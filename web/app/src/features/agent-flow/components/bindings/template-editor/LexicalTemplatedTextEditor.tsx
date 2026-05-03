@@ -50,14 +50,18 @@ const TRIGGER_CHARACTERS = new Set(['/', '{']);
 const TYPEAHEAD_OFFSET = 8;
 const TYPEAHEAD_MIN_LEFT = 8;
 const TYPEAHEAD_MIN_TOP = 8;
+const TYPEAHEAD_MAX_WIDTH = 320;
+const TYPEAHEAD_HORIZONTAL_GUTTER = 16;
 const DEFAULT_TYPEAHEAD_POSITION = {
   left: 8,
-  top: 36
+  top: 36,
+  width: 304
 };
 
 interface TypeaheadPosition {
   left: number;
   top: number;
+  width: number;
 }
 
 export interface LexicalTemplatedTextEditorHandle {
@@ -144,11 +148,37 @@ function getRangeRect(range: Range) {
   return clientRects.length > 0 ? clientRects[0] : null;
 }
 
+function getViewportWidth() {
+  if (typeof window === 'undefined') {
+    return TYPEAHEAD_MAX_WIDTH + TYPEAHEAD_HORIZONTAL_GUTTER * 2;
+  }
+
+  return window.innerWidth;
+}
+
+function clampTypeaheadLeft(left: number, width: number) {
+  const maxLeft = Math.max(
+    TYPEAHEAD_MIN_LEFT,
+    getViewportWidth() - width - TYPEAHEAD_HORIZONTAL_GUTTER
+  );
+
+  return Math.min(Math.max(TYPEAHEAD_MIN_LEFT, left), maxLeft);
+}
+
 function calculateTypeaheadPosition(container: HTMLElement) {
   const selection = window.getSelection();
+  const containerRect = container.getBoundingClientRect();
+  const width = Math.max(
+    240,
+    Math.min(TYPEAHEAD_MAX_WIDTH, containerRect.width - TYPEAHEAD_HORIZONTAL_GUTTER)
+  );
 
   if (!selection || selection.rangeCount === 0) {
-    return DEFAULT_TYPEAHEAD_POSITION;
+    return {
+      left: clampTypeaheadLeft(containerRect.left + TYPEAHEAD_MIN_LEFT, width),
+      top: Math.max(TYPEAHEAD_MIN_TOP, containerRect.top + 36),
+      width
+    };
   }
 
   const sourceRange = selection.getRangeAt(0);
@@ -156,15 +186,19 @@ function calculateTypeaheadPosition(container: HTMLElement) {
     ? sourceRange.cloneRange()
     : sourceRange;
   const rangeRect = getRangeRect(range);
-  const containerRect = container.getBoundingClientRect();
 
   if (!rangeRect) {
-    return DEFAULT_TYPEAHEAD_POSITION;
+    return {
+      left: clampTypeaheadLeft(containerRect.left + TYPEAHEAD_MIN_LEFT, width),
+      top: Math.max(TYPEAHEAD_MIN_TOP, containerRect.top + 36),
+      width
+    };
   }
 
   return {
-    left: Math.max(TYPEAHEAD_MIN_LEFT, rangeRect.left - containerRect.left),
-    top: Math.max(TYPEAHEAD_MIN_TOP, rangeRect.bottom - containerRect.top + TYPEAHEAD_OFFSET)
+    left: clampTypeaheadLeft(rangeRect.left, width),
+    top: Math.max(TYPEAHEAD_MIN_TOP, rangeRect.bottom + TYPEAHEAD_OFFSET),
+    width
   };
 }
 
@@ -239,6 +273,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
   const editorRef = useRef<LexicalEditor | null>(null);
   const apiRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const typeaheadRef = useRef<HTMLDivElement | null>(null);
   const blurCloseTimerRef = useRef<number | null>(null);
   const [typeaheadOpen, setTypeaheadOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -322,7 +357,11 @@ export const LexicalTemplatedTextEditor = forwardRef<
   function handleBlur(event: FocusEvent<HTMLDivElement>) {
     const nextFocusedNode = event.relatedTarget;
 
-    if (nextFocusedNode instanceof Node && shellRef.current?.contains(nextFocusedNode)) {
+    if (
+      nextFocusedNode instanceof Node &&
+      (shellRef.current?.contains(nextFocusedNode) ||
+        typeaheadRef.current?.contains(nextFocusedNode))
+    ) {
       return;
     }
 
@@ -451,6 +490,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
           ErrorBoundary={LexicalErrorBoundary}
         />
         <TemplateVariableTypeaheadPlugin
+          popupRef={typeaheadRef}
           open={typeaheadOpen}
           options={filteredOptions}
           query={query}

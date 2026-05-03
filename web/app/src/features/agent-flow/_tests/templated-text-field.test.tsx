@@ -370,12 +370,28 @@ describe('TemplatedTextField', () => {
     const listbox = await screen.findByRole('listbox', { name: '变量建议' });
 
     expect(listbox).toHaveStyle({
-      left: '128px',
-      top: '132px'
+      left: '168px',
+      top: '252px',
+      width: '304px'
     });
 
     editor.parentElement.getBoundingClientRect = originalGetBoundingClientRect;
     selectionSpy.mockRestore();
+  });
+
+  test('renders variable suggestions above the clipped field frame', async () => {
+    render(<TemplatedTextHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
+
+    const listbox = await screen.findByRole('listbox', { name: '变量建议' });
+    const fieldFrame = document.querySelector(
+      '.agent-flow-templated-text-field__frame'
+    );
+
+    expect(fieldFrame).not.toBeNull();
+    expect(fieldFrame?.contains(listbox)).toBe(false);
+    expect(document.body.contains(listbox)).toBe(true);
   });
 
   test('inserts selected variables from the toolbar and preserves stored template syntax', async () => {

@@ -1,5 +1,6 @@
 import { Empty } from 'antd';
-import type { CSSProperties, KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
+import type { CSSProperties, KeyboardEvent, RefObject } from 'react';
 
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 
@@ -11,7 +12,9 @@ interface TemplateVariableTypeaheadPluginProps {
   position?: {
     left: number;
     top: number;
+    width: number;
   } | null;
+  popupRef?: RefObject<HTMLDivElement | null>;
   onQueryChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement | HTMLInputElement>) => void;
   onSelect: (selector: string[]) => void;
@@ -23,6 +26,7 @@ export function TemplateVariableTypeaheadPlugin({
   query,
   activeIndex,
   position,
+  popupRef,
   onQueryChange,
   onKeyDown,
   onSelect
@@ -31,7 +35,8 @@ export function TemplateVariableTypeaheadPlugin({
   const popupStyle: CSSProperties | undefined = position
     ? {
         left: `${position.left}px`,
-        top: `${position.top}px`
+        top: `${position.top}px`,
+        width: `${position.width}px`
       }
     : undefined;
 
@@ -39,8 +44,9 @@ export function TemplateVariableTypeaheadPlugin({
     return null;
   }
 
-  return (
+  const popup = (
     <div
+      ref={popupRef}
       className="agent-flow-templated-text-field__typeahead"
       role="listbox"
       aria-label="变量建议"
@@ -84,4 +90,10 @@ export function TemplateVariableTypeaheadPlugin({
       )}
     </div>
   );
+
+  if (typeof document === 'undefined') {
+    return popup;
+  }
+
+  return createPortal(popup, document.body);
 }
