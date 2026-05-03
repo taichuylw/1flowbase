@@ -20,6 +20,12 @@ interface NodePickerPopoverProps {
   placement?: 'top' | 'bottom' | 'left' | 'right' | 'rightTop';
 }
 
+function isContainerBuiltinOption(
+  option: Extract<NodePickerOption, { kind: 'builtin' }>
+) {
+  return option.type === 'iteration' || option.type === 'loop';
+}
+
 export function NodePickerPopover({
   ariaLabel,
   open,
@@ -35,6 +41,10 @@ export function NodePickerPopover({
     (option): option is Extract<NodePickerOption, { kind: 'builtin' }> =>
       option.kind === 'builtin'
   );
+  const containerOptions = builtinOptions.filter(isContainerBuiltinOption);
+  const regularBuiltinOptions = builtinOptions.filter(
+    (option) => !isContainerBuiltinOption(option)
+  );
   const pluginOptions = options.filter(
     (option): option is Extract<NodePickerOption, { kind: 'plugin_contribution' }> =>
       option.kind === 'plugin_contribution'
@@ -49,7 +59,7 @@ export function NodePickerPopover({
       onOpenChange={onOpenChange}
       content={
         <div className="agent-flow-node-picker" role="menu">
-          {builtinOptions.map((option) => (
+          {regularBuiltinOptions.map((option) => (
             <button
               key={getNodePickerOptionKey(option)}
               className="agent-flow-node-picker__item"
@@ -63,6 +73,42 @@ export function NodePickerPopover({
               <span>{option.label}</span>
             </button>
           ))}
+          {containerOptions.length > 0 ? (
+            <div
+              aria-label="节点分组"
+              className="agent-flow-node-picker__group"
+              role="group"
+            >
+              <div className="agent-flow-node-picker__section-label">
+                节点分组
+              </div>
+              {containerOptions.map((option) => (
+                <button
+                  key={getNodePickerOptionKey(option)}
+                  className="agent-flow-node-picker__item agent-flow-node-picker__item--group"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onPickNode(option);
+                  }}
+                >
+                  <span className="agent-flow-node-picker__group-title">
+                    {option.label}
+                  </span>
+                  <span className="agent-flow-node-picker__group-preview">
+                    <span className="agent-flow-node-picker__group-boundary">
+                      开始
+                    </span>
+                    <span className="agent-flow-node-picker__group-line" />
+                    <span className="agent-flow-node-picker__group-boundary agent-flow-node-picker__group-boundary--end">
+                      结束
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           {pluginOptions.length > 0 ? (
             <div className="agent-flow-node-picker__section-label">
               插件节点

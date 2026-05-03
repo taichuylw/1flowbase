@@ -92,8 +92,7 @@ describe('AgentFlowCanvas', () => {
     fireEvent.doubleClick(await screen.findByText('Iteration'));
     expect(screen.getByRole('button', { name: '返回主画布' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: '节点别名' })).toHaveValue('Inner Answer');
-    expect(screen.getByText('开始')).toBeInTheDocument();
-    expect(screen.getByText('结束')).toBeInTheDocument();
+    expect(screen.queryByText('Start')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '返回主画布' }));
     expect(screen.getByText('Start')).toBeInTheDocument();

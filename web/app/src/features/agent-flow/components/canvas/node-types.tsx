@@ -1,5 +1,5 @@
 import type { FlowNodeType } from '@1flowbase/flow-schema';
-import type { EdgeTypes, Node, NodeProps, NodeTypes } from '@xyflow/react';
+import type { EdgeTypes, Node, NodeTypes } from '@xyflow/react';
 
 import type { CanvasNodeSchema } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
@@ -20,7 +20,6 @@ export interface AgentFlowCanvasNodeData extends Record<string, unknown> {
   showTargetHandle: boolean;
   showSourceHandle: boolean;
   isContainer: boolean;
-  containerChildCount: number;
   nodePickerOptions: NodePickerOption[];
   onOpenPicker: (nodeId: string) => void;
   onClosePicker: () => void;
@@ -36,37 +35,10 @@ export type AgentFlowCanvasNode = Node<
   AgentFlowCanvasNodeData,
   'agentFlowNode'
 >;
-
-export interface AgentFlowBoundaryNodeData extends Record<string, unknown> {
-  boundaryKind: 'start' | 'end';
-  label: string;
-}
-
-export type AgentFlowBoundaryNode = Node<
-  AgentFlowBoundaryNodeData,
-  'agentFlowBoundaryNode'
->;
-
-function AgentFlowBoundaryNodeCard({
-  data
-}: NodeProps<AgentFlowBoundaryNode>) {
-  return (
-    <div
-      aria-label={`容器${data.label}节点`}
-      className={`agent-flow-container-boundary agent-flow-container-boundary--${data.boundaryKind}`}
-      role="img"
-    >
-      <span className="agent-flow-container-boundary__dot" />
-      <span className="agent-flow-container-boundary__label">{data.label}</span>
-    </div>
-  );
-}
-
 export type { AgentFlowCanvasEdge };
 
 export const agentFlowNodeTypes: NodeTypes = {
-  agentFlowNode: AgentFlowNodeCard,
-  agentFlowBoundaryNode: AgentFlowBoundaryNodeCard
+  agentFlowNode: AgentFlowNodeCard
 };
 
 export const agentFlowEdgeTypes: EdgeTypes = {
