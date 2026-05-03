@@ -245,6 +245,102 @@ fn compile_prompt_messages_extracts_selector_dependencies_from_message_content()
 }
 
 #[test]
+fn compile_data_model_query_extracts_selector_dependencies() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1] = json!({
+        "id": "node-data-model",
+        "type": "data_model",
+        "alias": "Orders",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": { "data_model_code": "orders", "action": "list" },
+        "bindings": {
+            "query": {
+                "kind": "data_model_query",
+                "value": {
+                    "filters": [
+                        {
+                            "field_code": "status",
+                            "operator": "eq",
+                            "value": { "kind": "selector", "selector": ["node-start", "query"] }
+                        }
+                    ],
+                    "sorts": [],
+                    "expand_relations": [],
+                    "page": { "kind": "constant", "value": 1 },
+                    "page_size": { "kind": "selector", "selector": ["node-start", "page_size"] }
+                }
+            }
+        },
+        "outputs": [
+            { "key": "records", "title": "记录列表", "valueType": "array" },
+            { "key": "total", "title": "记录总数", "valueType": "number" }
+        ]
+    });
+    document["graph"]["edges"][0]["target"] = json!("node-data-model");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(
+        plan.nodes["node-data-model"].bindings["query"].selector_paths,
+        vec![
+            vec!["node-start".to_string(), "query".to_string()],
+            vec!["node-start".to_string(), "page_size".to_string()]
+        ]
+    );
+}
+
+#[test]
+fn compile_data_model_filters_inactive_bindings_by_action() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1] = json!({
+        "id": "node-data-model",
+        "type": "data_model",
+        "alias": "Orders",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": { "data_model_code": "orders", "action": "create" },
+        "bindings": {
+            "query": {
+                "kind": "data_model_query",
+                "value": {
+                    "filters": [
+                        {
+                            "field_code": "status",
+                            "operator": "eq",
+                            "value": { "kind": "selector", "selector": ["missing-node", "answer"] }
+                        }
+                    ],
+                    "sorts": [],
+                    "expand_relations": [],
+                    "page": { "kind": "constant", "value": 1 },
+                    "page_size": { "kind": "constant", "value": 20 }
+                }
+            },
+            "payload": {
+                "kind": "named_bindings",
+                "value": [{ "name": "title", "selector": ["node-start", "query"] }]
+            }
+        },
+        "outputs": [{ "key": "record", "title": "记录", "valueType": "json" }]
+    });
+    document["graph"]["edges"][0]["target"] = json!("node-data-model");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(!plan.nodes["node-data-model"].bindings.contains_key("query"));
+    assert!(plan.nodes["node-data-model"]
+        .bindings
+        .contains_key("payload"));
+}
+
+#[test]
 fn compile_rejects_edge_that_targets_unknown_node() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);

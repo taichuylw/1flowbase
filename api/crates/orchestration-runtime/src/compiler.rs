@@ -230,12 +230,13 @@ fn compile_node(
         .get("config")
         .cloned()
         .unwrap_or(Value::Object(Default::default()));
-    let bindings = compile_bindings(
-        node.get("bindings")
-            .and_then(Value::as_object)
-            .ok_or_else(|| anyhow!("node {node_id} missing bindings"))?,
-    )
-    .with_context(|| format!("failed to compile bindings for node {node_id}"))?;
+    let raw_bindings = node
+        .get("bindings")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("node {node_id} missing bindings"))?;
+    let active_bindings = active_binding_values(&node_type, &config, raw_bindings);
+    let bindings = compile_bindings(&active_bindings)
+        .with_context(|| format!("failed to compile bindings for node {node_id}"))?;
     let outputs = compile_outputs(
         node.get("outputs")
             .and_then(Value::as_array)
@@ -735,7 +736,7 @@ fn node_contribution_lookup_key(
 }
 
 fn compile_bindings(
-    binding_values: &serde_json::Map<String, Value>,
+    binding_values: &BTreeMap<String, Value>,
 ) -> Result<BTreeMap<String, CompiledBinding>> {
     let mut bindings = BTreeMap::new();
 
@@ -757,6 +758,41 @@ fn compile_bindings(
     }
 
     Ok(bindings)
+}
+
+fn active_binding_values(
+    node_type: &str,
+    config: &Value,
+    binding_values: &serde_json::Map<String, Value>,
+) -> BTreeMap<String, Value> {
+    if node_type != "data_model" {
+        return binding_values
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+    }
+
+    let active_keys = active_data_model_binding_keys(config);
+
+    binding_values
+        .iter()
+        .filter(|(key, _)| active_keys.contains(&key.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
+}
+
+fn active_data_model_binding_keys(config: &Value) -> &'static [&'static str] {
+    match config
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or("list")
+    {
+        "get" => &["record_id"],
+        "create" => &["payload"],
+        "update" => &["record_id", "payload"],
+        "delete" => &["record_id"],
+        "list" | _ => &["query"],
+    }
 }
 
 fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
@@ -807,6 +843,7 @@ fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<Strin
 
             Ok(selectors)
         }
+        "data_model_query" => extract_data_model_query_selector_paths(raw_value),
         "condition_group" => {
             let conditions = raw_value
                 .get("conditions")
@@ -842,6 +879,47 @@ fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<Strin
         }
         other => bail!("unsupported binding kind: {other}"),
     }
+}
+
+fn extract_data_model_query_selector_paths(raw_value: &Value) -> Result<Vec<Vec<String>>> {
+    let object = raw_value
+        .as_object()
+        .ok_or_else(|| anyhow!("data_model_query value must be an object"))?;
+    let mut selectors = Vec::new();
+
+    if let Some(filters) = object.get("filters") {
+        for filter in filters
+            .as_array()
+            .ok_or_else(|| anyhow!("data_model_query filters must be an array"))?
+        {
+            if let Some(value) = filter.get("value") {
+                push_query_value_selector(value, &mut selectors)?;
+            }
+        }
+    }
+
+    if let Some(page) = object.get("page") {
+        push_query_value_selector(page, &mut selectors)?;
+    }
+    if let Some(page_size) = object.get("page_size") {
+        push_query_value_selector(page_size, &mut selectors)?;
+    }
+
+    Ok(selectors)
+}
+
+fn push_query_value_selector(value: &Value, selectors: &mut Vec<Vec<String>>) -> Result<()> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow!("data_model_query value input must be an object"))?;
+
+    if object.get("kind").and_then(Value::as_str) == Some("selector") {
+        selectors.push(selector_path(
+            object.get("selector").unwrap_or(&Value::Null),
+        )?);
+    }
+
+    Ok(())
 }
 
 fn selector_path(value: &Value) -> Result<Vec<String>> {

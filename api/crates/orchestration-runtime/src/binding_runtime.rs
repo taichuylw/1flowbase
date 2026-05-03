@@ -126,9 +126,208 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
 
             Ok(Value::Array(messages))
         }
+        "data_model_query" => resolve_data_model_query(binding, variable_pool),
         "condition_group" | "state_write" => Ok(binding.raw_value.clone()),
         other => bail!("unsupported binding kind: {other}"),
     }
+}
+
+fn resolve_data_model_query(
+    binding: &CompiledBinding,
+    variable_pool: &Map<String, Value>,
+) -> Result<Value> {
+    let object = binding
+        .raw_value
+        .as_object()
+        .ok_or_else(|| anyhow!("data_model list query must be object"))?;
+    let mut query = Map::new();
+
+    query.insert(
+        "filters".to_string(),
+        Value::Array(resolve_data_model_query_filters(
+            object.get("filters"),
+            variable_pool,
+        )?),
+    );
+    query.insert(
+        "sorts".to_string(),
+        Value::Array(resolve_data_model_query_sorts(object.get("sorts"))?),
+    );
+    query.insert(
+        "expand_relations".to_string(),
+        Value::Array(parse_data_model_query_string_array(
+            object.get("expand_relations"),
+            "expand_relations",
+        )?),
+    );
+    query.insert(
+        "page".to_string(),
+        resolve_optional_query_value(object.get("page"), variable_pool, 1)?,
+    );
+    query.insert(
+        "page_size".to_string(),
+        resolve_optional_query_value(object.get("page_size"), variable_pool, 20)?,
+    );
+
+    Ok(Value::Object(query))
+}
+
+fn resolve_data_model_query_filters(
+    value: Option<&Value>,
+    variable_pool: &Map<String, Value>,
+) -> Result<Vec<Value>> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let entries = value
+        .as_array()
+        .ok_or_else(|| anyhow!("data_model list filters must be array"))?;
+    let mut filters = Vec::with_capacity(entries.len());
+
+    for entry in entries {
+        let object = entry
+            .as_object()
+            .ok_or_else(|| anyhow!("data_model list filter must be object"))?;
+        let operator = required_data_model_query_string(object, "operator", "filter")?;
+
+        if !matches!(operator.as_str(), "eq" | "ne" | "gt" | "gte" | "lt" | "lte") {
+            bail!("data_model list filter operator is unsupported: {operator}");
+        }
+
+        let mut filter = Map::new();
+        filter.insert(
+            "field_code".to_string(),
+            Value::String(required_data_model_query_string(
+                object,
+                "field_code",
+                "filter",
+            )?),
+        );
+        filter.insert("operator".to_string(), Value::String(operator));
+        filter.insert(
+            "value".to_string(),
+            resolve_query_value_input(
+                object.get("value").unwrap_or(&Value::Null),
+                variable_pool,
+                "filter value",
+            )?,
+        );
+        filters.push(Value::Object(filter));
+    }
+
+    Ok(filters)
+}
+
+fn resolve_data_model_query_sorts(value: Option<&Value>) -> Result<Vec<Value>> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let entries = value
+        .as_array()
+        .ok_or_else(|| anyhow!("data_model list sorts must be array"))?;
+    let mut sorts = Vec::with_capacity(entries.len());
+
+    for entry in entries {
+        let object = entry
+            .as_object()
+            .ok_or_else(|| anyhow!("data_model list sort must be object"))?;
+        let direction = required_data_model_query_string(object, "direction", "sort")?;
+
+        if !matches!(direction.as_str(), "asc" | "desc") {
+            bail!("data_model list sort direction is unsupported: {direction}");
+        }
+
+        let mut sort = Map::new();
+        sort.insert(
+            "field_code".to_string(),
+            Value::String(required_data_model_query_string(
+                object,
+                "field_code",
+                "sort",
+            )?),
+        );
+        sort.insert("direction".to_string(), Value::String(direction));
+        sorts.push(Value::Object(sort));
+    }
+
+    Ok(sorts)
+}
+
+fn parse_data_model_query_string_array(
+    value: Option<&Value>,
+    field: &'static str,
+) -> Result<Vec<Value>> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let entries = value
+        .as_array()
+        .ok_or_else(|| anyhow!("data_model list {field} must be array"))?;
+
+    entries
+        .iter()
+        .map(|entry| {
+            entry
+                .as_str()
+                .map(|value| Value::String(value.to_string()))
+                .ok_or_else(|| anyhow!("data_model list {field} item must be string"))
+        })
+        .collect()
+}
+
+fn resolve_optional_query_value(
+    value: Option<&Value>,
+    variable_pool: &Map<String, Value>,
+    default: i64,
+) -> Result<Value> {
+    match value {
+        Some(value) => resolve_query_value_input(value, variable_pool, "query value"),
+        None => Ok(Value::Number(default.into())),
+    }
+}
+
+fn resolve_query_value_input(
+    value: &Value,
+    variable_pool: &Map<String, Value>,
+    field: &'static str,
+) -> Result<Value> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow!("data_model list {field} must be object"))?;
+
+    match object.get("kind").and_then(Value::as_str) {
+        Some("constant") => Ok(object.get("value").cloned().unwrap_or(Value::Null)),
+        Some("selector") => {
+            let selector = object
+                .get("selector")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("data_model list {field} selector must be array"))?
+                .iter()
+                .map(|segment| {
+                    segment.as_str().map(str::to_string).ok_or_else(|| {
+                        anyhow!("data_model list {field} selector segment must be string")
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            lookup_selector_value(variable_pool, &selector)
+        }
+        Some(kind) => bail!("data_model list {field} kind is unsupported: {kind}"),
+        None => bail!("data_model list {field} kind is required"),
+    }
+}
+
+fn required_data_model_query_string(
+    object: &Map<String, Value>,
+    key: &'static str,
+    context: &'static str,
+) -> Result<String> {
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("data_model list {context} {key} is required"))
 }
 
 pub fn lookup_selector_value(

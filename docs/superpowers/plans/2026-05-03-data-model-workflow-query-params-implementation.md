@@ -38,7 +38,7 @@ Do not revert or reformat them. The implementation does not require touching tho
   - Adds `DataModelQueryField`.
   - Covers field filtering, operator options, selector-backed values, sorting, relation expansion, and pagination.
 
-- [ ] **03 Backend Orchestration Runtime:** `docs/superpowers/plans/2026-05-03-data-model-workflow-query-params-implementation-03-backend-orchestration-runtime.md`
+- [x] **03 Backend Orchestration Runtime:** `docs/superpowers/plans/2026-05-03-data-model-workflow-query-params-implementation-03-backend-orchestration-runtime.md`
   - Filters compiled Data Model bindings by action.
   - Extracts selectors from `data_model_query`.
   - Resolves `data_model_query` into the standard runtime list query object.

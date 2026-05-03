@@ -20,7 +20,7 @@
 
 ### Task 1: Compiler Active Bindings And Query Selectors
 
-- [ ] **Step 1: Add failing compiler tests**
+- [x] **Step 1: Add failing compiler tests**
 
 Append to `api/crates/orchestration-runtime/src/_tests/compiler_tests.rs`:
 
@@ -118,7 +118,7 @@ fn compile_data_model_filters_inactive_bindings_by_action() {
 }
 ```
 
-- [ ] **Step 2: Confirm failure**
+- [x] **Step 2: Confirm failure**
 
 Run:
 
@@ -128,7 +128,7 @@ cargo test -p orchestration-runtime compile_data_model -- --test-threads=1
 
 Expected: FAIL because `data_model_query` is unsupported and inactive Data Model bindings are still compiled.
 
-- [ ] **Step 3: Filter active bindings**
+- [x] **Step 3: Filter active bindings**
 
 In `api/crates/orchestration-runtime/src/compiler.rs`, replace the binding compile block in `compile_node` with:
 
@@ -174,7 +174,7 @@ fn active_data_model_binding_keys(config: &Value) -> &'static [&'static str] {
 }
 ```
 
-- [ ] **Step 4: Extract query selectors**
+- [x] **Step 4: Extract query selectors**
 
 Add this branch to `extract_selector_paths`:
 
@@ -225,7 +225,7 @@ fn push_query_value_selector(value: &Value, selectors: &mut Vec<Vec<String>>) ->
 }
 ```
 
-- [ ] **Step 5: Verify compiler**
+- [x] **Step 5: Verify compiler**
 
 Run:
 
@@ -237,7 +237,7 @@ Expected: PASS.
 
 ### Task 2: Binding Runtime Query Resolution
 
-- [ ] **Step 1: Add failing binding runtime tests**
+- [x] **Step 1: Add failing binding runtime tests**
 
 Create `api/crates/orchestration-runtime/src/_tests/binding_runtime_tests.rs`:
 
@@ -330,7 +330,7 @@ Add to `api/crates/orchestration-runtime/src/_tests/mod.rs`:
 mod binding_runtime_tests;
 ```
 
-- [ ] **Step 2: Confirm failure**
+- [x] **Step 2: Confirm failure**
 
 Run:
 
@@ -340,7 +340,7 @@ cargo test -p orchestration-runtime data_model_query -- --test-threads=1
 
 Expected: FAIL because binding runtime rejects the new kind.
 
-- [ ] **Step 3: Resolve `data_model_query`**
+- [x] **Step 3: Resolve `data_model_query`**
 
 In `api/crates/orchestration-runtime/src/binding_runtime.rs`, add this match branch:
 
@@ -465,7 +465,7 @@ fn ensure_supported_filter_operator(operator: &str) -> Result<()> {
 }
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -475,7 +475,7 @@ cargo test -p orchestration-runtime compile_data_model data_model_query -- --tes
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
