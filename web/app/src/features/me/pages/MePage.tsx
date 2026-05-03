@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Navigate, useNavigate } from '@tanstack/react-router';
-import { Result, Spin } from 'antd';
+import { Result } from 'antd';
 
 import { useAuthStore } from '../../../state/auth-store';
+import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
 import {
   changeMyPassword,
@@ -78,7 +79,7 @@ export function MePage({
   const currentProfile = profileQuery.data ?? me;
 
   if (profileQuery.isLoading) {
-    return <Spin tip="正在加载个人资料..." />;
+    return <LoadingState />;
   }
 
   if (!currentProfile || !actor) {

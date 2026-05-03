@@ -20,6 +20,7 @@ import { MePage } from '../features/me/pages/MePage';
 import type { SettingsSectionKey } from '../features/settings/lib/settings-sections';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { RouteGuard } from '../routes/route-guards';
+import { LoadingState } from '../shared/ui/loading-state/LoadingState';
 
 const ApplicationDetailPage = lazy(() =>
   import('../features/applications/pages/ApplicationDetailPage').then((module) => ({
@@ -37,7 +38,7 @@ function NotFoundPage() {
 }
 
 function RouteLoadingFallback() {
-  return <Result status="info" title="正在加载页面" />;
+  return <LoadingState fullscreen />;
 }
 
 function LazyRouteBoundary({ children }: { children: ReactNode }) {

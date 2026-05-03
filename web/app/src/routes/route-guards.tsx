@@ -2,9 +2,9 @@ import type { PropsWithChildren } from 'react';
 
 import type { AppRouteId } from '@1flowbase/shared-types';
 import { Navigate } from '@tanstack/react-router';
-import { Spin } from 'antd';
 
 import { useAuthStore } from '../state/auth-store';
+import { LoadingState } from '../shared/ui/loading-state/LoadingState';
 import { PermissionDeniedState } from '../shared/ui/PermissionDeniedState';
 import { getRouteDefinition } from './route-helpers';
 
@@ -18,7 +18,7 @@ export function RouteGuard({
   const me = useAuthStore((state) => state.me);
 
   if (sessionStatus === 'unknown') {
-    return <Spin fullscreen tip="正在恢复会话..." />;
+    return <LoadingState fullscreen />;
   }
 
   if (route.guard === 'public-only') {

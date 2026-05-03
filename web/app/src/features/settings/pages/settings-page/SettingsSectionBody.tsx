@@ -1,6 +1,6 @@
-import { Result } from 'antd';
 import { Suspense, lazy, type ReactNode } from 'react';
 
+import { LoadingState } from '../../../../shared/ui/loading-state/LoadingState';
 import { MemberManagementPanel } from '../../components/MemberManagementPanel';
 import { RolePermissionPanel } from '../../components/RolePermissionPanel';
 import { SystemRuntimePanel } from '../../components/SystemRuntimePanel';
@@ -27,7 +27,7 @@ const HostInfrastructurePanel = lazy(() =>
 );
 
 function SettingsSectionFallback() {
-  return <Result status="info" title="正在加载设置模块" />;
+  return <LoadingState compact />;
 }
 
 function SettingsSectionBoundary({ children }: { children: ReactNode }) {

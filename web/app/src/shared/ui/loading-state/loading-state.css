@@ -1,0 +1,41 @@
+.loading-state {
+  width: 100%;
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+}
+
+.loading-state--fullscreen {
+  min-height: 100vh;
+}
+
+.loading-state--compact {
+  min-height: 180px;
+  padding: 24px 16px;
+}
+
+.loading-state__surface {
+  width: min(100%, 720px);
+  padding: 24px;
+}
+
+.loading-state--compact .loading-state__surface {
+  width: min(100%, 520px);
+  padding: 16px;
+}
+
+@media (max-width: 640px) {
+  .loading-state {
+    min-height: 200px;
+    padding: 24px 16px;
+  }
+
+  .loading-state--fullscreen {
+    min-height: 100vh;
+  }
+
+  .loading-state__surface {
+    padding: 12px;
+  }
+}

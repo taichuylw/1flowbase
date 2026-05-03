@@ -33,6 +33,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
+import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import {
   applicationCatalogQueryKey,
   applicationsQueryKey,
@@ -198,7 +199,7 @@ export function ApplicationListPage() {
   const normalizedKeyword = keyword.trim().toLowerCase();
 
   if (applicationsQuery.isPending || applicationCatalogQuery.isPending) {
-    return <Result status="info" title="正在加载应用" />;
+    return <LoadingState />;
   }
 
   if (applicationsQuery.isError || applicationCatalogQuery.isError) {

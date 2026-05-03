@@ -3,6 +3,7 @@ import { Result } from 'antd';
 import { Suspense, lazy, type ReactNode } from 'react';
 
 import { ApiClientError } from '@1flowbase/api-client';
+import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import { PermissionDeniedState } from '../../../shared/ui/PermissionDeniedState';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
 import { applicationDetailQueryKey, fetchApplicationDetail } from '../api/applications';
@@ -24,7 +25,7 @@ const ApplicationLogsPage = lazy(() =>
 );
 
 function ApplicationSectionFallback() {
-  return <Result status="info" title="正在加载应用模块" />;
+  return <LoadingState compact />;
 }
 
 function ApplicationSectionBoundary({ children }: { children: ReactNode }) {
@@ -44,7 +45,7 @@ export function ApplicationDetailPage({
   });
 
   if (detailQuery.isPending) {
-    return <Result status="info" title="正在加载应用" />;
+    return <LoadingState />;
   }
 
   if (detailQuery.isError) {
