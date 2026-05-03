@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { NodePickerPopover } from '../components/node-picker/NodePickerPopover';
@@ -117,33 +117,5 @@ describe('NodePickerPopover', () => {
 
     expect(screen.getByRole('menuitem', { name: /OpenAI Prompt/i })).toBeEnabled();
     expect(screen.getByRole('menuitem', { name: /SQL Exporter/i })).toBeDisabled();
-  });
-
-  test('renders container node choices as grouped options with start and end boundaries', () => {
-    const onPickNode = vi.fn();
-
-    render(
-      <NodePickerPopover
-        ariaLabel="在 LLM 后新增节点"
-        open
-        onOpenChange={vi.fn()}
-        onPickNode={onPickNode}
-      />
-    );
-
-    const group = screen.getByRole('group', { name: '节点分组' });
-
-    expect(within(group).getByRole('menuitem', { name: /Iteration/ })).toBeInTheDocument();
-    expect(within(group).getByRole('menuitem', { name: /Loop/ })).toBeInTheDocument();
-    expect(within(group).getAllByText('开始')).toHaveLength(2);
-    expect(within(group).getAllByText('结束')).toHaveLength(2);
-
-    fireEvent.click(within(group).getByRole('menuitem', { name: /Iteration/ }));
-
-    expect(onPickNode).toHaveBeenCalledWith({
-      kind: 'builtin',
-      type: 'iteration',
-      label: 'Iteration'
-    });
   });
 });

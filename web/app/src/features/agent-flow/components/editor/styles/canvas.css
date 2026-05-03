@@ -1172,7 +1172,7 @@
 .agent-flow-node-picker {
   display: grid;
   gap: 6px;
-  min-width: 260px;
+  min-width: 220px;
 }
 
 .agent-flow-node-picker__item {
@@ -1188,74 +1188,9 @@
   cursor: pointer;
 }
 
-.agent-flow-node-picker__item--group {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border-style: dashed;
-  border-color: #91caff;
-  background: linear-gradient(180deg, #f7fbff, #ffffff);
-}
-
 .agent-flow-node-picker__item:hover {
   border-color: #84a58f;
   background: #f3f8f3;
-}
-
-.agent-flow-node-picker__item--group:hover {
-  border-color: #1677ff;
-  background: #f0f7ff;
-}
-
-.agent-flow-node-picker__section-label {
-  padding: 6px 2px 2px;
-  color: #667085;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.agent-flow-node-picker__group {
-  display: grid;
-  gap: 6px;
-}
-
-.agent-flow-node-picker__group-title {
-  color: #203227;
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.agent-flow-node-picker__group-preview {
-  display: grid;
-  grid-template-columns: 52px minmax(44px, 1fr) 52px;
-  align-items: center;
-  gap: 6px;
-}
-
-.agent-flow-node-picker__group-boundary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 24px;
-  border: 1px solid #b8c6d8;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #344054;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
-}
-
-.agent-flow-node-picker__group-boundary--end {
-  color: #475467;
-}
-
-.agent-flow-node-picker__group-line {
-  height: 2px;
-  border-radius: 999px;
-  background: #b8c6d8;
 }
 
 @media (max-width: 768px) {
