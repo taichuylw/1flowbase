@@ -659,6 +659,7 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: &AppendRunEventInput,
     ) -> Result<domain::RunEventRecord> {
         let mut tx = self.pool().begin().await?;
+        lock_flow_run_event_sequence(&mut tx, input.flow_run_id).await?;
         let next_sequence = next_event_sequence(&mut tx, input.flow_run_id).await?;
         let row = sqlx::query(
             r#"
@@ -712,6 +713,7 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         }
 
         let mut tx = self.pool().begin().await?;
+        lock_flow_run_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
         let first_sequence = next_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
         let mut builder = QueryBuilder::<Postgres>::new(
             r#"
@@ -819,6 +821,7 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: &AppendRuntimeEventInput,
     ) -> Result<domain::RuntimeEventRecord> {
         let mut tx = self.pool().begin().await?;
+        lock_flow_run_event_sequence(&mut tx, input.flow_run_id).await?;
         let next_sequence = next_runtime_event_sequence(&mut tx, input.flow_run_id).await?;
         let row = sqlx::query(
             r#"
@@ -899,6 +902,7 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         }
 
         let mut tx = self.pool().begin().await?;
+        lock_flow_run_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
         let first_sequence = next_runtime_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
         let mut builder = QueryBuilder::<Postgres>::new(
             r#"
@@ -1962,6 +1966,17 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
             node_run,
         }))
     }
+}
+
+async fn lock_flow_run_event_sequence(
+    tx: &mut Transaction<'_, Postgres>,
+    flow_run_id: Uuid,
+) -> Result<()> {
+    sqlx::query("select id from flow_runs where id = $1 for update")
+        .bind(flow_run_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 async fn next_event_sequence(tx: &mut Transaction<'_, Postgres>, flow_run_id: Uuid) -> Result<i64> {

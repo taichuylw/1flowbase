@@ -3,7 +3,6 @@ import { describe, expect, test } from 'vitest';
 import type { FlowDebugRunDetail } from '../../api/runtime';
 import {
   extractAssistantOutputText,
-  extractAssistantReasoningText,
   mapRunDetailToConversation
 } from '../../lib/debug-console/run-detail-mapper';
 
@@ -88,7 +87,7 @@ describe('run detail mapper', () => {
     expect(extractAssistantOutputText(detail)).toBe('退款政策摘要');
   });
 
-  test('restores persisted reasoning delta events separately from answer text', () => {
+  test('restores persisted reasoning and answer deltas as one ordered Dify-style content field', () => {
     const detail = baseDetail();
     detail.flow_run.status = 'running';
     detail.events = [
@@ -112,12 +111,13 @@ describe('run detail mapper', () => {
       }
     ];
 
-    expect(extractAssistantReasoningText(detail)).toBe('先分析');
     expect(mapRunDetailToConversation(detail)).toEqual(
       expect.objectContaining({
-        reasoningContent: '先分析',
-        content: '结果'
+        content: '<think>先分析</think>结果'
       })
+    );
+    expect(mapRunDetailToConversation(detail)).not.toHaveProperty(
+      'reasoningContent'
     );
   });
 });

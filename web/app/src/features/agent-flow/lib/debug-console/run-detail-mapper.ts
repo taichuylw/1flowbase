@@ -4,6 +4,11 @@ import type {
   AgentFlowTraceItem,
   FlowDebugRunDetail
 } from '../../api/runtime';
+import {
+  appendReasoningDeltaToAssistantContent,
+  appendTextDeltaToAssistantContent,
+  closeOpenThinkBlock
+} from './assistant-content';
 
 function findFirstString(value: unknown): string | null {
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -78,6 +83,29 @@ function collectDeltaEvents(
 
 function collectTextDeltaEvents(detail: FlowDebugRunDetail): string | null {
   return collectDeltaEvents(detail, 'text_delta');
+}
+
+function collectOrderedAssistantContentEvents(
+  detail: FlowDebugRunDetail
+): string | null {
+  const content = detail.events
+    .filter(
+      (event) =>
+        event.event_type === 'text_delta' ||
+        event.event_type === 'reasoning_delta'
+    )
+    .sort((left, right) => left.sequence - right.sequence)
+    .reduce((currentContent, event) => {
+      const text = extractDeltaText(event.payload);
+
+      return event.event_type === 'reasoning_delta'
+        ? appendReasoningDeltaToAssistantContent(currentContent, text)
+        : appendTextDeltaToAssistantContent(currentContent, text);
+    }, '');
+
+  const closedContent = closeOpenThinkBlock(content);
+
+  return closedContent.trim().length > 0 ? closedContent : null;
 }
 
 function findPreferredOutputText(payload: unknown): string | null {
@@ -184,10 +212,14 @@ export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {
   return summarizePayload(detail.flow_run.output_payload);
 }
 
-export function extractAssistantReasoningText(
-  detail: FlowDebugRunDetail
-): string {
-  return collectDeltaEvents(detail, 'reasoning_delta') ?? '';
+function extractAssistantContent(detail: FlowDebugRunDetail): string {
+  const orderedStreamContent = collectOrderedAssistantContentEvents(detail);
+
+  if (orderedStreamContent) {
+    return orderedStreamContent;
+  }
+
+  return extractAssistantOutputText(detail);
 }
 
 export function mapRunDetailToConversation(
@@ -202,8 +234,7 @@ export function mapRunDetailToConversation(
   return {
     id: `assistant-${detail.flow_run.id}`,
     role: 'assistant',
-    content: extractAssistantOutputText(detail),
-    reasoningContent: extractAssistantReasoningText(detail),
+    content: extractAssistantContent(detail),
     status: mapMessageStatus(detail.flow_run.status),
     runId: detail.flow_run.id,
     rawOutput,

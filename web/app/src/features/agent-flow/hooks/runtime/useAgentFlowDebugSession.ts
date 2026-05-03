@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import {
@@ -24,7 +24,6 @@ import {
   mapRunDetailToConversation,
   mapRunDetailToTrace
 } from '../../lib/debug-console/run-detail-mapper';
-import { filterTraceItemsByNode } from '../../lib/debug-console/trace-filters';
 import {
   buildRunContextFromDocument,
   getRunContextValues,
@@ -115,7 +114,6 @@ function createRunningAssistantMessage(): AgentFlowDebugMessage {
     id: createDebugMessageId('assistant-pending'),
     role: 'assistant',
     content: '',
-    reasoningContent: '',
     status: 'running',
     runId: null,
     rawOutput: null,
@@ -384,7 +382,6 @@ export function useAgentFlowDebugSession({
   const [streamTraceItems, setStreamTraceItems] = useState<
     AgentFlowTraceItem[]
   >([]);
-  const [activeNodeFilter, setActiveNodeFilter] = useState<string | null>(null);
   const [nodePreviewVariableCache, setNodePreviewVariableCache] =
     useState<NodeDebugPreviewVariableCache>({});
   const [runContext, setRunContext] = useState(() =>
@@ -426,10 +423,7 @@ export function useAgentFlowDebugSession({
           : [],
     [lastDetail, streamTraceItems]
   );
-  const traceItems = useMemo(
-    () => filterTraceItemsByNode(rawTraceItems, activeNodeFilter),
-    [activeNodeFilter, rawTraceItems]
-  );
+  const traceItems = rawTraceItems;
   const variableGroups = useMemo<AgentFlowVariableGroup[]>(() => {
     if (lastDetail) {
       return mapRunDetailToVariableGroups(lastDetail, {
@@ -858,7 +852,6 @@ export function useAgentFlowDebugSession({
     setMessages([]);
     setLastDetail(null);
     setStreamTraceItems([]);
-    setActiveNodeFilter(null);
   }
 
   function setRunContextValue(nodeId: string, key: string, value: unknown) {
@@ -919,14 +912,6 @@ export function useAgentFlowDebugSession({
     });
   }
 
-  function selectTraceNode(nodeId: string | null) {
-    setActiveNodeFilter(nodeId);
-  }
-
-  const syncSelectedNode = useCallback((nodeId: string | null) => {
-    setActiveNodeFilter(nodeId);
-  }, []);
-
   function resetVariableCache() {
     cancelActiveDebugStream();
     stopPolling();
@@ -934,7 +919,6 @@ export function useAgentFlowDebugSession({
     setStatus('idle');
     setLastDetail(null);
     setStreamTraceItems([]);
-    setActiveNodeFilter(null);
     setNodePreviewVariableCache({});
     setRunContext(buildRunContextFromDocument(document, null));
   }
@@ -945,7 +929,6 @@ export function useAgentFlowDebugSession({
     messages,
     traceItems,
     variableGroups,
-    activeNodeFilter,
     submitPrompt,
     rerunLast,
     stopRun,
@@ -953,8 +936,6 @@ export function useAgentFlowDebugSession({
     setRunContextValue,
     getNodePreviewVariableCache,
     rememberNodePreviewVariables,
-    resetVariableCache,
-    selectTraceNode,
-    syncSelectedNode
+    resetVariableCache
   };
 }

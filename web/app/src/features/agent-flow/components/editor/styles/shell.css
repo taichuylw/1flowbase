@@ -154,16 +154,6 @@
   background: #f8fafd;
 }
 
-.agent-flow-editor__debug-trace-detail {
-  display: flex;
-  min-height: 0;
-  height: 100%;
-  flex: 1;
-  flex-direction: column;
-  padding: 16px;
-  background: #f5f7fb;
-}
-
 .agent-flow-editor__debug-console-header {
   display: flex;
   flex: 0 0 auto;
@@ -271,9 +261,19 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  gap: clamp(0.5rem, 2cqw, 0.75rem);
   overflow: auto;
   padding: clamp(0.75rem, 3.6cqw, 1rem);
+}
+
+.agent-flow-editor__debug-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 2cqw, 0.75rem);
+}
+
+.agent-flow-editor__debug-bottom-sentinel {
+  block-size: 1px;
+  flex: 0 0 auto;
 }
 
 .agent-flow-editor__debug-message {
@@ -458,85 +458,8 @@
   padding-inline: 0.5rem;
 }
 
-.agent-flow-editor__debug-trace-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-  padding: 10px;
-  border: 1px solid #e6eaf1;
-  border-radius: 12px;
-  background: #f8fafc;
-}
-
-.agent-flow-editor__debug-trace-summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.agent-flow-editor__debug-trace-summary-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-flow-editor__debug-raw-output {
-  max-height: 220px;
-  margin: 12px 0 0;
-  padding: 12px;
-  overflow: auto;
-  border: 1px solid #e6eaf1;
-  border-radius: 12px;
-  background: #101826;
-  color: #eff6ff;
-  font-size: 12px;
-}
-
-.agent-flow-editor__debug-trace-pane,
 .agent-flow-editor__debug-variables-pane {
   height: 100%;
-}
-
-.agent-flow-editor__debug-trace-filter {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.agent-flow-editor__debug-trace-list {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-  gap: 8px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.agent-flow-editor__debug-trace-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid rgba(18, 52, 34, 0.08);
-  border-radius: 8px;
-  background: rgba(252, 253, 252, 0.98);
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-flow-editor__debug-trace-item-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .agent-flow-editor__debug-variables-pane {

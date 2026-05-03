@@ -117,7 +117,6 @@ describe('agent flow editor store', () => {
     store.getState().setPanelState({
       historyOpen: true,
       debugConsoleOpen: true,
-      debugConsoleActiveTab: 'trace',
       nodeDetailTab: 'lastRun'
     });
     store.getState().setInteractionState({
@@ -153,7 +152,6 @@ describe('agent flow editor store', () => {
     expect(store.getState().openInspectorSectionKey).toBe('outputs');
     expect(store.getState().historyOpen).toBe(true);
     expect(store.getState().debugConsoleOpen).toBe(true);
-    expect(store.getState().debugConsoleActiveTab).toBe('trace');
     expect(store.getState().nodeDetailTab).toBe('lastRun');
     expect(store.getState().activeContainerPath).toEqual(['node-iteration-1']);
     expect(store.getState().highlightedIssueId).toBe('issue-1');

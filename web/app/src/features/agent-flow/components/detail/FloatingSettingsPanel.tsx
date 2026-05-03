@@ -43,6 +43,8 @@ type FloatingSettingsPanelProps = {
   leftResizeHandleTestId?: string;
   rightResizeHandleTestId?: string;
   bottomResizeHandleTestId?: string;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
   onClose: () => void;
 };
 
@@ -206,6 +208,8 @@ export function FloatingSettingsPanel({
   leftResizeHandleTestId,
   rightResizeHandleTestId,
   bottomResizeHandleTestId,
+  onMouseEnter,
+  onMouseLeave,
   onClose
 }: FloatingSettingsPanelProps) {
   const [panelContainer, setPanelContainer] = useState<HTMLElement | null>(
@@ -498,6 +502,8 @@ export function FloatingSettingsPanel({
         .filter(Boolean)
         .join(' ')}
       role="dialog"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       style={{
         position: panelContainer ? 'absolute' : 'fixed',
         width: `${panelWidth}px`,

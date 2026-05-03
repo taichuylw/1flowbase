@@ -1,4 +1,4 @@
-import { ConfigProvider, Layout, Typography } from 'antd';
+import { App as AntdApp, ConfigProvider, Layout, Typography } from 'antd';
 import type { PropsWithChildren, ReactNode } from 'react';
 
 import { emeraldLightTheme } from './theme';
@@ -6,7 +6,11 @@ import { emeraldLightTheme } from './theme';
 const { Header, Content } = Layout;
 
 export function AppThemeProvider({ children }: PropsWithChildren) {
-  return <ConfigProvider theme={emeraldLightTheme}>{children}</ConfigProvider>;
+  return (
+    <ConfigProvider theme={emeraldLightTheme}>
+      <AntdApp>{children}</AntdApp>
+    </ConfigProvider>
+  );
 }
 
 export interface AppShellProps extends PropsWithChildren {

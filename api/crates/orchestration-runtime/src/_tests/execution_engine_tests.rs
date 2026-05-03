@@ -373,7 +373,7 @@ async fn llm_node_outputs_include_hidden_route_projection_and_attempt_ids() {
 }
 
 #[tokio::test]
-async fn llm_output_payload_splits_think_tags_into_reasoning_content() {
+async fn llm_output_payload_keeps_think_tags_in_standard_text_content() {
     let invoker = StubProviderInvoker {
         fail: false,
         captured_input: Arc::new(Mutex::new(None)),
@@ -397,10 +397,82 @@ async fn llm_output_payload_splits_think_tags_into_reasoning_content() {
         .expect("llm trace should exist")
         .output_payload;
 
-    assert_eq!(output["text"], "正式回答");
-    assert_eq!(output["message"]["content"], "正式回答");
+    assert_eq!(output["text"], "<think>先分析用户问题</think>正式回答");
+    assert_eq!(
+        output["message"]["content"],
+        "<think>先分析用户问题</think>正式回答"
+    );
     assert_eq!(output["reasoning_content"], "先分析用户问题");
-    assert!(!output["text"].as_str().unwrap().contains("<think>"));
+}
+
+struct ReasoningDeltaProviderInvoker;
+
+#[async_trait]
+impl ProviderInvoker for ReasoningDeltaProviderInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::ReasoningDelta {
+                    delta: "先分析".to_string(),
+                },
+                ProviderStreamEvent::TextDelta {
+                    delta: "正式回答".to_string(),
+                },
+                ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Stop,
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some("正式回答".to_string()),
+                finish_reason: Some(ProviderFinishReason::Stop),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for ReasoningDeltaProviderInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("base plan does not execute capability nodes")
+    }
+}
+
+#[tokio::test]
+async fn llm_output_payload_merges_reasoning_deltas_into_dify_style_text() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "node-start": {
+                "query": "hello"
+            }
+        }),
+        &ReasoningDeltaProviderInvoker,
+    )
+    .await
+    .unwrap();
+    let output = outcome
+        .node_traces
+        .into_iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist")
+        .output_payload;
+
+    assert_eq!(output["text"], "<think>先分析</think>正式回答");
+    assert_eq!(
+        output["message"]["content"],
+        "<think>先分析</think>正式回答"
+    );
+    assert_eq!(output["reasoning_content"], "先分析");
 }
 
 #[tokio::test]

@@ -5,8 +5,12 @@ import type {
   SaveConsoleApplicationDraftInput
 } from '@1flowbase/api-client';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import { CloseOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { Button, Tooltip, Typography, message } from 'antd';
+import {
+  CloseOutlined,
+  CopyOutlined,
+  QuestionCircleOutlined
+} from '@ant-design/icons';
+import { App, Button, Tooltip, Typography } from 'antd';
 import {
   useEffect,
   useMemo,
@@ -39,8 +43,8 @@ import {
 } from '../../lib/detail-panel-width';
 import { validateDocument } from '../../lib/validate-document';
 import { buildNodePickerOptions } from '../../lib/plugin-node-definitions';
-import { getContainerPathForNode } from '../../lib/document/transforms/container';
 import { useAuthStore } from '../../../../state/auth-store';
+import { copyTextToClipboard } from '../../../../shared/ui/clipboard/copy-text';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import {
   selectAutosaveStatus,
@@ -51,7 +55,10 @@ import {
   selectWorkingDocument
 } from '../../store/editor/selectors';
 import { AgentFlowDebugConsole } from '../debug-console/AgentFlowDebugConsole';
-import { DebugVariablesPane, type SelectedVariableInfo } from '../debug-console/variables/DebugVariablesPane';
+import {
+  DebugVariablesPane,
+  type SelectedVariableInfo
+} from '../debug-console/variables/DebugVariablesPane';
 import { NodeDetailPanel } from '../detail/NodeDetailPanel';
 import { NodePreviewVariablesModal } from '../detail/NodePreviewVariablesModal';
 import { VersionHistoryDrawer } from '../history/VersionHistoryDrawer';
@@ -89,6 +96,7 @@ export function AgentFlowCanvasFrame({
   saveDraftOverride,
   restoreVersionOverride
 }: AgentFlowCanvasFrameProps) {
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
@@ -101,9 +109,6 @@ export function AgentFlowCanvasFrame({
   );
   const debugConsoleOpen = useAgentFlowEditorStore(selectDebugConsoleOpen);
   const debugConsoleWidth = useAgentFlowEditorStore(selectDebugConsoleWidth);
-  const debugConsoleActiveTab = useAgentFlowEditorStore(
-    (state) => state.debugConsoleActiveTab
-  );
   const selectedNodeId = useAgentFlowEditorStore(
     (state) => state.selectedNodeId
   );
@@ -142,13 +147,17 @@ export function AgentFlowCanvasFrame({
     plan: NodeDebugPreviewPlan;
   } | null>(null);
   const [variableCacheOpen, setVariableCacheOpen] = useState(false);
-  const [selectedVariable, setSelectedVariable] = useState<SelectedVariableInfo | null>(null);
+  const [selectedVariable, setSelectedVariable] =
+    useState<SelectedVariableInfo | null>(null);
   const [variableCacheHeight, setVariableCacheHeight] = useState(
     VARIABLE_CACHE_DEFAULT_HEIGHT
   );
   const [isResizingVariableCache, setIsResizingVariableCache] = useState(false);
-  const [variableCacheSidebarWidth, setVariableCacheSidebarWidth] = useState(VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH);
-  const [isResizingVariableCacheSidebar, setIsResizingVariableCacheSidebar] = useState(false);
+  const [variableCacheSidebarWidth, setVariableCacheSidebarWidth] = useState(
+    VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH
+  );
+  const [isResizingVariableCacheSidebar, setIsResizingVariableCacheSidebar] =
+    useState(false);
   const modelProviderOptionsQuery = useQuery({
     queryKey: modelProviderOptionsQueryKey,
     queryFn: fetchModelProviderOptions
@@ -167,7 +176,6 @@ export function AgentFlowCanvasFrame({
     draftId: draftMeta.draftId,
     document: workingDocument
   });
-  const { syncSelectedNode } = debugSession;
   const issues = useMemo(
     () =>
       validateDocument(
@@ -317,10 +325,6 @@ export function AgentFlowCanvasFrame({
     stopVariableCacheSidebarResizeRef.current?.();
   }, [variableCacheOpen]);
 
-  useEffect(() => {
-    syncSelectedNode(selectedNodeId);
-  }, [selectedNodeId, syncSelectedNode]);
-
   useEditorShortcuts();
 
   const canvasFrameWidth =
@@ -461,7 +465,7 @@ export function AgentFlowCanvasFrame({
     window.addEventListener('mouseup', cleanup);
   }
 
-   function handleVariableCacheResizeStart(
+  function handleVariableCacheResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
     event.preventDefault();
@@ -530,10 +534,7 @@ export function AgentFlowCanvasFrame({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
-        Math.max(
-          startWidth + moveEvent.clientX - startX,
-          minWidth
-        ),
+        Math.max(startWidth + moveEvent.clientX - startX, minWidth),
         maxWidth
       );
 
@@ -550,9 +551,12 @@ export function AgentFlowCanvasFrame({
     message.success('已重置变量缓存');
   }
 
-
   function handleVariableCacheValueChange(key: string, value: unknown) {
-    if (selectedVariable?.isReadOnly || !selectedVariable || selectedVariable.key !== key) {
+    if (
+      selectedVariable?.isReadOnly ||
+      !selectedVariable ||
+      selectedVariable.key !== key
+    ) {
       return;
     }
 
@@ -642,23 +646,6 @@ export function AgentFlowCanvasFrame({
     handleRunNode(selectedNodeId);
   }
 
-  function handleLocateTraceNode(nodeId: string | null) {
-    debugSession.selectTraceNode(nodeId);
-
-    if (!nodeId) {
-      return;
-    }
-
-    setInteractionState({
-      activeContainerPath: getContainerPathForNode(documentRef.current, nodeId),
-      pendingLocateNodeId: nodeId
-    });
-    setPanelState({
-      debugConsoleActiveTab: 'trace',
-      debugConsoleOpen: true
-    });
-  }
-
   return (
     <section
       aria-label={`${applicationName} editor`}
@@ -677,7 +664,6 @@ export function AgentFlowCanvasFrame({
         onOpenDebugConsole={() =>
           setPanelState({
             debugConsoleOpen: true,
-            debugConsoleActiveTab: 'conversation',
             debugConsoleWidth: debugConsoleWidth || DEBUG_CONSOLE_DEFAULT_WIDTH
           })
         }
@@ -757,7 +743,9 @@ export function AgentFlowCanvasFrame({
             aria-label="变量缓存"
             className="agent-flow-editor__variable-cache-panel"
             data-resizing={isResizingVariableCache ? 'true' : 'false'}
-            data-sidebar-resizing={isResizingVariableCacheSidebar ? 'true' : 'false'}
+            data-sidebar-resizing={
+              isResizingVariableCacheSidebar ? 'true' : 'false'
+            }
             style={{
               right: variableCacheRightOffset,
               height: boundedVariableCacheHeight
@@ -796,7 +784,7 @@ export function AgentFlowCanvasFrame({
                           typeof selectedVariable.value === 'string'
                             ? selectedVariable.value
                             : JSON.stringify(selectedVariable.value, null, 2);
-                        navigator.clipboard.writeText(text).then(
+                        copyTextToClipboard(text).then(
                           () => message.success('已复制'),
                           () => message.error('复制失败')
                         );
@@ -850,19 +838,12 @@ export function AgentFlowCanvasFrame({
               role="separator"
             />
             <AgentFlowDebugConsole
-              activeNodeFilter={debugSession.activeNodeFilter}
-              activeTab={debugConsoleActiveTab}
               messages={debugSession.messages}
               runContext={debugSession.runContext}
               status={debugSession.status}
-              traceItems={debugSession.traceItems}
               onChangeRunContextValue={debugSession.setRunContextValue}
-              onChangeTab={(key) =>
-                setPanelState({ debugConsoleActiveTab: key })
-              }
               onClearSession={debugSession.clearSession}
               onClose={() => setPanelState({ debugConsoleOpen: false })}
-              onLocateTraceNode={handleLocateTraceNode}
               onSubmitPrompt={() => {
                 void debugSession.submitPrompt();
               }}

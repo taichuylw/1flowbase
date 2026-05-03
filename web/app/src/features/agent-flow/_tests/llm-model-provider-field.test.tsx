@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-container, testing-library/no-node-access */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
@@ -420,6 +420,72 @@ describe('LlmModelField', () => {
       left: '416px',
       top: '180px'
     });
+  });
+
+  test('closes the model settings panel two seconds after the mouse leaves it', async () => {
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    await openModelSettings();
+
+    vi.useFakeTimers();
+    try {
+      const dialog = screen.getByRole('dialog', { name: '模型设置' });
+
+      fireEvent.mouseLeave(dialog);
+      act(() => {
+        vi.advanceTimersByTime(1999);
+      });
+
+      expect(
+        screen.getByRole('dialog', { name: '模型设置' })
+      ).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(
+        screen.queryByRole('dialog', { name: '模型设置' })
+      ).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('keeps the model settings panel open when the mouse returns before auto close', async () => {
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    await openModelSettings();
+
+    vi.useFakeTimers();
+    try {
+      const dialog = screen.getByRole('dialog', { name: '模型设置' });
+
+      fireEvent.mouseLeave(dialog);
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+      fireEvent.mouseEnter(dialog);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(
+        screen.getByRole('dialog', { name: '模型设置' })
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('resizes the model settings panel width from both sides while keeping the 320px minimum', async () => {

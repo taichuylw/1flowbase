@@ -411,11 +411,10 @@ where
             .finish_reason
             .clone()
             .or_else(|| finish_reason_from_events(&output.events));
-        let final_content = output
-            .result
-            .final_content
-            .clone()
-            .or_else(|| collect_text_deltas(&output.events));
+        let final_content = resolve_final_llm_content(
+            output.result.final_content.clone(),
+            collect_dify_style_deltas(&output.events),
+        );
         let provider_error = first_provider_error(&output.events).cloned().or_else(|| {
             matches!(finish_reason, Some(ProviderFinishReason::Error)).then(|| {
                 ProviderRuntimeError::normalize(
@@ -889,7 +888,7 @@ fn build_llm_output_payload(
     let mut output = standard_llm_output_payload(
         node,
         runtime,
-        &text_parts.text,
+        &text,
         finish_reason,
         result.tool_calls.clone(),
         serde_json::to_value(usage).unwrap_or(Value::Null),
@@ -1017,14 +1016,60 @@ fn standard_llm_output_payload(
     Value::Object(output)
 }
 
-fn collect_text_deltas(events: &[ProviderStreamEvent]) -> Option<String> {
+fn resolve_final_llm_content(
+    result_content: Option<String>,
+    stream_content: Option<String>,
+) -> Option<String> {
+    match (result_content, stream_content) {
+        (Some(_), Some(stream)) if stream.contains("<think>") => Some(stream),
+        (Some(result), _) => Some(result),
+        (None, stream) => stream,
+    }
+}
+
+fn collect_dify_style_deltas(events: &[ProviderStreamEvent]) -> Option<String> {
     let mut content = String::new();
+
     for event in events {
-        if let ProviderStreamEvent::TextDelta { delta } = event {
-            content.push_str(delta);
+        match event {
+            ProviderStreamEvent::ReasoningDelta { delta } => {
+                append_reasoning_delta(&mut content, delta);
+            }
+            ProviderStreamEvent::TextDelta { delta } => {
+                append_text_delta(&mut content, delta);
+            }
+            _ => {}
         }
     }
+
+    close_open_think_block(&mut content);
     (!content.is_empty()).then_some(content)
+}
+
+fn append_reasoning_delta(content: &mut String, delta: &str) {
+    if delta.is_empty() {
+        return;
+    }
+
+    if !has_open_think_block(content) {
+        content.push_str("<think>");
+    }
+    content.push_str(delta);
+}
+
+fn append_text_delta(content: &mut String, delta: &str) {
+    close_open_think_block(content);
+    content.push_str(delta);
+}
+
+fn close_open_think_block(content: &mut String) {
+    if has_open_think_block(content) {
+        content.push_str("</think>");
+    }
+}
+
+fn has_open_think_block(content: &str) -> bool {
+    content.rfind("<think>") > content.rfind("</think>")
 }
 
 fn collect_usage(events: &[ProviderStreamEvent], result_usage: &ProviderUsage) -> ProviderUsage {

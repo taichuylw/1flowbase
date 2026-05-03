@@ -13,8 +13,10 @@ use control_plane::{
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
 use serde_json::json;
 use sqlx::PgPool;
+use std::sync::Arc;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
 use time::{macros::datetime, Duration, OffsetDateTime};
+use tokio::sync::Barrier;
 use uuid::Uuid;
 
 fn base_database_url() -> String {
@@ -635,6 +637,52 @@ async fn orchestration_runtime_repository_batch_appends_run_and_runtime_events()
             .map(|event| (event.sequence, event.event_type.as_str()))
             .collect::<Vec<_>>(),
         vec![(1, "text_delta"), (2, "finish")]
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_repository_serializes_concurrent_run_event_sequences() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-04-17 09:00:00 UTC);
+    let run = seed_flow_run(&store, &seeded, &compiled, started_at).await;
+    let barrier = Arc::new(Barrier::new(12));
+    let mut handles = Vec::new();
+
+    for index in 0..12 {
+        let store = store.clone();
+        let barrier = Arc::clone(&barrier);
+        let flow_run_id = run.id;
+        handles.push(tokio::spawn(async move {
+            barrier.wait().await;
+            <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_run_event(
+                &store,
+                &AppendRunEventInput {
+                    flow_run_id,
+                    node_run_id: None,
+                    event_type: format!("event_{index}"),
+                    payload: json!({ "index": index }),
+                },
+            )
+            .await
+        }));
+    }
+
+    let mut events = Vec::new();
+    for handle in handles {
+        events.push(handle.await.unwrap().unwrap());
+    }
+    events.sort_by_key(|event| event.sequence);
+
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| event.sequence)
+            .collect::<Vec<_>>(),
+        (1..=12).collect::<Vec<_>>()
     );
 }
 

@@ -1,14 +1,10 @@
-import {
-  CopyOutlined,
-  DownOutlined,
-  EyeOutlined,
-  PartitionOutlined,
-  RightOutlined
-} from '@ant-design/icons';
-import { Button, Space } from 'antd';
+import { CopyOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
+import { App, Button, Space, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../../api/runtime';
+import { parseAssistantContent } from '../../../lib/debug-console/assistant-content';
+import { copyTextToClipboard } from '../../../../../shared/ui/clipboard/copy-text';
 import { DebugMarkdownContent } from './DebugMarkdownContent';
 import { DebugWorkflowProcess } from './DebugWorkflowProcess';
 import './debug-message.css';
@@ -40,10 +36,15 @@ function fallbackContent(message: AgentFlowDebugMessage) {
 const TYPEWRITER_INTERVAL_MS = 24;
 const TYPEWRITER_CHARS_PER_TICK = 12;
 
-function useProgressiveText(target: string) {
+function useProgressiveText(target: string, enabled: boolean) {
   const [visibleText, setVisibleText] = useState(target);
 
   useEffect(() => {
+    if (!enabled) {
+      setVisibleText(target);
+      return;
+    }
+
     setVisibleText((currentText) => {
       if (!target) {
         return '';
@@ -55,9 +56,13 @@ function useProgressiveText(target: string) {
 
       return currentText;
     });
-  }, [target]);
+  }, [enabled, target]);
 
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
     if (visibleText.length >= target.length) {
       return undefined;
     }
@@ -75,30 +80,38 @@ function useProgressiveText(target: string) {
     }, TYPEWRITER_INTERVAL_MS);
 
     return () => window.clearTimeout(timer);
-  }, [target, visibleText]);
+  }, [enabled, target, visibleText]);
 
   return visibleText;
 }
 
 export function DebugAssistantMessage({
-  message,
-  onViewTrace
+  message
 }: {
   message: AgentFlowDebugMessage;
-  onViewTrace: () => void;
 }) {
-  const [showRawOutput, setShowRawOutput] = useState(false);
+  const { message: messageApi } = App.useApp();
   const [isReasoningExpanded, setIsReasoningExpanded] = useState(true);
-  const visibleContent = useProgressiveText(message.content);
-  const visibleReasoning = useProgressiveText(message.reasoningContent ?? '');
-  const hasReasoning = Boolean(message.reasoningContent?.trim());
+  const visibleContent = useProgressiveText(
+    message.content,
+    message.status !== 'running'
+  );
+  const parsedContent = parseAssistantContent(visibleContent);
+  const parsedFullContent = parseAssistantContent(message.content);
+  const hasReasoning = Boolean(parsedContent.reasoningText.trim());
+  const hasAnswer = Boolean(parsedContent.answerText.trim());
 
   async function handleCopyOutput() {
-    if (!message.content) {
+    if (!parsedFullContent.answerText) {
       return;
     }
 
-    await navigator.clipboard.writeText(message.content);
+    try {
+      await copyTextToClipboard(parsedFullContent.answerText);
+      messageApi.success('已复制');
+    } catch {
+      messageApi.error('复制失败');
+    }
   }
 
   return (
@@ -124,23 +137,18 @@ export function DebugAssistantMessage({
             {isReasoningExpanded ? (
               <DebugMarkdownContent
                 className="agent-flow-editor__debug-reasoning-content"
-                content={visibleReasoning}
+                content={parsedContent.reasoningText}
               />
             ) : null}
           </section>
         ) : null}
-        {message.content || !hasReasoning ? (
+        {hasAnswer || !hasReasoning ? (
           <DebugMarkdownContent
             className="agent-flow-editor__debug-message-content"
             content={
-              message.content ? visibleContent : fallbackContent(message)
+              hasAnswer ? parsedContent.answerText : fallbackContent(message)
             }
           />
-        ) : null}
-        {showRawOutput && message.rawOutput ? (
-          <pre className="agent-flow-editor__debug-raw-output">
-            {JSON.stringify(message.rawOutput, null, 2)}
-          </pre>
         ) : null}
       </div>
       <div
@@ -153,32 +161,17 @@ export function DebugAssistantMessage({
           size={8}
           wrap
         >
-          <Button
-            disabled={!message.content}
-            icon={<CopyOutlined />}
-            size="small"
-            onClick={() => {
-              void handleCopyOutput();
-            }}
-          >
-            复制输出
-          </Button>
-          <Button
-            disabled={message.traceSummary.length === 0}
-            icon={<PartitionOutlined />}
-            size="small"
-            onClick={onViewTrace}
-          >
-            查看 Trace
-          </Button>
-          <Button
-            disabled={!message.rawOutput}
-            icon={<EyeOutlined />}
-            size="small"
-            onClick={() => setShowRawOutput((current) => !current)}
-          >
-            查看 Raw Output
-          </Button>
+          <Tooltip title="复制输出">
+            <Button
+              aria-label="复制输出"
+              disabled={!parsedFullContent.answerText}
+              icon={<CopyOutlined />}
+              size="small"
+              onClick={() => {
+                void handleCopyOutput();
+              }}
+            />
+          </Tooltip>
         </Space>
       </div>
     </article>

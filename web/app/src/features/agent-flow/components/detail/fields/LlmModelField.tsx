@@ -43,6 +43,8 @@ const EMPTY_MODEL_PROVIDER = {
   schema_fetched_at: undefined
 } as const;
 
+const MODEL_SETTINGS_MOUSE_LEAVE_CLOSE_DELAY_MS = 2_000;
+
 const LLM_PARAMETERS_BLOCK: SchemaDynamicFormBlock = {
   kind: 'dynamic_form',
   form_key: 'llm_parameters',
@@ -173,6 +175,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const [searchText, setSearchText] = useState('');
   const [expandedProviders, setExpandedProviders] = useState<string[]>([]);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const mouseLeaveCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const providerOptionsQuery = useQuery({
     queryKey: modelProviderOptionsQueryKey,
     queryFn: fetchModelProviderOptions,
@@ -258,6 +263,38 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
     setSearchText('');
   }, [open]);
 
+  useEffect(() => {
+    return () => {
+      clearMouseLeaveCloseTimer();
+    };
+  }, []);
+
+  function clearMouseLeaveCloseTimer() {
+    if (!mouseLeaveCloseTimerRef.current) {
+      return;
+    }
+
+    clearTimeout(mouseLeaveCloseTimerRef.current);
+    mouseLeaveCloseTimerRef.current = null;
+  }
+
+  function closeFloatingPanel() {
+    clearMouseLeaveCloseTimer();
+    setOpen(false);
+  }
+
+  function scheduleMouseLeaveClose() {
+    if (!open) {
+      return;
+    }
+
+    clearMouseLeaveCloseTimer();
+    mouseLeaveCloseTimerRef.current = setTimeout(() => {
+      mouseLeaveCloseTimerRef.current = null;
+      setOpen(false);
+    }, MODEL_SETTINGS_MOUSE_LEAVE_CLOSE_DELAY_MS);
+  }
+
   function clearSelection() {
     adapter.setValue('config.model_provider', EMPTY_MODEL_PROVIDER);
     adapter.setValue('config.llm_parameters', buildLlmParameterState(null));
@@ -322,6 +359,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   }
 
   function openFloatingPanel() {
+    clearMouseLeaveCloseTimer();
     setOpen(true);
   }
 
@@ -334,7 +372,9 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
       dragHandleTestId="agent-flow-model-settings-drag-handle"
       leftResizeHandleTestId="agent-flow-model-settings-resize-handle-left"
       rightResizeHandleTestId="agent-flow-model-settings-resize-handle"
-      onClose={() => setOpen(false)}
+      onMouseEnter={clearMouseLeaveCloseTimer}
+      onMouseLeave={scheduleMouseLeaveClose}
+      onClose={closeFloatingPanel}
     >
       {providerOptionsQuery.isError ? (
         <Alert
@@ -560,6 +600,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
         aria-label={block.label}
         className="agent-flow-model-field__trigger"
         onClick={openFloatingPanel}
+        onMouseEnter={clearMouseLeaveCloseTimer}
+        onMouseLeave={scheduleMouseLeaveClose}
         ref={triggerRef}
       >
         <ModelChip

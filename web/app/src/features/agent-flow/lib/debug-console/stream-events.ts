@@ -4,6 +4,12 @@ import type {
   AgentFlowTraceItem,
   FlowDebugRunStreamEvent
 } from '../../api/runtime';
+import {
+  appendReasoningDeltaToAssistantContent,
+  appendTextDeltaToAssistantContent,
+  closeOpenThinkBlock,
+  parseAssistantContent
+} from './assistant-content';
 
 function nowIso() {
   return new Date().toISOString();
@@ -137,12 +143,15 @@ export function applyDebugStreamEventToAssistantMessage(
     case 'text_delta':
       return {
         ...message,
-        content: `${message.content}${event.text}`
+        content: appendTextDeltaToAssistantContent(message.content, event.text)
       };
     case 'reasoning_delta':
       return {
         ...message,
-        reasoningContent: `${message.reasoningContent ?? ''}${event.text}`
+        content: appendReasoningDeltaToAssistantContent(
+          message.content,
+          event.text
+        )
       };
     case 'node_started':
     case 'node_finished':
@@ -150,15 +159,23 @@ export function applyDebugStreamEventToAssistantMessage(
         ...message,
         traceSummary: traceItems
       };
-    case 'flow_finished':
+    case 'flow_finished': {
+      const closedContent = closeOpenThinkBlock(message.content);
+      const outputText = extractOutputText(event.output);
+      const nextContent =
+        parseAssistantContent(closedContent).answerText || !outputText
+          ? closedContent
+          : appendTextDeltaToAssistantContent(closedContent, outputText);
+
       return {
         ...message,
         runId: event.run_id,
         status: mapFlowStatus(event.status),
-        content: message.content || extractOutputText(event.output),
+        content: nextContent,
         rawOutput: event.output,
         traceSummary: traceItems
       };
+    }
     case 'flow_failed':
       return {
         ...message,

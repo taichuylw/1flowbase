@@ -1,10 +1,28 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
+import copy from 'copy-to-clipboard';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { DebugAssistantMessage } from '../../components/debug-console/conversation/DebugAssistantMessage';
 import type { AgentFlowDebugMessage } from '../../api/runtime';
+import { AppProviders } from '../../../../app/AppProviders';
+
+vi.mock('copy-to-clipboard', () => ({
+  default: vi.fn()
+}));
 
 describe('DebugAssistantMessage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(copy).mockResolvedValue(true);
+  });
+
   test('renders streamed answer content as markdown and shows the current workflow node', () => {
     const message: AgentFlowDebugMessage = {
       id: 'assistant-1',
@@ -49,7 +67,7 @@ describe('DebugAssistantMessage', () => {
       ]
     };
 
-    render(<DebugAssistantMessage message={message} onViewTrace={vi.fn()} />);
+    render(<DebugAssistantMessage message={message} />);
 
     expect(
       screen.getByRole('heading', { name: '处理结果' })
@@ -59,14 +77,15 @@ describe('DebugAssistantMessage', () => {
     expect(within(table).getByText('已确认')).toBeInTheDocument();
     const actionRow = screen.getByRole('group', { name: '输出动作' });
     expect(
-      within(actionRow).getByRole('button', { name: /复制输出/ })
+      within(actionRow).getByRole('button', { name: '复制输出' })
     ).toBeInTheDocument();
+    expect(within(actionRow).queryByText('复制输出')).not.toBeInTheDocument();
     expect(
-      within(actionRow).getByRole('button', { name: /查看 Trace/ })
-    ).toBeInTheDocument();
+      within(actionRow).queryByRole('button', { name: /查看 Trace/ })
+    ).not.toBeInTheDocument();
     expect(
-      within(actionRow).getByRole('button', { name: /查看 Raw Output/ })
-    ).toBeInTheDocument();
+      within(actionRow).queryByRole('button', { name: /查看 Raw Output/ })
+    ).not.toBeInTheDocument();
     expect(
       table.compareDocumentPosition(actionRow) &
         Node.DOCUMENT_POSITION_FOLLOWING
@@ -115,7 +134,7 @@ describe('DebugAssistantMessage', () => {
     expect(inputToggle).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('reveals newly arrived assistant content progressively', () => {
+  test('renders running streamed content immediately without typewriter delay', () => {
     vi.useFakeTimers();
     const baseMessage: AgentFlowDebugMessage = {
       id: 'assistant-typing',
@@ -128,14 +147,35 @@ describe('DebugAssistantMessage', () => {
     };
 
     const { container, rerender } = render(
-      <DebugAssistantMessage message={baseMessage} onViewTrace={vi.fn()} />
+      <DebugAssistantMessage message={baseMessage} />
     );
 
     rerender(
-      <DebugAssistantMessage
-        message={{ ...baseMessage, content: 'abcdef' }}
-        onViewTrace={vi.fn()}
-      />
+      <DebugAssistantMessage message={{ ...baseMessage, content: 'abcdef' }} />
+    );
+
+    expect(container).toHaveTextContent('abcdef');
+    vi.useRealTimers();
+  });
+
+  test('reveals completed assistant content progressively', () => {
+    vi.useFakeTimers();
+    const baseMessage: AgentFlowDebugMessage = {
+      id: 'assistant-typing-completed',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '',
+      rawOutput: null,
+      traceSummary: []
+    };
+
+    const { container, rerender } = render(
+      <DebugAssistantMessage message={baseMessage} />
+    );
+
+    rerender(
+      <DebugAssistantMessage message={{ ...baseMessage, content: 'abcdef' }} />
     );
 
     expect(container).not.toHaveTextContent('abcdef');
@@ -148,19 +188,18 @@ describe('DebugAssistantMessage', () => {
     vi.useRealTimers();
   });
 
-  test('renders streamed reasoning in a collapsible labeled section', () => {
+  test('renders Dify-style think tags in a collapsible labeled section', () => {
     const message: AgentFlowDebugMessage = {
       id: 'assistant-reasoning',
       role: 'assistant',
       status: 'running',
       runId: 'run-1',
-      content: '退款政策摘要。',
-      reasoningContent: '先分析用户问题，再整理退款政策。',
+      content: '<think>先分析用户问题，再整理退款政策。</think>退款政策摘要。',
       rawOutput: null,
       traceSummary: []
     };
 
-    render(<DebugAssistantMessage message={message} onViewTrace={vi.fn()} />);
+    render(<DebugAssistantMessage message={message} />);
 
     const reasoningToggle = screen.getByRole('button', { name: /思考/ });
     expect(reasoningToggle).toHaveAttribute('aria-expanded', 'true');
@@ -168,6 +207,7 @@ describe('DebugAssistantMessage', () => {
       screen.getByText('先分析用户问题，再整理退款政策。')
     ).toBeInTheDocument();
     expect(screen.getByText('退款政策摘要。')).toBeInTheDocument();
+    expect(screen.queryByText(/<think>/)).not.toBeInTheDocument();
 
     fireEvent.click(reasoningToggle);
 
@@ -176,5 +216,41 @@ describe('DebugAssistantMessage', () => {
       screen.queryByText('先分析用户问题，再整理退款政策。')
     ).not.toBeInTheDocument();
     expect(screen.getByText('退款政策摘要。')).toBeInTheDocument();
+  });
+
+  test('copies answer content through App message context without static message warning', async () => {
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-copy',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '复制这段输出',
+      rawOutput: null,
+      traceSummary: []
+    };
+
+    render(
+      <AppProviders>
+        <DebugAssistantMessage message={message} />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '复制输出' }));
+
+    await waitFor(() => {
+      expect(copy).toHaveBeenCalledWith('复制这段输出');
+    });
+    expect(
+      [...warnSpy.mock.calls, ...errorSpy.mock.calls].flat().join('\n')
+    ).not.toContain('Static function can not consume context');
+
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });

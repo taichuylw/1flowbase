@@ -3,9 +3,10 @@ import {
   CopyOutlined,
   FullscreenOutlined
 } from '@ant-design/icons';
-import { Button, Modal, Tooltip, message } from 'antd';
+import { App, Button, Modal, Tooltip } from 'antd';
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
+import { useClipboardCopy } from '../../../../shared/ui/clipboard/use-clipboard-copy';
 import { type FlowSelectorOption } from '../../lib/selector-options';
 import {
   LexicalTemplatedTextEditor,
@@ -42,18 +43,21 @@ export function TemplatedTextField({
   onDragEnd,
   onDragStart
 }: TemplatedTextFieldProps) {
+  const { message } = App.useApp();
   const editorRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
   const expandedEditorRef = useRef<LexicalTemplatedTextEditorHandle | null>(
     null
   );
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboardCopy();
   const [expanded, setExpanded] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    message.success('已复制');
-    window.setTimeout(() => setCopied(false), 1600);
+    try {
+      await copy(value);
+      message.success('已复制');
+    } catch {
+      message.error('复制失败');
+    }
   }
 
   function handleFrameMouseDown(event: MouseEvent<HTMLDivElement>) {

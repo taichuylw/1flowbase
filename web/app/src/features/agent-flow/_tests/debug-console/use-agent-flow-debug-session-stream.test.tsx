@@ -129,7 +129,7 @@ describe('useAgentFlowDebugSession streaming', () => {
     }
   });
 
-  test('streams reasoning deltas into assistant thought content before answer text', async () => {
+  test('streams reasoning and answer deltas into one Dify-style ordered content field', async () => {
     vi.useFakeTimers();
 
     try {
@@ -173,9 +173,11 @@ describe('useAgentFlowDebugSession streaming', () => {
         expect.objectContaining({
           runId: 'run-reasoning',
           status: 'running',
-          reasoningContent: '先分析',
-          content: '结果'
+          content: '<think>先分析</think>结果'
         })
+      );
+      expect(result.current.messages.at(-1)).not.toHaveProperty(
+        'reasoningContent'
       );
     } finally {
       vi.useRealTimers();

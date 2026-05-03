@@ -4,10 +4,11 @@ import {
   DownOutlined,
   FullscreenOutlined
 } from '@ant-design/icons';
-import { Button, Card, Modal, Tooltip, message } from 'antd';
+import { App, Button, Card, Modal, Tooltip } from 'antd';
 import { Suspense, lazy, useMemo, useState } from 'react';
 
 import type { NodeLastRun } from '../../../api/runtime';
+import { useClipboardCopy } from '../../../../../shared/ui/clipboard/use-clipboard-copy';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
@@ -101,21 +102,27 @@ export function NodeRunJsonBlock({
   title: string;
   payload: Record<string, unknown>;
 }) {
+  const { message } = App.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboardCopy();
   const value = useMemo(() => formatJson(payload), [payload]);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    message.success('已复制');
-    window.setTimeout(() => setCopied(false), 1600);
+    try {
+      await copy(value);
+      message.success('已复制');
+    } catch {
+      message.error('复制失败');
+    }
   };
 
   return (
     <section className="agent-flow-node-run-json-viewer">
-      <pre aria-label={`${title} JSON`} className="agent-flow-node-run-json__a11y">
+      <pre
+        aria-label={`${title} JSON`}
+        className="agent-flow-node-run-json__a11y"
+      >
         {value}
       </pre>
       <div className="agent-flow-node-run-json-viewer__header">
@@ -127,7 +134,9 @@ export function NodeRunJsonBlock({
           type="button"
         >
           <DownOutlined className="agent-flow-node-run-json-viewer__toggle-icon" />
-          <span className="agent-flow-node-run-json-viewer__title">{title}</span>
+          <span className="agent-flow-node-run-json-viewer__title">
+            {title}
+          </span>
         </button>
         <div className="agent-flow-node-run-json-viewer__actions">
           <Tooltip title="复制 JSON">
@@ -173,15 +182,14 @@ export function NodeRunJsonBlock({
   );
 }
 
-export function NodeRunIOCard({
-  lastRun
-}: {
-  lastRun: NodeLastRun;
-}) {
+export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
   return (
     <Card title="节点输入输出">
       <div className="agent-flow-node-run-json-list">
-        <NodeRunJsonBlock payload={lastRun.node_run.input_payload} title="输入" />
+        <NodeRunJsonBlock
+          payload={lastRun.node_run.input_payload}
+          title="输入"
+        />
         <NodeRunJsonBlock payload={getOutputPayload(lastRun)} title="输出" />
       </div>
     </Card>

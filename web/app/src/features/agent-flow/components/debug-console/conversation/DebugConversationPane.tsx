@@ -1,6 +1,10 @@
 import { Empty, Typography } from 'antd';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 
-import type { AgentFlowDebugMessage, AgentFlowRunContext } from '../../../api/runtime';
+import type {
+  AgentFlowDebugMessage,
+  AgentFlowRunContext
+} from '../../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgentFlowDebugSession';
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
@@ -14,56 +18,122 @@ export function DebugConversationPane({
   runContext,
   messages,
   onChangeQuery,
-  onSubmitPrompt,
-  onViewTrace
+  onSubmitPrompt
 }: {
   status: AgentFlowDebugSessionStatus;
   runContext: AgentFlowRunContext;
   messages: AgentFlowDebugMessage[];
   onChangeQuery: (value: string) => void;
   onSubmitPrompt: () => void;
-  onViewTrace: () => void;
 }) {
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollEnabledRef = useRef(true);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
   const queryField = getQueryField(runContext);
   const composerDisabled =
     !queryField ||
     status === 'running' ||
     status === 'waiting_human' ||
     status === 'waiting_callback';
+  const activeAssistantMessage =
+    [...messages].reverse().find((message) => message.role === 'assistant') ??
+    null;
+  const activeAssistantMessageId = activeAssistantMessage?.id ?? null;
+  const activeAssistantContent = activeAssistantMessage?.content ?? '';
+  const scrollToBottom = useCallback(() => {
+    if (status !== 'running' || !autoScrollEnabledRef.current) {
+      return;
+    }
+
+    if (typeof bottomRef.current?.scrollIntoView === 'function') {
+      bottomRef.current.scrollIntoView({ block: 'end' });
+    }
+  }, [status]);
+
+  useLayoutEffect(() => {
+    if (activeAssistantMessageIdRef.current !== activeAssistantMessageId) {
+      activeAssistantMessageIdRef.current = activeAssistantMessageId;
+      autoScrollEnabledRef.current = true;
+    }
+
+    scrollToBottom();
+  }, [activeAssistantContent, activeAssistantMessageId, messages.length, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const element = messageListRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      scrollToBottom();
+    });
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [scrollToBottom]);
+
+  function pauseAutoScroll() {
+    if (status === 'running') {
+      autoScrollEnabledRef.current = false;
+    }
+  }
 
   return (
     <div className="agent-flow-editor__debug-console-pane agent-flow-editor__debug-conversation-pane">
-      <div className="agent-flow-editor__debug-messages">
-        {messages.length === 0 ? (
-          <Empty
-            description="还没有整流运行记录"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
-        ) : (
-          messages.map((message) =>
-            message.role === 'assistant' ? (
-              <DebugAssistantMessage
-                key={message.id}
-                message={message}
-                onViewTrace={onViewTrace}
-              />
-            ) : (
-              <article
-                key={message.id}
-                className="agent-flow-editor__debug-message agent-flow-editor__debug-message--user"
-              >
-                <div className="agent-flow-editor__debug-message-main">
-                  <div className="agent-flow-editor__debug-message-header">
-                    <Typography.Text strong>User</Typography.Text>
+      <div
+        ref={messagesRef}
+        className="agent-flow-editor__debug-messages"
+        onPointerDown={pauseAutoScroll}
+        onTouchMove={pauseAutoScroll}
+        onWheel={pauseAutoScroll}
+      >
+        <div
+          ref={messageListRef}
+          className="agent-flow-editor__debug-message-list"
+        >
+          {messages.length === 0 ? (
+            <Empty
+              description="还没有整流运行记录"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          ) : (
+            messages.map((message) =>
+              message.role === 'assistant' ? (
+                <DebugAssistantMessage
+                  key={message.id}
+                  message={message}
+                />
+              ) : (
+                <article
+                  key={message.id}
+                  className="agent-flow-editor__debug-message agent-flow-editor__debug-message--user"
+                >
+                  <div className="agent-flow-editor__debug-message-main">
+                    <div className="agent-flow-editor__debug-message-header">
+                      <Typography.Text strong>User</Typography.Text>
+                    </div>
+                    <Typography.Paragraph className="agent-flow-editor__debug-message-content">
+                      {message.content}
+                    </Typography.Paragraph>
                   </div>
-                  <Typography.Paragraph className="agent-flow-editor__debug-message-content">
-                    {message.content}
-                  </Typography.Paragraph>
-                </div>
-              </article>
+                </article>
+              )
             )
-          )
-        )}
+          )}
+          <div
+            ref={bottomRef}
+            aria-hidden="true"
+            className="agent-flow-editor__debug-bottom-sentinel"
+          />
+        </div>
       </div>
       <DebugComposer
         disabled={composerDisabled}
