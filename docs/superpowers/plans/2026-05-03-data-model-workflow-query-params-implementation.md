@@ -43,11 +43,11 @@ Do not revert or reformat them. The implementation does not require touching tho
   - Extracts selectors from `data_model_query`.
   - Resolves `data_model_query` into the standard runtime list query object.
 
-- [ ] **04 Control Plane And Verification:** `docs/superpowers/plans/2026-05-03-data-model-workflow-query-params-implementation-04-control-plane-verification.md`
+- [x] **04 Control Plane And Verification:** `docs/superpowers/plans/2026-05-03-data-model-workflow-query-params-implementation-04-control-plane-verification.md`
   - Adds workflow list pagination clamp and runtime validation.
   - Adds Data Model execution coverage.
   - Runs final frontend and backend gates.
-  - [x] Task 1 and Task 2 completed; Task 3 final gates remain pending in main session.
+  - [x] Final gates completed in the main session.
 
 ## Acceptance Mapping
 

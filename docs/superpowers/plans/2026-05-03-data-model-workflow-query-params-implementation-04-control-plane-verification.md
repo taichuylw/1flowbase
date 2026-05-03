@@ -345,7 +345,7 @@ git commit -m "feat: validate data model workflow list queries"
 
 ### Task 3: Final Verification
 
-- [ ] **Step 1: Run targeted frontend gate**
+- [x] **Step 1: Run targeted frontend gate**
 
 Run:
 
@@ -355,7 +355,7 @@ pnpm --dir web/app test -- node-schema-registry node-inspector node-debug-previe
 
 Expected: PASS.
 
-- [ ] **Step 2: Run targeted backend gates**
+- [x] **Step 2: Run targeted backend gates**
 
 Run:
 
@@ -367,7 +367,7 @@ cargo test -p control-plane orchestration_runtime_data_model -- --test-threads=1
 
 Expected: PASS.
 
-- [ ] **Step 3: Run focused frontend workspace gate**
+- [x] **Step 3: Run focused frontend workspace gate**
 
 Run:
 
@@ -377,7 +377,7 @@ pnpm --dir web/app test -- agent-flow
 
 Expected: PASS.
 
-- [ ] **Step 4: Check artifacts and diff**
+- [x] **Step 4: Check artifacts and diff**
 
 Run:
 
@@ -392,7 +392,7 @@ Expected:
 - Existing unrelated frontend edits remain present and unreverted.
 - Warning and coverage artifacts, if produced, are under `tmp/test-governance/`.
 
-- [ ] **Step 5: Final delivery message**
+- [x] **Step 5: Final delivery message**
 
 Use this verification block:
 
