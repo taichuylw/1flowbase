@@ -1,0 +1,459 @@
+const fs = require('node:fs');
+const https = require('node:https');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+const { getRepoRoot } = require('../testing/warning-capture.js');
+
+const OUTPUT_ROOT = path.join('tmp', 'test-governance');
+const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'coverage']);
+const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
+const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
+
+function resolveCliEntry(repoRoot, entryName) {
+  return path.join(repoRoot, 'scripts', 'node', `${entryName}.js`);
+}
+
+function buildGateCommand({ repoRoot, scope }) {
+  if (!VALID_SCOPES.has(scope)) {
+    throw new Error(`Unknown quality gate scope: ${scope}`);
+  }
+
+  const command = process.execPath;
+
+  if (scope === 'coverage') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'all'],
+      cwd: repoRoot,
+    };
+  }
+
+  return {
+    command,
+    args: [resolveCliEntry(repoRoot, `verify-${scope}`)],
+    cwd: repoRoot,
+  };
+}
+
+function parseBooleanInput(value) {
+  if (value === undefined || value === null || value === '') {
+    return false;
+  }
+
+  if (value === true || value === 'true') {
+    return true;
+  }
+
+  if (value === false || value === 'false') {
+    return false;
+  }
+
+  throw new Error(`Expected boolean input, received: ${value}`);
+}
+
+function normalizeReportType(reportType) {
+  const normalized = reportType || 'ci';
+
+  if (!VALID_REPORT_TYPES.has(normalized)) {
+    throw new Error(`Unknown quality gate report type: ${normalized}`);
+  }
+
+  return normalized;
+}
+
+function ensureOutputDir(repoRoot) {
+  const outputDir = path.join(repoRoot, OUTPUT_ROOT);
+  fs.mkdirSync(outputDir, { recursive: true });
+  return outputDir;
+}
+
+function formatTimestamp(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hour = String(date.getUTCHours()).padStart(2, '0');
+  const minute = String(date.getUTCMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hour}:${minute}`;
+}
+
+function shortShaFromEnv(env) {
+  return (env.GITHUB_SHA || 'unknown').slice(0, 7);
+}
+
+function buildRunUrl(env) {
+  const serverUrl = env.GITHUB_SERVER_URL || 'https://github.com';
+  const repository = env.GITHUB_REPOSITORY || '';
+  const runId = env.GITHUB_RUN_ID || '';
+
+  if (!repository || !runId) {
+    return '';
+  }
+
+  return `${serverUrl}/${repository}/actions/runs/${runId}`;
+}
+
+function buildIssueTitle({
+  reportType,
+  timestamp,
+  branch,
+  shortSha,
+  status,
+  environment,
+}) {
+  const typeLabel = reportType.toUpperCase();
+  const target = environment || branch || 'unknown';
+
+  return `[Quality Gate][${typeLabel}] ${timestamp} ${target} ${shortSha} ${status}`;
+}
+
+function buildIssueLabels({ reportType, status }) {
+  return [
+    'quality-gate',
+    'manual-run',
+    `${reportType}-report`,
+    status,
+  ];
+}
+
+function listFilesBySuffix(rootDir, suffix) {
+  if (!fs.existsSync(rootDir)) {
+    return [];
+  }
+
+  const collected = [];
+  const walk = (currentDir) => {
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const absolutePath = path.join(currentDir, entry.name);
+
+      if (entry.isDirectory()) {
+        walk(absolutePath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith(suffix)) {
+        collected.push(absolutePath);
+      }
+    }
+  };
+
+  walk(rootDir);
+  return collected.sort();
+}
+
+function toRepoRelative(repoRoot, filePath) {
+  return path.relative(repoRoot, filePath).replace(/\\/gu, '/');
+}
+
+function buildReport({
+  repoRoot,
+  reportType,
+  scope,
+  status,
+  exitCode,
+  issueUrl,
+  environmentName,
+  timestamp,
+  env,
+}) {
+  const outputDir = path.join(repoRoot, OUTPUT_ROOT);
+  const logPath = path.join(outputDir, 'quality-gate.latest.log');
+  const warningFiles = listFilesBySuffix(outputDir, '.warnings.log')
+    .map((filePath) => toRepoRelative(repoRoot, filePath));
+  const coverageFiles = listFilesBySuffix(path.join(outputDir, 'coverage'), '.json')
+    .map((filePath) => toRepoRelative(repoRoot, filePath));
+  const runUrl = buildRunUrl(env);
+  const shortSha = shortShaFromEnv(env);
+
+  const report = {
+    reportType,
+    status,
+    scope,
+    exitCode,
+    branch: env.GITHUB_REF_NAME || '',
+    commit: env.GITHUB_SHA || '',
+    shortSha,
+    actor: env.GITHUB_ACTOR || '',
+    workflow: env.GITHUB_WORKFLOW || '',
+    runUrl,
+    environment: environmentName || '',
+    timestamp,
+    issueUrl,
+    logPath: toRepoRelative(repoRoot, logPath),
+    warningFiles,
+    coverageFiles,
+  };
+
+  const markdown = [
+    '# Quality Gate Report',
+    '',
+    `Type: ${reportType.toUpperCase()}`,
+    `Status: ${status}`,
+    `Scope: ${scope}`,
+    environmentName ? `Environment: ${environmentName}` : null,
+    `Branch: ${report.branch || 'unknown'}`,
+    `Commit: ${report.commit || 'unknown'}`,
+    `Actor: ${report.actor || 'unknown'}`,
+    runUrl ? `Run: ${runUrl}` : null,
+    '',
+    '## Evidence',
+    '',
+    `- Main log: ${report.logPath}`,
+    '- Artifact: test-governance-artifacts',
+    ...warningFiles.map((filePath) => `- Warning log: ${filePath}`),
+    ...coverageFiles.map((filePath) => `- Coverage summary: ${filePath}`),
+  ].filter((line) => line !== null).join('\n');
+
+  return {
+    markdown: `${markdown}\n`,
+    json: report,
+  };
+}
+
+function writeReports({ repoRoot, report }) {
+  const outputDir = ensureOutputDir(repoRoot);
+  const markdownPath = path.join(outputDir, 'quality-gate-report.md');
+  const jsonPath = path.join(outputDir, 'quality-gate-report.json');
+
+  fs.writeFileSync(markdownPath, report.markdown, 'utf8');
+  fs.writeFileSync(jsonPath, `${JSON.stringify(report.json, null, 2)}\n`, 'utf8');
+
+  return { markdownPath, jsonPath };
+}
+
+function writeActionOutputs(outputs, outputPath = process.env.GITHUB_OUTPUT) {
+  if (!outputPath) {
+    return;
+  }
+
+  const content = Object.entries(outputs)
+    .map(([key, value]) => `${key}=${String(value).replace(/\n/gu, ' ')}`)
+    .join('\n');
+
+  fs.appendFileSync(outputPath, `${content}\n`, 'utf8');
+}
+
+function appendStepSummary(markdown, summaryPath = process.env.GITHUB_STEP_SUMMARY) {
+  if (!summaryPath) {
+    return;
+  }
+
+  fs.appendFileSync(summaryPath, `\n${markdown}\n`, 'utf8');
+}
+
+function createIssueWithGitHubApi({ token, repository, title, body, labels }) {
+  if (!repository) {
+    throw new Error('GITHUB_REPOSITORY is required to create a quality gate issue');
+  }
+
+  const requestBody = JSON.stringify({ title, body, labels });
+
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      {
+        hostname: 'api.github.com',
+        method: 'POST',
+        path: `/repos/${repository}/issues`,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestBody),
+          'User-Agent': '1flowbase-quality-gate',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
+      (response) => {
+        let responseBody = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        response.on('end', () => {
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            resolve(JSON.parse(responseBody));
+            return;
+          }
+
+          reject(Object.assign(
+            new Error(`GitHub Issue creation failed with HTTP ${response.statusCode}: ${responseBody}`),
+            { statusCode: response.statusCode }
+          ));
+        });
+      }
+    );
+
+    request.on('error', reject);
+    request.write(requestBody);
+    request.end();
+  });
+}
+
+async function createIssueWithLabelFallback({ createIssueImpl, issue }) {
+  try {
+    return await createIssueImpl(issue);
+  } catch (error) {
+    if (error.statusCode !== 422 || issue.labels.length === 0) {
+      throw error;
+    }
+
+    return createIssueImpl({
+      ...issue,
+      labels: [],
+    });
+  }
+}
+
+function runGateCommand({
+  commandSpec,
+  env,
+  logPath,
+  spawnSyncImpl = spawnSync,
+  writeStdout = (text) => process.stdout.write(text),
+  writeStderr = (text) => process.stderr.write(text),
+}) {
+  const result = spawnSyncImpl(commandSpec.command, commandSpec.args, {
+    cwd: commandSpec.cwd,
+    env,
+    encoding: 'utf8',
+    maxBuffer: MAX_GATE_OUTPUT_BYTES,
+    stdio: ['inherit', 'pipe', 'pipe'],
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  const stdout = result.stdout || '';
+  const stderr = result.stderr || '';
+
+  if (stdout) {
+    writeStdout(stdout);
+  }
+
+  if (stderr) {
+    writeStderr(stderr);
+  }
+
+  fs.writeFileSync(logPath, `${stdout}${stderr}`, 'utf8');
+
+  return result.status ?? 1;
+}
+
+async function runQualityGate({
+  repoRoot = getRepoRoot(),
+  scope = 'ci',
+  reportType = 'ci',
+  publishIssue = false,
+  githubToken = '',
+  environmentName = '',
+  env = process.env,
+  nowImpl = () => new Date(),
+  spawnSyncImpl = spawnSync,
+  createIssueImpl = createIssueWithGitHubApi,
+  writeStdout = (text) => process.stdout.write(text),
+  writeStderr = (text) => process.stderr.write(text),
+} = {}) {
+  const normalizedReportType = normalizeReportType(reportType);
+  const outputDir = ensureOutputDir(repoRoot);
+  const logPath = path.join(outputDir, 'quality-gate.latest.log');
+  const commandSpec = buildGateCommand({ repoRoot, scope });
+  const gateExitCode = runGateCommand({
+    commandSpec,
+    env,
+    logPath,
+    spawnSyncImpl,
+    writeStdout,
+    writeStderr,
+  });
+  const status = gateExitCode === 0 ? 'passed' : 'failed';
+  const timestamp = formatTimestamp(nowImpl());
+  let issueUrl = '';
+
+  const report = buildReport({
+    repoRoot,
+    reportType: normalizedReportType,
+    scope,
+    status,
+    exitCode: gateExitCode,
+    issueUrl,
+    environmentName,
+    timestamp,
+    env,
+  });
+  const reportPaths = writeReports({ repoRoot, report });
+
+  if (publishIssue) {
+    if (!githubToken) {
+      throw new Error('github_token is required when publish_issue is true');
+    }
+
+    const issue = await createIssueWithLabelFallback({
+      createIssueImpl,
+      issue: {
+        token: githubToken,
+        repository: env.GITHUB_REPOSITORY,
+        title: buildIssueTitle({
+          reportType: normalizedReportType,
+          timestamp,
+          branch: env.GITHUB_REF_NAME || '',
+          shortSha: shortShaFromEnv(env),
+          status,
+          environment: environmentName,
+        }),
+        body: report.markdown,
+        labels: buildIssueLabels({
+          reportType: normalizedReportType,
+          status,
+        }),
+      },
+    });
+    issueUrl = issue.html_url || '';
+  }
+
+  const finalReport = issueUrl
+    ? buildReport({
+      repoRoot,
+      reportType: normalizedReportType,
+      scope,
+      status,
+      exitCode: gateExitCode,
+      issueUrl,
+      environmentName,
+      timestamp,
+      env,
+    })
+    : report;
+
+  if (issueUrl) {
+    writeReports({ repoRoot, report: finalReport });
+  }
+
+  appendStepSummary(finalReport.markdown);
+  writeActionOutputs({
+    status,
+    exit_code: gateExitCode,
+    report_path: toRepoRelative(repoRoot, reportPaths.markdownPath),
+    report_json_path: toRepoRelative(repoRoot, reportPaths.jsonPath),
+    issue_url: issueUrl,
+  });
+
+  return {
+    status,
+    exitCode: gateExitCode,
+    issueUrl,
+    reportPath: reportPaths.markdownPath,
+    reportJsonPath: reportPaths.jsonPath,
+  };
+}
+
+module.exports = {
+  buildGateCommand,
+  buildIssueLabels,
+  buildIssueTitle,
+  buildReport,
+  createIssueWithGitHubApi,
+  parseBooleanInput,
+  runQualityGate,
+};

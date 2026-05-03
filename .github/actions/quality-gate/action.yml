@@ -1,0 +1,54 @@
+name: 1flowbase Quality Gate
+description: Run repository quality gates and optionally publish one GitHub Issue report.
+
+inputs:
+  scope:
+    description: Quality gate scope: ci, repo, backend, or coverage.
+    required: false
+    default: ci
+  report_type:
+    description: Report classification: ci or cd.
+    required: false
+    default: ci
+  publish_issue:
+    description: Whether to create a new GitHub Issue for this run.
+    required: false
+    default: "false"
+  github_token:
+    description: GitHub token with issues:write, required when publish_issue is true.
+    required: false
+    default: ""
+  environment:
+    description: Optional deployment or report environment label.
+    required: false
+    default: ""
+
+outputs:
+  status:
+    description: Quality gate status, passed or failed.
+    value: ${{ steps.quality-gate.outputs.status }}
+  exit_code:
+    description: Numeric quality gate exit code.
+    value: ${{ steps.quality-gate.outputs.exit_code }}
+  report_path:
+    description: Markdown report path.
+    value: ${{ steps.quality-gate.outputs.report_path }}
+  report_json_path:
+    description: JSON report path.
+    value: ${{ steps.quality-gate.outputs.report_json_path }}
+  issue_url:
+    description: Created Issue URL, empty when issue publishing is disabled.
+    value: ${{ steps.quality-gate.outputs.issue_url }}
+
+runs:
+  using: composite
+  steps:
+    - id: quality-gate
+      shell: bash
+      env:
+        INPUT_SCOPE: ${{ inputs.scope }}
+        INPUT_REPORT_TYPE: ${{ inputs.report_type }}
+        INPUT_PUBLISH_ISSUE: ${{ inputs.publish_issue }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+      run: node scripts/node/github-quality-gate.js
