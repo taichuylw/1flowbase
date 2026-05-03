@@ -34,6 +34,10 @@ type MockReactFlowProps = {
       height?: number;
       width?: number;
     };
+    position?: {
+      x: number;
+      y: number;
+    };
     width?: number;
     data?: {
       onSelectNode?: (nodeId: string) => void;
@@ -196,6 +200,21 @@ vi.mock('@xyflow/react', () => ({
               {
                 id: 'node-llm',
                 type: 'position',
+                dragging: true,
+                position: { x: 480, y: 250 }
+              }
+            ])
+          }
+        >
+          trigger node drag move
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            props.onNodesChange?.([
+              {
+                id: 'node-llm',
+                type: 'position',
                 dragging: false,
                 position: { x: 520, y: 260 }
               }
@@ -247,6 +266,30 @@ describe('AgentFlowCanvas interactions', () => {
         })
       ])
     );
+  });
+
+  test('keeps node drag move positions local until the drag ends', () => {
+    const { getState } = renderCanvas();
+    const initialPosition = getState().workingDocument.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    )?.position;
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'trigger node drag move' })
+    );
+
+    expect(getState().workingDocument.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm',
+          position: initialPosition
+        })
+      ])
+    );
+    expect(
+      latestReactFlowProps?.nodes?.find((node) => node.id === 'node-llm')
+        ?.position
+    ).toEqual({ x: 480, y: 250 });
   });
 
   test('projects stable measured dimensions for controlled React Flow nodes', () => {

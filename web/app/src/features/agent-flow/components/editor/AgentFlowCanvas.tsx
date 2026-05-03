@@ -174,7 +174,7 @@ function AgentFlowCanvasInner({
   const edgeInteractions = useEdgeInteractions();
   const selectionInteractions = useSelectionInteractions();
 
-  const nodes = useMemo(
+  const baseNodes = useMemo(
     () =>
       toCanvasNodes(
         document,
@@ -209,6 +209,22 @@ function AgentFlowCanvasInner({
       selectedNodeId
     ]
   );
+  const nodes = useMemo(() => {
+    const transientNodePositions = canvasInteractions.transientNodePositions;
+
+    if (Object.keys(transientNodePositions).length === 0) {
+      return baseNodes;
+    }
+
+    return baseNodes.map((node) =>
+      transientNodePositions[node.id]
+        ? {
+            ...node,
+            position: transientNodePositions[node.id]
+          }
+        : node
+    );
+  }, [baseNodes, canvasInteractions.transientNodePositions]);
   const edges = useMemo(
     () =>
       toCanvasEdges(document, activeContainerId, selectedEdgeId, {
