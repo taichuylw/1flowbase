@@ -1,7 +1,11 @@
 import { removeEdge } from '../../lib/document/transforms/edge';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useNodeDetailActions } from './use-node-detail-actions';
+import {
+  duplicateNodeSubgraph,
+  getDuplicatedNodeId
+} from '../../lib/document/transforms/duplicate';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 
 export function useEditorShortcuts() {
@@ -12,11 +16,15 @@ export function useEditorShortcuts() {
   const setWorkingDocument = useAgentFlowEditorStore(
     (state) => state.setWorkingDocument
   );
+  const restorePreviousDocument = useAgentFlowEditorStore(
+    (state) => state.restorePreviousDocument
+  );
   const setInteractionState = useAgentFlowEditorStore(
     (state) => state.setInteractionState
   );
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
   const detailActions = useNodeDetailActions();
+  const copiedNodeIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     function isEditableTarget(target: EventTarget | null) {
@@ -35,6 +43,60 @@ export function useEditorShortcuts() {
     }
 
     function handleKeyDown(event: KeyboardEvent) {
+      const shortcutKey = event.key.toLowerCase();
+      const isModifierShortcut = event.ctrlKey || event.metaKey;
+
+      if (isModifierShortcut) {
+        if (isEditableTarget(event.target)) {
+          return;
+        }
+
+        if (shortcutKey === 'c') {
+          if (!selectedNodeId) {
+            return;
+          }
+
+          event.preventDefault();
+          copiedNodeIdRef.current = selectedNodeId;
+          return;
+        }
+
+        if (shortcutKey === 'v') {
+          const copiedNodeId = copiedNodeIdRef.current;
+
+          if (!copiedNodeId) {
+            return;
+          }
+
+          const duplicatedNodeId = getDuplicatedNodeId(
+            workingDocument.graph.nodes.map((node) => node.id),
+            copiedNodeId
+          );
+          const nextDocument = duplicateNodeSubgraph(workingDocument, {
+            nodeId: copiedNodeId
+          });
+
+          if (nextDocument === workingDocument) {
+            return;
+          }
+
+          event.preventDefault();
+          setWorkingDocument(nextDocument);
+          setSelection({
+            selectedNodeId: duplicatedNodeId,
+            selectedNodeIds: [duplicatedNodeId],
+            selectedEdgeId: null
+          });
+          return;
+        }
+
+        if (shortcutKey === 'z' && !event.shiftKey) {
+          event.preventDefault();
+          restorePreviousDocument();
+          return;
+        }
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (isEditableTarget(event.target)) {
           return;
@@ -102,6 +164,7 @@ export function useEditorShortcuts() {
     detailActions,
     selectedNodeId,
     selectedEdgeId,
+    restorePreviousDocument,
     setInteractionState,
     setPanelState,
     setSelection,

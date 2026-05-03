@@ -11,6 +11,7 @@ import type { SyncSlice } from './slices/sync-slice';
 import type { ViewportSlice } from './slices/viewport-slice';
 
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
+const MAX_UNDO_STACK_SIZE = 50;
 
 function getDefaultSelectedNodeId() {
   return null;
@@ -43,6 +44,7 @@ export interface AgentFlowEditorState
       | FlowAuthoringDocument
       | ((document: FlowAuthoringDocument) => FlowAuthoringDocument)
   ) => void;
+  restorePreviousDocument: () => void;
   setSelection: (payload: Partial<SelectionSlice>) => void;
   setViewportState: (payload: Partial<ViewportSlice>) => void;
   setPanelState: (
@@ -84,6 +86,7 @@ export function createAgentFlowEditorStore(
   return createStore<AgentFlowEditorState>((set) => ({
     workingDocument: state.draft.document,
     lastSavedDocument: state.draft.document,
+    undoStack: [],
     draftMeta: {
       draftId: state.draft.id,
       flowId: state.flow_id,
@@ -133,10 +136,60 @@ export function createAgentFlowEditorStore(
         const workingDocument =
           typeof update === 'function' ? update(current.workingDocument) : update;
 
+        if (workingDocument === current.workingDocument) {
+          return current;
+        }
+
+        const undoStack = [
+          ...current.undoStack.slice(-(MAX_UNDO_STACK_SIZE - 1)),
+          current.workingDocument
+        ];
+
         return {
           workingDocument,
+          undoStack,
           viewport: workingDocument.editor.viewport,
           isDirty: hasDocumentChanged(workingDocument, current.lastSavedDocument)
+        };
+      }),
+    restorePreviousDocument: () =>
+      set((current) => {
+        const previousDocument = current.undoStack.at(-1);
+
+        if (!previousDocument) {
+          return current;
+        }
+
+        const nextNodeIds = new Set(
+          previousDocument.graph.nodes.map((node) => node.id)
+        );
+        const nextEdgeIds = new Set(
+          previousDocument.graph.edges.map((edge) => edge.id)
+        );
+        const selectedNodeId =
+          current.selectedNodeId && nextNodeIds.has(current.selectedNodeId)
+            ? current.selectedNodeId
+            : null;
+        const selectedEdgeId =
+          current.selectedEdgeId && nextEdgeIds.has(current.selectedEdgeId)
+            ? current.selectedEdgeId
+            : null;
+        const selectedNodeIds = current.selectedNodeIds.filter((nodeId) =>
+          nextNodeIds.has(nodeId)
+        );
+
+        return {
+          workingDocument: previousDocument,
+          undoStack: current.undoStack.slice(0, -1),
+          viewport: previousDocument.editor.viewport,
+          selectedNodeId,
+          selectedEdgeId,
+          selectedNodeIds,
+          focusedFieldKey: selectedNodeId ? current.focusedFieldKey : null,
+          openInspectorSectionKey: selectedNodeId
+            ? current.openInspectorSectionKey
+            : null,
+          isDirty: hasDocumentChanged(previousDocument, current.lastSavedDocument)
         };
       }),
     setSelection: (payload) =>
@@ -219,6 +272,7 @@ export function createAgentFlowEditorStore(
         return {
           workingDocument: nextWorkingDocument,
           lastSavedDocument: nextState.draft.document,
+          undoStack: current.undoStack,
           draftMeta: {
             draftId: nextState.draft.id,
             flowId: nextState.flow_id,
@@ -242,6 +296,7 @@ export function createAgentFlowEditorStore(
       set((current) => ({
         workingDocument: nextState.draft.document,
         lastSavedDocument: nextState.draft.document,
+        undoStack: [],
         draftMeta: {
           draftId: nextState.draft.id,
           flowId: nextState.flow_id,

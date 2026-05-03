@@ -120,6 +120,162 @@ describe('useEditorShortcuts', () => {
     );
   });
 
+  test('copies and pastes the selected node with keyboard shortcuts', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        useEditorShortcuts();
+
+        return {
+          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
+          edges: useAgentFlowEditorStore((state) => state.workingDocument.graph.edges),
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
+        };
+      },
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm'],
+        selectedEdgeId: null
+      });
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
+      );
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
+      );
+    });
+
+    expect(result.current.selectedNodeId).toBe('node-llm-copy');
+    expect(result.current.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm-copy',
+          alias: 'LLM 副本',
+          position: { x: 408, y: 268 }
+        })
+      ])
+    );
+    expect(result.current.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-llm',
+          target: 'node-llm-copy'
+        })
+      ])
+    );
+  });
+
+  test('restores the previous document with Ctrl+Z', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        useEditorShortcuts();
+
+        return {
+          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
+          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
+        };
+      },
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm'],
+        selectedEdgeId: null
+      });
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
+      );
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
+      );
+    });
+
+    expect(result.current.nodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'node-llm-copy' })])
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true })
+      );
+    });
+
+    expect(result.current.selectedNodeId).toBe(null);
+    expect(result.current.nodes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'node-llm-copy' })])
+    );
+  });
+
+  test('does not handle copy paste undo shortcuts from editable content', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        useEditorShortcuts();
+
+        return {
+          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
+        };
+      },
+      { wrapper }
+    );
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm'],
+        selectedEdgeId: null
+      });
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true })
+      );
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true })
+      );
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })
+      );
+    });
+
+    expect(result.current.nodes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'node-llm-copy' })])
+    );
+    input.remove();
+  });
+
   test('does not close node detail when Escape comes from editable content', () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
