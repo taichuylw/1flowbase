@@ -14,11 +14,12 @@ match_when:
   - 需要查找上层相邻项目源码
   - 需要确认前端技术边界参考文档
 created_at: 2026-04-12 19
-updated_at: 2026-04-30 00
-last_verified_at: 2026-04-30 00
+updated_at: 2026-05-03 11
+last_verified_at: 2026-05-03 11
 decision_policy: index_only
 scope:
   - ../1flowbase-official-plugins
+  - /home/taichu/git/1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible
   - ../1flowbase-project-maintenance
   - ../1flowtap
   - ../AionUi
@@ -55,7 +56,8 @@ scope:
 ## 外部或相邻源码参考
 
 - `../1flowbase-official-plugins`
-  - 本项目官方插件源仓库。修改、排查、重建官方插件时优先看这里，不以 `api/plugins/installed/` 的安装态产物作为源码入口。
+  - 本项目官方插件源仓库，绝对路径是 `/home/taichu/git/1flowbase-official-plugins`。修改、排查、重建官方插件时优先看这里，不以 `api/plugins/installed/` 的安装态产物作为源码入口。
+  - OpenAI-compatible 官方模型供应商插件源码入口：`/home/taichu/git/1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible`。
 - `../1flowbase-project-maintenance`
   - 本项目维护、治理、项目管理相关源码或脚本入口。
 - `../1flowtap`
