@@ -1170,22 +1170,74 @@
 }
 
 .agent-flow-node-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 48px));
+  min-width: 280px;
+}
+
+.agent-flow-node-picker__search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 2px;
+  background: #ffffff;
+}
+
+.agent-flow-node-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-flow-node-picker__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-flow-node-picker__section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.agent-flow-node-picker__section-label {
+  color: #203227;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.agent-flow-node-picker__section-description {
+  color: #738196;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.agent-flow-node-picker__section-items {
   display: grid;
-  gap: 6px;
-  min-width: 220px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .agent-flow-node-picker__item {
   display: flex;
   width: 100%;
-  align-items: center;
+  min-width: 0;
+  min-height: 68px;
+  align-items: flex-start;
   justify-content: flex-start;
-  padding: 10px 12px;
+  gap: 9px;
+  padding: 10px;
   border: 1px solid #dce6d9;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #ffffff;
   color: #203227;
   cursor: pointer;
+  text-align: left;
 }
 
 .agent-flow-node-picker__item:hover {
@@ -1193,7 +1245,70 @@
   background: #f3f8f3;
 }
 
+.agent-flow-node-picker__item:disabled {
+  border-color: #e5e9ee;
+  background: #f7f8fa;
+  color: #9aa5b5;
+  cursor: not-allowed;
+}
+
+.agent-flow-node-picker__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #eef6f0;
+  color: #365540;
+  font-size: 14px;
+}
+
+.agent-flow-node-picker__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agent-flow-node-picker__name {
+  overflow: hidden;
+  color: #203227;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-flow-node-picker__meta {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #738196;
+  font-size: 12px;
+  line-height: 17px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.agent-flow-node-picker__empty {
+  padding: 18px 8px;
+  color: #738196;
+  font-size: 13px;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
+  .agent-flow-node-picker {
+    width: min(320px, calc(100vw - 32px));
+    min-width: 240px;
+  }
+
+  .agent-flow-node-picker__section-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .agent-flow-llm-parameter-form__row {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px 12px;

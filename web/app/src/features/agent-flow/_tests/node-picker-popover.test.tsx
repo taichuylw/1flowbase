@@ -65,6 +65,49 @@ const pluginOptions: NodePickerOption[] = [
 ];
 
 describe('NodePickerPopover', () => {
+  test('groups built-in nodes by workflow purpose', () => {
+    render(
+      <NodePickerPopover
+        ariaLabel="在 LLM 后新增节点"
+        open
+        onOpenChange={vi.fn()}
+        onPickNode={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('起止输出')).toBeInTheDocument();
+    expect(screen.getByText('模型与生成')).toBeInTheDocument();
+    expect(screen.getByText('流程控制')).toBeInTheDocument();
+    expect(screen.getByText('数据处理')).toBeInTheDocument();
+    expect(screen.getByText('外部能力')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /LLM/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /Knowledge Retrieval/i })
+    ).toBeInTheDocument();
+  });
+
+  test('filters node groups through the picker search', () => {
+    render(
+      <NodePickerPopover
+        ariaLabel="在 LLM 后新增节点"
+        open
+        onOpenChange={vi.fn()}
+        onPickNode={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索节点' }), {
+      target: { value: 'http' }
+    });
+
+    expect(
+      screen.getByRole('menuitem', { name: /HTTP Request/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText('外部能力')).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /LLM/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('模型与生成')).not.toBeInTheDocument();
+  });
+
   test('lets mousedown bubble so the surrounding handle can start a connection drag', () => {
     const handleMouseDown = vi.fn();
 
