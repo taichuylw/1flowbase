@@ -1172,8 +1172,8 @@
 .agent-flow-node-picker {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: min(360px, calc(100vw - 48px));
+  gap: 8px;
+  width: min(340px, calc(100vw - 48px));
   min-width: 280px;
 }
 
@@ -1188,19 +1188,20 @@
 .agent-flow-node-picker__list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .agent-flow-node-picker__section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .agent-flow-node-picker__section-head {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
   padding: 0 2px;
 }
 
@@ -1212,26 +1213,29 @@
 }
 
 .agent-flow-node-picker__section-description {
+  overflow: hidden;
   color: #738196;
   font-size: 12px;
   line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-flow-node-picker__section-items {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .agent-flow-node-picker__item {
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 68px;
-  align-items: flex-start;
+  min-height: 40px;
+  align-items: center;
   justify-content: flex-start;
-  gap: 9px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px 10px;
   border: 1px solid #dce6d9;
   border-radius: 8px;
   background: #ffffff;
@@ -1257,8 +1261,8 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 6px;
   background: #eef6f0;
   color: #365540;
@@ -1268,8 +1272,9 @@
 .agent-flow-node-picker__text {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 3px;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .agent-flow-node-picker__name {
@@ -1283,13 +1288,12 @@
 }
 
 .agent-flow-node-picker__meta {
-  display: -webkit-box;
   overflow: hidden;
   color: #738196;
   font-size: 12px;
-  line-height: 17px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-flow-node-picker__empty {
@@ -1305,8 +1309,8 @@
     min-width: 240px;
   }
 
-  .agent-flow-node-picker__section-items {
-    grid-template-columns: minmax(0, 1fr);
+  .agent-flow-node-picker__section-description {
+    display: none;
   }
 
   .agent-flow-llm-parameter-form__row {
