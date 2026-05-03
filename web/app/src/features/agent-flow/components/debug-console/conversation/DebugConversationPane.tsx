@@ -91,6 +91,7 @@ export function DebugConversationPane({
       <div
         ref={messagesRef}
         className="agent-flow-editor__debug-messages"
+        data-testid="debug-conversation-messages"
         onPointerDown={pauseAutoScroll}
         onTouchMove={pauseAutoScroll}
         onWheel={pauseAutoScroll}
@@ -132,6 +133,7 @@ export function DebugConversationPane({
             ref={bottomRef}
             aria-hidden="true"
             className="agent-flow-editor__debug-bottom-sentinel"
+            data-testid="debug-conversation-bottom-sentinel"
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import type {
@@ -58,14 +58,14 @@ function configureScrollMetrics(element: HTMLElement) {
 
 describe('DebugConversationPane auto scroll', () => {
   test('keeps streamed output pinned to the bottom until the user scrolls', () => {
-    const { container, rerender } = renderPane([assistantMessage('你好')]);
-    const messagesElement = container.querySelector(
-      '.agent-flow-editor__debug-messages'
-    ) as HTMLElement;
+    const { rerender } = renderPane([assistantMessage('你好')]);
+    const messagesElement = screen.getByTestId(
+      'debug-conversation-messages'
+    );
     configureScrollMetrics(messagesElement);
-    const bottomElement = container.querySelector(
-      '.agent-flow-editor__debug-bottom-sentinel'
-    ) as HTMLElement;
+    const bottomElement = screen.getByTestId(
+      'debug-conversation-bottom-sentinel'
+    );
     const scrollIntoViewSpy = vi.fn();
     bottomElement.scrollIntoView = scrollIntoViewSpy;
 

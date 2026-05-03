@@ -124,9 +124,6 @@ export function AgentFlowCanvasFrame({
     (state) => state.nodeDetailWidth
   );
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
-  const setInteractionState = useAgentFlowEditorStore(
-    (state) => state.setInteractionState
-  );
   const documentRef = useRef(workingDocument);
   const lastSavedDocumentRef = useRef(lastSavedDocument);
   const viewportSnapshotRef = useRef(workingDocument.editor.viewport);
