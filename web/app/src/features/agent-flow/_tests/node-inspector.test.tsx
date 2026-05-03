@@ -438,6 +438,7 @@ describe('NodeInspector', () => {
     expect(screen.getByText('text')).toBeInTheDocument();
     expect(screen.getByText('reasoning_content')).toBeInTheDocument();
     expect(screen.getByText('usage')).toBeInTheDocument();
+    expect(screen.queryByText('节点产出的数据字段')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '新增输出变量' })
     ).not.toBeInTheDocument();

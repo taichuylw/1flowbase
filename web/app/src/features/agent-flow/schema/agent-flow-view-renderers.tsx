@@ -115,9 +115,7 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
 
   const title = node.type === 'start' ? '输入字段' : '输出变量';
   const subtitle =
-    node.type === 'start'
-      ? '设置的输入可在工作流程中使用'
-      : '节点产出的数据字段';
+    node.type === 'start' ? '设置的输入可在工作流程中使用' : null;
 
   return (
     <div className="agent-flow-node-detail__section">
@@ -129,12 +127,14 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
           {block.title ?? title}
         </Typography.Title>
       </div>
-      <Typography.Text
-        className="agent-flow-node-detail__section-subtitle"
-        style={{ display: 'block', textAlign: 'center', marginBottom: 16 }}
-      >
-        {subtitle}
-      </Typography.Text>
+      {subtitle ? (
+        <Typography.Text
+          className="agent-flow-node-detail__section-subtitle"
+          style={{ display: 'block', textAlign: 'center', marginBottom: 16 }}
+        >
+          {subtitle}
+        </Typography.Text>
+      ) : null}
       {outputs.length > 0 ? (
         <div className="agent-flow-node-detail__list">
           {outputs.map((output) => (
