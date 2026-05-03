@@ -33,7 +33,7 @@ Do not revert or reformat them. The implementation does not require touching tho
   - Adds frontend query helpers.
   - Makes debug preview, validation, and duplicate transforms selector-aware and action-aware.
 
-- [ ] **02 Frontend UI:** `docs/superpowers/plans/2026-05-03-data-model-workflow-query-params-implementation-02-frontend-ui.md`
+- [x] **02 Frontend UI:** `docs/superpowers/plans/2026-05-03-data-model-workflow-query-params-implementation-02-frontend-ui.md`
   - Registers the Data Model query editor in node schema.
   - Adds `DataModelQueryField`.
   - Covers field filtering, operator options, selector-backed values, sorting, relation expansion, and pagination.

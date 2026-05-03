@@ -70,6 +70,16 @@ export const dataModelNodeDefinition: NodeDefinition = {
           options: DATA_MODEL_ACTION_OPTIONS
         },
         {
+          key: 'bindings.query',
+          label: '查询参数',
+          editor: 'data_model_query',
+          visibleWhen: {
+            operator: 'eq',
+            path: 'config.action',
+            value: 'list'
+          }
+        },
+        {
           key: 'bindings.record_id',
           label: 'record_id',
           editor: 'templated_text',

@@ -103,6 +103,15 @@ function createInitialStateWithDataModelNode() {
   document.graph.nodes.push(
     createNodeDocument('data_model' as never, 'node-data-model', 720, 240)
   );
+  document.graph.edges.push({
+    id: 'edge-start-data-model',
+    source: 'node-start',
+    target: 'node-data-model',
+    sourceHandle: null,
+    targetHandle: null,
+    containerId: null,
+    points: []
+  });
 
   return {
     flow_id: 'flow-1',
@@ -202,7 +211,35 @@ async function openSelect(label: string) {
 }
 
 async function selectOption(label: string) {
-  fireEvent.click(await screen.findByTitle(label));
+  const dropdowns = [
+    ...document.querySelectorAll(
+      '.ant-select-dropdown:not(.ant-select-dropdown-hidden), .ant-cascader-dropdown:not(.ant-cascader-dropdown-hidden)'
+    )
+  ].reverse();
+  const popupOption = dropdowns
+    .flatMap((dropdown) => [
+      ...dropdown.querySelectorAll(
+        '[title], .ant-select-item-option, .ant-cascader-menu-item'
+      )
+    ])
+    .find(
+      (match) =>
+        match.getAttribute('title') === label ||
+        match.textContent?.trim() === label
+    );
+
+  if (popupOption) {
+    fireEvent.click(popupOption);
+    return;
+  }
+
+  const matches = await screen.findAllByTitle(label);
+  const option =
+    matches.find((match) => match.classList.contains('ant-select-item-option')) ??
+    matches.find((match) => match.closest('.ant-select-item-option')) ??
+    matches[matches.length - 1];
+
+  fireEvent.click(option);
 }
 
 async function selectDataModelOption(value: string) {
@@ -241,8 +278,42 @@ describe('NodeInspector', () => {
             title: 'Amount',
             valueType: 'number',
             required: false
+          },
+          {
+            code: 'status',
+            title: 'Status',
+            valueType: 'enum',
+            required: false
+          },
+          {
+            code: 'customer',
+            title: 'Customer',
+            valueType: 'many_to_one',
+            required: false
+          },
+          {
+            code: 'lines',
+            title: 'Lines',
+            valueType: 'one_to_many',
+            required: false
+          },
+          {
+            code: 'approved',
+            title: 'Approved',
+            valueType: 'boolean',
+            required: false
           }
         ]
+      },
+      {
+        value: 'empty_orders',
+        label: 'Empty Orders',
+        state: 'enabled',
+        disabled: false,
+        disabledReason: null,
+        modelId: 'model-empty-orders',
+        modelCode: 'empty_orders',
+        fields: []
       },
       {
         value: 'draft_orders',
@@ -549,11 +620,220 @@ describe('NodeInspector', () => {
             title: 'Amount',
             valueType: 'number',
             required: false
+          },
+          {
+            code: 'status',
+            title: 'Status',
+            valueType: 'enum',
+            required: false
+          },
+          {
+            code: 'customer',
+            title: 'Customer',
+            valueType: 'many_to_one',
+            required: false
+          },
+          {
+            code: 'lines',
+            title: 'Lines',
+            valueType: 'one_to_many',
+            required: false
+          },
+          {
+            code: 'approved',
+            title: 'Approved',
+            valueType: 'boolean',
+            required: false
           }
         ]
       });
     });
   });
+
+  test('edits Data Model list query binding', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider
+        initialState={createInitialStateWithDataModelNode()}
+      >
+        <SelectionSeed nodeId="node-data-model" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByText('请先选择 Data Model')).toBeInTheDocument();
+
+    await openSelect('Data Model');
+    await selectDataModelOption('orders');
+    fireEvent.click(await screen.findByRole('button', { name: '新增过滤条件' }));
+    await openSelect('过滤字段 1');
+    await selectOption('Status');
+    await openSelect('过滤操作符 1');
+    await selectOption('eq');
+    await openSelect('过滤值来源 1');
+    await selectOption('变量');
+    await openSelect('过滤变量 1');
+    await selectOption('Start');
+    await selectOption('userinput.query');
+    fireEvent.click(await screen.findByRole('button', { name: '新增过滤条件' }));
+    await openSelect('过滤字段 2');
+    await selectOption('Amount');
+    await waitFor(() => {
+      expect(getDataModelNode(latestDocument).bindings.query).toMatchObject({
+        value: {
+          filters: [
+            expect.anything(),
+            {
+              field_code: 'amount',
+              value: { kind: 'constant', value: 0 }
+            }
+          ]
+        }
+      });
+    });
+    fireEvent.change(screen.getByLabelText('过滤值 2'), {
+      target: { value: '123' }
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '新增过滤条件' }));
+    await openSelect('过滤字段 3');
+    await selectOption('Approved');
+    await waitFor(() => {
+      expect(getDataModelNode(latestDocument).bindings.query).toMatchObject({
+        value: {
+          filters: [
+            expect.anything(),
+            expect.anything(),
+            {
+              field_code: 'approved',
+              value: { kind: 'constant', value: false }
+            }
+          ]
+        }
+      });
+    });
+    await openSelect('过滤值来源 3');
+    await selectOption('变量');
+    await openSelect('过滤值来源 3');
+    await selectOption('常量');
+    await waitFor(() => {
+      expect(getDataModelNode(latestDocument).bindings.query).toMatchObject({
+        value: {
+          filters: [
+            expect.anything(),
+            expect.anything(),
+            {
+              field_code: 'approved',
+              value: { kind: 'constant', value: false }
+            }
+          ]
+        }
+      });
+    });
+    await openSelect('过滤值 3');
+    await selectOption('true');
+    fireEvent.click(screen.getByRole('button', { name: '新增排序规则' }));
+    await openSelect('排序字段 1');
+    await selectOption('Amount');
+    await openSelect('排序方向 1');
+    await selectOption('desc');
+    await openSelect('展开关联');
+    await selectOption('Customer');
+    fireEvent.change(screen.getByLabelText('页码'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('每页数量'), {
+      target: { value: '50' }
+    });
+
+    await waitFor(() => {
+      expect(getDataModelNode(latestDocument).bindings.query).toMatchObject({
+        kind: 'data_model_query',
+        value: {
+          filters: [
+            {
+              field_code: 'status',
+              operator: 'eq',
+              value: {
+                kind: 'selector',
+                selector: ['node-start', 'query']
+            }
+          },
+          {
+            field_code: 'amount',
+            operator: 'eq',
+            value: { kind: 'constant', value: 123 }
+          },
+          {
+            field_code: 'approved',
+            operator: 'eq',
+            value: { kind: 'constant', value: true }
+          }
+        ],
+        sorts: [{ field_code: 'amount', direction: 'desc' }],
+          expand_relations: ['customer'],
+          page: { kind: 'constant', value: 2 },
+          page_size: { kind: 'constant', value: 50 }
+        }
+      });
+    });
+  }, 15000);
+
+  test('keeps Data Model query pagination editable when selected model has no fields', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider
+        initialState={createInitialStateWithDataModelNode()}
+      >
+        <SelectionSeed nodeId="node-data-model" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByText('请先选择 Data Model')).toBeInTheDocument();
+
+    await openSelect('Data Model');
+    await selectDataModelOption('empty_orders');
+
+    await waitFor(() => {
+      expect(screen.queryByText('请先选择 Data Model')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('页码')).toBeInTheDocument();
+      expect(screen.getByLabelText('每页数量')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole('button', { name: '新增过滤条件' })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: '新增排序规则' })
+    ).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('页码'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('每页数量'), {
+      target: { value: '10' }
+    });
+
+    await waitFor(() => {
+      expect(getDataModelNode(latestDocument).bindings.query).toMatchObject({
+        kind: 'data_model_query',
+        value: {
+          filters: [],
+          sorts: [],
+          page: { kind: 'constant', value: 3 },
+          page_size: { kind: 'constant', value: 10 }
+        }
+      });
+    });
+  }, 10000);
 
   test('toggles Data Model record and payload editors by action and keeps outputs aligned', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

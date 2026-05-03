@@ -22,7 +22,7 @@
 
 ### Task 1: Register Data Model Query Schema Field
 
-- [ ] **Step 1: Add failing schema tests**
+- [x] **Step 1: Add failing schema tests**
 
 In `web/app/src/features/agent-flow/_tests/node-schema-registry.test.tsx`, update `exposes a real renderer registry for later schema-driven consumers`:
 
@@ -53,7 +53,7 @@ Add this test:
   });
 ```
 
-- [ ] **Step 2: Confirm failure**
+- [x] **Step 2: Confirm failure**
 
 Run:
 
@@ -63,7 +63,7 @@ pnpm --dir web/app test -- node-schema-registry
 
 Expected: FAIL because `data_model_query` is not registered.
 
-- [ ] **Step 3: Add editor kind and fragment mapping**
+- [x] **Step 3: Add editor kind and fragment mapping**
 
 In `web/app/src/features/agent-flow/lib/node-definitions/types.ts`, add:
 
@@ -81,7 +81,7 @@ In `web/app/src/features/agent-flow/schema/node-schema-fragments.ts`, add:
 
 after `data_model: 'data_model'`.
 
-- [ ] **Step 4: Add node definition field**
+- [x] **Step 4: Add node definition field**
 
 In `web/app/src/features/agent-flow/lib/node-definitions/nodes/data-model/index.ts`, insert this field after `config.action`:
 
@@ -98,7 +98,7 @@ In `web/app/src/features/agent-flow/lib/node-definitions/nodes/data-model/index.
         },
 ```
 
-- [ ] **Step 5: Add inert renderer registration**
+- [x] **Step 5: Add inert renderer registration**
 
 In `web/app/src/features/agent-flow/schema/agent-flow-field-renderers.tsx`, add:
 
@@ -114,7 +114,7 @@ Add the renderer entry:
   data_model_query: renderDataModelQueryField,
 ```
 
-- [ ] **Step 6: Verify schema registration**
+- [x] **Step 6: Verify schema registration**
 
 Run:
 
@@ -126,7 +126,7 @@ Expected: PASS.
 
 ### Task 2: Add Query Editor UI
 
-- [ ] **Step 1: Add failing UI test**
+- [x] **Step 1: Add failing UI test**
 
 In `web/app/src/features/agent-flow/_tests/node-inspector.test.tsx`, extend the `orders` fixture with:
 
@@ -194,7 +194,7 @@ Append this test:
   });
 ```
 
-- [ ] **Step 2: Confirm failure**
+- [x] **Step 2: Confirm failure**
 
 Run:
 
@@ -204,7 +204,7 @@ pnpm --dir web/app test -- node-inspector
 
 Expected: FAIL because the renderer returns `null`.
 
-- [ ] **Step 3: Create `DataModelQueryField`**
+- [x] **Step 3: Create `DataModelQueryField`**
 
 Create `web/app/src/features/agent-flow/components/bindings/DataModelQueryField.tsx`:
 
@@ -366,7 +366,7 @@ export function DataModelQueryField({ ariaLabel, value, fields, selectorOptions,
 }
 ```
 
-- [ ] **Step 4: Wire real renderer**
+- [x] **Step 4: Wire real renderer**
 
 In `web/app/src/features/agent-flow/schema/agent-flow-field-renderers.tsx`, import:
 
@@ -405,7 +405,7 @@ function renderDataModelQueryField({ adapter, block }: SchemaFieldRendererProps)
 }
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -415,7 +415,7 @@ pnpm --dir web/app test -- node-schema-registry node-inspector
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 

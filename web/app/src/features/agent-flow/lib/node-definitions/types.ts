@@ -15,6 +15,7 @@ export type NodeEditorKind =
   | 'text'
   | 'static_select'
   | 'data_model'
+  | 'data_model_query'
   | 'llm_model'
   | 'llm_prompt_messages'
   | 'llm_response_format'

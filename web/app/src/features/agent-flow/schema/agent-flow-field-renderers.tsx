@@ -6,7 +6,9 @@ import type {
   SchemaFieldRendererProps
 } from '../../../shared/schema-ui/registry/create-renderer-registry';
 
+import type { AgentFlowDataModelFieldOption } from '../api/data-model-options';
 import { ConditionGroupField } from '../components/bindings/ConditionGroupField';
+import { DataModelQueryField } from '../components/bindings/DataModelQueryField';
 import { NamedBindingsField } from '../components/bindings/NamedBindingsField';
 import { SelectorField } from '../components/bindings/SelectorField';
 import { StateWriteField } from '../components/bindings/StateWriteField';
@@ -17,6 +19,10 @@ import { LlmModelField } from '../components/detail/fields/LlmModelField';
 import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMessagesField';
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
 import { StartInputFieldsField } from '../components/detail/fields/StartInputFieldsField';
+import {
+  DATA_MODEL_QUERY_DEFAULT_VALUE,
+  normalizeDataModelQueryBindingValue
+} from '../lib/data-model-query-binding';
 import {
   normalizePromptMessagesBinding,
   toPromptMessagesBinding
@@ -287,10 +293,49 @@ function renderStartInputFieldsField({
   );
 }
 
+function renderDataModelQueryField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const value = adapter.getValue(block.path);
+  const binding = normalizeDataModelQueryBindingValue(
+    getBindingValue(
+      value,
+      'data_model_query',
+      DATA_MODEL_QUERY_DEFAULT_VALUE
+    )
+  );
+  const fields =
+    (adapter.getValue('config.data_model_fields') as
+      | AgentFlowDataModelFieldOption[]
+      | null
+      | undefined) ?? [];
+  const dataModelCode = adapter.getValue('config.data_model_code');
+
+  return (
+    <DataModelQueryField
+      ariaLabel={block.label}
+      hasDataModelSelected={
+        typeof dataModelCode === 'string' && dataModelCode.trim().length > 0
+      }
+      fields={fields}
+      selectorOptions={getSelectorOptions(adapter)}
+      value={binding}
+      onChange={(nextValue) =>
+        adapter.setValue(block.path, {
+          kind: 'data_model_query',
+          value: normalizeDataModelQueryBindingValue(nextValue)
+        })
+      }
+    />
+  );
+}
+
 export const agentFlowFieldRenderers = {
   text: renderTextField,
   static_select: renderStaticSelectField,
   data_model: DataModelField,
+  data_model_query: renderDataModelQueryField,
   llm_model: LlmModelField,
   llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,

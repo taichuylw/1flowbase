@@ -86,6 +86,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.start_input_fields).toBeTypeOf(
       'function'
     );
+    expect(agentFlowRendererRegistry.fields.data_model_query).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.dynamicForms.llm_parameters).toBeTypeOf(
       'function'
     );
@@ -237,6 +240,25 @@ describe('agent-flow node schema registry', () => {
     expect(payloadField).toEqual(
       expect.objectContaining({
         renderer: 'named_bindings'
+      })
+    );
+  });
+
+  test('exposes Data Model query params only for list action', () => {
+    const schema = resolveAgentFlowNodeSchema('data_model' as never);
+    const queryField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'bindings.query'
+    );
+
+    expect(queryField).toEqual(
+      expect.objectContaining({
+        renderer: 'data_model_query',
+        visibleWhen: {
+          operator: 'eq',
+          path: 'config.action',
+          value: 'list'
+        }
       })
     );
   });

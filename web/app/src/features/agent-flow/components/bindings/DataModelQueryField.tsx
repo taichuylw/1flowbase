@@ -1,0 +1,409 @@
+import type {
+  DataModelQueryBindingValue,
+  DataModelQueryFilter,
+  DataModelQueryOperator,
+  DataModelQuerySort,
+  DataModelQueryValue
+} from '@1flowbase/flow-schema';
+import {
+  Button,
+  Flex,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Typography
+} from 'antd';
+
+import type { AgentFlowDataModelFieldOption } from '../../api/data-model-options';
+import {
+  DATA_MODEL_QUERY_OPERATORS,
+  normalizeDataModelQueryBindingValue
+} from '../../lib/data-model-query-binding';
+import type { FlowSelectorOption } from '../../lib/selector-options';
+import { SelectorField } from './SelectorField';
+
+const FILTER_TYPES = new Set([
+  'string',
+  'enum',
+  'text',
+  'datetime',
+  'number',
+  'boolean',
+  'json',
+  'many_to_one'
+]);
+const SORT_TYPES = new Set([
+  'string',
+  'enum',
+  'text',
+  'datetime',
+  'number',
+  'boolean'
+]);
+const EXPAND_TYPES = new Set(['many_to_one', 'one_to_many']);
+const RANGE_TYPES = new Set(['number', 'datetime']);
+
+interface DataModelQueryFieldProps {
+  ariaLabel: string;
+  value: unknown;
+  hasDataModelSelected: boolean;
+  fields: AgentFlowDataModelFieldOption[];
+  selectorOptions: FlowSelectorOption[];
+  onChange: (value: DataModelQueryBindingValue) => void;
+}
+
+function fieldOptions(
+  fields: AgentFlowDataModelFieldOption[],
+  types: Set<string>
+) {
+  return fields
+    .filter((field) => types.has(field.valueType))
+    .map((field) => ({
+      value: field.code,
+      label: field.title || field.code
+    }));
+}
+
+function operators(
+  fields: AgentFlowDataModelFieldOption[],
+  fieldCode: string
+) {
+  const field = fields.find((entry) => entry.code === fieldCode);
+  const values =
+    field && RANGE_TYPES.has(field.valueType)
+      ? DATA_MODEL_QUERY_OPERATORS
+      : (['eq', 'ne'] satisfies DataModelQueryOperator[]);
+
+  return values.map((value) => ({ value, label: value }));
+}
+
+function constantValueForType(valueType?: string) {
+  if (valueType === 'number') {
+    return 0;
+  }
+
+  if (valueType === 'boolean') {
+    return false;
+  }
+
+  return '';
+}
+
+function nextFilter(
+  fields: AgentFlowDataModelFieldOption[]
+): DataModelQueryFilter {
+  const field = fieldOptions(fields, FILTER_TYPES)[0];
+  const fieldMeta = fields.find((entry) => entry.code === field?.value);
+
+  return {
+    field_code: field?.value ?? '',
+    operator: 'eq',
+    value: {
+      kind: 'constant',
+      value: constantValueForType(fieldMeta?.valueType)
+    }
+  };
+}
+
+function nextSort(fields: AgentFlowDataModelFieldOption[]): DataModelQuerySort {
+  return {
+    field_code: fieldOptions(fields, SORT_TYPES)[0]?.value ?? '',
+    direction: 'asc'
+  };
+}
+
+function QueryValueInput({
+  ariaLabel,
+  value,
+  valueType,
+  selectorOptions,
+  numeric = false,
+  sourceAriaLabel,
+  selectorAriaLabel,
+  onChange
+}: {
+  ariaLabel: string;
+  value: DataModelQueryValue;
+  valueType?: string;
+  selectorOptions: FlowSelectorOption[];
+  numeric?: boolean;
+  sourceAriaLabel?: string;
+  selectorAriaLabel?: string;
+  onChange: (value: DataModelQueryValue) => void;
+}) {
+  return (
+    <Space.Compact block>
+      <Select
+        aria-label={sourceAriaLabel ?? `${ariaLabel}来源`}
+        options={[
+          { value: 'constant', label: '常量' },
+          { value: 'selector', label: '变量' }
+        ]}
+        value={value.kind}
+        onChange={(kind) =>
+          onChange(
+            kind === 'selector'
+              ? { kind: 'selector', selector: [] }
+              : {
+                  kind: 'constant',
+                  value: numeric ? 1 : constantValueForType(valueType)
+                }
+          )
+        }
+      />
+      {value.kind === 'selector' ? (
+        <SelectorField
+          ariaLabel={selectorAriaLabel ?? ariaLabel}
+          options={selectorOptions}
+          value={value.selector}
+          onChange={(nextValue) =>
+            onChange({ kind: 'selector', selector: nextValue as string[] })
+          }
+        />
+      ) : numeric ? (
+        <InputNumber
+          aria-label={ariaLabel}
+          min={1}
+          value={typeof value.value === 'number' ? value.value : null}
+          onChange={(nextValue) =>
+            onChange({ kind: 'constant', value: nextValue ?? 1 })
+          }
+        />
+      ) : valueType === 'number' ? (
+        <InputNumber
+          aria-label={ariaLabel}
+          value={typeof value.value === 'number' ? value.value : null}
+          onChange={(nextValue) =>
+            onChange({ kind: 'constant', value: nextValue ?? null })
+          }
+        />
+      ) : valueType === 'boolean' ? (
+        <Select
+          aria-label={ariaLabel}
+          options={[
+            { value: true, label: 'true' },
+            { value: false, label: 'false' }
+          ]}
+          value={typeof value.value === 'boolean' ? value.value : undefined}
+          onChange={(nextValue) =>
+            onChange({ kind: 'constant', value: nextValue })
+          }
+        />
+      ) : (
+        <Input
+          aria-label={ariaLabel}
+          value={
+            typeof value.value === 'string'
+              ? value.value
+              : JSON.stringify(value.value ?? '')
+          }
+          onChange={(event) =>
+            onChange({ kind: 'constant', value: event.target.value })
+          }
+        />
+      )}
+    </Space.Compact>
+  );
+}
+
+export function DataModelQueryField({
+  ariaLabel,
+  value,
+  hasDataModelSelected,
+  fields,
+  selectorOptions,
+  onChange
+}: DataModelQueryFieldProps) {
+  const query = normalizeDataModelQueryBindingValue(value);
+  const filterOptions = fieldOptions(fields, FILTER_TYPES);
+  const sortOptions = fieldOptions(fields, SORT_TYPES);
+  const expandOptions = fieldOptions(fields, EXPAND_TYPES);
+  const update = (patch: Partial<DataModelQueryBindingValue>) =>
+    onChange({ ...query, ...patch });
+
+  if (!hasDataModelSelected) {
+    return (
+      <Typography.Text type="secondary">请先选择 Data Model</Typography.Text>
+    );
+  }
+
+  return (
+    <Flex aria-label={ariaLabel} vertical gap={12}>
+      <Flex vertical gap={8}>
+        {query.filters.map((filter, index) => (
+          <Space.Compact key={`filter-${index}`} block>
+            <Select
+              aria-label={`过滤字段 ${index + 1}`}
+              options={filterOptions}
+              value={filter.field_code || undefined}
+              onChange={(fieldCode) => {
+                const field = fields.find((entry) => entry.code === fieldCode);
+
+                update({
+                  filters: query.filters.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? {
+                          ...entry,
+                          field_code: fieldCode,
+                          operator: 'eq',
+                          value:
+                            entry.value.kind === 'selector'
+                              ? entry.value
+                              : {
+                                  kind: 'constant',
+                                  value: constantValueForType(field?.valueType)
+                                }
+                        }
+                      : entry
+                  )
+                });
+              }}
+            />
+            <Select
+              aria-label={`过滤操作符 ${index + 1}`}
+              options={operators(fields, filter.field_code)}
+              value={filter.operator}
+              onChange={(operator) =>
+                update({
+                  filters: query.filters.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? {
+                          ...entry,
+                          operator: operator as DataModelQueryOperator
+                        }
+                      : entry
+                  )
+                })
+              }
+            />
+            <QueryValueInput
+              ariaLabel={`过滤值 ${index + 1}`}
+              valueType={
+                fields.find((field) => field.code === filter.field_code)
+                  ?.valueType
+              }
+              sourceAriaLabel={`过滤值来源 ${index + 1}`}
+              selectorAriaLabel={`过滤变量 ${index + 1}`}
+              selectorOptions={selectorOptions}
+              value={filter.value}
+              onChange={(nextValue) =>
+                update({
+                  filters: query.filters.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? { ...entry, value: nextValue }
+                      : entry
+                  )
+                })
+              }
+            />
+            <Button
+              danger
+              type="text"
+              onClick={() =>
+                update({
+                  filters: query.filters.filter(
+                    (_, entryIndex) => entryIndex !== index
+                  )
+                })
+              }
+            >
+              删除
+            </Button>
+          </Space.Compact>
+        ))}
+        <Button
+          type="dashed"
+          disabled={filterOptions.length === 0}
+          onClick={() =>
+            update({ filters: [...query.filters, nextFilter(fields)] })
+          }
+        >
+          新增过滤条件
+        </Button>
+      </Flex>
+      <Flex vertical gap={8}>
+        {query.sorts.map((sort, index) => (
+          <Space.Compact key={`sort-${index}`} block>
+            <Select
+              aria-label={`排序字段 ${index + 1}`}
+              options={sortOptions}
+              value={sort.field_code || undefined}
+              onChange={(fieldCode) =>
+                update({
+                  sorts: query.sorts.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? { ...entry, field_code: fieldCode }
+                      : entry
+                  )
+                })
+              }
+            />
+            <Select
+              aria-label={`排序方向 ${index + 1}`}
+              options={[
+                { value: 'asc', label: 'asc' },
+                { value: 'desc', label: 'desc' }
+              ]}
+              value={sort.direction}
+              onChange={(direction) =>
+                update({
+                  sorts: query.sorts.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? { ...entry, direction: direction as 'asc' | 'desc' }
+                      : entry
+                  )
+                })
+              }
+            />
+            <Button
+              danger
+              type="text"
+              onClick={() =>
+                update({
+                  sorts: query.sorts.filter(
+                    (_, entryIndex) => entryIndex !== index
+                  )
+                })
+              }
+            >
+              删除
+            </Button>
+          </Space.Compact>
+        ))}
+        <Button
+          type="dashed"
+          disabled={sortOptions.length === 0}
+          onClick={() => update({ sorts: [...query.sorts, nextSort(fields)] })}
+        >
+          新增排序规则
+        </Button>
+      </Flex>
+      <Select
+        aria-label="展开关联"
+        mode="multiple"
+        options={expandOptions}
+        value={query.expand_relations}
+        onChange={(expandRelations) =>
+          update({ expand_relations: expandRelations })
+        }
+      />
+      <Space.Compact block>
+        <QueryValueInput
+          ariaLabel="页码"
+          numeric
+          selectorOptions={selectorOptions}
+          value={query.page}
+          onChange={(page) => update({ page })}
+        />
+        <QueryValueInput
+          ariaLabel="每页数量"
+          numeric
+          selectorOptions={selectorOptions}
+          value={query.page_size}
+          onChange={(pageSize) => update({ page_size: pageSize })}
+        />
+      </Space.Compact>
+    </Flex>
+  );
+}

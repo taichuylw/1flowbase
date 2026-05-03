@@ -15,6 +15,7 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   text: 'text',
   static_select: 'static_select',
   data_model: 'data_model',
+  data_model_query: 'data_model_query',
   llm_model: 'llm_model',
   llm_prompt_messages: 'llm_prompt_messages',
   llm_response_format: 'llm_response_format',
