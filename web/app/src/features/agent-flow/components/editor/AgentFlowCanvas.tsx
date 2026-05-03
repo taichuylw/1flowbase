@@ -7,6 +7,7 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  useOnViewportChange,
   useReactFlow,
   useViewport,
   type Edge
@@ -97,9 +98,11 @@ function ZoomToolbar() {
 }
 
 function ViewportObserver({
+  onViewportEnd,
   onViewportSnapshotChange,
   onViewportGetterReady
 }: {
+  onViewportEnd: (viewport: FlowAuthoringDocument['editor']['viewport']) => void;
   onViewportSnapshotChange?: (
     viewport: FlowAuthoringDocument['editor']['viewport']
   ) => void;
@@ -109,6 +112,10 @@ function ViewportObserver({
 }) {
   const reactFlow = useReactFlow();
   const viewport = useViewport();
+
+  useOnViewportChange({
+    onEnd: onViewportEnd
+  });
 
   useEffect(() => {
     onViewportGetterReady?.(() => reactFlow.getViewport());
@@ -245,7 +252,7 @@ function AgentFlowCanvasInner({
       <ReactFlow
         edges={edges}
         nodes={nodes}
-        viewport={document.editor.viewport}
+        defaultViewport={document.editor.viewport}
         nodeTypes={agentFlowNodeTypes}
         edgeTypes={agentFlowEdgeTypes}
         connectionLineComponent={AgentFlowCustomConnectionLine}
@@ -288,7 +295,6 @@ function AgentFlowCanvasInner({
           });
         }}
         onNodesChange={canvasInteractions.onNodesChange}
-        onViewportChange={canvasInteractions.onViewportChange}
         onReconnect={(oldEdge: Edge, connection) => {
           edgeInteractions.reconnect(oldEdge.id, connection);
         }}
@@ -300,6 +306,7 @@ function AgentFlowCanvasInner({
         <Background gap={20} size={1} />
         <PendingLocateNodeEffect />
         <ViewportObserver
+          onViewportEnd={canvasInteractions.commitViewportChange}
           onViewportSnapshotChange={onViewportSnapshotChange}
           onViewportGetterReady={onViewportGetterReady}
         />

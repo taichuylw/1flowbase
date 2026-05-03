@@ -1,5 +1,5 @@
 import type { NodeChange } from '@xyflow/react';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { moveNodes } from '../../lib/document/transforms/node';
 import { setViewport } from '../../lib/document/transforms/viewport';
@@ -59,9 +59,8 @@ export function useCanvasInteractions() {
     (state) => state.setWorkingDocument
   );
 
-  return {
-    transientNodePositions,
-    onNodesChange(changes: NodeChange[]) {
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
       const positionChanges = getPositionChanges(changes);
 
       if (positionChanges.length === 0) {
@@ -97,7 +96,11 @@ export function useCanvasInteractions() {
         moveNodes(currentDocument, committedPositions)
       );
     },
-    onViewportChange(viewport: { x: number; y: number; zoom: number }) {
+    [setWorkingDocument]
+  );
+
+  const commitViewportChange = useCallback(
+    (viewport: { x: number; y: number; zoom: number }) => {
       setWorkingDocument((currentDocument) =>
         setViewport(currentDocument, {
           x: viewport.x,
@@ -105,6 +108,16 @@ export function useCanvasInteractions() {
           zoom: viewport.zoom
         })
       );
-    }
-  };
+    },
+    [setWorkingDocument]
+  );
+
+  return useMemo(
+    () => ({
+      transientNodePositions,
+      onNodesChange,
+      commitViewportChange
+    }),
+    [commitViewportChange, onNodesChange, transientNodePositions]
+  );
 }

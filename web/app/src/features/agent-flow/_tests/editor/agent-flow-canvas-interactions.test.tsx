@@ -27,6 +27,7 @@ type MockViewport = {
 
 type MockReactFlowProps = {
   children?: ReactNode;
+  defaultViewport?: MockViewport;
   nodes?: Array<{
     id: string;
     height?: number;
@@ -98,6 +99,11 @@ type MockReactFlowProps = {
 
 let latestReactFlowProps: MockReactFlowProps | null = null;
 let mockViewport: MockViewport = { x: 0, y: 0, zoom: 1 };
+let latestViewportChangeOptions: {
+  onStart?: (viewport: MockViewport) => void;
+  onChange?: (viewport: MockViewport) => void;
+  onEnd?: (viewport: MockViewport) => void;
+} | null = null;
 
 function createInitialState(document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })) {
   return {
@@ -189,7 +195,7 @@ vi.mock('@xyflow/react', () => ({
   },
   ReactFlow: (props: MockReactFlowProps) => {
     latestReactFlowProps = props;
-    mockViewport = props.viewport ?? mockViewport;
+    mockViewport = props.viewport ?? props.defaultViewport ?? mockViewport;
 
     return (
       <div data-testid="mock-react-flow">
@@ -238,6 +244,13 @@ vi.mock('@xyflow/react', () => ({
   },
   ReactFlowProvider: ({ children }: { children?: ReactNode }) => children ?? null,
   getBezierPath: () => ['M0,0', 0, 0],
+  useOnViewportChange: (options: {
+    onStart?: (viewport: MockViewport) => void;
+    onChange?: (viewport: MockViewport) => void;
+    onEnd?: (viewport: MockViewport) => void;
+  }) => {
+    latestViewportChangeOptions = options;
+  },
   useReactFlow: () => ({
     fitView: vi.fn(),
     screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
@@ -250,6 +263,7 @@ vi.mock('@xyflow/react', () => ({
 describe('AgentFlowCanvas interactions', () => {
   beforeEach(() => {
     latestReactFlowProps = null;
+    latestViewportChangeOptions = null;
     mockViewport = { x: 0, y: 0, zoom: 1 };
   });
 
@@ -310,14 +324,27 @@ describe('AgentFlowCanvas interactions', () => {
   test('opens with the document viewport and shows a plain percentage label', () => {
     renderCanvas();
 
-    expect(latestReactFlowProps?.viewport).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(latestReactFlowProps?.defaultViewport).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(latestReactFlowProps?.viewport).not.toBeDefined();
     expect(screen.getByLabelText('当前缩放')).toHaveTextContent('100%');
   });
 
-  test('writes viewport changes back into the document', () => {
+  test('writes viewport changes back into the document after viewport movement ends', () => {
     const { getState } = renderCanvas();
 
-    fireEvent.click(screen.getByRole('button', { name: 'trigger viewport change' }));
+    act(() => {
+      latestViewportChangeOptions?.onChange?.({ x: 64, y: 32, zoom: 0.92 });
+    });
+
+    expect(getState().workingDocument.editor.viewport).toEqual({
+      x: 0,
+      y: 0,
+      zoom: 1
+    });
+
+    act(() => {
+      latestViewportChangeOptions?.onEnd?.({ x: 120, y: 48, zoom: 0.85 });
+    });
 
     expect(getState().workingDocument.editor.viewport).toEqual({
       x: 120,
