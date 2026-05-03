@@ -230,13 +230,11 @@ export function NodePickerPopover({
               <NodePickerSection
                 key={group.key}
                 title={group.title}
-                description={group.description}
               >
                 {group.options.map((option) => (
                   <NodePickerOptionButton
                     key={getNodePickerOptionKey(option)}
                     option={option}
-                    description={BUILTIN_NODE_PICKER_SUMMARIES[option.type]}
                     onPick={() => {
                       closePicker();
                       onPickNode(option);
@@ -248,13 +246,11 @@ export function NodePickerPopover({
             {uncategorizedBuiltinOptions.length > 0 ? (
               <NodePickerSection
                 title="其他节点"
-                description="尚未归入常用工作流分组的节点。"
               >
                 {uncategorizedBuiltinOptions.map((option) => (
                   <NodePickerOptionButton
                     key={getNodePickerOptionKey(option)}
                     option={option}
-                    description={BUILTIN_NODE_PICKER_SUMMARIES[option.type]}
                     onPick={() => {
                       closePicker();
                       onPickNode(option);
@@ -266,13 +262,11 @@ export function NodePickerPopover({
             {filteredPluginOptions.length > 0 ? (
               <NodePickerSection
                 title="插件节点"
-                description="来自已安装 capability plugin 的扩展节点。"
               >
                 {filteredPluginOptions.map((option) => (
                   <NodePickerOptionButton
                     key={getNodePickerOptionKey(option)}
                     option={option}
-                    description={getNodePickerOptionDescription(option)}
                     onPick={() => {
                       if (option.disabled) {
                         return;
@@ -313,13 +307,11 @@ export function NodePickerPopover({
 
 interface NodePickerSectionProps {
   title: string;
-  description: string;
   children: ReactNode;
 }
 
 function NodePickerSection({
   title,
-  description,
   children
 }: NodePickerSectionProps) {
   return (
@@ -327,9 +319,6 @@ function NodePickerSection({
       <div className="agent-flow-node-picker__section-head">
         <div className="agent-flow-node-picker__section-label">
           {title}
-        </div>
-        <div className="agent-flow-node-picker__section-description">
-          {description}
         </div>
       </div>
       <div className="agent-flow-node-picker__section-items">
@@ -341,13 +330,11 @@ function NodePickerSection({
 
 interface NodePickerOptionButtonProps {
   option: NodePickerOption;
-  description: string | null;
   onPick: () => void;
 }
 
 function NodePickerOptionButton({
   option,
-  description,
   onPick
 }: NodePickerOptionButtonProps) {
   const icon =
@@ -369,11 +356,6 @@ function NodePickerOptionButton({
       </span>
       <span className="agent-flow-node-picker__text">
         <span className="agent-flow-node-picker__name">{option.label}</span>
-        {description ? (
-          <span className="agent-flow-node-picker__meta">
-            {description}
-          </span>
-        ) : null}
       </span>
     </button>
   );
