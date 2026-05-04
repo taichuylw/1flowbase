@@ -10,6 +10,7 @@ const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'coverage']);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
+const ANSI_CONTROL_SEQUENCE_PATTERN = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/gu;
 
 function resolveCliEntry(repoRoot, entryName) {
   return path.join(repoRoot, 'scripts', 'node', `${entryName}.js`);
@@ -148,7 +149,11 @@ function readFailureExcerpt(logPath) {
   }
 
   const lines = fs.readFileSync(logPath, 'utf8').trimEnd().split(/\r?\n/u);
-  return lines.slice(-FAILURE_EXCERPT_MAX_LINES).join('\n').trim();
+  return stripAnsiControlSequences(lines.slice(-FAILURE_EXCERPT_MAX_LINES).join('\n')).trim();
+}
+
+function stripAnsiControlSequences(value) {
+  return value.replace(ANSI_CONTROL_SEQUENCE_PATTERN, '');
 }
 
 function toRepoRelative(repoRoot, filePath) {

@@ -153,3 +153,43 @@ test('runQualityGate creates a new issue when publishing is enabled even if the 
   assert.match(createdIssues[0].body, /## Failure Excerpt/u);
   assert.match(createdIssues[0].body, /failure detail/u);
 });
+
+test('runQualityGate strips ANSI control sequences from published failure excerpts', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-'));
+  const createdIssues = [];
+
+  await runQualityGate({
+    repoRoot,
+    scope: 'ci',
+    reportType: 'ci',
+    publishIssue: true,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'main',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '789',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+    },
+    spawnSyncImpl() {
+      return {
+        status: 1,
+        stdout: '\u001b[2mdist/\u001b[22m\u001b[36masset.js\u001b[39m\n',
+        stderr: '\u001b[31mDiff in api/apps/api-server/src/_tests/config_tests.rs:77\u001b[39m\n',
+      };
+    },
+    createIssueImpl(issue) {
+      createdIssues.push(issue);
+      return { html_url: 'https://github.com/taichuy/1flowbase/issues/3' };
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(createdIssues.length, 1);
+  assert.doesNotMatch(createdIssues[0].body, /\u001b\[/u);
+  assert.match(createdIssues[0].body, /dist\/asset\.js/u);
+  assert.match(createdIssues[0].body, /Diff in api\/apps\/api-server\/src\/_tests\/config_tests\.rs:77/u);
+});

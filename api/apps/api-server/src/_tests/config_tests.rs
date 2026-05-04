@@ -77,11 +77,9 @@ fn api_config_rejects_invalid_database_pool_max_connections() {
     env.push(("API_DATABASE_POOL_MAX_CONNECTIONS", "0"));
     let error = ApiConfig::from_env_map(&env).unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("API_DATABASE_POOL_MAX_CONNECTIONS")
-    );
+    assert!(error
+        .to_string()
+        .contains("API_DATABASE_POOL_MAX_CONNECTIONS"));
 }
 
 #[test]
