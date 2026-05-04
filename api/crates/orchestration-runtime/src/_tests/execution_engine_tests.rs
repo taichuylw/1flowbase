@@ -140,6 +140,55 @@ impl CapabilityInvoker for RuntimeContractErrorInvoker {
     }
 }
 
+struct InputCacheUsageSnapshotInvoker;
+
+#[async_trait]
+impl ProviderInvoker for InputCacheUsageSnapshotInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: "cache-aware response".to_string(),
+                },
+                ProviderStreamEvent::UsageSnapshot {
+                    usage: ProviderUsage {
+                        input_tokens: Some(100),
+                        input_cache_hit_tokens: Some(40),
+                        input_cache_miss_tokens: Some(60),
+                        output_tokens: Some(12),
+                        total_tokens: Some(112),
+                        ..ProviderUsage::default()
+                    },
+                },
+                ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Stop,
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some("cache-aware response".to_string()),
+                finish_reason: Some(ProviderFinishReason::Stop),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for InputCacheUsageSnapshotInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("base plan does not execute capability nodes")
+    }
+}
+
 struct FailFirstFailoverInvoker {
     calls: Arc<Mutex<Vec<String>>>,
 }
@@ -370,6 +419,34 @@ async fn llm_node_outputs_include_hidden_route_projection_and_attempt_ids() {
     assert!(output["__context_projection_id"].as_str().is_some());
     assert!(output["__attempt_ids"].as_array().is_some());
     assert!(output["__winner_attempt_id"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn llm_node_final_usage_preserves_input_cache_snapshot_fields() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "node-start": {
+                "query": "hello"
+            }
+        }),
+        &InputCacheUsageSnapshotInvoker,
+    )
+    .await
+    .unwrap();
+    let output = outcome
+        .node_traces
+        .into_iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist")
+        .output_payload;
+
+    assert_eq!(output["usage"]["input_tokens"], json!(100));
+    assert_eq!(output["usage"]["input_cache_hit_tokens"], json!(40));
+    assert_eq!(output["usage"]["input_cache_miss_tokens"], json!(60));
+    assert_eq!(output["usage"]["output_tokens"], json!(12));
+    assert_eq!(output["usage"]["total_tokens"], json!(112));
+    assert_eq!(output["usage"]["cache_write_tokens"], Value::Null);
 }
 
 #[tokio::test]

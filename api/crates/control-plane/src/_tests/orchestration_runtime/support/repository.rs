@@ -2200,6 +2200,8 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             output_tokens: input.output_tokens,
             reasoning_output_tokens: input.reasoning_output_tokens,
             total_tokens: input.total_tokens,
+            input_cache_hit_tokens: input.input_cache_hit_tokens,
+            input_cache_miss_tokens: input.input_cache_miss_tokens,
             cache_read_tokens: input.cache_read_tokens,
             cache_write_tokens: input.cache_write_tokens,
             price_snapshot: input.price_snapshot.clone(),

@@ -926,7 +926,8 @@ async fn runtime_fact_spine_preserves_span_sequence_and_trust_level() {
 }
 
 #[tokio::test]
-async fn orchestration_runtime_repository_persists_model_failover_attempt_ledger() {
+async fn orchestration_runtime_repository_persists_model_failover_attempt_and_input_cache_usage_ledger(
+) {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);
@@ -1010,6 +1011,8 @@ async fn orchestration_runtime_repository_persists_model_failover_attempt_ledger
             output_tokens: Some(2),
             reasoning_output_tokens: None,
             total_tokens: Some(3),
+            input_cache_hit_tokens: Some(40),
+            input_cache_miss_tokens: Some(60),
             cache_read_tokens: None,
             cache_write_tokens: None,
             price_snapshot: None,
@@ -1047,6 +1050,18 @@ async fn orchestration_runtime_repository_persists_model_failover_attempt_ledger
     assert_eq!(attempts[0].id, attempt.id);
     assert_eq!(attempts[0].usage_ledger_id, Some(usage.id));
     assert_eq!(usage_records[0].failover_attempt_id, Some(attempt.id));
+    assert_eq!(usage_records[0].input_cache_hit_tokens, Some(40));
+    assert_eq!(usage_records[0].input_cache_miss_tokens, Some(60));
+
+    let cache_usage = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
+        "select input_cache_hit_tokens, input_cache_miss_tokens from runtime_usage_ledger where id = $1",
+    )
+    .bind(usage.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(cache_usage.0, Some(40));
+    assert_eq!(cache_usage.1, Some(60));
 }
 
 #[tokio::test]

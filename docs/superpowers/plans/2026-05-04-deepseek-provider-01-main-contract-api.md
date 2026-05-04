@@ -24,7 +24,7 @@
 - Modify: `api/crates/storage-durable/postgres/src/mappers/orchestration_runtime_mapper.rs`
 - Modify: `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs`
 
-- [ ] **Step 1: Write the failing provider usage serialization test**
+- [x] **Step 1: Write the failing provider usage serialization test**
 
 Add to `api/crates/plugin-framework/src/_tests/provider_contract_tests.rs`:
 
@@ -50,7 +50,7 @@ fn provider_usage_serializes_input_cache_hit_and_miss_tokens() {
 }
 ```
 
-- [ ] **Step 2: Run the provider usage test to verify it fails**
+- [x] **Step 2: Run the provider usage test to verify it fails**
 
 Run:
 
@@ -61,7 +61,7 @@ cargo test -p plugin-framework provider_usage_serializes_input_cache_hit_and_mis
 
 Expected: compile failure mentioning missing `input_cache_hit_tokens` and `input_cache_miss_tokens`.
 
-- [ ] **Step 3: Add the `ProviderUsage` fields**
+- [x] **Step 3: Add the `ProviderUsage` fields**
 
 Update `api/crates/plugin-framework/src/provider_contract.rs`:
 
@@ -101,7 +101,7 @@ pub fn total_tokens(&self) -> Option<u64> {
 }
 ```
 
-- [ ] **Step 4: Propagate usage aggregation**
+- [x] **Step 4: Propagate usage aggregation**
 
 Update `apply_usage_delta()` in `api/crates/orchestration-runtime/src/execution_engine.rs`:
 
@@ -130,7 +130,7 @@ assert_eq!(result.result.usage.input_cache_hit_tokens, Some(40));
 assert_eq!(result.result.usage.input_cache_miss_tokens, Some(60));
 ```
 
-- [ ] **Step 5: Add durable usage fields**
+- [x] **Step 5: Add durable usage fields**
 
 Create `api/crates/storage-durable/postgres/migrations/20260504213000_add_input_cache_usage_fields.sql`:
 
@@ -160,7 +160,7 @@ input_cache_miss_tokens: usage_i64(&raw_usage, "input_cache_miss_tokens"),
 
 Keep `cached_input_tokens`, `cache_read_tokens`, and `cache_write_tokens` for compatibility.
 
-- [ ] **Step 6: Add repository persistence coverage**
+- [x] **Step 6: Add repository persistence coverage**
 
 Extend `api/crates/storage-durable/postgres/src/_tests/orchestration_runtime_repository_tests.rs` so an appended ledger record includes:
 
@@ -176,7 +176,7 @@ assert_eq!(record.input_cache_hit_tokens, Some(40));
 assert_eq!(record.input_cache_miss_tokens, Some(60));
 ```
 
-- [ ] **Step 7: Run focused usage tests**
+- [x] **Step 7: Run focused usage tests**
 
 Run:
 
@@ -189,7 +189,7 @@ cargo test -p storage-postgres input_cache
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit usage contract changes**
+- [x] **Step 8: Commit usage contract changes**
 
 Run:
 
@@ -628,7 +628,7 @@ git push origin main
 
 ## Plan Completion
 
-- [ ] All Task 1 checkboxes are complete.
+- [x] All Task 1 checkboxes are complete.
 - [ ] All Task 2 checkboxes are complete.
 - [ ] All Task 3 checkboxes are complete.
 - [ ] Update the index plan checkbox for `01 - Main Provider Contract And API`.

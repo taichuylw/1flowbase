@@ -29,6 +29,8 @@ fn model_discovery_mode_accepts_all_supported_wire_values() {
 fn provider_usage_total_tokens_falls_back_to_known_segments() {
     let usage = ProviderUsage {
         input_tokens: Some(120),
+        input_cache_hit_tokens: Some(80),
+        input_cache_miss_tokens: Some(40),
         output_tokens: Some(45),
         reasoning_tokens: Some(12),
         cache_read_tokens: Some(9),
@@ -36,7 +38,27 @@ fn provider_usage_total_tokens_falls_back_to_known_segments() {
         total_tokens: None,
     };
 
-    assert_eq!(usage.total_tokens(), Some(189));
+    assert_eq!(usage.total_tokens(), Some(177));
+}
+
+#[test]
+fn provider_usage_serializes_input_cache_hit_and_miss_tokens() {
+    let usage = ProviderUsage {
+        input_tokens: Some(100),
+        input_cache_hit_tokens: Some(40),
+        input_cache_miss_tokens: Some(60),
+        output_tokens: Some(12),
+        total_tokens: Some(112),
+        ..ProviderUsage::default()
+    };
+
+    let payload = serde_json::to_value(&usage).unwrap();
+
+    assert_eq!(payload["input_tokens"], 100);
+    assert_eq!(payload["input_cache_hit_tokens"], 40);
+    assert_eq!(payload["input_cache_miss_tokens"], 60);
+    assert_eq!(payload["output_tokens"], 12);
+    assert_eq!(payload["total_tokens"], 112);
 }
 
 #[test]

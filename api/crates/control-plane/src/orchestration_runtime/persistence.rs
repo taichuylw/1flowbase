@@ -511,6 +511,8 @@ where
             output_tokens: usage_i64(&raw_usage, "output_tokens"),
             reasoning_output_tokens: usage_i64(&raw_usage, "reasoning_tokens"),
             total_tokens: usage_i64(&raw_usage, "total_tokens"),
+            input_cache_hit_tokens: usage_i64(&raw_usage, "input_cache_hit_tokens"),
+            input_cache_miss_tokens: usage_i64(&raw_usage, "input_cache_miss_tokens"),
             cache_read_tokens: usage_i64(&raw_usage, "cache_read_tokens"),
             cache_write_tokens: usage_i64(&raw_usage, "cache_write_tokens"),
             price_snapshot: None,

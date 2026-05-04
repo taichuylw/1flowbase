@@ -1110,6 +1110,8 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
                 output_tokens,
                 reasoning_output_tokens,
                 total_tokens,
+                input_cache_hit_tokens,
+                input_cache_miss_tokens,
                 cache_read_tokens,
                 cache_write_tokens,
                 price_snapshot,
@@ -1118,7 +1120,8 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
                 raw_usage,
                 normalized_usage
             ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                      $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                      $21, $22, $23, $24)
             returning
                 id,
                 flow_run_id,
@@ -1135,6 +1138,8 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
                 output_tokens,
                 reasoning_output_tokens,
                 total_tokens,
+                input_cache_hit_tokens,
+                input_cache_miss_tokens,
                 cache_read_tokens,
                 cache_write_tokens,
                 price_snapshot,
@@ -1160,6 +1165,8 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .bind(input.output_tokens)
         .bind(input.reasoning_output_tokens)
         .bind(input.total_tokens)
+        .bind(input.input_cache_hit_tokens)
+        .bind(input.input_cache_miss_tokens)
         .bind(input.cache_read_tokens)
         .bind(input.cache_write_tokens)
         .bind(&input.price_snapshot)
@@ -1777,6 +1784,8 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
                 output_tokens,
                 reasoning_output_tokens,
                 total_tokens,
+                input_cache_hit_tokens,
+                input_cache_miss_tokens,
                 cache_read_tokens,
                 cache_write_tokens,
                 price_snapshot,
@@ -2441,6 +2450,8 @@ fn map_usage_ledger_record(row: PgRow) -> Result<domain::UsageLedgerRecord> {
         output_tokens: row.get("output_tokens"),
         reasoning_output_tokens: row.get("reasoning_output_tokens"),
         total_tokens: row.get("total_tokens"),
+        input_cache_hit_tokens: row.get("input_cache_hit_tokens"),
+        input_cache_miss_tokens: row.get("input_cache_miss_tokens"),
         cache_read_tokens: row.get("cache_read_tokens"),
         cache_write_tokens: row.get("cache_write_tokens"),
         price_snapshot: row.get("price_snapshot"),

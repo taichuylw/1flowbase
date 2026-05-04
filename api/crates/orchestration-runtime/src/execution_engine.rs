@@ -1090,6 +1090,14 @@ fn collect_usage(events: &[ProviderStreamEvent], result_usage: &ProviderUsage) -
 
 fn apply_usage_delta(target: &mut ProviderUsage, delta: &ProviderUsage) {
     add_usage_value(&mut target.input_tokens, delta.input_tokens);
+    add_usage_value(
+        &mut target.input_cache_hit_tokens,
+        delta.input_cache_hit_tokens,
+    );
+    add_usage_value(
+        &mut target.input_cache_miss_tokens,
+        delta.input_cache_miss_tokens,
+    );
     add_usage_value(&mut target.output_tokens, delta.output_tokens);
     add_usage_value(&mut target.reasoning_tokens, delta.reasoning_tokens);
     add_usage_value(&mut target.cache_read_tokens, delta.cache_read_tokens);
@@ -1247,4 +1255,34 @@ fn redact_prefixed_token(text: &str, prefix: &str) -> String {
 
     result.push_str(&text[cursor..]);
     result
+}
+
+#[cfg(test)]
+mod input_cache_usage_tests {
+    use super::*;
+
+    #[test]
+    fn usage_delta_accumulates_input_cache_hit_and_miss_tokens() {
+        let mut usage = ProviderUsage {
+            input_tokens: Some(100),
+            input_cache_hit_tokens: Some(40),
+            input_cache_miss_tokens: Some(60),
+            output_tokens: Some(12),
+            total_tokens: Some(112),
+            ..ProviderUsage::default()
+        };
+
+        apply_usage_delta(
+            &mut usage,
+            &ProviderUsage {
+                input_cache_hit_tokens: Some(5),
+                input_cache_miss_tokens: Some(7),
+                ..ProviderUsage::default()
+            },
+        );
+
+        assert_eq!(usage.input_cache_hit_tokens, Some(45));
+        assert_eq!(usage.input_cache_miss_tokens, Some(67));
+        assert_eq!(usage.total_tokens(), Some(112));
+    }
 }

@@ -153,6 +153,8 @@ pub struct PluginFormSchema {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ProviderUsage {
     pub input_tokens: Option<u64>,
+    pub input_cache_hit_tokens: Option<u64>,
+    pub input_cache_miss_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub reasoning_tokens: Option<u64>,
     pub cache_read_tokens: Option<u64>,
@@ -166,17 +168,12 @@ impl ProviderUsage {
             return Some(value);
         }
 
-        let segments = [
-            self.input_tokens,
-            self.output_tokens,
-            self.reasoning_tokens,
-            self.cache_read_tokens,
-            self.cache_write_tokens,
-        ];
-
         let mut total = 0_u64;
         let mut has_value = false;
-        for segment in segments.into_iter().flatten() {
+        for segment in [self.input_tokens, self.output_tokens, self.reasoning_tokens]
+            .into_iter()
+            .flatten()
+        {
             has_value = true;
             total += segment;
         }

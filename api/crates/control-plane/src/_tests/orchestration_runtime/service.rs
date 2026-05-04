@@ -442,6 +442,8 @@ async fn fast_stream_provider_events_are_durably_persisted_to_runtime_observabil
                 input_tokens: Some(10),
                 output_tokens: Some(5),
                 reasoning_tokens: None,
+                input_cache_hit_tokens: None,
+                input_cache_miss_tokens: None,
                 cache_read_tokens: None,
                 cache_write_tokens: None,
                 total_tokens: Some(15),

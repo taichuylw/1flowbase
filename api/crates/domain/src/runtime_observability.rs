@@ -212,6 +212,8 @@ pub struct UsageLedgerRecord {
     pub output_tokens: Option<i64>,
     pub reasoning_output_tokens: Option<i64>,
     pub total_tokens: Option<i64>,
+    pub input_cache_hit_tokens: Option<i64>,
+    pub input_cache_miss_tokens: Option<i64>,
     pub cache_read_tokens: Option<i64>,
     pub cache_write_tokens: Option<i64>,
     pub price_snapshot: Option<serde_json::Value>,
