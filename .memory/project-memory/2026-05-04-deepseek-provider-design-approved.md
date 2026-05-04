@@ -1,14 +1,14 @@
 ---
 memory_type: project
 topic: DeepSeek 官方供应商插件设计方向已确认
-summary: 用户在 `2026-05-04 20` 明确确认采用“专用 DeepSeek 官方插件 + 主仓 provider runtime 余额能力扩展”的方向；DeepSeek 不复用 `openai_compatible` 配置绕过，也不把余额塞进 validate metadata。`2026-05-04 21` 进一步确认主仓 `ProviderUsage` 需要一等表达输入缓存命中 / 未命中字段，不能把 DeepSeek `prompt_cache_miss_tokens` 当成 `cache_write_tokens`。设计文档已写入 `docs/superpowers/specs/2026-05-04-deepseek-provider-design.md`。
+summary: 用户在 `2026-05-04 20` 明确确认采用“专用 DeepSeek 官方插件 + 主仓 provider runtime 余额能力扩展”的方向；DeepSeek 不复用 `openai_compatible` 配置绕过，也不把余额塞进 validate metadata。`2026-05-04 21` 进一步确认主仓 `ProviderUsage` 需要一等表达输入缓存命中 / 未命中字段，不能把 DeepSeek `prompt_cache_miss_tokens` 当成 `cache_write_tokens`；DeepSeek 插件本轮不静态记录当前价格，价格后续走主仓动态 pricing source / pricing adapter。设计文档已写入 `docs/superpowers/specs/2026-05-04-deepseek-provider-design.md`。
 keywords:
   - deepseek
   - model-provider
   - official-plugins
   - provider-runtime
   - balance
-  - pricing
+  - pricing-source
 match_when:
   - 继续实现 DeepSeek 官方供应商插件
   - 需要判断余额接口应该放在插件 metadata 还是主仓 provider runtime contract
@@ -35,12 +35,12 @@ scope:
 
 ## 为什么这样做
 
-- DeepSeek 有独立模型、价格、缓存命中字段、思考模式参数和余额接口。
+- DeepSeek 有独立模型、缓存命中字段、思考模式参数和余额接口。
 - 这些能力如果塞进 `openai_compatible`，会污染通用兼容插件，也无法把余额变成宿主可正式调用的能力。
 
 ## 为什么要做
 
-- 后续 DeepSeek 价格、token 用量、缓存命中、工具调用和余额都需要被平台稳定消费。
+- 后续 DeepSeek token 用量、缓存命中、工具调用和余额都需要被平台稳定消费；价格如果要展示或估算，应由主仓动态价格源能力承载。
 - 余额接口属于 provider runtime 能力，不应只作为 validate 返回值或 provider metadata 的临时字段存在。
 
 ## 截止日期
@@ -49,6 +49,7 @@ scope:
 
 ## 决策背后动机
 
-- 专用插件承载 DeepSeek 品牌、默认地址、参数表、模型元数据和价格元数据。
+- 专用插件承载 DeepSeek 品牌、默认地址、参数表和模型元数据，不静态记录当前价格。
 - 主仓扩展 provider runtime balance contract，给后续控制台和 API 使用保留稳定入口。
 - 主仓 `ProviderUsage` 应补齐 `input_cache_hit_tokens` 和 `input_cache_miss_tokens` 这类标准输入缓存字段；`cache_write_tokens` 只用于 provider 明确返回或明确按缓存写入计费的 token。
+- 价格后续如需进入平台，应通过主仓动态 pricing source / pricing adapter 从官方来源获取或更新，不把时间敏感价格固化进插件版本。

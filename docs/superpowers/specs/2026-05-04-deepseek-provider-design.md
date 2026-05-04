@@ -19,7 +19,6 @@
 - DeepSeek Chat Completions：`https://api-docs.deepseek.com/zh-cn/api/create-chat-completion`
 - DeepSeek Models：`https://api-docs.deepseek.com/zh-cn/api/list-models`
 - DeepSeek Balance：`https://api-docs.deepseek.com/zh-cn/api/get-user-balance`
-- DeepSeek Pricing：`https://api-docs.deepseek.com/zh-cn/quick_start/pricing`
 - DeepSeek Context Cache：`https://api-docs.deepseek.com/zh-cn/guides/kv_cache`
 - DeepSeek Thinking Mode：`https://api-docs.deepseek.com/zh-cn/guides/thinking_mode`
 
@@ -38,20 +37,13 @@ DeepSeek 的 OpenAI 格式 base URL 是 `https://api.deepseek.com`。
 
 DeepSeek V4 支持 JSON 输出、工具调用、思考模式、1M 上下文和最大 384K 输出。DeepSeek usage 会用 `prompt_cache_hit_tokens` 和 `prompt_cache_miss_tokens` 返回缓存命中和未命中的输入 token。
 
-当前公开价格按每百万 token 计：
-
-| 模型 | 输入缓存命中 | 输入缓存未命中 | 输出 |
-| --- | ---: | ---: | ---: |
-| `deepseek-v4-flash` | CNY 0.02 | CNY 1 | CNY 2 |
-| `deepseek-v4-pro` | CNY 0.025 | CNY 3 | CNY 6 |
-
-价格是时间敏感信息。插件应在当前价格 metadata 中保存 `as_of: 2026-05-04` 和文档来源字段，后续价格刷新必须通过显式版本化变更处理。
+DeepSeek 价格由官方维护，当前 chat / models / balance API 返回值不包含单价字段。本轮插件不静态记录当前价格；后续如果平台需要展示费用或做成本估算，应在主仓新增动态 pricing source / pricing adapter 能力，再从官方来源获取或更新价格。
 
 ## 方案
 
 使用专用 DeepSeek 插件，不让用户手动配置 `openai_compatible` 来绕过。
 
-这样可以把供应商身份、图标、本地化文案、DeepSeek 专属参数、静态模型元数据、价格元数据、缓存 token 映射和余额能力放在一起，也避免 OpenAI-compatible 通用插件继续积累供应商特例。
+这样可以把供应商身份、图标、本地化文案、DeepSeek 专属参数、静态模型元数据、缓存 token 映射和余额能力放在一起，也避免 OpenAI-compatible 通用插件继续积累供应商特例。
 
 ## 主仓 Contract 改动
 
@@ -139,14 +131,14 @@ Tools 优先来自宿主 `tools` 数组。兼容上可以接受 raw `tools` mode
 
 DeepSeek 已废弃的 `frequency_penalty` 和 `presence_penalty` 不应暴露在专用 provider UI 中。
 
-## Usage 与价格元数据
+## Usage 与价格能力
 
 DeepSeek usage 说明：
 
 - DeepSeek 的上下文硬盘缓存默认开启；
 - 每次请求都会触发缓存构建；
 - DeepSeek 返回的是输入 token 的缓存命中情况，不返回独立“写入缓存 token”；
-- 价格口径按输入缓存命中、输入缓存未命中、输出三类计费。
+- DeepSeek 官方价格口径按输入缓存命中、输入缓存未命中、输出三类计费，但当前 API 返回值只给 token 用量，不给单价。
 
 主仓 `ProviderUsage` 需要补齐输入缓存命中 / 未命中字段，而不是只依赖 provider metadata：
 
@@ -181,16 +173,15 @@ DeepSeek usage 归一化规则：
 - `context_window: 1000000`
 - `max_output_tokens: 384000`
 - streaming、tool call、structured output、reasoning 能力标记
-- pricing 对象：
-  - currency `CNY`
-  - unit `million_tokens`
-  - 输入缓存命中价格
-  - 输入缓存未命中价格
-  - 输出价格
-  - `as_of: 2026-05-04`
-  - 来源 URL
 
 动态 `/models` 返回结果应与静态 metadata 合并，使 DeepSeek 返回的模型 ID 保留内置的更完整 metadata。
+
+价格能力边界：
+
+- DeepSeek 插件本轮不内置固定单价；
+- 不在模型 `provider_metadata` 写当前价格快照；
+- 主仓后续如果需要展示预计费用，应新增动态价格源 contract，优先使用供应商官方 API 或官方可维护来源，而不是把时间敏感价格固化在插件版本里；
+- 本轮只确保 usage 的输入缓存命中、输入缓存未命中、输出和推理 token 能被主仓标准字段表达，为后续动态价格计算预留数据基础。
 
 ## 错误处理
 
@@ -215,7 +206,7 @@ DeepSeek usage 归一化规则：
 - 如果实现内部 non-streaming JSON completion helper，补对应解析测试；
 - 单元测试 streaming SSE 解析 text、reasoning、tool call、usage、finish；
 - 单元测试 DeepSeek usage 映射 cache hit tokens，并将 miss tokens 保留在 metadata；
-- 单元测试 `/models` 归一化会合并静态价格和能力 metadata；
+- 单元测试 `/models` 归一化会合并静态能力 metadata；
 - 单元测试 `/user/balance` 归一化。
 
 主仓：
@@ -242,5 +233,5 @@ DeepSeek usage 归一化规则：
 
 - 主仓 provider contract 无法在不改持久化 schema 的前提下接受新的 balance method；
 - package format 拒绝专用 DeepSeek provider metadata 形态；
-- 实现期间 DeepSeek 文档变更了模型 ID、余额响应或价格；
+- 实现期间 DeepSeek 文档变更了模型 ID、余额响应或 usage 字段；
 - 本地环境无法构建 provider crate 或运行定向测试。
