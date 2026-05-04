@@ -23,7 +23,7 @@ use control_plane::ports::{
     OfficialPluginSourcePort,
 };
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -82,12 +82,17 @@ fn default_test_config() -> ApiConfig {
 }
 
 async fn isolated_database_url(base_url: &str) -> String {
-    let admin_pool = PgPool::connect(base_url).await.unwrap();
+    let admin_pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(base_url)
+        .await
+        .unwrap();
     let schema = format!("test_{}", Uuid::now_v7().to_string().replace('-', ""));
     sqlx::query(&format!("create schema if not exists {schema}"))
         .execute(&admin_pool)
         .await
         .unwrap();
+    admin_pool.close().await;
 
     format!("{base_url}?options=-csearch_path%3D{schema}")
 }

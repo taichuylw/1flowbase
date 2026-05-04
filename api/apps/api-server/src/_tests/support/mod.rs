@@ -27,7 +27,6 @@ use flate2::{write::GzEncoder, Compression};
 use runtime_profile::{RuntimeCpu, RuntimeMemory, RuntimePlatform, RuntimeProfile};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
 use tar::Builder;
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
