@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
+import { NodePickerPopover } from '../components/node-picker/NodePickerPopover';
 import {
-  calculateNodePickerMaxHeight,
-  NodePickerPopover
-} from '../components/node-picker/NodePickerPopover';
+  calculateNodePickerMaxHeight
+} from '../components/node-picker/node-picker-layout';
 import type { NodePickerOption } from '../lib/plugin-node-definitions';
 
 const pluginOptions: NodePickerOption[] = [

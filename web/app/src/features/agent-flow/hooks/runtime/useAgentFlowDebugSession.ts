@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import {
@@ -479,33 +479,33 @@ export function useAgentFlowDebugSession({
     runContext
   ]);
 
-  function clearPollTimer() {
+  const clearPollTimer = useCallback(() => {
     if (pollTimerRef.current !== null) {
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-  }
+  }, []);
 
-  function stopPolling() {
+  const stopPolling = useCallback(() => {
     clearPollTimer();
     activeRunIdRef.current = null;
-  }
+  }, [clearPollTimer]);
 
-  function abortActiveDebugStream() {
+  const abortActiveDebugStream = useCallback(() => {
     streamAbortControllerRef.current?.abort();
     streamAbortControllerRef.current = null;
-  }
+  }, []);
 
-  function startDebugStreamGeneration() {
+  const startDebugStreamGeneration = useCallback(() => {
     abortActiveDebugStream();
     streamGenerationRef.current += 1;
     return streamGenerationRef.current;
-  }
+  }, [abortActiveDebugStream]);
 
-  function cancelActiveDebugStream() {
+  const cancelActiveDebugStream = useCallback(() => {
     streamGenerationRef.current += 1;
     abortActiveDebugStream();
-  }
+  }, [abortActiveDebugStream]);
 
   function isActiveDebugStreamGeneration(generation: number) {
     return streamGenerationRef.current === generation;
@@ -537,14 +537,14 @@ export function useAgentFlowDebugSession({
     });
   }
 
-  function clearScheduledAssistantMessageFlush() {
+  const clearScheduledAssistantMessageFlush = useCallback(() => {
     if (flushStreamMessageFrameRef.current !== null) {
       window.cancelAnimationFrame(flushStreamMessageFrameRef.current);
       flushStreamMessageFrameRef.current = null;
     }
 
     pendingAssistantMessageRef.current = null;
-  }
+  }, []);
 
   function flushAssistantMessageImmediately(
     runningMessageId: string,
@@ -642,7 +642,11 @@ export function useAgentFlowDebugSession({
       clearScheduledAssistantMessageFlush();
       cancelActiveDebugStream();
     },
-    []
+    [
+      cancelActiveDebugStream,
+      clearPollTimer,
+      clearScheduledAssistantMessageFlush
+    ]
   );
 
   async function submitPrompt(prompt?: string) {
