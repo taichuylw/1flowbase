@@ -49,6 +49,7 @@ pub enum ProviderStdioMethod {
     Validate,
     ListModels,
     Invoke,
+    Balance,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,6 +74,39 @@ pub struct ProviderStdioResponse {
     pub result: Value,
     #[serde(default)]
     pub error: Option<ProviderStdioError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProviderBalanceInfo {
+    pub currency: String,
+    pub total_balance: String,
+    #[serde(default)]
+    pub granted_balance: Option<String>,
+    #[serde(default)]
+    pub topped_up_balance: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProviderBalanceResult {
+    pub is_available: bool,
+    #[serde(default)]
+    pub balance_infos: Vec<ProviderBalanceInfo>,
+    #[serde(default = "empty_provider_metadata")]
+    pub provider_metadata: Value,
+}
+
+fn empty_provider_metadata() -> Value {
+    serde_json::json!({})
+}
+
+impl Default for ProviderBalanceResult {
+    fn default() -> Self {
+        Self {
+            is_available: false,
+            balance_infos: Vec::new(),
+            provider_metadata: empty_provider_metadata(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

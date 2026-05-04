@@ -93,6 +93,24 @@ fn write_fixture_runtime_with_invoke_lines(
         ]
     })
     .to_string();
+    let balance_output = json!({
+        "ok": true,
+        "result": {
+            "is_available": true,
+            "balance_infos": [
+                {
+                    "currency": "CNY",
+                    "total_balance": "110.00",
+                    "granted_balance": "10.00",
+                    "topped_up_balance": "100.00"
+                }
+            ],
+            "provider_metadata": {
+                "provider": "deepseek"
+            }
+        }
+    })
+    .to_string();
     let error_output = json!({
         "ok": false,
         "error": {
@@ -104,6 +122,7 @@ fn write_fixture_runtime_with_invoke_lines(
     .to_string();
     let validate_output = shell_quote(&validate_output);
     let list_models_output = shell_quote(&list_models_output);
+    let balance_output = shell_quote(&balance_output);
     let error_output = shell_quote(&error_output);
     let invoke_output = invoke_lines
         .iter()
@@ -123,6 +142,9 @@ case "${{payload}}" in
     ;;
   *'"method":"list_models"'*)
     printf '%s' {list_models_output}
+    ;;
+  *'"method":"balance"'*)
+    printf '%s' {balance_output}
     ;;
   *'"method":"invoke"'*)
 {invoke_output}
@@ -472,6 +494,52 @@ async fn provider_runtime_routes_cover_load_reload_validate_list_models_and_invo
         find_model(reloaded_models, "fixture_dynamic")["display_name"],
         "Reloaded Dynamic"
     );
+}
+
+#[tokio::test]
+async fn provider_runner_exposes_balance() {
+    let package = make_fixture_package();
+    let app = app();
+
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/load",
+        json!({
+            "package_root": package.path(),
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, balance_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/balance",
+        json!({
+            "plugin_id": load_payload["plugin_id"],
+            "provider_config": {
+                "api_key": "secret",
+            }
+        }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(balance_payload["balance"]["is_available"], true);
+    assert_eq!(
+        balance_payload["balance"]["balance_infos"][0]["currency"],
+        "CNY"
+    );
+    assert_eq!(
+        balance_payload["balance"]["balance_infos"][0]["total_balance"],
+        "110.00"
+    );
+    assert_eq!(
+        balance_payload["balance"]["provider_metadata"]["provider"],
+        "deepseek"
+    );
+    assert!(!balance_payload.to_string().contains("secret"));
 }
 
 #[tokio::test]

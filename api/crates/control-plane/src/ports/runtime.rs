@@ -554,6 +554,15 @@ pub trait ProviderRuntimePort: Send + Sync {
         installation: &domain::PluginInstallationRecord,
         provider_config: serde_json::Value,
     ) -> anyhow::Result<Vec<ProviderModelDescriptor>>;
+    async fn get_balance(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        provider_config: serde_json::Value,
+    ) -> anyhow::Result<ProviderBalanceResult> {
+        let _ = installation;
+        let _ = provider_config;
+        anyhow::bail!("provider balance is not implemented by this runtime")
+    }
     async fn invoke_stream(
         &self,
         installation: &domain::PluginInstallationRecord,

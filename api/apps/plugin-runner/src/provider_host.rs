@@ -7,8 +7,9 @@ use std::{
 use plugin_framework::{
     error::{FrameworkResult, PluginFrameworkError},
     provider_contract::{
-        ModelDiscoveryMode, ProviderInvocationInput, ProviderInvocationResult,
-        ProviderModelDescriptor, ProviderStdioMethod, ProviderStdioRequest, ProviderStreamEvent,
+        ModelDiscoveryMode, ProviderBalanceResult, ProviderInvocationInput,
+        ProviderInvocationResult, ProviderModelDescriptor, ProviderStdioMethod,
+        ProviderStdioRequest, ProviderStreamEvent,
     },
 };
 use serde::Serialize;
@@ -70,6 +71,11 @@ pub struct ProviderValidationOutput {
 #[derive(Debug, Clone, Serialize)]
 pub struct ProviderModelsOutput {
     pub models: Vec<ProviderModelDescriptor>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderBalanceOutput {
+    pub balance: ProviderBalanceResult,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -209,6 +215,20 @@ impl ProviderHost {
         Ok(ProviderModelsOutput { models })
     }
 
+    pub async fn get_balance(
+        &self,
+        plugin_id: &str,
+        provider_config: Value,
+    ) -> FrameworkResult<ProviderBalanceOutput> {
+        let loaded = self.loaded_package(plugin_id)?;
+        let raw_balance = self
+            .call_runtime(loaded, ProviderStdioMethod::Balance, provider_config)
+            .await?;
+        Ok(ProviderBalanceOutput {
+            balance: normalize_balance(raw_balance)?,
+        })
+    }
+
     pub async fn invoke_stream(
         &self,
         plugin_id: &str,
@@ -267,6 +287,11 @@ impl ProviderHost {
 }
 
 fn normalize_models(raw: Value) -> FrameworkResult<Vec<ProviderModelDescriptor>> {
+    serde_json::from_value(raw)
+        .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
+}
+
+fn normalize_balance(raw: Value) -> FrameworkResult<ProviderBalanceResult> {
     serde_json::from_value(raw)
         .map_err(|error| PluginFrameworkError::invalid_provider_contract(error.to_string()))
 }

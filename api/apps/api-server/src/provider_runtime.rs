@@ -24,7 +24,7 @@ use plugin_framework::{
         DataSourceResourceDescriptor, DataSourceUpdateRecordInput, DataSourceUpdateRecordOutput,
     },
     error::PluginFrameworkError,
-    provider_contract::{ProviderInvocationInput, ProviderModelDescriptor},
+    provider_contract::{ProviderBalanceResult, ProviderInvocationInput, ProviderModelDescriptor},
 };
 use plugin_runner::{
     capability_host::CapabilityHost, data_source_host::DataSourceHost, provider_host::ProviderHost,
@@ -66,6 +66,14 @@ pub struct ApiProviderRuntime {
 impl ApiProviderRuntime {
     pub fn new(services: Arc<ApiRuntimeServices>) -> Self {
         Self { services }
+    }
+
+    pub async fn get_balance(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        provider_config: Value,
+    ) -> anyhow::Result<ProviderBalanceResult> {
+        <Self as ProviderRuntimePort>::get_balance(self, installation, provider_config).await
     }
 }
 
@@ -173,6 +181,19 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         host.list_models(&installation.plugin_id, provider_config)
             .await
             .map(|output| output.models)
+            .map_err(map_provider_framework_error)
+    }
+
+    async fn get_balance(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        provider_config: Value,
+    ) -> anyhow::Result<ProviderBalanceResult> {
+        self.ensure_provider_loaded(installation).await?;
+        let host = self.services.provider_host.read().await;
+        host.get_balance(&installation.plugin_id, provider_config)
+            .await
+            .map(|output| output.balance)
             .map_err(map_provider_framework_error)
     }
 
@@ -759,6 +780,83 @@ exit 1
         }
     }
 
+    fn write_balance_provider_package(package: &TempProviderPackage) {
+        package.write(
+            "manifest.yaml",
+            r#"manifest_version: 1
+plugin_id: fixture_provider@0.1.0
+version: 0.1.0
+vendor: 1flowbase
+display_name: Fixture Provider
+description: Fixture provider
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture_provider
+  limits:
+    timeout_ms: 30000
+node_contributions: []
+"#,
+        );
+        package.write(
+            "provider/fixture_provider.yaml",
+            r#"provider_code: fixture_provider
+display_name: Fixture Provider
+protocol: openai_compatible
+model_discovery: static
+config_schema:
+  - key: api_key
+    type: secret
+    required: true
+"#,
+        );
+        package.write(
+            "i18n/en_US.json",
+            r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+        );
+        package.write(
+            "bin/fixture_provider",
+            r#"#!/usr/bin/env bash
+payload="$(cat)"
+case "${payload}" in
+  *'"method":"balance"'*)
+    printf '%s' '{"ok":true,"result":{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"110.00","granted_balance":"10.00","topped_up_balance":"100.00"}],"provider_metadata":{"provider":"deepseek"}}}'
+    ;;
+  *)
+    printf '%s' '{"ok":false,"error":{"kind":"provider_invalid_response","message":"unknown method","provider_summary":null}}'
+    exit 1
+    ;;
+esac
+"#,
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let path = package.path().join("bin/fixture_provider");
+            let mut permissions = fs::metadata(&path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(path, permissions).unwrap();
+        }
+    }
+
     fn fixture_installation(package: &TempProviderPackage) -> PluginInstallationRecord {
         let now = OffsetDateTime::now_utc();
         PluginInstallationRecord {
@@ -789,6 +887,32 @@ exit 1
             created_at: now,
             updated_at: now,
         }
+    }
+
+    #[tokio::test]
+    async fn provider_runtime_get_balance_ensures_loaded_and_calls_host() {
+        let package = TempProviderPackage::new();
+        write_balance_provider_package(&package);
+        let runtime = ApiProviderRuntime::new(Arc::new(ApiRuntimeServices::new(
+            Arc::new(RwLock::new(ProviderHost::default())),
+            Arc::new(RwLock::new(CapabilityHost::default())),
+            Arc::new(RwLock::new(DataSourceHost::default())),
+        )));
+
+        let balance = runtime
+            .get_balance(
+                &fixture_installation(&package),
+                json!({
+                    "api_key": "secret"
+                }),
+            )
+            .await
+            .expect("balance should be returned through api runtime adapter");
+
+        assert!(balance.is_available);
+        assert_eq!(balance.balance_infos[0].currency, "CNY");
+        assert_eq!(balance.balance_infos[0].total_balance, "110.00");
+        assert_eq!(balance.provider_metadata["provider"], "deepseek");
     }
 
     #[tokio::test]

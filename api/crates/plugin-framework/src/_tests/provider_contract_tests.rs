@@ -1,9 +1,10 @@
 use plugin_framework::{
     installation::PluginTaskStatus,
     provider_contract::{
-        ModelDiscoveryMode, ProviderInvocationResult, ProviderRuntimeError,
-        ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod, ProviderStdioRequest,
-        ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
+        ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult, ProviderInvocationResult,
+        ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod,
+        ProviderStdioRequest, ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall,
+        ProviderUsage,
     },
 };
 use serde_json::json;
@@ -121,6 +122,45 @@ fn provider_stdio_contract_uses_snake_case_methods_and_result_payloads() {
     .unwrap();
     assert!(response.ok);
     assert_eq!(response.result[0]["model_id"], "fixture_dynamic");
+}
+
+#[test]
+fn provider_balance_stdio_method_serializes_balance() {
+    let request = ProviderStdioRequest {
+        method: ProviderStdioMethod::Balance,
+        input: json!({ "api_key": "secret" }),
+    };
+
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        json!({
+            "method": "balance",
+            "input": { "api_key": "secret" }
+        })
+    );
+}
+
+#[test]
+fn provider_balance_result_serializes_deepseek_shape() {
+    let result = ProviderBalanceResult {
+        is_available: true,
+        balance_infos: vec![ProviderBalanceInfo {
+            currency: "CNY".to_string(),
+            total_balance: "110.00".to_string(),
+            granted_balance: Some("10.00".to_string()),
+            topped_up_balance: Some("100.00".to_string()),
+        }],
+        provider_metadata: json!({ "provider": "deepseek" }),
+    };
+
+    let payload = serde_json::to_value(result).unwrap();
+
+    assert_eq!(payload["is_available"], true);
+    assert_eq!(payload["balance_infos"][0]["currency"], "CNY");
+    assert_eq!(payload["balance_infos"][0]["total_balance"], "110.00");
+    assert_eq!(payload["balance_infos"][0]["granted_balance"], "10.00");
+    assert_eq!(payload["balance_infos"][0]["topped_up_balance"], "100.00");
+    assert_eq!(payload["provider_metadata"]["provider"], "deepseek");
 }
 
 #[test]

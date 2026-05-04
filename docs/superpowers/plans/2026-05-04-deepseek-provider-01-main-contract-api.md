@@ -212,7 +212,7 @@ git push origin main
 - Modify: `api/apps/plugin-runner/tests/provider_runtime_routes.rs`
 - Modify: `api/apps/api-server/src/provider_runtime.rs`
 
-- [ ] **Step 1: Write failing balance contract tests**
+- [x] **Step 1: Write failing balance contract tests**
 
 Add to `api/crates/plugin-framework/src/_tests/provider_contract_tests.rs`:
 
@@ -254,7 +254,7 @@ fn provider_balance_result_serializes_deepseek_shape() {
 }
 ```
 
-- [ ] **Step 2: Run the balance contract tests to verify failure**
+- [x] **Step 2: Run the balance contract tests to verify failure**
 
 Run:
 
@@ -265,7 +265,7 @@ cargo test -p plugin-framework provider_balance
 
 Expected: compile failure because balance types and method do not exist.
 
-- [ ] **Step 3: Add balance DTOs and stdio method**
+- [x] **Step 3: Add balance DTOs and stdio method**
 
 Update `api/crates/plugin-framework/src/provider_contract.rs`:
 
@@ -299,7 +299,7 @@ pub struct ProviderBalanceResult {
 }
 ```
 
-- [ ] **Step 4: Add plugin-runner host balance method**
+- [x] **Step 4: Add plugin-runner host balance method**
 
 In `api/apps/plugin-runner/src/provider_host.rs`, add:
 
@@ -324,7 +324,7 @@ pub async fn get_balance(
 }
 ```
 
-- [ ] **Step 5: Add plugin-runner HTTP route**
+- [x] **Step 5: Add plugin-runner HTTP route**
 
 In `api/apps/plugin-runner/src/lib.rs`, add:
 
@@ -354,7 +354,7 @@ Register:
 .route("/providers/balance", post(provider_balance))
 ```
 
-- [ ] **Step 6: Add plugin-runner route test**
+- [x] **Step 6: Add plugin-runner route test**
 
 Update `api/apps/plugin-runner/tests/provider_runtime_routes.rs` fixture runtime to handle:
 
@@ -396,7 +396,7 @@ async fn provider_runner_exposes_balance() {
 }
 ```
 
-- [ ] **Step 7: Add api-server runtime adapter**
+- [x] **Step 7: Add api-server runtime adapter**
 
 In `api/apps/api-server/src/provider_runtime.rs`, add the `ProviderRuntimePort` method:
 
@@ -415,7 +415,7 @@ async fn get_balance(
 }
 ```
 
-- [ ] **Step 8: Run balance runtime tests**
+- [x] **Step 8: Run balance runtime tests**
 
 Run:
 
@@ -427,7 +427,7 @@ cargo test -p plugin-runner provider_runner_exposes_balance
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit balance runtime changes**
+- [x] **Step 9: Commit balance runtime changes**
 
 Run:
 
@@ -629,6 +629,6 @@ git push origin main
 ## Plan Completion
 
 - [x] All Task 1 checkboxes are complete.
-- [ ] All Task 2 checkboxes are complete.
+- [x] All Task 2 checkboxes are complete.
 - [ ] All Task 3 checkboxes are complete.
 - [ ] Update the index plan checkbox for `01 - Main Provider Contract And API`.

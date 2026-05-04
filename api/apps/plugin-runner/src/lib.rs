@@ -32,8 +32,8 @@ use crate::data_source_host::{
     LoadedDataSourceSummary,
 };
 use crate::provider_host::{
-    LoadedProviderSummary, ProviderHost, ProviderInvokeStreamOutput, ProviderModelsOutput,
-    ProviderValidationOutput,
+    LoadedProviderSummary, ProviderBalanceOutput, ProviderHost, ProviderInvokeStreamOutput,
+    ProviderModelsOutput, ProviderValidationOutput,
 };
 pub use capability_host::CapabilityHost;
 pub use data_source_host::DataSourceHost;
@@ -92,6 +92,13 @@ struct ValidateProviderRequest {
 
 #[derive(Debug, Deserialize)]
 struct ListModelsRequest {
+    plugin_id: String,
+    #[serde(default)]
+    provider_config: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct BalanceProviderRequest {
     plugin_id: String,
     #[serde(default)]
     provider_config: Value,
@@ -250,6 +257,17 @@ async fn list_models(
 ) -> Result<Json<ProviderModelsOutput>, (StatusCode, Json<ErrorResponse>)> {
     let host = state.provider_host.read().await;
     host.list_models(&request.plugin_id, request.provider_config)
+        .await
+        .map(Json)
+        .map_err(map_framework_error)
+}
+
+async fn get_balance(
+    State(state): State<AppState>,
+    Json(request): Json<BalanceProviderRequest>,
+) -> Result<Json<ProviderBalanceOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.provider_host.read().await;
+    host.get_balance(&request.plugin_id, request.provider_config)
         .await
         .map(Json)
         .map_err(map_framework_error)
@@ -486,6 +504,7 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/providers/reload", post(reload_provider))
         .route("/providers/validate", post(validate_provider))
         .route("/providers/list-models", post(list_models))
+        .route("/providers/balance", post(get_balance))
         .route("/providers/invoke-stream", post(invoke_stream))
         .route("/data-sources/load", post(load_data_source))
         .route("/data-sources/reload", post(reload_data_source))
