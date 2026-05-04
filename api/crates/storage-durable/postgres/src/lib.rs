@@ -22,7 +22,9 @@ pub mod role_repository;
 pub mod runtime_record_repository;
 pub mod workspace_repository;
 
-pub use connection::{connect, connect_with_max_connections};
+pub use connection::{
+    connect, connect_with_max_connections, connect_with_pool_settings, PgPoolSettings,
+};
 pub use repositories::PgControlPlaneStore;
 
 use anyhow::Result;

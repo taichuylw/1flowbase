@@ -1,4 +1,9 @@
-use storage_durable::{build_main_durable_postgres, DurableBackendKind, MainDurableStore};
+use std::time::Duration;
+
+use storage_durable::{
+    build_main_durable_postgres, build_main_durable_postgres_with_pool_settings,
+    DurableBackendKind, MainDurableStore, PgPoolSettings,
+};
 
 #[test]
 fn durable_backend_kind_parses_postgres() {
@@ -19,6 +24,18 @@ fn main_durable_store_alias_points_at_storage_postgres() {
 #[test]
 fn postgres_builder_is_part_of_public_surface() {
     let _ = build_main_durable_postgres;
+}
+
+#[test]
+fn postgres_builder_accepts_pool_lifecycle_settings() {
+    let mut settings = PgPoolSettings::with_max_connections(1);
+    settings.idle_timeout = Some(Duration::from_millis(250));
+    settings.max_lifetime = Some(Duration::from_secs(1));
+
+    let _ = build_main_durable_postgres_with_pool_settings;
+    assert_eq!(settings.max_connections, 1);
+    assert_eq!(settings.idle_timeout, Some(Duration::from_millis(250)));
+    assert_eq!(settings.max_lifetime, Some(Duration::from_secs(1)));
 }
 
 #[test]

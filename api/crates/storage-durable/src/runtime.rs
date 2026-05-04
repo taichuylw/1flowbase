@@ -16,8 +16,18 @@ pub async fn build_main_durable_postgres_with_max_connections(
     database_url: &str,
     max_connections: u32,
 ) -> anyhow::Result<MainDurableRuntime> {
-    let pool =
-        storage_postgres::connect_with_max_connections(database_url, max_connections).await?;
+    build_main_durable_postgres_with_pool_settings(
+        database_url,
+        storage_postgres::PgPoolSettings::with_max_connections(max_connections),
+    )
+    .await
+}
+
+pub async fn build_main_durable_postgres_with_pool_settings(
+    database_url: &str,
+    settings: storage_postgres::PgPoolSettings,
+) -> anyhow::Result<MainDurableRuntime> {
+    let pool = storage_postgres::connect_with_pool_settings(database_url, settings).await?;
     storage_postgres::run_migrations(&pool).await?;
 
     Ok(MainDurableRuntime {

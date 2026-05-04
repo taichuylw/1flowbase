@@ -8,6 +8,7 @@ use axum::response::Response;
 use control_plane::ports::FileManagementRepository;
 use control_plane::ports::SessionStore;
 use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
 
 #[derive(Clone)]
 struct StaticApiRuntimeProfileCollector {
@@ -78,6 +79,7 @@ pub(crate) fn test_config() -> ApiConfig {
 async fn isolated_database_url(base_url: &str) -> String {
     let admin_pool = PgPoolOptions::new()
         .max_connections(1)
+        .acquire_timeout(Duration::from_secs(30))
         .connect(base_url)
         .await
         .unwrap();
@@ -102,9 +104,14 @@ async fn test_state_with_runtime_profile_state(
         .join(format!("api-business-files-{}", Uuid::now_v7()))
         .display()
         .to_string();
-    let durable = storage_durable::build_main_durable_postgres_with_max_connections(
+    let mut pool_settings =
+        storage_durable::PgPoolSettings::with_max_connections(config.database_pool_max_connections);
+    pool_settings.acquire_timeout = Duration::from_secs(30);
+    pool_settings.idle_timeout = Some(Duration::from_millis(250));
+    pool_settings.max_lifetime = Some(Duration::from_secs(1));
+    let durable = storage_durable::build_main_durable_postgres_with_pool_settings(
         &config.database_url,
-        config.database_pool_max_connections,
+        pool_settings,
     )
     .await
     .unwrap();

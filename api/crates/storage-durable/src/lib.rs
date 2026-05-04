@@ -6,8 +6,9 @@ mod runtime;
 pub use backend_kind::DurableBackendKind;
 pub use runtime::{
     build_main_durable_postgres, build_main_durable_postgres_with_max_connections,
-    MainDurableRuntime, MainDurableStore,
+    build_main_durable_postgres_with_pool_settings, MainDurableRuntime, MainDurableStore,
 };
+pub use storage_postgres::PgPoolSettings;
 
 pub fn crate_name() -> &'static str {
     "storage-durable"
