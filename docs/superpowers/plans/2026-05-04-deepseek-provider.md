@@ -24,7 +24,7 @@
 
 ## Subplans
 
-- [ ] [01 - Main Provider Contract And API](2026-05-04-deepseek-provider-01-main-contract-api.md)
+- [x] [01 - Main Provider Contract And API](2026-05-04-deepseek-provider-01-main-contract-api.md)
   - Adds `ProviderUsage.input_cache_hit_tokens`.
   - Adds `ProviderUsage.input_cache_miss_tokens`.
   - Adds provider `balance` stdio method and DTOs.

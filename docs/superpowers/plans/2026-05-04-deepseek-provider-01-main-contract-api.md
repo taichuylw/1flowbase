@@ -451,7 +451,7 @@ git push origin main
 - Modify: `api/apps/api-server/src/openapi.rs`
 - Modify: `api/apps/api-server/src/_tests/model_provider_routes.rs`
 
-- [ ] **Step 1: Write failing api-server route test**
+- [x] **Step 1: Write failing api-server route test**
 
 Add to `api/apps/api-server/src/_tests/model_provider_routes.rs` after existing validate coverage:
 
@@ -479,7 +479,7 @@ assert_eq!(
 assert!(!balance_payload.to_string().contains("super-secret"));
 ```
 
-- [ ] **Step 2: Run the route test to verify failure**
+- [x] **Step 2: Run the route test to verify failure**
 
 Run:
 
@@ -490,7 +490,7 @@ cargo test -p api-server model_provider_routes_mask_secret_until_reveal_and_keep
 
 Expected: FAIL with 404 for `/balance`.
 
-- [ ] **Step 3: Add control-plane service**
+- [x] **Step 3: Add control-plane service**
 
 In `api/crates/control-plane/src/ports/runtime.rs`, add:
 
@@ -552,7 +552,7 @@ where
 
 In `api/crates/control-plane/src/model_provider.rs`, add `mod balance;`, `ModelProviderBalanceResult`, and `ModelProviderService::get_balance()`.
 
-- [ ] **Step 4: Add route DTOs and handler**
+- [x] **Step 4: Add route DTOs and handler**
 
 In `api/apps/api-server/src/routes/plugins_and_models/model_providers.rs`, add:
 
@@ -603,7 +603,7 @@ pub async fn get_balance(
 
 Register route and schemas in `api/apps/api-server/src/openapi.rs`.
 
-- [ ] **Step 5: Run route and OpenAPI tests**
+- [x] **Step 5: Run route and OpenAPI tests**
 
 Run:
 
@@ -615,7 +615,7 @@ cargo test -p api-server operation_spec_builder_exposes_model_provider_catalog_r
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit console route changes**
+- [x] **Step 6: Commit console route changes**
 
 Run:
 
@@ -630,5 +630,5 @@ git push origin main
 
 - [x] All Task 1 checkboxes are complete.
 - [x] All Task 2 checkboxes are complete.
-- [ ] All Task 3 checkboxes are complete.
-- [ ] Update the index plan checkbox for `01 - Main Provider Contract And API`.
+- [x] All Task 3 checkboxes are complete.
+- [x] Update the index plan checkbox for `01 - Main Provider Contract And API`.

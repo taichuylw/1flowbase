@@ -16,10 +16,10 @@ use axum::{
 };
 use control_plane::model_provider::{
     CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
-    LocalizedProviderModelDescriptor, ModelProviderCatalogEntry, ModelProviderCatalogView,
-    ModelProviderInstanceView, ModelProviderMainInstanceView, ModelProviderModelCatalog,
-    ModelProviderOptionEntry, ModelProviderOptionsView, ModelProviderService,
-    PreviewModelProviderModelsCommand, UpdateModelProviderInstanceCommand,
+    LocalizedProviderModelDescriptor, ModelProviderBalanceResult, ModelProviderCatalogEntry,
+    ModelProviderCatalogView, ModelProviderInstanceView, ModelProviderMainInstanceView,
+    ModelProviderModelCatalog, ModelProviderOptionEntry, ModelProviderOptionsView,
+    ModelProviderService, PreviewModelProviderModelsCommand, UpdateModelProviderInstanceCommand,
     UpdateModelProviderMainInstanceCommand, ValidateModelProviderResult,
 };
 use control_plane::ports::PluginRepository;
@@ -247,6 +247,22 @@ pub struct ValidateModelProviderResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct ModelProviderBalanceInfoResponse {
+    pub currency: String,
+    pub total_balance: String,
+    pub granted_balance: Option<String>,
+    pub topped_up_balance: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModelProviderBalanceResponse {
+    pub is_available: bool,
+    pub balance_infos: Vec<ModelProviderBalanceInfoResponse>,
+    #[schema(value_type = Object)]
+    pub provider_metadata: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ModelProviderModelCatalogResponse {
     pub provider_instance_id: String,
     pub refresh_status: String,
@@ -340,6 +356,7 @@ pub fn router() -> Router<Arc<ApiState>> {
             patch(update_instance).delete(delete_instance),
         )
         .route("/model-providers/:id/validate", post(validate_instance))
+        .route("/model-providers/:id/balance", get(get_balance))
         .route("/model-providers/:id/secrets/reveal", post(reveal_secret))
         .route("/model-providers/:id/models", get(list_models))
         .route("/model-providers/:id/models/refresh", post(refresh_models))
@@ -685,6 +702,23 @@ fn to_validate_response(result: ValidateModelProviderResult) -> ValidateModelPro
     }
 }
 
+fn to_balance_response(result: ModelProviderBalanceResult) -> ModelProviderBalanceResponse {
+    ModelProviderBalanceResponse {
+        is_available: result.is_available,
+        balance_infos: result
+            .balance_infos
+            .into_iter()
+            .map(|info| ModelProviderBalanceInfoResponse {
+                currency: info.currency,
+                total_balance: info.total_balance,
+                granted_balance: info.granted_balance,
+                topped_up_balance: info.topped_up_balance,
+            })
+            .collect(),
+        provider_metadata: result.provider_metadata,
+    }
+}
+
 fn to_main_instance_response(
     view: ModelProviderMainInstanceView,
 ) -> ModelProviderMainInstanceResponse {
@@ -975,6 +1009,24 @@ pub async fn validate_instance(
         .validate_instance(context.user.id, parse_uuid(&id, "id")?)
         .await?;
     Ok(Json(ApiSuccess::new(to_validate_response(result))))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/model-providers/{id}/balance",
+    operation_id = "model_provider_get_balance",
+    responses((status = 200, body = ModelProviderBalanceResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn get_balance(
+    State(state): State<Arc<ApiState>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<ModelProviderBalanceResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let result = service(&state)
+        .get_balance(context.user.id, parse_uuid(&id, "id")?)
+        .await?;
+    Ok(Json(ApiSuccess::new(to_balance_response(result))))
 }
 
 #[utoipa::path(

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::Result;
 use plugin_framework::{
-    provider_contract::{PluginFormSchema, ProviderModelDescriptor},
+    provider_contract::{PluginFormSchema, ProviderBalanceResult, ProviderModelDescriptor},
     provider_package::{ProviderConfigField, ProviderPackage},
 };
 use serde_json::{json, Value};
@@ -23,6 +23,7 @@ use crate::{
     state_transition::ensure_model_provider_instance_transition,
 };
 
+mod balance;
 mod catalog;
 pub mod catalog_source;
 pub mod failover_queue;
@@ -71,6 +72,7 @@ pub struct UpdateModelProviderMainInstanceCommand {
 }
 
 pub type ModelProviderConfiguredModelInput = domain::ModelProviderConfiguredModel;
+pub type ModelProviderBalanceResult = ProviderBalanceResult;
 
 pub struct DeleteModelProviderInstanceCommand {
     pub actor_user_id: Uuid,
@@ -882,6 +884,21 @@ where
         instance_id: Uuid,
     ) -> Result<ModelProviderModelCatalog> {
         options::refresh_models(
+            &self.repository,
+            &self.runtime,
+            &self.provider_secret_master_key,
+            actor_user_id,
+            instance_id,
+        )
+        .await
+    }
+
+    pub async fn get_balance(
+        &self,
+        actor_user_id: Uuid,
+        instance_id: Uuid,
+    ) -> Result<ModelProviderBalanceResult> {
+        balance::get_balance(
             &self.repository,
             &self.runtime,
             &self.provider_secret_master_key,

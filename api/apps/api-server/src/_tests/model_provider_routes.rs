@@ -1,8 +1,6 @@
 use std::{fs, path::Path};
 
-use crate::_tests::support::{
-    login_and_capture_cookie, test_app, write_provider_manifest_v2, write_provider_runtime_script,
-};
+use crate::_tests::support::{login_and_capture_cookie, test_app, write_provider_manifest_v2};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
@@ -54,11 +52,7 @@ config_schema:
 "#,
     )
     .unwrap();
-    write_provider_runtime_script(
-        &root.join("bin/fixture_provider-provider"),
-        "fixture_chat",
-        "Fixture Chat",
-    );
+    write_fixture_provider_runtime_script(&root.join("bin/fixture_provider-provider"));
     fs::write(
         root.join("models/llm/_position.yaml"),
         "items:\n  - fixture_chat\n",
@@ -116,6 +110,83 @@ capabilities:
     .unwrap();
     fs::write(root.join("demo/index.html"), "<html></html>").unwrap();
     fs::write(root.join("scripts/demo.sh"), "echo demo").unwrap();
+}
+
+fn write_fixture_provider_runtime_script(path: &Path) {
+    fs::write(
+        path,
+        r#"#!/usr/bin/env node
+const fs = require('node:fs');
+
+const request = JSON.parse(fs.readFileSync(0, 'utf8') || '{}');
+const listModels = [{
+  model_id: "fixture_chat",
+  display_name: "Fixture Chat",
+  source: "dynamic",
+  supports_streaming: true,
+  supports_tool_call: false,
+  supports_multimodal: false,
+  provider_metadata: {}
+}];
+
+let result = {};
+switch (request.method) {
+  case 'validate':
+    result = {
+      sanitized: {
+        api_key: request.input?.api_key ? "***" : null
+      }
+    };
+    break;
+  case 'list_models':
+    result = listModels;
+    break;
+  case 'balance':
+    result = {
+      is_available: true,
+      balance_infos: [{
+        currency: "CNY",
+        total_balance: "110.00",
+        granted_balance: "10.00",
+        topped_up_balance: "100.00"
+      }],
+      provider_metadata: { provider: "deepseek", echoed_api_key: request.input?.api_key }
+    };
+    break;
+  case 'invoke': {
+    const query = request.input?.messages?.[0]?.content ?? "";
+    const lines = [
+      { type: "text_delta", delta: "reply:" + query },
+      { type: "usage_snapshot", usage: { input_tokens: 5, output_tokens: 7, total_tokens: 12 } },
+      { type: "finish", reason: "stop" },
+      {
+        type: "result",
+        result: {
+          final_content: "reply:" + query,
+          usage: { input_tokens: 5, output_tokens: 7, total_tokens: 12 },
+          finish_reason: "stop"
+        }
+      }
+    ];
+    process.stdout.write(lines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    process.exit(0);
+  }
+  default:
+    result = {};
+}
+
+process.stdout.write(JSON.stringify({ ok: true, result }));
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
 }
 
 async fn install_enable_assign(app: &axum::Router, cookie: &str, csrf: &str) -> String {
@@ -370,6 +441,33 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
         validate_payload["data"]["output"]["sanitized"]["api_key"].as_str(),
         Some("***")
     );
+
+    let balance = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/model-providers/{instance_id}/balance"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(balance.status(), StatusCode::OK);
+    let balance_payload: Value =
+        serde_json::from_slice(&to_bytes(balance.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        balance_payload["data"]["is_available"].as_bool(),
+        Some(true)
+    );
+    assert_eq!(
+        balance_payload["data"]["balance_infos"][0]["currency"].as_str(),
+        Some("CNY")
+    );
+    assert!(!balance_payload.to_string().contains("super-secret"));
 
     let catalog = app
         .clone()
@@ -932,6 +1030,10 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
             .get("404")
             .is_some()
     );
+    assert!(paths
+        .get("/api/console/model-providers/{id}/balance")
+        .and_then(|path| path.get("get"))
+        .is_some());
     let main_instance_operation =
         &paths["/api/console/model-providers/providers/{provider_code}/main-instance"]["put"];
     assert!(main_instance_operation["responses"].get("404").is_some());
@@ -953,6 +1055,11 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
         schemas["ModelProviderInstanceResponse"]["properties"]["included_in_main"]["type"].as_str(),
         Some("boolean")
     );
+    assert!(schemas
+        .get("ModelProviderBalanceResponse")
+        .and_then(|schema| schema.get("properties"))
+        .and_then(|properties| properties.get("balance_infos"))
+        .is_some());
     assert!(schemas["ModelProviderInstanceResponse"]
         .get("properties")
         .and_then(|properties| properties.get("is_primary"))
