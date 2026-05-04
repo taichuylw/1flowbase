@@ -33,19 +33,11 @@ where
 
             match &mut pending_delta {
                 Some(pending)
-                    if pending.run_id == event.run_id && pending.node_run_id == node_run_id =>
+                    if pending.run_id == event.run_id
+                        && pending.node_run_id == node_run_id
+                        && pending.event_type == event.event_type =>
                 {
-                    if pending.event_type == event.event_type {
-                        pending.text.push_str(text);
-                    } else {
-                        flush_pending_delta(&mut run_events, pending_delta.take());
-                        pending_delta = Some(PendingStreamDelta {
-                            run_id: event.run_id,
-                            node_run_id,
-                            event_type: event.event_type,
-                            text: text.to_string(),
-                        });
-                    }
+                    pending.text.push_str(text);
                 }
                 _ => {
                     flush_pending_delta(&mut run_events, pending_delta.take());
