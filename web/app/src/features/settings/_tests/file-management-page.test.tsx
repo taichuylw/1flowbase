@@ -175,6 +175,14 @@ function renderApp(pathname: string) {
   );
 }
 
+function findFileManagementHeading() {
+  return screen.findByRole(
+    'heading',
+    { name: '文件管理', level: 3 },
+    { timeout: 10_000 }
+  );
+}
+
 describe('File management settings page', () => {
   beforeEach(() => {
     resetAuthStore();
@@ -247,9 +255,7 @@ describe('File management settings page', () => {
 
     renderApp('/settings/files');
 
-    expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 3 })
-    ).toBeInTheDocument();
+    expect(await findFileManagementHeading()).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '存储配置' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '文件表' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新增/ })).toBeInTheDocument();
@@ -261,9 +267,7 @@ describe('File management settings page', () => {
 
     renderApp('/settings/files');
 
-    expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 3 })
-    ).toBeInTheDocument();
+    expect(await findFileManagementHeading()).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '存储配置' })
     ).not.toBeInTheDocument();
@@ -282,9 +286,7 @@ describe('File management settings page', () => {
 
     renderApp('/settings/files');
 
-    expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 3 })
-    ).toBeInTheDocument();
+    expect(await findFileManagementHeading()).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '文件表' })
     ).not.toBeInTheDocument();

@@ -222,21 +222,21 @@ impl InMemoryOrchestrationRuntimeRepository {
             refreshed_at: Some(now),
             updated_at: now,
         };
-        let scope_data_model_grants = include_data_model_scope_grant
-            .then(|| {
-                vec![domain::ScopeDataModelGrantRecord {
-                    id: Uuid::now_v7(),
-                    scope_kind: domain::DataModelScopeKind::Workspace,
-                    scope_id: workspace_id,
-                    data_model_id: Uuid::nil(),
-                    enabled: true,
-                    permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
-                    created_by: None,
-                    created_at: now,
-                    updated_at: now,
-                }]
-            })
-            .unwrap_or_default();
+        let scope_data_model_grants = if include_data_model_scope_grant {
+            vec![domain::ScopeDataModelGrantRecord {
+                id: Uuid::now_v7(),
+                scope_kind: domain::DataModelScopeKind::Workspace,
+                scope_id: workspace_id,
+                data_model_id: Uuid::nil(),
+                enabled: true,
+                permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+                created_by: None,
+                created_at: now,
+                updated_at: now,
+            }]
+        } else {
+            Vec::new()
+        };
 
         Self {
             flow,

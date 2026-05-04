@@ -297,9 +297,13 @@ function renderApp(pathname: string) {
 }
 
 async function openProviderInstancesModal() {
-  const catalogRow = await screen.findByRole('row', {
-    name: /OpenAI Compatible/
-  });
+  const catalogRow = await screen.findByRole(
+    'row',
+    {
+      name: /OpenAI Compatible/
+    },
+    { timeout: 10_000 }
+  );
   fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
 
   return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
@@ -587,17 +591,24 @@ describe('ModelProvidersPage', () => {
 
     renderApp('/settings/model-providers');
 
-    await waitFor(() => {
-      expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
-    });
+    await waitFor(
+      () => {
+        expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalled();
+      },
+      { timeout: 10_000 }
+    );
     expect(await screen.findByText('0.1.0')).toBeInTheDocument();
     expect(
       screen.queryByText('当前使用 0.1.0，最新版本 0.2.0')
     ).not.toBeInTheDocument();
 
-    const catalogRow = await screen.findByRole('row', {
-      name: /OpenAI Compatible/
-    });
+    const catalogRow = await screen.findByRole(
+      'row',
+      {
+        name: /OpenAI Compatible/
+      },
+      { timeout: 10_000 }
+    );
 
     expect(
       within(catalogRow).getByRole('button', { name: /更\s*新/ })

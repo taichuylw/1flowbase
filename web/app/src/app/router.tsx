@@ -8,7 +8,7 @@ import {
   useRouterState
 } from '@tanstack/react-router';
 import { Result } from 'antd';
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, lazy, useState, type ReactNode } from 'react';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { SignInPage } from '../features/auth/pages/SignInPage';
@@ -335,18 +335,22 @@ const routeTree = rootRoute.addChildren([
   signInRoute
 ]);
 
-const router = createRouter({
-  routeTree,
-  defaultNotFoundComponent: NotFoundPage,
-  notFoundMode: 'root'
-});
+function createAppRouter() {
+  return createRouter({
+    routeTree,
+    defaultNotFoundComponent: NotFoundPage,
+    notFoundMode: 'root'
+  });
+}
 
 declare module '@tanstack/react-router' {
   interface Register {
-    router: typeof router;
+    router: ReturnType<typeof createAppRouter>;
   }
 }
 
 export function AppRouterProvider() {
+  const [router] = useState(createAppRouter);
+
   return <RouterProvider router={router} />;
 }

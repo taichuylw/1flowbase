@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -151,9 +151,19 @@ export function SettingsDataModelsSection({
     () => models.find((model) => model.id === editingModelId) ?? null,
     [editingModelId, models]
   );
+  const previousEffectiveSourceIdRef = useRef(effectiveSourceId);
+
   useEffect(() => {
-    setSelectedModelId(null);
-    setEditingModelId(null);
+    const previousEffectiveSourceId = previousEffectiveSourceIdRef.current;
+    previousEffectiveSourceIdRef.current = effectiveSourceId;
+
+    if (
+      previousEffectiveSourceId !== null &&
+      previousEffectiveSourceId !== effectiveSourceId
+    ) {
+      setSelectedModelId(null);
+      setEditingModelId(null);
+    }
   }, [effectiveSourceId]);
 
   useEffect(() => {

@@ -111,7 +111,9 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('子系统')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: '子系统', level: 2 })
+    ).toBeInTheDocument();
   });
 
   test('keeps the shell content container full width instead of capping to 1200px', () => {

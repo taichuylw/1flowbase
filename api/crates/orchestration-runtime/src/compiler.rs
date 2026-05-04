@@ -791,7 +791,7 @@ fn active_data_model_binding_keys(config: &Value) -> &'static [&'static str] {
         "create" => &["payload"],
         "update" => &["record_id", "payload"],
         "delete" => &["record_id"],
-        "list" | _ => &["query"],
+        _ => &["query"],
     }
 }
 

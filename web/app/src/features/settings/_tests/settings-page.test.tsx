@@ -566,7 +566,7 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
   });
 
-  test('shows 模型供应商 when state_model.view.all is the only visible settings section', async () => {
+  test('shows 数据源 when state_model.view.all is the only visible settings section', async () => {
     authenticateWithPermissions([
       'route_page.view.all',
       'state_model.view.all'
@@ -575,10 +575,10 @@ describe('SettingsPage', () => {
     renderApp('/settings');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/model-providers');
+      expect(window.location.pathname).toBe('/settings/data-models');
     });
     expect(
-      await screen.findByRole('heading', { name: '模型供应商', level: 3 })
+      await screen.findByRole('heading', { name: '数据源', level: 3 })
     ).toBeInTheDocument();
   });
 

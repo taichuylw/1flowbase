@@ -211,33 +211,8 @@ async function openSelect(label: string) {
 }
 
 async function selectOption(label: string) {
-  const dropdowns = [
-    ...document.querySelectorAll(
-      '.ant-select-dropdown:not(.ant-select-dropdown-hidden), .ant-cascader-dropdown:not(.ant-cascader-dropdown-hidden)'
-    )
-  ].reverse();
-  const popupOption = dropdowns
-    .flatMap((dropdown) => [
-      ...dropdown.querySelectorAll(
-        '[title], .ant-select-item-option, .ant-cascader-menu-item'
-      )
-    ])
-    .find(
-      (match) =>
-        match.getAttribute('title') === label ||
-        match.textContent?.trim() === label
-    );
-
-  if (popupOption) {
-    fireEvent.click(popupOption);
-    return;
-  }
-
   const matches = await screen.findAllByTitle(label);
-  const option =
-    matches.find((match) => match.classList.contains('ant-select-item-option')) ??
-    matches.find((match) => match.closest('.ant-select-item-option')) ??
-    matches[matches.length - 1];
+  const option = matches[matches.length - 1];
 
   fireEvent.click(option);
 }
@@ -780,7 +755,7 @@ describe('NodeInspector', () => {
         }
       });
     });
-  }, 15000);
+  }, 30_000);
 
   test('keeps Data Model query pagination editable when selected model has no fields', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

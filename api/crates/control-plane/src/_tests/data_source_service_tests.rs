@@ -146,9 +146,10 @@ impl Default for InMemoryDataSourceRepository {
 
 impl InMemoryDataSourceRepository {
     fn with_actor(actor: ActorContext) -> Self {
-        let mut repository = Self::default();
-        repository.actor = actor;
-        repository
+        Self {
+            actor,
+            ..Self::default()
+        }
     }
 
     async fn preview_session_count(&self) -> usize {
