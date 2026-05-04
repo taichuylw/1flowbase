@@ -193,3 +193,53 @@ test('runQualityGate strips ANSI control sequences from published failure excerp
   assert.match(createdIssues[0].body, /dist\/asset\.js/u);
   assert.match(createdIssues[0].body, /Diff in api\/apps\/api-server\/src\/_tests\/config_tests\.rs:77/u);
 });
+
+test('runQualityGate publishes the rust failure block when cargo stderr hides it at the tail', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-'));
+  const createdIssues = [];
+  const compileTail = Array.from({ length: 100 }, (_, index) => `Compiling crate-${index}`).join('\n');
+
+  await runQualityGate({
+    repoRoot,
+    scope: 'ci',
+    reportType: 'ci',
+    publishIssue: true,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'main',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '790',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+    },
+    spawnSyncImpl() {
+      return {
+        status: 1,
+        stdout: [
+          'test _tests::workspace_routes::workspaces_route_lists_accessible_workspaces_with_current_marker ... FAILED',
+          '',
+          'failures:',
+          '',
+          "thread '_tests::workspace_routes::workspaces_route_lists_accessible_workspaces_with_current_marker' panicked at apps/api-server/src/_tests/support/auth.rs:83:10:",
+          'called `Result::unwrap()` on an `Err` value: PoolTimedOut',
+          '',
+          'test result: FAILED. 68 passed; 111 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3330.75s',
+        ].join('\n'),
+        stderr: `${compileTail}\nerror: test failed, to rerun pass \`-p api-server --lib\`\n`,
+      };
+    },
+    createIssueImpl(issue) {
+      createdIssues.push(issue);
+      return { html_url: 'https://github.com/taichuy/1flowbase/issues/4' };
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(createdIssues.length, 1);
+  assert.match(createdIssues[0].body, /PoolTimedOut/u);
+  assert.match(createdIssues[0].body, /test result: FAILED\. 68 passed; 111 failed/u);
+  assert.doesNotMatch(createdIssues[0].body, /Compiling crate-99/u);
+});

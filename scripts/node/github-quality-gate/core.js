@@ -148,12 +148,52 @@ function readFailureExcerpt(logPath) {
     return '';
   }
 
-  const lines = fs.readFileSync(logPath, 'utf8').trimEnd().split(/\r?\n/u);
-  return stripAnsiControlSequences(lines.slice(-FAILURE_EXCERPT_MAX_LINES).join('\n')).trim();
+  const lines = stripAnsiControlSequences(fs.readFileSync(logPath, 'utf8'))
+    .trimEnd()
+    .split(/\r?\n/u);
+  return selectFailureExcerpt(lines).trim();
 }
 
 function stripAnsiControlSequences(value) {
   return value.replace(ANSI_CONTROL_SEQUENCE_PATTERN, '');
+}
+
+function selectFailureExcerpt(lines) {
+  const rustFailuresIndex = lines.findIndex((line) => line.trim() === 'failures:');
+  if (rustFailuresIndex >= 0) {
+    return excerptFromAnchorWithSummary({
+      lines,
+      anchorIndex: rustFailuresIndex,
+      summaryIndex: lines.findIndex((line) => /test result: FAILED/u.test(line)),
+    });
+  }
+
+  const panicIndex = lines.findIndex((line) => /\bpanicked at\b/u.test(line));
+  if (panicIndex >= 0) {
+    return excerptFromAnchorWithSummary({
+      lines,
+      anchorIndex: Math.max(0, panicIndex - 2),
+      summaryIndex: lines.findIndex((line) => /test result: FAILED/u.test(line)),
+    });
+  }
+
+  return lines.slice(-FAILURE_EXCERPT_MAX_LINES).join('\n');
+}
+
+function excerptFromAnchorWithSummary({ lines, anchorIndex, summaryIndex }) {
+  const summaryWillBeAppended = summaryIndex >= anchorIndex + FAILURE_EXCERPT_MAX_LINES;
+  const bodyLineBudget = summaryWillBeAppended
+    ? FAILURE_EXCERPT_MAX_LINES - 2
+    : FAILURE_EXCERPT_MAX_LINES;
+  const endIndex = Math.min(lines.length, anchorIndex + bodyLineBudget);
+  const excerptLines = lines.slice(anchorIndex, endIndex);
+
+  if (summaryWillBeAppended) {
+    excerptLines.push('...');
+    excerptLines.push(lines[summaryIndex]);
+  }
+
+  return excerptLines.join('\n');
 }
 
 function toRepoRelative(repoRoot, filePath) {
