@@ -399,7 +399,7 @@ Expected: tests pass and commit is pushed.
 - Modify: `runtime-extensions/model-providers/deepseek/src/lib.rs`
 - Modify: `runtime-extensions/model-providers/deepseek/src/main.rs`
 
-- [ ] **Step 1: Write failing chat body and usage tests**
+- [x] **Step 1: Write failing chat body and usage tests**
 
 Add tests:
 
@@ -460,7 +460,7 @@ fn normalize_usage_maps_deepseek_cache_segments() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -471,7 +471,7 @@ cargo test --manifest-path runtime-extensions/model-providers/deepseek/Cargo.tom
 
 Expected: FAIL because chat helpers are missing.
 
-- [ ] **Step 3: Implement chat body builder**
+- [x] **Step 3: Implement chat body builder**
 
 Rules:
 
@@ -491,7 +491,7 @@ body.insert("thinking".to_string(), json!({ "type": thinking_type }));
 body.insert("response_format".to_string(), json!({ "type": response_format }));
 ```
 
-- [ ] **Step 4: Add streaming parser test**
+- [x] **Step 4: Add streaming parser test**
 
 Add a local TCP test patterned after `openai_compatible` that streams:
 
@@ -514,7 +514,7 @@ ProviderStreamEvent::UsageSnapshot { usage: expected_usage }
 ProviderStreamEvent::Finish { reason: ProviderFinishReason::Stop }
 ```
 
-- [ ] **Step 5: Implement streaming invocation**
+- [x] **Step 5: Implement streaming invocation**
 
 Implement:
 
@@ -527,7 +527,7 @@ Implement:
 - finish reason normalization, including unknown for `insufficient_system_resource`;
 - final result NDJSON line in `src/main.rs`.
 
-- [ ] **Step 6: Run chat tests and commit**
+- [x] **Step 6: Run chat tests and commit**
 
 Run:
 
@@ -544,7 +544,7 @@ Expected: tests pass and commit is pushed.
 
 ## Plan Completion
 
-- [ ] All Task 1 checkboxes are complete.
-- [ ] All Task 2 checkboxes are complete.
-- [ ] All Task 3 checkboxes are complete.
-- [ ] Update the index plan checkbox for `02 - Official DeepSeek Provider`.
+- [x] All Task 1 checkboxes are complete.
+- [x] All Task 2 checkboxes are complete.
+- [x] All Task 3 checkboxes are complete.
+- [x] Update the index plan checkbox for `02 - Official DeepSeek Provider`.

@@ -32,7 +32,7 @@
   - Adds console API route `GET /api/console/model-providers/{id}/balance`.
   - Adds persistence for input cache usage fields.
 
-- [ ] [02 - Official DeepSeek Provider](2026-05-04-deepseek-provider-02-official-plugin.md)
+- [x] [02 - Official DeepSeek Provider](2026-05-04-deepseek-provider-02-official-plugin.md)
   - Adds `runtime-extensions/model-providers/deepseek`.
   - Adds manifest, provider YAML, static model metadata, i18n, icon, readme.
   - Implements config normalization, `/models`, `/user/balance`, and streaming `/chat/completions`.
