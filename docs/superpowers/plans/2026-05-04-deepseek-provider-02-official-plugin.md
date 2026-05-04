@@ -277,7 +277,7 @@ git push origin main
 **Files:**
 - Modify: `runtime-extensions/model-providers/deepseek/src/lib.rs`
 
-- [ ] **Step 1: Write failing tests for config, model, and balance normalization**
+- [x] **Step 1: Write failing tests for config, model, and balance normalization**
 
 Add inside `src/lib.rs` test module:
 
@@ -322,7 +322,7 @@ fn normalize_balance_payload_preserves_deepseek_balances() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -333,7 +333,7 @@ cargo test --manifest-path runtime-extensions/model-providers/deepseek/Cargo.tom
 
 Expected: FAIL because normalization helpers are missing.
 
-- [ ] **Step 3: Implement config, models, balance**
+- [x] **Step 3: Implement config, models, balance**
 
 Implement:
 
@@ -357,7 +357,7 @@ Rules:
 - `/models` normalizes `id`, `owned_by`, 1M context, 384K output, dynamic pricing source;
 - `/user/balance` returns `is_available` and `balance_infos`.
 
-- [ ] **Step 4: Add runtime HTTP methods**
+- [x] **Step 4: Add runtime HTTP methods**
 
 Implement:
 
@@ -377,7 +377,7 @@ Headers:
 - `Accept: application/json`
 - `Authorization: Bearer <api_key>`
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 Run:
 
