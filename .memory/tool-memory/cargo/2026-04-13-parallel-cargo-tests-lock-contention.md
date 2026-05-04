@@ -13,8 +13,8 @@ match_when:
   - cargo 输出 `Blocking waiting for file lock on package cache`
   - cargo 输出 `Blocking waiting for file lock on artifact directory`
 created_at: 2026-04-13 07
-updated_at: 2026-04-17 21
-last_verified_at: 2026-04-17 21
+updated_at: 2026-05-04 21
+last_verified_at: 2026-05-04 21
 decision_policy: reference_on_failure
 scope:
   - cargo
@@ -62,3 +62,4 @@ scope:
 - `2026-04-14 00`：为验证 settings docs 的三个后端红灯测试，用 `multi_tool_use.parallel` 同时启动三条 `cargo test -p api-server ... -- --nocapture`，再次出现 package cache / artifact directory 锁等待；等待已有进程结束后改回串行执行，结果恢复稳定。
 - `2026-04-15 18`：为确认 `04 agentFlow` 接口是否完整，误用 `multi_tool_use.parallel` 同时启动 `cargo test -p api-server openapi_contains_application_console_routes`、`cargo test -p api-server application_orchestration_routes_bootstrap_save_and_restore`、`cargo test -p control-plane save_draft_only_appends_history_for_logical_changes`，再次出现 `Blocking waiting for file lock on package cache` 和 `artifact directory`；三条命令最终通过，但验证起步明显被锁等待拖慢，后续同类 QA 仍应严格串行。
 - `2026-04-17 21`：执行模块 05 stateful debug run 的 Task 6 时，为回跑 `control-plane` 受影响测试，误并发启动 `cargo test -p control-plane orchestration_runtime_service_tests` 与 `cargo test -p control-plane orchestration_runtime_resume_tests`，再次出现 package cache / artifact directory 锁等待；两条命令最终通过，但确认同一工作区内的后端验证仍必须默认串行。
+- `2026-05-04 21`：排查 `dev-up` 后端启动编译失败时，误并发启动 `cargo test -p storage-durable` 和 `cargo test -p storage-postgres crate_name_matches_storage_postgres --lib`，再次出现 package cache / artifact directory 锁等待；中断第二条后改回串行执行，两条验证均通过。
