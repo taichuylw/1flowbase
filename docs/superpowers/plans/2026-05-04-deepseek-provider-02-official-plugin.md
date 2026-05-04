@@ -27,7 +27,7 @@
 - Create: `runtime-extensions/model-providers/deepseek/readme/README_en_US.md`
 - Create: `scripts/_tests/deepseek-provider-contract.test.mjs`
 
-- [ ] **Step 1: Write failing repository contract test**
+- [x] **Step 1: Write failing repository contract test**
 
 Create `scripts/_tests/deepseek-provider-contract.test.mjs`:
 
@@ -80,7 +80,7 @@ test('deepseek provider exposes deepseek-specific model parameters only', () => 
 });
 ```
 
-- [ ] **Step 2: Run metadata test to verify failure**
+- [x] **Step 2: Run metadata test to verify failure**
 
 Run:
 
@@ -91,7 +91,7 @@ node --test scripts/_tests/deepseek-provider-contract.test.mjs
 
 Expected: FAIL because `runtime-extensions/model-providers/deepseek` does not exist.
 
-- [ ] **Step 3: Add manifest and Cargo files**
+- [x] **Step 3: Add manifest and Cargo files**
 
 Use `manifest.yaml`:
 
@@ -151,7 +151,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-- [ ] **Step 4: Add provider YAML**
+- [x] **Step 4: Add provider YAML**
 
 Create `provider/deepseek.yaml` with:
 
@@ -197,7 +197,7 @@ config_schema:
   advanced: true
 ```
 
-- [ ] **Step 5: Add static model metadata without price**
+- [x] **Step 5: Add static model metadata without price**
 
 Create `_position.yaml`:
 
@@ -223,7 +223,7 @@ provider_metadata:
   pricing_source: dynamic
 ```
 
-- [ ] **Step 6: Add i18n, icon, readme, and minimal Rust entrypoint**
+- [x] **Step 6: Add i18n, icon, readme, and minimal Rust entrypoint**
 
 Use `src/main.rs` patterned after `openai_compatible/src/main.rs`, with crate name `deepseek_provider`.
 
@@ -247,7 +247,7 @@ pub async fn handle_request(request: ProviderStdioRequest) -> anyhow::Result<Pro
 }
 ```
 
-- [ ] **Step 7: Run scaffold tests**
+- [x] **Step 7: Run scaffold tests**
 
 Run:
 
@@ -259,7 +259,7 @@ cargo test --manifest-path runtime-extensions/model-providers/deepseek/Cargo.tom
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit scaffold**
+- [x] **Step 8: Commit scaffold**
 
 Run:
 
