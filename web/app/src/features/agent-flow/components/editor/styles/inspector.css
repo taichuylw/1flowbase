@@ -175,13 +175,8 @@
   justify-content: space-between;
   height: 34px;
   padding: 5px 8px 5px 12px;
-  border-bottom: 1px solid rgba(22, 119, 255, 0.42);
-  background: linear-gradient(
-    180deg,
-    rgba(22, 119, 255, 0.68),
-    rgb(22 130 255 / 52%)
-  );
-  backdrop-filter: blur(10px) saturate(140%);
+  border-bottom: 1px solid #d9e3dc;
+  background: #fff;
   line-height: 24px;
 }
 
@@ -245,13 +240,18 @@
   height: 22px;
   min-width: 22px;
   padding: 0;
-  color: #fff;
+  color: #101828;
   line-height: 22px;
   vertical-align: top;
 }
 
 .agent-flow-templated-text-field__action.ant-btn {
   padding: 0;
+}
+
+.agent-flow-templated-text-field__action.ant-btn:hover,
+.agent-flow-templated-text-field__action.ant-btn:focus-visible {
+  color: #101828;
 }
 
 .agent-flow-templated-text-field__action .anticon {
@@ -264,7 +264,7 @@
 }
 
 .agent-flow-templated-text-field__counter {
-  color: rgba(255, 255, 255, 0.92);
+  color: #101828;
   font-size: 12px;
   font-weight: 500;
   text-align: center;
@@ -276,7 +276,7 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #fff;
+  color: #101828;
   font-size: 12px;
   font-weight: 700;
   line-height: 16px;
