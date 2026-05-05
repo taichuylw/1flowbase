@@ -341,7 +341,7 @@
   padding: 0 6px;
   border: 1px solid rgba(22, 119, 255, 0.24);
   border-radius: 999px;
-  color: var(--ant-color-primary);
+  color: var(--ant-color-text);
   background: rgba(22, 119, 255, 0.08);
   font-size: inherit;
   line-height: 18px;
@@ -351,7 +351,7 @@
 .agent-flow-templated-text-field__chip--selected {
   border-color: var(--ant-color-primary);
   background: rgba(22, 119, 255, 0.14);
-  color: var(--ant-color-primary-active);
+  color: var(--ant-color-text);
 }
 
 .agent-flow-templated-text-field__modal
