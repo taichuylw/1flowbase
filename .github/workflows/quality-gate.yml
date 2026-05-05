@@ -3,6 +3,13 @@ name: manual quality gate
 on:
   workflow_dispatch:
     inputs:
+      target_branch:
+        description: Target branch
+        type: choice
+        default: latest
+        options:
+          - latest
+          - main
       scope:
         description: Quality gate scope
         type: choice
@@ -34,6 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.target_branch }}
+      - name: Resolve quality gate target SHA
+        run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
         with:
           version: 10
@@ -46,6 +57,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: ./.github/actions/quality-gate
+        env:
+          GITHUB_REF_NAME: ${{ inputs.target_branch }}
+          GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
         with:
           scope: ${{ inputs.scope }}
           report_type: ${{ inputs.report_type }}
