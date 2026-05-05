@@ -213,12 +213,22 @@ function readJsonFileIfPresent(filePath) {
 }
 
 function readFrontendMetricPct(summary, metric) {
-  const value = summary?.total?.[metric]?.pct;
+  const metricSummary = summary?.total?.[metric];
+  if (metricSummary && Number.isFinite(metricSummary.total) && metricSummary.total === 0) {
+    return null;
+  }
+
+  const value = metricSummary?.pct;
   return Number.isFinite(value) ? value : null;
 }
 
 function readBackendMetricPct(summary, metric) {
-  const value = summary?.data?.[0]?.totals?.[metric]?.percent;
+  const metricSummary = summary?.data?.[0]?.totals?.[metric];
+  if (metricSummary && Number.isFinite(metricSummary.count) && metricSummary.count === 0) {
+    return null;
+  }
+
+  const value = metricSummary?.percent;
   return Number.isFinite(value) ? value : null;
 }
 

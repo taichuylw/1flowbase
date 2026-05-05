@@ -235,6 +235,68 @@ test('runQualityGate publishes a complete passed report with coverage details', 
   assert.match(createdIssues[0].body, /tmp\/test-governance\/quality-gate\.latest\.log/u);
 });
 
+test('runQualityGate renders unavailable coverage metrics as n/a', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-coverage-na-'));
+  const createdIssues = [];
+  const coveragePath = path.join(
+    repoRoot,
+    'tmp',
+    'test-governance',
+    'coverage',
+    'backend',
+    'api-server.json'
+  );
+
+  fs.mkdirSync(path.dirname(coveragePath), { recursive: true });
+  fs.writeFileSync(
+    coveragePath,
+    `${JSON.stringify({
+      data: [{
+        totals: {
+          lines: { count: 10, covered: 9, percent: 90 },
+          branches: { count: 0, covered: 0, percent: 0 },
+        },
+      }],
+    })}\n`,
+    'utf8'
+  );
+
+  await runQualityGate({
+    repoRoot,
+    scope: 'ci',
+    reportType: 'ci',
+    publishIssue: true,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'latest',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '792',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+    },
+    spawnSyncImpl() {
+      return {
+        status: 0,
+        stdout: 'repo passed\n',
+        stderr: '',
+      };
+    },
+    createIssueImpl(issue) {
+      createdIssues.push(issue);
+      return { html_url: 'https://github.com/taichuy/1flowbase/issues/6' };
+    },
+    listOpenQualityGateIssuesImpl() {
+      return [];
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.match(createdIssues[0].body, /api-server: lines 90\.00%, functions n\/a, branches n\/a, regions n\/a/u);
+});
+
 test('runQualityGate closes older open quality gate issues after publishing the latest report', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-'));
   const closedIssues = [];
