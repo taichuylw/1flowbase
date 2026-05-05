@@ -1,0 +1,626 @@
+impl PgControlPlaneStore {
+    async fn upsert_compiled_plan(
+        &self,
+        input: &UpsertCompiledPlanInput,
+    ) -> Result<domain::CompiledPlanRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_compiled_plans (
+                id,
+                flow_id,
+                flow_draft_id,
+                schema_version,
+                document_updated_at,
+                plan,
+                created_by
+            ) values ($1, $2, $3, $4, $5, $6, $7)
+            on conflict (flow_draft_id) do update
+            set flow_id = excluded.flow_id,
+                schema_version = excluded.schema_version,
+                document_updated_at = excluded.document_updated_at,
+                plan = excluded.plan,
+                created_by = excluded.created_by,
+                updated_at = now()
+            returning
+                id,
+                flow_id,
+                flow_draft_id,
+                schema_version,
+                document_updated_at,
+                plan,
+                created_by,
+                created_at,
+                updated_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_id)
+        .bind(input.flow_draft_id)
+        .bind(&input.schema_version)
+        .bind(input.document_updated_at)
+        .bind(&input.plan)
+        .bind(input.actor_user_id)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_compiled_plan_record(row)
+    }
+
+    async fn get_compiled_plan(
+        &self,
+        compiled_plan_id: Uuid,
+    ) -> Result<Option<domain::CompiledPlanRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                flow_id,
+                flow_draft_id,
+                schema_version,
+                document_updated_at,
+                plan,
+                created_by,
+                created_at,
+                updated_at
+            from flow_compiled_plans
+            where id = $1
+            "#,
+        )
+        .bind(compiled_plan_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_compiled_plan_record).transpose()
+    }
+
+    async fn create_flow_run(&self, input: &CreateFlowRunInput) -> Result<domain::FlowRunRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_runs (
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                created_by,
+                started_at
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.application_id)
+        .bind(input.flow_id)
+        .bind(input.flow_draft_id)
+        .bind(input.compiled_plan_id)
+        .bind(input.run_mode.as_str())
+        .bind(input.target_node_id.as_deref())
+        .bind(input.status.as_str())
+        .bind(&input.input_payload)
+        .bind(input.actor_user_id)
+        .bind(input.started_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_flow_run_record(row)
+    }
+
+    async fn create_flow_run_shell(
+        &self,
+        input: &CreateFlowRunShellInput,
+    ) -> Result<domain::FlowRunRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_runs (
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                created_by,
+                started_at
+            ) values ($1, $2, $3, $4, null, $5, $6, $7, $8, $9, $10)
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.application_id)
+        .bind(input.flow_id)
+        .bind(input.flow_draft_id)
+        .bind(input.run_mode.as_str())
+        .bind(input.target_node_id.as_deref())
+        .bind(input.status.as_str())
+        .bind(&input.input_payload)
+        .bind(input.actor_user_id)
+        .bind(input.started_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_flow_run_record(row)
+    }
+
+    async fn attach_compiled_plan_to_flow_run(
+        &self,
+        input: &AttachCompiledPlanToFlowRunInput,
+    ) -> Result<domain::FlowRunRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set compiled_plan_id = $2,
+                status = $3
+            from flow_compiled_plans compiled
+            where flow_runs.id = $1
+              and compiled.id = $2
+              and flow_runs.status = 'queued'
+              and flow_runs.compiled_plan_id is null
+              and compiled.flow_id = flow_runs.flow_id
+              and compiled.flow_draft_id = flow_runs.flow_draft_id
+            returning
+                flow_runs.id,
+                flow_runs.application_id,
+                flow_runs.flow_id,
+                flow_runs.flow_draft_id,
+                flow_runs.compiled_plan_id,
+                flow_runs.run_mode,
+                flow_runs.target_node_id,
+                flow_runs.status,
+                flow_runs.input_payload,
+                flow_runs.output_payload,
+                flow_runs.error_payload,
+                flow_runs.created_by,
+                flow_runs.started_at,
+                flow_runs.finished_at,
+                flow_runs.created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(input.compiled_plan_id)
+        .bind(input.status.as_str())
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or_else(|| anyhow!("flow run compiled plan cannot be attached"))?;
+
+        map_flow_run_record(row)
+    }
+
+    async fn fail_queued_flow_run_shell(
+        &self,
+        input: &FailQueuedFlowRunShellInput,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set status = 'failed',
+                output_payload = $2,
+                error_payload = $3,
+                finished_at = $4
+            where id = $1
+              and status = 'queued'
+              and compiled_plan_id is null
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(&input.output_payload)
+        .bind(&input.error_payload)
+        .bind(input.finished_at)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_flow_run_record).transpose()
+    }
+
+    async fn get_flow_run(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        fetch_flow_run_for_application(self, application_id, flow_run_id).await
+    }
+
+    async fn create_node_run(&self, input: &CreateNodeRunInput) -> Result<domain::NodeRunRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into node_runs (
+                id,
+                flow_run_id,
+                node_id,
+                node_type,
+                node_alias,
+                status,
+                input_payload,
+                started_at
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            returning
+                id,
+                flow_run_id,
+                node_id,
+                node_type,
+                node_alias,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                metrics_payload,
+                started_at,
+                finished_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(&input.node_id)
+        .bind(&input.node_type)
+        .bind(&input.node_alias)
+        .bind(input.status.as_str())
+        .bind(&input.input_payload)
+        .bind(input.started_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_node_run_record(row)
+    }
+
+    async fn update_node_run(&self, input: &UpdateNodeRunInput) -> Result<domain::NodeRunRecord> {
+        let row = sqlx::query(
+            r#"
+            update node_runs
+            set status = $2,
+                output_payload = $3,
+                error_payload = $4,
+                metrics_payload = $5,
+                finished_at = $6
+            where id = $1
+            returning
+                id,
+                flow_run_id,
+                node_id,
+                node_type,
+                node_alias,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                metrics_payload,
+                started_at,
+                finished_at
+            "#,
+        )
+        .bind(input.node_run_id)
+        .bind(input.status.as_str())
+        .bind(&input.output_payload)
+        .bind(&input.error_payload)
+        .bind(&input.metrics_payload)
+        .bind(input.finished_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_node_run_record(row)
+    }
+
+    async fn complete_node_run(
+        &self,
+        input: &CompleteNodeRunInput,
+    ) -> Result<domain::NodeRunRecord> {
+        self.update_node_run(&UpdateNodeRunInput {
+            node_run_id: input.node_run_id,
+            status: input.status,
+            output_payload: input.output_payload.clone(),
+            error_payload: input.error_payload.clone(),
+            metrics_payload: input.metrics_payload.clone(),
+            finished_at: Some(input.finished_at),
+        })
+        .await
+    }
+
+    async fn update_flow_run(&self, input: &UpdateFlowRunInput) -> Result<domain::FlowRunRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set status = $2,
+                output_payload = $3,
+                error_payload = $4,
+                finished_at = $5
+            where id = $1
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(input.status.as_str())
+        .bind(&input.output_payload)
+        .bind(&input.error_payload)
+        .bind(input.finished_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_flow_run_record(row)
+    }
+
+    async fn update_flow_run_if_status(
+        &self,
+        input: &UpdateFlowRunInput,
+        expected_status: domain::FlowRunStatus,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        let row = sqlx::query(
+            r#"
+            update flow_runs
+            set status = $2,
+                output_payload = $3,
+                error_payload = $4,
+                finished_at = $5
+            where id = $1
+              and status = $6
+            returning
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                run_mode,
+                target_node_id,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                started_at,
+                finished_at,
+                created_at
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .bind(input.status.as_str())
+        .bind(&input.output_payload)
+        .bind(&input.error_payload)
+        .bind(input.finished_at)
+        .bind(expected_status.as_str())
+        .fetch_optional(self.pool())
+        .await?;
+
+        if let Some(row) = row {
+            return map_flow_run_record(row).map(Some);
+        }
+
+        let exists = sqlx::query_scalar::<_, bool>(
+            r#"
+            select exists(select 1 from flow_runs where id = $1)
+            "#,
+        )
+        .bind(input.flow_run_id)
+        .fetch_one(self.pool())
+        .await?;
+        if !exists {
+            return Err(ControlPlaneError::NotFound("flow_run").into());
+        }
+
+        Ok(None)
+    }
+
+    async fn complete_flow_run(
+        &self,
+        input: &CompleteFlowRunInput,
+    ) -> Result<domain::FlowRunRecord> {
+        self.update_flow_run(&UpdateFlowRunInput {
+            flow_run_id: input.flow_run_id,
+            status: input.status,
+            output_payload: input.output_payload.clone(),
+            error_payload: input.error_payload.clone(),
+            finished_at: Some(input.finished_at),
+        })
+        .await
+    }
+
+    async fn get_checkpoint(
+        &self,
+        flow_run_id: Uuid,
+        checkpoint_id: Uuid,
+    ) -> Result<Option<domain::CheckpointRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload,
+                created_at
+            from flow_run_checkpoints
+            where flow_run_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(checkpoint_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        Ok(row.map(fetch_checkpoint_record))
+    }
+
+    async fn create_checkpoint(
+        &self,
+        input: &CreateCheckpointInput,
+    ) -> Result<domain::CheckpointRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_run_checkpoints (
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload,
+                created_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(&input.status)
+        .bind(&input.reason)
+        .bind(&input.locator_payload)
+        .bind(&input.variable_snapshot)
+        .bind(&input.external_ref_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_checkpoint_record(row))
+    }
+
+    async fn create_callback_task(
+        &self,
+        input: &CreateCallbackTaskInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into flow_run_callback_tasks (
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                external_ref_payload
+            ) values ($1, $2, $3, $4, 'pending', $5, $6)
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.flow_run_id)
+        .bind(input.node_run_id)
+        .bind(&input.callback_kind)
+        .bind(&input.request_payload)
+        .bind(&input.external_ref_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_callback_task_record(row)
+    }
+
+    async fn complete_callback_task(
+        &self,
+        input: &CompleteCallbackTaskInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_run_callback_tasks
+            set status = 'completed',
+                response_payload = $2,
+                completed_at = $3
+            where id = $1
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(input.callback_task_id)
+        .bind(&input.response_payload)
+        .bind(input.completed_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_callback_task_record(row)
+    }
+
+
+}
