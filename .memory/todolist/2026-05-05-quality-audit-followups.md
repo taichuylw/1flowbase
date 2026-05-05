@@ -2,19 +2,19 @@
 created_at: 2026-05-05 23
 topic: quality-audit-followups
 status: needs_user_decision
-updated_at: 2026-05-06 00
+updated_at: 2026-05-06 01
 ---
 
 # 2026-05-05 质量审核待确认项
 
 本轮已确认 `latest` 远端质量门禁通过，并补了低风险覆盖 / 模板质量缺口。下面这些属于结构性质量问题，改动范围较大，不适合在无人值守时直接搬迁大量文件。
 
-## 2026-05-06 00 值守证据
+## 2026-05-06 01 值守证据
 
-- 最新远端质量门禁 issue：`#59`，`latest` / `6ad8dd9` / passed，已评论并关闭。
-- GitHub Actions：`verify` run `25387033017` 成功，`CodeQL` run `25387029740` 成功。
+- 最新远端质量门禁 issue：`#60`，`latest` / `db5e4fd` / passed，已评论并关闭。
+- GitHub Actions：`verify` run `25389415294` 成功，`CodeQL` run `25389414651` 成功。
 - Artifact JSON：`status=passed`、`exitCode=0`、`warningFiles=[]`。
-- Artifact 已下载到 `tmp/test-governance/remote-run-25387033017/`，该目录按 `.gitignore` 保持本地证据，不提交。
+- Artifact 已下载到 `tmp/test-governance/remote-25389415294/`，该目录按 `.gitignore` 保持本地证据，不提交。
 
 ## 需要拍板的方向
 
@@ -32,8 +32,9 @@ updated_at: 2026-05-06 00
 
 3. 是否安排后端覆盖率专项：
    - 远端 artifact 显示 `storage-postgres` line coverage 为 77.08%。
-   - 低覆盖文件包括 `member_repository.rs` 0%、`role_repository.rs` 10%、`repositories.rs` 40.70%、`application_mapper.rs` 41.30%。
-   - 建议方向：先补 `member_repository.rs` / `role_repository.rs` 仓储测试，再决定是否提高后端覆盖率门槛。
+   - 低覆盖文件仍包括 `repositories.rs` 40.70%、`application_mapper.rs` 41.30% 等。
+   - `2026-05-06 01` 已补 `member_repository.rs` / `role_repository.rs` 仓储测试，覆盖默认建成员、成员角色替换、workspace 默认角色切换、角色权限替换。
+   - 建议方向：先观察下一次远端 coverage artifact 的 `storage-postgres` 改善幅度，再决定是否继续补 `repositories.rs` / mapper 覆盖或提高后端覆盖率门槛。
 
 4. 是否安排前端覆盖率专项：
    - 远端 artifact 显示前端总 line coverage 为 79.63%，function coverage 为 74.30%。

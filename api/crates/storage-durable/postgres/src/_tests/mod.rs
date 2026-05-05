@@ -6,6 +6,7 @@ mod flow_repository_tests;
 mod host_extension_migration_tests;
 mod host_infrastructure_config_repository_tests;
 mod member_mapper_tests;
+mod member_role_repository_tests;
 mod migration_smoke;
 mod model_definition_repository_tests;
 mod model_provider_repository_tests;
