@@ -82,8 +82,8 @@ Existing warning, coverage, screenshot, and QA evidence files remain under
 Workflows must install pnpm before enabling `setup-node` pnpm cache:
 
 ```yaml
-- uses: pnpm/action-setup@v4
-- uses: actions/setup-node@v4
+- uses: pnpm/action-setup@v5
+- uses: actions/setup-node@v5
   with:
     cache: pnpm
 ```

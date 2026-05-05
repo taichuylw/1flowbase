@@ -43,9 +43,23 @@ outputs:
 runs:
   using: composite
   steps:
+    - id: quality-gate-postgres
+      shell: bash
+      env:
+        POSTGRES_MAX_CONNECTIONS: "300"
+      run: |
+        if docker compose version >/dev/null 2>&1; then
+          docker compose -f docker/docker-compose.middleware.yaml up -d --wait db
+        elif docker-compose version >/dev/null 2>&1; then
+          docker-compose -f docker/docker-compose.middleware.yaml up -d --wait db
+        else
+          echo "docker compose or docker-compose v2 is required for the quality gate database" >&2
+          exit 1
+        fi
     - id: quality-gate
       shell: bash
       env:
+        API_DATABASE_URL: postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase
         INPUT_SCOPE: ${{ inputs.scope }}
         INPUT_REPORT_TYPE: ${{ inputs.report_type }}
         INPUT_PUBLISH_ISSUE: ${{ inputs.publish_issue }}

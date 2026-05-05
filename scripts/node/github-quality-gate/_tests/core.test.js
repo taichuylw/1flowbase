@@ -137,6 +137,9 @@ test('runQualityGate creates a new issue when publishing is enabled even if the 
       createdIssues.push(issue);
       return { html_url: 'https://github.com/taichuy/1flowbase/issues/2' };
     },
+    listOpenQualityGateIssuesImpl() {
+      return [];
+    },
     nowImpl: () => new Date('2026-05-03T15:40:00Z'),
     writeStdout() {},
     writeStderr() {},
@@ -152,6 +155,57 @@ test('runQualityGate creates a new issue when publishing is enabled even if the 
   assert.match(createdIssues[0].body, /Environment: staging/u);
   assert.match(createdIssues[0].body, /## Failure Excerpt/u);
   assert.match(createdIssues[0].body, /failure detail/u);
+});
+
+test('runQualityGate closes older open quality gate issues after publishing the latest report', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-'));
+  const closedIssues = [];
+
+  const status = await runQualityGate({
+    repoRoot,
+    scope: 'repo',
+    reportType: 'ci',
+    publishIssue: true,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'main',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '457',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: '1234567890abcdef',
+      GITHUB_WORKFLOW: 'manual quality gate',
+    },
+    spawnSyncImpl() {
+      return {
+        status: 0,
+        stdout: 'repo passed\n',
+        stderr: '',
+      };
+    },
+    createIssueImpl() {
+      return {
+        html_url: 'https://github.com/taichuy/1flowbase/issues/12',
+        number: 12,
+      };
+    },
+    listOpenQualityGateIssuesImpl() {
+      return [
+        { number: 10, html_url: 'https://github.com/taichuy/1flowbase/issues/10' },
+        { number: 11, html_url: 'https://github.com/taichuy/1flowbase/issues/11' },
+        { number: 12, html_url: 'https://github.com/taichuy/1flowbase/issues/12' },
+      ];
+    },
+    closeIssueImpl(issue) {
+      closedIssues.push(issue.number);
+      return {};
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(status.issueUrl, 'https://github.com/taichuy/1flowbase/issues/12');
+  assert.deepEqual(closedIssues, [10, 11]);
 });
 
 test('runQualityGate strips ANSI control sequences from published failure excerpts', async () => {
@@ -184,6 +238,9 @@ test('runQualityGate strips ANSI control sequences from published failure excerp
       createdIssues.push(issue);
       return { html_url: 'https://github.com/taichuy/1flowbase/issues/3' };
     },
+    listOpenQualityGateIssuesImpl() {
+      return [];
+    },
     writeStdout() {},
     writeStderr() {},
   });
@@ -192,4 +249,57 @@ test('runQualityGate strips ANSI control sequences from published failure excerp
   assert.doesNotMatch(createdIssues[0].body, /\u001b\[/u);
   assert.match(createdIssues[0].body, /dist\/asset\.js/u);
   assert.match(createdIssues[0].body, /Diff in api\/apps\/api-server\/src\/_tests\/config_tests\.rs:77/u);
+});
+
+test('runQualityGate publishes the rust failure block when cargo stderr hides it at the tail', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-'));
+  const createdIssues = [];
+  const compileTail = Array.from({ length: 100 }, (_, index) => `Compiling crate-${index}`).join('\n');
+
+  await runQualityGate({
+    repoRoot,
+    scope: 'ci',
+    reportType: 'ci',
+    publishIssue: true,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'main',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '790',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+    },
+    spawnSyncImpl() {
+      return {
+        status: 1,
+        stdout: [
+          'test _tests::workspace_routes::workspaces_route_lists_accessible_workspaces_with_current_marker ... FAILED',
+          '',
+          'failures:',
+          '',
+          "thread '_tests::workspace_routes::workspaces_route_lists_accessible_workspaces_with_current_marker' panicked at apps/api-server/src/_tests/support/auth.rs:83:10:",
+          'called `Result::unwrap()` on an `Err` value: PoolTimedOut',
+          '',
+          'test result: FAILED. 68 passed; 111 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3330.75s',
+        ].join('\n'),
+        stderr: `${compileTail}\nerror: test failed, to rerun pass \`-p api-server --lib\`\n`,
+      };
+    },
+    createIssueImpl(issue) {
+      createdIssues.push(issue);
+      return { html_url: 'https://github.com/taichuy/1flowbase/issues/4' };
+    },
+    listOpenQualityGateIssuesImpl() {
+      return [];
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(createdIssues.length, 1);
+  assert.match(createdIssues[0].body, /PoolTimedOut/u);
+  assert.match(createdIssues[0].body, /test result: FAILED\. 68 passed; 111 failed/u);
+  assert.doesNotMatch(createdIssues[0].body, /Compiling crate-99/u);
 });

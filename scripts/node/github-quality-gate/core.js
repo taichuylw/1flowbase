@@ -148,12 +148,52 @@ function readFailureExcerpt(logPath) {
     return '';
   }
 
-  const lines = fs.readFileSync(logPath, 'utf8').trimEnd().split(/\r?\n/u);
-  return stripAnsiControlSequences(lines.slice(-FAILURE_EXCERPT_MAX_LINES).join('\n')).trim();
+  const lines = stripAnsiControlSequences(fs.readFileSync(logPath, 'utf8'))
+    .trimEnd()
+    .split(/\r?\n/u);
+  return selectFailureExcerpt(lines).trim();
 }
 
 function stripAnsiControlSequences(value) {
   return value.replace(ANSI_CONTROL_SEQUENCE_PATTERN, '');
+}
+
+function selectFailureExcerpt(lines) {
+  const rustFailuresIndex = lines.findIndex((line) => line.trim() === 'failures:');
+  if (rustFailuresIndex >= 0) {
+    return excerptFromAnchorWithSummary({
+      lines,
+      anchorIndex: rustFailuresIndex,
+      summaryIndex: lines.findIndex((line) => /test result: FAILED/u.test(line)),
+    });
+  }
+
+  const panicIndex = lines.findIndex((line) => /\bpanicked at\b/u.test(line));
+  if (panicIndex >= 0) {
+    return excerptFromAnchorWithSummary({
+      lines,
+      anchorIndex: Math.max(0, panicIndex - 2),
+      summaryIndex: lines.findIndex((line) => /test result: FAILED/u.test(line)),
+    });
+  }
+
+  return lines.slice(-FAILURE_EXCERPT_MAX_LINES).join('\n');
+}
+
+function excerptFromAnchorWithSummary({ lines, anchorIndex, summaryIndex }) {
+  const summaryWillBeAppended = summaryIndex >= anchorIndex + FAILURE_EXCERPT_MAX_LINES;
+  const bodyLineBudget = summaryWillBeAppended
+    ? FAILURE_EXCERPT_MAX_LINES - 2
+    : FAILURE_EXCERPT_MAX_LINES;
+  const endIndex = Math.min(lines.length, anchorIndex + bodyLineBudget);
+  const excerptLines = lines.slice(anchorIndex, endIndex);
+
+  if (summaryWillBeAppended) {
+    excerptLines.push('...');
+    excerptLines.push(lines[summaryIndex]);
+  }
+
+  return excerptLines.join('\n');
 }
 
 function toRepoRelative(repoRoot, filePath) {
@@ -311,6 +351,75 @@ function createIssueWithGitHubApi({ token, repository, title, body, labels }) {
   });
 }
 
+function requestGitHubJson({ token, repository, method, path: requestPath, body }) {
+  if (!repository) {
+    throw new Error('GITHUB_REPOSITORY is required for quality gate issue maintenance');
+  }
+
+  const requestBody = body === undefined ? '' : JSON.stringify(body);
+
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      {
+        hostname: 'api.github.com',
+        method,
+        path: `/repos/${repository}${requestPath}`,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestBody),
+          'User-Agent': '1flowbase-quality-gate',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
+      (response) => {
+        let responseBody = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        response.on('end', () => {
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            resolve(responseBody ? JSON.parse(responseBody) : {});
+            return;
+          }
+
+          reject(Object.assign(
+            new Error(`GitHub request failed with HTTP ${response.statusCode}: ${responseBody}`),
+            { statusCode: response.statusCode }
+          ));
+        });
+      }
+    );
+
+    request.on('error', reject);
+    if (requestBody) {
+      request.write(requestBody);
+    }
+    request.end();
+  });
+}
+
+function listOpenQualityGateIssuesWithGitHubApi({ token, repository }) {
+  return requestGitHubJson({
+    token,
+    repository,
+    method: 'GET',
+    path: '/issues?state=open&labels=quality-gate&per_page=100',
+  });
+}
+
+function closeIssueWithGitHubApi({ token, repository, number }) {
+  return requestGitHubJson({
+    token,
+    repository,
+    method: 'PATCH',
+    path: `/issues/${number}`,
+    body: { state: 'closed' },
+  });
+}
+
 async function createIssueWithLabelFallback({ createIssueImpl, issue }) {
   try {
     return await createIssueImpl(issue);
@@ -322,6 +431,45 @@ async function createIssueWithLabelFallback({ createIssueImpl, issue }) {
     return createIssueImpl({
       ...issue,
       labels: [],
+    });
+  }
+}
+
+function issueNumberFromIssue(issue) {
+  if (Number.isInteger(issue.number)) {
+    return issue.number;
+  }
+
+  const match = String(issue.html_url || '').match(/\/issues\/(\d+)$/u);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+async function closeStaleOpenQualityGateIssues({
+  token,
+  repository,
+  latestIssue,
+  listOpenQualityGateIssuesImpl,
+  closeIssueImpl,
+}) {
+  const latestIssueNumber = issueNumberFromIssue(latestIssue);
+
+  if (!latestIssueNumber) {
+    return;
+  }
+
+  const openIssues = await listOpenQualityGateIssuesImpl({ token, repository });
+
+  for (const issue of openIssues) {
+    const issueNumber = issueNumberFromIssue(issue);
+
+    if (!issueNumber || issueNumber === latestIssueNumber) {
+      continue;
+    }
+
+    await closeIssueImpl({
+      token,
+      repository,
+      number: issueNumber,
     });
   }
 }
@@ -373,6 +521,8 @@ async function runQualityGate({
   nowImpl = () => new Date(),
   spawnSyncImpl = spawnSync,
   createIssueImpl = createIssueWithGitHubApi,
+  listOpenQualityGateIssuesImpl = listOpenQualityGateIssuesWithGitHubApi,
+  closeIssueImpl = closeIssueWithGitHubApi,
   writeStdout = (text) => process.stdout.write(text),
   writeStderr = (text) => process.stderr.write(text),
 } = {}) {
@@ -431,6 +581,13 @@ async function runQualityGate({
       },
     });
     issueUrl = issue.html_url || '';
+    await closeStaleOpenQualityGateIssues({
+      token: githubToken,
+      repository: env.GITHUB_REPOSITORY,
+      latestIssue: issue,
+      listOpenQualityGateIssuesImpl,
+      closeIssueImpl,
+    });
   }
 
   const finalReport = issueUrl
@@ -474,7 +631,9 @@ module.exports = {
   buildIssueLabels,
   buildIssueTitle,
   buildReport,
+  closeIssueWithGitHubApi,
   createIssueWithGitHubApi,
+  listOpenQualityGateIssuesWithGitHubApi,
   parseBooleanInput,
   runQualityGate,
 };

@@ -10,9 +10,7 @@ import {
   type NodePickerOption
 } from '../../lib/plugin-node-definitions';
 import { getAgentFlowNodeTypeIcon } from '../../lib/node-type-icons';
-
-const MIN_PICKER_HEIGHT = 120;
-const CANVAS_BOTTOM_GAP = 10;
+import { calculateNodePickerMaxHeight } from './node-picker-layout';
 
 type BuiltinNodePickerOption = Extract<NodePickerOption, { kind: 'builtin' }>;
 
@@ -90,16 +88,6 @@ const BUILTIN_NODE_PICKER_SUMMARIES: Record<
   iteration: '遍历列表并处理每一项。',
   loop: '按条件重复执行节点。'
 };
-
-export function calculateNodePickerMaxHeight(
-  canvasBottom: number,
-  anchorY: number
-) {
-  return Math.max(
-    MIN_PICKER_HEIGHT,
-    Math.floor(canvasBottom - anchorY - CANVAS_BOTTOM_GAP)
-  );
-}
 
 interface NodePickerPopoverProps {
   ariaLabel: string;
