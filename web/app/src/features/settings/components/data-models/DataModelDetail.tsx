@@ -1,6 +1,15 @@
 import { useState } from 'react';
 
-import { Button, Descriptions, Flex, Table, Tabs, Tag, Typography } from 'antd';
+import {
+  Button,
+  Descriptions,
+  Flex,
+  Select,
+  Table,
+  Tabs,
+  Tag,
+  Typography
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type {
@@ -186,26 +195,16 @@ export function DataModelDetail({
         data-testid="data-model-detail-actions"
       >
         <div className="data-model-panel__status-control">
-          <label htmlFor="data-model-status-select">Data Model 状态</label>
+          <label htmlFor="data-model-status-select">状态：</label>
           <div className="data-model-panel__control-with-help">
-            <select
+            <Select
               id="data-model-status-select"
-              className="data-model-panel__native-select"
               value={model.status}
+              options={dataModelStatusOptions}
               disabled={!canManage || modelSaving}
-              aria-label="Data Model 状态"
-              onChange={(event) =>
-                onUpdateModelStatus(
-                  event.target.value as SettingsDataModel['status']
-                )
-              }
-            >
-              {dataModelStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              virtual={false}
+              onChange={(value) => onUpdateModelStatus(value)}
+            />
             <DataModelHelpTooltip
               label="Data Model 状态"
               title={dataModelStatusHelp}

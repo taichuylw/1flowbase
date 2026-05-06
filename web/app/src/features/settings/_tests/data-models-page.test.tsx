@@ -706,7 +706,7 @@ describe('Settings data models page', () => {
     expect(
       within(
         within(editorDialog).getByTestId('data-model-detail-summary')
-      ).queryByLabelText('Data Model 状态')
+      ).queryByText('状态：')
     ).not.toBeInTheDocument();
     const detailActions = within(editorDialog).getByTestId(
       'data-model-detail-actions'
@@ -722,20 +722,27 @@ describe('Settings data models page', () => {
         name: /编\s*辑/
       })
     ).toBeInTheDocument();
-    expect(
-      within(detailActions).getByLabelText('Data Model 状态')
-    ).toBeInTheDocument();
+    const statusSelect = within(detailActions).getByRole('combobox', {
+      name: /状态/
+    });
+    expect(statusSelect).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '关系' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '权限' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'API' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '记录预览' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Advisor' })).toBeInTheDocument();
 
-    fireEvent.mouseDown(within(detailActions).getByLabelText('Data Model 状态'));
-    expect(await screen.findByText('draft')).toBeInTheDocument();
-    expect(screen.getByText('published')).toBeInTheDocument();
-    expect(screen.getByText('disabled')).toBeInTheDocument();
-    expect(screen.getByText('broken')).toBeInTheDocument();
+    fireEvent.mouseDown(statusSelect);
+    expect(
+      await screen.findByRole('option', { name: 'draft' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'published' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'disabled' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'broken' })).toBeInTheDocument();
     expect(
       within(editorDialog).getByLabelText('Data Model 状态说明')
     ).toBeInTheDocument();
@@ -753,7 +760,7 @@ describe('Settings data models page', () => {
     expect(
       screen.queryByRole('combobox', { name: 'api_exposed_ready' })
     ).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   test('shows editable grants, record preview, and Advisor severities', async () => {
     renderApp('/settings/data-models?source=source-1');

@@ -57,7 +57,6 @@
 }
 
 .data-model-panel__defaults .ant-select,
-.data-model-panel__native-select,
 .data-model-panel__actions .ant-btn {
   min-width: 180px;
 }
@@ -69,8 +68,7 @@
   gap: 8px;
 }
 
-.data-model-panel__control-with-help .ant-select,
-.data-model-panel__control-with-help .data-model-panel__native-select {
+.data-model-panel__control-with-help .ant-select {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -130,7 +128,7 @@
 
 .data-model-panel__detail-actions {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 12px;
   justify-content: flex-end;
   margin: 8px 0 4px;
@@ -142,22 +140,22 @@
 
 .data-model-panel__status-control {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
 }
 
 .data-model-panel__status-control label {
+  flex: 0 0 auto;
   color: var(--ant-color-text-secondary);
   font-size: 12px;
 }
 
-.data-model-panel__native-select {
-  min-height: 32px;
-  padding: 4px 28px 4px 11px;
-  color: var(--ant-color-text);
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border);
-  border-radius: var(--ant-border-radius);
+.data-model-panel__status-control .data-model-panel__control-with-help {
+  width: auto;
+}
+
+.data-model-panel__status-control .ant-select {
+  min-width: 140px;
 }
 
 .data-model-panel__link-button {
