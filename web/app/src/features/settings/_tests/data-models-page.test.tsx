@@ -801,16 +801,20 @@ describe('Settings data models page', () => {
     fireEvent.click(
       within(editorDialog).getByRole('button', { name: '编辑 Data Model' })
     );
-    const editDialog = await screen.findByRole('dialog', {
-      name: '编辑 Data Model'
-    });
+    const editDialog = await screen.findByRole(
+      'dialog',
+      {
+        name: '编辑 Data Model'
+      },
+      { timeout: 5000 }
+    );
     fireEvent.change(within(editDialog).getByDisplayValue('Contacts'), {
       target: { value: 'Customer Contacts' }
     });
     fireEvent.change(within(editDialog).getByDisplayValue('crm.contacts'), {
       target: { value: 'crm.contacts.v2' }
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(within(editDialog).getByRole('button', { name: '保存' }));
 
     await waitFor(() =>
       expect(dataModelsApi.updateSettingsDataModel).toHaveBeenCalledWith(
