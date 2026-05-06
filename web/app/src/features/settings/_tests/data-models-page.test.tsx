@@ -711,6 +711,10 @@ describe('Settings data models page', () => {
     expect(within(detailSummary).getByText('Contacts')).toBeInTheDocument();
     expect(within(detailSummary).getByText('contacts')).toBeInTheDocument();
     expect(
+      within(detailSummary).getAllByTestId('data-model-summary-item')
+    ).toHaveLength(6);
+    expect(within(detailSummary).getByText('表 ID：')).toBeInTheDocument();
+    expect(
       within(detailSummary).queryByText('状态：')
     ).not.toBeInTheDocument();
     const detailActions = within(editorDialog).getByTestId(
@@ -731,6 +735,13 @@ describe('Settings data models page', () => {
       name: /状态/
     });
     expect(statusSelect).toBeInTheDocument();
+    const statusLabel = within(detailActions).getByTestId(
+      'data-model-status-label'
+    );
+    expect(statusLabel).toHaveTextContent('状态：');
+    expect(
+      within(statusLabel).getByLabelText('Data Model 状态说明')
+    ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '关系' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '权限' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'API' })).toBeInTheDocument();

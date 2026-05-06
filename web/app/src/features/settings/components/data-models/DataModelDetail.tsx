@@ -2,7 +2,6 @@ import { useState } from 'react';
 
 import {
   Button,
-  Descriptions,
   Flex,
   Select,
   Table,
@@ -150,6 +149,22 @@ export function DataModelDetail({
   const relationFields = model.fields.filter(
     (field) => field.relation_target_model_id
   );
+  const summaryItems = [
+    { key: 'title', label: '标题', value: model.title, strong: true },
+    { key: 'code', label: 'Code', value: model.code },
+    { key: 'source', label: '来源', value: model.source_kind },
+    { key: 'runtime', label: 'Runtime', value: model.runtime_availability },
+    ...(model.source_kind === 'external_source'
+      ? [
+          {
+            key: 'external_table_id',
+            label: '表 ID',
+            value: model.external_table_id ?? '-'
+          }
+        ]
+      : []),
+    { key: 'table', label: '物理表', value: model.physical_table_name }
+  ];
 
   return (
     <section className="data-model-panel__detail" aria-label="Data Model 详情">
@@ -157,43 +172,23 @@ export function DataModelDetail({
         className="data-model-panel__detail-summary"
         data-testid="data-model-detail-summary"
       >
-        <div className="data-model-panel__identity">
-          <div className="data-model-panel__identity-row">
-            <span className="data-model-panel__identity-label">标题：</span>
-            <Typography.Text strong>{model.title}</Typography.Text>
-          </div>
-          <div className="data-model-panel__identity-row">
-            <span className="data-model-panel__identity-label">Code：</span>
-            <Typography.Text type="secondary">{model.code}</Typography.Text>
-          </div>
-        </div>
-        <Descriptions
-          className="data-model-panel__metadata"
-          size="small"
-          column={{ xs: 1, sm: 2, lg: 4 }}
-          items={[
-            { key: 'source', label: '来源', children: model.source_kind },
-            {
-              key: 'runtime',
-              label: 'Runtime',
-              children: model.runtime_availability
-            },
-            ...(model.source_kind === 'external_source'
-              ? [
-                  {
-                    key: 'external_table_id',
-                    label: '表 ID',
-                    children: model.external_table_id ?? '-'
-                  }
-                ]
-              : []),
-            {
-              key: 'table',
-              label: '物理表',
-              children: model.physical_table_name
-            }
-          ]}
-        />
+        {summaryItems.map((item) => (
+          <span
+            key={item.key}
+            className="data-model-panel__summary-item"
+            data-testid="data-model-summary-item"
+          >
+            <span className="data-model-panel__summary-label">
+              {item.label}：
+            </span>
+            <Typography.Text
+              strong={item.strong}
+              type={item.strong ? undefined : 'secondary'}
+            >
+              {item.value}
+            </Typography.Text>
+          </span>
+        ))}
       </div>
 
       <div
@@ -201,21 +196,24 @@ export function DataModelDetail({
         data-testid="data-model-detail-actions"
       >
         <div className="data-model-panel__status-control">
-          <label htmlFor="data-model-status-select">状态：</label>
-          <div className="data-model-panel__control-with-help">
-            <Select
-              id="data-model-status-select"
-              value={model.status}
-              options={dataModelStatusOptions}
-              disabled={!canManage || modelSaving}
-              virtual={false}
-              onChange={(value) => onUpdateModelStatus(value)}
-            />
+          <div
+            className="data-model-panel__status-label"
+            data-testid="data-model-status-label"
+          >
+            <label htmlFor="data-model-status-select">状态：</label>
             <DataModelHelpTooltip
               label="Data Model 状态"
               title={dataModelStatusHelp}
             />
           </div>
+          <Select
+            id="data-model-status-select"
+            value={model.status}
+            options={dataModelStatusOptions}
+            disabled={!canManage || modelSaving}
+            virtual={false}
+            onChange={(value) => onUpdateModelStatus(value)}
+          />
         </div>
         <Button disabled={!canManage} onClick={() => setModelDrawerOpen(true)}>
           编辑
