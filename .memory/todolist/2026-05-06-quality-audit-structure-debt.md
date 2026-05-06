@@ -2,9 +2,15 @@
 
 ## Context
 
-Quality gate for `latest` passed on GitHub run `25428429684`, so this offline pass moved to repository quality audit.
+Quality gate for `latest` passed on GitHub run `25443807661`, so this offline pass moved to repository quality audit.
 
-Follow-up watch on `2026-05-06 18` found current `latest` head `351b23a8` running GitHub `verify` run `25430321506`. Do not treat the earlier pass as evidence for that newer head until the run artifact is checked.
+Follow-up watch on `2026-05-06 23` checked current `latest` head `7bbd5638a4bda192b922aac7b425bc07e3b58658`; GitHub `verify` run `25443807661` completed successfully and issue `#84` was already commented and closed.
+
+## Handled During Watch
+
+- Removed tracked frontend runtime artifacts from `web/app/tmp/test-governance/`.
+- Added `web/app/tmp/` to `.gitignore` so local frontend test output does not re-enter version control.
+- Kept the repository-approved root governance artifact location as `tmp/test-governance/`.
 
 ## Needs User Decision
 
@@ -17,7 +23,7 @@ File length evidence from a static scan that excluded `.git`, `node_modules`, `a
 - `api/apps/api-server/src/_tests/application/runtime_model_routes.rs`: 2139 lines.
 - `api/apps/api-server/src/_tests/application/model_definition_routes.rs`: 2094 lines.
 - `api/crates/control-plane/src/_tests/data_source_service_tests.rs`: 2026 lines.
-- `web/app/src/features/settings/_tests/model-providers-page.test.tsx`: 2018 lines.
+- `web/app/src/features/settings/_tests/model-providers-page.test.tsx`: 1463 lines.
 - `api/crates/control-plane/src/_tests/support.rs`: 1654 lines.
 
 Directory size evidence from the same scan:
