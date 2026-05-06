@@ -21,7 +21,7 @@ pub mod runtime_registry_sync;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use argon2::{
     password_hash::{PasswordHasher, SaltString},
     Argon2,
@@ -76,10 +76,15 @@ async fn console_health() -> Json<HealthResponse> {
     health().await
 }
 
-pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> SocketAddr {
-    candidate
-        .and_then(|value| value.parse().ok())
-        .unwrap_or_else(|| default_addr.parse().unwrap())
+pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> Result<SocketAddr> {
+    match candidate {
+        Some(value) => value
+            .parse()
+            .map_err(|err| anyhow!("invalid API_SERVER_ADDR `{value}`: {err}")),
+        None => default_addr
+            .parse()
+            .map_err(|err| anyhow!("invalid default API server address `{default_addr}`: {err}")),
+    }
 }
 
 fn development_cors_layer() -> CorsLayer {
@@ -313,16 +318,16 @@ mod tests {
 
     #[test]
     fn parse_bind_addr_uses_new_default_api_port() {
-        let addr = parse_bind_addr(None, DEFAULT_API_SERVER_ADDR);
+        let addr = parse_bind_addr(None, DEFAULT_API_SERVER_ADDR).unwrap();
 
         assert_eq!(addr.to_string(), "0.0.0.0:7800");
     }
 
     #[test]
-    fn parse_bind_addr_falls_back_when_value_is_invalid() {
-        let addr = parse_bind_addr(Some("not-an-addr"), DEFAULT_API_SERVER_ADDR);
+    fn parse_bind_addr_rejects_invalid_value() {
+        let error = parse_bind_addr(Some("not-an-addr"), DEFAULT_API_SERVER_ADDR).unwrap_err();
 
-        assert_eq!(addr.to_string(), "0.0.0.0:7800");
+        assert!(error.to_string().contains("API_SERVER_ADDR"));
     }
 }
 
