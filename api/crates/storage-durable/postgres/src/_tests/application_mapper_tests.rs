@@ -1,0 +1,136 @@
+use domain::{ApplicationType, RoleScopeKind};
+use serde_json::json;
+use storage_postgres::mappers::application_mapper::{
+    parse_application_type, planned_sections, PgApplicationMapper, StoredApplicationRow,
+};
+use time::OffsetDateTime;
+use uuid::Uuid;
+
+#[test]
+fn parse_application_type_accepts_known_storage_values() {
+    assert!(matches!(
+        parse_application_type("agent_flow").unwrap(),
+        ApplicationType::AgentFlow
+    ));
+    assert!(matches!(
+        parse_application_type("workflow").unwrap(),
+        ApplicationType::Workflow
+    ));
+}
+
+#[test]
+fn parse_application_type_rejects_unknown_storage_value() {
+    let error = parse_application_type("form").unwrap_err();
+
+    assert_eq!(error.to_string(), "unknown application_type: form");
+}
+
+#[test]
+fn planned_sections_preserve_planned_contract_fields() {
+    let sections = planned_sections(ApplicationType::Workflow);
+
+    assert_eq!(sections.orchestration.status, "planned");
+    assert_eq!(sections.orchestration.subject_kind, "workflow");
+    assert_eq!(sections.orchestration.subject_status, "unconfigured");
+    assert_eq!(sections.orchestration.current_subject_id, None);
+    assert_eq!(sections.orchestration.current_draft_id, None);
+
+    assert_eq!(sections.api.status, "planned");
+    assert_eq!(sections.api.credential_kind, "application_api_key");
+    assert_eq!(
+        sections.api.invoke_routing_mode,
+        "api_key_bound_application"
+    );
+    assert_eq!(sections.api.invoke_path_template, None);
+    assert_eq!(sections.api.api_capability_status, "planned");
+    assert_eq!(sections.api.credentials_status, "planned");
+
+    assert_eq!(sections.logs.status, "planned");
+    assert_eq!(sections.logs.runs_capability_status, "planned");
+    assert_eq!(sections.logs.run_object_kind, "application_run");
+    assert_eq!(sections.logs.log_retention_status, "planned");
+
+    assert_eq!(sections.monitoring.status, "planned");
+    assert_eq!(sections.monitoring.metrics_capability_status, "planned");
+    assert_eq!(
+        sections.monitoring.metrics_object_kind,
+        "application_metrics"
+    );
+    assert_eq!(sections.monitoring.tracing_config_status, "planned");
+}
+
+#[test]
+fn application_mapper_maps_tags_type_and_ready_sections() {
+    let application_id = Uuid::now_v7();
+    let workspace_id = Uuid::now_v7();
+    let creator_id = Uuid::now_v7();
+    let current_flow_id = Uuid::now_v7();
+    let current_draft_id = Uuid::now_v7();
+    let tag_id = Uuid::now_v7();
+
+    let record = PgApplicationMapper::to_application_record(StoredApplicationRow {
+        id: application_id,
+        workspace_id,
+        application_type: "agent_flow".into(),
+        name: "Support Agent".into(),
+        description: "Routes support requests".into(),
+        icon: Some("sparkles".into()),
+        icon_type: Some("lucide".into()),
+        icon_background: Some("#0f172a".into()),
+        created_by: creator_id,
+        updated_at: OffsetDateTime::now_utc(),
+        current_flow_id: Some(current_flow_id),
+        current_draft_id: Some(current_draft_id),
+        tags: json!([
+            {
+                "id": tag_id,
+                "name": "Support"
+            }
+        ]),
+    })
+    .unwrap();
+
+    assert_eq!(record.id, application_id);
+    assert_eq!(record.workspace_id, workspace_id);
+    assert!(matches!(
+        record.application_type,
+        ApplicationType::AgentFlow
+    ));
+    assert_eq!(record.tags.len(), 1);
+    assert_eq!(record.tags[0].id, tag_id);
+    assert_eq!(record.tags[0].name, "Support");
+
+    assert_eq!(record.sections.orchestration.status, "ready");
+    assert_eq!(record.sections.orchestration.subject_kind, "agent_flow");
+    assert_eq!(record.sections.orchestration.subject_status, "editable");
+    assert_eq!(
+        record.sections.orchestration.current_subject_id,
+        Some(current_flow_id)
+    );
+    assert_eq!(
+        record.sections.orchestration.current_draft_id,
+        Some(current_draft_id)
+    );
+    assert_eq!(record.sections.logs.status, "ready");
+    assert_eq!(record.sections.logs.runs_capability_status, "queryable");
+}
+
+#[test]
+fn decode_role_scope_kind_maps_legacy_and_default_scope_values() {
+    assert!(matches!(
+        crate::repositories::decode_role_scope_kind("system"),
+        RoleScopeKind::System
+    ));
+    assert!(matches!(
+        crate::repositories::decode_role_scope_kind("app"),
+        RoleScopeKind::System
+    ));
+    assert!(matches!(
+        crate::repositories::decode_role_scope_kind("workspace"),
+        RoleScopeKind::Workspace
+    ));
+    assert!(matches!(
+        crate::repositories::decode_role_scope_kind("unknown"),
+        RoleScopeKind::Workspace
+    ));
+}

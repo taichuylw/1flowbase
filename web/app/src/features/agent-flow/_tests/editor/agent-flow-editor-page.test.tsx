@@ -455,6 +455,7 @@ describe('AgentFlowEditorShell', () => {
     expect(await screen.findByRole('button', { name: '历史版本' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Issues' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '在 LLM 后新增节点' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '扩展' }));
     expect(
       await screen.findByRole('menuitem', { name: /OpenAI Prompt/i })
     ).toBeInTheDocument();

@@ -6,7 +6,7 @@ This directory owns GitHub Actions automation for repository quality gates.
 
 | Path | Purpose |
 | --- | --- |
-| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main`. |
+| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; only `latest` push publishes quality-gate issues. |
 | `.github/workflows/quality-gate.yml` | Manual quality gate run that creates one new GitHub Issue report per run. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI and manual quality gates. |
 
@@ -16,18 +16,20 @@ This directory owns GitHub Actions automation for repository quality gates.
 
 - `pull_request`
 - `push` to `main`
+- `push` to `latest`
 
 It calls the local Quality Gate Action with:
 
 ```yaml
 scope: ci
 report_type: ci
-publish_issue: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+publish_issue: ${{ github.event_name == 'push' && github.ref == 'refs/heads/latest' }}
 ```
 
-Automatic CI creates a GitHub Issue for main branch push failures and uploads
+Automatic CI creates a GitHub Issue only for `latest` branch pushes and uploads
 `tmp/test-governance` as the `test-governance-artifacts` artifact. The issue body includes
-a failure excerpt; use the artifact for full logs.
+the quality gate result summary, warning status, coverage percentages, evidence paths, and
+a failure excerpt when the gate fails. Use the artifact for full logs and raw coverage files.
 
 ## Manual Quality Gate
 

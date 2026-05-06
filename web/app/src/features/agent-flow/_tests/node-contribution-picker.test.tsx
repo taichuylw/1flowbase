@@ -95,6 +95,7 @@ describe('node contribution picker', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: '在 LLM 后新增节点' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '扩展' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /OpenAI Prompt/i }));
 
     await waitFor(() => {
