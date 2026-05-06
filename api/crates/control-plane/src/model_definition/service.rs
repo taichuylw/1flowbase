@@ -37,6 +37,8 @@ pub struct ModelDefinitionService<R> {
     repository: R,
 }
 
+const NON_DELETABLE_MAIN_SOURCE_MODEL_CODES: [&str; 3] = ["attachments", "users", "roles"];
+
 pub fn runtime_scope_grant_from_record(
     grant: &domain::ScopeDataModelGrantRecord,
 ) -> runtime_core::runtime_acl::RuntimeScopeGrant {
@@ -85,6 +87,16 @@ fn ensure_protected_model_override_authorized(
 ) -> Result<(), ControlPlaneError> {
     if model.protection.is_protected && !actor.is_root {
         return Err(ControlPlaneError::PermissionDenied("protected_data_model"));
+    }
+
+    Ok(())
+}
+
+fn ensure_model_deletable(model: &domain::ModelDefinitionRecord) -> Result<(), ControlPlaneError> {
+    if model.source_kind == domain::DataModelSourceKind::MainSource
+        && NON_DELETABLE_MAIN_SOURCE_MODEL_CODES.contains(&model.code.as_str())
+    {
+        return Err(ControlPlaneError::InvalidInput("builtin_data_model"));
     }
 
     Ok(())
@@ -557,6 +569,7 @@ where
             .get_model_definition(actor.current_workspace_id, command.model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_model_deletable(&model)?;
         ensure_protected_model_override_authorized(&actor, &model)?;
 
         self.repository

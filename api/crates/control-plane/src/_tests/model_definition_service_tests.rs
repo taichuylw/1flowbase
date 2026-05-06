@@ -601,6 +601,44 @@ async fn delete_model_requires_explicit_confirmation() {
 }
 
 #[tokio::test]
+async fn delete_model_rejects_builtin_main_source_models() {
+    let service = ModelDefinitionService::for_tests();
+
+    for code in ["attachments", "users", "roles"] {
+        let created = service
+            .create_model(CreateModelDefinitionCommand {
+                actor_user_id: Uuid::nil(),
+                scope_kind: DataModelScopeKind::System,
+                data_source_instance_id: None,
+                external_resource_key: None,
+                external_table_id: None,
+                code: code.into(),
+                title: code.into(),
+                status: None,
+            })
+            .await
+            .unwrap();
+
+        let error = service
+            .delete_model(DeleteModelDefinitionCommand {
+                actor_user_id: Uuid::nil(),
+                model_id: created.id,
+                confirmed: true,
+            })
+            .await
+            .unwrap_err();
+
+        assert!(error.to_string().contains("builtin_data_model"));
+        assert!(service
+            .get_model(Uuid::nil(), created.id)
+            .await
+            .unwrap()
+            .code
+            .eq(code));
+    }
+}
+
+#[tokio::test]
 async fn create_system_model_uses_fixed_system_scope_id() {
     let service = ModelDefinitionService::for_tests();
 
