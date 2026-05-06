@@ -31,6 +31,7 @@ test('verify workflow runs on main and latest but only publishes quality reports
   const workflow = readVerifyWorkflow();
 
   assert.deepEqual(extractPushBranches(workflow), ['main', 'latest']);
+  assert.match(workflow, /concurrency:\n\s+group: quality-gate-\$\{\{ github\.ref_name \}\}\n\s+cancel-in-progress: true/u);
   assert.match(
     workflow,
     /publish_issue: \$\{\{ github\.event_name == 'push' && github\.ref == 'refs\/heads\/latest' \}\}/u
@@ -55,6 +56,7 @@ test('manual quality gate defaults to latest and can target supported branches',
   const workflow = readManualQualityGateWorkflow();
 
   assert.match(workflow, /target_branch:\n\s+description: Target branch\n\s+type: choice\n\s+default: latest\n\s+options:\n\s+- latest\n\s+- main/u);
+  assert.match(workflow, /concurrency:\n\s+group: quality-gate-\$\{\{ inputs\.target_branch \}\}\n\s+cancel-in-progress: true/u);
   assert.match(workflow, /uses: actions\/checkout@v5\n\s+with:\n\s+ref: \$\{\{ inputs\.target_branch \}\}/u);
   assert.match(workflow, /GITHUB_REF_NAME: \$\{\{ inputs\.target_branch \}\}/u);
   assert.match(workflow, /GITHUB_SHA: \$\{\{ env\.QUALITY_GATE_TARGET_SHA \}\}/u);

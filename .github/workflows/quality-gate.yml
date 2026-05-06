@@ -36,6 +36,10 @@ permissions:
   actions: read
   issues: write
 
+concurrency:
+  group: quality-gate-${{ inputs.target_branch }}
+  cancel-in-progress: true
+
 jobs:
   quality-gate:
     runs-on: ubuntu-latest

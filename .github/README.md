@@ -30,6 +30,8 @@ Automatic CI creates a GitHub Issue only for `latest` branch pushes and uploads
 `tmp/test-governance` as the `test-governance-artifacts` artifact. The issue body includes
 the quality gate result summary, warning status, coverage percentages, evidence paths, and
 a failure excerpt when the gate fails. Use the artifact for full logs and raw coverage files.
+Runs use branch-level concurrency, so a newer push cancels an older in-progress quality gate
+for the same branch before stale runs can publish or close quality issues.
 
 ## Manual Quality Gate
 
@@ -46,6 +48,7 @@ environment: leave empty
 Manual runs call the same Quality Gate Action with `publish_issue: "true"`. Each manual run
 creates a new GitHub Issue. It does not reuse a fixed Issue and does not append comments to
 old reports.
+Manual runs share the same target-branch concurrency group as automatic quality gates.
 
 ## Scope Options
 
