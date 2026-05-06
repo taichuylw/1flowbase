@@ -143,121 +143,14 @@ vi.mock('@scalar/api-reference-react', () => ({
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
-import { ModelProviderInstanceDrawer } from '../components/model-providers/ModelProviderInstanceDrawer';
 import {
-  MODEL_CONTEXT_WINDOW_VALIDATION_MESSAGE,
-  MODEL_CONTEXT_WINDOW_PRESET_OPTIONS,
-  formatModelContextWindowValue,
-  parseModelContextWindowInput
-} from '../components/model-providers/model-context-window';
+  buildMainInstanceSettings,
+  buildSettingsModelProviderInstances,
+  buildSettingsModelProviderOptions
+} from './model-provider-test-fixtures';
 import { SettingsModelProvidersSection } from '../pages/settings-page/SettingsModelProvidersSection';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
-
-function buildSettingsModelProviderInstances() {
-  return [
-    {
-      id: 'provider-1',
-      installation_id: modelProviderCatalogEntries[0].installation_id,
-      provider_code: modelProviderCatalogEntries[0].provider_code,
-      protocol: modelProviderCatalogEntries[0].protocol,
-      display_name: 'OpenAI Production',
-      status: 'ready',
-      config_json: {
-        base_url: 'https://api.openai.com/v1',
-        api_key: 'supe****cret'
-      },
-      included_in_main: true,
-      configured_models: [
-        {
-          model_id: 'gpt-4o-mini',
-          enabled: true,
-          context_window_override_tokens: null
-        },
-        {
-          model_id: 'gpt-4o',
-          enabled: true,
-          context_window_override_tokens: null
-        }
-      ],
-      enabled_model_ids: ['gpt-4o-mini', 'gpt-4o'],
-      catalog_refresh_status: 'ready',
-      catalog_last_error_message: null,
-      catalog_refreshed_at: '2026-04-18T10:01:00Z',
-      model_count: 1
-    },
-    {
-      id: 'provider-2',
-      installation_id: modelProviderCatalogEntries[0].installation_id,
-      provider_code: modelProviderCatalogEntries[0].provider_code,
-      protocol: modelProviderCatalogEntries[0].protocol,
-      display_name: 'OpenAI Backup',
-      status: 'ready',
-      config_json: {
-        base_url: 'https://backup.openai.example/v1',
-        api_key: 'back****cret'
-      },
-      included_in_main: false,
-      configured_models: [
-        {
-          model_id: 'gpt-4.1-mini',
-          enabled: true,
-          context_window_override_tokens: null
-        }
-      ],
-      enabled_model_ids: ['gpt-4.1-mini'],
-      catalog_refresh_status: 'ready',
-      catalog_last_error_message: null,
-      catalog_refreshed_at: '2026-04-18T09:58:00Z',
-      model_count: 1
-    }
-  ];
-}
-
-function buildSettingsModelProviderOptions() {
-  return {
-    locale_meta: {
-      requested_locale: 'zh_Hans',
-      resolved_locale: 'zh_Hans',
-      user_preferred_locale: 'zh_Hans',
-      accept_language: 'zh-Hans-CN,zh;q=0.9,en;q=0.8',
-      fallback_locale: 'en_US',
-      supported_locales: ['zh_Hans', 'en_US']
-    },
-    i18n_catalog: {},
-    providers: [
-      {
-        provider_code: modelProviderCatalogEntries[0].provider_code,
-        plugin_type: 'model_provider',
-        namespace: modelProviderCatalogEntries[0].namespace,
-        label_key: modelProviderCatalogEntries[0].label_key,
-        description_key: modelProviderCatalogEntries[0].description_key,
-        protocol: modelProviderCatalogEntries[0].protocol,
-        display_name: modelProviderCatalogEntries[0].display_name,
-        main_instance: {
-          provider_code: modelProviderCatalogEntries[0].provider_code,
-          auto_include_new_instances: true,
-          group_count: 1,
-          model_count: primaryContractProviderModels.length
-        },
-        model_groups: [
-          {
-            source_instance_id: 'provider-1',
-            source_instance_display_name: 'OpenAI Production',
-            models: primaryContractProviderModels
-          }
-        ]
-      }
-    ]
-  };
-}
-
-function buildMainInstanceSettings(autoIncludeNewInstances = true) {
-  return {
-    provider_code: modelProviderCatalogEntries[0].provider_code,
-    auto_include_new_instances: autoIncludeNewInstances
-  };
-}
 
 function authenticateWithPermissions(
   permissions: string[],
@@ -286,6 +179,14 @@ function authenticateWithPermissions(
   });
 }
 
+function authenticateAsModelProviderManager() {
+  authenticateWithPermissions([
+    'route_page.view.all',
+    'state_model.view.all',
+    'state_model.manage.all'
+  ]);
+}
+
 function renderApp(pathname: string) {
   window.history.pushState({}, '', pathname);
 
@@ -308,51 +209,6 @@ async function openProviderInstancesModal() {
 
   return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
 }
-
-describe('model-context-window helpers', () => {
-  test.each([
-    ['200000', 200000],
-    ['200K', 200000],
-    ['1M', 1000000]
-  ])('parses %s into numeric tokens', (input, expectedValue) => {
-    expect(parseModelContextWindowInput(input)).toEqual({
-      value: expectedValue,
-      error: null
-    });
-  });
-
-  test('exposes the supported preset choices', () => {
-    expect(MODEL_CONTEXT_WINDOW_PRESET_OPTIONS.map((option) => option.value)).toEqual([
-      '16K',
-      '32K',
-      '64K',
-      '128K',
-      '256K',
-      '1M'
-    ]);
-  });
-
-  test.each([
-    [16000, '16K'],
-    [32000, '32K'],
-    [64000, '64K'],
-    [128000, '128K'],
-    [256000, '256K'],
-    [1000000, '1M']
-  ])('formats %s into preferred uppercase display %s', (input, expectedValue) => {
-    expect(formatModelContextWindowValue(input)).toBe(expectedValue);
-  });
-
-  test.each(['abc', '1g', '10kk', '   '])(
-    'rejects invalid context window input %s',
-    (input) => {
-      expect(parseModelContextWindowInput(input)).toEqual({
-        value: null,
-        error: '请输入有效的上下文大小，支持纯数字、K 或 M 后缀。'
-      });
-    }
-  );
-});
 
 describe('ModelProvidersPage', () => {
   beforeEach(() => {
@@ -583,11 +439,7 @@ describe('ModelProvidersPage', () => {
   });
 
   test('renders provider family rows and upgrades to the latest version from the catalog version column', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
 
     renderApp('/settings/model-providers');
 
@@ -613,8 +465,12 @@ describe('ModelProvidersPage', () => {
     expect(
       within(catalogRow).getByRole('button', { name: /更\s*新/ })
     ).toBeInTheDocument();
-    expect(within(catalogRow).queryByRole('button', { name: '版本管理' })).not.toBeInTheDocument();
-    fireEvent.click(within(catalogRow).getByRole('button', { name: /更\s*新/ }));
+    expect(
+      within(catalogRow).queryByRole('button', { name: '版本管理' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(catalogRow).getByRole('button', { name: /更\s*新/ })
+    );
 
     await waitFor(() => {
       expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
@@ -625,11 +481,7 @@ describe('ModelProvidersPage', () => {
   }, 20000);
 
   test('switches provider family version and shows a follow-up warning in the instances modal', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([
       {
         provider_code: 'openai_compatible',
@@ -686,9 +538,7 @@ describe('ModelProvidersPage', () => {
       );
     });
 
-    fireEvent.click(
-      within(catalogRow).getByRole('button', { name: '配置' })
-    );
+    fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
     expect(
       await screen.findByText(
         '该供应商刚完成版本切换，建议刷新模型并验证关键实例。'
@@ -697,11 +547,7 @@ describe('ModelProvidersPage', () => {
   }, 20000);
 
   test('deletes a provider family after confirmation', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
 
     renderApp('/settings/model-providers');
 
@@ -773,11 +619,7 @@ describe('ModelProvidersPage', () => {
   }, 10000);
 
   test('shows create and row-level manage actions when state_model.manage.all is present', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
 
     renderApp('/settings/model-providers');
 
@@ -809,11 +651,7 @@ describe('ModelProvidersPage', () => {
     'wires preview and create submission from the model provider drawer into the settings api',
     { timeout: 20000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
       modelProvidersApi.createSettingsModelProviderInstance.mockResolvedValue({
         id: 'provider-3',
         installation_id: modelProviderCatalogEntries[0].installation_id,
@@ -849,9 +687,7 @@ describe('ModelProvidersPage', () => {
       fireEvent.click(await screen.findByRole('button', { name: '添加' }));
 
       expect(await screen.findByText('API 密钥授权配置')).toBeInTheDocument();
-      expect(
-        screen.getByRole('switch', { name: '加入主实例' })
-      ).toBeChecked();
+      expect(screen.getByRole('switch', { name: '加入主实例' })).toBeChecked();
 
       fireEvent.change(screen.getByLabelText('API Endpoint'), {
         target: { value: 'https://api.openai.com/v1' }
@@ -880,7 +716,9 @@ describe('ModelProvidersPage', () => {
         );
       });
 
-      const cachedModelSelect = screen.getByRole('combobox', { name: '缓存模型' });
+      const cachedModelSelect = screen.getByRole('combobox', {
+        name: '缓存模型'
+      });
       fireEvent.mouseDown(cachedModelSelect);
       fireEvent.click(await screen.findByText('gpt-4o-mini'));
       expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
@@ -921,11 +759,7 @@ describe('ModelProvidersPage', () => {
   );
 
   test('switches provider version from the catalog version column', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
 
     renderApp('/settings/model-providers');
 
@@ -946,18 +780,16 @@ describe('ModelProvidersPage', () => {
   }, 20000);
 
   test('renders provider catalog headers in the expected order', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
 
     renderApp('/settings/model-providers');
 
     const headers = await screen.findAllByRole('columnheader');
     const catalogHeaders = headers
       .map((header) => header.textContent?.trim() ?? '')
-      .filter((text) => ['操作', '名称', '状态', '版本', '说明'].includes(text));
+      .filter((text) =>
+        ['操作', '名称', '状态', '版本', '说明'].includes(text)
+      );
 
     expect(catalogHeaders.slice(0, 5)).toEqual([
       '操作',
@@ -972,11 +804,7 @@ describe('ModelProvidersPage', () => {
     'opens provider instances modal from installed provider row as a management list',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
@@ -984,9 +812,7 @@ describe('ModelProvidersPage', () => {
       expect(
         within(modal).getAllByText('OpenAI Production').length
       ).toBeGreaterThanOrEqual(1);
-      expect(
-        within(modal).getByText('聚合视图')
-      ).toBeInTheDocument();
+      expect(within(modal).getByText('聚合视图')).toBeInTheDocument();
       expect(
         within(modal).getByRole('switch', { name: '新实例自动加入主实例' })
       ).toBeInTheDocument();
@@ -994,7 +820,9 @@ describe('ModelProvidersPage', () => {
         within(modal).queryByRole('combobox', { name: '主实例' })
       ).not.toBeInTheDocument();
       expect(
-        within(modal).getByRole('switch', { name: '加入主实例 OpenAI Production' })
+        within(modal).getByRole('switch', {
+          name: '加入主实例 OpenAI Production'
+        })
       ).toBeInTheDocument();
       expect(
         within(modal).getByRole('switch', { name: '加入主实例 OpenAI Backup' })
@@ -1010,11 +838,7 @@ describe('ModelProvidersPage', () => {
     'updates provider defaults and child-instance inclusion from the provider instances modal',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       let instancesState = buildSettingsModelProviderInstances();
       let mainInstanceState = buildMainInstanceSettings();
@@ -1105,11 +929,7 @@ describe('ModelProvidersPage', () => {
     'runs candidate refresh and delete from the provider instances modal',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
       modelProvidersApi.refreshSettingsModelProviderModels.mockResolvedValue({
         provider_instance_id: 'provider-1',
         refresh_status: 'ready',
@@ -1127,7 +947,9 @@ describe('ModelProvidersPage', () => {
       await openProviderInstancesModal();
 
       fireEvent.click(
-        await screen.findByRole('button', { name: '刷新候选模型 OpenAI Production' })
+        await screen.findByRole('button', {
+          name: '刷新候选模型 OpenAI Production'
+        })
       );
       await waitFor(() => {
         expect(
@@ -1156,347 +978,10 @@ describe('ModelProvidersPage', () => {
   );
 
   test(
-    'loads candidate models from the draft drawer and submits grouped configured model rows',
-    { timeout: 30000 },
-    async () => {
-      const previewModels = vi.fn().mockResolvedValue({
-        models: [
-          {
-            model_id: 'gpt-4o-mini',
-            display_name: 'gpt-4o-mini',
-            source: 'dynamic',
-            supports_streaming: true,
-            supports_tool_call: true,
-            supports_multimodal: false,
-            context_window: null,
-            max_output_tokens: null,
-            parameter_form: null,
-            provider_metadata: {}
-          }
-        ],
-        preview_token: 'preview-1',
-        expires_at: '2026-04-22T12:00:00Z'
-      });
-      const submit = vi.fn().mockResolvedValue(undefined);
-
-      render(
-        <ModelProviderInstanceDrawer
-          open
-          mode="create"
-          catalogEntry={modelProviderCatalogEntries[0]}
-          instance={null}
-          cachedModelCatalog={null}
-          defaultIncludedInMain={true}
-          submitting={false}
-          onClose={() => undefined}
-          onSubmit={submit}
-          onPreviewModels={previewModels}
-          onRevealSecret={async () => 'super-secret'}
-        />
-      );
-
-      await screen.findByRole('dialog');
-      expect(screen.getByText('API 密钥授权配置')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '添加模型' })).toBeInTheDocument();
-      expect(screen.queryByText('校验模型')).not.toBeInTheDocument();
-      expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('organization')).not.toBeInTheDocument();
-      expect(screen.getByText('高级配置（可选）')).toBeInTheDocument();
-      expect(
-        screen.getByRole('combobox', { name: '缓存模型' })
-      ).not.toHaveAttribute('aria-disabled', 'true');
-      expect(screen.getByRole('button', { name: /检\s*测/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /保\s*存/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /取\s*消/ })).toBeInTheDocument();
-
-      fireEvent.change(screen.getByLabelText('API Endpoint'), {
-        target: { value: 'https://api.openai.com/v1' }
-      });
-      fireEvent.change(screen.getByLabelText('API Key'), {
-        target: { value: 'super-secret' }
-      });
-      fireEvent.change(screen.getByLabelText('凭据名称'), {
-        target: { value: 'OpenAI Production' }
-      });
-
-      const expectedConfig = {
-        base_url: 'https://api.openai.com/v1',
-        api_key: 'super-secret'
-      };
-
-      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
-
-      await waitFor(() => {
-        expect(previewModels).toHaveBeenCalledWith(expectedConfig);
-      });
-
-      const cachedModelSelect = screen.getByRole('combobox', { name: '缓存模型' });
-      fireEvent.mouseDown(cachedModelSelect);
-      fireEvent.click(await screen.findByText('gpt-4o-mini'));
-      expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
-      fireEvent.change(screen.getByLabelText('模型 ID 1'), {
-        target: { value: 'gpt-4o-mini' }
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
-
-      fireEvent.change(screen.getByLabelText('模型 ID 2'), {
-        target: { value: 'manual-model-id' }
-      });
-      fireEvent.click(screen.getByRole('switch', { name: '启用模型 2' }));
-
-      previewModels.mockResolvedValueOnce({
-        models: [
-          {
-            model_id: 'gpt-4.1-mini',
-            display_name: 'gpt-4.1-mini',
-            source: 'dynamic',
-            supports_streaming: true,
-            supports_tool_call: true,
-            supports_multimodal: false,
-            context_window: null,
-            max_output_tokens: null,
-            parameter_form: null,
-            provider_metadata: {}
-          }
-        ],
-        preview_token: 'preview-2',
-        expires_at: '2026-04-22T13:00:00Z'
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: /检\s*测/ }));
-
-      await waitFor(() => {
-        expect(previewModels).toHaveBeenCalledTimes(2);
-      });
-      expect(screen.getByLabelText('模型 ID 1')).toHaveValue('gpt-4o-mini');
-      expect(screen.getByLabelText('模型 ID 2')).toHaveValue('manual-model-id');
-
-      fireEvent.mouseDown(screen.getByRole('combobox', { name: '缓存模型' }));
-      expect(await screen.findByText('gpt-4.1-mini')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
-
-      await waitFor(() => {
-        expect(submit).toHaveBeenCalledWith({
-          display_name: 'OpenAI Production',
-          config: expectedConfig,
-          configured_models: [
-            {
-              model_id: 'gpt-4o-mini',
-              enabled: true,
-              context_window_override_tokens: null
-            },
-            {
-              model_id: 'manual-model-id',
-              enabled: false,
-              context_window_override_tokens: null
-            }
-          ],
-          included_in_main: true,
-          preview_token: 'preview-2'
-        });
-      });
-      expect(previewModels).toHaveBeenNthCalledWith(2, expectedConfig);
-    }
-  );
-
-  test(
-    'hydrates included_in_main from the instance in edit mode and submits it back unchanged',
-    { timeout: 15000 },
-    async () => {
-      const submit = vi.fn().mockResolvedValue(undefined);
-      const instance = {
-        ...buildSettingsModelProviderInstances()[1],
-        included_in_main: false
-      };
-
-      render(
-        <ModelProviderInstanceDrawer
-          open
-          mode="edit"
-          catalogEntry={modelProviderCatalogEntries[0]}
-          instance={instance}
-          cachedModelCatalog={null}
-          defaultIncludedInMain={true}
-          submitting={false}
-          onClose={() => undefined}
-          onSubmit={submit}
-          onPreviewModels={async () => ({
-            models: [],
-            preview_token: 'preview-1',
-            expires_at: '2026-04-22T12:00:00Z'
-          })}
-          onRevealSecret={async () => 'backup-secret'}
-        />
-      );
-
-      expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
-      expect(
-        screen.getByRole('switch', { name: '加入主实例' })
-      ).not.toBeChecked();
-
-      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
-
-      await waitFor(() => {
-        expect(submit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            display_name: 'OpenAI Backup',
-            included_in_main: false
-          })
-        );
-      });
-    }
-  );
-
-  test(
-    'parses create-mode context overrides into numeric payloads and blocks invalid values',
-    { timeout: 15000 },
-    async () => {
-      const submit = vi.fn().mockResolvedValue(undefined);
-
-      render(
-        <ModelProviderInstanceDrawer
-          open
-          mode="create"
-          catalogEntry={modelProviderCatalogEntries[0]}
-          instance={null}
-          cachedModelCatalog={null}
-          defaultIncludedInMain={true}
-          submitting={false}
-          onClose={() => undefined}
-          onSubmit={submit}
-          onPreviewModels={async () => ({
-            models: [],
-            preview_token: 'preview-1',
-            expires_at: '2026-04-22T12:00:00Z'
-          })}
-          onRevealSecret={async () => 'super-secret'}
-        />
-      );
-
-      fireEvent.change(await screen.findByLabelText('API Endpoint'), {
-        target: { value: 'https://api.openai.com/v1' }
-      });
-      fireEvent.change(screen.getByLabelText('API Key'), {
-        target: { value: 'super-secret' }
-      });
-      fireEvent.change(screen.getByLabelText('凭据名称'), {
-        target: { value: 'OpenAI Draft' }
-      });
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
-      fireEvent.change(screen.getByLabelText('模型 ID 1'), {
-        target: { value: 'gpt-4o-mini' }
-      });
-      fireEvent.change(screen.getByLabelText('上下文 1'), {
-        target: { value: 'abc' }
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
-
-      await waitFor(() => {
-        expect(submit).not.toHaveBeenCalled();
-        expect(
-          screen.getByText(MODEL_CONTEXT_WINDOW_VALIDATION_MESSAGE)
-        ).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('上下文 1'), {
-        target: { value: '200K' }
-      });
-      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
-
-      await waitFor(() => {
-        expect(submit).toHaveBeenCalledWith({
-          display_name: 'OpenAI Draft',
-          config: {
-            base_url: 'https://api.openai.com/v1',
-            api_key: 'super-secret'
-          },
-          configured_models: [
-            {
-              model_id: 'gpt-4o-mini',
-              enabled: true,
-              context_window_override_tokens: 200000
-            }
-          ],
-          included_in_main: true,
-          preview_token: undefined
-        });
-      });
-    }
-  );
-
-  test(
-    'rehydrates formatted edit-mode context overrides and submits null after clearing',
-    { timeout: 15000 },
-    async () => {
-      const submit = vi.fn().mockResolvedValue(undefined);
-      const instance = {
-        ...buildSettingsModelProviderInstances()[0],
-        configured_models: [
-          {
-            model_id: 'gpt-4o-mini',
-            enabled: true,
-            context_window_override_tokens: 16000
-          }
-        ]
-      };
-
-      render(
-        <ModelProviderInstanceDrawer
-          open
-          mode="edit"
-          catalogEntry={modelProviderCatalogEntries[0]}
-          instance={instance}
-          cachedModelCatalog={null}
-          defaultIncludedInMain={true}
-          submitting={false}
-          onClose={() => undefined}
-          onSubmit={submit}
-          onPreviewModels={async () => ({
-            models: [],
-            preview_token: 'preview-1',
-            expires_at: '2026-04-22T12:00:00Z'
-          })}
-          onRevealSecret={async () => 'super-secret'}
-        />
-      );
-
-      expect(await screen.findByLabelText('上下文 1')).toHaveValue('16K');
-
-      fireEvent.change(screen.getByLabelText('上下文 1'), {
-        target: { value: '' }
-      });
-      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
-
-      await waitFor(() => {
-        expect(submit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            configured_models: [
-              {
-                model_id: 'gpt-4o-mini',
-                enabled: true,
-                context_window_override_tokens: null
-              }
-            ]
-          })
-        );
-      });
-    }
-  );
-
-  test(
     'keeps the provider instances modal open while opening the edit drawer',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
@@ -1519,11 +1004,7 @@ describe('ModelProvidersPage', () => {
     'folds advanced provider fields into a collapsed section in the edit drawer',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
@@ -1549,11 +1030,7 @@ describe('ModelProvidersPage', () => {
     'hydrates cached model select from existing model catalog in edit mode',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
@@ -1588,11 +1065,7 @@ describe('ModelProvidersPage', () => {
     'masks api key by default and reveals it only after explicit action',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
@@ -1626,23 +1099,20 @@ describe('ModelProvidersPage', () => {
     'renders grouped model previews and instance inclusion toggles in the main-instance modal',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
       const modal = await openProviderInstancesModal();
+      expect(await within(modal).findByText('聚合视图')).toBeInTheDocument();
       expect(
-        await within(modal).findByText('聚合视图')
-      ).toBeInTheDocument();
-      expect(
-        within(modal).getAllByText(primaryContractProviderModels[0].model_id).length
+        within(modal).getAllByText(primaryContractProviderModels[0].model_id)
+          .length
       ).toBeGreaterThanOrEqual(1);
       expect(
-        within(modal).getByRole('switch', { name: '加入主实例 OpenAI Production' })
+        within(modal).getByRole('switch', {
+          name: '加入主实例 OpenAI Production'
+        })
       ).toBeInTheDocument();
       expect(
         within(modal).getByRole('switch', { name: '加入主实例 OpenAI Backup' })
@@ -1654,11 +1124,7 @@ describe('ModelProvidersPage', () => {
     'renders provider instances as a collapsible management list beneath the main-instance summary',
     { timeout: 15000 },
     async () => {
-      authenticateWithPermissions([
-        'route_page.view.all',
-        'state_model.view.all',
-        'state_model.manage.all'
-      ]);
+      authenticateAsModelProviderManager();
 
       renderApp('/settings/model-providers');
 
@@ -1673,9 +1139,7 @@ describe('ModelProvidersPage', () => {
       expect(
         within(modal).getAllByText('OpenAI Production').length
       ).toBeGreaterThanOrEqual(1);
-      expect(
-        within(modal).getByText('OpenAI Backup')
-      ).toBeInTheDocument();
+      expect(within(modal).getByText('OpenAI Backup')).toBeInTheDocument();
       expect(
         within(modal).getByRole('button', {
           name: '编辑 API Key OpenAI Production'
@@ -1687,12 +1151,11 @@ describe('ModelProvidersPage', () => {
         })
       ).not.toBeInTheDocument();
       expect(
-        within(modal).getAllByText(primaryContractProviderModels[0].model_id).length
+        within(modal).getAllByText(primaryContractProviderModels[0].model_id)
+          .length
       ).toBeGreaterThanOrEqual(1);
 
-      fireEvent.click(
-        within(modal).getByText('OpenAI Backup')
-      );
+      fireEvent.click(within(modal).getByText('OpenAI Backup'));
 
       expect(
         await within(modal).findByRole('button', {
@@ -1702,18 +1165,12 @@ describe('ModelProvidersPage', () => {
       expect(
         within(modal).getAllByText(/gpt-4o-mini/).length
       ).toBeGreaterThanOrEqual(1);
-      expect(
-        within(modal).getByText('gpt-4.1-mini')
-      ).toBeInTheDocument();
+      expect(within(modal).getByText('gpt-4.1-mini')).toBeInTheDocument();
     }
   );
 
   test('renders official install cards beneath the installed provider area', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       source_kind: 'official_registry',
@@ -1775,11 +1232,7 @@ describe('ModelProvidersPage', () => {
   });
 
   test('deduplicates official install cards for the same provider and keeps only one latest entry', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       source_kind: 'official_registry',
@@ -1822,11 +1275,7 @@ describe('ModelProvidersPage', () => {
   });
 
   test('polls install task until the official plugin finishes installing', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       source_kind: 'official_registry',
@@ -1955,11 +1404,7 @@ describe('ModelProvidersPage', () => {
   }, 15000);
 
   test('renders upload entry and removes the version management entry point', async () => {
-    authenticateWithPermissions([
-      'route_page.view.all',
-      'state_model.view.all',
-      'state_model.manage.all'
-    ]);
+    authenticateAsModelProviderManager();
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([
       {
         provider_code: 'openai_compatible',
