@@ -12,12 +12,10 @@ import type {
   SettingsRuntimeRecordPreview,
   UpdateSettingsDataModelApiExposureInput,
   UpdateSettingsDataModelFieldInput,
-  UpdateSettingsDataModelInput
 } from '../../api/data-models';
 import { DataModelAdvisorTab } from './DataModelAdvisorTab';
 import { DataModelApiTab } from './DataModelApiTab';
 import { DataModelFieldDrawer } from './DataModelFieldDrawer';
-import { DataModelFormDrawer } from './DataModelFormDrawer';
 import { DataModelPermissionsTab } from './DataModelPermissionsTab';
 import { DataModelRecordPreview } from './DataModelRecordPreview';
 
@@ -39,11 +37,11 @@ export function DataModelDetail({
   modelSaving,
   fieldSaving,
   onUpdateModelStatus,
-  onUpdateModel,
   onCreateField,
   onUpdateField,
   onDeleteField,
   onUpdateApiExposure,
+  onOpenModelEditor,
   onSaveGrant
 }: {
   model: SettingsDataModel;
@@ -59,7 +57,6 @@ export function DataModelDetail({
   modelSaving: boolean;
   fieldSaving: boolean;
   onUpdateModelStatus: (status: SettingsDataModel['status']) => void;
-  onUpdateModel: (input: UpdateSettingsDataModelInput) => void;
   onCreateField: (input: CreateSettingsDataModelFieldInput) => void;
   onUpdateField: (
     field: SettingsDataModelField,
@@ -67,9 +64,9 @@ export function DataModelDetail({
   ) => void;
   onDeleteField: (field: SettingsDataModelField) => void;
   onUpdateApiExposure: (input: UpdateSettingsDataModelApiExposureInput) => void;
+  onOpenModelEditor: () => void;
   onSaveGrant: Parameters<typeof DataModelPermissionsTab>[0]['onSave'];
 }) {
-  const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
   const [fieldDrawerState, setFieldDrawerState] = useState<
     | { open: false; mode: 'create'; field: null }
     | { open: true; mode: 'create'; field: null }
@@ -168,7 +165,7 @@ export function DataModelDetail({
           </div>
           <Button
             disabled={!canManage}
-            onClick={() => setModelDrawerOpen(true)}
+            onClick={onOpenModelEditor}
           >
             编辑 Data Model
           </Button>
@@ -313,19 +310,6 @@ export function DataModelDetail({
             )
           }
         ]}
-      />
-      <DataModelFormDrawer
-        open={modelDrawerOpen}
-        mode="edit"
-        model={model}
-        source={null}
-        saving={modelSaving}
-        onClose={() => setModelDrawerOpen(false)}
-        onCreate={() => undefined}
-        onUpdate={(_model, input) => {
-          onUpdateModel(input);
-          setModelDrawerOpen(false);
-        }}
       />
     </section>
   );

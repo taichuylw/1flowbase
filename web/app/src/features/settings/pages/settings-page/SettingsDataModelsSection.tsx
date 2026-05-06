@@ -49,6 +49,7 @@ import {
   type UpdateSettingsDataSourceDefaultsInput
 } from '../../api/data-models';
 import { DataModelDetail } from '../../components/data-models/DataModelDetail';
+import { DataModelFormDrawer } from '../../components/data-models/DataModelFormDrawer';
 import { DataModelTable } from '../../components/data-models/DataModelTable';
 import { DataSourcePanel } from '../../components/data-models/DataSourcePanel';
 import '../../components/data-models/data-model-panel.css';
@@ -127,6 +128,7 @@ export function SettingsDataModelsSection({
   );
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [modelFormOpen, setModelFormOpen] = useState(false);
 
   const sourcesQuery = useQuery({
     queryKey: settingsDataSourcesQueryKey,
@@ -163,6 +165,7 @@ export function SettingsDataModelsSection({
     ) {
       setSelectedModelId(null);
       setEditingModelId(null);
+      setModelFormOpen(false);
     }
   }, [effectiveSourceId]);
 
@@ -195,6 +198,7 @@ export function SettingsDataModelsSection({
     setSelectedSourceId(null);
     setSelectedModelId(null);
     setEditingModelId(null);
+    setModelFormOpen(false);
     writeSourceIdToLocation(null);
   };
 
@@ -567,6 +571,7 @@ export function SettingsDataModelsSection({
               onEditModel={(model) => {
                 setSelectedModelId(model.id);
                 setEditingModelId(model.id);
+                setModelFormOpen(false);
               }}
               onCreateModel={(input) => createModelMutation.mutate(input)}
               onUpdateModel={(model, input) =>
@@ -581,7 +586,10 @@ export function SettingsDataModelsSection({
               open={Boolean(editingModel)}
               width={980}
               destroyOnHidden
-              onClose={() => setEditingModelId(null)}
+              onClose={() => {
+                setEditingModelId(null);
+                setModelFormOpen(false);
+              }}
             >
               {editingModel ? (
                 <DataModelDetail
@@ -610,9 +618,6 @@ export function SettingsDataModelsSection({
                       input: { status }
                     })
                   }
-                  onUpdateModel={(input) =>
-                    updateModelMutation.mutate({ model: editingModel, input })
-                  }
                   onCreateField={(input) =>
                     createFieldMutation.mutate({ model: editingModel, input })
                   }
@@ -632,12 +637,29 @@ export function SettingsDataModelsSection({
                       input
                     })
                   }
+                  onOpenModelEditor={() => setModelFormOpen(true)}
                   onSaveGrant={(grant, input) =>
                     saveGrantMutation.mutate({ grant, input })
                   }
                 />
               ) : null}
             </Drawer>
+            <DataModelFormDrawer
+              open={Boolean(editingModel && modelFormOpen)}
+              mode="edit"
+              model={editingModel}
+              source={null}
+              saving={updateModelMutation.isPending}
+              onClose={() => setModelFormOpen(false)}
+              onCreate={() => undefined}
+              onUpdate={(_model, input) => {
+                if (!editingModel) {
+                  return;
+                }
+                updateModelMutation.mutate({ model: editingModel, input });
+                setModelFormOpen(false);
+              }}
+            />
           </Flex>
         ) : (
           <DataSourcePanel
