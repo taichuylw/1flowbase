@@ -1,7 +1,7 @@
 ---
 memory_type: tool
 topic: cargo fmt 传入文件路径时按当前工作目录解析
-summary: 在仓库根执行 `cargo fmt --manifest-path api/Cargo.toml --all -- apps/...` 会报文件不存在，因为 rustfmt 的文件参数按当前工作目录解析；切到 `api/` 目录重跑或显式带上 `api/` 前缀即可。
+summary: 在仓库根执行 `cargo fmt --manifest-path api/Cargo.toml --all -- apps/...` 会报文件不存在，因为 rustfmt 的文件参数按当前工作目录解析；在当前 workspace 上执行 `cargo fmt --manifest-path api/Cargo.toml --check` 可能报 `Failed to find targets`，切到 `api/` 目录执行 `cargo fmt --all --check` 可正常验证。
 keywords:
   - cargo
   - fmt
@@ -11,11 +11,12 @@ keywords:
   - file-not-found
 match_when:
   - 使用 `cargo fmt --manifest-path ... -- <files>`
+  - 使用 `cargo fmt --manifest-path api/Cargo.toml --check`
   - 文件路径按 crate/workspace 根写但命令在仓库根执行
   - 输出 `file ... does not exist`
 created_at: 2026-04-13 16
-updated_at: 2026-04-13 16
-last_verified_at: 2026-04-13 16
+updated_at: 2026-05-07 03
+last_verified_at: 2026-05-07 03
 decision_policy: reference_on_failure
 scope:
   - cargo
@@ -71,3 +72,4 @@ cargo fmt --all -- apps/api-server/src/_tests/openapi_alignment.rs ...
 ## 复现记录
 
 - `2026-04-13 16`：为修复 `node scripts/node/verify-backend.js` 暴露的 rustfmt diff，先在仓库根用 `--manifest-path api/Cargo.toml` 跑定向 `cargo fmt`，结果全部报路径不存在；切到 `api/` 目录后重跑同样的相对路径命令成功。
+- `2026-05-07 03`：在仓库根执行 `cargo fmt --manifest-path api/Cargo.toml --check` 报 `Failed to find targets`；切到 `api/` 后执行 `cargo fmt --all --check` 通过。
