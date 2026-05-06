@@ -9,6 +9,27 @@ export const dataModelStatusHelp =
 export const defaultApiExposureStatusHelp =
   'draft: API 暴露草稿；published_not_exposed: 默认不生成 API 访问面；api_exposed_no_permission: 已请求生成 API 访问面，但默认不授予访问权限。';
 
+export const dataModelCodeHelp =
+  'Code: Data Model 的稳定标识，用于 API、权限和内部引用；创建后不可编辑。';
+
+export const dataModelTitleHelp =
+  '标题: 管理台展示名称，可按业务语义调整，不影响稳定 Code。';
+
+export function DataModelFieldLabel({
+  label,
+  title
+}: {
+  label: string;
+  title: string;
+}) {
+  return (
+    <span className="data-model-panel__field-label">
+      <span>{label}</span>
+      <DataModelHelpTooltip label={label} title={title} />
+    </span>
+  );
+}
+
 export function DataModelHelpTooltip({
   label,
   title

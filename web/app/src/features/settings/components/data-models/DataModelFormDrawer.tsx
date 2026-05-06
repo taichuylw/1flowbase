@@ -9,8 +9,10 @@ import type {
   UpdateSettingsDataModelInput
 } from '../../api/data-models';
 import {
-  DataModelHelpTooltip,
-  dataModelStatusHelp
+  DataModelFieldLabel,
+  dataModelCodeHelp,
+  dataModelStatusHelp,
+  dataModelTitleHelp
 } from './DataModelHelpTooltip';
 
 const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
@@ -131,27 +133,30 @@ export function DataModelFormDrawer({
       >
         <Form.Item
           name="code"
-          label="Code"
+          label={
+            <DataModelFieldLabel label="Code" title={dataModelCodeHelp} />
+          }
           rules={[{ required: true, message: '请输入 Data Model Code' }]}
         >
-          <Input disabled={mode === 'edit'} />
+          <Input aria-label="Code" disabled={mode === 'edit'} />
         </Form.Item>
         <Form.Item
           name="title"
-          label="标题"
+          label={
+            <DataModelFieldLabel label="标题" title={dataModelTitleHelp} />
+          }
           rules={[{ required: true, message: '请输入标题' }]}
         >
-          <Input />
+          <Input aria-label="标题" />
         </Form.Item>
         <Form.Item
           name="status"
-          label="状态"
+          label={
+            <DataModelFieldLabel label="状态" title={dataModelStatusHelp} />
+          }
           rules={[{ required: true, message: '请选择状态' }]}
         >
-          <div className="data-model-panel__control-with-help">
-            <Select options={dataModelStatusOptions} />
-            <DataModelHelpTooltip label="状态" title={dataModelStatusHelp} />
-          </div>
+          <Select aria-label="状态" options={dataModelStatusOptions} />
         </Form.Item>
         <Form.Item name="data_source_instance_id" label="数据源">
           <Input disabled />

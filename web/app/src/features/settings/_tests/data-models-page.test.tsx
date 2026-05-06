@@ -766,6 +766,14 @@ describe('Settings data models page', () => {
       name: '新建 Data Model'
     });
     expect(createDialog).toBeInTheDocument();
+    expect(within(createDialog).getByLabelText('Code说明')).toBeInTheDocument();
+    expect(
+      within(createDialog).getByText(/Code: Data Model 的稳定标识/)
+    ).toBeInTheDocument();
+    expect(within(createDialog).getByLabelText('标题说明')).toBeInTheDocument();
+    expect(
+      within(createDialog).getByText(/标题: 管理台展示名称/)
+    ).toBeInTheDocument();
     expect(within(createDialog).getByLabelText('状态说明')).toBeInTheDocument();
     expect(
       within(createDialog).getByText(/disabled: 已停用，不进入运行面/)

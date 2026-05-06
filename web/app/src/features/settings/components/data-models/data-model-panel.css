@@ -72,6 +72,12 @@
   min-width: 0;
 }
 
+.data-model-panel__field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .data-model-panel__help-icon {
   flex: 0 0 auto;
   color: var(--ant-color-text-tertiary);
