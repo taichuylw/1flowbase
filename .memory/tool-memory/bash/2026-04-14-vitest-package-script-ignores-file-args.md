@@ -14,8 +14,8 @@ match_when:
   - 使用 `pnpm --dir web/app test -- <file>` 后发现仍然执行全套测试
   - 需要精确定向验证前端改动
 created_at: 2026-04-14 15
-updated_at: 2026-05-05 17
-last_verified_at: 2026-05-05 17
+updated_at: 2026-05-06 14
+last_verified_at: 2026-05-06 14
 decision_policy: reference_on_failure
 scope:
   - bash
@@ -60,3 +60,4 @@ scripts/node/exec-with-real-node.sh scripts/node/run-frontend-vitest.js run src/
 - `2026-04-14 15`：实现共享壳计划时，`pnpm --dir web/app test -- <file...>` 意外跑了整套测试；改用 `pnpm --dir web/app exec vitest run <file...>` 后定向验证恢复正常。
 - `2026-04-16 07`：调整 `agent-flow` 节点检查器时，执行 `pnpm --dir web/app test -- node-inspector.test.tsx` 仍然触发整套 `web/app` 测试；继续改用 `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/node-inspector.test.tsx ...` 后，成功只跑目标文件。
 - `2026-05-05 17`：排查变量 picker 时，`pnpm --dir web/app test -- src/features/agent-flow/_tests/templated-text-field.test.tsx` 再次拉起无关测试；改用 `scripts/node/exec-with-real-node.sh scripts/node/run-frontend-vitest.js run src/features/agent-flow/_tests/templated-text-field.test.tsx` 后，只执行目标文件，并继续遵守仓库测试资源 wrapper。
+- `2026-05-06 14`：合并 `latest` action 优化时，`pnpm --dir web/app test -- src/features/agent-flow/_tests/api/data-model-options.test.ts ...` 仍拉起 72 个文件的 fast suite；改用 `node scripts/node/run-frontend-vitest.js run src/features/agent-flow/_tests/api/data-model-options.test.ts ...` 后，只执行 8 个目标文件，53 个测试通过。
