@@ -29,6 +29,7 @@ const baseModel = {
   data_source_instance_id: null,
   source_kind: 'main_source',
   external_resource_key: null,
+  external_table_id: null,
   physical_table_name: 'data_customer',
   acl_namespace: 'data_model.customer',
   audit_namespace: 'data_model.customer',
@@ -74,6 +75,8 @@ describe('agent flow data model options api', () => {
             physical_column_name: 'name',
             external_field_key: null,
             field_kind: 'text',
+            is_system: false,
+            is_writable: true,
             is_required: true,
             is_unique: false,
             default_value: null,
@@ -90,6 +93,8 @@ describe('agent flow data model options api', () => {
             physical_column_name: 'email',
             external_field_key: null,
             field_kind: 'email',
+            is_system: false,
+            is_writable: true,
             is_required: false,
             is_unique: true,
             default_value: null,
@@ -135,13 +140,15 @@ describe('agent flow data model options api', () => {
             code: 'email',
             title: 'email',
             valueType: 'email',
-            required: false
+            required: false,
+            writable: true
           },
           {
             code: 'name',
             title: 'Name',
             valueType: 'text',
-            required: true
+            required: true,
+            writable: true
           }
         ]
       },

@@ -8,6 +8,11 @@ import {
 import { Grid } from 'antd';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type {
+  SettingsDataModel,
+  SettingsDataModelField
+} from '../api/data-models';
+
 const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
   fetchSettingsMembers: vi.fn(),
@@ -250,8 +255,8 @@ function settingsDataModelField(
   code: string,
   title: string,
   fieldKind = 'string',
-  overrides: Record<string, unknown> = {}
-) {
+  overrides: Partial<SettingsDataModelField> = {}
+): SettingsDataModelField {
   return {
     id,
     code,
@@ -259,6 +264,8 @@ function settingsDataModelField(
     physical_column_name: code,
     external_field_key: null,
     field_kind: fieldKind,
+    is_system: false,
+    is_writable: true,
     is_required: false,
     is_unique: false,
     default_value: null,
@@ -276,8 +283,8 @@ function settingsDataModel(
   code: string,
   title: string,
   fields: ReturnType<typeof settingsDataModelField>[],
-  overrides: Record<string, unknown> = {}
-) {
+  overrides: Partial<SettingsDataModel> = {}
+): SettingsDataModel {
   return {
     id,
     scope_kind: 'system',
