@@ -1,0 +1,305 @@
+use std::sync::Arc;
+
+use anyhow::Result;
+use async_trait::async_trait;
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+use crate::ports::{
+    CreateMemberInput, CreateWorkspaceRoleInput, MemberRepository, RoleRepository,
+    UpdateWorkspaceRoleInput,
+};
+use domain::{
+    ActorContext, AuditLogRecord, BoundRole, RoleScopeKind, RoleTemplate, UserRecord, UserStatus,
+};
+
+#[derive(Debug, Clone)]
+pub struct CreatedMember {
+    pub role_codes: Vec<String>,
+}
+
+#[derive(Clone)]
+pub struct MemoryMemberRepository {
+    root_user_id: Uuid,
+    default_role_code: Arc<RwLock<String>>,
+    created_members: Arc<RwLock<Vec<CreatedMember>>>,
+    audit_events: Arc<RwLock<Vec<String>>>,
+}
+
+impl Default for MemoryMemberRepository {
+    fn default() -> Self {
+        Self::with_default_role("manager")
+    }
+}
+
+impl MemoryMemberRepository {
+    pub fn with_default_role(role_code: &str) -> Self {
+        Self {
+            root_user_id: Uuid::now_v7(),
+            default_role_code: Arc::new(RwLock::new(role_code.to_string())),
+            created_members: Arc::new(RwLock::new(Vec::new())),
+            audit_events: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    pub fn root_user_id(&self) -> Uuid {
+        self.root_user_id
+    }
+
+    pub fn created_members(&self) -> Vec<CreatedMember> {
+        self.created_members
+            .try_read()
+            .expect("created_members lock should be free in assertions")
+            .clone()
+    }
+
+    pub fn audit_events(&self) -> Vec<String> {
+        self.audit_events
+            .try_read()
+            .expect("audit_events lock should be free in assertions")
+            .clone()
+    }
+}
+
+#[async_trait]
+impl MemberRepository for MemoryMemberRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        Ok(ActorContext::root(actor_user_id, Uuid::nil(), "root"))
+    }
+
+    async fn create_member_with_default_role(
+        &self,
+        _input: &CreateMemberInput,
+    ) -> Result<UserRecord> {
+        let default_role_code = self.default_role_code.read().await.clone();
+        self.created_members.write().await.push(CreatedMember {
+            role_codes: vec![default_role_code.clone()],
+        });
+        Ok(UserRecord {
+            id: Uuid::now_v7(),
+            account: format!("{default_role_code}-1"),
+            email: format!("{default_role_code}-1@example.com"),
+            phone: Some("13800000000".to_string()),
+            password_hash: "hash".to_string(),
+            name: format!("{} 1", default_role_code.to_uppercase()),
+            nickname: format!("{} 1", default_role_code.to_uppercase()),
+            avatar_url: None,
+            introduction: String::new(),
+            preferred_locale: None,
+            default_display_role: Some(default_role_code.clone()),
+            email_login_enabled: true,
+            phone_login_enabled: false,
+            status: UserStatus::Active,
+            session_version: 1,
+            roles: vec![BoundRole {
+                code: default_role_code,
+                scope_kind: RoleScopeKind::Workspace,
+                workspace_id: Some(Uuid::nil()),
+            }],
+        })
+    }
+
+    async fn disable_member(&self, _actor_user_id: Uuid, _target_user_id: Uuid) -> Result<()> {
+        Ok(())
+    }
+
+    async fn reset_member_password(
+        &self,
+        _actor_user_id: Uuid,
+        _target_user_id: Uuid,
+        _password_hash: &str,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn replace_member_roles(
+        &self,
+        _actor_user_id: Uuid,
+        _workspace_id: Uuid,
+        _target_user_id: Uuid,
+        _role_codes: &[String],
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn list_members(&self, _workspace_id: Uuid) -> Result<Vec<UserRecord>> {
+        Ok(Vec::new())
+    }
+
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_events
+            .write()
+            .await
+            .push(event.event_code.clone());
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct MemoryRoleRepository {
+    root_user_id: Uuid,
+    roles: Arc<RwLock<Vec<RoleTemplate>>>,
+    audit_events: Arc<RwLock<Vec<String>>>,
+    touched_workspaces: Arc<RwLock<Vec<Uuid>>>,
+}
+
+impl Default for MemoryRoleRepository {
+    fn default() -> Self {
+        Self {
+            root_user_id: Uuid::now_v7(),
+            roles: Arc::new(RwLock::new(Vec::new())),
+            audit_events: Arc::new(RwLock::new(Vec::new())),
+            touched_workspaces: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+}
+
+impl MemoryRoleRepository {
+    pub fn root_user_id(&self) -> Uuid {
+        self.root_user_id
+    }
+
+    pub fn audit_events(&self) -> Vec<String> {
+        self.audit_events
+            .try_read()
+            .expect("audit_events lock should be free in assertions")
+            .clone()
+    }
+}
+
+#[async_trait]
+impl RoleRepository for MemoryRoleRepository {
+    async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
+        Ok(ActorContext::root(actor_user_id, Uuid::nil(), "root"))
+    }
+
+    async fn list_roles(&self, _workspace_id: Uuid) -> Result<Vec<RoleTemplate>> {
+        Ok(self.roles.read().await.clone())
+    }
+
+    async fn create_team_role(&self, input: &CreateWorkspaceRoleInput) -> Result<()> {
+        self.touched_workspaces
+            .write()
+            .await
+            .push(input.workspace_id);
+        let mut roles = self.roles.write().await;
+        if input.is_default_member_role {
+            for role in roles.iter_mut() {
+                if matches!(role.scope_kind, RoleScopeKind::Workspace) {
+                    role.is_default_member_role = false;
+                }
+            }
+        }
+        roles.push(RoleTemplate {
+            code: input.code.clone(),
+            name: input.name.clone(),
+            introduction: input.introduction.clone(),
+            scope_kind: RoleScopeKind::Workspace,
+            is_builtin: false,
+            is_editable: true,
+            auto_grant_new_permissions: input.auto_grant_new_permissions,
+            is_default_member_role: input.is_default_member_role,
+            permissions: Vec::new(),
+        });
+        Ok(())
+    }
+
+    async fn update_team_role(&self, input: &UpdateWorkspaceRoleInput) -> Result<()> {
+        self.touched_workspaces
+            .write()
+            .await
+            .push(input.workspace_id);
+        let mut roles = self.roles.write().await;
+        let role_index = roles.iter().position(|role| role.code == input.role_code);
+
+        if matches!(input.is_default_member_role, Some(false))
+            && role_index
+                .and_then(|index| roles.get(index))
+                .map(|role| role.is_default_member_role)
+                .unwrap_or(false)
+        {
+            anyhow::bail!(crate::errors::ControlPlaneError::InvalidInput(
+                "default_member_role_required"
+            ));
+        }
+
+        if matches!(input.is_default_member_role, Some(true)) {
+            for role in roles.iter_mut() {
+                if matches!(role.scope_kind, RoleScopeKind::Workspace)
+                    && role.code != input.role_code
+                {
+                    role.is_default_member_role = false;
+                }
+            }
+        }
+
+        if let Some(role) = role_index.and_then(|index| roles.get_mut(index)) {
+            role.name = input.name.clone();
+            role.introduction = input.introduction.clone();
+            if let Some(value) = input.auto_grant_new_permissions {
+                role.auto_grant_new_permissions = value;
+            }
+            if let Some(value) = input.is_default_member_role {
+                role.is_default_member_role = value;
+            }
+        }
+        Ok(())
+    }
+
+    async fn delete_team_role(
+        &self,
+        _actor_user_id: Uuid,
+        workspace_id: Uuid,
+        role_code: &str,
+    ) -> Result<()> {
+        self.touched_workspaces.write().await.push(workspace_id);
+        self.roles
+            .write()
+            .await
+            .retain(|role| role.code != role_code);
+        Ok(())
+    }
+
+    async fn replace_role_permissions(
+        &self,
+        _actor_user_id: Uuid,
+        workspace_id: Uuid,
+        role_code: &str,
+        permission_codes: &[String],
+    ) -> Result<()> {
+        self.touched_workspaces.write().await.push(workspace_id);
+        if let Some(role) = self
+            .roles
+            .write()
+            .await
+            .iter_mut()
+            .find(|role| role.code == role_code)
+        {
+            role.permissions = permission_codes.to_vec();
+        }
+        Ok(())
+    }
+
+    async fn list_role_permissions(
+        &self,
+        _workspace_id: Uuid,
+        role_code: &str,
+    ) -> Result<Vec<String>> {
+        Ok(self
+            .roles
+            .read()
+            .await
+            .iter()
+            .find(|role| role.code == role_code)
+            .map(|role| role.permissions.clone())
+            .unwrap_or_default())
+    }
+
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_events
+            .write()
+            .await
+            .push(event.event_code.clone());
+        Ok(())
+    }
+}
