@@ -202,7 +202,7 @@ where
             })
             .await?;
 
-        self.ensure_template_fields(actor_user_id, model.id, &[], &template)
+        self.ensure_template_fields(actor_user_id, model.id, &model.fields, &template)
             .await?;
 
         let published = self

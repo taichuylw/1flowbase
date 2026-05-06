@@ -74,6 +74,41 @@ async fn ensure_workspace_data_source_belongs_to_scope(
     }
 }
 
+fn platform_runtime_field_records(model_id: Uuid) -> Vec<domain::ModelFieldRecord> {
+    [
+        ("id", domain::ModelFieldKind::String),
+        ("created_by", domain::ModelFieldKind::String),
+        ("updated_by", domain::ModelFieldKind::String),
+        ("created_at", domain::ModelFieldKind::Datetime),
+        ("updated_at", domain::ModelFieldKind::Datetime),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(
+        |(sort_order, (code, field_kind))| domain::ModelFieldRecord {
+            id: Uuid::now_v7(),
+            data_model_id: model_id,
+            code: code.to_string(),
+            title: code.to_string(),
+            physical_column_name: code.to_string(),
+            external_field_key: None,
+            field_kind,
+            is_system: true,
+            is_writable: false,
+            is_required: true,
+            is_unique: code == "id",
+            default_value: None,
+            display_interface: None,
+            display_options: serde_json::json!({}),
+            relation_target_model_id: None,
+            relation_options: serde_json::json!({}),
+            sort_order: sort_order as i32,
+            availability_status: domain::MetadataAvailabilityStatus::Available,
+        },
+    )
+    .collect()
+}
+
 #[async_trait]
 impl ModelDefinitionRepository for PgControlPlaneStore {
     async fn load_actor_context_for_user(
@@ -204,7 +239,7 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
     ) -> Result<domain::ModelDefinitionRecord> {
         ensure_workspace_data_source_belongs_to_scope(self, input).await?;
 
-        let model = domain::ModelDefinitionRecord {
+        let mut model = domain::ModelDefinitionRecord {
             id: Uuid::now_v7(),
             scope_kind: input.scope_kind,
             scope_id: input.scope_id,
@@ -224,6 +259,9 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             api_exposure_status: input.api_exposure_status,
             protection: input.protection.clone(),
         };
+        if model.source_kind == domain::DataModelSourceKind::MainSource {
+            model.fields = platform_runtime_field_records(model.id);
+        }
         let before_snapshot = serde_json::json!({});
         let after_snapshot = serde_json::to_value(&model)?;
         let actor_user_id = nullable_actor_user_id(input.actor_user_id);
@@ -239,6 +277,15 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
             .await?;
             if model.source_kind == domain::DataModelSourceKind::MainSource {
                 create_runtime_model_table(&mut tx, &model).await?;
+                for field in &model.fields {
+                    insert_model_field(
+                        &mut tx,
+                        field,
+                        actor_user_id,
+                        domain::MetadataAvailabilityStatus::Available,
+                    )
+                    .await?;
+                }
             }
             append_change_log_tx(
                 &mut tx,

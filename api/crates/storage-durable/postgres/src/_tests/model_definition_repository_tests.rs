@@ -181,7 +181,53 @@ async fn model_definition_repository_creates_scope_bound_metadata_without_publis
     assert_eq!(created.code, code);
     assert_eq!(created.title, "Orders");
     assert!(created.physical_table_name.starts_with("rtm_workspace_"));
-    assert_eq!(created.fields.len(), 0);
+    let system_fields: Vec<_> = created
+        .fields
+        .iter()
+        .map(|field| {
+            (
+                field.code.as_str(),
+                field.physical_column_name.as_str(),
+                field.field_kind,
+                field.is_system,
+                field.is_writable,
+            )
+        })
+        .collect();
+    assert_eq!(
+        system_fields,
+        vec![
+            ("id", "id", ModelFieldKind::String, true, false),
+            (
+                "created_by",
+                "created_by",
+                ModelFieldKind::String,
+                true,
+                false
+            ),
+            (
+                "updated_by",
+                "updated_by",
+                ModelFieldKind::String,
+                true,
+                false
+            ),
+            (
+                "created_at",
+                "created_at",
+                ModelFieldKind::Datetime,
+                true,
+                false
+            ),
+            (
+                "updated_at",
+                "updated_at",
+                ModelFieldKind::Datetime,
+                true,
+                false
+            ),
+        ]
+    );
 
     let system_created = ModelDefinitionRepository::create_model_definition(
         &store,
