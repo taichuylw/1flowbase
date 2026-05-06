@@ -703,10 +703,15 @@ describe('Settings data models page', () => {
     expect(
       within(editorDialog).getByTestId('data-model-detail-summary')
     ).toBeInTheDocument();
+    const detailSummary = within(editorDialog).getByTestId(
+      'data-model-detail-summary'
+    );
+    expect(within(detailSummary).getByText('标题：')).toBeInTheDocument();
+    expect(within(detailSummary).getByText('Code：')).toBeInTheDocument();
+    expect(within(detailSummary).getByText('Contacts')).toBeInTheDocument();
+    expect(within(detailSummary).getByText('contacts')).toBeInTheDocument();
     expect(
-      within(
-        within(editorDialog).getByTestId('data-model-detail-summary')
-      ).queryByText('状态：')
+      within(detailSummary).queryByText('状态：')
     ).not.toBeInTheDocument();
     const detailActions = within(editorDialog).getByTestId(
       'data-model-detail-actions'

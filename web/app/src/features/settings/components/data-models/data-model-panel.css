@@ -119,7 +119,20 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+}
+
+.data-model-panel__identity-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.data-model-panel__identity-label {
+  flex: 0 0 auto;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
 }
 
 .data-model-panel__metadata {

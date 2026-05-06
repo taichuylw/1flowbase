@@ -158,8 +158,14 @@ export function DataModelDetail({
         data-testid="data-model-detail-summary"
       >
         <div className="data-model-panel__identity">
-          <Typography.Title level={4}>{model.title}</Typography.Title>
-          <Typography.Text type="secondary">{model.code}</Typography.Text>
+          <div className="data-model-panel__identity-row">
+            <span className="data-model-panel__identity-label">标题：</span>
+            <Typography.Text strong>{model.title}</Typography.Text>
+          </div>
+          <div className="data-model-panel__identity-row">
+            <span className="data-model-panel__identity-label">Code：</span>
+            <Typography.Text type="secondary">{model.code}</Typography.Text>
+          </div>
         </div>
         <Descriptions
           className="data-model-panel__metadata"
