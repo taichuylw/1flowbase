@@ -528,7 +528,7 @@ function closeIssueWithGitHubApi({ token, repository, number }) {
     repository,
     method: 'PATCH',
     path: `/issues/${number}`,
-    body: { state: 'closed' },
+    body: { state: 'closed', state_reason: 'completed' },
   });
 }
 
@@ -560,6 +560,33 @@ function isPullRequestIssue(issue) {
   return issue && typeof issue === 'object' && issue.pull_request !== undefined;
 }
 
+function qualityGateIssueScopeFromTitle(title) {
+  const match = String(title || '').match(
+    /^\[Quality Gate\]\[([^\]]+)\]\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(\S+)\s+\S+\s+(?:passed|failed)$/u
+  );
+
+  return match
+    ? {
+      reportType: match[1],
+      target: match[2],
+    }
+    : null;
+}
+
+function isSameQualityGateScope(issue, latestScope) {
+  if (!latestScope) {
+    return false;
+  }
+
+  const issueScope = qualityGateIssueScopeFromTitle(issue.title);
+
+  return Boolean(
+    issueScope
+    && issueScope.reportType === latestScope.reportType
+    && issueScope.target === latestScope.target
+  );
+}
+
 async function closeStaleOpenQualityGateIssues({
   token,
   repository,
@@ -568,8 +595,9 @@ async function closeStaleOpenQualityGateIssues({
   closeIssueImpl,
 }) {
   const latestIssueNumber = issueNumberFromIssue(latestIssue);
+  const latestScope = qualityGateIssueScopeFromTitle(latestIssue.title);
 
-  if (!latestIssueNumber) {
+  if (!latestIssueNumber || !latestScope) {
     return;
   }
 
@@ -583,6 +611,10 @@ async function closeStaleOpenQualityGateIssues({
     const issueNumber = issueNumberFromIssue(issue);
 
     if (!issueNumber || issueNumber === latestIssueNumber) {
+      continue;
+    }
+
+    if (!isSameQualityGateScope(issue, latestScope)) {
       continue;
     }
 

@@ -327,15 +327,39 @@ test('runQualityGate closes older open quality gate issues after publishing the 
       return {
         html_url: 'https://github.com/taichuy/1flowbase/issues/12',
         number: 12,
+        title: '[Quality Gate][CI] 2026-05-06 12:49 main 1234567 passed',
       };
     },
     listOpenQualityGateIssuesImpl() {
       return [
-        { number: 10, html_url: 'https://github.com/taichuy/1flowbase/issues/10' },
-        { number: 11, html_url: 'https://github.com/taichuy/1flowbase/issues/11' },
-        { number: 12, html_url: 'https://github.com/taichuy/1flowbase/issues/12' },
+        {
+          number: 10,
+          title: '[Quality Gate][CI] 2026-05-06 10:24 main abc1234 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/10',
+        },
+        {
+          number: 11,
+          title: '[Quality Gate][CI] 2026-05-06 10:24 latest def5678 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/11',
+        },
+        {
+          number: 12,
+          title: '[Quality Gate][CI] 2026-05-06 12:49 main 1234567 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/12',
+        },
+        {
+          number: 14,
+          title: '[Quality Gate][CD] 2026-05-06 10:24 main abc1234 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/14',
+        },
+        {
+          number: 15,
+          title: 'Manual quality note',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/15',
+        },
         {
           number: 13,
+          title: '[Quality Gate][CI] 2026-05-06 10:24 main abc1234 failed',
           html_url: 'https://github.com/taichuy/1flowbase/pull/13',
           pull_request: {
             html_url: 'https://github.com/taichuy/1flowbase/pull/13',
@@ -352,7 +376,7 @@ test('runQualityGate closes older open quality gate issues after publishing the 
   });
 
   assert.equal(status.issueUrl, 'https://github.com/taichuy/1flowbase/issues/12');
-  assert.deepEqual(closedIssues, [10, 11]);
+  assert.deepEqual(closedIssues, [10]);
 });
 
 test('runQualityGate strips ANSI control sequences from published failure excerpts', async () => {
