@@ -637,9 +637,17 @@ describe('Settings data models page', () => {
     expect(screen.getByLabelText('默认 Data Model 状态')).toBeInTheDocument();
     expect(screen.getByLabelText('默认 API 暴露状态')).toBeInTheDocument();
     expect(
-      screen.getByLabelText('默认 Data Model 状态说明')
+      screen
+        .getByText('默认 Data Model 状态')
+        .closest('.data-model-panel__field-label')
+        ?.querySelector('.data-model-panel__help-icon')
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('默认 API 暴露状态说明')).toBeInTheDocument();
+    expect(
+      screen
+        .getByText('默认 API 暴露状态')
+        .closest('.data-model-panel__field-label')
+        ?.querySelector('.data-model-panel__help-icon')
+    ).toBeInTheDocument();
     const managerTitleRow = document.querySelector(
       '.data-model-panel__manager-title-row'
     );
@@ -658,12 +666,6 @@ describe('Settings data models page', () => {
     expect(tableHead).toBeInTheDocument();
     expect(
       within(tableHead as HTMLElement).getByText('数据表')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/draft: 草稿，默认新建为未发布状态/)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/published_not_exposed: 默认不生成 API 访问面/)
     ).toBeInTheDocument();
     expect(await screen.findByText('Contacts')).toBeInTheDocument();
     expect(screen.getByText('contacts')).toBeInTheDocument();

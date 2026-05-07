@@ -17,23 +17,31 @@ export const dataModelTitleHelp =
 
 export function DataModelFieldLabel({
   label,
-  title
+  title,
+  decorativeHelp = false
 }: {
   label: string;
   title: string;
+  decorativeHelp?: boolean;
 }) {
   return (
     <span className="data-model-panel__field-label">
       <span>{label}</span>
-      <DataModelHelpTooltip label={label} title={title} />
+      <DataModelHelpTooltip
+        decorative={decorativeHelp}
+        label={label}
+        title={title}
+      />
     </span>
   );
 }
 
 export function DataModelHelpTooltip({
+  decorative = false,
   label,
   title
 }: {
+  decorative?: boolean;
   label: string;
   title: string;
 }) {
@@ -43,15 +51,18 @@ export function DataModelHelpTooltip({
     <>
       <Tooltip title={title}>
         <QuestionCircleOutlined
-          aria-describedby={descriptionId}
-          aria-label={`${label}说明`}
+          aria-describedby={decorative ? undefined : descriptionId}
+          aria-hidden={decorative ? true : undefined}
+          aria-label={decorative ? undefined : `${label}说明`}
           className="data-model-panel__help-icon"
-          tabIndex={0}
+          tabIndex={decorative ? -1 : 0}
         />
       </Tooltip>
-      <span id={descriptionId} className="data-model-panel__sr-only">
-        {title}
-      </span>
+      {decorative ? null : (
+        <span id={descriptionId} className="data-model-panel__sr-only">
+          {title}
+        </span>
+      )}
     </>
   );
 }
