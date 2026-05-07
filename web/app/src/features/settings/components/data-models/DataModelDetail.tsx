@@ -90,10 +90,10 @@ export function DataModelDetail({
 
   const fieldColumns: ColumnsType<SettingsDataModelField> = [
     {
-      title: '字段',
+      title: '字段标题',
       dataIndex: 'title',
       key: 'title',
-      render: (_, field) => (
+      render: (value: string, field) => (
         <button
           type="button"
           className="data-model-panel__link-button"
@@ -102,9 +102,16 @@ export function DataModelDetail({
             setFieldDrawerState({ open: true, mode: 'edit', field })
           }
         >
-          <Typography.Text strong>{field.title}</Typography.Text>
-          <Typography.Text type="secondary">{field.code}</Typography.Text>
+          <Typography.Text strong>{value}</Typography.Text>
         </button>
+      )
+    },
+    {
+      title: 'Code',
+      dataIndex: 'code',
+      key: 'code',
+      render: (value: string) => (
+        <Typography.Text type="secondary">{value}</Typography.Text>
       )
     },
     {
