@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
+  buildReport,
   buildGateCommand,
   buildIssueTitle,
   buildIssueLabels,
@@ -24,6 +25,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'coverage' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-coverage.js'), 'all'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'backend-consistency' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend-consistency.js')],
     cwd: repoRoot,
   });
 
@@ -74,7 +81,7 @@ test('runQualityGate writes reports and does not create an issue when publishing
       GITHUB_RUN_ID: '123',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: 'abcdef1234567890',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
     spawnSyncImpl(command, args, options) {
       assert.equal(command, process.execPath);
@@ -124,7 +131,7 @@ test('runQualityGate creates a new issue when publishing is enabled even if the 
       GITHUB_RUN_ID: '456',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: '1234567890abcdef',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
     spawnSyncImpl() {
       return {
@@ -152,7 +159,7 @@ test('runQualityGate creates a new issue when publishing is enabled even if the 
   assert.equal(createdIssues[0].title, '[Quality Gate][CD] 2026-05-03 15:40 staging 1234567 failed');
   assert.deepEqual(createdIssues[0].labels, ['quality-gate', 'cd-report', 'failed']);
   assert.match(createdIssues[0].body, /Status: failed/u);
-  assert.match(createdIssues[0].body, /Environment: staging/u);
+  assert.match(createdIssues[0].body, /- Environment: staging/u);
   assert.match(createdIssues[0].body, /## Failure Excerpt/u);
   assert.match(createdIssues[0].body, /failure detail/u);
 });
@@ -297,6 +304,80 @@ test('runQualityGate renders unavailable coverage metrics as n/a', async () => {
   assert.match(createdIssues[0].body, /api-server: lines 90\.00%, functions n\/a, branches n\/a, regions n\/a/u);
 });
 
+test('buildReport includes backend consistency target results for consistency scopes', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-targets-'));
+  const targetReportPath = path.join(
+    repoRoot,
+    'tmp',
+    'test-governance',
+    'backend-consistency-targets.json'
+  );
+  fs.mkdirSync(path.dirname(targetReportPath), { recursive: true });
+  fs.writeFileSync(
+    targetReportPath,
+    `${JSON.stringify({
+      targets: [
+        {
+          label: 'consistency-control-plane-state-transitions',
+          packageName: 'control-plane',
+          filter: 'state_transition_tests',
+          status: 'passed',
+          exitCode: 0,
+          durationMs: 1250,
+          passedCount: 3,
+          failedCount: 0,
+        },
+        {
+          label: 'consistency-storage-model-definition-repository',
+          packageName: 'storage-postgres',
+          filter: 'model_definition_repository_tests',
+          status: 'failed',
+          exitCode: 101,
+          durationMs: 2300,
+          passedCount: 2,
+          failedCount: 1,
+        },
+      ],
+    }, null, 2)}\n`,
+    'utf8'
+  );
+
+  const report = buildReport({
+    repoRoot,
+    reportType: 'ci',
+    scope: 'backend-consistency',
+    status: 'passed',
+    exitCode: 0,
+    issueUrl: '',
+    environmentName: 'nightly-latest',
+    timestamp: '2026-05-07 02:32',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'latest',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '25472497763',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: '017e740a685939bf03b88112ca5623f57127bafb',
+      GITHUB_WORKFLOW: 'quality gate',
+    },
+  });
+
+  assert.match(report.markdown, /## Backend Consistency Targets/u);
+  assert.match(report.markdown, /\| Label \| Package \| Rust test filter \| Status \| Duration \| Passed \| Failed \|/u);
+  assert.match(report.markdown, /\| `consistency-storage-model-definition-repository` \| `storage-postgres` \| `model_definition_repository_tests` \| failed \| 2\.30s \| 2 \| 1 \|/u);
+  assert.equal(report.json.backendConsistencyTargets.length, 2);
+  assert.deepEqual(report.json.backendConsistencyTargets[0], {
+    label: 'consistency-control-plane-state-transitions',
+    packageName: 'control-plane',
+    filter: 'state_transition_tests',
+    status: 'passed',
+    exitCode: 0,
+    durationMs: 1250,
+    passedCount: 3,
+    failedCount: 0,
+  });
+});
+
 test('runQualityGate closes older open quality gate issues after publishing the latest report', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-'));
   const closedIssues = [];
@@ -314,7 +395,7 @@ test('runQualityGate closes older open quality gate issues after publishing the 
       GITHUB_RUN_ID: '457',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: '1234567890abcdef',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
     spawnSyncImpl() {
       return {
@@ -327,13 +408,44 @@ test('runQualityGate closes older open quality gate issues after publishing the 
       return {
         html_url: 'https://github.com/taichuy/1flowbase/issues/12',
         number: 12,
+        title: '[Quality Gate][CI] 2026-05-06 12:49 main 1234567 passed',
       };
     },
     listOpenQualityGateIssuesImpl() {
       return [
-        { number: 10, html_url: 'https://github.com/taichuy/1flowbase/issues/10' },
-        { number: 11, html_url: 'https://github.com/taichuy/1flowbase/issues/11' },
-        { number: 12, html_url: 'https://github.com/taichuy/1flowbase/issues/12' },
+        {
+          number: 10,
+          title: '[Quality Gate][CI] 2026-05-06 10:24 main abc1234 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/10',
+        },
+        {
+          number: 11,
+          title: '[Quality Gate][CI] 2026-05-06 10:24 latest def5678 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/11',
+        },
+        {
+          number: 12,
+          title: '[Quality Gate][CI] 2026-05-06 12:49 main 1234567 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/12',
+        },
+        {
+          number: 14,
+          title: '[Quality Gate][CD] 2026-05-06 10:24 main abc1234 passed',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/14',
+        },
+        {
+          number: 15,
+          title: 'Manual quality note',
+          html_url: 'https://github.com/taichuy/1flowbase/issues/15',
+        },
+        {
+          number: 13,
+          title: '[Quality Gate][CI] 2026-05-06 10:24 main abc1234 failed',
+          html_url: 'https://github.com/taichuy/1flowbase/pull/13',
+          pull_request: {
+            html_url: 'https://github.com/taichuy/1flowbase/pull/13',
+          },
+        },
       ];
     },
     closeIssueImpl(issue) {
@@ -345,7 +457,7 @@ test('runQualityGate closes older open quality gate issues after publishing the 
   });
 
   assert.equal(status.issueUrl, 'https://github.com/taichuy/1flowbase/issues/12');
-  assert.deepEqual(closedIssues, [10, 11]);
+  assert.deepEqual(closedIssues, [10]);
 });
 
 test('runQualityGate strips ANSI control sequences from published failure excerpts', async () => {

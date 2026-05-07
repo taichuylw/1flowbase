@@ -1,4 +1,7 @@
-use api_server::config::{ApiConfig, ApiEnvironment};
+use api_server::{
+    config::{ApiConfig, ApiEnvironment},
+    parse_bind_addr, DEFAULT_API_SERVER_ADDR,
+};
 use std::path::PathBuf;
 
 fn current_workspace_root() -> PathBuf {
@@ -23,6 +26,20 @@ fn base_env_without_ephemeral_backend() -> Vec<(&'static str, &'static str)> {
         ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
         ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
     ]
+}
+
+#[test]
+fn parse_bind_addr_rejects_invalid_candidate() {
+    let error = parse_bind_addr(Some("not-a-socket-address"), DEFAULT_API_SERVER_ADDR).unwrap_err();
+
+    assert!(error.to_string().contains("API_SERVER_ADDR"));
+}
+
+#[test]
+fn parse_bind_addr_accepts_default_when_candidate_is_missing() {
+    let addr = parse_bind_addr(None, DEFAULT_API_SERVER_ADDR).unwrap();
+
+    assert_eq!(addr.to_string(), DEFAULT_API_SERVER_ADDR);
 }
 
 #[test]

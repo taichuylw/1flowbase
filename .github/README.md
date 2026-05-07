@@ -7,8 +7,8 @@ This directory owns GitHub Actions automation for repository quality gates.
 | Path | Purpose |
 | --- | --- |
 | `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; only `latest` push publishes quality-gate issues. |
-| `.github/workflows/quality-gate.yml` | Manual quality gate run that creates one new GitHub Issue report per run. |
-| `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI and manual quality gates. |
+| `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run that creates one new GitHub Issue report per run. |
+| `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
 ## Automatic CI
 
@@ -30,10 +30,13 @@ Automatic CI creates a GitHub Issue only for `latest` branch pushes and uploads
 `tmp/test-governance` as the `test-governance-artifacts` artifact. The issue body includes
 the quality gate result summary, warning status, coverage percentages, evidence paths, and
 a failure excerpt when the gate fails. Use the artifact for full logs and raw coverage files.
+Runs use branch-level concurrency, so a newer push cancels an older in-progress quality gate
+for the same branch before stale runs can publish or close quality issues.
 
-## Manual Quality Gate
+## Manual And Nightly Quality Gate
 
-`quality-gate.yml` is triggered from GitHub Actions with `workflow_dispatch`.
+`quality-gate.yml` is triggered from GitHub Actions with `workflow_dispatch` and by a daily
+schedule at 18:00 UTC, which is 02:00 Asia/Shanghai.
 
 Recommended first run:
 
@@ -46,6 +49,9 @@ environment: leave empty
 Manual runs call the same Quality Gate Action with `publish_issue: "true"`. Each manual run
 creates a new GitHub Issue. It does not reuse a fixed Issue and does not append comments to
 old reports.
+Manual runs share the same target-branch concurrency group as automatic quality gates.
+Scheduled runs target `latest`, use `scope: ci`, set `environment: nightly-latest`, publish
+one Issue report, and upload the same `test-governance-artifacts` artifact.
 
 ## Scope Options
 
@@ -54,10 +60,13 @@ old reports.
 | `ci` | `node scripts/node/verify-ci.js` |
 | `repo` | `node scripts/node/verify-repo.js` |
 | `backend` | `node scripts/node/verify-backend.js` |
+| `backend-consistency` | `node scripts/node/verify-backend-consistency.js` |
 | `coverage` | `node scripts/node/verify-coverage.js all` |
 
-Use `ci` for the full repository quality gate. Use narrower scopes only when debugging or
-when a faster targeted report is enough.
+Use `ci` for the full repository quality gate. It includes the online-only backend
+consistency pass between the repo gate and coverage gate. Use narrower scopes only when
+debugging or when a faster targeted report is enough. Do not run the backend consistency
+scope locally unless explicitly requested, because it exercises database-backed Rust suites.
 
 ## Report Type
 
@@ -75,9 +84,14 @@ The Quality Gate Action writes:
 - `tmp/test-governance/quality-gate.latest.log`
 - `tmp/test-governance/quality-gate-report.md`
 - `tmp/test-governance/quality-gate-report.json`
+- `tmp/test-governance/backend-consistency-targets.json` for `ci` and `backend-consistency`
 
 Existing warning, coverage, screenshot, and QA evidence files remain under
 `tmp/test-governance/`.
+For `ci` and `backend-consistency` scopes, the report also includes the current backend
+consistency target results: label, Cargo package, Rust test filter, status, duration,
+passed count, and failed count. If the target result artifact is unavailable, the report
+falls back to the static target registry with `not_run` status.
 
 ## Setup Order
 

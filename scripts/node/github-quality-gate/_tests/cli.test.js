@@ -45,3 +45,54 @@ test('main returns the quality gate exit code from the runner', async () => {
 
   assert.equal(status, 7);
 });
+
+test('main forwards quality issue maintenance dependencies to the runner', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-cli-'));
+  const closedIssues = [];
+
+  const status = await main([], {
+    repoRoot,
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'latest',
+      GITHUB_RUN_ID: '123',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+      INPUT_GITHUB_TOKEN: 'token',
+      INPUT_PUBLISH_ISSUE: 'true',
+      INPUT_REPORT_TYPE: 'ci',
+      INPUT_SCOPE: 'backend',
+    },
+    spawnSyncImpl() {
+      return {
+        status: 0,
+        stdout: 'backend passed\n',
+        stderr: '',
+      };
+    },
+    createIssueImpl() {
+      return {
+        html_url: 'https://github.com/taichuy/1flowbase/issues/18',
+        number: 18,
+        title: '[Quality Gate][CI] 2026-05-06 17:16 latest abcdef1 passed',
+      };
+    },
+    listOpenQualityGateIssuesImpl() {
+      return [{
+        html_url: 'https://github.com/taichuy/1flowbase/issues/17',
+        number: 17,
+        title: '[Quality Gate][CI] 2026-05-06 16:29 latest 1234567 failed',
+      }];
+    },
+    closeIssueImpl(issue) {
+      closedIssues.push(issue.number);
+      return {};
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(closedIssues, [17]);
+});

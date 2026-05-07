@@ -1,6 +1,9 @@
-name: manual quality gate
+name: quality gate
 
 on:
+  schedule:
+    # Daily 02:00 Asia/Shanghai.
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       target_branch:
@@ -18,6 +21,7 @@ on:
           - ci
           - repo
           - backend
+          - backend-consistency
           - coverage
       report_type:
         description: Report type
@@ -36,13 +40,23 @@ permissions:
   actions: read
   issues: write
 
+concurrency:
+  group: quality-gate-${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'latest' }}
+  cancel-in-progress: true
+
+env:
+  QUALITY_GATE_TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'latest' }}
+  QUALITY_GATE_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'ci' }}
+  QUALITY_GATE_REPORT_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.report_type || 'ci' }}
+  QUALITY_GATE_SCHEDULED_ENVIRONMENT: nightly-latest
+
 jobs:
   quality-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
       - name: Resolve quality gate target SHA
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
@@ -58,12 +72,12 @@ jobs:
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: ./.github/actions/quality-gate
         env:
-          GITHUB_REF_NAME: ${{ inputs.target_branch }}
+          GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
         with:
-          scope: ${{ inputs.scope }}
-          report_type: ${{ inputs.report_type }}
-          environment: ${{ inputs.environment }}
+          scope: ${{ env.QUALITY_GATE_SCOPE }}
+          report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
+          environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
           publish_issue: "true"
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v6

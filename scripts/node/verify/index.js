@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const {
   buildCargoCommandEnv,
   getRepoRoot,
+  resolveOutputDir,
   runCommandSequence,
   runManagedCommandSequence,
 } = require('../testing/warning-capture.js');
@@ -19,9 +20,139 @@ const {
 } = require('../testing/coverage-thresholds.js');
 
 const VALID_COVERAGE_TARGETS = new Set(['frontend', 'backend', 'all']);
-const VERIFY_COMMANDS = new Set(['backend', 'ci', 'coverage', 'repo']);
+const VERIFY_COMMANDS = new Set(['backend', 'backend-consistency', 'ci', 'coverage', 'repo']);
 const FRONTEND_METRICS = ['lines', 'functions', 'statements', 'branches'];
 const COVERAGE_SCOPE_LABEL = '1flowbase-verify-coverage';
+const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
+const BACKEND_CONSISTENCY_TARGETS = [
+  {
+    label: 'consistency-control-plane-state-transitions',
+    packageName: 'control-plane',
+    filter: 'state_transition_tests',
+  },
+  {
+    label: 'consistency-control-plane-workspace-session',
+    packageName: 'control-plane',
+    filter: 'workspace_session',
+  },
+  {
+    label: 'consistency-control-plane-model-definition-service',
+    packageName: 'control-plane',
+    filter: 'model_definition_service_tests',
+  },
+  {
+    label: 'consistency-control-plane-model-definition-runtime-sync',
+    packageName: 'control-plane',
+    filter: 'model_definition_runtime_sync_tests',
+  },
+  {
+    label: 'consistency-control-plane-resource-action-kernel',
+    packageName: 'control-plane',
+    filter: 'resource_action_tests',
+  },
+  {
+    label: 'consistency-runtime-acl',
+    packageName: 'runtime-core',
+    filter: 'runtime_acl_tests',
+  },
+  {
+    label: 'consistency-runtime-engine',
+    packageName: 'runtime-core',
+    filter: 'runtime_engine_tests',
+  },
+  {
+    label: 'consistency-storage-migration-smoke',
+    packageName: 'storage-postgres',
+    filter: 'migration_smoke',
+  },
+  {
+    label: 'consistency-storage-model-definition-repository',
+    packageName: 'storage-postgres',
+    filter: 'model_definition_repository_tests',
+  },
+  {
+    label: 'consistency-storage-runtime-record-repository',
+    packageName: 'storage-postgres',
+    filter: 'runtime_record_repository_tests',
+  },
+  {
+    label: 'consistency-storage-orchestration-runtime-repository',
+    packageName: 'storage-postgres',
+    filter: 'orchestration_runtime_repository_tests',
+  },
+  {
+    label: 'consistency-storage-physical-schema-repository',
+    packageName: 'storage-postgres',
+    filter: 'physical_schema_repository_tests',
+  },
+  {
+    label: 'consistency-storage-workspace-scope',
+    packageName: 'storage-postgres',
+    filter: 'workspace_scope_tests',
+  },
+  {
+    label: 'consistency-api-model-definition-routes',
+    packageName: 'api-server',
+    filter: 'model_definition_routes',
+  },
+  {
+    label: 'consistency-api-runtime-model-routes',
+    packageName: 'api-server',
+    filter: 'runtime_model_routes',
+  },
+  {
+    label: 'consistency-api-workspace-routes',
+    packageName: 'api-server',
+    filter: 'workspace_routes',
+  },
+  {
+    label: 'consistency-api-file-management-routes',
+    packageName: 'api-server',
+    filter: 'file_management_routes',
+  },
+];
+
+function parseCargoTestCounts(output) {
+  const counts = {
+    passedCount: null,
+    failedCount: null,
+  };
+  const pattern = /test result:\s+(?:ok|FAILED)\.\s+(\d+) passed;\s+(\d+) failed;/gu;
+  let match = pattern.exec(output);
+
+  while (match) {
+    counts.passedCount = (counts.passedCount ?? 0) + Number.parseInt(match[1], 10);
+    counts.failedCount = (counts.failedCount ?? 0) + Number.parseInt(match[2], 10);
+    match = pattern.exec(output);
+  }
+
+  return counts;
+}
+
+function buildBackendConsistencyTargetResult(command) {
+  const target = BACKEND_CONSISTENCY_TARGETS.find((candidate) => candidate.label === command.label);
+
+  return {
+    label: command.label,
+    packageName: target?.packageName || command.args?.[2] || '',
+    filter: target?.filter || command.args?.[5] || '',
+    status: 'skipped',
+    exitCode: null,
+    durationMs: null,
+    passedCount: null,
+    failedCount: null,
+  };
+}
+
+function writeBackendConsistencyTargetReport({ repoRoot, env, targets }) {
+  const outputDir = resolveOutputDir(repoRoot, env);
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(outputDir, BACKEND_CONSISTENCY_TARGET_REPORT_FILE),
+    `${JSON.stringify({ targets }, null, 2)}\n`,
+    'utf8'
+  );
+}
 
 function resolveScriptsNodeEntry(repoRoot, entryName) {
   return path.join(repoRoot, 'scripts', 'node', entryName);
@@ -87,6 +218,91 @@ async function runBackend(_argv = [], deps = {}) {
   });
 }
 
+function buildBackendConsistencyCommands({ cargoJobs, cargoTestThreads }) {
+  return BACKEND_CONSISTENCY_TARGETS.map((target) => ({
+    label: target.label,
+    command: 'cargo',
+    args: [
+      'test',
+      '-p',
+      target.packageName,
+      '--jobs',
+      String(cargoJobs),
+      target.filter,
+      '--',
+      `--test-threads=${cargoTestThreads}`,
+    ],
+    cwd: 'api',
+    env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
+  }));
+}
+
+function runBackendConsistencyCommandSequence(sequenceOptions) {
+  const targets = sequenceOptions.commands.map(buildBackendConsistencyTargetResult);
+  const targetByLabel = new Map(targets.map((target) => [target.label, target]));
+
+  const status = runCommandSequence({
+    ...sequenceOptions,
+    onCommandComplete({ command, result, startedAtMs, finishedAtMs }) {
+      const target = targetByLabel.get(command.label);
+
+      if (!target) {
+        return;
+      }
+
+      const counts = parseCargoTestCounts(`${result.stdout || ''}\n${result.stderr || ''}`);
+      target.status = result.status === 0 ? 'passed' : 'failed';
+      target.exitCode = result.status ?? 1;
+      target.durationMs = Math.max(0, finishedAtMs - startedAtMs);
+      target.passedCount = counts.passedCount;
+      target.failedCount = counts.failedCount;
+    },
+  });
+
+  writeBackendConsistencyTargetReport({
+    repoRoot: sequenceOptions.repoRoot,
+    env: sequenceOptions.env,
+    targets,
+  });
+
+  return status;
+}
+
+async function runBackendConsistency(argv = [], deps = {}) {
+  if (argv.includes('-h') || argv.includes('--help')) {
+    (deps.writeStdout || ((text) => process.stdout.write(text)))(
+      'Usage: node scripts/node/verify-backend-consistency.js\n'
+        + 'Runs targeted backend Rust data/state consistency regression suites.\n'
+    );
+    return 0;
+  }
+
+  const repoRoot = deps.repoRoot || getRepoRoot();
+  const env = deps.env || process.env;
+  const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
+  const managedRunner = deps.managedRunnerImpl || runManagedCommandSequence;
+
+  return managedRunner({
+    repoRoot,
+    env,
+    scope: 'verify-backend-consistency',
+    lockMode: 'heavy',
+    commandDisplay: 'node scripts/node/verify-backend-consistency.js',
+    runtimeConfig,
+    commands: buildBackendConsistencyCommands({
+      cargoJobs: runtimeConfig.backend.cargoJobs,
+      cargoTestThreads: runtimeConfig.backend.cargoTestThreads,
+    }),
+    spawnSyncImpl: deps.spawnSyncImpl,
+    writeStdout: deps.writeStdout,
+    writeStderr: deps.writeStderr,
+    runCommandSequenceImpl: (sequenceOptions) => runBackendConsistencyCommandSequence({
+      ...sequenceOptions,
+      nowImpl: deps.nowImpl,
+    }),
+  });
+}
+
 function buildCiCommands({ repoRoot, env = process.env }) {
   const nodeBinary = resolveNodeBinaryFromPath(env);
 
@@ -95,6 +311,12 @@ function buildCiCommands({ repoRoot, env = process.env }) {
       label: 'ci-verify-repo',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'repo'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'ci-backend-consistency',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'verify'), 'backend-consistency'],
       cwd: repoRoot,
     },
     {
@@ -109,7 +331,7 @@ function buildCiCommands({ repoRoot, env = process.env }) {
 function usageCi(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/verify-ci.js\n'
-      + 'Runs: verify-repo + verify-coverage all\n'
+      + 'Runs: verify-repo + verify-backend-consistency + verify-coverage all\n'
   );
 }
 
@@ -601,9 +823,7 @@ function parseVerifyCliArgs(argv) {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(
-    'Usage: node scripts/node/verify <backend|ci|coverage|repo> [args]\n'
-  );
+  writeStdout('Usage: node scripts/node/verify <backend|backend-consistency|ci|coverage|repo> [args]\n');
 }
 
 async function main(argv = [], deps = {}) {
@@ -622,6 +842,10 @@ async function main(argv = [], deps = {}) {
     return (deps.runBackendImpl || runBackend)(options.rest, deps);
   }
 
+  if (options.command === 'backend-consistency') {
+    return (deps.runBackendConsistencyImpl || runBackendConsistency)(options.rest, deps);
+  }
+
   if (options.command === 'ci') {
     return (deps.runCiImpl || runCi)(options.rest, deps);
   }
@@ -634,7 +858,10 @@ async function main(argv = [], deps = {}) {
 }
 
 module.exports = {
+  BACKEND_CONSISTENCY_TARGETS,
   buildBackendCommands,
+  buildBackendConsistencyCommands,
+  runBackendConsistencyCommandSequence,
   buildCiCommands,
   buildCoverageBackendCleanupCommands,
   buildCoverageBackendCommands,
@@ -647,6 +874,7 @@ module.exports = {
   parseCoverageCliArgs,
   parseVerifyCliArgs,
   runBackend,
+  runBackendConsistency,
   runCi,
   runCoverage,
   runRepo,

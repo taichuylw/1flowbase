@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-ci.js');
 
-test('buildCommands composes repo full gate and all coverage gate', () => {
+test('buildCommands composes repo full gate, backend consistency gate and all coverage gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
@@ -14,6 +14,12 @@ test('buildCommands composes repo full gate and all coverage gate', () => {
       label: 'ci-verify-repo',
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'repo'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'ci-backend-consistency',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'backend-consistency'],
       cwd: repoRoot,
     },
     {
@@ -25,7 +31,7 @@ test('buildCommands composes repo full gate and all coverage gate', () => {
   ]);
 });
 
-test('main runs repo and coverage gates in order and captures advisory output', async () => {
+test('main runs repo, backend consistency and coverage gates in order and captures advisory output', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-ci-'));
   const calls = [];
 
@@ -46,11 +52,12 @@ test('main runs repo and coverage gates in order and captures advisory output', 
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(
     calls.map((call) => call.args),
     [
       [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'repo'],
+      [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'backend-consistency'],
       [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'coverage', 'all'],
     ]
   );
@@ -59,10 +66,11 @@ test('main runs repo and coverage gates in order and captures advisory output', 
   assert.equal(fs.existsSync(warningLogPath), true);
   const warningLog = fs.readFileSync(warningLogPath, 'utf8');
   assert.match(warningLog, /warning: repo advisory/u);
+  assert.match(warningLog, /warning: backend-consistency advisory/u);
   assert.match(warningLog, /warning: coverage advisory/u);
 });
 
-test('main passes the inherited lock token to verify-repo and verify-coverage all', async () => {
+test('main passes the inherited lock token to repo, backend consistency and coverage gates', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-ci-'));
   const calls = [];
 
@@ -78,9 +86,10 @@ test('main passes the inherited lock token to verify-repo and verify-coverage al
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[1].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
+  assert.equal(calls[2].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
 });
 
 test('main routes the CI gate through the heavy managed runner', async () => {

@@ -4,9 +4,11 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { getRepoRoot } = require('../testing/warning-capture.js');
+const { BACKEND_CONSISTENCY_TARGETS } = require('../verify/index.js');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
-const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'coverage']);
+const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
+const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'backend-consistency', 'coverage']);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
@@ -297,6 +299,55 @@ function formatCoverageSummaryLine(summary) {
     : `- ${summary.name}: see ${summary.path}`;
 }
 
+function normalizeBackendConsistencyTarget(target) {
+  return {
+    label: target.label,
+    packageName: target.packageName,
+    filter: target.filter,
+    status: target.status || 'not_run',
+    exitCode: Number.isFinite(target.exitCode) ? target.exitCode : null,
+    durationMs: Number.isFinite(target.durationMs) ? target.durationMs : null,
+    passedCount: Number.isFinite(target.passedCount) ? target.passedCount : null,
+    failedCount: Number.isFinite(target.failedCount) ? target.failedCount : null,
+  };
+}
+
+function readBackendConsistencyTargetReport(repoRoot) {
+  const report = readJsonFileIfPresent(path.join(
+    repoRoot,
+    OUTPUT_ROOT,
+    BACKEND_CONSISTENCY_TARGET_REPORT_FILE
+  ));
+
+  return Array.isArray(report?.targets)
+    ? report.targets.map(normalizeBackendConsistencyTarget)
+    : [];
+}
+
+function buildBackendConsistencyTargets({ repoRoot, scope }) {
+  if (scope !== 'ci' && scope !== 'backend-consistency') {
+    return [];
+  }
+
+  const targetReport = readBackendConsistencyTargetReport(repoRoot);
+
+  if (targetReport.length > 0) {
+    return targetReport;
+  }
+
+  return BACKEND_CONSISTENCY_TARGETS.map(normalizeBackendConsistencyTarget);
+}
+
+function formatDurationMs(durationMs) {
+  return durationMs === null ? 'n/a' : `${(durationMs / 1000).toFixed(2)}s`;
+}
+
+function formatBackendConsistencyTargetLine(target) {
+  return `| \`${target.label}\` | \`${target.packageName}\` | \`${target.filter}\` | `
+    + `${target.status} | ${formatDurationMs(target.durationMs)} | `
+    + `${target.passedCount ?? 'n/a'} | ${target.failedCount ?? 'n/a'} |`;
+}
+
 function buildReport({
   repoRoot,
   reportType,
@@ -315,6 +366,7 @@ function buildReport({
   const coverageFiles = listFilesBySuffix(path.join(outputDir, 'coverage'), '.json')
     .map((filePath) => toRepoRelative(repoRoot, filePath));
   const coverageSummaries = buildCoverageSummaries({ repoRoot, coverageFiles });
+  const backendConsistencyTargets = buildBackendConsistencyTargets({ repoRoot, scope });
   const runUrl = buildRunUrl(env);
   const shortSha = shortShaFromEnv(env);
   const failureExcerpt = status === 'failed' ? readFailureExcerpt(logPath) : '';
@@ -337,6 +389,7 @@ function buildReport({
     warningFiles,
     coverageFiles,
     coverageSummaries,
+    backendConsistencyTargets,
   };
 
   const markdown = [
@@ -348,7 +401,7 @@ function buildReport({
     `- Status: ${status}`,
     `- Exit code: ${exitCode}`,
     `- Scope: ${scope}`,
-    environmentName ? `Environment: ${environmentName}` : null,
+    environmentName ? `- Environment: ${environmentName}` : null,
     `- Branch: ${report.branch || 'unknown'}`,
     `- Commit: ${report.commit || 'unknown'}`,
     `- Actor: ${report.actor || 'unknown'}`,
@@ -363,6 +416,12 @@ function buildReport({
     '',
     coverageSummaries.length === 0 ? 'No coverage summaries were captured for this scope.' : null,
     ...coverageSummaries.map(formatCoverageSummaryLine),
+    '',
+    backendConsistencyTargets.length > 0 ? '## Backend Consistency Targets' : null,
+    backendConsistencyTargets.length > 0 ? '' : null,
+    backendConsistencyTargets.length > 0 ? '| Label | Package | Rust test filter | Status | Duration | Passed | Failed |' : null,
+    backendConsistencyTargets.length > 0 ? '| --- | --- | --- | --- | ---: | ---: | ---: |' : null,
+    ...backendConsistencyTargets.map(formatBackendConsistencyTargetLine),
     '',
     '## Evidence',
     '',
@@ -528,7 +587,7 @@ function closeIssueWithGitHubApi({ token, repository, number }) {
     repository,
     method: 'PATCH',
     path: `/issues/${number}`,
-    body: { state: 'closed' },
+    body: { state: 'closed', state_reason: 'completed' },
   });
 }
 
@@ -556,6 +615,37 @@ function issueNumberFromIssue(issue) {
   return match ? Number.parseInt(match[1], 10) : null;
 }
 
+function isPullRequestIssue(issue) {
+  return issue && typeof issue === 'object' && issue.pull_request !== undefined;
+}
+
+function qualityGateIssueScopeFromTitle(title) {
+  const match = String(title || '').match(
+    /^\[Quality Gate\]\[([^\]]+)\]\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(\S+)\s+\S+\s+(?:passed|failed)$/u
+  );
+
+  return match
+    ? {
+      reportType: match[1],
+      target: match[2],
+    }
+    : null;
+}
+
+function isSameQualityGateScope(issue, latestScope) {
+  if (!latestScope) {
+    return false;
+  }
+
+  const issueScope = qualityGateIssueScopeFromTitle(issue.title);
+
+  return Boolean(
+    issueScope
+    && issueScope.reportType === latestScope.reportType
+    && issueScope.target === latestScope.target
+  );
+}
+
 async function closeStaleOpenQualityGateIssues({
   token,
   repository,
@@ -564,17 +654,26 @@ async function closeStaleOpenQualityGateIssues({
   closeIssueImpl,
 }) {
   const latestIssueNumber = issueNumberFromIssue(latestIssue);
+  const latestScope = qualityGateIssueScopeFromTitle(latestIssue.title);
 
-  if (!latestIssueNumber) {
+  if (!latestIssueNumber || !latestScope) {
     return;
   }
 
   const openIssues = await listOpenQualityGateIssuesImpl({ token, repository });
 
   for (const issue of openIssues) {
+    if (isPullRequestIssue(issue)) {
+      continue;
+    }
+
     const issueNumber = issueNumberFromIssue(issue);
 
     if (!issueNumber || issueNumber === latestIssueNumber) {
+      continue;
+    }
+
+    if (!isSameQualityGateScope(issue, latestScope)) {
       continue;
     }
 

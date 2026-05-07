@@ -9,7 +9,7 @@ function readVerifyWorkflow() {
   return fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'verify.yml'), 'utf8');
 }
 
-function readManualQualityGateWorkflow() {
+function readQualityGateWorkflow() {
   return fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'quality-gate.yml'), 'utf8');
 }
 
@@ -31,6 +31,7 @@ test('verify workflow runs on main and latest but only publishes quality reports
   const workflow = readVerifyWorkflow();
 
   assert.deepEqual(extractPushBranches(workflow), ['main', 'latest']);
+  assert.match(workflow, /concurrency:\n\s+group: quality-gate-\$\{\{ github\.ref_name \}\}\n\s+cancel-in-progress: true/u);
   assert.match(
     workflow,
     /publish_issue: \$\{\{ github\.event_name == 'push' && github\.ref == 'refs\/heads\/latest' \}\}/u
@@ -51,11 +52,19 @@ test('GitHub automation docs describe latest-only issue publishing', () => {
   assert.doesNotMatch(readme, /refs\/heads\/main/u);
 });
 
-test('manual quality gate defaults to latest and can target supported branches', () => {
-  const workflow = readManualQualityGateWorkflow();
+test('quality gate workflow supports dispatch targets and nightly latest CI defaults', () => {
+  const workflow = readQualityGateWorkflow();
 
+  assert.match(workflow, /name: quality gate/u);
   assert.match(workflow, /target_branch:\n\s+description: Target branch\n\s+type: choice\n\s+default: latest\n\s+options:\n\s+- latest\n\s+- main/u);
-  assert.match(workflow, /uses: actions\/checkout@v5\n\s+with:\n\s+ref: \$\{\{ inputs\.target_branch \}\}/u);
-  assert.match(workflow, /GITHUB_REF_NAME: \$\{\{ inputs\.target_branch \}\}/u);
+  assert.match(workflow, /concurrency:\n\s+group: quality-gate-\$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.target_branch \|\| 'latest' \}\}\n\s+cancel-in-progress: true/u);
+  assert.match(workflow, /schedule:\n(?:\s+# .+\n)?\s+- cron: '0 18 \* \* \*'/u);
+  assert.match(workflow, /QUALITY_GATE_TARGET_BRANCH: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.target_branch \|\| 'latest' \}\}/u);
+  assert.match(workflow, /QUALITY_GATE_SCOPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope \|\| 'ci' \}\}/u);
+  assert.match(workflow, /QUALITY_GATE_REPORT_TYPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.report_type \|\| 'ci' \}\}/u);
+  assert.match(workflow, /QUALITY_GATE_SCHEDULED_ENVIRONMENT: nightly-latest/u);
+  assert.match(workflow, /with:\n\s+ref: \$\{\{ env\.QUALITY_GATE_TARGET_BRANCH \}\}/u);
+  assert.match(workflow, /GITHUB_REF_NAME: \$\{\{ env\.QUALITY_GATE_TARGET_BRANCH \}\}/u);
   assert.match(workflow, /GITHUB_SHA: \$\{\{ env\.QUALITY_GATE_TARGET_SHA \}\}/u);
+  assert.match(workflow, /environment: \$\{\{ github\.event_name == 'schedule' && env\.QUALITY_GATE_SCHEDULED_ENVIRONMENT \|\| inputs\.environment \}\}/u);
 });

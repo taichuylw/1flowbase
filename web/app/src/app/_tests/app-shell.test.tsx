@@ -81,7 +81,7 @@ describe('App shell', () => {
       expect(
         within(primaryNavigation).getByRole('link', { name: '工具' })
       ).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: '设置' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: '设置' })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'Captain Root' })).toBeInTheDocument();
       expect(
         within(primaryNavigation).queryByRole('link', { name: 'Home' })

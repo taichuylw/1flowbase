@@ -8,6 +8,11 @@ import {
 import { Grid } from 'antd';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type {
+  SettingsDataModel,
+  SettingsDataModelField
+} from '../api/data-models';
+
 const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
   fetchSettingsMembers: vi.fn(),
@@ -179,6 +184,7 @@ vi.mock('@scalar/api-reference-react', () => ({
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
+import { DataModelFormDrawer } from '../components/data-models/DataModelFormDrawer';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 const antdStaticMessageWarning =
@@ -255,8 +261,8 @@ function settingsDataModelField(
   code: string,
   title: string,
   fieldKind = 'string',
-  overrides: Record<string, unknown> = {}
-) {
+  overrides: Partial<SettingsDataModelField> = {}
+): SettingsDataModelField {
   return {
     id,
     code,
@@ -264,6 +270,8 @@ function settingsDataModelField(
     physical_column_name: code,
     external_field_key: null,
     field_kind: fieldKind,
+    is_system: false,
+    is_writable: true,
     is_required: false,
     is_unique: false,
     default_value: null,
@@ -281,8 +289,8 @@ function settingsDataModel(
   code: string,
   title: string,
   fields: ReturnType<typeof settingsDataModelField>[],
-  overrides: Record<string, unknown> = {}
-) {
+  overrides: Partial<SettingsDataModel> = {}
+): SettingsDataModel {
   return {
     id,
     scope_kind: 'system',
@@ -852,7 +860,7 @@ describe('Settings data models page', () => {
     expect(within(advisorTab).getByText('info')).toBeInTheDocument();
   }, 20_000);
 
-  test('creates and edits Data Models from the data source section', async () => {
+  test('creates Data Models from the data source section', async () => {
     renderApp('/settings/data-models?source=source-1');
 
     await screen.findByText('Contacts', {}, { timeout: 10_000 });
@@ -910,6 +918,10 @@ describe('Settings data models page', () => {
         screen.queryByRole('dialog', { name: '新建 Data Model' })
       ).not.toBeInTheDocument()
     );
+  }, 20_000);
+
+  test('exposes Data Model editing from the detail drawer', async () => {
+    renderApp('/settings/data-models?source=source-1');
 
     await screen.findByText('Contacts', {}, { timeout: 10_000 });
     const contactsRow = screen
@@ -931,33 +943,56 @@ describe('Settings data models page', () => {
       within(editorDialog).getByRole('tab', { name: '字段' })
     ).toBeInTheDocument();
     expect(within(editorDialog).getByText('crm.contacts')).toBeInTheDocument();
-
     fireEvent.click(
       within(detailActions).getByRole('button', { name: /编\s*辑/ })
     );
-    const editDialog = await screen.findByRole('dialog', {
-      name: '编辑 Data Model'
-    });
+    expect(
+      await screen.findByRole('dialog', { name: '编辑 Data Model' })
+    ).toBeInTheDocument();
+  }, 20_000);
+
+  test('submits Data Model edits from the form drawer', async () => {
+    const onUpdate = vi.fn();
+
+    render(
+      <DataModelFormDrawer
+        open
+        mode="edit"
+        model={contactsModel}
+        source={null}
+        saving={false}
+        onClose={vi.fn()}
+        onCreate={vi.fn()}
+        onUpdate={onUpdate}
+      />
+    );
+
+    const editDialog = await screen.findByRole(
+      'dialog',
+      {
+        name: '编辑 Data Model'
+      },
+      { timeout: 5000 }
+    );
     fireEvent.change(within(editDialog).getByDisplayValue('Contacts'), {
       target: { value: 'Customer Contacts' }
     });
     fireEvent.change(within(editDialog).getByDisplayValue('crm.contacts'), {
       target: { value: 'crm.contacts.v2' }
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(within(editDialog).getByRole('button', { name: '保存' }));
 
     await waitFor(() =>
-      expect(dataModelsApi.updateSettingsDataModel).toHaveBeenCalledWith(
-        'model-1',
+      expect(onUpdate).toHaveBeenCalledWith(
+        contactsModel,
         expect.objectContaining({
           title: 'Customer Contacts',
           status: 'published',
           external_table_id: 'crm.contacts.v2'
-        }),
-        'csrf-123'
+        })
       )
     );
-  }, 20_000);
+  });
 
   test('deletes a Data Model from the table operation column after confirmation', async () => {
     renderApp('/settings/data-models?source=source-1');

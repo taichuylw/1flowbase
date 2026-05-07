@@ -134,6 +134,8 @@ function runCommandSequence({
   spawnSyncImpl = spawnSync,
   writeStdout = (text) => process.stdout.write(text),
   writeStderr = (text) => process.stderr.write(text),
+  nowImpl = () => Date.now(),
+  onCommandComplete,
 }) {
   clearWarningCapture(repoRoot, env, scope);
 
@@ -145,6 +147,7 @@ function runCommandSequence({
     const commandEnv = command.command === 'pnpm'
       ? buildNodePreferredEnv(mergedEnv).env
       : mergedEnv;
+    const startedAtMs = nowImpl();
     const result = spawnSyncImpl(command.command, command.args, {
       cwd: resolveCwd(repoRoot, command.cwd),
       env: commandEnv,
@@ -156,6 +159,7 @@ function runCommandSequence({
     if (result.error) {
       throw result.error;
     }
+    const finishedAtMs = nowImpl();
 
     if (result.stdout) {
       writeStdout(result.stdout);
@@ -176,6 +180,15 @@ function runCommandSequence({
         scope,
         step: command.label,
         stderr: warningStderr,
+      });
+    }
+
+    if (onCommandComplete) {
+      onCommandComplete({
+        command,
+        result,
+        startedAtMs,
+        finishedAtMs,
       });
     }
 

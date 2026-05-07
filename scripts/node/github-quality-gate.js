@@ -24,6 +24,8 @@ async function main(_argv = [], deps = {}) {
     repoRoot: deps.repoRoot,
     spawnSyncImpl: deps.spawnSyncImpl,
     createIssueImpl: deps.createIssueImpl,
+    listOpenQualityGateIssuesImpl: deps.listOpenQualityGateIssuesImpl,
+    closeIssueImpl: deps.closeIssueImpl,
     writeStdout: deps.writeStdout,
     writeStderr: deps.writeStderr,
   });

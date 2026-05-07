@@ -112,7 +112,7 @@ fn ensure_field_mutable(
         .find(|field| field.id == field_id)
         .ok_or(ControlPlaneError::NotFound("model_field"))?;
     if field.is_system || !field.is_writable {
-        return Err(ControlPlaneError::InvalidInput("model_field").into());
+        return Err(ControlPlaneError::InvalidInput("model_field"));
     }
 
     Ok(())

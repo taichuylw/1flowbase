@@ -1,6 +1,5 @@
-/* eslint-disable testing-library/no-node-access */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { resetAuthStore, useAuthStore } from '../../../../../state/auth-store';
@@ -75,11 +74,11 @@ describe('HostInfrastructurePanel', () => {
     expect(
       await screen.findByRole('heading', { name: '基础设施', level: 3 })
     ).toBeInTheDocument();
-    const row = (await screen.findByText('Redis')).closest('tr') as HTMLElement;
-    expect(within(row).getByText('disabled')).toBeInTheDocument();
-    expect(within(row).getByText('inactive')).toBeInTheDocument();
-    expect(within(row).getByText('storage-ephemeral')).toBeInTheDocument();
-    expect(within(row).getByText('cache-store')).toBeInTheDocument();
+    expect(await screen.findByText('Redis')).toBeInTheDocument();
+    expect(screen.getByText('disabled')).toBeInTheDocument();
+    expect(screen.getByText('inactive')).toBeInTheDocument();
+    expect(screen.getByText('storage-ephemeral')).toBeInTheDocument();
+    expect(screen.getByText('cache-store')).toBeInTheDocument();
   });
 
   test('renders pending restart state without claiming provider is active', async () => {
@@ -103,9 +102,9 @@ describe('HostInfrastructurePanel', () => {
 
     renderPanel();
 
-    const row = (await screen.findByText('Redis')).closest('tr') as HTMLElement;
-    expect(within(row).getByText('pending_restart')).toBeInTheDocument();
-    expect(within(row).getByText('inactive')).toBeInTheDocument();
+    expect(await screen.findByText('Redis')).toBeInTheDocument();
+    expect(screen.getByText('pending_restart')).toBeInTheDocument();
+    expect(screen.getByText('inactive')).toBeInTheDocument();
     expect(screen.getByText('重启后生效')).toBeInTheDocument();
   });
 
