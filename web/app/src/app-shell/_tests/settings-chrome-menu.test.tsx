@@ -66,10 +66,13 @@ describe('createSettingsChromeMenuItems', () => {
         ? settingsItem.label
         : null;
 
-    expect(isReactElementWithProps(label)).toBe(true);
-    expect(label?.props['aria-label']).toBe('设置');
-    expect(label?.props.children).toBeTruthy();
-    expect(label?.props.children).not.toBe('设置');
+    if (!isReactElementWithProps(label)) {
+      throw new Error('Expected settings item label to be a React element');
+    }
+
+    expect(label.props['aria-label']).toBe('设置');
+    expect(label.props.children).toBeTruthy();
+    expect(label.props.children).not.toBe('设置');
   });
 
   test('constrains the settings dropdown to sixty percent viewport height', () => {
