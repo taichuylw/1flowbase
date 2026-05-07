@@ -57,10 +57,13 @@ Manual runs share the same target-branch concurrency group as automatic quality 
 | `ci` | `node scripts/node/verify-ci.js` |
 | `repo` | `node scripts/node/verify-repo.js` |
 | `backend` | `node scripts/node/verify-backend.js` |
+| `backend-consistency` | `node scripts/node/verify-backend-consistency.js` |
 | `coverage` | `node scripts/node/verify-coverage.js all` |
 
-Use `ci` for the full repository quality gate. Use narrower scopes only when debugging or
-when a faster targeted report is enough.
+Use `ci` for the full repository quality gate. It includes the online-only backend
+consistency pass between the repo gate and coverage gate. Use narrower scopes only when
+debugging or when a faster targeted report is enough. Do not run the backend consistency
+scope locally unless explicitly requested, because it exercises database-backed Rust suites.
 
 ## Report Type
 

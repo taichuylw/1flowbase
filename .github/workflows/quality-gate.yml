@@ -18,6 +18,7 @@ on:
           - ci
           - repo
           - backend
+          - backend-consistency
           - coverage
       report_type:
         description: Report type

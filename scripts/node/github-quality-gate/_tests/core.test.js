@@ -27,6 +27,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'backend-consistency' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend-consistency.js')],
+    cwd: repoRoot,
+  });
+
   assert.throws(
     () => buildGateCommand({ repoRoot, scope: 'unknown' }),
     /Unknown quality gate scope: unknown/u

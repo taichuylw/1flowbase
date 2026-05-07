@@ -31,6 +31,20 @@ test('verify index dispatches coverage subcommand with remaining args', async ()
   assert.deepEqual(capturedArgv, ['backend']);
 });
 
+test('verify index dispatches backend consistency subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['backend-consistency'], {
+    runBackendConsistencyImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, []);
+});
+
 test('verify index rejects unknown subcommands', async () => {
   await assert.rejects(
     () => main(['unknown']),

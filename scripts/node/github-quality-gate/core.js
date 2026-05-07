@@ -6,7 +6,7 @@ const { spawnSync } = require('node:child_process');
 const { getRepoRoot } = require('../testing/warning-capture.js');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
-const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'coverage']);
+const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'backend-consistency', 'coverage']);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
