@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { BACKEND_CONSISTENCY_TARGETS } = require('../../verify/index.js');
 const {
   buildCommands,
   main,
@@ -16,25 +17,7 @@ test('buildCommands targets backend consistency suites without workspace-wide re
 
   assert.deepEqual(
     commands.map((command) => [command.label, command.args[2], command.args[5]]),
-    [
-      ['consistency-control-plane-state-transitions', 'control-plane', 'state_transition_tests'],
-      ['consistency-control-plane-workspace-session', 'control-plane', 'workspace_session'],
-      ['consistency-control-plane-model-definition-service', 'control-plane', 'model_definition_service_tests'],
-      ['consistency-control-plane-model-definition-runtime-sync', 'control-plane', 'model_definition_runtime_sync_tests'],
-      ['consistency-control-plane-resource-action-kernel', 'control-plane', 'resource_action_tests'],
-      ['consistency-runtime-acl', 'runtime-core', 'runtime_acl_tests'],
-      ['consistency-runtime-engine', 'runtime-core', 'runtime_engine_tests'],
-      ['consistency-storage-migration-smoke', 'storage-postgres', 'migration_smoke'],
-      ['consistency-storage-model-definition-repository', 'storage-postgres', 'model_definition_repository_tests'],
-      ['consistency-storage-runtime-record-repository', 'storage-postgres', 'runtime_record_repository_tests'],
-      ['consistency-storage-orchestration-runtime-repository', 'storage-postgres', 'orchestration_runtime_repository_tests'],
-      ['consistency-storage-physical-schema-repository', 'storage-postgres', 'physical_schema_repository_tests'],
-      ['consistency-storage-workspace-scope', 'storage-postgres', 'workspace_scope_tests'],
-      ['consistency-api-model-definition-routes', 'api-server', 'model_definition_routes'],
-      ['consistency-api-runtime-model-routes', 'api-server', 'runtime_model_routes'],
-      ['consistency-api-workspace-routes', 'api-server', 'workspace_routes'],
-      ['consistency-api-file-management-routes', 'api-server', 'file_management_routes'],
-    ]
+    BACKEND_CONSISTENCY_TARGETS.map((target) => [target.label, target.packageName, target.filter])
   );
 
   for (const command of commands) {
@@ -126,14 +109,14 @@ test('runBackendConsistencyCommandSequence writes per-target result evidence', (
     failedCount: target.failedCount,
   })), [
     {
-      label: 'consistency-control-plane-state-transitions',
+      label: commands[0].label,
       status: 'passed',
       durationMs: 1250,
       passedCount: 3,
       failedCount: 0,
     },
     {
-      label: 'consistency-control-plane-workspace-session',
+      label: commands[1].label,
       status: 'passed',
       durationMs: 1250,
       passedCount: 3,

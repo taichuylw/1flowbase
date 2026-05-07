@@ -8,7 +8,7 @@ This directory owns GitHub Actions automation for repository quality gates.
 | --- | --- |
 | `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; only `latest` push publishes quality-gate issues. |
 | `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run that creates one new GitHub Issue report per run. |
-| `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI and manual quality gates. |
+| `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
 ## Automatic CI
 
@@ -33,7 +33,7 @@ a failure excerpt when the gate fails. Use the artifact for full logs and raw co
 Runs use branch-level concurrency, so a newer push cancels an older in-progress quality gate
 for the same branch before stale runs can publish or close quality issues.
 
-## Manual Quality Gate
+## Manual And Nightly Quality Gate
 
 `quality-gate.yml` is triggered from GitHub Actions with `workflow_dispatch` and by a daily
 schedule at 18:00 UTC, which is 02:00 Asia/Shanghai.

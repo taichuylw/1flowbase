@@ -14,7 +14,7 @@ keywords:
 match_when:
   - 需要实现或调整 GitHub Actions 质量门禁封装
   - 需要判断 Issue 报告何时创建、是否复用旧 Issue
-  - 需要编写 quality gate action 或 manual quality gate workflow
+  - 需要编写 quality gate action、manual 或 scheduled quality gate workflow
   - 需要编写 scheduled quality gate 或 backend consistency target 报告
 created_at: 2026-05-03 23
 updated_at: 2026-05-07 17

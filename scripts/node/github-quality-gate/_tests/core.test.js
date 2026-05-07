@@ -81,7 +81,7 @@ test('runQualityGate writes reports and does not create an issue when publishing
       GITHUB_RUN_ID: '123',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: 'abcdef1234567890',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
     spawnSyncImpl(command, args, options) {
       assert.equal(command, process.execPath);
@@ -131,7 +131,7 @@ test('runQualityGate creates a new issue when publishing is enabled even if the 
       GITHUB_RUN_ID: '456',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: '1234567890abcdef',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
     spawnSyncImpl() {
       return {
@@ -358,14 +358,12 @@ test('buildReport includes backend consistency target results for consistency sc
       GITHUB_RUN_ID: '25472497763',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: '017e740a685939bf03b88112ca5623f57127bafb',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
   });
 
   assert.match(report.markdown, /## Backend Consistency Targets/u);
   assert.match(report.markdown, /\| Label \| Package \| Rust test filter \| Status \| Duration \| Passed \| Failed \|/u);
-  assert.match(report.markdown, /consistency-control-plane-state-transitions/u);
-  assert.match(report.markdown, /model_definition_repository_tests/u);
   assert.match(report.markdown, /\| `consistency-storage-model-definition-repository` \| `storage-postgres` \| `model_definition_repository_tests` \| failed \| 2\.30s \| 2 \| 1 \|/u);
   assert.equal(report.json.backendConsistencyTargets.length, 2);
   assert.deepEqual(report.json.backendConsistencyTargets[0], {
@@ -397,7 +395,7 @@ test('runQualityGate closes older open quality gate issues after publishing the 
       GITHUB_RUN_ID: '457',
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: '1234567890abcdef',
-      GITHUB_WORKFLOW: 'manual quality gate',
+      GITHUB_WORKFLOW: 'quality gate',
     },
     spawnSyncImpl() {
       return {

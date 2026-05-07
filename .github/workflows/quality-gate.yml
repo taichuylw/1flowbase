@@ -1,4 +1,4 @@
-name: manual quality gate
+name: quality gate
 
 on:
   schedule:
