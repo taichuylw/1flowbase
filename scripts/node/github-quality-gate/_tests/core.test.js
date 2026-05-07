@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
+  buildReport,
   buildGateCommand,
   buildIssueTitle,
   buildIssueLabels,
@@ -301,6 +302,82 @@ test('runQualityGate renders unavailable coverage metrics as n/a', async () => {
   });
 
   assert.match(createdIssues[0].body, /api-server: lines 90\.00%, functions n\/a, branches n\/a, regions n\/a/u);
+});
+
+test('buildReport includes backend consistency target results for consistency scopes', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-targets-'));
+  const targetReportPath = path.join(
+    repoRoot,
+    'tmp',
+    'test-governance',
+    'backend-consistency-targets.json'
+  );
+  fs.mkdirSync(path.dirname(targetReportPath), { recursive: true });
+  fs.writeFileSync(
+    targetReportPath,
+    `${JSON.stringify({
+      targets: [
+        {
+          label: 'consistency-control-plane-state-transitions',
+          packageName: 'control-plane',
+          filter: 'state_transition_tests',
+          status: 'passed',
+          exitCode: 0,
+          durationMs: 1250,
+          passedCount: 3,
+          failedCount: 0,
+        },
+        {
+          label: 'consistency-storage-model-definition-repository',
+          packageName: 'storage-postgres',
+          filter: 'model_definition_repository_tests',
+          status: 'failed',
+          exitCode: 101,
+          durationMs: 2300,
+          passedCount: 2,
+          failedCount: 1,
+        },
+      ],
+    }, null, 2)}\n`,
+    'utf8'
+  );
+
+  const report = buildReport({
+    repoRoot,
+    reportType: 'ci',
+    scope: 'backend-consistency',
+    status: 'passed',
+    exitCode: 0,
+    issueUrl: '',
+    environmentName: 'nightly-latest',
+    timestamp: '2026-05-07 02:32',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'latest',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '25472497763',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: '017e740a685939bf03b88112ca5623f57127bafb',
+      GITHUB_WORKFLOW: 'manual quality gate',
+    },
+  });
+
+  assert.match(report.markdown, /## Backend Consistency Targets/u);
+  assert.match(report.markdown, /\| Label \| Package \| Rust test filter \| Status \| Duration \| Passed \| Failed \|/u);
+  assert.match(report.markdown, /consistency-control-plane-state-transitions/u);
+  assert.match(report.markdown, /model_definition_repository_tests/u);
+  assert.match(report.markdown, /\| `consistency-storage-model-definition-repository` \| `storage-postgres` \| `model_definition_repository_tests` \| failed \| 2\.30s \| 2 \| 1 \|/u);
+  assert.equal(report.json.backendConsistencyTargets.length, 2);
+  assert.deepEqual(report.json.backendConsistencyTargets[0], {
+    label: 'consistency-control-plane-state-transitions',
+    packageName: 'control-plane',
+    filter: 'state_transition_tests',
+    status: 'passed',
+    exitCode: 0,
+    durationMs: 1250,
+    passedCount: 3,
+    failedCount: 0,
+  });
 });
 
 test('runQualityGate closes older open quality gate issues after publishing the latest report', async () => {

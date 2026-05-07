@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 const {
   buildCargoCommandEnv,
   getRepoRoot,
+  resolveOutputDir,
   runCommandSequence,
   runManagedCommandSequence,
 } = require('../testing/warning-capture.js');
@@ -22,6 +23,7 @@ const VALID_COVERAGE_TARGETS = new Set(['frontend', 'backend', 'all']);
 const VERIFY_COMMANDS = new Set(['backend', 'backend-consistency', 'ci', 'coverage', 'repo']);
 const FRONTEND_METRICS = ['lines', 'functions', 'statements', 'branches'];
 const COVERAGE_SCOPE_LABEL = '1flowbase-verify-coverage';
+const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
 const BACKEND_CONSISTENCY_TARGETS = [
   {
     label: 'consistency-control-plane-state-transitions',
@@ -110,6 +112,48 @@ const BACKEND_CONSISTENCY_TARGETS = [
   },
 ];
 
+function parseCargoTestCounts(output) {
+  const counts = {
+    passedCount: null,
+    failedCount: null,
+  };
+  const pattern = /test result:\s+(?:ok|FAILED)\.\s+(\d+) passed;\s+(\d+) failed;/gu;
+  let match = pattern.exec(output);
+
+  while (match) {
+    counts.passedCount = (counts.passedCount ?? 0) + Number.parseInt(match[1], 10);
+    counts.failedCount = (counts.failedCount ?? 0) + Number.parseInt(match[2], 10);
+    match = pattern.exec(output);
+  }
+
+  return counts;
+}
+
+function buildBackendConsistencyTargetResult(command) {
+  const target = BACKEND_CONSISTENCY_TARGETS.find((candidate) => candidate.label === command.label);
+
+  return {
+    label: command.label,
+    packageName: target?.packageName || command.args?.[2] || '',
+    filter: target?.filter || command.args?.[5] || '',
+    status: 'skipped',
+    exitCode: null,
+    durationMs: null,
+    passedCount: null,
+    failedCount: null,
+  };
+}
+
+function writeBackendConsistencyTargetReport({ repoRoot, env, targets }) {
+  const outputDir = resolveOutputDir(repoRoot, env);
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(outputDir, BACKEND_CONSISTENCY_TARGET_REPORT_FILE),
+    `${JSON.stringify({ targets }, null, 2)}\n`,
+    'utf8'
+  );
+}
+
 function resolveScriptsNodeEntry(repoRoot, entryName) {
   return path.join(repoRoot, 'scripts', 'node', entryName);
 }
@@ -193,6 +237,37 @@ function buildBackendConsistencyCommands({ cargoJobs, cargoTestThreads }) {
   }));
 }
 
+function runBackendConsistencyCommandSequence(sequenceOptions) {
+  const targets = sequenceOptions.commands.map(buildBackendConsistencyTargetResult);
+  const targetByLabel = new Map(targets.map((target) => [target.label, target]));
+
+  const status = runCommandSequence({
+    ...sequenceOptions,
+    onCommandComplete({ command, result, startedAtMs, finishedAtMs }) {
+      const target = targetByLabel.get(command.label);
+
+      if (!target) {
+        return;
+      }
+
+      const counts = parseCargoTestCounts(`${result.stdout || ''}\n${result.stderr || ''}`);
+      target.status = result.status === 0 ? 'passed' : 'failed';
+      target.exitCode = result.status ?? 1;
+      target.durationMs = Math.max(0, finishedAtMs - startedAtMs);
+      target.passedCount = counts.passedCount;
+      target.failedCount = counts.failedCount;
+    },
+  });
+
+  writeBackendConsistencyTargetReport({
+    repoRoot: sequenceOptions.repoRoot,
+    env: sequenceOptions.env,
+    targets,
+  });
+
+  return status;
+}
+
 async function runBackendConsistency(argv = [], deps = {}) {
   if (argv.includes('-h') || argv.includes('--help')) {
     (deps.writeStdout || ((text) => process.stdout.write(text)))(
@@ -221,6 +296,10 @@ async function runBackendConsistency(argv = [], deps = {}) {
     spawnSyncImpl: deps.spawnSyncImpl,
     writeStdout: deps.writeStdout,
     writeStderr: deps.writeStderr,
+    runCommandSequenceImpl: (sequenceOptions) => runBackendConsistencyCommandSequence({
+      ...sequenceOptions,
+      nowImpl: deps.nowImpl,
+    }),
   });
 }
 
@@ -779,8 +858,10 @@ async function main(argv = [], deps = {}) {
 }
 
 module.exports = {
+  BACKEND_CONSISTENCY_TARGETS,
   buildBackendCommands,
   buildBackendConsistencyCommands,
+  runBackendConsistencyCommandSequence,
   buildCiCommands,
   buildCoverageBackendCleanupCommands,
   buildCoverageBackendCommands,

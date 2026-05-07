@@ -3,6 +3,7 @@
 const {
   buildBackendConsistencyCommands: buildCommands,
   runBackendConsistency: main,
+  runBackendConsistencyCommandSequence,
 } = require('./verify/index.js');
 
 if (require.main === module) {
@@ -20,4 +21,5 @@ if (require.main === module) {
 module.exports = {
   buildCommands,
   main,
+  runBackendConsistencyCommandSequence,
 };

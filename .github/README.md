@@ -7,7 +7,7 @@ This directory owns GitHub Actions automation for repository quality gates.
 | Path | Purpose |
 | --- | --- |
 | `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; only `latest` push publishes quality-gate issues. |
-| `.github/workflows/quality-gate.yml` | Manual quality gate run that creates one new GitHub Issue report per run. |
+| `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run that creates one new GitHub Issue report per run. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI and manual quality gates. |
 
 ## Automatic CI
@@ -35,7 +35,8 @@ for the same branch before stale runs can publish or close quality issues.
 
 ## Manual Quality Gate
 
-`quality-gate.yml` is triggered from GitHub Actions with `workflow_dispatch`.
+`quality-gate.yml` is triggered from GitHub Actions with `workflow_dispatch` and by a daily
+schedule at 18:00 UTC, which is 02:00 Asia/Shanghai.
 
 Recommended first run:
 
@@ -49,6 +50,8 @@ Manual runs call the same Quality Gate Action with `publish_issue: "true"`. Each
 creates a new GitHub Issue. It does not reuse a fixed Issue and does not append comments to
 old reports.
 Manual runs share the same target-branch concurrency group as automatic quality gates.
+Scheduled runs target `latest`, use `scope: ci`, set `environment: nightly-latest`, publish
+one Issue report, and upload the same `test-governance-artifacts` artifact.
 
 ## Scope Options
 
@@ -81,9 +84,14 @@ The Quality Gate Action writes:
 - `tmp/test-governance/quality-gate.latest.log`
 - `tmp/test-governance/quality-gate-report.md`
 - `tmp/test-governance/quality-gate-report.json`
+- `tmp/test-governance/backend-consistency-targets.json` for `ci` and `backend-consistency`
 
 Existing warning, coverage, screenshot, and QA evidence files remain under
 `tmp/test-governance/`.
+For `ci` and `backend-consistency` scopes, the report also includes the current backend
+consistency target results: label, Cargo package, Rust test filter, status, duration,
+passed count, and failed count. If the target result artifact is unavailable, the report
+falls back to the static target registry with `not_run` status.
 
 ## Setup Order
 
