@@ -45,6 +45,19 @@
   overflow-wrap: anywhere;
 }
 
+.data-model-panel__source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 32px;
+  align-items: center;
+}
+
+.data-model-panel__source-meta-item {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .data-model-panel__detail {
   margin-top: 16px;
 }

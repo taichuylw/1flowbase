@@ -6,7 +6,6 @@ import {
   Alert,
   Breadcrumb,
   Button,
-  Descriptions,
   Drawer,
   Flex,
   Form,
@@ -514,23 +513,24 @@ export function SettingsDataModelsSection({
               </Flex>
 
               <div className="data-model-panel__source-detail">
-                <Descriptions
-                  size="small"
-                  column={{ xs: 1, sm: 2, lg: 3 }}
-                  items={[
-                    { key: 'id', label: 'ID', children: selectedSource.id },
-                    {
-                      key: 'source_kind',
-                      label: '来源类型',
-                      children: selectedSource.source_kind
-                    },
-                    {
-                      key: 'catalog',
-                      label: 'Catalog',
-                      children: selectedSource.catalog_refresh_status ?? '-'
-                    }
-                  ]}
-                />
+                <div className="data-model-panel__source-meta">
+                  <span className="data-model-panel__source-meta-item">
+                    <Typography.Text type="secondary">ID:</Typography.Text>
+                    <Typography.Text>{selectedSource.id}</Typography.Text>
+                  </span>
+                  <span className="data-model-panel__source-meta-item">
+                    <Typography.Text type="secondary">
+                      来源类型:
+                    </Typography.Text>
+                    <Typography.Text>{selectedSource.source_kind}</Typography.Text>
+                  </span>
+                  <span className="data-model-panel__source-meta-item">
+                    <Typography.Text type="secondary">Catalog:</Typography.Text>
+                    <Typography.Text>
+                      {selectedSource.catalog_refresh_status ?? '-'}
+                    </Typography.Text>
+                  </span>
+                </div>
                 <Form layout="inline" className="data-model-panel__defaults">
                   <Form.Item
                     label={
