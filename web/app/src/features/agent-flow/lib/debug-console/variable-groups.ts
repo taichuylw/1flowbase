@@ -154,9 +154,11 @@ export function mapVariableCacheToVariableGroup(
   variableCache: NodeDebugPreviewVariableCache,
   nodeLabels: Record<string, string> = {}
 ): AgentFlowVariableGroup | null {
-  const items = Object.entries(variableCache).flatMap(([nodeId, value]) =>
-    flattenNodeVariables(nodeLabels[nodeId] ?? nodeId, value)
-  );
+  const items = Object.entries(variableCache).map(([nodeId, value]) => ({
+    key: nodeId,
+    label: nodeLabels[nodeId] ?? nodeId,
+    value
+  }));
 
   if (items.length === 0) {
     return null;
