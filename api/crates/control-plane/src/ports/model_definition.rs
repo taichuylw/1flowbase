@@ -135,6 +135,12 @@ pub trait ModelDefinitionRepository: Send + Sync {
     ) -> anyhow::Result<domain::DataSourceDefaults> {
         anyhow::bail!("get_data_source_defaults is not implemented")
     }
+    async fn get_main_source_defaults(
+        &self,
+        _workspace_id: Uuid,
+    ) -> anyhow::Result<domain::DataSourceDefaults> {
+        Ok(domain::DataSourceDefaults::default())
+    }
     async fn create_model_definition(
         &self,
         input: &CreateModelDefinitionInput,

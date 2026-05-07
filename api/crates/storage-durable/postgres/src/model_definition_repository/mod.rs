@@ -233,6 +233,33 @@ impl ModelDefinitionRepository for PgControlPlaneStore {
         })
     }
 
+    async fn get_main_source_defaults(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<domain::DataSourceDefaults> {
+        let row = sqlx::query(
+            r#"
+            select default_data_model_status, default_api_exposure_status
+            from main_source_defaults
+            where workspace_id = $1
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        Ok(row
+            .map(|row| domain::DataSourceDefaults {
+                data_model_status: domain::DataModelStatus::from_db(
+                    row.get::<String, _>("default_data_model_status").as_str(),
+                ),
+                api_exposure_status: domain::ApiExposureStatus::from_db(
+                    row.get::<String, _>("default_api_exposure_status").as_str(),
+                ),
+            })
+            .unwrap_or_default())
+    }
+
     async fn create_model_definition(
         &self,
         input: &CreateModelDefinitionInput,

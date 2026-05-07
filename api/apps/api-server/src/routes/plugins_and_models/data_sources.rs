@@ -237,8 +237,7 @@ fn to_instance_response(view: DataSourceInstanceView) -> DataSourceInstanceRespo
     }
 }
 
-fn main_source_response() -> DataSourceInstanceResponse {
-    let defaults = domain::DataSourceDefaults::default();
+fn main_source_response(defaults: domain::DataSourceDefaults) -> DataSourceInstanceResponse {
     DataSourceInstanceResponse {
         id: "main_source".to_string(),
         source_kind: domain::DataModelSourceKind::MainSource.as_str().to_string(),
@@ -339,7 +338,10 @@ pub async fn list_instances(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<Vec<DataSourceInstanceResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let mut sources = vec![main_source_response()];
+    let main_source_defaults = service(&state)
+        .get_main_source_defaults(context.user.id, context.actor.current_workspace_id)
+        .await?;
+    let mut sources = vec![main_source_response(main_source_defaults)];
     sources.extend(
         service(&state)
             .list_instances(context.user.id, context.actor.current_workspace_id)
@@ -401,7 +403,15 @@ pub async fn update_defaults(
         api_exposure_status: parse_api_exposure_status(&body.default_api_exposure_status)?,
     };
     if instance_id == "main_source" {
-        return Ok(Json(ApiSuccess::new(main_source_response())));
+        let defaults = service(&state)
+            .update_main_source_defaults(UpdateDataSourceDefaultsCommand {
+                actor_user_id: context.user.id,
+                workspace_id: context.actor.current_workspace_id,
+                instance_id: Uuid::nil(),
+                defaults,
+            })
+            .await?;
+        return Ok(Json(ApiSuccess::new(main_source_response(defaults))));
     }
 
     let instance = service(&state)

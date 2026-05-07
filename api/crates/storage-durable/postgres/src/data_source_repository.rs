@@ -388,6 +388,73 @@ impl DataSourceRepository for PgControlPlaneStore {
         map_instance(row)
     }
 
+    async fn get_main_source_defaults(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<domain::DataSourceDefaults> {
+        let row = sqlx::query(
+            r#"
+            select default_data_model_status, default_api_exposure_status
+            from main_source_defaults
+            where workspace_id = $1
+            "#,
+        )
+        .bind(workspace_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        Ok(row
+            .map(|row| domain::DataSourceDefaults {
+                data_model_status: domain::DataModelStatus::from_db(
+                    row.get::<String, _>("default_data_model_status").as_str(),
+                ),
+                api_exposure_status: domain::ApiExposureStatus::from_db(
+                    row.get::<String, _>("default_api_exposure_status").as_str(),
+                ),
+            })
+            .unwrap_or_default())
+    }
+
+    async fn update_main_source_defaults(
+        &self,
+        input: &control_plane::ports::UpdateMainSourceDefaultsInput,
+    ) -> Result<domain::DataSourceDefaults> {
+        let row = sqlx::query(
+            r#"
+            insert into main_source_defaults (
+                workspace_id,
+                default_data_model_status,
+                default_api_exposure_status,
+                updated_by
+            ) values (
+                $1, $2, $3, $4
+            )
+            on conflict (workspace_id) do update
+            set
+                default_data_model_status = excluded.default_data_model_status,
+                default_api_exposure_status = excluded.default_api_exposure_status,
+                updated_by = excluded.updated_by,
+                updated_at = now()
+            returning default_data_model_status, default_api_exposure_status
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.defaults.data_model_status.as_str())
+        .bind(input.defaults.api_exposure_status.as_str())
+        .bind(input.updated_by)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(domain::DataSourceDefaults {
+            data_model_status: domain::DataModelStatus::from_db(
+                row.get::<String, _>("default_data_model_status").as_str(),
+            ),
+            api_exposure_status: domain::ApiExposureStatus::from_db(
+                row.get::<String, _>("default_api_exposure_status").as_str(),
+            ),
+        })
+    }
+
     async fn update_instance_config(
         &self,
         input: &UpdateDataSourceInstanceConfigInput,

@@ -363,11 +363,11 @@ async fn data_source_routes_create_validate_preview_and_catalog() {
     );
     assert_eq!(
         main_source_defaults_payload["data"]["default_data_model_status"].as_str(),
-        Some("published")
+        Some("draft")
     );
     assert_eq!(
         main_source_defaults_payload["data"]["default_api_exposure_status"].as_str(),
-        Some("published_not_exposed")
+        Some("draft")
     );
 
     let update_defaults = app

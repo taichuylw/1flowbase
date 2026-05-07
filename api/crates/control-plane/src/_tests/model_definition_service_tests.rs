@@ -724,6 +724,33 @@ async fn create_model_defaults_to_main_source_published_not_exposed() {
 }
 
 #[tokio::test]
+async fn create_model_inherits_main_source_defaults() {
+    let repository =
+        InMemoryModelDefinitionRepository::with_main_source_defaults(DataSourceDefaults {
+            data_model_status: DataModelStatus::Draft,
+            api_exposure_status: ApiExposureStatus::Draft,
+        });
+    let service = ModelDefinitionService::new(repository.clone());
+
+    let created = service
+        .create_model(CreateModelDefinitionCommand {
+            actor_user_id: Uuid::nil(),
+            scope_kind: DataModelScopeKind::Workspace,
+            data_source_instance_id: None,
+            external_resource_key: None,
+            external_table_id: None,
+            code: "main_source_draft_orders".into(),
+            title: "Main Source Draft Orders".into(),
+            status: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.status, DataModelStatus::Draft);
+    assert_eq!(created.api_exposure_status, ApiExposureStatus::Draft);
+}
+
+#[tokio::test]
 async fn api_key_readiness_treats_system_all_as_not_ready_for_non_root_runtime_actor() {
     let repository = InMemoryModelDefinitionRepository::default();
     let service = ModelDefinitionService::new(repository.clone());

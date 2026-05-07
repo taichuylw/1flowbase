@@ -217,7 +217,11 @@ where
                     .get_data_source_defaults(actor.current_workspace_id, data_source_instance_id)
                     .await?
             }
-            None => domain::DataSourceDefaults::default(),
+            None => {
+                self.repository
+                    .get_main_source_defaults(actor.current_workspace_id)
+                    .await?
+            }
         };
         let status = command.status.unwrap_or(defaults.data_model_status);
         let api_exposure_status =

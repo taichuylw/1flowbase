@@ -38,6 +38,13 @@ pub struct UpdateDataSourceDefaultsInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateMainSourceDefaultsInput {
+    pub workspace_id: Uuid,
+    pub defaults: domain::DataSourceDefaults,
+    pub updated_by: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpdateDataSourceInstanceConfigInput {
     pub workspace_id: Uuid,
     pub instance_id: Uuid,
@@ -108,6 +115,18 @@ pub trait DataSourceRepository: Send + Sync {
         &self,
         input: &UpdateDataSourceDefaultsInput,
     ) -> anyhow::Result<domain::DataSourceInstanceRecord>;
+    async fn get_main_source_defaults(
+        &self,
+        _workspace_id: Uuid,
+    ) -> anyhow::Result<domain::DataSourceDefaults> {
+        Ok(domain::DataSourceDefaults::default())
+    }
+    async fn update_main_source_defaults(
+        &self,
+        _input: &UpdateMainSourceDefaultsInput,
+    ) -> anyhow::Result<domain::DataSourceDefaults> {
+        anyhow::bail!("update_main_source_defaults is not implemented")
+    }
     async fn update_instance_config(
         &self,
         input: &UpdateDataSourceInstanceConfigInput,

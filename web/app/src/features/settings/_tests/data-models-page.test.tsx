@@ -720,6 +720,8 @@ describe('Settings data models page', () => {
       within(rolesRow as HTMLElement).getByText('角色')
     ).toBeInTheDocument();
     expect(within(rolesRow as HTMLElement).getByText('6')).toBeInTheDocument();
+    expect(screen.getByLabelText('默认 Data Model 状态')).toBeEnabled();
+    expect(screen.getByLabelText('默认 API 暴露状态')).toBeEnabled();
 
     fireEvent.click(
       within(rolesRow as HTMLElement).getByRole('button', { name: '编辑' })

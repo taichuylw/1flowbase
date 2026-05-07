@@ -26,6 +26,7 @@ use super::{
 pub struct InMemoryModelDefinitionRepository {
     models: Arc<Mutex<HashMap<Uuid, domain::ModelDefinitionRecord>>>,
     data_source_defaults: Arc<Mutex<HashMap<(Uuid, Uuid), domain::DataSourceDefaults>>>,
+    main_source_defaults: Arc<Mutex<HashMap<Uuid, domain::DataSourceDefaults>>>,
     grants: Arc<Mutex<Vec<domain::ScopeDataModelGrantRecord>>>,
     api_key_readiness: Arc<Mutex<Vec<ApiKeyDataModelReadinessRecord>>>,
     audit_logs: Arc<Mutex<Vec<domain::AuditLogRecord>>>,
@@ -42,6 +43,7 @@ impl InMemoryModelDefinitionRepository {
                 (Uuid::nil(), data_source_instance_id),
                 defaults,
             )]))),
+            main_source_defaults: Arc::default(),
             grants: Arc::default(),
             api_key_readiness: Arc::default(),
             audit_logs: Arc::default(),
@@ -53,6 +55,17 @@ impl InMemoryModelDefinitionRepository {
             .lock()
             .expect("in-memory api key readiness lock poisoned")
             .push(readiness);
+    }
+
+    pub fn with_main_source_defaults(defaults: domain::DataSourceDefaults) -> Self {
+        Self {
+            models: Arc::default(),
+            data_source_defaults: Arc::default(),
+            main_source_defaults: Arc::new(Mutex::new(HashMap::from([(Uuid::nil(), defaults)]))),
+            grants: Arc::default(),
+            api_key_readiness: Arc::default(),
+            audit_logs: Arc::default(),
+        }
     }
 
     pub fn replace_grant_permission_profile_for_tests(
@@ -158,6 +171,19 @@ impl ModelDefinitionRepository for InMemoryModelDefinitionRepository {
             .get(&(workspace_id, data_source_instance_id))
             .copied()
             .ok_or_else(|| ControlPlaneError::NotFound("data_source_instance").into())
+    }
+
+    async fn get_main_source_defaults(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<domain::DataSourceDefaults> {
+        Ok(self
+            .main_source_defaults
+            .lock()
+            .expect("in-memory main source defaults lock poisoned")
+            .get(&workspace_id)
+            .copied()
+            .unwrap_or_default())
     }
 
     async fn create_model_definition(

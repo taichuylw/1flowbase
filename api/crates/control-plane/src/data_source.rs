@@ -20,7 +20,8 @@ use crate::{
         CreateScopeDataModelGrantInput, DataSourceRepository, DataSourceRuntimePort,
         ModelDefinitionRepository, PluginRepository, RotateDataSourceSecretInput,
         UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceStatusInput,
-        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
+        UpdateMainSourceDefaultsInput, UpsertDataSourceCatalogCacheInput,
+        UpsertDataSourceSecretInput,
     },
 };
 
@@ -408,6 +409,54 @@ where
         .await?;
 
         Ok(instance)
+    }
+
+    pub async fn get_main_source_defaults(
+        &self,
+        actor_user_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<domain::DataSourceDefaults> {
+        let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
+        ensure_workspace_matches(&actor, workspace_id)?;
+        ensure_external_data_source_permission(&actor, "view")?;
+        DataSourceRepository::get_main_source_defaults(&self.repository, workspace_id).await
+    }
+
+    pub async fn update_main_source_defaults(
+        &self,
+        command: UpdateDataSourceDefaultsCommand,
+    ) -> Result<domain::DataSourceDefaults> {
+        let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
+        ensure_workspace_matches(&actor, command.workspace_id)?;
+        ensure_external_data_source_permission(&actor, "configure")?;
+        ensure_data_source_defaults_compatible(command.defaults)?;
+
+        let defaults = self
+            .repository
+            .update_main_source_defaults(&UpdateMainSourceDefaultsInput {
+                workspace_id: command.workspace_id,
+                defaults: command.defaults,
+                updated_by: actor.user_id,
+            })
+            .await?;
+
+        AuthRepository::append_audit_log(
+            &self.repository,
+            &audit_log(
+                Some(command.workspace_id),
+                Some(actor.user_id),
+                "data_source_instance",
+                None,
+                "data_source.main_source_defaults_updated",
+                json!({
+                    "default_data_model_status": defaults.data_model_status.as_str(),
+                    "default_api_exposure_status": defaults.api_exposure_status.as_str(),
+                }),
+            ),
+        )
+        .await?;
+
+        Ok(defaults)
     }
 
     pub async fn rotate_secret(

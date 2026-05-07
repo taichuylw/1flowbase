@@ -538,10 +538,7 @@ export function SettingsDataModelsSection({
                         id="data-source-default-model-status"
                         value={selectedSource.default_data_model_status}
                         options={dataModelStatusOptions}
-                        disabled={
-                          selectedSource.source_kind === 'main_source' ||
-                          updateDefaultsMutation.isPending
-                        }
+                        disabled={updateDefaultsMutation.isPending}
                         onChange={(value) =>
                           updateDefaultsMutation.mutate({
                             source: selectedSource,
@@ -572,10 +569,7 @@ export function SettingsDataModelsSection({
                           selectedSource.default_api_exposure_status
                         )}
                         options={apiExposureOptions}
-                        disabled={
-                          selectedSource.source_kind === 'main_source' ||
-                          updateDefaultsMutation.isPending
-                        }
+                        disabled={updateDefaultsMutation.isPending}
                         onChange={(value: DefaultApiExposureStatus) =>
                           updateDefaultsMutation.mutate({
                             source: selectedSource,

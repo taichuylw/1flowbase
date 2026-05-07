@@ -29,12 +29,12 @@ use crate::{
         DataSourceCrudRuntimePort, DataSourceRepository, DataSourceRuntimePort,
         ModelDefinitionRepository, RotateDataSourceSecretInput, RotateDataSourceSecretOutput,
         UpdateDataSourceDefaultsInput, UpdateDataSourceInstanceConfigInput,
-        UpdateDataSourceInstanceStatusInput, UpdateModelDefinitionInput,
-        UpdateModelDefinitionStatusInput, UpdateModelFieldInput, UpdatePluginArtifactSnapshotInput,
-        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
-        UpdatePluginTaskStatusInput, UpdateProfileInput, UpdateScopeDataModelGrantInput,
-        UpsertDataSourceCatalogCacheInput, UpsertDataSourceSecretInput,
-        UpsertPluginInstallationInput,
+        UpdateDataSourceInstanceStatusInput, UpdateMainSourceDefaultsInput,
+        UpdateModelDefinitionInput, UpdateModelDefinitionStatusInput, UpdateModelFieldInput,
+        UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
+        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
+        UpdateScopeDataModelGrantInput, UpsertDataSourceCatalogCacheInput,
+        UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
     },
 };
 use domain::{
@@ -107,6 +107,7 @@ struct InMemoryDataSourceRepository {
     secrets: Arc<RwLock<HashMap<Uuid, Value>>>,
     secret_records: Arc<RwLock<HashMap<Uuid, DataSourceSecretRecord>>>,
     caches: Arc<RwLock<HashMap<Uuid, DataSourceCatalogCacheRecord>>>,
+    main_source_defaults: Arc<RwLock<HashMap<Uuid, DataSourceDefaults>>>,
     preview_sessions: Arc<RwLock<HashMap<Uuid, DataSourcePreviewSessionRecord>>>,
     models: Arc<RwLock<HashMap<Uuid, ModelDefinitionRecord>>>,
     grants: Arc<RwLock<Vec<ScopeDataModelGrantRecord>>>,
@@ -136,6 +137,7 @@ impl Default for InMemoryDataSourceRepository {
             secrets: Arc::new(RwLock::new(HashMap::new())),
             secret_records: Arc::new(RwLock::new(HashMap::new())),
             caches: Arc::new(RwLock::new(HashMap::new())),
+            main_source_defaults: Arc::new(RwLock::new(HashMap::new())),
             preview_sessions: Arc::new(RwLock::new(HashMap::new())),
             models: Arc::new(RwLock::new(HashMap::new())),
             grants: Arc::new(RwLock::new(Vec::new())),
@@ -392,6 +394,27 @@ impl DataSourceRepository for InMemoryDataSourceRepository {
         instance.defaults = input.defaults;
         instance.updated_at = OffsetDateTime::now_utc();
         Ok(instance.clone())
+    }
+
+    async fn get_main_source_defaults(&self, workspace_id: Uuid) -> Result<DataSourceDefaults> {
+        Ok(self
+            .main_source_defaults
+            .read()
+            .await
+            .get(&workspace_id)
+            .copied()
+            .unwrap_or_default())
+    }
+
+    async fn update_main_source_defaults(
+        &self,
+        input: &UpdateMainSourceDefaultsInput,
+    ) -> Result<DataSourceDefaults> {
+        self.main_source_defaults
+            .write()
+            .await
+            .insert(input.workspace_id, input.defaults);
+        Ok(input.defaults)
     }
 
     async fn update_instance_config(
