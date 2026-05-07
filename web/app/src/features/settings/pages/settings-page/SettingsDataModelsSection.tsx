@@ -485,9 +485,15 @@ export function SettingsDataModelsSection({
               <Flex
                 align="center"
                 className="data-model-panel__manager-title-row"
-                gap={18}
+                gap={12}
                 wrap="wrap"
               >
+                <Button
+                  aria-label="返回"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={closeSourceManager}
+                  type="text"
+                />
                 <Typography.Title
                   level={4}
                   className="data-model-panel__section-title"
@@ -504,12 +510,6 @@ export function SettingsDataModelsSection({
                 <Typography.Text type="secondary">
                   {selectedSource.source_code}
                 </Typography.Text>
-                <Button
-                  aria-label="返回"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={closeSourceManager}
-                  type="text"
-                />
               </Flex>
 
               <div className="data-model-panel__source-detail">
