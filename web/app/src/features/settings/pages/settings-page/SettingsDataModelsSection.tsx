@@ -485,11 +485,12 @@ export function SettingsDataModelsSection({
               <Flex
                 align="center"
                 className="data-model-panel__manager-title-row"
-                gap={12}
+                gap={10}
                 wrap="wrap"
               >
                 <Button
                   aria-label="返回"
+                  className="data-model-panel__back-button"
                   icon={<ArrowLeftOutlined />}
                   onClick={closeSourceManager}
                   type="text"
