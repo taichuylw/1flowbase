@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import {
   Alert,
   Breadcrumb,
@@ -503,7 +504,12 @@ export function SettingsDataModelsSection({
                 <Typography.Text type="secondary">
                   {selectedSource.source_code}
                 </Typography.Text>
-                <Button onClick={closeSourceManager}>返回</Button>
+                <Button
+                  aria-label="返回"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={closeSourceManager}
+                  type="text"
+                />
               </Flex>
 
               <div className="data-model-panel__source-detail">
