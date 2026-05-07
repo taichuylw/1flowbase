@@ -2,7 +2,7 @@
 
 日期：2026-05-07
 
-状态：已按开发期破坏性基线重写，并补入持久化、缓存、流式、插件和 Data Model 审计项；待拆 implementation plan
+状态：已按开发期破坏性基线重写，并补入持久化、缓存、变量展示、流式 replay、插件版本锁定和 Data Model 写入审计项；待拆 implementation plan
 
 取代文档：无
 
@@ -142,6 +142,7 @@ current node
 3. 不把 Dify 的 `answer` 配置字段命名直接迁入 1flowbase；1flowbase 继续用 `answer_template` 表示 Answer 输入模板。
 4. 不把 metadata/error/debug 当成 output 再靠可见性字段筛掉。
 5. 1flowbase 采用自己的 Node Runtime UI Contract：用声明式 contract 驱动节点选择器、卡片、Inspector、Detail Panel、运行态面板、变量链接器和插件节点贡献。
+6. 不复制 Dify 当前 LLM output 中继续暴露 `usage`、`reasoning_content` 的历史兼容做法；1flowbase 只吸收其变量链接、snapshot replay、offload 和插件 schema 分层机制。
 
 ## 4. 信息架构诊断
 
@@ -161,7 +162,7 @@ current node
 | 信息 | 深度 | 容器 | 规则 |
 |---|---|---|---|
 | 可被下游引用的变量 | L0/L1 | Variable Cache / Variable Picker | 只来自公开输出契约。 |
-| 当前节点解析后的输入 | L1 | Trace item detail | 只用于调试，不进入变量缓存。 |
+| 当前节点解析后的输入 | L1 | Trace item detail / node_run.input_payload | 必须持久化并可审计、可 full-load；不作为 public output，不进入变量缓存。 |
 | 节点公开输出 | L1 | Trace Outputs / Variable Cache | 与 variable pool 同源。 |
 | token、耗时、route、attempt、finish reason | L1 | Trace Metrics | 指标，不作为普通变量。 |
 | provider event、raw response、artifact ref | L2 | Trace Debug | 调试证据，不进入变量选择器。 |
@@ -184,6 +185,9 @@ current node
 11. 建立 RuntimeEventStream 与 durable debug event 的流式返回契约。
 12. 建立 plugin node contribution v2 到 Node Runtime UI Contract 的映射和校验规则。
 13. 建立 Data Model 节点动作级输出、权限、scope 和副作用矩阵。
+14. 建立大对象 offload、预览截断、full-load API 和 run retention/GC 契约。
+15. 建立 LLM 流式事件 cursor/replay/幂等消费契约。
+16. 建立 plugin contribution 版本锁定、compile snapshot 和 stale contribution 处理规则。
 
 ### 5.2 非目标
 
@@ -213,6 +217,9 @@ current node
 15. 大对象、raw response、provider event、artifact 和内部证据默认以 ref 进入 debug，不直接塞入 node output。
 16. 写入型 Data Model 节点必须声明副作用等级，调试运行、重跑和 checkpoint 恢复必须能解释是否会重复写。
 17. 插件贡献只能声明宿主支持的能力和 schema；基础设施缓存、队列、锁、事件总线不由 RuntimeExtension 或 CapabilityPlugin 直连。
+18. 缓存、snapshot 和 draft debug 变量必须按 workspace、actor、draft、document hash 和 run scope 隔离；任何跨 actor 或跨 workspace 恢复都视为数据泄露。
+19. 变量显示身份使用稳定 selector key，不使用 output title 作为身份；title 只作为辅助展示文案。
+20. 插件、Data Model、LLM 等 executor 的 raw output 不能直接成为持久化 payload；必须先经过 payload builder 与 schema 校验。
 
 ## 7. 目标概念模型
 
@@ -429,6 +436,9 @@ Capability Plugin 的 node contribution 需要映射到同一个 Node Runtime UI
 contribution identity:
   plugin_id
   plugin_version
+  plugin_unique_identifier
+  package_id
+  contribution_checksum
   contribution_code
   node_shell
   schema_version
@@ -453,11 +463,15 @@ ui/runtime contract:
 5. plugin `runtime_schema` 只描述 Trace 展示结构，不生成变量。
 6. plugin `policy_schema` 只描述 retry、error handling、timeout 和 single-run/debug form。
 7. dependency status 不为 ready 时，Node Picker 可以展示禁用项，但不能创建不可编译节点。
+8. 节点实例保存的是编译时 contribution identity 与 output schema snapshot，不从当前已安装插件动态反推旧节点输出。
+9. plugin 升级后，既有节点必须显式 recompile 或接受迁移提示；运行时发现 package 缺失、checksum 不匹配或 output schema 漂移时，编译失败，不降级执行。
 
 插件 contribution v2 必须补齐以下硬边界：
 
 ```text
 schema_version: 1flowbase.node-contribution/v2
+plugin_unique_identifier: provider/package identity
+compiled_contribution_hash: immutable compile snapshot
 panel_schema: host-renderer blocks only
 runtime_schema: inputs / outputs / metrics / errors / debug display schema
 policy_schema: timeout / retry / error handling / side effect / single-run form
@@ -474,6 +488,9 @@ output_schema.outputs: public outputs only
 5. v1 contribution 可在开发期直接拒绝编译或通过重种子替换，不写兼容 mapper。
 6. RuntimeExtension / CapabilityPlugin 不能声明或消费 `cache-store`、`distributed-lock`、`event-bus`、`task-queue` 等宿主基础设施连接。
 7. HostExtension provider 可以实现基础设施 contract，但 cache 数据不能成为 Agent Flow 变量真值。
+8. plugin executor 返回未声明 output key 时，payload builder 必须拒绝写入 public output，并把原始值放入 debug artifact 或丢弃并记录校验错误。
+9. renderer allowlist 是宿主能力白名单，不是插件自带能力；未知 field/view renderer 不能进入持久化草稿。
+10. plugin invocation metadata、凭据状态、重试、provider route 和内部调用 ID 只能进入 metrics/debug/error，不得进入 output schema。
 
 ### 9.5 Panel 信息深度
 
@@ -557,7 +574,7 @@ export function listAvailableVariables(
 ### 10.4 UI 规则
 
 1. 变量选择器文案使用“选择上游输出”，不使用“选择缓存字段”。
-2. 变量块展示 `node alias / output title`。
+2. 变量块主展示使用 `node.alias/key`；`output title` 只能作为辅助说明，不参与变量身份、selector、cache key 或测试断言。
 3. Variables tab 展示节点级 output object，不递归平铺对象内部字段。
 4. Trace Inputs 展示 resolved inputs。
 5. Trace Metrics 展示 usage、duration、route、attempt、finish reason。
@@ -583,12 +600,13 @@ debug_payload
 
 规则：
 
-1. `input_payload` 保存 resolved inputs。
+1. `input_payload` 保存 resolved inputs，必须持久化到 node run trace，用于调试、审计、回放和 full-load。
 2. `output_payload` 保存公开业务输出。
 3. `metrics_payload` 保存 usage、duration、route、attempt、finish_reason、preview_mode。
 4. `error_payload` 保存错误。
 5. `debug_payload` 保存 raw response ref、provider event ref、artifact ref、internal evidence。
 6. provider stream events 不进入 output payload。
+7. `input_payload` 不是 public output，不进入 Variable Cache、Variable Picker 或 variable pool。
 
 ### 11.2 Variable Pool
 
@@ -636,10 +654,13 @@ snapshot key 固定包含：
 
 ```text
 application_id
+workspace_id
+actor_user_id
 draft_id
 document_hash
 flow_schema_version
 snapshot_schema_version
+debug_session_id
 latest_completed_or_running_run_id
 ```
 
@@ -653,6 +674,10 @@ latest_completed_or_running_run_id
 6. frontend preview cache 可以先展示 RuntimeEventStream 最新 output，但最终必须被 durable run detail / snapshot 对齐。
 7. cache-store / Redis / local ring buffer 只保存加速数据；缓存丢失不能影响 durable run 的可解释性。
 8. audit、billing、checkpoint 和 callback 所需事件不能只停留在易失缓存。
+9. snapshot 不跨 `workspace_id`、`actor_user_id` 或 `debug_session_id` 恢复；共享应用的不同编辑者必须看到各自的 draft debug 变量。
+10. snapshot 只读取状态为 succeeded 或显式 waiting-success checkpoint 的 node public output；failed/cancelled/running 中未完成节点不进入 durable variable cache。
+11. snapshot 合并排序必须稳定：`flow_run.started_at, flow_run.id, node_run.index, node_run.started_at, node_run.id`；同一节点覆盖旧值时必须可解释到具体 `node_run_id`。
+12. 运行中 snapshot 属于 partial cache，response 必须携带 `snapshot_completeness` 或等价状态；前端需要标识它不是完整 durable truth。
 
 ### 11.5 Payload Builder 与 public output filter
 
@@ -676,6 +701,9 @@ resolved inputs
 4. failure path 默认不写普通 public output；如需可被下游引用的异常变量，必须由显式错误处理策略产出新的 public output。
 5. live debug run 与 non-stream debug run 必须使用同一 payload builder。
 6. checkpoint 的 `variable_snapshot` 只保存 public-only variable pool。
+7. payload builder 是 `node_run.output_payload`、`variable_pool`、`debug snapshot` 的唯一写入口；executor raw result 只能作为 builder input 或 debug artifact。
+8. unknown output key 的默认策略是 reject-and-record，不是 silently drop；只有节点 contract 明确声明的 `additionalProperties` 才能保留结构化扩展字段。
+9. splitter 需要返回 `output_payload`、`metrics_payload`、`error_payload`、`debug_payload` 四个互斥对象；互斥失败直接视为 runtime contract error。
 
 ### 11.6 RuntimeEventStream 与 LLM 流式返回
 
@@ -702,6 +730,11 @@ LLM 流式事件分层：
 4. 如果 provider 在首 token 后失败，已发出的 delta 保留在 Trace/Debug 中，LLM 节点仍按失败处理，不向 variable pool 写普通 output。
 5. RuntimeEventStream provider 可以从 local ring buffer 升级到 Redis Streams / NATS / Kafka 等 HostExtension provider；Core 只依赖 `RuntimeEventStream` contract。
 6. durable debug event 持久化可以异步，但持久化失败必须可诊断。
+7. 每个 stream event envelope 必须包含 `event_id`、`run_id`、`node_run_id`、`event_type`、`sequence`、`created_at`；delta 事件还必须包含 `delta_index` 和 `content_type`。
+8. SSE reconnect 使用 `last_event_id` 或等价 cursor replay；前端按 `event_id/sequence` 幂等应用，不能重复拼接 delta。
+9. durable debug event 读模型可以合并 delta，但必须保留 `node_run_id`、`event_type`、`sequence_start`、`sequence_end`、`content_type`、`is_truncated` 和 artifact/ref 信息。
+10. RuntimeEventStream buffer 溢出策略必须显式：丢弃最旧 live event 时写 warning event 或服务端日志；durable-required event 不能只依赖已丢弃的 live buffer。
+11. terminal event 包括 `flow_finished`、`flow_failed`、`flow_cancelled`、`waiting_human`、`waiting_callback`；terminal 之后同一 run 的 stream 必须关闭或进入明确等待态。
 
 ### 11.7 debug_payload 与大对象引用
 
@@ -727,6 +760,20 @@ internal_evidence
 2. `debug_payload` 不进入 Variables tab、Variable Picker、Debug Variable Cache。
 3. Trace Debug 读取 `debug_payload` 和 debug artifacts，不读取 variable pool。
 4. debug artifact 的生命周期跟随 run retention policy，不跟随 editor preview cache。
+
+### 11.8 大对象、offload 与预览截断
+
+大对象处理不是 UI 优化，而是持久化与调试契约的一部分。
+
+规则：
+
+1. `input_payload`、`output_payload`、`metrics_payload`、`debug_payload` 和 draft variable snapshot 都必须有 inline size budget。
+2. 超过 inline budget 的文本、JSON、文件列表和 provider raw response 必须 offload 到 object storage，并在 durable record 中保存 ref。
+3. 预览 payload 必须携带 `is_truncated`、`original_size_bytes`、`preview_size_bytes`、`content_type`、`artifact_ref`。
+4. Trace 与 Variable Cache 默认读取预览；用户展开完整值时走 full-load API，不从 cache-store 反查。
+5. offload artifact 生命周期跟随 run retention / draft variable retention；删除 run 或 draft variable 时必须进入 GC 队列。
+6. Variable Picker 不能从 offload 内容推断字段；结构化字段只来自 output schema。
+7. offload 失败时，public output 写入失败或降级必须有正式 error/debug payload，不能把大对象截断后伪装成完整业务输出。
 
 ## 12. 节点级契约
 
@@ -953,6 +1000,8 @@ data_model_delete: deleted_id, affected_count
 4. Data Model 节点按节点类型固定 action，不读取 `config.action`。
 5. runtime scope 使用 `actor.current_workspace_id` 或 `SYSTEM_SCOPE_ID` 对应的 Data Model grant，不允许回退到旧 `team/app` alias。
 6. metadata 不健康、未发布、未授权或 scope grant 不满足时，进入 `error_payload`，不写 public output。
+7. runtime metadata 缺失或版本落后于编译时 schema hash 时必须失败，不能跳过字段、排序或 relation 校验后继续执行。
+8. `data_model_delete` 成功输出必须同时包含 `deleted_id` 与 `affected_count`；如果底层存储无法返回影响行数，runtime adapter 必须补成可解释的 `affected_count`，不能省略字段。
 
 动作矩阵：
 
@@ -970,6 +1019,12 @@ data_model_delete: deleted_id, affected_count
 2. Data Model write 在 debug run 中必须有 `side_effect_policy`：`disabled`、`confirm_each_run` 或 `allow_with_idempotency`。
 3. checkpoint 恢复不能隐式重复执行已经成功的 write node。
 4. write node 的 audit/outbox 归 Data Model runtime action owner，不由节点 UI 或插件私自补。
+5. `disabled` 时节点不执行写入，产出正式 `error_payload.code = "DATA_MODEL_SIDE_EFFECT_DISABLED"`，不写 public output。
+6. `confirm_each_run` 时运行进入等待确认态；确认记录必须包含 actor、node_id、run_id、resolved payload hash 和过期时间。
+7. `allow_with_idempotency` 必须生成同一 run 内稳定的 idempotency key：`workspace_id + application_id + draft_id + run_id + node_id + action + resolved payload hash`；checkpoint replay 命中同一 key 时读取已记录结果，不再次写入。
+8. Data Model write idempotency 的目标是防同一 `run_id` 内的 checkpoint/replay 重复写；跨 debug run 的重复执行仍按新 run 处理，除非未来另行引入业务级去重键。
+9. write 成功后必须持久化 side-effect receipt，至少包含 action、model_code、record_id/deleted_id、affected_count、idempotency_key、actor、scope_id、node_run_id、created_at。
+10. audit/outbox 写入失败时，Data Model write 不能被当作完全成功；需要明确补偿或失败策略。
 
 ### 12.8 Human Input
 
@@ -1012,6 +1067,8 @@ submitted values
 3. application draft document 可按 v2 默认文档重建。
 4. flow run、node run、checkpoint 的 payload 结构按新契约写入。
 5. 没有 selector 修复路径；失效 selector 由校验报错暴露。
+6. debug snapshot 表或等价 cache schema 必须包含 workspace、actor、draft、document hash、schema version、debug session 和 latest run scope。
+7. debug artifact/offload 表或对象索引必须支持 ref、size、content type、retention 和 GC 状态。
 
 ### 13.3 Runtime 基线
 
@@ -1024,6 +1081,9 @@ submitted values
 7. durable debug events 保存 text/reasoning delta 的合并读模型，不作为 variable pool 来源。
 8. `flow_run.output_payload` 只保存最终业务输出，不保存整流变量缓存。
 9. `debug_payload` 大对象字段只保存 ref。
+10. RuntimeEventStream 事件必须有 sequence/cursor，支持 reconnect replay 与前端幂等消费。
+11. Data Model write 节点必须写 side-effect receipt，并用 idempotency key 防止 checkpoint replay 重复写。
+12. plugin contribution 编译时保存 immutable identity/hash/output schema snapshot，运行时不从当前插件动态反推旧节点契约。
 
 ### 13.4 Frontend 基线
 
@@ -1037,6 +1097,8 @@ submitted values
 8. Debug Variable Cache 使用 object-level 节点条目展示。
 9. Run Context / Environment / Session 独立展示，不合并进 Variable Cache。
 10. Variable Picker 结构化字段展开只读 output schema。
+11. 变量展示身份固定为 `node.alias/key`；output title 只做辅助文案。
+12. Trace / Variable Cache 的大对象默认展示预览和 truncation 状态，完整值通过 full-load API 展开。
 
 ## 14. 验收证据
 
@@ -1064,6 +1126,15 @@ submitted values
 18. plugin contribution v2 拒绝 unknown renderer、React panel、基础设施连接和非 public output key。
 19. Data Model delete 输出 `deleted_id` 与 `affected_count`，前后端输出契约一致。
 20. Data Model write 节点在 debug run 中按 `side_effect_policy` 执行，不允许 checkpoint 恢复重复写。
+21. 变量块展示使用 `node.alias/key`，不会把 output title 当作 selector identity。
+22. snapshot key 包含 `workspace_id`、`actor_user_id`、`debug_session_id` 和 latest run scope；跨 workspace/actor/draft/document hash 不恢复旧 cache。
+23. snapshot 只聚合 succeeded 或 waiting-success checkpoint 的 public output；failed/cancelled/running 未完成节点不进入 durable variable cache。
+24. stream event 带 `event_id/sequence`，断线重连不会重复拼接 `text_delta` 或 `reasoning_delta`。
+25. durable debug event 合并读模型保留 sequence 范围、content type、node_run_id 和 truncation/ref 信息。
+26. 大对象 offload 后 Variable Cache 显示预览、`is_truncated` 和 full-load ref，不把截断内容当完整变量。
+27. plugin contribution 编译时锁定 package identity/hash/output schema；插件缺失、checksum 不匹配或 stale contribution 会编译失败。
+28. plugin executor 返回 unknown output key 时，payload builder 拒绝写入 public output 并记录校验错误。
+29. Data Model write 的 idempotency key、side-effect receipt、audit/outbox 失败策略有单元测试覆盖。
 
 建议命令：
 
@@ -1117,12 +1188,12 @@ tmp/test-governance/
 
 1. `data_model_create/update/delete` 在 debug run 中展示 side effect policy。
 2. policy 为 `disabled` 时节点不执行写入，Trace Error 给出正式错误。
-3. policy 为 `allow_with_idempotency` 时重复执行使用同一 idempotency key。
+3. policy 为 `allow_with_idempotency` 时，同一 `run_id` 的 checkpoint/replay 重复执行使用同一 idempotency key；跨 debug run 会生成新 key。
 4. delete 后 Variables tab 展示 `deleted_id` 与 `affected_count`。
 
 ## 15. 实施预算
 
-建议拆成 7 个实现计划：
+建议拆成 9 个实现计划：
 
 1. Schema v2、Node Runtime UI Contract 与变量链接器基础：1 天。
 2. Node Picker、Node Factory、Node Card、Inspector、Detail Panel contract 化：1 天。
@@ -1131,6 +1202,8 @@ tmp/test-governance/
 5. RuntimeEventStream、LLM streaming、reasoning/debug event 与 durable read model 对齐：1 天。
 6. Plugin contribution v2、renderer allowlist、policy schema 与 manifest 校验：1 天。
 7. 核心节点输出契约、Data Model side effect matrix、校验与回归测试：1 天。
+8. 大对象 offload、truncation preview、full-load API 与 artifact retention/GC：1 天。
+9. Data Model write idempotency、side-effect receipt、audit/outbox 与 checkpoint replay：1 天。
 
 最小闭环不是 UI 过滤，而是：
 
@@ -1146,7 +1219,7 @@ schema v2 node runtime contract + public-only outputs
 满足以下条件即可认为本轮设计落地完成：
 
 1. 变量选择器与 Variables tab 对“变量”的定义一致。
-2. 任意非 Start 节点的 `input_payload` 不会出现在 Variable Cache。
+2. 任意非 Start 节点的 `input_payload` 会保留在 Trace item detail / node run 审计记录中，但不会出现在 Variable Cache。
 3. 任意节点的 `metrics_payload`、`error_payload`、`debug_payload` 不会出现在 Variable Cache。
 4. Answer 不再出现 `answer_template` 和 `answer` 并列。
 5. Template Transform 不再出现 `template` 和 `text` 并列。
@@ -1159,3 +1232,8 @@ schema v2 node runtime contract + public-only outputs
 12. reasoning 可流式展示和恢复，但不会进入 public output。
 13. plugin contribution 不能绕过宿主 renderer、policy、output filter 和基础设施边界。
 14. Data Model 写入节点的副作用、重跑和 checkpoint 恢复语义明确。
+15. snapshot 恢复不跨 workspace、actor、draft、debug session 或 document hash。
+16. RuntimeEventStream 支持 cursor replay，断线重连不会重复拼接 delta。
+17. 大对象以 preview/ref/full-load 方式展示，截断值不会伪装成完整变量。
+18. 插件节点按编译时 identity/hash/output schema 执行，stale contribution 不会静默降级。
+19. Data Model write 有 idempotency key、side-effect receipt 和 audit/outbox 失败处理。
