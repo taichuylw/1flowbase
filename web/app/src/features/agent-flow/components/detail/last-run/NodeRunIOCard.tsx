@@ -103,29 +103,16 @@ export function pickProcessPayload(debugPayload: unknown) {
   return isRecord(debugPayload) ? debugPayload : {};
 }
 
-function isSameJsonValue(left: unknown, right: unknown) {
-  try {
-    return JSON.stringify(left) === JSON.stringify(right);
-  } catch {
-    return false;
-  }
-}
-
-export function omitProcessPayloadFromOutput(
-  outputPayload: unknown,
-  processPayload: unknown
-) {
-  if (!isRecord(outputPayload) || !isRecord(processPayload)) {
+export function normalizeNodeOutputPayload(outputPayload: unknown) {
+  if (!isRecord(outputPayload)) {
     return outputPayload;
   }
 
-  const entries = Object.entries(outputPayload).filter(
-    ([key, value]) =>
-      !Object.prototype.hasOwnProperty.call(processPayload, key) ||
-      !isSameJsonValue(value, processPayload[key])
-  );
+  if (isRecord(outputPayload.node_output)) {
+    return outputPayload.node_output;
+  }
 
-  return Object.fromEntries(entries);
+  return outputPayload;
 }
 
 export function NodeRunPayloadSections({
@@ -140,10 +127,7 @@ export function NodeRunPayloadSections({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const processPayload = pickProcessPayload(debugPayload);
-  const visibleOutputPayload = omitProcessPayloadFromOutput(
-    outputPayload,
-    processPayload
-  );
+  const visibleOutputPayload = normalizeNodeOutputPayload(outputPayload);
 
   return (
     <>
