@@ -476,7 +476,7 @@ async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
         .await
         .unwrap();
 
-    service
+    let detail = service
         .continue_flow_debug_run(ContinueFlowDebugRunCommand {
             application_id: seeded.application_id,
             flow_run_id: detail.flow_run.id,
@@ -484,6 +484,18 @@ async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
         })
         .await
         .unwrap();
+
+    let llm_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-llm")
+        .expect("llm node run should be persisted");
+    assert_eq!(llm_node.output_payload["text"], "正式回答");
+    assert_eq!(
+        llm_node.output_payload["reasoning_content"],
+        "先分析用户问题"
+    );
+    assert!(llm_node.debug_payload.get("reasoning_content").is_none());
 
     let events = stream.events();
     assert!(events

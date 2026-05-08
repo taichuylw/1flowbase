@@ -396,6 +396,7 @@ where
                     attempt_metrics,
                 ),
                 Vec::new(),
+                false,
             );
         }
         let output = match invoker.invoke_llm(attempt_runtime, invocation_input).await {
@@ -430,6 +431,7 @@ where
                         attempt_metrics,
                     ),
                     Vec::new(),
+                    true,
                 );
             }
         };
@@ -494,6 +496,7 @@ where
                     attempt_metrics,
                 ),
                 output.events,
+                true,
             );
         }
 
@@ -530,6 +533,7 @@ where
             attempt_metrics,
         ),
         Vec::new(),
+        true,
     )
 }
 
@@ -910,18 +914,23 @@ fn build_failed_llm_execution(
     error_payload: Value,
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
+    include_output_payload: bool,
 ) -> Result<LlmNodeExecution> {
     let raw = RawNodeExecutionResult {
         executor_output: Map::new(),
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
-        debug_facts: build_llm_debug_facts(node, runtime, None, None),
+        debug_facts: build_llm_debug_facts(node, runtime, None),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
 
     Ok(LlmNodeExecution {
-        output_payload: built.output_payload,
+        output_payload: if include_output_payload {
+            built.output_payload
+        } else {
+            json!({})
+        },
         error_payload: Some(built.error_payload),
         metrics_payload: built.metrics_payload,
         debug_payload: built.debug_payload,
@@ -941,6 +950,12 @@ fn build_successful_llm_execution(
     let text_parts = split_llm_think_tags(&raw_text);
     let mut executor_output = Map::new();
     executor_output.insert("text".to_string(), Value::String(text_parts.text.clone()));
+    if let Some(reasoning_content) = text_parts.reasoning_content {
+        executor_output.insert(
+            "reasoning_content".to_string(),
+            Value::String(reasoning_content),
+        );
+    }
 
     if declares_public_output(node, "structured_output")
         && is_structured_response_format(&node.config)
@@ -955,12 +970,7 @@ fn build_successful_llm_execution(
         executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: Map::new(),
-        debug_facts: build_llm_debug_facts(
-            node,
-            runtime,
-            Some(result),
-            text_parts.reasoning_content,
-        ),
+        debug_facts: build_llm_debug_facts(node, runtime, Some(result)),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -997,7 +1007,6 @@ fn build_llm_debug_facts(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
     result: Option<&ProviderInvocationResult>,
-    reasoning_content: Option<String>,
 ) -> Map<String, Value> {
     let attempt_ref = format!("pending_attempt_id:{}", node.node_id);
     let mut debug = Map::new();
@@ -1030,13 +1039,6 @@ fn build_llm_debug_facts(
             "model": runtime.model,
         }),
     );
-
-    if let Some(reasoning_content) = reasoning_content {
-        debug.insert(
-            "reasoning_content".to_string(),
-            Value::String(reasoning_content),
-        );
-    }
 
     if let Some(result) = result {
         debug.insert(

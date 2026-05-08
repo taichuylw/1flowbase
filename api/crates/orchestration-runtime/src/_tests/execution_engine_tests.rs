@@ -737,6 +737,7 @@ async fn llm_output_payload_keeps_think_tags_in_standard_text_content() {
 
     assert_eq!(trace.output_payload["text"], json!("正式回答"));
     assert_eq!(trace.output_payload["reasoning_content"], "先分析用户问题");
+    assert!(trace.debug_payload.get("reasoning_content").is_none());
     assert!(trace.output_payload.get("message").is_none());
 }
 
@@ -803,6 +804,7 @@ async fn llm_output_payload_merges_reasoning_deltas_into_dify_style_text() {
 
     assert_eq!(trace.output_payload["text"], json!("正式回答"));
     assert_eq!(trace.output_payload["reasoning_content"], "先分析");
+    assert!(trace.debug_payload.get("reasoning_content").is_none());
     assert!(trace.output_payload.get("message").is_none());
 }
 

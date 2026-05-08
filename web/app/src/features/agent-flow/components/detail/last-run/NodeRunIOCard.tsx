@@ -103,32 +103,8 @@ function getProcessPayload(lastRun: NodeLastRun) {
   return pickProcessPayload(lastRun.node_run.debug_payload);
 }
 
-const PROCESS_PAYLOAD_KEYS = [
-  'provider_events',
-  'tool_calls',
-  'mcp_calls',
-  'reasoning_content',
-  'process_events',
-  'execution_events',
-  'steps',
-  'transforms',
-  'calculations'
-];
-
 export function pickProcessPayload(debugPayload: unknown) {
-  if (!isRecord(debugPayload)) {
-    return {};
-  }
-
-  const processPayload: Record<string, unknown> = {};
-
-  for (const key of PROCESS_PAYLOAD_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(debugPayload, key)) {
-      processPayload[key] = debugPayload[key];
-    }
-  }
-
-  return processPayload;
+  return isRecord(debugPayload) ? debugPayload : {};
 }
 
 function isSameJsonValue(left: unknown, right: unknown) {

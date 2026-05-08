@@ -61,6 +61,7 @@ describe('NodeLastRunTab', () => {
         },
         output_payload: {
           text: '退款政策摘要',
+          reasoning_content: '先分析退款场景',
           usage: {
             total_tokens: 72
           },
@@ -123,14 +124,16 @@ describe('NodeLastRunTab', () => {
     );
     const outputJson = screen.getByLabelText('输出 JSON');
     expect(outputJson).toHaveTextContent('退款政策摘要');
+    expect(outputJson).toHaveTextContent('reasoning_content');
+    expect(outputJson).toHaveTextContent('先分析退款场景');
     expect(outputJson).toHaveTextContent('usage');
     expect(outputJson).not.toHaveTextContent('provider_events');
     expect(outputJson).not.toHaveTextContent('text_delta');
     const processJson = screen.getByLabelText('数据处理 JSON');
     expect(processJson).toHaveTextContent('provider_events');
     expect(processJson).toHaveTextContent('text_delta');
-    expect(processJson).not.toHaveTextContent('assistant_message');
-    expect(processJson).not.toHaveTextContent('provider_route');
+    expect(processJson).toHaveTextContent('assistant_message');
+    expect(processJson).toHaveTextContent('provider_route');
     expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();
     expect(screen.queryByText('执行人')).not.toBeInTheDocument();

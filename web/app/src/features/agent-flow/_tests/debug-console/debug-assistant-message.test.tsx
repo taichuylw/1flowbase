@@ -208,7 +208,7 @@ describe('DebugAssistantMessage', () => {
     });
   });
 
-  test('renders only event-like data processing for trace items', () => {
+  test('renders raw debug payload as data processing for trace items', () => {
     const message: AgentFlowDebugMessage = {
       id: 'assistant-process',
       role: 'assistant',
@@ -261,8 +261,8 @@ describe('DebugAssistantMessage', () => {
     const processJson = screen.getByLabelText('数据处理 JSON');
     expect(processJson).toHaveTextContent('provider_events');
     expect(processJson).toHaveTextContent('tool_call_commit');
-    expect(processJson).not.toHaveTextContent('assistant_message');
-    expect(processJson).not.toHaveTextContent('provider_route');
+    expect(processJson).toHaveTextContent('assistant_message');
+    expect(processJson).toHaveTextContent('provider_route');
     const outputJson = screen.getByLabelText('输出 JSON');
     expect(outputJson).toHaveTextContent('ok');
     expect(outputJson).toHaveTextContent('example.test');
