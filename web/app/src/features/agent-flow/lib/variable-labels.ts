@@ -1,4 +1,11 @@
-export function formatNodeVariableLabel(nodeName: string, variableName: string) {
+export function formatNodeVariableLabel(
+  nodeName: string,
+  variableName: string
+) {
+  if (nodeName === 'sys') {
+    return `sys.${variableName}`;
+  }
+
   return `${nodeName}/${variableName}`;
 }
 

@@ -93,6 +93,32 @@ describe('start node variables', () => {
     );
   });
 
+  test('exposes system variables to any node without upstream edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.edges = document.graph.edges.filter(
+      (edge) => edge.target !== 'node-answer'
+    );
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-answer').map((option) => ({
+        value: option.value,
+        label: option.displayLabel
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          value: ['sys', 'conversation_id'],
+          label: 'sys.conversation_id'
+        },
+        {
+          value: ['sys', 'workflow_run_id'],
+          label: 'sys.workflow_run_id'
+        }
+      ])
+    );
+  });
+
   test('exposes only public LLM runtime output variables to downstream selectors', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
@@ -107,9 +133,10 @@ describe('start node variables', () => {
       { key: 'usage', title: 'Token 使用', valueType: 'json' }
     ];
 
-    const selectorLabels = listVisibleSelectorOptions(document, 'node-answer').map(
-      (option) => option.displayLabel
-    );
+    const selectorLabels = listVisibleSelectorOptions(
+      document,
+      'node-answer'
+    ).map((option) => option.displayLabel);
 
     const options = listVisibleSelectorOptions(document, 'node-answer');
     const textOutput = options.find(

@@ -1,6 +1,10 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
 import { getNodeVariableOutputs } from './start-node-variables';
+import {
+  agentFlowSystemVariables,
+  systemVariableNodeId
+} from './system-variables';
 import { formatNodeVariableLabel } from './variable-labels';
 
 export interface FlowSelectorOption {
@@ -44,8 +48,16 @@ export function listVisibleSelectorOptions(
   nodeId: string
 ): FlowSelectorOption[] {
   const visibleNodeIds = collectUpstreamNodeIds(document, nodeId);
+  const systemOptions = agentFlowSystemVariables.map((variable) => ({
+    nodeId: systemVariableNodeId,
+    nodeLabel: '系统变量',
+    outputKey: variable.key,
+    outputLabel: variable.title,
+    value: [systemVariableNodeId, variable.key],
+    displayLabel: variable.title
+  }));
 
-  return document.graph.nodes
+  const nodeOptions = document.graph.nodes
     .filter((node) => visibleNodeIds.has(node.id))
     .flatMap((node) =>
       getNodeVariableOutputs(node).map((output) => ({
@@ -57,6 +69,8 @@ export function listVisibleSelectorOptions(
         displayLabel: formatNodeVariableLabel(node.alias, output.key)
       }))
     );
+
+  return [...systemOptions, ...nodeOptions];
 }
 
 export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {

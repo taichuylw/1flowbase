@@ -66,6 +66,7 @@ import { VersionHistoryDrawer } from '../history/VersionHistoryDrawer';
 import { IssuesDrawer } from '../issues/IssuesDrawer';
 import { AgentFlowCanvas } from './AgentFlowCanvas';
 import { AgentFlowOverlay } from './AgentFlowOverlay';
+import { SystemVariablesPanel } from './SystemVariablesPanel';
 
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
 const DEBUG_CONSOLE_MIN_WIDTH = 320;
@@ -145,6 +146,7 @@ export function AgentFlowCanvasFrame({
     plan: NodeDebugPreviewPlan;
   } | null>(null);
   const [variableCacheOpen, setVariableCacheOpen] = useState(false);
+  const [systemVariablesOpen, setSystemVariablesOpen] = useState(false);
   const [selectedVariable, setSelectedVariable] =
     useState<SelectedVariableInfo | null>(null);
   const [variableCacheHeight, setVariableCacheHeight] = useState(
@@ -674,6 +676,7 @@ export function AgentFlowCanvasFrame({
         }
         onOpenIssues={() => setPanelState({ issuesOpen: true })}
         onOpenHistory={() => setPanelState({ historyOpen: true })}
+        onOpenSystemVariables={() => setSystemVariablesOpen(true)}
         onOpenPublish={() => undefined}
         publishDisabled={false}
       />
@@ -715,6 +718,9 @@ export function AgentFlowCanvasFrame({
         >
           查看缓存
         </Button>
+        {systemVariablesOpen ? (
+          <SystemVariablesPanel onClose={() => setSystemVariablesOpen(false)} />
+        ) : null}
         {selectedNodeId ? (
           <div
             className="agent-flow-editor__detail-dock"

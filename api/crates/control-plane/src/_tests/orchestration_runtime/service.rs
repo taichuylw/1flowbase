@@ -540,6 +540,52 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
 }
 
 #[tokio::test]
+async fn flow_debug_run_resolves_system_variables_from_run_context() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let editor_state = service
+        .editor_state_for_tests(seeded.application_id, seeded.actor_user_id)
+        .await;
+    let mut document = editor_state.draft.document.clone();
+
+    document["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]["value"] =
+        json!("{{sys.user_id}}/{{sys.app_id}}/{{sys.workflow_id}}/{{sys.workflow_run_id}}");
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: Some(document),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+    let llm_run = completed
+        .node_runs
+        .iter()
+        .find(|run| run.node_id == "node-llm")
+        .expect("llm node run");
+    let content = llm_run.input_payload["prompt_messages"][0]["content"]
+        .as_str()
+        .expect("rendered prompt content");
+
+    assert!(content.contains(&seeded.actor_user_id.to_string()));
+    assert!(content.contains(&seeded.application_id.to_string()));
+    assert!(content.contains(&seeded.flow_id.to_string()));
+    assert!(content.contains(&detail.flow_run.id.to_string()));
+}
+
+#[tokio::test]
 async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::ReasoningDelta {

@@ -40,6 +40,78 @@
   min-height: 0;
 }
 
+.agent-flow-editor__system-variables-panel {
+  position: absolute;
+  top: var(--agent-flow-secondary-top);
+  right: 16px;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100% - 32px));
+  max-height: min(74vh, calc(100% - var(--agent-flow-secondary-top) - 24px));
+  overflow: hidden;
+  border: 1px solid #e6eaf1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+
+.agent-flow-editor__system-variables-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.agent-flow-editor__system-variables-heading {
+  min-width: 0;
+}
+
+.agent-flow-editor__system-variables-heading .ant-typography {
+  margin: 0;
+}
+
+.agent-flow-editor__system-variables-heading .ant-typography-secondary {
+  display: block;
+  margin-top: 6px;
+  line-height: 1.55;
+}
+
+.agent-flow-editor__system-variables-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+}
+
+.agent-flow-editor__system-variable-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.agent-flow-editor__system-variable-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agent-flow-editor__system-variable-main .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .agent-flow-editor__splitter-shell,
 .agent-flow-editor__splitter {
   display: flex;
@@ -161,7 +233,8 @@
   justify-content: space-between;
   gap: clamp(0.5rem, 2cqw, 0.75rem);
   min-height: auto;
-  padding: clamp(0.75rem, 3.5cqw, 0.875rem) clamp(0.875rem, 4cqw, 1.125rem) clamp(0.5rem, 2cqw, 0.625rem);
+  padding: clamp(0.75rem, 3.5cqw, 0.875rem) clamp(0.875rem, 4cqw, 1.125rem)
+    clamp(0.5rem, 2cqw, 0.625rem);
   background: #f8fafd;
 }
 
@@ -203,7 +276,10 @@
   padding: 12px 0;
 }
 
-.agent-flow-editor__debug-console-tabs > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {
+.agent-flow-editor__debug-console-tabs
+  > .ant-tabs-nav
+  .ant-tabs-tab
+  + .ant-tabs-tab {
   margin-left: 36px;
 }
 
@@ -313,7 +389,8 @@
   max-width: 100%;
 }
 
-.agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-main {
+.agent-flow-editor__debug-message--assistant
+  .agent-flow-editor__debug-message-main {
   display: flex;
   width: 100%;
   flex-direction: column;
@@ -335,7 +412,8 @@
   margin-bottom: 0.375rem;
 }
 
-.agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-header {
+.agent-flow-editor__debug-message--user
+  .agent-flow-editor__debug-message-header {
   justify-content: flex-end;
 }
 
@@ -346,7 +424,8 @@
   white-space: pre-wrap;
 }
 
-.agent-flow-editor__debug-message--assistant .agent-flow-editor__debug-message-content.ant-typography {
+.agent-flow-editor__debug-message--assistant
+  .agent-flow-editor__debug-message-content.ant-typography {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -354,7 +433,8 @@
   box-shadow: none;
 }
 
-.agent-flow-editor__debug-message--user .agent-flow-editor__debug-message-content.ant-typography {
+.agent-flow-editor__debug-message--user
+  .agent-flow-editor__debug-message-content.ant-typography {
   padding: clamp(0.5rem, 2.5cqw, 0.625rem) clamp(0.75rem, 3cqw, 0.875rem);
   border-radius: 1rem;
   background: #dbeafe;
@@ -378,7 +458,8 @@
   border: 1px solid #dfe4ed;
   border-radius: 0.875rem;
   background: #ffffff;
-  padding: clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.75rem, 3cqw, 0.875rem);
+  padding: clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.5rem, 2.2cqw, 0.625rem)
+    clamp(0.5rem, 2.2cqw, 0.625rem) clamp(0.75rem, 3cqw, 0.875rem);
   box-shadow: 0 12px 30px rgb(15 23 42 / 8%);
 }
 
@@ -457,8 +538,10 @@
   transition: opacity 120ms ease;
 }
 
-.agent-flow-editor__debug-message--assistant:hover .agent-flow-editor__debug-message-action-row,
-.agent-flow-editor__debug-message--assistant:focus-within .agent-flow-editor__debug-message-action-row {
+.agent-flow-editor__debug-message--assistant:hover
+  .agent-flow-editor__debug-message-action-row,
+.agent-flow-editor__debug-message--assistant:focus-within
+  .agent-flow-editor__debug-message-action-row {
   opacity: 1;
   pointer-events: auto;
 }
@@ -507,7 +590,7 @@
 }
 
 .agent-flow-editor__debug-variables-resize-handle::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 12px;
   bottom: 12px;
@@ -532,7 +615,8 @@
   gap: 2px;
 }
 
-.agent-flow-editor__debug-variables-group + .agent-flow-editor__debug-variables-group {
+.agent-flow-editor__debug-variables-group
+  + .agent-flow-editor__debug-variables-group {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid rgba(18, 52, 34, 0.07);
@@ -555,7 +639,9 @@
   padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
   user-select: none;
 }
 
@@ -573,7 +659,8 @@
   transition: color 120ms ease;
 }
 
-.agent-flow-editor__debug-variables-item .agent-flow-editor__debug-variables-item-helper {
+.agent-flow-editor__debug-variables-item
+  .agent-flow-editor__debug-variables-item-helper {
   font-size: 11px;
   line-height: 1.35;
   color: #6b7280;
@@ -593,7 +680,8 @@
   font-weight: 500;
 }
 
-.agent-flow-editor__debug-variables-item.is-selected .agent-flow-editor__debug-variables-item-helper {
+.agent-flow-editor__debug-variables-item.is-selected
+  .agent-flow-editor__debug-variables-item-helper {
   color: #4b5563;
   font-weight: 400;
 }
@@ -650,8 +738,6 @@
   box-shadow: none;
 }
 
-
-
 .agent-flow-editor__debug-variables-detail-value:hover,
 .agent-flow-editor__debug-variables-detail-value:focus {
   background-color: transparent;
@@ -659,12 +745,11 @@
 }
 
 .agent-flow-editor__debug-variables-detail-value:disabled,
-.agent-flow-editor__debug-variables-detail-value.ant-input-disabled{
+.agent-flow-editor__debug-variables-detail-value.ant-input-disabled {
   color: #111827;
   background-color: transparent;
   opacity: 1;
 }
-
 
 .agent-flow-editor__debug-variables-detail-empty {
   display: flex;
@@ -802,7 +887,6 @@
   margin-left: auto;
 }
 
-
 .agent-flow-editor__variable-cache-header-variable-name {
   font-size: 13px;
   color: #6b7280;
@@ -828,7 +912,6 @@
   align-items: stretch;
   gap: 0;
 }
-
 
 .agent-flow-editor__variable-cache-body
   .agent-flow-editor__debug-variables-sidebar,

@@ -1,4 +1,5 @@
 import {
+  DatabaseOutlined,
   HistoryOutlined,
   IssuesCloseOutlined,
   PlayCircleOutlined,
@@ -16,6 +17,7 @@ interface AgentFlowOverlayProps {
   onOpenDebugConsole: () => void;
   onOpenIssues: () => void;
   onOpenHistory: () => void;
+  onOpenSystemVariables: () => void;
   onOpenPublish: () => void;
   publishDisabled: boolean;
 }
@@ -30,6 +32,7 @@ export function AgentFlowOverlay({
   onOpenDebugConsole,
   onOpenIssues,
   onOpenHistory,
+  onOpenSystemVariables,
   onOpenPublish,
   publishDisabled
 }: AgentFlowOverlayProps) {
@@ -43,9 +46,7 @@ export function AgentFlowOverlay({
   return (
     <div className="agent-flow-editor__overlay">
       <Space className="agent-flow-editor__overlay-status" size="small">
-        <Typography.Text strong>
-          {applicationName}
-        </Typography.Text>
+        <Typography.Text strong>{applicationName}</Typography.Text>
         <Tag color={statusTag.color} bordered={false}>
           {statusTag.label}
         </Tag>
@@ -71,6 +72,15 @@ export function AgentFlowOverlay({
           title="预览"
         >
           预览
+        </Button>
+        <Button
+          aria-label="系统变量"
+          autoInsertSpace={false}
+          icon={<DatabaseOutlined />}
+          onClick={onOpenSystemVariables}
+          title="系统变量"
+        >
+          系统变量
         </Button>
         <Tooltip title={autosaveLabel}>
           <Button

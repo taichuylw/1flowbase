@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -11,9 +17,9 @@ const schemaRuntimeSpies = vi.hoisted(() => ({
 }));
 
 vi.mock('../../schema/node-schema-registry', async () => {
-  const actual = await vi.importActual<typeof import('../../schema/node-schema-registry')>(
-    '../../schema/node-schema-registry'
-  );
+  const actual = await vi.importActual<
+    typeof import('../../schema/node-schema-registry')
+  >('../../schema/node-schema-registry');
 
   return {
     ...actual,
@@ -143,7 +149,9 @@ beforeEach(() => {
     }
   });
   vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue(null);
-  vi.spyOn(nodeContributionsApi, 'fetchNodeContributions').mockResolvedValue([]);
+  vi.spyOn(nodeContributionsApi, 'fetchNodeContributions').mockResolvedValue(
+    []
+  );
   vi.spyOn(runtimeApi, 'buildNodeDebugPreviewInput').mockReturnValue({
     input_payload: {}
   });
@@ -230,7 +238,6 @@ beforeEach(() => {
 
 describe('AgentFlowEditorShell', () => {
   test('renders node cards through node schema card blocks and keeps debug overlay actions', async () => {
-
     renderShell(
       <AgentFlowEditorShell
         applicationId="app-1"
@@ -240,9 +247,13 @@ describe('AgentFlowEditorShell', () => {
     );
 
     expect(
-      await screen.findByText('Start', { selector: '.agent-flow-node-card__title' })
+      await screen.findByText('Start', {
+        selector: '.agent-flow-node-card__title'
+      })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '历史版本' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '历史版本' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
   }, 20_000);
 
@@ -256,7 +267,9 @@ describe('AgentFlowEditorShell', () => {
     );
 
     expect(
-      await screen.findByText('Start', { selector: '.agent-flow-node-card__title' })
+      await screen.findByText('Start', {
+        selector: '.agent-flow-node-card__title'
+      })
     ).toBeInTheDocument();
     expect(
       screen.getByText('LLM', { selector: '.agent-flow-node-card__title' })
@@ -266,9 +279,32 @@ describe('AgentFlowEditorShell', () => {
       screen.getByText('Answer', { selector: '.agent-flow-node-card__title' })
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '历史版本' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '历史版本' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '发布' })).toBeInTheDocument();
+  }, 20_000);
+
+  test('opens readonly system variables from the canvas overlay', async () => {
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '系统变量' }));
+
+    const panel = screen.getByRole('region', { name: '系统变量' });
+
+    expect(panel).toBeInTheDocument();
+    expect(within(panel).getByText('sys.conversation_id')).toBeInTheDocument();
+    expect(within(panel).getByText('sys.workflow_run_id')).toBeInTheDocument();
+    expect(
+      within(panel).getByText(/可被画布内任意节点引用/)
+    ).toBeInTheDocument();
   }, 20_000);
 
   test('opens preview from overlay action and starts the run from composer', async () => {
@@ -432,9 +468,9 @@ describe('AgentFlowEditorShell', () => {
     vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
       createInitialState()
     );
-    vi.mocked(nodeContributionsApi.fetchNodeContributions).mockResolvedValueOnce([
-      readyContribution
-    ]);
+    vi.mocked(
+      nodeContributionsApi.fetchNodeContributions
+    ).mockResolvedValueOnce([readyContribution]);
 
     renderShell(
       <AgentFlowEditorPage
@@ -443,18 +479,22 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
-    expect(await screen.findByRole('button', { name: '历史版本' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: '历史版本' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
-    expect(nodeContributionsApi.fetchNodeContributions).toHaveBeenCalledWith('app-1');
+    expect(nodeContributionsApi.fetchNodeContributions).toHaveBeenCalledWith(
+      'app-1'
+    );
   });
 
   test('renders provider-backed editor chrome on desktop', async () => {
     vi.spyOn(orchestrationApi, 'fetchOrchestrationState').mockResolvedValueOnce(
       createInitialState()
     );
-    vi.mocked(nodeContributionsApi.fetchNodeContributions).mockResolvedValueOnce([
-      readyContribution
-    ]);
+    vi.mocked(
+      nodeContributionsApi.fetchNodeContributions
+    ).mockResolvedValueOnce([readyContribution]);
 
     renderShell(
       <AgentFlowEditorPage
@@ -463,7 +503,9 @@ describe('AgentFlowEditorShell', () => {
       />
     );
 
-    expect(await screen.findByRole('button', { name: '历史版本' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: '历史版本' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Issues' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '在 LLM 后新增节点' }));
     fireEvent.click(await screen.findByRole('tab', { name: '扩展' }));
@@ -471,7 +513,9 @@ describe('AgentFlowEditorShell', () => {
       await screen.findByRole('menuitem', { name: /OpenAI Prompt/i })
     ).toBeInTheDocument();
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();
-    expect(nodeContributionsApi.fetchNodeContributions).toHaveBeenCalledWith('app-1');
+    expect(nodeContributionsApi.fetchNodeContributions).toHaveBeenCalledWith(
+      'app-1'
+    );
   }, 20_000);
 
   test('renders node detail inside a docked overlay panel on orchestration page', async () => {
@@ -509,7 +553,9 @@ describe('AgentFlowEditorShell', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
-    expect(await screen.findByText('当前节点还没有运行记录')).toBeInTheDocument();
+    expect(
+      await screen.findByText('当前节点还没有运行记录')
+    ).toBeInTheDocument();
     expect(detailDock).toBeInTheDocument();
     expect(within(detailDock).getByLabelText('节点详情')).toBeInTheDocument();
     expect(screen.queryByText('请使用桌面端编辑')).not.toBeInTheDocument();

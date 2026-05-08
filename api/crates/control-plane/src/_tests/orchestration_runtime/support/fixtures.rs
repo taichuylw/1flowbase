@@ -434,6 +434,21 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         self.repository.default_provider_instance_id()
     }
 
+    pub async fn editor_state_for_tests(
+        &self,
+        application_id: Uuid,
+        actor_user_id: Uuid,
+    ) -> domain::FlowEditorState {
+        FlowRepository::get_or_create_editor_state(
+            &self.repository,
+            Uuid::nil(),
+            application_id,
+            actor_user_id,
+        )
+        .await
+        .expect("load editor state")
+    }
+
     pub fn seed_provider_instance(
         &self,
         provider_code: &str,

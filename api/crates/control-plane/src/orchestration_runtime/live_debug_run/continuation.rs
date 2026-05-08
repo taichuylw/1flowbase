@@ -249,6 +249,7 @@ where
         .as_object()
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
+    inject_system_variables(&mut variable_pool, &flow_run);
     let mut last_output_payload = json!({});
     let flow_span = append_host_span(
         &service.repository,
@@ -985,4 +986,21 @@ where
         .await?;
 
     load_run_detail(&service.repository, command.application_id, flow_run.id).await
+}
+
+fn inject_system_variables(
+    variable_pool: &mut serde_json::Map<String, Value>,
+    flow_run: &domain::FlowRunRecord,
+) {
+    variable_pool.insert(
+        "sys".to_string(),
+        json!({
+            "conversation_id": flow_run.debug_session_id,
+            "dialog_count": 0,
+            "user_id": flow_run.created_by.to_string(),
+            "app_id": flow_run.application_id.to_string(),
+            "workflow_id": flow_run.flow_id.to_string(),
+            "workflow_run_id": flow_run.id.to_string(),
+        }),
+    );
 }
