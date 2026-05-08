@@ -402,6 +402,19 @@
   border-radius: 0.7rem;
 }
 
+.agent-flow-editor__debug-composer-stop {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.agent-flow-editor__debug-composer-stop:not(:disabled):hover,
+.agent-flow-editor__debug-composer-stop:not(:disabled):focus-visible {
+  border-color: #9ca3af;
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
 .agent-flow-editor__debug-feature-bar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

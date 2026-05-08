@@ -33,7 +33,7 @@ describe('DebugComposer', () => {
     const handleSubmit = vi.fn();
     const handleStop = vi.fn();
 
-    render(
+    const { container } = render(
       <DebugComposer
         disabled={true}
         submitting={true}
@@ -51,6 +51,10 @@ describe('DebugComposer', () => {
       code: 'Enter'
     });
 
+    expect(container.querySelector('.anticon-close-circle')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '终止调试运行' })
+    ).toHaveClass('agent-flow-editor__debug-composer-stop');
     expect(handleStop).toHaveBeenCalledTimes(1);
     expect(handleSubmit).not.toHaveBeenCalled();
   });

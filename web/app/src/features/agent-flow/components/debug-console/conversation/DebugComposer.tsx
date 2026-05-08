@@ -1,8 +1,8 @@
 import {
   ArrowRightOutlined,
   ArrowUpOutlined,
+  CloseCircleOutlined,
   MessageOutlined,
-  StopOutlined
 } from '@ant-design/icons';
 import { Button, Input, Typography } from 'antd';
 import { useState } from 'react';
@@ -62,13 +62,11 @@ export function DebugComposer({
           {showStop ? (
             <Button
               aria-label={stopping ? '正在终止调试运行' : '终止调试运行'}
-              className="agent-flow-editor__debug-composer-submit"
-              danger
+              className="agent-flow-editor__debug-composer-submit agent-flow-editor__debug-composer-stop"
               disabled={stopping}
-              icon={<StopOutlined />}
+              icon={<CloseCircleOutlined />}
               loading={stopping}
               shape="circle"
-              type="primary"
               onClick={onStop}
             />
           ) : (
