@@ -15,6 +15,7 @@ pub struct UpsertCompiledPlanInput {
     pub flow_id: Uuid,
     pub flow_draft_id: Uuid,
     pub schema_version: String,
+    pub document_hash: String,
     pub document_updated_at: OffsetDateTime,
     pub plan: serde_json::Value,
 }
@@ -26,6 +27,9 @@ pub struct CreateFlowRunInput {
     pub flow_id: Uuid,
     pub flow_draft_id: Uuid,
     pub compiled_plan_id: Uuid,
+    pub debug_session_id: String,
+    pub flow_schema_version: String,
+    pub document_hash: String,
     pub run_mode: domain::FlowRunMode,
     pub target_node_id: Option<String>,
     pub status: domain::FlowRunStatus,
@@ -39,6 +43,9 @@ pub struct CreateFlowRunShellInput {
     pub application_id: Uuid,
     pub flow_id: Uuid,
     pub flow_draft_id: Uuid,
+    pub debug_session_id: String,
+    pub flow_schema_version: String,
+    pub document_hash: String,
     pub run_mode: domain::FlowRunMode,
     pub target_node_id: Option<String>,
     pub status: domain::FlowRunStatus,
@@ -50,6 +57,8 @@ pub struct CreateFlowRunShellInput {
 pub struct AttachCompiledPlanToFlowRunInput {
     pub flow_run_id: Uuid,
     pub compiled_plan_id: Uuid,
+    pub flow_schema_version: String,
+    pub document_hash: String,
     pub status: domain::FlowRunStatus,
 }
 
@@ -69,6 +78,7 @@ pub struct CreateNodeRunInput {
     pub node_alias: String,
     pub status: domain::NodeRunStatus,
     pub input_payload: serde_json::Value,
+    pub debug_payload: serde_json::Value,
     pub started_at: OffsetDateTime,
 }
 
@@ -79,6 +89,7 @@ pub struct UpdateNodeRunInput {
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
     pub metrics_payload: serde_json::Value,
+    pub debug_payload: serde_json::Value,
     pub finished_at: Option<OffsetDateTime>,
 }
 
@@ -89,6 +100,7 @@ pub struct CompleteNodeRunInput {
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
     pub metrics_payload: serde_json::Value,
+    pub debug_payload: serde_json::Value,
     pub finished_at: OffsetDateTime,
 }
 
@@ -116,6 +128,54 @@ pub struct AppendRunEventInput {
     pub node_run_id: Option<Uuid>,
     pub event_type: String,
     pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateFlowRunPayloadsInput {
+    pub flow_run_id: Uuid,
+    pub input_payload: serde_json::Value,
+    pub output_payload: serde_json::Value,
+    pub error_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateNodeRunPayloadsInput {
+    pub node_run_id: Uuid,
+    pub input_payload: serde_json::Value,
+    pub output_payload: serde_json::Value,
+    pub error_payload: Option<serde_json::Value>,
+    pub metrics_payload: serde_json::Value,
+    pub debug_payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateRunEventPayloadInput {
+    pub run_event_id: Uuid,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateRuntimeDebugArtifactInput {
+    pub artifact_id: Uuid,
+    pub workspace_id: Uuid,
+    pub application_id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub node_run_id: Option<Uuid>,
+    pub run_event_id: Option<Uuid>,
+    pub artifact_kind: String,
+    pub content_type: String,
+    pub original_size_bytes: i64,
+    pub preview_size_bytes: i64,
+    pub storage_id: Uuid,
+    pub storage_ref: String,
+    pub retention_state: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GetRuntimeDebugArtifactInput {
+    pub workspace_id: Uuid,
+    pub application_id: Uuid,
+    pub artifact_id: Uuid,
 }
 
 #[derive(Debug, Clone)]
@@ -264,6 +324,33 @@ pub struct AppendBillingSessionInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpsertDataModelSideEffectReceiptInput {
+    pub workspace_id: Uuid,
+    pub application_id: Uuid,
+    pub draft_id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Uuid,
+    pub node_id: String,
+    pub action: String,
+    pub model_code: String,
+    pub record_id: Option<String>,
+    pub deleted_id: Option<String>,
+    pub affected_count: i64,
+    pub idempotency_key: String,
+    pub payload_hash: String,
+    pub actor_user_id: Uuid,
+    pub scope_id: Uuid,
+    pub status: String,
+    pub output_payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct DataModelSideEffectReceiptClaim {
+    pub record: domain::DataModelSideEffectReceiptRecord,
+    pub claimed: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppendModelFailoverAttemptLedgerInput {
     pub flow_run_id: Uuid,
     pub node_run_id: Option<Uuid>,
@@ -408,6 +495,13 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         &self,
         input: &CreateCallbackTaskInput,
     ) -> anyhow::Result<domain::CallbackTaskRecord>;
+    async fn get_callback_task(
+        &self,
+        callback_task_id: Uuid,
+    ) -> anyhow::Result<Option<domain::CallbackTaskRecord>> {
+        let _ = callback_task_id;
+        anyhow::bail!("get_callback_task not implemented")
+    }
     async fn complete_callback_task(
         &self,
         input: &CompleteCallbackTaskInput,
@@ -425,6 +519,63 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
             records.push(self.append_run_event(input).await?);
         }
         Ok(records)
+    }
+    async fn update_flow_run_payloads(
+        &self,
+        input: &UpdateFlowRunPayloadsInput,
+    ) -> anyhow::Result<domain::FlowRunRecord> {
+        let _ = input;
+        anyhow::bail!("update_flow_run_payloads not implemented")
+    }
+    async fn update_node_run_payloads(
+        &self,
+        input: &UpdateNodeRunPayloadsInput,
+    ) -> anyhow::Result<domain::NodeRunRecord> {
+        let _ = input;
+        anyhow::bail!("update_node_run_payloads not implemented")
+    }
+    async fn update_run_event_payload(
+        &self,
+        input: &UpdateRunEventPayloadInput,
+    ) -> anyhow::Result<domain::RunEventRecord> {
+        let _ = input;
+        anyhow::bail!("update_run_event_payload not implemented")
+    }
+    async fn create_runtime_debug_artifact(
+        &self,
+        input: &CreateRuntimeDebugArtifactInput,
+    ) -> anyhow::Result<domain::RuntimeDebugArtifactRecord> {
+        let _ = input;
+        anyhow::bail!("create_runtime_debug_artifact not implemented")
+    }
+    async fn get_runtime_debug_artifact(
+        &self,
+        input: &GetRuntimeDebugArtifactInput,
+    ) -> anyhow::Result<Option<domain::RuntimeDebugArtifactRecord>> {
+        let _ = input;
+        anyhow::bail!("get_runtime_debug_artifact not implemented")
+    }
+    async fn get_data_model_side_effect_receipt(
+        &self,
+        workspace_id: Uuid,
+        idempotency_key: &str,
+    ) -> anyhow::Result<Option<domain::DataModelSideEffectReceiptRecord>> {
+        let _ = (workspace_id, idempotency_key);
+        anyhow::bail!("get_data_model_side_effect_receipt not implemented")
+    }
+    async fn claim_data_model_side_effect_receipt(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> anyhow::Result<DataModelSideEffectReceiptClaim> {
+        let _ = input;
+        anyhow::bail!("claim_data_model_side_effect_receipt not implemented")
+    }
+    async fn upsert_data_model_side_effect_receipt(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> anyhow::Result<domain::DataModelSideEffectReceiptRecord> {
+        let _ = input;
+        anyhow::bail!("upsert_data_model_side_effect_receipt not implemented")
     }
     async fn append_runtime_span(
         &self,

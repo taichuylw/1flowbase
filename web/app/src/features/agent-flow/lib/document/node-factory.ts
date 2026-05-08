@@ -1,10 +1,8 @@
 import type {
-  BuiltinFlowNodeType,
   FlowAuthoringDocument,
   FlowNodeDocument,
   FlowNodeType
 } from '@1flowbase/flow-schema';
-import { DEFAULT_LLM_NODE_OUTPUTS } from '@1flowbase/flow-schema';
 
 import {
   createPluginNodeOutputs,
@@ -12,147 +10,40 @@ import {
   toPluginContributionRef,
   type NodePickerOption
 } from '../plugin-node-definitions';
-import {
-  DATA_MODEL_NODE_LABELS,
-  defaultDataModelNodeConfig,
-  getDataModelActionForNodeType,
-  getDataModelNodeOutputs
-} from '../node-definitions/nodes/data-model';
+import { getBuiltinNodeRuntimeContract } from '../node-definitions/contracts';
 
 type NodeFactoryInput = FlowNodeType | NodePickerOption;
-
-function humanizeNodeType(nodeType: FlowNodeType) {
-  if (nodeType === 'llm') {
-    return 'LLM';
-  }
-
-  return nodeType
-    .split('_')
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
-}
-
-function defaultOutputs(
-  nodeType: BuiltinFlowNodeType
-): FlowNodeDocument['outputs'] {
-  switch (nodeType) {
-    case 'start':
-      return [];
-    case 'llm':
-      return DEFAULT_LLM_NODE_OUTPUTS.map((output) => ({ ...output }));
-    case 'answer':
-      return [{ key: 'answer', title: '对话输出', valueType: 'string' }];
-    case 'template_transform':
-      return [{ key: 'text', title: '转换结果', valueType: 'string' }];
-    case 'knowledge_retrieval':
-      return [{ key: 'documents', title: '知识结果', valueType: 'array' }];
-    case 'question_classifier':
-      return [{ key: 'label', title: '分类标签', valueType: 'string' }];
-    case 'if_else':
-      return [];
-    case 'code':
-      return [{ key: 'result', title: '代码结果', valueType: 'unknown' }];
-    case 'http_request':
-      return [{ key: 'body', title: '响应正文', valueType: 'json' }];
-    case 'tool':
-      return [{ key: 'result', title: '工具输出', valueType: 'unknown' }];
-    case 'data_model_list':
-    case 'data_model_get':
-    case 'data_model_create':
-    case 'data_model_update':
-    case 'data_model_delete':
-      return getDataModelNodeOutputs(
-        getDataModelActionForNodeType(nodeType) ?? 'list'
-      );
-    case 'variable_assigner':
-      return [{ key: 'state', title: '状态结果', valueType: 'json' }];
-    case 'parameter_extractor':
-      return [{ key: 'parameters', title: '提取参数', valueType: 'json' }];
-    case 'iteration':
-    case 'loop':
-      return [{ key: 'result', title: '聚合输出', valueType: 'array' }];
-    case 'human_input':
-      return [{ key: 'input', title: '人工输入', valueType: 'string' }];
-  }
-}
-
-function defaultConfig(nodeType: BuiltinFlowNodeType): Record<string, unknown> {
-  switch (nodeType) {
-    case 'start':
-      return { input_fields: [] };
-    case 'llm':
-      return {
-        model_provider: {
-          provider_code: '',
-          source_instance_id: '',
-          model_id: ''
-        },
-        llm_parameters: {
-          schema_version: '1.0.0',
-          items: {}
-        },
-        response_format: {
-          mode: 'text'
-        }
-      };
-    case 'template_transform':
-      return { template: '' };
-    case 'knowledge_retrieval':
-      return { top_k: 4 };
-    case 'question_classifier':
-      return { classes: [] };
-    case 'if_else':
-      return { mode: 'all' };
-    case 'code':
-      return { language: 'javascript' };
-    case 'http_request':
-      return { method: 'GET', url: '' };
-    case 'tool':
-      return { tool_name: '' };
-    case 'data_model_list':
-    case 'data_model_get':
-    case 'data_model_create':
-    case 'data_model_update':
-    case 'data_model_delete':
-      return { ...defaultDataModelNodeConfig };
-    case 'variable_assigner':
-      return { writes: [] };
-    case 'parameter_extractor':
-      return { schema: [] };
-    case 'iteration':
-      return { max_steps: 10 };
-    case 'loop':
-      return { max_rounds: 10 };
-    default:
-      return {};
-  }
-}
-
-function defaultBindings(
-  nodeType: BuiltinFlowNodeType
-): FlowNodeDocument['bindings'] {
-  if (nodeType !== 'llm') {
-    return {};
-  }
-
-  return {
-    prompt_messages: {
-      kind: 'prompt_messages',
-      value: [
-        {
-          id: 'system-1',
-          role: 'system',
-          content: { kind: 'templated_text', value: '' }
-        }
-      ]
-    }
-  };
-}
 
 function isNodePickerOption(
   value: NodeFactoryInput
 ): value is NodePickerOption {
   return typeof value === 'object' && value !== null && 'kind' in value;
+}
+
+function createNodeDocumentFromRuntimeContract(
+  nodeType: FlowNodeType,
+  id: string,
+  x: number,
+  y: number
+): FlowNodeDocument | null {
+  const contract = getBuiltinNodeRuntimeContract(nodeType);
+
+  if (!contract) {
+    return null;
+  }
+
+  return {
+    id,
+    type: contract.meta.type,
+    alias: contract.defaults.alias,
+    description: contract.defaults.description ?? '',
+    containerId: null,
+    position: { x, y },
+    configVersion: contract.defaults.configVersion,
+    config: contract.defaults.config,
+    bindings: contract.defaults.bindings,
+    outputs: contract.defaults.outputs
+  };
 }
 
 export function createNodeDocument(
@@ -163,6 +54,12 @@ export function createNodeDocument(
 ): FlowNodeDocument {
   if (isNodePickerOption(nodeTypeOrOption)) {
     if (nodeTypeOrOption.kind === 'plugin_contribution') {
+      if (nodeTypeOrOption.disabled) {
+        throw new Error(
+          `Plugin contribution is unavailable: ${nodeTypeOrOption.disabledReason ?? nodeTypeOrOption.label}`
+        );
+      }
+
       return {
         id,
         type: 'plugin_node',
@@ -181,34 +78,18 @@ export function createNodeDocument(
     return createNodeDocument(nodeTypeOrOption.type, id, x, y);
   }
 
-  if (nodeTypeOrOption === 'plugin_node') {
-    return {
-      id,
-      type: 'plugin_node',
-      alias: humanizeNodeType(nodeTypeOrOption),
-      description: '',
-      containerId: null,
-      position: { x, y },
-      configVersion: 1,
-      config: {},
-      bindings: {},
-      outputs: [{ key: 'result', title: '节点输出', valueType: 'json' }]
-    };
+  const contractNode = createNodeDocumentFromRuntimeContract(
+    nodeTypeOrOption,
+    id,
+    x,
+    y
+  );
+
+  if (contractNode) {
+    return contractNode;
   }
 
-  return {
-    id,
-    type: nodeTypeOrOption,
-    alias: DATA_MODEL_NODE_LABELS[nodeTypeOrOption as keyof typeof DATA_MODEL_NODE_LABELS]
-      ?? humanizeNodeType(nodeTypeOrOption),
-    description: '',
-    containerId: null,
-    position: { x, y },
-    configVersion: 1,
-    config: defaultConfig(nodeTypeOrOption),
-    bindings: defaultBindings(nodeTypeOrOption),
-    outputs: defaultOutputs(nodeTypeOrOption)
-  };
+  throw new Error(`Missing runtime contract for node type: ${nodeTypeOrOption}`);
 }
 
 export function createNextNodeId(

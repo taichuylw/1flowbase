@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust 2021, Axum SSE, Tokio, Serde, TypeScript fetch streaming, Vitest.
 
+**Status:** Completed on 2026-05-08.
+
 ---
 
 ## Files
@@ -28,30 +30,30 @@
 
 ### Task 1: Define client-visible event envelope
 
-- [ ] Add shared DTO fields: `event_id`, `run_id`, `node_run_id`, `event_type`, `sequence`, `created_at`, `payload`.
-- [ ] Add delta fields: `delta_index`, `content_type`, and `text`.
-- [ ] Keep terminal events explicit: `flow_finished`, `flow_failed`, `flow_cancelled`, `waiting_human`, `waiting_callback`.
+- [x] Add shared DTO fields: `event_id`, `run_id`, `node_run_id`, `event_type`, `sequence`, `created_at`, `payload`.
+- [x] Add delta fields: `delta_index`, `content_type`, and `text`.
+- [x] Keep terminal events explicit: `flow_finished`, `flow_failed`, `flow_cancelled`, `waiting_human`, `waiting_callback`.
 
 ### Task 2: Add cursor replay contract
 
-- [ ] Accept `last_event_id` or `from_sequence` on stream subscribe.
-- [ ] Set SSE `id` to `event_id` or a documented cursor that round-trips to sequence.
-- [ ] Emit `replay_expired` with a typed payload when local replay cannot satisfy the cursor.
-- [ ] Ensure durable-required events do not rely only on live buffer retention.
+- [x] Accept `last_event_id` or `from_sequence` on stream subscribe.
+- [x] Set SSE `id` to `event_id` or a documented cursor that round-trips to sequence.
+- [x] Emit `replay_expired` with a typed payload when local replay cannot satisfy the cursor.
+- [x] Ensure durable-required events do not rely only on live buffer retention.
 
 ### Task 3: Durable debug event read model
 
-- [ ] Persist text/reasoning deltas with `node_run_id`, event type, sequence range, content type, truncation/ref fields, and artifact refs.
-- [ ] Keep coalesced read model available for run detail.
-- [ ] Do not use durable debug events as variable pool source.
+- [x] Persist text/reasoning deltas with `node_run_id`, event type, sequence range, content type, truncation/ref fields, and artifact refs.
+- [x] Keep coalesced read model available for run detail.
+- [x] Do not use durable debug events as variable pool source.
 
 ### Task 4: Frontend idempotent stream apply
 
-- [ ] Parse event envelope in `api-client`.
-- [ ] Track applied `event_id` or `(run_id, sequence)` per running message.
-- [ ] Append text/reasoning deltas only once.
-- [ ] Key trace rows by `node_run_id` first, falling back to `node_id` only for legacy events during development.
-- [ ] Keep reasoning in trace/debug display, not public output.
+- [x] Parse event envelope in `api-client`.
+- [x] Track applied `event_id` or `(run_id, sequence)` per running message.
+- [x] Append text/reasoning deltas only once.
+- [x] Key trace rows by `node_run_id` first, falling back to `node_id` only for legacy events during development.
+- [x] Keep reasoning in trace/debug display, not public output.
 
 ### Task 5: Verification
 
@@ -62,6 +64,36 @@ cargo test -p api-server runtime_event_stream -- --test-threads=1
 cargo test -p control-plane orchestration_runtime_runtime_events -- --test-threads=1
 pnpm --dir web/app test -- use-agent-flow-debug-session-stream run-detail-mapper
 ```
+
+Additional targeted verification:
+
+```bash
+cargo test -p api-server application_runtime_stream -- --test-threads=1
+cargo test -p api-server replay_expired -- --test-threads=1
+cargo test -p api-server runtime_event_cursor -- --test-threads=1
+cargo test -p api-server debug_run_stream_cursor -- --test-threads=1
+cargo test -p control-plane debug_event_persister -- --test-threads=1
+cargo test -p control-plane runtime_event -- --test-threads=1
+pnpm --dir web/packages/api-client test -- console-application-runtime
+cargo fmt -p api-server -p control-plane -p storage-postgres -- --check
+git diff --check
+```
+
+Evidence:
+
+- `cargo test -p api-server runtime_event_stream -- --test-threads=1`: 11 passed.
+- `cargo test -p api-server application_runtime_stream -- --test-threads=1`: 1 passed.
+- `cargo test -p api-server replay_expired -- --test-threads=1`: 2 passed.
+- `cargo test -p api-server runtime_event_cursor -- --test-threads=1`: 1 passed.
+- `cargo test -p api-server debug_run_stream_cursor -- --test-threads=1`: 1 passed.
+- `cargo test -p control-plane orchestration_runtime_runtime_events -- --test-threads=1`: 0 matched; retained as plan evidence gap.
+- `cargo test -p control-plane debug_event_persister -- --test-threads=1`: 3 passed.
+- `cargo test -p control-plane runtime_event -- --test-threads=1`: 4 passed.
+- `pnpm --dir web/packages/api-client test -- console-application-runtime`: 4 files / 24 tests passed.
+- `pnpm --dir web/app test -- use-agent-flow-debug-session-stream run-detail-mapper`: 2 files / 19 tests passed.
+- `cargo fmt -p api-server -p control-plane -p storage-postgres -- --check`: passed.
+- `git diff --check`: passed.
+- Independent serial review re-check: PASS.
 
 Expected:
 

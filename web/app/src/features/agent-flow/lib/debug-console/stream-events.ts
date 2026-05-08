@@ -52,7 +52,8 @@ function upsertTraceItem(
   items: AgentFlowTraceItem[],
   nextItem: AgentFlowTraceItem
 ) {
-  const index = items.findIndex((item) => item.nodeId === nextItem.nodeId);
+  const nextItemKey = getTraceItemKey(nextItem);
+  const index = items.findIndex((item) => getTraceItemKey(item) === nextItemKey);
 
   if (index === -1) {
     return [...items, nextItem];
@@ -83,6 +84,7 @@ export function applyDebugStreamEventToTrace(
     const startedAt = event.started_at ?? nowIso();
 
     return upsertTraceItem(items, {
+      nodeRunId: event.node_run_id,
       nodeId: event.node_id,
       nodeAlias: event.title,
       nodeType: event.node_type,
@@ -93,16 +95,20 @@ export function applyDebugStreamEventToTrace(
       inputPayload: event.input_payload ?? {},
       outputPayload: {},
       errorPayload: null,
-      metricsPayload: {}
+      metricsPayload: {},
+      debugPayload: {}
     });
   }
 
   if (event.type === 'node_finished') {
-    const existing = items.find((item) => item.nodeId === event.node_id);
+    const existing = items.find(
+      (item) => getTraceItemKey(item) === getTraceItemKeyFromFinished(event)
+    );
     const startedAt = event.started_at ?? existing?.startedAt ?? nowIso();
     const finishedAt = event.finished_at ?? nowIso();
 
     return upsertTraceItem(items, {
+      nodeRunId: event.node_run_id,
       nodeId: event.node_id,
       nodeAlias: existing?.nodeAlias ?? event.node_id,
       nodeType: existing?.nodeType ?? 'node',
@@ -113,11 +119,23 @@ export function applyDebugStreamEventToTrace(
       inputPayload: existing?.inputPayload ?? {},
       outputPayload: event.output_payload ?? {},
       errorPayload: event.error_payload ?? null,
-      metricsPayload: event.metrics_payload ?? {}
+      metricsPayload: event.metrics_payload ?? {},
+      debugPayload: event.debug_payload ?? existing?.debugPayload ?? {}
     });
   }
 
   return items;
+}
+
+function getTraceItemKey(item: AgentFlowTraceItem) {
+  return item.nodeRunId ?? item.nodeId;
+}
+
+function getTraceItemKeyFromFinished(event: {
+  node_run_id?: string | null;
+  node_id: string;
+}) {
+  return event.node_run_id ?? event.node_id;
 }
 
 export function applyDebugStreamEventToAssistantMessage(
@@ -190,6 +208,14 @@ export function applyDebugStreamEventToAssistantMessage(
         ...message,
         runId: event.run_id,
         status: 'cancelled',
+        traceSummary: traceItems
+      };
+    case 'waiting_human':
+    case 'waiting_callback':
+      return {
+        ...message,
+        runId: event.run_id,
+        status: mapFlowStatus(event.status),
         traceSummary: traceItems
       };
     case 'replay_expired':

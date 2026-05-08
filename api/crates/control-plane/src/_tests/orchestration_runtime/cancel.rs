@@ -21,6 +21,7 @@ async fn cancel_flow_run_marks_running_debug_run_as_cancelled() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -58,6 +59,7 @@ async fn cancel_flow_run_emits_cancelled_runtime_terminal_event_and_closes_strea
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -101,6 +103,7 @@ async fn cancel_flow_run_does_not_overwrite_succeeded_run_after_stale_read() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -146,6 +149,7 @@ async fn cancel_flow_run_rejects_terminal_status() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();

@@ -86,9 +86,11 @@ function useProgressiveText(target: string, enabled: boolean) {
 }
 
 export function DebugAssistantMessage({
-  message
+  message,
+  onLoadArtifact
 }: {
   message: AgentFlowDebugMessage;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const { message: messageApi } = App.useApp();
   const [isReasoningExpanded, setIsReasoningExpanded] = useState(true);
@@ -117,7 +119,10 @@ export function DebugAssistantMessage({
   return (
     <article className="agent-flow-editor__debug-message agent-flow-editor__debug-message--assistant">
       <div className="agent-flow-editor__debug-message-main">
-        <DebugWorkflowProcess items={message.traceSummary} />
+        <DebugWorkflowProcess
+          items={message.traceSummary}
+          onLoadArtifact={onLoadArtifact}
+        />
         {hasReasoning ? (
           <section
             aria-label="思考"

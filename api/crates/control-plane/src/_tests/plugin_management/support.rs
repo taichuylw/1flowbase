@@ -55,7 +55,9 @@ mod repository;
 #[path = "support/source.rs"]
 mod source;
 
-pub(crate) use fixtures::{actor_with_permissions, create_provider_fixture};
+pub(crate) use fixtures::{
+    actor_with_permissions, create_capability_plugin_fixture, create_provider_fixture,
+};
 pub(super) use fixtures::{
     build_openai_compatible_package_bytes, build_signed_openai_upload_package,
     create_provider_fixture_with_node_contribution, seed_test_installation,

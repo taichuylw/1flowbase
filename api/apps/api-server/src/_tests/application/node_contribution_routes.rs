@@ -144,6 +144,8 @@ async fn seed_node_contribution_registry(database_url: &str) -> (Uuid, Uuid) {
             id,
             installation_id,
             provider_code,
+            plugin_unique_identifier,
+            package_id,
             plugin_id,
             plugin_version,
             contribution_code,
@@ -155,19 +157,27 @@ async fn seed_node_contribution_registry(database_url: &str) -> (Uuid, Uuid) {
             schema_ui,
             schema_version,
             output_schema,
+            contribution_checksum,
+            compiled_contribution_hash,
+            output_schema_snapshot,
+            side_effect_policy,
+            infra_contracts,
             required_auth,
             visibility,
             experimental,
             dependency_installation_kind,
             dependency_plugin_version_range
         ) values (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+            $19, $20, $21, $22, $23, $24, $25, $26
         )
         "#,
     )
     .bind(contribution_id)
     .bind(installation_id)
     .bind("fixture_provider")
+    .bind("fixture_provider")
+    .bind("fixture_provider@1.2.3")
     .bind("fixture_provider@1.2.3")
     .bind("1.2.3")
     .bind("fixture_prompt")
@@ -177,8 +187,17 @@ async fn seed_node_contribution_registry(database_url: &str) -> (Uuid, Uuid) {
     .bind("Prompt node fixture")
     .bind("spark")
     .bind(json!({"type":"object"}))
-    .bind("1flowbase.node-contribution/v1")
-    .bind(json!({"type":"object"}))
+    .bind("1flowbase.node-contribution/v2")
+    .bind(json!({
+        "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+    }))
+    .bind("sha256:contribution")
+    .bind("sha256:compiled")
+    .bind(json!({
+        "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+    }))
+    .bind("external_read")
+    .bind(json!([]))
     .bind(json!(["provider_instance"]))
     .bind("public")
     .bind(false)
@@ -221,6 +240,11 @@ async fn node_contribution_routes_list_registry_entries_for_application_workspac
 
     assert_eq!(payload["data"].as_array().unwrap().len(), 1);
     assert_eq!(entry["plugin_id"].as_str(), Some("fixture_provider@1.2.3"));
+    assert_eq!(
+        entry["plugin_unique_identifier"].as_str(),
+        Some("fixture_provider")
+    );
+    assert_eq!(entry["package_id"].as_str(), Some("fixture_provider@1.2.3"));
     assert_eq!(entry["plugin_version"].as_str(), Some("1.2.3"));
     assert_eq!(entry["contribution_code"].as_str(), Some("fixture_prompt"));
     assert_eq!(entry["node_shell"].as_str(), Some("action"));
@@ -230,7 +254,16 @@ async fn node_contribution_routes_list_registry_entries_for_application_workspac
     assert_eq!(entry["dependency_status"].as_str(), Some("ready"));
     assert_eq!(
         entry["schema_version"].as_str(),
-        Some("1flowbase.node-contribution/v1")
+        Some("1flowbase.node-contribution/v2")
     );
+    assert_eq!(
+        entry["contribution_checksum"].as_str(),
+        Some("sha256:contribution")
+    );
+    assert_eq!(
+        entry["compiled_contribution_hash"].as_str(),
+        Some("sha256:compiled")
+    );
+    assert_eq!(entry["side_effect_policy"].as_str(), Some("external_read"));
     assert_eq!(entry["experimental"].as_bool(), Some(false));
 }

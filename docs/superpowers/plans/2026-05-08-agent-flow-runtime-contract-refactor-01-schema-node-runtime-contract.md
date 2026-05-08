@@ -25,34 +25,38 @@
 
 ### Task 1: Add schema v2 constants and contract types
 
-- [ ] Add `FLOW_SCHEMA_VERSION = '1flowbase.flow/v2'`.
-- [ ] Add `NODE_CONTRIBUTION_SCHEMA_VERSION = '1flowbase.node-contribution/v2'`.
-- [ ] Add typed contract sections: `meta`, `defaults`, `ports`, `card`, `panel`, `runtime`, `policies`.
-- [ ] Add public output key validation helper that rejects `metadata`, `usage`, `debug`, `error`, and `__*`.
-- [ ] Add tests proving invalid public output keys are rejected.
+- [x] Add `FLOW_SCHEMA_VERSION = '1flowbase.flow/v2'`.
+- [x] Add `NODE_CONTRIBUTION_SCHEMA_VERSION = '1flowbase.node-contribution/v2'`.
+- [x] Add typed contract sections: `meta`, `defaults`, `ports`, `card`, `panel`, `runtime`, `policies`.
+- [x] Add public output key validation helper that rejects `metadata`, `usage`, `debug`, `error`, and `__*`.
+- [x] Add tests proving invalid public output keys are rejected.
 
 ### Task 2: Remove legacy LLM public outputs
 
-- [ ] Replace default LLM outputs with `text` only.
-- [ ] Add optional `structured_output` only when the LLM node config explicitly enables structured output.
-- [ ] Update tests that currently expect `reasoning_content` or `usage` as default LLM outputs.
-- [ ] Keep reasoning and usage available only to runtime/trace contracts in later plans.
+- [x] Replace default LLM outputs with `text` only.
+- [x] Add optional `structured_output` only when the LLM node config explicitly enables structured output.
+- [x] Update tests that currently expect `reasoning_content` or `usage` as default LLM outputs.
+- [x] Keep reasoning and usage available only to runtime/trace contracts in later plans.
 
 ### Task 3: Add built-in node contracts
 
-- [ ] Define built-in contracts for Start, LLM, Answer, Template Transform, HTTP, Plugin Node placeholder, Human Input, and fixed Data Model nodes.
-- [ ] Ensure Start public variables derive from `config.input_fields`, `query`, and `files`, not from `node.outputs`.
-- [ ] Ensure Answer exposes public output `answer` only.
-- [ ] Ensure Template Transform exposes public output `text` only.
-- [ ] Ensure Data Model delete declares both `deleted_id` and `affected_count`.
+- [x] Define built-in contracts for Start, LLM, Answer, Template Transform, HTTP, Plugin Node placeholder, Human Input, and fixed Data Model nodes.
+- [x] Ensure Start public variables derive from `config.input_fields`, `query`, and `files`, not from `node.outputs`.
+- [x] Ensure Answer exposes public output `answer` only.
+- [x] Ensure Template Transform exposes public output `text` only.
+- [x] Ensure Data Model delete declares both `deleted_id` and `affected_count`.
 
 ### Task 4: Adapt node factory and validation
 
-- [ ] Make `node-factory.ts` create nodes from the contract default document.
-- [ ] Make document validation reject v1-only or unknown public output fields during development.
-- [ ] Keep the destructive baseline: no v1 compatibility mapper in this plan.
+- [x] Make `node-factory.ts` create nodes from the contract default document.
+- [x] Make document validation reject v1-only or unknown public output fields during development.
+- [x] Keep the destructive baseline: no v1 compatibility mapper in this plan.
 
 ### Task 5: Verification
+
+- [x] Run scoped app verification: `pnpm --dir web/app test -- node-schema-registry validate-document document-transforms`.
+- [x] Run schema package verification: `pnpm --dir web/packages/flow-schema test`.
+- [x] Confirm expected outcomes for contract-driven defaults, LLM public outputs, and Data Model delete outputs.
 
 Run:
 

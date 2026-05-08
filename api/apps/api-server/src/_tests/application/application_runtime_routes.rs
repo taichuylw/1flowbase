@@ -11,6 +11,8 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+const DEBUG_SESSION_ID: &str = "application-runtime-debug-session";
+
 fn create_provider_fixture(root: &Path) {
     fs::create_dir_all(root.join("provider")).unwrap();
     fs::create_dir_all(root.join("bin")).unwrap();
@@ -129,7 +131,11 @@ capabilities:
     fs::write(root.join("scripts/demo.sh"), "echo demo").unwrap();
 }
 
-async fn create_ready_provider_instance(app: &axum::Router, cookie: &str, csrf: &str) -> String {
+pub(super) async fn create_ready_provider_instance(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+) -> String {
     let package_root = std::env::temp_dir().join(format!(
         "application-runtime-provider-{}",
         uuid::Uuid::now_v7()
@@ -231,7 +237,7 @@ async fn create_ready_provider_instance(app: &axum::Router, cookie: &str, csrf: 
 
 fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id, "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -245,7 +251,7 @@ fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> V
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -264,7 +270,7 @@ fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> V
                         "temperature": 0.2
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 },
@@ -292,7 +298,7 @@ fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> V
     })
 }
 
-async fn seed_agent_flow_application(
+pub(super) async fn seed_agent_flow_application(
     app: &axum::Router,
     cookie: &str,
     csrf: &str,
@@ -378,7 +384,7 @@ async fn seed_agent_flow_application(
 
 fn build_human_input_document(flow_id: &str, provider_instance_id: &str) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id, "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -392,7 +398,7 @@ fn build_human_input_document(flow_id: &str, provider_instance_id: &str) -> Valu
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -411,7 +417,7 @@ fn build_human_input_document(flow_id: &str, provider_instance_id: &str) -> Valu
                         "temperature": 0.2
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 },
@@ -552,6 +558,37 @@ async fn wait_for_run_detail(
     );
 }
 
+async fn resolve_runtime_debug_artifact_value(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    value: &Value,
+) -> Value {
+    if value["__runtime_debug_artifact"] != true {
+        return value.clone();
+    }
+
+    let artifact_ref = value["artifact_ref"]
+        .as_str()
+        .expect("debug artifact preview should include artifact_ref");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/{artifact_ref}"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
 async fn wait_for_persisted_text_delta_events(
     app: &axum::Router,
     cookie: &str,
@@ -645,8 +682,10 @@ async fn get_runtime_debug_stream_returns_trusted_parts() {
                 .body(Body::from(
                     json!({
                         "input_payload": {
-                            "node-start": { "query": "总结退款政策" }
-                        }
+                            "node-start": { "query": "总结退款政策" },
+                            "node-llm": { "prompt_messages": ["resolved prompt must stay audit-only"] }
+                        },
+                        "debug_session_id": DEBUG_SESSION_ID
                     })
                     .to_string(),
                 ))
@@ -706,8 +745,10 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
                 .body(Body::from(
                     json!({
                         "input_payload": {
-                            "node-start": { "query": "总结退款政策" }
-                        }
+                            "node-start": { "query": "总结退款政策" },
+                            "node-llm": { "prompt_messages": ["resolved prompt must stay audit-only"] }
+                        },
+                        "debug_session_id": DEBUG_SESSION_ID
                     })
                     .to_string(),
                 ))
@@ -716,6 +757,13 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
         .await
         .unwrap();
     assert_eq!(preview.status(), StatusCode::CREATED);
+    let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
+    let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
+    let flow_run_id = preview_payload["data"]["flow_run"]["id"].as_str().unwrap();
+    let node_run_id = preview_payload["data"]["node_run"]["id"].as_str().unwrap();
+    let draft_id = preview_payload["data"]["flow_run"]["draft_id"]
+        .as_str()
+        .unwrap();
 
     let response = app
         .clone()
@@ -723,7 +771,7 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot"
+                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot?debug_session_id={DEBUG_SESSION_ID}"
                 ))
                 .header("cookie", &cookie)
                 .body(Body::empty())
@@ -736,12 +784,47 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
     let payload: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(
+        payload["data"]["snapshot_schema_version"],
+        "1flowbase.debug-variable-snapshot/v1"
+    );
+    assert!(payload["data"]["workspace_id"].is_string());
+    assert!(payload["data"]["actor_user_id"].is_string());
+    assert_eq!(payload["data"]["draft_id"], draft_id);
+    assert_eq!(payload["data"]["flow_schema_version"], "1flowbase.flow/v2");
+    let document_hash = payload["data"]["document_hash"].as_str().unwrap();
+    assert!(document_hash.starts_with("sha256:"));
+    let debug_session_id = payload["data"]["debug_session_id"].as_str().unwrap();
+    assert_eq!(debug_session_id, DEBUG_SESSION_ID);
+    assert!(payload["data"]["document_hash"]
+        .as_str()
+        .unwrap()
+        .starts_with("sha256:"));
+    assert_eq!(payload["data"]["snapshot_completeness"], "complete");
+    assert_eq!(
+        payload["data"]["latest_run_scope"],
+        json!({
+            "flow_run_id": flow_run_id,
+            "run_mode": "debug_node_preview",
+            "status": "succeeded",
+            "target_node_id": "node-llm"
+        })
+    );
+    assert_eq!(
         payload["data"]["variable_cache"]["node-start"]["query"],
         "总结退款政策"
     );
+    assert!(payload["data"]["variable_cache"]["node-llm"]["prompt_messages"].is_null());
     assert_eq!(
         payload["data"]["variable_cache"]["node-llm"]["text"],
         "reply:总结退款政策"
+    );
+    assert_eq!(
+        payload["data"]["source_flow_run_ids"]["node-start"]["query"],
+        flow_run_id
+    );
+    assert_eq!(
+        payload["data"]["source_node_run_ids"]["node-llm"]["text"],
+        node_run_id
     );
 }
 
@@ -876,6 +959,45 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         Some("node-llm")
     );
     assert_eq!(
+        preview_payload["data"]["node_run"]["output_payload"],
+        json!({ "text": "reply:总结退款政策" })
+    );
+    assert_eq!(
+        preview_payload["data"]["flow_run"]["output_payload"],
+        json!({ "text": "reply:总结退款政策" })
+    );
+    assert_eq!(
+        resolve_runtime_debug_artifact_value(
+            &app,
+            &cookie,
+            &application_id,
+            &preview_payload["data"]["node_run"]["debug_payload"],
+        )
+        .await["message"]["content"],
+        json!("reply:总结退款政策")
+    );
+    for hidden_key in [
+        "resolved_inputs",
+        "rendered_templates",
+        "output_contract",
+        "metrics_payload",
+        "debug_payload",
+        "provider_events",
+    ] {
+        assert!(
+            preview_payload["data"]["node_run"]["output_payload"]
+                .get(hidden_key)
+                .is_none(),
+            "{hidden_key} must not leak into node output"
+        );
+        assert!(
+            preview_payload["data"]["flow_run"]["output_payload"]
+                .get(hidden_key)
+                .is_none(),
+            "{hidden_key} must not leak into flow output"
+        );
+    }
+    assert_eq!(
         preview_payload["data"]["events"][0]["event_type"].as_str(),
         Some("node_preview_started")
     );
@@ -938,6 +1060,16 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         detail_payload["data"]["node_runs"][0]["node_alias"].as_str(),
         Some("LLM")
     );
+    assert_eq!(
+        resolve_runtime_debug_artifact_value(
+            &app,
+            &cookie,
+            &application_id,
+            &detail_payload["data"]["node_runs"][0]["debug_payload"],
+        )
+        .await["message"]["content"],
+        json!("reply:总结退款政策")
+    );
 
     let last_run = app
         .clone()
@@ -959,6 +1091,16 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     assert_eq!(
         last_run_payload["data"]["node_run"]["node_id"].as_str(),
         Some("node-llm")
+    );
+    assert_eq!(
+        resolve_runtime_debug_artifact_value(
+            &app,
+            &cookie,
+            &application_id,
+            &last_run_payload["data"]["node_run"]["debug_payload"],
+        )
+        .await["message"]["content"],
+        json!("reply:总结退款政策")
     );
     assert_eq!(
         last_run_payload["data"]["flow_run"]["id"].as_str(),
@@ -1322,9 +1464,172 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
         "streamed debug run should persist one logical durable text_delta event: {text_delta_events:?}"
     );
     let text_delta = &text_delta_events[0];
-    assert!(!text_delta["payload"]["text"].as_str().unwrap().is_empty());
+    let text_delta_payload = resolve_runtime_debug_artifact_value(
+        &app,
+        &cookie,
+        &application_id,
+        &text_delta["payload"],
+    )
+    .await;
+    assert!(!text_delta_payload["text"].as_str().unwrap().is_empty());
     assert!(
-        text_delta["payload"]["delta"].is_null(),
-        "streamed debug run should not persist legacy provider delta payload: {text_delta:?}"
+        text_delta_payload["delta"].is_null(),
+        "streamed debug run should not persist legacy provider delta payload: {text_delta_payload:?}"
     );
+}
+
+#[tokio::test]
+async fn application_runtime_routes_runtime_debug_artifact_full_load_returns_original_payload() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let other_application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let large_query = "退款政策".repeat(900);
+    let debug_session_id = "runtime-debug-artifact-session";
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "debug_session_id": debug_session_id,
+                        "input_payload": {
+                            "node-start": { "query": large_query }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
+
+    let snapshot_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot?debug_session_id={debug_session_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot_response.status(), StatusCode::OK);
+    let snapshot_body = to_bytes(snapshot_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let snapshot_payload: Value = serde_json::from_slice(&snapshot_body).unwrap();
+    let snapshot_preview = &snapshot_payload["data"]["variable_cache"]["node-start"]["query"];
+
+    assert_eq!(snapshot_preview["__runtime_debug_artifact"], true);
+    assert_eq!(snapshot_preview["is_truncated"], true);
+    let snapshot_artifact_ref = snapshot_preview["artifact_ref"].as_str().unwrap();
+    let snapshot_artifact_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/{snapshot_artifact_ref}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot_artifact_response.status(), StatusCode::OK);
+    let snapshot_artifact_body = to_bytes(snapshot_artifact_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let snapshot_full_payload: Value = serde_json::from_slice(&snapshot_artifact_body).unwrap();
+    assert_eq!(snapshot_full_payload, large_query);
+
+    let detail = wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+    let preview = &detail["flow_run"]["input_payload"];
+
+    assert_eq!(preview["__runtime_debug_artifact"], true);
+    assert_eq!(preview["is_truncated"], true);
+    assert!(preview["preview"].as_str().unwrap().len() < large_query.len());
+    let artifact_ref = preview["artifact_ref"].as_str().unwrap();
+
+    let unauthorized_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/{artifact_ref}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized_response.status(), StatusCode::UNAUTHORIZED);
+
+    let wrong_application_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{other_application_id}/orchestration/debug-artifacts/{artifact_ref}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(wrong_application_response.status(), StatusCode::NOT_FOUND);
+
+    let artifact_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/{artifact_ref}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(artifact_response.status(), StatusCode::OK);
+    assert_eq!(
+        artifact_response.headers()["content-type"]
+            .to_str()
+            .unwrap(),
+        "application/json"
+    );
+    let artifact_body = to_bytes(artifact_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let full_payload: Value = serde_json::from_slice(&artifact_body).unwrap();
+
+    assert_eq!(full_payload["node-start"]["query"], large_query);
 }

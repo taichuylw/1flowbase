@@ -214,8 +214,14 @@ node_contributions:
     description: Fixture capability node
     icon: puzzle
     schema_ui: {}
-    schema_version: 1flowbase.node-contribution/v1
-    output_schema: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: result
+          title: Result
+          valueType: json
+    side_effect_policy: external_read
+    infra_contracts: []
     required_auth:
       - provider_instance
     visibility: public
@@ -368,6 +374,16 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         )
     }
 
+    pub async fn upsert_data_model_side_effect_receipt_for_tests(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> domain::DataModelSideEffectReceiptRecord {
+        self.repository
+            .upsert_data_model_side_effect_receipt(input)
+            .await
+            .expect("upsert data model side-effect receipt")
+    }
+
     pub async fn seed_application_with_flow(&self, name: &str) -> SeededPreviewApplication {
         let actor_user_id = Uuid::now_v7();
         let application = self
@@ -458,6 +474,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
                     "node-start": { "query": "请总结退款政策" }
                 }),
                 document_snapshot: None,
+                debug_session_id: None,
             })
             .await
             .expect("seed waiting human run should succeed");
@@ -490,6 +507,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
                     "node-start": { "query": "order_123" }
                 }),
                 document_snapshot: None,
+                debug_session_id: None,
             })
             .await
             .expect("seed waiting callback run should succeed");
@@ -703,7 +721,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
 
 fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -717,7 +735,7 @@ fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -736,7 +754,7 @@ fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid
                         "temperature": 0.2
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 },
@@ -766,7 +784,7 @@ fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid
 
 fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -780,7 +798,7 @@ fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -799,7 +817,7 @@ fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -
                         "temperature": 0.2
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 },
@@ -844,7 +862,7 @@ fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -
 
 fn build_callback_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -858,7 +876,7 @@ fn build_callback_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> V
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-tool",
@@ -900,7 +918,7 @@ fn build_callback_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> V
 
 fn build_plugin_capability_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -914,7 +932,7 @@ fn build_plugin_capability_flow_document(flow_id: Uuid, _provider_instance_id: U
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-plugin",
@@ -924,11 +942,18 @@ fn build_plugin_capability_flow_document(flow_id: Uuid, _provider_instance_id: U
                     "containerId": null,
                     "position": { "x": 240, "y": 0 },
                     "configVersion": 1,
+                    "plugin_unique_identifier": "fixture_capability",
+                    "package_id": "fixture_capability@0.1.0",
                     "plugin_id": "fixture_capability@0.1.0",
                     "plugin_version": "0.1.0",
                     "contribution_code": "fixture_action",
                     "node_shell": "action",
-                    "schema_version": "1flowbase.node-contribution/v1",
+                    "schema_version": "1flowbase.node-contribution/v2",
+                    "contribution_checksum": "sha256:contribution",
+                    "compiled_contribution_hash": "sha256:compiled",
+                    "output_schema_snapshot": {
+                        "outputs": [{ "key": "answer", "title": "回答", "valueType": "string" }]
+                    },
                     "config": { "prompt": "Hello {{ node-start.query }}" },
                     "bindings": {
                         "query": { "kind": "selector", "value": ["node-start", "query"] }

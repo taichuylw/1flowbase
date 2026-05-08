@@ -205,8 +205,8 @@ async fn save_draft_only_appends_history_for_logical_changes() {
     assert_eq!(layout_state.versions.len(), 1);
 
     let mut logical_change = layout_state.draft.document.clone();
-    logical_change["graph"]["nodes"][1]["bindings"]["system_prompt"] =
-        json!({ "kind": "templated_text", "value": "You are a support agent." });
+    logical_change["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]
+        ["value"] = json!("You are a support agent.");
 
     let logical_state = <PgControlPlaneStore as FlowRepository>::save_draft(
         &store,
@@ -247,8 +247,8 @@ async fn restore_version_replaces_current_draft_and_appends_restore_history() {
     .unwrap();
 
     let mut logical_change = initial.draft.document.clone();
-    logical_change["graph"]["nodes"][1]["bindings"]["system_prompt"] =
-        json!({ "kind": "templated_text", "value": "You are a support agent." });
+    logical_change["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]
+        ["value"] = json!("You are a support agent.");
     let updated = <PgControlPlaneStore as FlowRepository>::save_draft(
         &store,
         workspace_id,

@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -52,14 +52,14 @@ pub struct PluginRuntimeManifest {
     pub limits: PluginRuntimeLimits,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NodeContributionDependencyManifest {
     pub installation_kind: String,
     pub plugin_version_range: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NodeContributionManifest {
     pub contribution_code: String,
@@ -71,6 +71,9 @@ pub struct NodeContributionManifest {
     pub schema_ui: Value,
     pub schema_version: String,
     pub output_schema: Value,
+    pub side_effect_policy: String,
+    #[serde(default)]
+    pub infra_contracts: Vec<String>,
     pub required_auth: Vec<String>,
     pub visibility: String,
     pub experimental: bool,
@@ -237,8 +240,16 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
         validate_allowed(
             &node_contribution.schema_version,
             "node_contributions[].schema_version",
-            &["1flowbase.node-contribution/v1"],
+            &["1flowbase.node-contribution/v2"],
         )?;
+        validate_allowed(
+            &node_contribution.side_effect_policy,
+            "node_contributions[].side_effect_policy",
+            &["none", "external_read", "external_write", "durable_write"],
+        )?;
+        validate_node_contribution_schema_ui(&node_contribution.schema_ui)?;
+        validate_node_contribution_output_schema(&node_contribution.output_schema)?;
+        validate_node_contribution_infra_contracts(&node_contribution.infra_contracts)?;
         validate_required_auth(&node_contribution.required_auth)?;
         validate_allowed(
             &node_contribution.visibility,
@@ -267,6 +278,202 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
             return Err(PluginFrameworkError::invalid_provider_package(
                 "node_contributions[].output_schema cannot be null",
             ));
+        }
+    }
+
+    Ok(())
+}
+
+const NODE_CONTRIBUTION_ALLOWED_RENDERERS: &[&str] = &[
+    "text",
+    "static_select",
+    "data_model",
+    "data_model_query",
+    "llm_model",
+    "llm_prompt_messages",
+    "llm_response_format",
+    "number",
+    "selector",
+    "selector_list",
+    "templated_text",
+    "named_bindings",
+    "condition_group",
+    "state_write",
+    "output_contract_definition",
+    "start_input_fields",
+    "header_alias",
+    "header_description",
+    "card_eyebrow",
+    "card_model",
+    "card_description",
+    "summary",
+    "output_contract",
+    "policy_group",
+    "relations",
+    "runtime_summary",
+    "runtime_io",
+    "runtime_metadata",
+];
+
+const RESERVED_PUBLIC_OUTPUT_KEYS: &[&str] = &[
+    "metadata",
+    "usage",
+    "debug",
+    "error",
+    "route",
+    "attempts",
+    "finish_reason",
+    "provider_instance_id",
+    "provider_code",
+    "protocol",
+    "model",
+    "event_count",
+    "queue_snapshot_id",
+    "provider_metadata",
+    "provider_events",
+    "tool_calls",
+    "mcp_calls",
+    "raw_response_ref",
+    "raw_response_refs",
+    "raw_ref",
+    "raw_refs",
+    "context_projection_ref",
+    "context_projection_refs",
+    "attempt_ref",
+    "attempt_refs",
+];
+
+const FORBIDDEN_NODE_CONTRIBUTION_INFRA_CONTRACTS: &[&str] = &[
+    "cache-store",
+    "cache_store",
+    "distributed-lock",
+    "distributed_lock",
+    "event-bus",
+    "event_bus",
+    "task-queue",
+    "task_queue",
+    "rate-limit-store",
+    "rate_limit_store",
+    "storage-durable",
+    "storage_durable",
+    "storage-ephemeral",
+    "storage_ephemeral",
+    "storage-object",
+    "storage_object",
+    "object-storage",
+    "object_storage",
+];
+
+fn validate_node_contribution_schema_ui(schema_ui: &Value) -> FrameworkResult<()> {
+    fn walk(value: &Value) -> FrameworkResult<()> {
+        match value {
+            Value::Object(object) => {
+                for key in object.keys() {
+                    if matches!(
+                        key.as_str(),
+                        "react_panel"
+                            | "reactPanel"
+                            | "panel_component"
+                            | "panelComponent"
+                            | "component"
+                            | "component_path"
+                            | "componentPath"
+                            | "module"
+                            | "import"
+                    ) {
+                        return Err(PluginFrameworkError::invalid_provider_package(
+                            "node_contributions[].schema_ui cannot declare plugin-provided React panels",
+                        ));
+                    }
+                }
+
+                if let Some(renderer) = object.get("renderer").and_then(Value::as_str) {
+                    validate_allowed(
+                        renderer,
+                        "node_contributions[].schema_ui.renderer",
+                        NODE_CONTRIBUTION_ALLOWED_RENDERERS,
+                    )
+                    .map_err(|_| {
+                        PluginFrameworkError::invalid_provider_package(format!(
+                            "unknown node contribution renderer: {renderer}"
+                        ))
+                    })?;
+                }
+
+                for child in object.values() {
+                    walk(child)?;
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    walk(item)?;
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    walk(schema_ui)
+}
+
+fn validate_node_contribution_output_schema(output_schema: &Value) -> FrameworkResult<()> {
+    let Some(object) = output_schema.as_object() else {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "node_contributions[].output_schema must be an object",
+        ));
+    };
+
+    for bucket in ["metrics", "metric", "errors", "error", "debug"] {
+        if object.contains_key(bucket) {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "node_contributions[].output_schema cannot declare metrics, error, or debug fields",
+            ));
+        }
+    }
+
+    let Some(outputs) = object.get("outputs").and_then(Value::as_array) else {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "node_contributions[].output_schema.outputs must be an array",
+        ));
+    };
+
+    for output in outputs {
+        let key = required_output_schema_string(output, "key")?;
+        let _title = required_output_schema_string(output, "title")?;
+        let _value_type = required_output_schema_string(output, "valueType")?;
+
+        if key.starts_with("__") || RESERVED_PUBLIC_OUTPUT_KEYS.contains(&key.as_str()) {
+            return Err(PluginFrameworkError::invalid_provider_package(format!(
+                "reserved public output key `{key}` cannot be declared by node_contributions[].output_schema"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn required_output_schema_string(output: &Value, field: &'static str) -> FrameworkResult<String> {
+    output
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            PluginFrameworkError::invalid_provider_package(format!(
+                "node_contributions[].output_schema.outputs[].{field} cannot be empty"
+            ))
+        })
+}
+
+fn validate_node_contribution_infra_contracts(infra_contracts: &[String]) -> FrameworkResult<()> {
+    for contract in infra_contracts {
+        if FORBIDDEN_NODE_CONTRIBUTION_INFRA_CONTRACTS.contains(&contract.as_str()) {
+            return Err(PluginFrameworkError::invalid_provider_package(format!(
+                "capability node contribution cannot request host infrastructure contract `{contract}`"
+            )));
         }
     }
 

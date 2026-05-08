@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust 2021, runtime-core Data Model runtime, control-plane, SQLx/PostgreSQL, TypeScript node definitions.
 
+**Status:** Completed on 2026-05-08.
+
 ---
 
 ## Files
@@ -26,31 +28,31 @@
 
 ### Task 1: Align fixed Data Model outputs
 
-- [ ] Ensure list outputs `records` and `total`.
-- [ ] Ensure get/create/update output `record`.
-- [ ] Ensure delete outputs `deleted_id` and `affected_count`.
-- [ ] Update frontend node definition tests and backend runtime tests.
+- [x] Ensure list outputs `records` and `total`.
+- [x] Ensure get/create/update output `record`.
+- [x] Ensure delete outputs `deleted_id` and `affected_count`.
+- [x] Update frontend node definition tests and backend runtime tests.
 
 ### Task 2: Add side-effect policy
 
-- [ ] Add debug run policy values: `disabled`, `confirm_each_run`, `allow_with_idempotency`.
-- [ ] Make write nodes fail with `DATA_MODEL_SIDE_EFFECT_DISABLED` when policy is disabled.
-- [ ] Make `confirm_each_run` enter a waiting confirmation state with actor, node id, run id, payload hash, and expiry.
-- [ ] Keep read nodes unaffected.
+- [x] Add debug run policy values: `disabled`, `confirm_each_run`, `allow_with_idempotency`.
+- [x] Make write nodes fail with `DATA_MODEL_SIDE_EFFECT_DISABLED` when policy is disabled.
+- [x] Make `confirm_each_run` enter a waiting confirmation state with actor, node id, run id, payload hash, and expiry.
+- [x] Keep read nodes unaffected.
 
 ### Task 3: Add same-run idempotency receipt
 
-- [ ] Generate key from `workspace_id + application_id + draft_id + run_id + node_id + action + resolved payload hash`.
-- [ ] Add receipt fields: action, model code, record id or deleted id, affected count, idempotency key, actor, scope id, node run id, created time, status.
-- [ ] Add unique index on `(workspace_id, idempotency_key)`.
-- [ ] On same-run checkpoint replay, return the recorded result instead of writing again.
-- [ ] Do not deduplicate across different debug runs.
+- [x] Generate key from `workspace_id + application_id + draft_id + run_id + node_id + action + resolved payload hash`.
+- [x] Add receipt fields: action, model code, record id or deleted id, affected count, idempotency key, actor, scope id, node run id, created time, status.
+- [x] Add unique index on `(workspace_id, idempotency_key)`.
+- [x] On same-run checkpoint replay, return the recorded result instead of writing again.
+- [x] Do not deduplicate across different debug runs.
 
 ### Task 4: Add audit/outbox failure semantics
 
-- [ ] Treat write + receipt + audit/outbox as one owner-controlled action.
-- [ ] If receipt or audit/outbox fails after the write, mark the node as not fully successful and expose formal error/debug evidence.
-- [ ] Do not let node UI or plugins synthesize missing receipts.
+- [x] Treat write + receipt + audit/outbox as one owner-controlled action.
+- [x] If receipt or audit/outbox fails after the write, mark the node as not fully successful and expose formal error/debug evidence.
+- [x] Do not let node UI or plugins synthesize missing receipts.
 
 ### Task 5: Verification
 
@@ -58,7 +60,7 @@ Run:
 
 ```bash
 cargo test -p control-plane orchestration_runtime_data_model -- --test-threads=1
-cargo test -p storage-durable data_model_side_effect_receipts -- --test-threads=1
+cargo test -p storage-postgres data_model_side_effect_receipts -- --test-threads=1
 pnpm --dir web/app test -- node-schema-registry
 ```
 
@@ -67,6 +69,25 @@ Expected:
 - Delete returns `deleted_id` and `affected_count`.
 - Same `run_id` checkpoint replay does not duplicate create/update/delete.
 - Cross debug run execution gets a new idempotency key.
+
+### Verification Evidence
+
+- `cargo test -p control-plane orchestration_runtime_data_model -- --test-threads=1`: 17 passed.
+- `cargo test -p storage-postgres data_model_side_effect_receipts -- --test-threads=1`: 1 passed.
+- `pnpm --dir web/app test -- node-schema-registry`: 21 passed.
+- Extra callback regression: `cargo test -p control-plane complete_callback_task -- --test-threads=1`: 1 passed.
+- Extra storage callback regression: `cargo test -p storage-postgres callback_tasks -- --test-threads=1`: 1 passed.
+- Extra frontend binding regression: `pnpm --dir web/app test -- node-inspector validate-document node-debug-preview-input`: 44 passed.
+- Formatting/static: `cargo fmt --all -- --check` and `git diff --check`.
+
+### Notes
+
+- `confirm_each_run` now stops the debug run and records a callback task; approved callback completion executes the Data Model write, persists/replays the receipt, then resumes downstream nodes.
+- Callback completion now requires a pending callback task, verifies the original actor and expiry metadata before completion, and rejects duplicate completion.
+- Writes now claim a `pending` receipt before executing the Data Model write; success promotes it to `succeeded`, write failure marks it `failed`, and receipt persistence failure leaves a non-replayable `pending` row so same-run retry cannot duplicate the write silently.
+- Same-run replay is covered by seeding the matching receipt before callback completion and asserting the confirmed write returns receipt output with `side_effect_replayed = true`.
+- Frontend get/update/delete now expose `bindings.record_id` selector fields to match the compiler and runtime contract; list remains the only Data Model query editor.
+- The storage crate is `storage-postgres`; the original plan command used the historical `storage-durable` naming.
 
 ## Stop Conditions
 

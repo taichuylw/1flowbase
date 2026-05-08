@@ -86,11 +86,17 @@ pub struct CompiledLlmRuntime {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompiledPluginRuntime {
     pub installation_id: Uuid,
+    pub plugin_unique_identifier: String,
+    pub package_id: String,
     pub plugin_id: String,
     pub plugin_version: String,
     pub contribution_code: String,
     pub node_shell: String,
     pub schema_version: String,
+    pub contribution_checksum: String,
+    pub compiled_contribution_hash: String,
+    pub output_schema_snapshot: Vec<CompiledOutput>,
+    pub side_effect_policy: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,8 +112,16 @@ pub enum CompileIssueCode {
     MissingContributionCode,
     MissingNodeShell,
     MissingSchemaVersion,
+    MissingPluginUniqueIdentifier,
+    MissingPackageId,
+    MissingContributionChecksum,
+    MissingCompiledContributionHash,
+    MissingOutputSchemaSnapshot,
+    UnsupportedPluginContributionSchemaVersion,
     MissingPluginContribution,
     PluginContributionDependencyNotReady,
+    PluginContributionChecksumMismatch,
+    PluginContributionOutputSchemaMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

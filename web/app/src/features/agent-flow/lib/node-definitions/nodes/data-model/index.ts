@@ -37,6 +37,22 @@ export const DATA_MODEL_NODE_LABELS = {
 
 export const defaultDataModelNodeConfig = { data_model_code: '' } as const;
 
+const DATA_MODEL_WRITE_ACTIONS = new Set<DataModelNodeAction>([
+  'create',
+  'update',
+  'delete'
+]);
+
+export function getDataModelNodeDefaultConfig(
+  nodeType: DataModelFlowNodeType
+): Record<string, unknown> {
+  const action = getDataModelActionForNodeType(nodeType);
+
+  return action && DATA_MODEL_WRITE_ACTIONS.has(action)
+    ? { ...defaultDataModelNodeConfig, side_effect_policy: 'disabled' }
+    : { ...defaultDataModelNodeConfig };
+}
+
 const dataModelActionOutputs = {
   list: [
     { key: 'records', title: 'Records', valueType: 'array' },
@@ -45,7 +61,10 @@ const dataModelActionOutputs = {
   get: [{ key: 'record', title: 'Record', valueType: 'json' }],
   create: [{ key: 'record', title: 'Record', valueType: 'json' }],
   update: [{ key: 'record', title: 'Record', valueType: 'json' }],
-  delete: [{ key: 'deleted_id', title: 'Deleted ID', valueType: 'string' }]
+  delete: [
+    { key: 'deleted_id', title: 'Deleted ID', valueType: 'string' },
+    { key: 'affected_count', title: 'Affected Count', valueType: 'number' }
+  ]
 } satisfies Record<DataModelNodeAction, FlowNodeDocument['outputs']>;
 
 export function isDataModelFlowNodeType(
@@ -84,12 +103,31 @@ const dataModelQueryField = {
   editor: 'data_model_query'
 } as const;
 
+const dataModelRecordIdField = {
+  key: 'bindings.record_id',
+  label: 'Record ID',
+  editor: 'selector',
+  required: true
+} as const;
+
 const dataModelPayloadField = {
   key: 'bindings.payload',
   label: 'Payload',
   editor: 'named_bindings',
   required: true
 } as const;
+
+const dataModelSideEffectPolicyField = {
+  key: 'config.side_effect_policy',
+  label: 'Side Effect Policy',
+  editor: 'static_select',
+  required: true,
+  options: [
+    { label: 'Disabled', value: 'disabled' },
+    { label: 'Confirm Each Run', value: 'confirm_each_run' },
+    { label: 'Allow With Idempotency', value: 'allow_with_idempotency' }
+  ]
+} satisfies NodeDefinition['sections'][number]['fields'][number];
 
 function createDataModelNodeDefinition({
   label,
@@ -127,22 +165,22 @@ export const dataModelListNodeDefinition = createDataModelNodeDefinition({
 
 export const dataModelGetNodeDefinition = createDataModelNodeDefinition({
   label: DATA_MODEL_NODE_LABELS.data_model_get,
-  fields: [dataModelQueryField]
+  fields: [dataModelRecordIdField]
 });
 
 export const dataModelCreateNodeDefinition = createDataModelNodeDefinition({
   label: DATA_MODEL_NODE_LABELS.data_model_create,
-  fields: [dataModelPayloadField]
+  fields: [dataModelPayloadField, dataModelSideEffectPolicyField]
 });
 
 export const dataModelUpdateNodeDefinition = createDataModelNodeDefinition({
   label: DATA_MODEL_NODE_LABELS.data_model_update,
-  fields: [dataModelQueryField, dataModelPayloadField]
+  fields: [dataModelRecordIdField, dataModelPayloadField, dataModelSideEffectPolicyField]
 });
 
 export const dataModelDeleteNodeDefinition = createDataModelNodeDefinition({
   label: DATA_MODEL_NODE_LABELS.data_model_delete,
-  fields: [dataModelQueryField]
+  fields: [dataModelRecordIdField, dataModelSideEffectPolicyField]
 });
 
 export const dataModelNodeDefinitions = {

@@ -34,50 +34,56 @@ Do not revert or reformat these files unless the active child plan explicitly ed
 
 ## Child Plans
 
-- [ ] **01 Schema And Node Runtime Contract:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-01-schema-node-runtime-contract.md`
+- [x] **01 Schema And Node Runtime Contract:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-01-schema-node-runtime-contract.md`
   - Introduces schema v2.
   - Adds first-class Node Runtime UI Contract types.
   - Removes legacy LLM public outputs from authoring defaults.
 
-- [ ] **02 Payload Builder And LLM Output Contract:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-02-payload-builder-llm-output-contract.md`
+- [x] **02 Payload Builder And LLM Output Contract:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-02-payload-builder-llm-output-contract.md`
   - Adds shared public output filtering and payload splitting.
   - Makes LLM output public-only.
   - Keeps metrics, error, provider metadata, route, attempts, tool calls, and raw refs outside variable pool.
 
-- [ ] **03 Variable Linker, Debug Cache, And Snapshot:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-03-variable-linker-debug-cache-snapshot.md`
+- [x] **03 Variable Linker, Debug Cache, And Snapshot:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-03-variable-linker-debug-cache-snapshot.md`
   - Rebuilds Variable Picker and Debug Variable Cache around public outputs.
   - Keeps resolved `input_payload` in Trace detail / node run audit only.
   - Adds snapshot isolation and stable merge semantics.
+  - Completed with targeted frontend/API/control-plane/storage verification and serial spec/code-quality reviews.
 
-- [ ] **04 RuntimeEventStream Replay And Durable Debug Events:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-04-runtime-event-stream-replay-debug-events.md`
+- [x] **04 RuntimeEventStream Replay And Durable Debug Events:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-04-runtime-event-stream-replay-debug-events.md`
   - Adds event envelope DTOs.
   - Adds cursor replay and frontend idempotent delta consumption.
   - Keeps streaming deltas out of variable pool.
+  - Completed with targeted frontend/API/control-plane verification and serial review re-check.
 
-- [ ] **05 Debug Artifact Offload And Full Load:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-05-debug-artifact-offload-full-load.md`
+- [x] **05 Debug Artifact Offload And Full Load:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-05-debug-artifact-offload-full-load.md`
   - Adds inline budgets.
   - Adds artifact refs, truncation preview, full-load API, and retention/GC state.
   - Prevents truncated payloads from masquerading as complete business output.
+  - Completed with targeted storage/API/control-plane/frontend verification and serial review re-check.
 
-- [ ] **06 Plugin Contribution V2:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-06-plugin-contribution-v2.md`
+- [x] **06 Plugin Contribution V2:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-06-plugin-contribution-v2.md`
   - Locks plugin identity, package identity, contribution checksum, renderer allowlist, and output schema snapshot.
   - Rejects unknown renderers, infra contracts, and non-public output keys.
   - Stops runtime from deriving old node behavior from current plugin installation state.
+  - Completed with targeted plugin-framework/orchestration/storage/control-plane/API/frontend verification and serial review re-check.
 
-- [ ] **07 Data Model Side Effects:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-07-data-model-side-effects.md`
+- [x] **07 Data Model Side Effects:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-07-data-model-side-effects.md`
   - Adds fixed Data Model output parity.
   - Adds side-effect policy, receipt, audit/outbox semantics, and same-run replay idempotency.
   - Ensures write nodes cannot be silently repeated by checkpoint replay.
 
-- [ ] **08 Node Runtime UI Surfaces:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-08-node-runtime-ui-surfaces.md`
+- [x] **08 Node Runtime UI Surfaces:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-08-node-runtime-ui-surfaces.md`
   - Moves Node Picker, Factory, Card, Inspector, Detail Panel, Trace, and Variables surfaces to the Node Runtime UI Contract.
   - Makes display identity `node.alias/key`.
   - Keeps object-level variable cache display and schema-driven deep field expansion.
+  - Completed with targeted frontend/control-plane verification and independent read-only QA re-check.
 
-- [ ] **09 Final QA And Cutover:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-09-final-qa-cutover.md`
+- [x] **09 Final QA And Cutover:** `docs/superpowers/plans/2026-05-08-agent-flow-runtime-contract-refactor-09-final-qa-cutover.md`
   - Runs targeted verification and QA review.
   - Updates OpenAPI/client generation and plan status.
   - Closes the destructive baseline by removing legacy compatibility paths.
+  - Completed with qa-evaluation review, legacy contract cleanup, OpenAPI verification, targeted frontend/backend gates, and heavy Rust consistency gates deferred to GitHub Actions.
 
 ## Required Execution Order
 

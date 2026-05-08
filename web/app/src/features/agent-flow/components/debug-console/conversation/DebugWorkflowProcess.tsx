@@ -123,18 +123,36 @@ function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   );
 }
 
-function buildNodeOutputPayload(item: AgentFlowTraceItem) {
+function buildNodeMetricsPayload(item: AgentFlowTraceItem) {
   return {
-    ...item.outputPayload,
-    error: item.errorPayload ?? null,
-    metrics: item.metricsPayload
+    usage:
+      item.metricsPayload.usage ??
+      (typeof item.metricsPayload.total_tokens === 'number' ||
+      typeof item.metricsPayload.total_tokens === 'string'
+        ? { total_tokens: item.metricsPayload.total_tokens }
+        : null),
+    duration_ms: item.durationMs,
+    route: item.metricsPayload.route ?? {
+      provider_instance_id: item.metricsPayload.provider_instance_id,
+      provider_code: item.metricsPayload.provider_code,
+      protocol: item.metricsPayload.protocol
+    },
+    attempt:
+      item.metricsPayload.attempt ??
+      item.metricsPayload.attempt_id ??
+      item.metricsPayload.attempt_index ??
+      null,
+    finish_reason: item.metricsPayload.finish_reason ?? null,
+    metrics_payload: item.metricsPayload
   };
 }
 
 export function DebugWorkflowProcess({
-  items
+  items,
+  onLoadArtifact
 }: {
   items: AgentFlowTraceItem[];
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -172,7 +190,7 @@ export function DebugWorkflowProcess({
           className="agent-flow-editor__debug-workflow-collapse-list"
           expandIconPosition="end"
           items={items.map((item) => ({
-            key: item.nodeId,
+            key: item.nodeRunId ?? item.nodeId,
             label: (
               <span className="agent-flow-editor__debug-workflow-row">
                 <NodeTypeIcon nodeType={item.nodeType} />
@@ -188,8 +206,31 @@ export function DebugWorkflowProcess({
             ),
             children: (
               <div className="agent-flow-editor__debug-workflow-node-detail">
-                <NodeRunJsonBlock payload={item.inputPayload} title="输入" />
-                <NodeRunJsonBlock payload={buildNodeOutputPayload(item)} title="输出" />
+                <NodeRunJsonBlock
+                  payload={item.inputPayload}
+                  title="输入"
+                  onLoadArtifact={onLoadArtifact}
+                />
+                <NodeRunJsonBlock
+                  payload={item.outputPayload}
+                  title="输出"
+                  onLoadArtifact={onLoadArtifact}
+                />
+                <NodeRunJsonBlock
+                  payload={buildNodeMetricsPayload(item)}
+                  title="指标"
+                  onLoadArtifact={onLoadArtifact}
+                />
+                <NodeRunJsonBlock
+                  payload={item.errorPayload}
+                  title="错误"
+                  onLoadArtifact={onLoadArtifact}
+                />
+                <NodeRunJsonBlock
+                  payload={item.debugPayload ?? {}}
+                  title="Debug"
+                  onLoadArtifact={onLoadArtifact}
+                />
               </div>
             )
           }))}

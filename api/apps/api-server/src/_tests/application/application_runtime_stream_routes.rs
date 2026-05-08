@@ -222,7 +222,7 @@ async fn create_ready_provider_instance(app: &axum::Router, cookie: &str, csrf: 
 
 fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id, "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -236,7 +236,7 @@ fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> V
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -255,7 +255,7 @@ fn build_ready_provider_document(flow_id: &str, provider_instance_id: &str) -> V
                         "temperature": 0.2
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 },
@@ -406,6 +406,10 @@ async fn debug_run_stream_returns_flow_accepted_before_runtime_continuation_fini
         stream_text.contains("event: flow_accepted"),
         "{stream_text}"
     );
+    assert!(stream_text.contains("id: "), "{stream_text}");
+    assert!(stream_text.contains("\"event_id\""), "{stream_text}");
+    assert!(stream_text.contains("\"sequence\":1"), "{stream_text}");
+    assert!(stream_text.contains("\"payload\""), "{stream_text}");
     assert!(
         stream_text.contains("\"type\":\"flow_accepted\""),
         "{stream_text}"

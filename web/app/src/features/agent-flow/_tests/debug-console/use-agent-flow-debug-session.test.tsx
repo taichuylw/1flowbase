@@ -240,7 +240,9 @@ describe('useAgentFlowDebugSession', () => {
   test('restores node preview variable cache from durable runtime snapshot', async () => {
     const queryClient = createQueryClient();
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot').mockResolvedValue({
+    const fetchSnapshotSpy = vi
+      .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValue({
       variable_cache: {
         'node-start': {
           query: '沿用 durable 输入'
@@ -278,6 +280,10 @@ describe('useAgentFlowDebugSession', () => {
         title: 'Variable Cache'
       })
     );
+    expect(fetchSnapshotSpy).toHaveBeenCalledWith(
+      'app-1',
+      expect.stringMatching(/^app-1:draft-1:/)
+    );
   });
 
   test('ignores a delayed durable snapshot after resetting variable cache', async () => {
@@ -286,11 +292,13 @@ describe('useAgentFlowDebugSession', () => {
     let resolveSnapshot:
       | ((value: runtimeApi.DebugVariableSnapshot) => void)
       | null = null;
-    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot').mockReturnValue(
-      new Promise<runtimeApi.DebugVariableSnapshot>((resolve) => {
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockReturnValueOnce(
+        new Promise<runtimeApi.DebugVariableSnapshot>((resolve) => {
         resolveSnapshot = resolve;
-      })
-    );
+        })
+      )
+      .mockResolvedValue({ variable_cache: {} });
 
     const { result } = renderHook(
       () =>
@@ -348,6 +356,7 @@ describe('useAgentFlowDebugSession', () => {
       'app-1',
       {
         document,
+        debug_session_id: expect.stringMatching(/^app-1:draft-1:/),
         input_payload: {
           'node-start': { files: undefined, query: '请总结退款政策' }
         }
@@ -384,6 +393,16 @@ describe('useAgentFlowDebugSession', () => {
         'Environment'
       ])
     );
+    const inputVariablesGroup = result.current.variableGroups.find(
+      (group) => group.title === 'Input Variables'
+    );
+    const inputVariablesKeys = (inputVariablesGroup?.items ?? []).map(
+      (item) => item.key
+    );
+
+    expect(inputVariablesKeys).toContain('node-start.query');
+    expect(inputVariablesKeys).not.toContain('node-llm.user_prompt');
+    expect(inputVariablesKeys).not.toContain('node-answer.answer_template');
     expect(result.current.getNodePreviewVariableCache()).toEqual(
       expect.objectContaining({
         'node-start': expect.objectContaining({
@@ -394,6 +413,12 @@ describe('useAgentFlowDebugSession', () => {
         })
       })
     );
+    expect(result.current.getNodePreviewVariableCache()['node-llm']).not.toHaveProperty(
+      'user_prompt'
+    );
+    expect(
+      result.current.getNodePreviewVariableCache()['node-answer']
+    ).not.toHaveProperty('answer_template');
     expect(
       JSON.parse(
         window.localStorage.getItem(

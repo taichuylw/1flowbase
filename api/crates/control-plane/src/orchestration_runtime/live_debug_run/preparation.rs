@@ -14,9 +14,10 @@ use crate::{
 };
 
 use super::super::{
-    compile_context::ensure_compiled_plan_runnable, debug_stream_events,
-    freeze_failover_queue_routes, inputs::build_compiled_plan_input, OrchestrationRuntimeService,
-    PrepareFlowDebugRunCommand, StartFlowDebugRunCommand,
+    compile_context::ensure_compiled_plan_runnable,
+    debug_stream_events, freeze_failover_queue_routes,
+    inputs::{build_compiled_plan_input, flow_document_hash, flow_document_schema_version},
+    OrchestrationRuntimeService, PrepareFlowDebugRunCommand, StartFlowDebugRunCommand,
 };
 use super::{append_runtime_event, emit_flow_failed_and_close, fail_flow_run, load_run_detail};
 
@@ -44,6 +45,7 @@ where
     let application_id = command.application_id;
     let input_payload = command.input_payload.clone();
     let document_snapshot = command.document_snapshot.clone();
+    let debug_session_id = command.debug_session_id.clone().unwrap_or_default();
     let shell = open_flow_debug_run_shell(service, command).await?;
 
     prepare_flow_debug_run_from_shell(
@@ -54,6 +56,7 @@ where
             flow_run_id: shell.id,
             input_payload,
             document_snapshot,
+            debug_session_id,
         },
     )
     .await
@@ -68,11 +71,21 @@ fn validate_flow_debug_run_shell(
     command: &PrepareFlowDebugRunCommand,
     editor_state: &domain::FlowEditorState,
 ) -> Result<()> {
+    let debug_document = command
+        .document_snapshot
+        .as_ref()
+        .unwrap_or(&editor_state.draft.document);
+    let flow_schema_version = flow_document_schema_version(editor_state, debug_document);
+    let document_hash = flow_document_hash(debug_document);
+
     if flow_run.created_by != command.actor_user_id
         || flow_run.run_mode != domain::FlowRunMode::DebugFlowRun
         || flow_run.target_node_id.is_some()
         || flow_run.status != domain::FlowRunStatus::Queued
         || flow_run.compiled_plan_id.is_some()
+        || flow_run.debug_session_id != command.debug_session_id
+        || flow_run.flow_schema_version != flow_schema_version
+        || flow_run.document_hash != document_hash
         || flow_run.input_payload != command.input_payload
         || flow_run.flow_id != editor_state.flow.id
         || flow_run.draft_id != editor_state.draft.id
@@ -112,6 +125,12 @@ where
         .get_application(actor.current_workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
+    let debug_document = command
+        .document_snapshot
+        .as_ref()
+        .unwrap_or(&editor_state.draft.document);
+    let flow_schema_version = flow_document_schema_version(&editor_state, debug_document);
+    let document_hash = flow_document_hash(debug_document);
 
     service
         .repository
@@ -120,6 +139,9 @@ where
             application_id: command.application_id,
             flow_id: editor_state.flow.id,
             flow_draft_id: editor_state.draft.id,
+            debug_session_id: command.debug_session_id.unwrap_or_default(),
+            flow_schema_version,
+            document_hash,
             run_mode: domain::FlowRunMode::DebugFlowRun,
             target_node_id: None,
             status: domain::FlowRunStatus::Queued,
@@ -168,14 +190,15 @@ where
         .get_application(actor.current_workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
+    let debug_document = command
+        .document_snapshot
+        .as_ref()
+        .unwrap_or(&editor_state.draft.document);
+    let document_hash = flow_document_hash(debug_document);
     let pre_attach_result = async {
         let compile_context = service
             .build_compile_context(application.workspace_id)
             .await?;
-        let debug_document = command
-            .document_snapshot
-            .as_ref()
-            .unwrap_or(&editor_state.draft.document);
 
         let mut compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
             editor_state.flow.id,
@@ -191,6 +214,7 @@ where
                 command.actor_user_id,
                 &editor_state,
                 &compiled_plan,
+                debug_document,
             )?)
             .await?;
 
@@ -217,6 +241,8 @@ where
         .attach_compiled_plan_to_flow_run(&AttachCompiledPlanToFlowRunInput {
             flow_run_id: command.flow_run_id,
             compiled_plan_id: compiled_record.id,
+            flow_schema_version: compiled_record.schema_version.clone(),
+            document_hash,
             status: domain::FlowRunStatus::Running,
         })
         .await

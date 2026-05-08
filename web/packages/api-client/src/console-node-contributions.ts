@@ -7,6 +7,11 @@ export interface ConsoleNodeContributionEntry {
   plugin_version: string;
   contribution_code: string;
   node_shell: string;
+  plugin_unique_identifier: string;
+  package_id: string;
+  contribution_checksum: string;
+  compiled_contribution_hash: string;
+  output_schema_snapshot: Record<string, unknown>;
   category: string;
   title: string;
   description: string;
@@ -16,6 +21,8 @@ export interface ConsoleNodeContributionEntry {
   icon: string;
   schema_ui: Record<string, unknown>;
   output_schema: Record<string, unknown>;
+  side_effect_policy: string;
+  infra_contracts: string[];
   required_auth: string[];
   visibility: string;
   dependency_installation_kind: string;

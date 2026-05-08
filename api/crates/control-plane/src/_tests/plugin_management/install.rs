@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::support::{
     actor_with_permissions, build_openai_compatible_package_bytes,
-    build_signed_openai_upload_package, create_provider_fixture,
+    build_signed_openai_upload_package, create_capability_plugin_fixture, create_provider_fixture,
     create_provider_fixture_with_node_contribution, requested_locales, MemoryOfficialPluginSource,
     MemoryPluginManagementRepository, MemoryProviderRuntime,
 };
@@ -245,6 +245,56 @@ async fn plugin_management_service_syncs_manifest_node_contributions_on_install(
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].installation_id, installation.id);
     assert_eq!(entries[0].contribution_code, "openai_prompt");
+    assert_eq!(
+        entries[0].dependency_status,
+        NodeContributionDependencyStatus::MissingPlugin
+    );
+}
+
+#[tokio::test]
+async fn plugin_management_service_installs_capability_plugin_node_contributions() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let nonce = Uuid::now_v7().to_string();
+    let package_root = std::env::temp_dir().join(format!("capability-plugin-source-{nonce}"));
+    let install_root = std::env::temp_dir().join(format!("capability-plugin-installed-{nonce}"));
+    create_capability_plugin_fixture(&package_root);
+
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+
+    let installation = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .unwrap()
+        .installation;
+    let entries = NodeContributionRepository::list_node_contributions(&repository, workspace_id)
+        .await
+        .unwrap();
+
+    assert_eq!(installation.contract_version, "1flowbase.capability/v1");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].installation_id, installation.id);
+    assert_eq!(entries[0].plugin_unique_identifier, "fixture_capability");
+    assert_eq!(entries[0].package_id, "fixture_capability@0.1.0");
+    assert_eq!(entries[0].schema_version, "1flowbase.node-contribution/v2");
+    assert!(entries[0].contribution_checksum.starts_with("sha256:"));
+    assert!(entries[0].compiled_contribution_hash.starts_with("sha256:"));
+    assert_eq!(
+        entries[0].output_schema_snapshot["outputs"][0]["key"],
+        "answer"
+    );
     assert_eq!(
         entries[0].dependency_status,
         NodeContributionDependencyStatus::MissingPlugin

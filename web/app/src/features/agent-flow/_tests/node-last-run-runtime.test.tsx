@@ -172,8 +172,9 @@ describe('node last run runtime', () => {
             }
           },
           document: expect.objectContaining({
-            schemaVersion: '1flowbase.flow/v1'
-          })
+            schemaVersion: '1flowbase.flow/v2'
+          }),
+          debug_session_id: expect.any(String)
         },
         'csrf-123'
       );
@@ -236,8 +237,9 @@ describe('node last run runtime', () => {
             }
           },
           document: expect.objectContaining({
-            schemaVersion: '1flowbase.flow/v1'
-          })
+            schemaVersion: '1flowbase.flow/v2'
+          }),
+          debug_session_id: expect.any(String)
         },
         'csrf-123'
       );

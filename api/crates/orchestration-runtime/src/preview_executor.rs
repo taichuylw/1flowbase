@@ -15,6 +15,7 @@ pub struct NodePreviewOutcome {
     pub node_output: Value,
     pub error_payload: Option<Value>,
     pub metrics_payload: Value,
+    pub debug_payload: Value,
     pub provider_events: Vec<plugin_framework::provider_contract::ProviderStreamEvent>,
 }
 
@@ -28,6 +29,7 @@ impl NodePreviewOutcome {
             "node_output": self.node_output,
             "error_payload": self.error_payload,
             "metrics_payload": self.metrics_payload,
+            "debug_payload": self.debug_payload,
             "provider_events": self.provider_events,
         })
     }
@@ -68,24 +70,26 @@ where
         })
         .collect();
 
-    let (node_output, error_payload, metrics_payload, provider_events) = if node.node_type == "llm"
-    {
-        let execution =
-            execute_llm_node(node, &resolved_inputs, &rendered_templates, invoker).await?;
-        (
-            execution.output_payload,
-            execution.error_payload,
-            execution.metrics_payload,
-            execution.provider_events,
-        )
-    } else {
-        (
-            Value::Null,
-            None,
-            json!({ "preview_mode": true }),
-            Vec::new(),
-        )
-    };
+    let (node_output, error_payload, metrics_payload, debug_payload, provider_events) =
+        if node.node_type == "llm" {
+            let execution =
+                execute_llm_node(node, &resolved_inputs, &rendered_templates, invoker).await?;
+            (
+                execution.output_payload,
+                execution.error_payload,
+                execution.metrics_payload,
+                execution.debug_payload,
+                execution.provider_events,
+            )
+        } else {
+            (
+                Value::Null,
+                None,
+                json!({ "preview_mode": true }),
+                json!({}),
+                Vec::new(),
+            )
+        };
 
     Ok(NodePreviewOutcome {
         target_node_id: node.node_id.clone(),
@@ -95,6 +99,7 @@ where
         node_output,
         error_payload,
         metrics_payload,
+        debug_payload,
         provider_events,
     })
 }

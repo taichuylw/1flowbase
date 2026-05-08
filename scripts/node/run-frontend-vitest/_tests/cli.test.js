@@ -20,6 +20,13 @@ test('parseCliArgs strips leading passthrough separator', () => {
   });
 });
 
+test('parseCliArgs strips package-script passthrough separator after default flags', () => {
+  assert.deepEqual(parseCliArgs(['run', '--exclude', 'a.test.ts', '--', 'llm-node-defaults']), {
+    mode: 'run',
+    passThroughArgs: ['--exclude', 'a.test.ts', 'llm-node-defaults'],
+  });
+});
+
 test('buildVitestCommand uses runtime-configured worker limits', () => {
   assert.deepEqual(
     buildVitestCommand({

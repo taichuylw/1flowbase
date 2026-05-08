@@ -120,10 +120,14 @@ pub struct RuntimeEventPayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeEventEnvelope {
     pub run_id: Uuid,
+    pub node_run_id: Option<Uuid>,
     pub sequence: i64,
     pub event_id: String,
     pub event_type: String,
     pub occurred_at: time::OffsetDateTime,
+    pub delta_index: Option<i64>,
+    pub content_type: Option<String>,
+    pub text: Option<String>,
     pub source: RuntimeEventSource,
     pub durability: RuntimeEventDurability,
     pub persist_required: bool,
@@ -133,12 +137,51 @@ pub struct RuntimeEventEnvelope {
 
 impl RuntimeEventEnvelope {
     pub fn new(run_id: Uuid, sequence: i64, event: RuntimeEventPayload) -> Self {
+        let node_run_id = event
+            .payload
+            .get("node_run_id")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| Uuid::parse_str(value).ok());
+        let text = event
+            .payload
+            .get("text")
+            .or_else(|| event.payload.get("delta"))
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string);
+        let (delta_index, content_type) = match event.event_type.as_str() {
+            "text_delta" => (
+                Some(
+                    event
+                        .payload
+                        .get("delta_index")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(sequence),
+                ),
+                Some("text".to_string()),
+            ),
+            "reasoning_delta" => (
+                Some(
+                    event
+                        .payload
+                        .get("delta_index")
+                        .and_then(serde_json::Value::as_i64)
+                        .unwrap_or(sequence),
+                ),
+                Some("reasoning".to_string()),
+            ),
+            _ => (None, None),
+        };
+
         Self {
             run_id,
+            node_run_id,
             sequence,
             event_id: format!("{run_id}:{sequence}"),
             event_type: event.event_type,
             occurred_at: time::OffsetDateTime::now_utc(),
+            delta_index,
+            content_type,
+            text,
             source: event.source,
             durability: event.durability,
             persist_required: event.persist_required,
@@ -182,6 +225,8 @@ pub enum RuntimeEventCloseReason {
     Finished,
     Failed,
     Cancelled,
+    WaitingHuman,
+    WaitingCallback,
     Expired,
 }
 

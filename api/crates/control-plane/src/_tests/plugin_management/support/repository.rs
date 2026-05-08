@@ -1,4 +1,3 @@
-use super::source::version_matches_range;
 use super::*;
 
 #[derive(Clone)]
@@ -498,6 +497,8 @@ impl NodeContributionRepository for MemoryPluginManagementRepository {
                 .map(|entry| domain::NodeContributionRegistryEntry {
                     installation_id: input.installation_id,
                     provider_code: input.provider_code.clone(),
+                    plugin_unique_identifier: entry.plugin_unique_identifier.clone(),
+                    package_id: entry.package_id.clone(),
                     plugin_id: input.plugin_id.clone(),
                     plugin_version: input.plugin_version.clone(),
                     contribution_code: entry.contribution_code.clone(),
@@ -509,6 +510,11 @@ impl NodeContributionRepository for MemoryPluginManagementRepository {
                     schema_ui: entry.schema_ui.clone(),
                     schema_version: entry.schema_version.clone(),
                     output_schema: entry.output_schema.clone(),
+                    contribution_checksum: entry.contribution_checksum.clone(),
+                    compiled_contribution_hash: entry.compiled_contribution_hash.clone(),
+                    output_schema_snapshot: entry.output_schema_snapshot.clone(),
+                    side_effect_policy: entry.side_effect_policy.clone(),
+                    infra_contracts: entry.infra_contracts.clone(),
                     required_auth: entry.required_auth.clone(),
                     visibility: entry.visibility.clone(),
                     experimental: entry.experimental,
@@ -531,29 +537,19 @@ impl NodeContributionRepository for MemoryPluginManagementRepository {
         Ok(rows
             .into_iter()
             .map(|mut entry| {
-                let assigned_installation = assignments
-                    .iter()
-                    .find(|assignment| {
-                        assignment.workspace_id == workspace_id
-                            && assignment.provider_code == entry.provider_code
-                    })
-                    .and_then(|assignment| installations.get(&assignment.installation_id));
-                entry.dependency_status = match assigned_installation {
-                    None => NodeContributionDependencyStatus::MissingPlugin,
-                    Some(installation)
+                let assigned = assignments.iter().any(|assignment| {
+                    assignment.workspace_id == workspace_id
+                        && assignment.installation_id == entry.installation_id
+                });
+                let pinned_installation = installations.get(&entry.installation_id);
+                entry.dependency_status = match (assigned, pinned_installation) {
+                    (false, _) | (_, None) => NodeContributionDependencyStatus::MissingPlugin,
+                    (true, Some(installation))
                         if matches!(installation.desired_state, PluginDesiredState::Disabled) =>
                     {
                         NodeContributionDependencyStatus::DisabledPlugin
                     }
-                    Some(installation)
-                        if !version_matches_range(
-                            &installation.plugin_version,
-                            &entry.dependency_plugin_version_range,
-                        ) =>
-                    {
-                        NodeContributionDependencyStatus::VersionMismatch
-                    }
-                    Some(_) => NodeContributionDependencyStatus::Ready,
+                    (true, Some(_)) => NodeContributionDependencyStatus::Ready,
                 };
                 entry
             })

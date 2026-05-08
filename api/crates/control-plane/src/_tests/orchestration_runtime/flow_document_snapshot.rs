@@ -16,7 +16,7 @@ async fn start_flow_debug_run_uses_request_document_snapshot() {
                 "node-start": { "query": "draft prompt" }
             }),
             document_snapshot: Some(serde_json::json!({
-                "schemaVersion": "1flowbase.flow/v1",
+                "schemaVersion": "1flowbase.flow/v2",
                 "meta": {
                     "flowId": seeded.flow_id.to_string(),
                     "name": "Support Agent",
@@ -35,7 +35,7 @@ async fn start_flow_debug_run_uses_request_document_snapshot() {
                             "configVersion": 1,
                             "config": {},
                             "bindings": {},
-                            "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                            "outputs": []
                         },
                         {
                             "id": "node-llm",
@@ -53,7 +53,7 @@ async fn start_flow_debug_run_uses_request_document_snapshot() {
                                 }
                             },
                             "bindings": {
-                                "user_prompt": { "kind": "templated_text", "value": "snapshot {{node-start.query}}" }
+                                "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "snapshot {{node-start.query}}" } }] }
                             },
                             "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                         },
@@ -83,6 +83,7 @@ async fn start_flow_debug_run_uses_request_document_snapshot() {
                     "activeContainerPath": []
                 }
             })),
+            debug_session_id: None,
         })
         .await
         .unwrap();

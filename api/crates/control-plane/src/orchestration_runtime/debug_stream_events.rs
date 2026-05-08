@@ -93,6 +93,40 @@ pub fn flow_cancelled(run_id: Uuid) -> RuntimeEventPayload {
     }
 }
 
+pub fn waiting_human(run_id: Uuid, node_run_id: Uuid, node_id: &str) -> RuntimeEventPayload {
+    RuntimeEventPayload {
+        event_type: "waiting_human".to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({
+            "type": "waiting_human",
+            "run_id": run_id,
+            "node_run_id": node_run_id,
+            "node_id": node_id,
+            "status": "waiting_human",
+        }),
+    }
+}
+
+pub fn waiting_callback(run_id: Uuid, node_run_id: Uuid, node_id: &str) -> RuntimeEventPayload {
+    RuntimeEventPayload {
+        event_type: "waiting_callback".to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({
+            "type": "waiting_callback",
+            "run_id": run_id,
+            "node_run_id": node_run_id,
+            "node_id": node_id,
+            "status": "waiting_callback",
+        }),
+    }
+}
+
 pub fn node_started(node_run: &domain::NodeRunRecord) -> RuntimeEventPayload {
     RuntimeEventPayload {
         event_type: "node_started".to_string(),
@@ -128,6 +162,7 @@ pub fn node_finished(node_run: &domain::NodeRunRecord) -> RuntimeEventPayload {
             "output_payload": node_run.output_payload,
             "error_payload": node_run.error_payload,
             "metrics_payload": node_run.metrics_payload,
+            "debug_payload": node_run.debug_payload,
             "started_at": node_run.started_at,
             "finished_at": node_run.finished_at,
         }),

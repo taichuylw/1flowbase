@@ -3,6 +3,7 @@ import type {
   FlowBinding,
   FlowNodeDocument
 } from '@1flowbase/flow-schema';
+import { getLlmNodeOutputs } from '@1flowbase/flow-schema';
 
 import { createEdgeDocument } from '../edge-factory';
 import { createNodeDocument } from '../node-factory';
@@ -17,6 +18,7 @@ type NodeFieldValue =
   | boolean
   | null
   | FlowBinding
+  | Record<string, unknown>
   | string[]
   | string[][];
 
@@ -28,6 +30,19 @@ function replaceOutputTitle(
   return outputs.map((output) =>
     output.key === outputKey ? { ...output, title } : output
   );
+}
+
+function deriveLlmOutputs(
+  config: Record<string, unknown>,
+  currentOutputs: FlowNodeDocument['outputs']
+): FlowNodeDocument['outputs'] {
+  return getLlmNodeOutputs(config).map((derivedOutput) => {
+    const currentOutput = currentOutputs.find(
+      (output) => output.key === derivedOutput.key
+    );
+
+    return currentOutput ? { ...derivedOutput, ...currentOutput } : derivedOutput;
+  });
 }
 
 export function replaceNodeOutputs(
@@ -201,13 +216,18 @@ export function updateNodeField(
 
         if (payload.fieldKey.startsWith('config.')) {
           const configKey = payload.fieldKey.slice('config.'.length);
+          const nextConfig = {
+            ...node.config,
+            [configKey]: payload.value
+          };
 
           return {
             ...node,
-            config: {
-              ...node.config,
-              [configKey]: payload.value
-            }
+            config: nextConfig,
+            outputs:
+              node.type === 'llm' && configKey === 'response_format'
+                ? deriveLlmOutputs(nextConfig, node.outputs)
+                : node.outputs
           };
         }
 

@@ -28,6 +28,8 @@ pub struct NodeContributionQuery {
 pub struct NodeContributionResponse {
     pub installation_id: String,
     pub provider_code: String,
+    pub plugin_unique_identifier: String,
+    pub package_id: String,
     pub plugin_id: String,
     pub plugin_version: String,
     pub contribution_code: String,
@@ -43,6 +45,12 @@ pub struct NodeContributionResponse {
     pub schema_ui: serde_json::Value,
     #[schema(value_type = Object)]
     pub output_schema: serde_json::Value,
+    pub contribution_checksum: String,
+    pub compiled_contribution_hash: String,
+    #[schema(value_type = Object)]
+    pub output_schema_snapshot: serde_json::Value,
+    pub side_effect_policy: String,
+    pub infra_contracts: Vec<String>,
     pub required_auth: Vec<String>,
     pub visibility: String,
     pub dependency_installation_kind: String,
@@ -57,6 +65,8 @@ fn to_response(entry: domain::NodeContributionRegistryEntry) -> NodeContribution
     NodeContributionResponse {
         installation_id: entry.installation_id.to_string(),
         provider_code: entry.provider_code,
+        plugin_unique_identifier: entry.plugin_unique_identifier,
+        package_id: entry.package_id,
         plugin_id: entry.plugin_id,
         plugin_version: entry.plugin_version,
         contribution_code: entry.contribution_code,
@@ -70,6 +80,11 @@ fn to_response(entry: domain::NodeContributionRegistryEntry) -> NodeContribution
         icon: entry.icon,
         schema_ui: entry.schema_ui,
         output_schema: entry.output_schema,
+        contribution_checksum: entry.contribution_checksum,
+        compiled_contribution_hash: entry.compiled_contribution_hash,
+        output_schema_snapshot: entry.output_schema_snapshot,
+        side_effect_policy: entry.side_effect_policy,
+        infra_contracts: entry.infra_contracts,
         required_auth: entry.required_auth,
         visibility: entry.visibility,
         dependency_installation_kind: entry.dependency_installation_kind,

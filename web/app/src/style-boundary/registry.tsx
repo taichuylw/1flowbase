@@ -52,15 +52,26 @@ const styleBoundaryNodeContributions = [
     plugin_version: '0.1.0',
     contribution_code: 'openai_prompt',
     node_shell: 'action',
+    plugin_unique_identifier: 'prompt_pack',
+    package_id: 'prompt_pack@0.1.0',
+    contribution_checksum: 'sha256:contribution',
+    compiled_contribution_hash: 'sha256:compiled',
     category: 'generation',
     title: 'OpenAI Prompt',
     description: 'Generate prompt output',
     dependency_status: 'ready',
-    schema_version: '1flowbase.node-contribution/v1',
+    schema_version: '1flowbase.node-contribution/v2',
+    output_schema_snapshot: {
+      outputs: [{ key: 'answer', title: 'Answer', valueType: 'string' }]
+    },
     experimental: false,
     icon: 'sparkles',
     schema_ui: {},
-    output_schema: {},
+    output_schema: {
+      outputs: [{ key: 'answer', title: 'Answer', valueType: 'string' }]
+    },
+    side_effect_policy: 'external_read',
+    infra_contracts: [],
     required_auth: [],
     visibility: 'public',
     dependency_installation_kind: 'model_provider',

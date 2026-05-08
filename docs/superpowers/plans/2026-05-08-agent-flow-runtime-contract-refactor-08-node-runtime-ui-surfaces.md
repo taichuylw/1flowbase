@@ -25,33 +25,33 @@
 
 ### Task 1: Contract-driven Node Picker and Factory
 
-- [ ] Build node picker items from contract `meta`, `ports`, and `defaults`.
-- [ ] Create node documents from contract defaults.
-- [ ] Reject unavailable plugin contribution nodes instead of creating uncompilable drafts.
+- [x] Build node picker items from contract `meta`, `ports`, and `defaults`.
+- [x] Create node documents from contract defaults.
+- [x] Reject unavailable plugin contribution nodes instead of creating uncompilable drafts.
 
 ### Task 2: Contract-driven Card and Inspector
 
-- [ ] Render node cards from contract `card` fields.
-- [ ] Render inspector forms from contract `panel_schema` and host renderer allowlist.
-- [ ] Keep config editing separate from runtime variables.
-- [ ] Remove output-title-based identity from UI tests.
+- [x] Render node cards from contract `card` fields.
+- [x] Render inspector forms from contract `panel_schema` and host renderer allowlist.
+- [x] Keep config editing separate from runtime variables.
+- [x] Remove output-title-based identity from UI tests.
 
 ### Task 3: Runtime panels
 
-- [ ] Trace Inputs displays `input_payload`.
-- [ ] Trace Outputs displays public `output_payload`.
-- [ ] Trace Metrics displays usage, duration, route, attempt, finish reason.
-- [ ] Trace Error displays `error_payload`.
-- [ ] Trace Debug displays refs and artifact metadata.
-- [ ] No non-output payload appears in Variable Cache.
+- [x] Trace Inputs displays `input_payload`.
+- [x] Trace Outputs displays public `output_payload`.
+- [x] Trace Metrics displays usage, duration, route, attempt, finish reason.
+- [x] Trace Error displays `error_payload`.
+- [x] Trace Debug displays refs and artifact metadata.
+- [x] No non-output payload appears in Variable Cache.
 
 ### Task 4: Variables tab and preview UX
 
-- [ ] Display Variable Cache object-level entries.
-- [ ] Show `node.alias/key` as primary label.
-- [ ] Show output title as secondary helper text only.
-- [ ] Show truncation and full-load affordance when plan 05 metadata exists.
-- [ ] Keep Run Context / Environment / Session separate from Variable Cache.
+- [x] Display Variable Cache object-level entries.
+- [x] Show `node.alias/key` as primary label.
+- [x] Show output title as secondary helper text only.
+- [x] Show truncation and full-load affordance when plan 05 metadata exists.
+- [x] Keep Run Context / Environment / Session separate from Variable Cache.
 
 ### Task 5: Verification
 
@@ -66,6 +66,22 @@ Expected:
 - UI surfaces consume the same contract shape.
 - `input_payload`, metrics, error, and debug evidence are inspectable but not variable entries.
 - Data Model and plugin nodes display public outputs consistently.
+
+Status:
+
+- [x] Passed `pnpm --dir web/app test -- agent-flow node-schema-registry variable-groups use-agent-flow-debug-session` on 2026-05-08. Result: 41 files, 267 tests passed.
+- [x] Passed `cargo fmt --all -- --check` from `api/` on 2026-05-08.
+- [x] Passed `cargo test -p control-plane live_debug_persists_llm_debug_payload_without_polluting_public_outputs -- --test-threads=1` on 2026-05-08. Result: 1 passed.
+- [ ] `pnpm --dir web/app build` remains blocked by pre-existing `app-shell/_tests` type errors unrelated to Agent Flow: missing `ConsoleSessionActor.id`, null string assignment, and unsafe `.props` access in settings chrome menu tests.
+
+Implementation Notes:
+
+- Added complete builtin `NodeRuntimeUiContract` coverage for picker metadata, factory defaults, card metadata, panel sections, runtime displays, and Data Model fixed output contracts.
+- Node picker now derives builtin options from contract metadata and ports; factory rejects disabled plugin contributions before creating drafts.
+- Last Run and Debug Trace now render input, public output, metrics, error, and debug payloads as separate JSON blocks with artifact full-load support.
+- Variable Cache, live preview cache, and run-detail Node Outputs keep object-level public output entries, use `node.alias/key` as the primary label, and show contract or document output title as secondary helper text.
+- Frontend debug stream now accepts optional `debug_payload`; backend node-finished stream events include `debug_payload` for live Trace Debug.
+- Independent read-only QA initially found the live/durable Variable Cache still displayed whole-node cache objects; this was fixed by mapping preview cache with document node metadata.
 
 ## Stop Conditions
 

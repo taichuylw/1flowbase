@@ -15,6 +15,7 @@ import {
   type AgentFlowTraceItem,
   type AgentFlowVariableGroup,
   type FlowDebugRunDetail,
+  type FlowDebugRunStreamEvent,
   type NodeDebugPreviewVariableCache
 } from '../../api/runtime';
 import {
@@ -30,7 +31,8 @@ import {
   getRunContextValues,
   mapRunContextToVariableGroups,
   mapRunDetailToVariableGroups,
-  mapVariableCacheToVariableGroup
+  mapVariableCacheToVariableGroup,
+  type NodeVariableDisplayMeta
 } from '../../lib/debug-console/variable-groups';
 
 const DEBUG_SESSION_STORAGE_VERSION = 1;
@@ -168,6 +170,20 @@ function clearPersistedQueryValue(
   return { ...inputValues, query: '' };
 }
 
+function buildStreamEventDedupKeys(event: FlowDebugRunStreamEvent) {
+  const keys: string[] = [];
+
+  if (event.event_id) {
+    keys.push(`eid:${event.event_id}`);
+  }
+
+  if ('run_id' in event && event.run_id && event.sequence !== undefined) {
+    keys.push(`seq:${event.run_id}:${event.sequence}`);
+  }
+
+  return keys;
+}
+
 function replaceAssistantMessage(
   currentMessages: AgentFlowDebugMessage[],
   nextMessage: AgentFlowDebugMessage,
@@ -280,10 +296,6 @@ function buildVariableCacheFromTraceItems(
   let cache: NodeDebugPreviewVariableCache = {};
 
   for (const item of traceItems) {
-    if (isRecord(item.inputPayload)) {
-      cache = mergeVariablePayload(cache, item.nodeId, item.inputPayload);
-    }
-
     if (isRecord(item.outputPayload)) {
       cache = mergeVariablePayload(cache, item.nodeId, item.outputPayload);
     }
@@ -297,23 +309,7 @@ function buildVariableCacheFromRunDetail(
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
-  for (const [nodeId, payload] of Object.entries(
-    detail.flow_run.input_payload
-  )) {
-    if (isRecord(payload)) {
-      cache = mergeVariablePayload(cache, nodeId, payload);
-    }
-  }
-
   for (const nodeRun of detail.node_runs) {
-    if (isRecord(nodeRun.input_payload)) {
-      cache = mergeVariablePayload(
-        cache,
-        nodeRun.node_id,
-        nodeRun.input_payload
-      );
-    }
-
     if (isRecord(nodeRun.output_payload)) {
       cache = mergeVariablePayload(
         cache,
@@ -358,10 +354,31 @@ function buildDisplayVariableCache(
   return displayCache;
 }
 
-function buildNodeLabelMap(document: FlowAuthoringDocument) {
+function buildNodeVariableDisplayMetadata(
+  document: FlowAuthoringDocument
+): Record<string, NodeVariableDisplayMeta> {
   return Object.fromEntries(
-    document.graph.nodes.map((node) => [node.id, node.alias])
+    document.graph.nodes.map((node) => [
+      node.id,
+      {
+        label: node.alias,
+        nodeType: node.type,
+        outputs: node.outputs
+      }
+    ])
   );
+}
+
+function createDebugSessionState(applicationId: string, draftId: string) {
+  const random =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  return {
+    scope: `${applicationId}:${draftId}`,
+    id: `${applicationId}:${draftId}:${random}`
+  };
 }
 
 export function useAgentFlowDebugSession({
@@ -395,6 +412,10 @@ export function useAgentFlowDebugSession({
     buildRunContextFromDocument(document, rememberedInputValues)
   );
   const previousStorageKeyRef = useRef(storageKey);
+  const debugSessionScope = `${applicationId}:${draftId}`;
+  const [debugSessionState, setDebugSessionState] = useState(() =>
+    createDebugSessionState(applicationId, draftId)
+  );
   const lastSubmittedPromptRef = useRef<string | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
@@ -403,6 +424,14 @@ export function useAgentFlowDebugSession({
   const streamAbortControllerRef = useRef<AbortController | null>(null);
   const streamGenerationRef = useRef(0);
   const variableSnapshotRestoreGenerationRef = useRef(0);
+
+  useEffect(() => {
+    setDebugSessionState((current) =>
+      current.scope === debugSessionScope
+        ? current
+        : createDebugSessionState(applicationId, draftId)
+    );
+  }, [applicationId, debugSessionScope, draftId]);
 
   useEffect(() => {
     setRunContext((currentRunContext) => {
@@ -423,11 +452,15 @@ export function useAgentFlowDebugSession({
   }, [document, rememberedInputValues, storageKey]);
 
   useEffect(() => {
+    if (debugSessionState.scope !== debugSessionScope) {
+      return;
+    }
+
     let disposed = false;
     const restoreGeneration = (variableSnapshotRestoreGenerationRef.current += 1);
 
     setNodePreviewVariableCache({});
-    fetchDebugVariableSnapshot(applicationId)
+    fetchDebugVariableSnapshot(applicationId, debugSessionState.id)
       .then((snapshot) => {
         if (
           disposed ||
@@ -447,7 +480,7 @@ export function useAgentFlowDebugSession({
     return () => {
       disposed = true;
     };
-  }, [applicationId, draftId]);
+  }, [applicationId, debugSessionScope, debugSessionState, draftId]);
 
   const rawTraceItems = useMemo(
     () =>
@@ -474,7 +507,7 @@ export function useAgentFlowDebugSession({
     });
     const cacheGroup = mapVariableCacheToVariableGroup(
       buildDisplayVariableCache(nodePreviewVariableCache, runContext),
-      buildNodeLabelMap(document)
+      buildNodeVariableDisplayMetadata(document)
     );
 
     return cacheGroup ? [cacheGroup, ...groups] : groups;
@@ -690,12 +723,14 @@ export function useAgentFlowDebugSession({
 
     const runInput = {
       ...buildFlowDebugRunInput(document, inputValues),
-      document
+      document,
+      debug_session_id: debugSessionState.id
     };
 
     try {
       let streamAssistantMessage = runningMessage;
       let streamTraceItemsSnapshot: AgentFlowTraceItem[] = [];
+      const seenStreamEventKeys = new Set<string>();
 
       await startFlowDebugRunStream(applicationId, runInput, csrfToken, {
         getAbortController: (abortController) => {
@@ -707,6 +742,21 @@ export function useAgentFlowDebugSession({
           streamAbortControllerRef.current = abortController;
         },
         onEvent: (event) => {
+          const dedupKeys = buildStreamEventDedupKeys(event);
+          const isRepeatedStreamEvent = dedupKeys.some((key) =>
+            seenStreamEventKeys.has(key)
+          );
+
+          if (isRepeatedStreamEvent) {
+            return;
+          }
+
+          if (dedupKeys.length > 0) {
+            dedupKeys.forEach((key) => {
+              seenStreamEventKeys.add(key);
+            });
+          }
+
           if (!isActiveDebugStreamGeneration(streamGeneration)) {
             return;
           }
@@ -716,6 +766,8 @@ export function useAgentFlowDebugSession({
           const isTerminalEvent =
             event.type === 'flow_finished' ||
             event.type === 'flow_failed' ||
+            event.type === 'waiting_human' ||
+            event.type === 'waiting_callback' ||
             event.type === 'replay_expired';
 
           if (isTraceEvent) {
@@ -734,7 +786,9 @@ export function useAgentFlowDebugSession({
           if (
             event.type === 'flow_accepted' ||
             event.type === 'flow_started' ||
-            event.type === 'flow_cancelled'
+            event.type === 'flow_cancelled' ||
+            event.type === 'waiting_human' ||
+            event.type === 'waiting_callback'
           ) {
             activeRunIdRef.current = event.run_id;
           }
@@ -916,17 +970,6 @@ export function useAgentFlowDebugSession({
     }
 
     if (lastDetail) {
-      for (const [nodeId, payload] of Object.entries(
-        lastDetail.flow_run.input_payload
-      )) {
-        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-          cache[nodeId] = {
-            ...(cache[nodeId] ?? {}),
-            ...(payload as Record<string, unknown>)
-          };
-        }
-      }
-
       for (const nodeRun of lastDetail.node_runs) {
         cache[nodeRun.node_id] = {
           ...(cache[nodeRun.node_id] ?? {}),
@@ -955,6 +998,7 @@ export function useAgentFlowDebugSession({
 
   function resetVariableCache() {
     variableSnapshotRestoreGenerationRef.current += 1;
+    setDebugSessionState(createDebugSessionState(applicationId, draftId));
     cancelActiveDebugStream();
     stopPolling();
     clearScheduledAssistantMessageFlush();
@@ -967,6 +1011,7 @@ export function useAgentFlowDebugSession({
 
   return {
     status,
+    debugSessionId: debugSessionState.id,
     runContext,
     messages,
     traceItems,

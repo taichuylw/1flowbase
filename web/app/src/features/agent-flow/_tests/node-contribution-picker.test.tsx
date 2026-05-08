@@ -9,6 +9,7 @@ import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { renderReactFlowScene } from '../../../test/renderers/render-react-flow-scene';
+import { createPluginNodeOutputs } from '../lib/plugin-node-definitions';
 
 const readyContribution: ConsoleNodeContributionEntry = {
   installation_id: 'installation-1',
@@ -17,15 +18,32 @@ const readyContribution: ConsoleNodeContributionEntry = {
   plugin_version: '0.1.0',
   contribution_code: 'openai_prompt',
   node_shell: 'action',
+  plugin_unique_identifier: 'prompt_pack',
+  package_id: 'prompt_pack@0.1.0',
+  contribution_checksum: 'sha256:contribution',
+  compiled_contribution_hash: 'sha256:compiled',
   category: 'generation',
   title: 'OpenAI Prompt',
   description: 'Generate prompt output',
   dependency_status: 'ready',
-  schema_version: '1flowbase.node-contribution/v1',
+  schema_version: '1flowbase.node-contribution/v2',
+  output_schema_snapshot: {
+    outputs: [
+      {
+        key: 'prompt_text',
+        title: 'PromptText',
+        valueType: 'string'
+      }
+    ]
+  },
   experimental: false,
   icon: 'sparkles',
   schema_ui: {},
-  output_schema: {},
+  output_schema: {
+    outputs: [{ key: 'legacy_output', title: 'Legacy Output', valueType: 'json' }]
+  },
+  side_effect_policy: 'external_read',
+  infra_contracts: [],
   required_auth: [],
   visibility: 'public',
   dependency_installation_kind: 'model_provider',
@@ -82,6 +100,17 @@ beforeEach(() => {
 });
 
 describe('node contribution picker', () => {
+  test('does not invent plugin outputs when the snapshot entry is incomplete', () => {
+    expect(
+      createPluginNodeOutputs({
+        ...readyContribution,
+        output_schema_snapshot: {
+          outputs: [{ key: 'raw', title: 'Raw' }]
+        }
+      })
+    ).toEqual([]);
+  });
+
   test('writes contribution identity into the draft node document', async () => {
     renderReactFlowScene(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
@@ -115,7 +144,21 @@ describe('node contribution picker', () => {
       plugin_version: '0.1.0',
       contribution_code: 'openai_prompt',
       node_shell: 'action',
-      schema_version: '1flowbase.node-contribution/v1'
+      schema_version: '1flowbase.node-contribution/v2',
+      plugin_unique_identifier: 'prompt_pack',
+      package_id: 'prompt_pack@0.1.0',
+      contribution_checksum: 'sha256:contribution',
+      compiled_contribution_hash: 'sha256:compiled',
+      output_schema_snapshot: {
+        outputs: [
+          {
+            key: 'prompt_text',
+            title: 'PromptText',
+            valueType: 'string'
+          }
+        ]
+      },
+      outputs: [{ key: 'prompt_text', title: 'PromptText', valueType: 'string' }]
     });
   }, 20_000);
 });

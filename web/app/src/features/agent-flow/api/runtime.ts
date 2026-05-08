@@ -7,14 +7,17 @@ import {
   cancelConsoleFlowRun,
   getConsoleApplicationRunDetail,
   getConsoleDebugVariableSnapshot,
+  getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRun,
   startConsoleFlowDebugRunStream,
   getConsoleNodeLastRun,
   startConsoleNodeDebugPreview,
   type ConsoleApplicationRunDetail,
   type ConsoleFlowDebugStreamEvent,
+  type ConsoleFlowDebugStreamCursor,
   type ConsoleFlowDebugStreamHandlers,
-  type ConsoleNodeLastRun
+  type ConsoleNodeLastRun,
+  type ConsoleRuntimeDebugArtifactPreview
 } from '@1flowbase/api-client';
 
 import { getApplicationsApiBaseUrl } from '../../applications/api/applications';
@@ -29,6 +32,7 @@ import {
 
 export type NodeLastRun = ConsoleNodeLastRun;
 export type FlowDebugRunDetail = ConsoleApplicationRunDetail;
+export type RuntimeDebugArtifactPreview = ConsoleRuntimeDebugArtifactPreview;
 export type DebugVariableSnapshot = {
   variable_cache: NodeDebugPreviewVariableCache;
 };
@@ -44,6 +48,7 @@ export type AgentFlowDebugMessageStatus =
 
 export interface AgentFlowTraceItem {
   nodeId: string;
+  nodeRunId?: string;
   nodeAlias: string;
   nodeType: string;
   status: string;
@@ -54,6 +59,7 @@ export interface AgentFlowTraceItem {
   outputPayload: Record<string, unknown>;
   errorPayload: Record<string, unknown> | null;
   metricsPayload: Record<string, unknown>;
+  debugPayload?: Record<string, unknown>;
 }
 
 export interface AgentFlowVariableItem {
@@ -61,6 +67,9 @@ export interface AgentFlowVariableItem {
   label: string;
   value: unknown;
   isReadOnly?: boolean;
+  isTruncated?: boolean;
+  artifactRef?: string;
+  helperText?: string;
 }
 
 export interface AgentFlowVariableGroup {
@@ -130,9 +139,13 @@ export function fetchNodeLastRun(applicationId: string, nodeId: string) {
   );
 }
 
-export function fetchDebugVariableSnapshot(applicationId: string) {
+export function fetchDebugVariableSnapshot(
+  applicationId: string,
+  debugSessionId?: string
+) {
   return getConsoleDebugVariableSnapshot(
     applicationId,
+    debugSessionId,
     getApplicationsApiBaseUrl()
   );
 }
@@ -143,6 +156,7 @@ export function startNodeDebugPreview(
   input: {
     input_payload: Record<string, Record<string, unknown>>;
     document?: FlowAuthoringDocument;
+    debug_session_id?: string;
   },
   csrfToken: string
 ) {
@@ -211,6 +225,7 @@ export function startFlowDebugRun(
   input: {
     input_payload: Record<string, Record<string, unknown>>;
     document?: FlowAuthoringDocument;
+    debug_session_id?: string;
   },
   csrfToken: string
 ) {
@@ -227,16 +242,21 @@ export function startFlowDebugRunStream(
   input: {
     input_payload: Record<string, Record<string, unknown>>;
     document?: FlowAuthoringDocument;
+    debug_session_id?: string;
   },
   csrfToken: string,
-  handlers: FlowDebugRunStreamHandlers
+  handlers: FlowDebugRunStreamHandlers,
+  cursor?: ConsoleFlowDebugStreamCursor
 ) {
   return startConsoleFlowDebugRunStream(
     applicationId,
     input,
     csrfToken,
     handlers,
-    getApplicationsApiBaseUrl()
+    {
+      cursor,
+      baseUrl: getApplicationsApiBaseUrl()
+    }
   );
 }
 
@@ -247,6 +267,17 @@ export function fetchApplicationRunDetail(
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchRuntimeDebugArtifact(
+  applicationId: string,
+  artifactId: string
+) {
+  return getConsoleRuntimeDebugArtifact(
+    applicationId,
+    artifactId,
     getApplicationsApiBaseUrl()
   );
 }

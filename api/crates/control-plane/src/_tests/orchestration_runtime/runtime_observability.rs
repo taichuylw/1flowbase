@@ -53,6 +53,7 @@ async fn external_opaque_boundary_marks_external_agent_event_as_durable_workspac
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -91,6 +92,7 @@ async fn flow_debug_run_shadow_writes_runtime_spans_and_provider_events() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -149,6 +151,7 @@ async fn provider_events_returned_by_runtime_are_persisted_before_debug_run_fini
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -208,6 +211,98 @@ async fn provider_events_returned_by_runtime_are_persisted_before_debug_run_fini
 }
 
 #[tokio::test]
+async fn live_debug_persists_llm_debug_payload_without_polluting_public_outputs() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        ProviderStreamEvent::ToolCallCommit {
+            call: ProviderToolCall {
+                id: "call-1".into(),
+                name: "lookup_order".into(),
+                arguments: serde_json::json!({ "order_id": "A-1" }),
+            },
+        },
+        ProviderStreamEvent::McpCallCommit {
+            call: ProviderMcpCall {
+                id: "mcp-1".into(),
+                server: "orders".into(),
+                method: "lookup".into(),
+                arguments: serde_json::json!({ "order_id": "A-1" }),
+            },
+        },
+        ProviderStreamEvent::UsageSnapshot {
+            usage: plugin_framework::provider_contract::ProviderUsage {
+                input_tokens: Some(2),
+                output_tokens: Some(3),
+                total_tokens: Some(5),
+                ..Default::default()
+            },
+        },
+        ProviderStreamEvent::Finish {
+            reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请查询订单" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let llm_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-llm")
+        .expect("llm node run should be persisted");
+
+    assert_eq!(llm_node.output_payload.get("usage"), None);
+    assert_eq!(llm_node.output_payload.get("provider_events"), None);
+    assert_eq!(llm_node.output_payload.get("tool_calls"), None);
+    assert!(llm_node.output_payload.get("text").is_some());
+    assert_eq!(
+        llm_node.metrics_payload["usage"]["total_tokens"],
+        serde_json::json!(5)
+    );
+    assert_eq!(
+        llm_node.debug_payload["message"]["content"],
+        "echo:gpt-5.4-mini:请查询订单"
+    );
+    assert!(llm_node.debug_payload["provider_events"]
+        .as_array()
+        .is_some_and(|events| events.len() >= 4));
+
+    assert_eq!(
+        detail.flow_run.output_payload,
+        serde_json::json!({ "answer": "echo:gpt-5.4-mini:请查询订单" })
+    );
+    for forbidden_key in [
+        "node-start",
+        "node-llm",
+        "usage",
+        "debug_payload",
+        "provider_events",
+        "tool_calls",
+        "mcp_calls",
+    ] {
+        assert_eq!(detail.flow_run.output_payload.get(forbidden_key), None);
+    }
+}
+
+#[tokio::test]
 async fn provider_tool_commit_is_recorded_as_intent_not_execution() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         ProviderStreamEvent::ToolCallCommit {
@@ -236,6 +331,7 @@ async fn provider_tool_commit_is_recorded_as_intent_not_execution() {
                 "node-start": { "query": "请查询订单" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -356,6 +452,7 @@ async fn provider_text_deltas_are_coalesced_before_durable_write() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -411,6 +508,7 @@ async fn llm_turn_records_context_projection_and_usage_ledger() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -470,6 +568,7 @@ async fn llm_turn_records_failover_attempt_and_links_usage_ledger() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -523,6 +622,7 @@ async fn failover_queue_records_each_attempt_and_links_usage_to_winner() {
                 primary_instance_id,
                 backup_instance_id,
             )),
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -583,6 +683,7 @@ async fn all_failed_failover_attempts_do_not_receive_usage_ledger_link() {
                 primary_instance_id,
                 backup_instance_id,
             )),
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -619,7 +720,7 @@ fn failover_queue_document(
     backup_instance_id: Uuid,
 ) -> serde_json::Value {
     serde_json::json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -633,7 +734,7 @@ fn failover_queue_document(
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -665,7 +766,7 @@ fn failover_queue_document(
                         }
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 }
@@ -698,6 +799,7 @@ async fn provider_events_fold_into_runtime_items() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -746,6 +848,7 @@ async fn tool_call_commit_creates_capability_invocation_request() {
                 "node-start": { "query": "请查询订单" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();

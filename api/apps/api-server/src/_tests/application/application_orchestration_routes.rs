@@ -75,8 +75,8 @@ async fn application_orchestration_routes_bootstrap_save_and_restore() {
     assert_eq!(start_node["outputs"], json!([]));
     assert_eq!(start_node["config"]["input_fields"], json!([]));
 
-    document["graph"]["nodes"][1]["bindings"]["system_prompt"] =
-        json!({ "kind": "templated_text", "value": "You are a support agent." });
+    document["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]["value"] =
+        json!("You are a support agent.");
 
     let save = app
         .clone()

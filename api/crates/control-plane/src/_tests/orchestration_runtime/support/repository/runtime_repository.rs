@@ -13,6 +13,9 @@ async fn fail_queued_flow_run_shell_does_not_fail_attached_run() {
             flow_id: Uuid::now_v7(),
             flow_draft_id: Uuid::now_v7(),
             compiled_plan_id: Uuid::now_v7(),
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "test-document-hash".to_string(),
             run_mode: domain::FlowRunMode::DebugFlowRun,
             target_node_id: None,
             status: domain::FlowRunStatus::Running,
@@ -57,6 +60,9 @@ async fn update_flow_run_if_status_does_not_overwrite_cancelled_run() {
             flow_id: Uuid::now_v7(),
             flow_draft_id: Uuid::now_v7(),
             compiled_plan_id: Uuid::now_v7(),
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "test-document-hash".to_string(),
             run_mode: domain::FlowRunMode::DebugFlowRun,
             target_node_id: None,
             status: domain::FlowRunStatus::Running,
@@ -127,30 +133,19 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
     ) -> Result<domain::CompiledPlanRecord> {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
         let now = OffsetDateTime::now_utc();
-        let record = inner
-            .compiled_plans_by_draft_id
-            .entry(input.flow_draft_id)
-            .and_modify(|record| {
-                record.flow_id = input.flow_id;
-                record.schema_version = input.schema_version.clone();
-                record.document_updated_at = input.document_updated_at;
-                record.plan = input.plan.clone();
-                record.created_by = input.actor_user_id;
-                record.updated_at = now;
-            })
-            .or_insert_with(|| domain::CompiledPlanRecord {
-                id: Uuid::now_v7(),
-                flow_id: input.flow_id,
-                draft_id: input.flow_draft_id,
-                schema_version: input.schema_version.clone(),
-                document_updated_at: input.document_updated_at,
-                plan: input.plan.clone(),
-                created_by: input.actor_user_id,
-                created_at: now,
-                updated_at: now,
-            })
-            .clone();
-
+        let record = domain::CompiledPlanRecord {
+            id: Uuid::now_v7(),
+            flow_id: input.flow_id,
+            draft_id: input.flow_draft_id,
+            schema_version: input.schema_version.clone(),
+            document_hash: input.document_hash.clone(),
+            document_updated_at: input.document_updated_at,
+            plan: input.plan.clone(),
+            created_by: input.actor_user_id,
+            created_at: now,
+            updated_at: now,
+        };
+        inner.compiled_plans_by_id.insert(record.id, record.clone());
         Ok(record)
     }
 
@@ -159,11 +154,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         compiled_plan_id: Uuid,
     ) -> Result<Option<domain::CompiledPlanRecord>> {
         let inner = self.inner.lock().expect("runtime repo mutex poisoned");
-        Ok(inner
-            .compiled_plans_by_draft_id
-            .values()
-            .find(|record| record.id == compiled_plan_id)
-            .cloned())
+        Ok(inner.compiled_plans_by_id.get(&compiled_plan_id).cloned())
     }
 
     async fn create_flow_run(&self, input: &CreateFlowRunInput) -> Result<domain::FlowRunRecord> {
@@ -174,6 +165,9 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             flow_id: input.flow_id,
             draft_id: input.flow_draft_id,
             compiled_plan_id: Some(input.compiled_plan_id),
+            debug_session_id: input.debug_session_id.clone(),
+            flow_schema_version: input.flow_schema_version.clone(),
+            document_hash: input.document_hash.clone(),
             run_mode: input.run_mode,
             target_node_id: input.target_node_id.clone(),
             status: input.status,
@@ -200,6 +194,9 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             flow_id: input.flow_id,
             draft_id: input.flow_draft_id,
             compiled_plan_id: None,
+            debug_session_id: input.debug_session_id.clone(),
+            flow_schema_version: input.flow_schema_version.clone(),
+            document_hash: input.document_hash.clone(),
             run_mode: input.run_mode,
             target_node_id: input.target_node_id.clone(),
             status: input.status,
@@ -221,9 +218,8 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
     ) -> Result<domain::FlowRunRecord> {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
         let Some(compiled) = inner
-            .compiled_plans_by_draft_id
-            .values()
-            .find(|record| record.id == input.compiled_plan_id)
+            .compiled_plans_by_id
+            .get(&input.compiled_plan_id)
             .cloned()
         else {
             return Err(anyhow::anyhow!("flow run compiled plan cannot be attached"));
@@ -233,8 +229,12 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         };
         if record.status != domain::FlowRunStatus::Queued
             || record.compiled_plan_id.is_some()
+            || record.flow_schema_version != input.flow_schema_version
+            || record.document_hash != input.document_hash
             || compiled.flow_id != record.flow_id
             || compiled.draft_id != record.draft_id
+            || compiled.schema_version != record.flow_schema_version
+            || compiled.document_hash != record.document_hash
         {
             return Err(anyhow::anyhow!("flow run compiled plan cannot be attached"));
         }
@@ -297,6 +297,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             output_payload: json!({}),
             error_payload: None,
             metrics_payload: json!({}),
+            debug_payload: input.debug_payload.clone(),
             started_at: input.started_at,
             finished_at: None,
         };
@@ -313,6 +314,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         record.output_payload = input.output_payload.clone();
         record.error_payload = input.error_payload.clone();
         record.metrics_payload = input.metrics_payload.clone();
+        record.debug_payload = input.debug_payload.clone();
         record.finished_at = input.finished_at;
         Ok(record.clone())
     }
@@ -327,6 +329,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             output_payload: input.output_payload.clone(),
             error_payload: input.error_payload.clone(),
             metrics_payload: input.metrics_payload.clone(),
+            debug_payload: input.debug_payload.clone(),
             finished_at: Some(input.finished_at),
         })
         .await
@@ -439,10 +442,131 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         let Some(record) = inner.callback_tasks_by_id.get_mut(&input.callback_task_id) else {
             return Err(ControlPlaneError::NotFound("callback_task").into());
         };
+        if record.status != domain::CallbackTaskStatus::Pending {
+            return Err(ControlPlaneError::Conflict("callback_task_not_pending").into());
+        }
         record.status = domain::CallbackTaskStatus::Completed;
         record.response_payload = Some(input.response_payload.clone());
         record.completed_at = Some(input.completed_at);
         Ok(record.clone())
+    }
+
+    async fn get_callback_task(
+        &self,
+        callback_task_id: Uuid,
+    ) -> Result<Option<domain::CallbackTaskRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.callback_tasks_by_id.get(&callback_task_id).cloned())
+    }
+
+    async fn get_data_model_side_effect_receipt(
+        &self,
+        workspace_id: Uuid,
+        idempotency_key: &str,
+    ) -> Result<Option<domain::DataModelSideEffectReceiptRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .data_model_side_effect_receipts_by_idempotency
+            .get(&(workspace_id, idempotency_key.to_string()))
+            .cloned())
+    }
+
+    async fn claim_data_model_side_effect_receipt(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> Result<DataModelSideEffectReceiptClaim> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let key = (input.workspace_id, input.idempotency_key.clone());
+        if let Some(record) = inner
+            .data_model_side_effect_receipts_by_idempotency
+            .get(&key)
+        {
+            return Ok(DataModelSideEffectReceiptClaim {
+                record: record.clone(),
+                claimed: false,
+            });
+        }
+
+        let record = domain::DataModelSideEffectReceiptRecord {
+            id: Uuid::now_v7(),
+            workspace_id: input.workspace_id,
+            application_id: input.application_id,
+            draft_id: input.draft_id,
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            node_id: input.node_id.clone(),
+            action: input.action.clone(),
+            model_code: input.model_code.clone(),
+            record_id: None,
+            deleted_id: None,
+            affected_count: 0,
+            idempotency_key: input.idempotency_key.clone(),
+            payload_hash: input.payload_hash.clone(),
+            actor_user_id: input.actor_user_id,
+            scope_id: input.scope_id,
+            status: "pending".to_string(),
+            output_payload: json!({}),
+            created_at: OffsetDateTime::now_utc(),
+        };
+        inner
+            .data_model_side_effect_receipts_by_idempotency
+            .insert(key, record.clone());
+
+        Ok(DataModelSideEffectReceiptClaim {
+            record,
+            claimed: true,
+        })
+    }
+
+    async fn upsert_data_model_side_effect_receipt(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> Result<domain::DataModelSideEffectReceiptRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let key = (input.workspace_id, input.idempotency_key.clone());
+        if let Some(record) = inner
+            .data_model_side_effect_receipts_by_idempotency
+            .get(&key)
+        {
+            if record.status != "pending" {
+                return Ok(record.clone());
+            }
+        }
+
+        let record = domain::DataModelSideEffectReceiptRecord {
+            id: inner
+                .data_model_side_effect_receipts_by_idempotency
+                .get(&key)
+                .map(|record| record.id)
+                .unwrap_or_else(Uuid::now_v7),
+            workspace_id: input.workspace_id,
+            application_id: input.application_id,
+            draft_id: input.draft_id,
+            flow_run_id: input.flow_run_id,
+            node_run_id: input.node_run_id,
+            node_id: input.node_id.clone(),
+            action: input.action.clone(),
+            model_code: input.model_code.clone(),
+            record_id: input.record_id.clone(),
+            deleted_id: input.deleted_id.clone(),
+            affected_count: input.affected_count,
+            idempotency_key: input.idempotency_key.clone(),
+            payload_hash: input.payload_hash.clone(),
+            actor_user_id: input.actor_user_id,
+            scope_id: input.scope_id,
+            status: input.status.clone(),
+            output_payload: input.output_payload.clone(),
+            created_at: inner
+                .data_model_side_effect_receipts_by_idempotency
+                .get(&key)
+                .map(|record| record.created_at)
+                .unwrap_or_else(OffsetDateTime::now_utc),
+        };
+        inner
+            .data_model_side_effect_receipts_by_idempotency
+            .insert(key, record.clone());
+
+        Ok(record)
     }
 
     async fn append_run_event(

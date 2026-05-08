@@ -40,15 +40,25 @@ fn compile_context() -> FlowCompileContext {
 fn plugin_compile_context() -> FlowCompileContext {
     let mut context = compile_context();
     context.node_contributions.insert(
-        "prompt_pack@0.1.0::0.1.0::openai_prompt::action::1flowbase.node-contribution/v1"
+        "prompt_pack@0.1.0::0.1.0::openai_prompt::action::1flowbase.node-contribution/v2"
             .to_string(),
         FlowCompileNodeContribution {
             installation_id: Uuid::now_v7(),
+            plugin_unique_identifier: "prompt_pack".to_string(),
+            package_id: "prompt_pack@0.1.0".to_string(),
             plugin_id: "prompt_pack@0.1.0".to_string(),
             plugin_version: "0.1.0".to_string(),
             contribution_code: "openai_prompt".to_string(),
             node_shell: "action".to_string(),
-            schema_version: "1flowbase.node-contribution/v1".to_string(),
+            schema_version: "1flowbase.node-contribution/v2".to_string(),
+            contribution_checksum: "sha256:contribution".to_string(),
+            compiled_contribution_hash: "sha256:compiled".to_string(),
+            output_schema_snapshot: vec![orchestration_runtime::compiled_plan::CompiledOutput {
+                key: "answer".to_string(),
+                title: "回答".to_string(),
+                value_type: "string".to_string(),
+            }],
+            side_effect_policy: "external_read".to_string(),
             dependency_status: "ready".to_string(),
         },
     );
@@ -57,7 +67,7 @@ fn plugin_compile_context() -> FlowCompileContext {
 
 fn sample_document(flow_id: Uuid) -> serde_json::Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -71,7 +81,7 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-llm",
@@ -90,8 +100,27 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
                         "temperature": 0.2
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] },
-                        "system_prompt": { "kind": "templated_text", "value": "You are helpful." }
+                        "prompt_messages": {
+                            "kind": "prompt_messages",
+                            "value": [
+                                {
+                                    "id": "system-1",
+                                    "role": "system",
+                                    "content": {
+                                        "kind": "templated_text",
+                                        "value": "You are helpful."
+                                    }
+                                },
+                                {
+                                    "id": "user-1",
+                                    "role": "user",
+                                    "content": {
+                                        "kind": "templated_text",
+                                        "value": "Question: {{node-start.query}}"
+                                    }
+                                }
+                            ]
+                        }
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                 }
@@ -114,7 +143,7 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
 
 fn plugin_document(flow_id: Uuid) -> serde_json::Value {
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
         "graph": {
             "nodes": [
@@ -128,7 +157,7 @@ fn plugin_document(flow_id: Uuid) -> serde_json::Value {
                     "configVersion": 1,
                     "config": {},
                     "bindings": {},
-                    "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                    "outputs": []
                 },
                 {
                     "id": "node-plugin",
@@ -138,11 +167,18 @@ fn plugin_document(flow_id: Uuid) -> serde_json::Value {
                     "containerId": null,
                     "position": { "x": 480, "y": 0 },
                     "configVersion": 1,
+                    "plugin_unique_identifier": "prompt_pack",
+                    "package_id": "prompt_pack@0.1.0",
                     "plugin_id": "prompt_pack@0.1.0",
                     "plugin_version": "0.1.0",
                     "contribution_code": "openai_prompt",
                     "node_shell": "action",
-                    "schema_version": "1flowbase.node-contribution/v1",
+                    "schema_version": "1flowbase.node-contribution/v2",
+                    "contribution_checksum": "sha256:contribution",
+                    "compiled_contribution_hash": "sha256:compiled",
+                    "output_schema_snapshot": {
+                        "outputs": [{ "key": "answer", "title": "回答", "valueType": "string" }]
+                    },
                     "config": {
                         "prompt": "Hello {{ node-start.query }}"
                     },
@@ -186,7 +222,7 @@ fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runti
         vec!["node-start"]
     );
     assert_eq!(
-        plan.nodes["node-llm"].bindings["user_prompt"].selector_paths,
+        plan.nodes["node-llm"].bindings["prompt_messages"].selector_paths,
         vec![vec!["node-start".to_string(), "query".to_string()]]
     );
     assert_eq!(
@@ -206,6 +242,55 @@ fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runti
         "provider-selected"
     );
     assert!(plan.compile_issues.is_empty());
+}
+
+#[test]
+fn compile_rejects_unsupported_flow_schema_version() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["schemaVersion"] = json!("1flowbase.flow/v1");
+
+    let error =
+        FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("unsupported flow schemaVersion: 1flowbase.flow/v1"));
+}
+
+#[test]
+fn compile_rejects_legacy_start_outputs() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][0]["outputs"] =
+        json!([{ "key": "query", "title": "用户输入", "valueType": "string" }]);
+
+    let error =
+        FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("start node node-start outputs must be empty"));
+}
+
+#[test]
+fn compile_llm_node_ignores_legacy_prompt_bindings() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"]["user_prompt"] =
+        json!({ "kind": "selector", "value": ["node-start", "query"] });
+    document["graph"]["nodes"][1]["bindings"]["system_prompt"] =
+        json!({ "kind": "templated_text", "value": "Legacy system prompt" });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(plan.nodes["node-llm"]
+        .bindings
+        .contains_key("prompt_messages"));
+    assert!(!plan.nodes["node-llm"].bindings.contains_key("user_prompt"));
+    assert!(!plan.nodes["node-llm"]
+        .bindings
+        .contains_key("system_prompt"));
 }
 
 #[test]
@@ -402,6 +487,19 @@ fn compile_rejects_edge_that_targets_unknown_node() {
 }
 
 #[test]
+fn compile_rejects_reserved_public_output_keys() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["outputs"] =
+        json!([{ "key": "provider_code", "title": "Provider", "valueType": "string" }]);
+
+    let error =
+        FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap_err();
+
+    assert!(format!("{error:#}").contains("provider_code"));
+}
+
+#[test]
 fn compile_collects_provider_compile_issues() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
@@ -586,6 +684,26 @@ fn compile_plugin_node_emits_runtime_reference_from_registry_identity() {
         plan_json["nodes"]["node-plugin"]["plugin_runtime"]["installation_id"],
         installation_id.to_string()
     );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["plugin_unique_identifier"],
+        "prompt_pack"
+    );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["package_id"],
+        "prompt_pack@0.1.0"
+    );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["contribution_checksum"],
+        "sha256:contribution"
+    );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["compiled_contribution_hash"],
+        "sha256:compiled"
+    );
+    assert_eq!(
+        plan_json["nodes"]["node-plugin"]["plugin_runtime"]["output_schema_snapshot"][0]["key"],
+        "answer"
+    );
 }
 
 #[test]
@@ -606,4 +724,52 @@ fn compile_plugin_node_reports_dependency_issue_when_registry_information_is_mis
         "expected a compile issue for the plugin node, got {:?}",
         plan.compile_issues
     );
+}
+
+#[test]
+fn compile_plugin_node_rejects_legacy_contribution_schema_version() {
+    let flow_id = Uuid::now_v7();
+    let mut document = plugin_document(flow_id);
+    document["graph"]["nodes"][1]["schema_version"] = json!("1flowbase.node-contribution/v1");
+
+    let plan =
+        FlowCompiler::compile(flow_id, "draft-1", &document, &plugin_compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-plugin"
+            && issue.code == CompileIssueCode::UnsupportedPluginContributionSchemaVersion
+    }));
+    assert!(plan.nodes["node-plugin"].plugin_runtime.is_none());
+}
+
+#[test]
+fn compile_plugin_node_reports_issue_when_contribution_checksum_drifts() {
+    let flow_id = Uuid::now_v7();
+    let mut document = plugin_document(flow_id);
+    document["graph"]["nodes"][1]["contribution_checksum"] = json!("sha256:changed");
+
+    let plan =
+        FlowCompiler::compile(flow_id, "draft-1", &document, &plugin_compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-plugin"
+            && issue.code == CompileIssueCode::PluginContributionChecksumMismatch
+    }));
+}
+
+#[test]
+fn compile_plugin_node_reports_issue_when_output_schema_snapshot_drifts() {
+    let flow_id = Uuid::now_v7();
+    let mut document = plugin_document(flow_id);
+    document["graph"]["nodes"][1]["output_schema_snapshot"] = json!({
+        "outputs": [{ "key": "changed", "title": "Changed", "valueType": "string" }]
+    });
+
+    let plan =
+        FlowCompiler::compile(flow_id, "draft-1", &document, &plugin_compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-plugin"
+            && issue.code == CompileIssueCode::PluginContributionOutputSchemaMismatch
+    }));
 }

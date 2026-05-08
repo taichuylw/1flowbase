@@ -20,6 +20,7 @@ export function AgentFlowDebugConsole({
   onChangeRunContextValue,
   onClearSession,
   onClose,
+  onLoadArtifact,
   onSubmitPrompt
 }: {
   messages: AgentFlowDebugMessage[];
@@ -28,6 +29,7 @@ export function AgentFlowDebugConsole({
   onChangeRunContextValue: (nodeId: string, key: string, value: unknown) => void;
   onClearSession: () => void;
   onClose: () => void;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onSubmitPrompt: () => void;
 }) {
   return (
@@ -46,6 +48,7 @@ export function AgentFlowDebugConsole({
         messages={messages}
         runContext={runContext}
         status={status}
+        onLoadArtifact={onLoadArtifact}
         onChangeQuery={(value) => {
           const queryField =
             runContext.fields.find((field) => field.key === 'query') ?? null;

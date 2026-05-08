@@ -221,6 +221,8 @@ pub trait HostInfrastructureConfigRepository: Send + Sync {
 
 #[derive(Debug, Clone)]
 pub struct NodeContributionRegistryInput {
+    pub plugin_unique_identifier: String,
+    pub package_id: String,
     pub contribution_code: String,
     pub node_shell: String,
     pub category: String,
@@ -230,6 +232,11 @@ pub struct NodeContributionRegistryInput {
     pub schema_ui: serde_json::Value,
     pub schema_version: String,
     pub output_schema: serde_json::Value,
+    pub contribution_checksum: String,
+    pub compiled_contribution_hash: String,
+    pub output_schema_snapshot: serde_json::Value,
+    pub side_effect_policy: String,
+    pub infra_contracts: Vec<String>,
     pub required_auth: Vec<String>,
     pub visibility: String,
     pub experimental: bool,

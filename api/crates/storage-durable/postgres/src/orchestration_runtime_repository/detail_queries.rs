@@ -21,6 +21,9 @@ pub(super) async fn fetch_flow_run_for_application(
             flow_id,
             flow_draft_id,
             compiled_plan_id,
+            debug_session_id,
+            flow_schema_version,
+            document_hash,
             run_mode,
             target_node_id,
             status,
@@ -61,6 +64,7 @@ pub(super) async fn fetch_node_run(
             output_payload,
             error_payload,
             metrics_payload,
+            debug_payload,
             started_at,
             finished_at
         from node_runs
@@ -91,6 +95,7 @@ pub(super) async fn list_node_runs_for_flow_run(
             output_payload,
             error_payload,
             metrics_payload,
+            debug_payload,
             started_at,
             finished_at
         from node_runs

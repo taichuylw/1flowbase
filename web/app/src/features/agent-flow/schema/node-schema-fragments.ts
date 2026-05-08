@@ -1,4 +1,8 @@
-import type { FlowNodeType } from '@1flowbase/flow-schema';
+import type {
+  FlowNodeType,
+  NodeRuntimePanelFieldDocument,
+  NodeRuntimePanelSectionDocument
+} from '@1flowbase/flow-schema';
 
 import type {
   SchemaBlock,
@@ -10,6 +14,7 @@ import {
   type NodeDefinitionField,
   type NodeEditorKind
 } from '../lib/node-definitions';
+import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 
 const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   text: 'text',
@@ -29,6 +34,10 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   output_contract_definition: 'output_contract_definition',
   start_input_fields: 'start_input_fields'
 };
+
+const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set(
+  Object.values(FIELD_RENDERER_BY_EDITOR)
+);
 
 function createFieldBlock(field: NodeDefinitionField): SchemaFieldBlock {
   const block: SchemaFieldBlock = {
@@ -54,6 +63,40 @@ function createSectionBlock(
     kind: 'section',
     title,
     blocks: fields.map(createFieldBlock)
+  };
+}
+
+function createContractFieldBlock(
+  field: NodeRuntimePanelFieldDocument
+): SchemaFieldBlock | null {
+  if (!CONTRACT_FIELD_RENDERER_ALLOWLIST.has(field.renderer)) {
+    return null;
+  }
+
+  return {
+    kind: 'field',
+    renderer: field.renderer,
+    path: field.key,
+    label: field.title,
+    options: field.options as SchemaFieldBlock['options']
+  };
+}
+
+function createContractSectionBlock(
+  section: NodeRuntimePanelSectionDocument
+): SchemaSectionBlock | null {
+  const fields = (section.fields ?? [])
+    .map(createContractFieldBlock)
+    .filter((field): field is SchemaFieldBlock => field !== null);
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  return {
+    kind: 'section',
+    title: section.title ?? section.key ?? 'Config',
+    blocks: fields
   };
 }
 
@@ -102,13 +145,16 @@ export function buildNodeDetailHeaderBlocks(): SchemaBlock[] {
 }
 
 export function buildNodeCardBlocks(nodeType: FlowNodeType): SchemaBlock[] {
+  const contract = getBuiltinNodeRuntimeContract(nodeType);
+
   return [
     {
       kind: 'view',
       renderer: 'card_eyebrow',
-      key: `${nodeType}-eyebrow`
+      key: `${nodeType}-${contract?.card.title ?? 'node'}-eyebrow`,
+      title: contract?.card.title
     },
-    ...(nodeType === 'llm'
+    ...(contract?.meta.type === 'llm'
       ? [
           {
             kind: 'view' as const,
@@ -120,13 +166,15 @@ export function buildNodeCardBlocks(nodeType: FlowNodeType): SchemaBlock[] {
     {
       kind: 'view',
       renderer: 'card_description',
-      key: `${nodeType}-description`
+      key: `${nodeType}-${contract?.card.title ?? 'node'}-description`,
+      title: contract?.card.description
     }
   ];
 }
 
 export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
-  const definitionSections = getNodeDefinitionSections(nodeType)
+  const contract = getBuiltinNodeRuntimeContract(nodeType);
+  const contractSections = (contract?.panel.sections ?? [])
     .filter((section) => {
       if (section.key === 'basics' || section.key === 'outputs') {
         return false;
@@ -138,9 +186,25 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
 
       return true;
     })
-    .flatMap((section) => {
-      return [createSectionBlock(section.title, section.fields)];
-    });
+    .map(createContractSectionBlock)
+    .filter((section): section is SchemaSectionBlock => section !== null);
+  const definitionSections = contractSections?.length
+    ? contractSections
+    : getNodeDefinitionSections(nodeType)
+        .filter((section) => {
+          if (section.key === 'basics' || section.key === 'outputs') {
+            return false;
+          }
+
+          if (nodeType === 'llm' && section.key === 'advanced') {
+            return false;
+          }
+
+          return true;
+        })
+        .flatMap((section) => {
+          return [createSectionBlock(section.title, section.fields)];
+        });
   const policyBlocks: SchemaBlock[] =
     nodeType === 'start'
       ? []

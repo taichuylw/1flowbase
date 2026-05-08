@@ -95,10 +95,19 @@ fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
             dependency_node_ids: vec!["node-start".to_string()],
             downstream_node_ids: Vec::new(),
             bindings: BTreeMap::from([(
-                "user_prompt".to_string(),
+                "prompt_messages".to_string(),
                 CompiledBinding {
-                    kind: "templated_text".to_string(),
-                    raw_value: json!("{{node-start.query}}你好？"),
+                    kind: "prompt_messages".to_string(),
+                    raw_value: json!([
+                        {
+                            "id": "user-1",
+                            "role": "user",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": "{{node-start.query}}你好？"
+                            }
+                        }
+                    ]),
                     selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
                 },
             )]),
@@ -124,7 +133,7 @@ fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
     CompiledPlan {
         flow_id: Uuid::nil(),
         source_draft_id: "draft-1".to_string(),
-        schema_version: "1flowbase.flow/v1".to_string(),
+        schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec!["node-start".to_string(), "node-llm".to_string()],
         nodes,
         compile_issues: Vec::new(),

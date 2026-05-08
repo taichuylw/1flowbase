@@ -498,8 +498,8 @@ describe('NodeInspector', () => {
 
     expect(await screen.findByText('输出变量')).toBeInTheDocument();
     expect(screen.getByText('text')).toBeInTheDocument();
-    expect(screen.getByText('reasoning_content')).toBeInTheDocument();
-    expect(screen.getByText('usage')).toBeInTheDocument();
+    expect(screen.queryByText('reasoning_content')).not.toBeInTheDocument();
+    expect(screen.queryByText('usage')).not.toBeInTheDocument();
     expect(screen.queryByText('节点产出的数据字段')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '新增输出变量' })
@@ -865,11 +865,11 @@ describe('NodeInspector', () => {
     );
 
     expect(
-      screen.queryByTestId('inspector-field-bindings.record_id')
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByTestId('inspector-field-bindings.query')
+      screen.getByTestId('inspector-field-bindings.record_id')
     ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('inspector-field-bindings.query')
+    ).not.toBeInTheDocument();
     expect(
       screen.getByTestId('inspector-field-bindings.payload')
     ).toBeInTheDocument();
@@ -885,11 +885,11 @@ describe('NodeInspector', () => {
     );
 
     expect(
-      screen.queryByTestId('inspector-field-bindings.record_id')
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByTestId('inspector-field-bindings.query')
+      screen.getByTestId('inspector-field-bindings.record_id')
     ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('inspector-field-bindings.query')
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByTestId('inspector-field-bindings.payload')
     ).not.toBeInTheDocument();
@@ -909,12 +909,15 @@ describe('NodeInspector', () => {
     await selectDataModelOption('orders');
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Query')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('inspector-field-bindings.record_id')
+      ).toBeInTheDocument();
+      expect(screen.queryByLabelText('Query')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('页码')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('每页数量')).not.toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: '新增过滤条件' })
-      ).toBeEnabled();
+        screen.queryByRole('button', { name: '新增过滤条件' })
+      ).not.toBeInTheDocument();
     });
 
     unmount();

@@ -3,7 +3,8 @@ import { describe, expect, test } from 'vitest';
 import type { FlowDebugRunDetail } from '../../api/runtime';
 import {
   extractAssistantOutputText,
-  mapRunDetailToConversation
+  mapRunDetailToConversation,
+  mapRunDetailToTrace
 } from '../../lib/debug-console/run-detail-mapper';
 
 function baseDetail(): FlowDebugRunDetail {
@@ -118,6 +119,39 @@ describe('run detail mapper', () => {
     );
     expect(mapRunDetailToConversation(detail)).not.toHaveProperty(
       'reasoningContent'
+    );
+  });
+
+  test('maps trace debug payload separately from public output and metrics', () => {
+    const detail = baseDetail();
+    detail.node_runs = [
+      {
+        id: 'node-run-llm',
+        flow_run_id: 'flow-run-1',
+        node_id: 'node-llm',
+        node_type: 'llm',
+        node_alias: 'LLM',
+        status: 'succeeded',
+        input_payload: { prompt: 'hi' },
+        output_payload: { text: 'hello' },
+        error_payload: null,
+        metrics_payload: { total_tokens: 8 },
+        debug_payload: {
+          response_ref: 'runtime_artifact:inline:response-1'
+        },
+        started_at: '2026-04-26T10:00:00Z',
+        finished_at: '2026-04-26T10:00:01Z'
+      }
+    ];
+
+    expect(mapRunDetailToTrace(detail)[0]).toEqual(
+      expect.objectContaining({
+        outputPayload: { text: 'hello' },
+        metricsPayload: { total_tokens: 8 },
+        debugPayload: {
+          response_ref: 'runtime_artifact:inline:response-1'
+        }
+      })
     );
   });
 });

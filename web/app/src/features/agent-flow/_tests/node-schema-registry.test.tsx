@@ -12,7 +12,14 @@ import { agentFlowRendererRegistry } from '../schema/agent-flow-renderer-registr
 import { createAgentFlowNodeSchemaAdapter } from '../schema/node-schema-adapter';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
 import { createNodeDocument } from '../lib/document/node-factory';
-import { BUILTIN_NODE_PICKER_OPTIONS } from '../lib/plugin-node-definitions';
+import {
+  builtinNodeRuntimeContractTypes,
+  getBuiltinNodeRuntimeContract
+} from '../lib/node-definitions/contracts';
+import {
+  BUILTIN_NODE_PICKER_OPTIONS,
+  type NodePickerOption
+} from '../lib/plugin-node-definitions';
 
 function getNode(
   document: ReturnType<typeof createDefaultAgentFlowDocument>,
@@ -243,24 +250,35 @@ describe('agent-flow node schema registry', () => {
     expect(findFieldBlock(listSchema.detail.tabs.config.blocks, 'bindings.query')).toEqual(
       expect.objectContaining({ renderer: 'data_model_query' })
     );
-    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.query')).toEqual(
-      expect.objectContaining({ renderer: 'data_model_query' })
+    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.record_id')).toEqual(
+      expect.objectContaining({ renderer: 'selector' })
     );
     expect(findFieldBlock(createSchema.detail.tabs.config.blocks, 'bindings.payload')).toEqual(
       expect.objectContaining({ renderer: 'named_bindings' })
     );
-    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.query')).toEqual(
-      expect.objectContaining({ renderer: 'data_model_query' })
+    expect(findFieldBlock(createSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toEqual(
+      expect.objectContaining({ renderer: 'static_select' })
+    );
+    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.record_id')).toEqual(
+      expect.objectContaining({ renderer: 'selector' })
     );
     expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.payload')).toEqual(
       expect.objectContaining({ renderer: 'named_bindings' })
     );
-    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.query')).toEqual(
-      expect.objectContaining({ renderer: 'data_model_query' })
+    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toEqual(
+      expect.objectContaining({ renderer: 'static_select' })
     );
-    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.record_id')).toBeNull();
-    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.record_id')).toBeNull();
-    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.record_id')).toBeNull();
+    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.record_id')).toEqual(
+      expect.objectContaining({ renderer: 'selector' })
+    );
+    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toEqual(
+      expect.objectContaining({ renderer: 'static_select' })
+    );
+    expect(findFieldBlock(listSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toBeNull();
+    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toBeNull();
+    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.query')).toBeNull();
+    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.query')).toBeNull();
+    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.query')).toBeNull();
   });
 
   test('exposes Data Model list query params without action-scoped visibility', () => {
@@ -286,6 +304,19 @@ describe('agent-flow node schema registry', () => {
     const deleteNode = createNodeDocument('data_model_delete', 'node-data-model-delete');
 
     expect(listNode.config).toEqual({ data_model_code: '' });
+    expect(getNode.config).toEqual({ data_model_code: '' });
+    expect(createNode.config).toEqual({
+      data_model_code: '',
+      side_effect_policy: 'disabled'
+    });
+    expect(updateNode.config).toEqual({
+      data_model_code: '',
+      side_effect_policy: 'disabled'
+    });
+    expect(deleteNode.config).toEqual({
+      data_model_code: '',
+      side_effect_policy: 'disabled'
+    });
     expect(listNode.outputs).toEqual([
       { key: 'records', title: 'Records', valueType: 'array' },
       { key: 'total', title: 'Total', valueType: 'number' }
@@ -294,8 +325,276 @@ describe('agent-flow node schema registry', () => {
     expect(createNode.outputs).toEqual([{ key: 'record', title: 'Record', valueType: 'json' }]);
     expect(updateNode.outputs).toEqual([{ key: 'record', title: 'Record', valueType: 'json' }]);
     expect(deleteNode.outputs).toEqual([
-      { key: 'deleted_id', title: 'Deleted ID', valueType: 'string' }
+      { key: 'deleted_id', title: 'Deleted ID', valueType: 'string' },
+      { key: 'affected_count', title: 'Affected Count', valueType: 'number' }
     ]);
+  });
+
+  test('registers builtin node runtime contracts for runtime defaults', () => {
+    const expectedTypes = [
+      'start',
+      'llm',
+      'answer',
+      'template_transform',
+      'knowledge_retrieval',
+      'question_classifier',
+      'if_else',
+      'code',
+      'http_request',
+      'tool',
+      'plugin_node',
+      'human_input',
+      'data_model_list',
+      'data_model_get',
+      'data_model_create',
+      'data_model_update',
+      'data_model_delete',
+      'variable_assigner',
+      'parameter_extractor',
+      'iteration',
+      'loop'
+    ] as const;
+
+    expect([...builtinNodeRuntimeContractTypes]).toEqual(
+      expect.arrayContaining([...expectedTypes])
+    );
+    expect(
+      builtinNodeRuntimeContractTypes.every((nodeType) =>
+        expectedTypes.includes(nodeType)
+      )
+    ).toBe(true);
+
+    for (const nodeType of expectedTypes) {
+      expect(getBuiltinNodeRuntimeContract(nodeType)).not.toBeNull();
+      expect(getBuiltinNodeRuntimeContract(nodeType)!.meta.type).toBe(nodeType);
+      expect(getBuiltinNodeRuntimeContract(nodeType)!.defaults.configVersion).toBe(1);
+      expect(getBuiltinNodeRuntimeContract(nodeType)!.defaults.alias).toBeTypeOf(
+        'string'
+      );
+      expect(Array.isArray(getBuiltinNodeRuntimeContract(nodeType)!.defaults.outputs)).toBe(
+        true
+      );
+    }
+  });
+
+  test('builds builtin picker options from runtime contract metadata and ports', () => {
+    const llmContract = getBuiltinNodeRuntimeContract('llm');
+    const llmOption = BUILTIN_NODE_PICKER_OPTIONS.find(
+      (option) => option.type === 'llm'
+    );
+
+    expect(llmOption).toEqual(
+      expect.objectContaining({
+        label: llmContract?.meta.title,
+        description: llmContract?.defaults.description,
+        category: llmContract?.card.category,
+        outputKeys: llmContract?.ports.outputs.map((output) => output.key)
+      })
+    );
+  });
+
+  test('Start defaults to no outputs and derive variables from input config', () => {
+    const contract = getBuiltinNodeRuntimeContract('start');
+
+    expect(contract).not.toBeNull();
+    expect(contract?.defaults.outputs).toEqual([]);
+    expect(contract?.defaults.config).toEqual({ input_fields: [] });
+    expect(contract?.defaults.bindings).toEqual({});
+  });
+
+  test('returns isolated builtin contract defaults for mutable nested values', () => {
+    const firstContract = getBuiltinNodeRuntimeContract('llm');
+
+    if (!firstContract) {
+      throw new Error('expected LLM contract');
+    }
+
+    firstContract.defaults.config.model_provider = {
+      provider_code: 'mutated-provider',
+      source_instance_id: 'mutated-instance',
+      model_id: 'mutated-model'
+    };
+    firstContract.defaults.bindings.prompt_messages = {
+      kind: 'prompt_messages',
+      value: []
+    };
+    firstContract.defaults.outputs[0] = {
+      key: 'mutated',
+      title: 'Mutated',
+      valueType: 'string'
+    };
+
+    const nextContract = getBuiltinNodeRuntimeContract('llm');
+
+    expect(nextContract?.defaults.config.model_provider).toEqual({
+      provider_code: '',
+      source_instance_id: '',
+      model_id: ''
+    });
+    expect(nextContract?.defaults.bindings.prompt_messages).toEqual({
+      kind: 'prompt_messages',
+      value: [
+        {
+          id: 'system-1',
+          role: 'system',
+          content: { kind: 'templated_text', value: '' }
+        }
+      ]
+    });
+    expect(nextContract?.defaults.outputs).toEqual([
+      { key: 'text', title: '模型输出', valueType: 'string' }
+    ]);
+  });
+
+  test('Answer defaults to answer output only', () => {
+    const contract = getBuiltinNodeRuntimeContract('answer');
+
+    expect(contract).not.toBeNull();
+    expect(contract?.defaults.outputs).toEqual([
+      { key: 'answer', title: '对话输出', valueType: 'string' }
+    ]);
+  });
+
+  test('Template Transform defaults to text output only', () => {
+    const contract = getBuiltinNodeRuntimeContract('template_transform');
+
+    expect(contract).not.toBeNull();
+    expect(contract?.defaults.outputs).toEqual([
+      { key: 'text', title: '转换结果', valueType: 'string' }
+    ]);
+  });
+
+  test('Data Model Delete defaults to deleted_id and affected_count outputs', () => {
+    const contract = getBuiltinNodeRuntimeContract('data_model_delete');
+
+    expect(contract).not.toBeNull();
+    expect(contract?.defaults.outputs).toEqual([
+      { key: 'deleted_id', title: 'Deleted ID', valueType: 'string' },
+      { key: 'affected_count', title: 'Affected Count', valueType: 'number' }
+    ]);
+  });
+
+  test('creates contracted built-in node documents from runtime contract defaults', () => {
+    const contract = getBuiltinNodeRuntimeContract('human_input');
+
+    if (!contract) {
+      throw new Error('expected Human Input contract');
+    }
+
+    const node = createNodeDocument('human_input', 'node-human-input', 120, 240);
+
+    expect(node).toEqual(
+      expect.objectContaining({
+        id: 'node-human-input',
+        type: 'human_input',
+        alias: contract.defaults.alias,
+        description: contract.defaults.description,
+        position: { x: 120, y: 240 },
+        configVersion: contract.defaults.configVersion,
+        config: contract.defaults.config,
+        bindings: contract.defaults.bindings,
+        outputs: contract.defaults.outputs
+      })
+    );
+  });
+
+  test('creates every built-in node document from runtime contract defaults', () => {
+    for (const nodeType of builtinNodeRuntimeContractTypes) {
+      if (nodeType === 'plugin_node') {
+        continue;
+      }
+
+      const contract = getBuiltinNodeRuntimeContract(nodeType);
+
+      if (!contract) {
+        throw new Error(`expected ${nodeType} contract`);
+      }
+
+      const node = createNodeDocument(nodeType, `node-${nodeType}`);
+
+      expect(node).toEqual(
+        expect.objectContaining({
+          type: contract.meta.type,
+          alias: contract.defaults.alias,
+          description: contract.defaults.description,
+          configVersion: contract.defaults.configVersion,
+          config: contract.defaults.config,
+          bindings: contract.defaults.bindings,
+          outputs: contract.defaults.outputs
+        })
+      );
+    }
+  });
+
+  test('rejects unavailable plugin contribution options in the node factory', () => {
+    const disabledContributionOption = {
+      kind: 'plugin_contribution',
+      label: 'Disabled Exporter',
+      disabled: true,
+      disabledReason: '缺少依赖插件',
+      contribution: {
+        installation_id: 'installation-1',
+        provider_code: 'sql_pack',
+        plugin_id: 'sql_pack@0.1.0',
+        plugin_version: '0.1.0',
+        contribution_code: 'disabled_exporter',
+        node_shell: 'action',
+        plugin_unique_identifier: 'sql_pack',
+        package_id: 'sql_pack@0.1.0',
+        contribution_checksum: 'sha256:disabled-exporter',
+        compiled_contribution_hash: 'sha256:compiled-disabled-exporter',
+        category: 'export',
+        title: 'Disabled Exporter',
+        description: 'Disabled plugin node',
+        dependency_status: 'missing_plugin',
+        schema_version: '1flowbase.node-contribution/v2',
+        output_schema_snapshot: {
+          outputs: [{ key: 'result', title: 'Result', valueType: 'json' }]
+        },
+        experimental: false,
+        icon: 'database',
+        schema_ui: {},
+        output_schema: {
+          outputs: [{ key: 'result', title: 'Result', valueType: 'json' }]
+        },
+        side_effect_policy: 'external_read',
+        infra_contracts: [],
+        required_auth: [],
+        visibility: 'public',
+        dependency_installation_kind: 'model_provider',
+        dependency_plugin_version_range: '^0.1.0'
+      }
+    } satisfies NodePickerOption;
+
+    expect(() =>
+      createNodeDocument(disabledContributionOption, 'node-disabled')
+    ).toThrow('Plugin contribution is unavailable');
+  });
+
+  test('does not share nested contract defaults across created node documents', () => {
+    const firstNode = createNodeDocument('llm', 'node-llm-a');
+
+    firstNode.config.model_provider = {
+      provider_code: 'mutated-provider',
+      source_instance_id: 'mutated-instance',
+      model_id: 'mutated-model'
+    };
+    firstNode.bindings.prompt_messages = {
+      kind: 'prompt_messages',
+      value: []
+    };
+    firstNode.outputs[0] = {
+      key: 'mutated',
+      title: 'Mutated',
+      valueType: 'string'
+    };
+
+    const nextNode = createNodeDocument('llm', 'node-llm-b');
+    const contract = getBuiltinNodeRuntimeContract('llm');
+
+    expect(nextNode.config).toEqual(contract?.defaults.config);
+    expect(nextNode.bindings).toEqual(contract?.defaults.bindings);
+    expect(nextNode.outputs).toEqual(contract?.defaults.outputs);
   });
 
   test('reads relative node values and preserves output contract writes on the document', () => {

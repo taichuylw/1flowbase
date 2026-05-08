@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust 2021, SQLx/PostgreSQL, object storage port, Axum, TypeScript API client, React 19.
 
+**Status:** Completed on 2026-05-08.
+
 ---
 
 ## Files
@@ -28,27 +30,27 @@
 
 ### Task 1: Add artifact storage model
 
-- [ ] Add table fields for artifact id, workspace id, application id, flow run id, node run id, artifact kind, content type, original size, preview size, storage ref, retention state, and created time.
-- [ ] Add repository methods to create artifact refs and load full artifact content by authorized scope.
-- [ ] Add GC state values: `active`, `pending_delete`, `deleted`.
+- [x] Add table fields for artifact id, workspace id, application id, flow run id, node run id, artifact kind, content type, original size, preview size, storage ref, retention state, and created time.
+- [x] Add repository methods to create artifact refs and load full artifact content by authorized scope.
+- [x] Add GC state values: `active`, `pending_delete`, `deleted`.
 
 ### Task 2: Add truncation and preview builder
 
-- [ ] Add inline byte budgets for `input_payload`, `output_payload`, `metrics_payload`, `debug_payload`, provider raw events, and draft snapshot values.
-- [ ] Return preview objects with `is_truncated`, `original_size_bytes`, `preview_size_bytes`, `content_type`, and `artifact_ref`.
-- [ ] Treat offload failure as a runtime error/debug condition, not as a complete public output.
+- [x] Add inline byte budgets for `input_payload`, `output_payload`, `metrics_payload`, `debug_payload`, provider raw events, and draft snapshot values.
+- [x] Return preview objects with `is_truncated`, `original_size_bytes`, `preview_size_bytes`, `content_type`, and `artifact_ref`.
+- [x] Treat offload failure as a runtime error/debug condition, not as a complete public output.
 
 ### Task 3: Add full-load API
 
-- [ ] Add authenticated endpoint for artifact full-load under application runtime routes.
-- [ ] Verify actor can see the application and workspace before reading artifact content.
-- [ ] Return content type and full JSON/text payload without involving cache-store.
+- [x] Add authenticated endpoint for artifact full-load under application runtime routes.
+- [x] Verify actor can see the application and workspace before reading artifact content.
+- [x] Return content type and full JSON/text payload without involving cache-store.
 
 ### Task 4: Wire frontend previews
 
-- [ ] Show truncation state in Trace and Variable Cache.
-- [ ] Load full value on explicit user expansion.
-- [ ] Do not let Variable Picker infer schema fields from full-loaded values.
+- [x] Show truncation state in Trace and Variable Cache.
+- [x] Load full value on explicit user expansion.
+- [x] Do not let Variable Picker infer schema fields from full-loaded values.
 
 ### Task 5: Verification
 
@@ -59,6 +61,38 @@ cargo test -p storage-durable runtime_debug_artifacts -- --test-threads=1
 cargo test -p api-server runtime_debug_artifacts -- --test-threads=1
 pnpm --dir web/app test -- variable-groups agent-flow
 ```
+
+Additional targeted verification:
+
+```bash
+cargo test -p storage-postgres runtime_debug_artifacts -- --test-threads=1
+cargo test -p storage-durable runtime_debug_artifacts -- --test-threads=1
+cargo test -p control-plane artifact_preview -- --test-threads=1
+cargo test -p control-plane existing_preview -- --test-threads=1
+pnpm --dir web/packages/api-client test -- console-application-runtime
+cargo fmt -p api-server -p control-plane -p storage-postgres -- --check
+git diff --check
+```
+
+Evidence:
+
+- `cargo test -p storage-postgres runtime_debug_artifacts -- --test-threads=1`: 1 passed.
+- `cargo test -p storage-durable runtime_debug_artifacts -- --test-threads=1`: 0 matched; actual PostgreSQL repository coverage lives in `storage-postgres`.
+- `cargo test -p api-server runtime_debug_artifact -- --test-threads=1`: 1 passed.
+- `cargo test -p control-plane artifact_preview -- --test-threads=1`: 1 passed.
+- `cargo test -p control-plane existing_preview -- --test-threads=1`: 1 passed.
+- `pnpm --dir web/packages/api-client test -- console-application-runtime`: 4 files / 25 tests passed.
+- `pnpm --dir web/app test -- variable-groups agent-flow`: 41 files / 260 tests passed.
+- `cargo fmt -p api-server -p control-plane -p storage-postgres -- --check`: passed.
+- `git diff --check`: passed.
+- Independent serial review re-check: PASS.
+
+Residual risks:
+
+- HTTP API has no dedicated inactive-artifact request test; repository scope and active retention query are covered.
+- Cross-workspace HTTP artifact access is covered by application visibility and repository workspace scope, but not by a separate route fixture.
+- `NodeRunJsonBlock` loads the first preview ref in a rendered JSON block; multiple refs in the same block are not replaced field-by-field.
+- Snapshot value offload can create duplicate artifact records for the same large value; retention/GC cleanup is expected to own that later.
 
 Expected:
 

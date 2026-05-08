@@ -292,6 +292,7 @@ where
                 node_alias: node.alias.clone(),
                 status: domain::NodeRunStatus::Running,
                 input_payload: Value::Object(resolved_inputs.clone()),
+                debug_payload: json!({}),
                 started_at: node_started_at,
             })
             .await?;
@@ -338,6 +339,7 @@ where
                         output_payload,
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true }),
+                        debug_payload: json!({}),
                         finished_at: Some(OffsetDateTime::now_utc()),
                     },
                 )
@@ -372,7 +374,8 @@ where
                     .map_err(|e| anyhow!("persist task panicked: {e}"))??;
                 let execution = execution_result?;
 
-                last_output_payload = execution.output_payload.clone();
+                let public_output_payload = execution.output_payload.clone();
+                last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
                 } else {
@@ -389,9 +392,10 @@ where
                     &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: node_status,
-                        output_payload: execution.output_payload.clone(),
+                        output_payload: public_output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
+                        debug_payload: execution.debug_payload.clone(),
                         finished_at: Some(OffsetDateTime::now_utc()),
                     },
                 )
@@ -452,7 +456,7 @@ where
                     .await;
                 }
 
-                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+                variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "plugin_node" => {
                 let execution =
@@ -483,6 +487,7 @@ where
                         output_payload: execution.output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
+                        debug_payload: execution.debug_payload.clone(),
                         finished_at: Some(OffsetDateTime::now_utc()),
                     },
                 )
@@ -543,8 +548,125 @@ where
                     &actor,
                     node,
                     &resolved_inputs,
+                    &data_model_runtime::DataModelRunContext {
+                        workspace_id: application.workspace_id,
+                        application_id: command.application_id,
+                        draft_id: flow_run.draft_id,
+                        flow_run_id: flow_run.id,
+                        node_run_id: node_run.id,
+                    },
                 )
                 .await;
+                if let Some(confirmation) = execution.waiting_confirmation {
+                    ensure_node_run_transition(
+                        domain::NodeRunStatus::Running,
+                        domain::NodeRunStatus::WaitingCallback,
+                        "continue_flow_debug_run",
+                    )?;
+                    update_node_run_and_emit(
+                        service,
+                        flow_run.id,
+                        &UpdateNodeRunInput {
+                            node_run_id: node_run.id,
+                            status: domain::NodeRunStatus::WaitingCallback,
+                            output_payload: json!({}),
+                            error_payload: None,
+                            metrics_payload: execution.metrics_payload.clone(),
+                            debug_payload: json!({
+                                "side_effect_policy": "confirm_each_run",
+                                "idempotency_key": confirmation.idempotency_key,
+                                "payload_hash": confirmation.payload_hash,
+                                "expires_at": confirmation.expires_at,
+                            }),
+                            finished_at: None,
+                        },
+                    )
+                    .await?;
+
+                    if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                        .await?
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
+
+                    ensure_flow_run_transition(
+                        domain::FlowRunStatus::Running,
+                        domain::FlowRunStatus::WaitingCallback,
+                        "continue_flow_debug_run",
+                    )?;
+                    let confirmation_payload = json!({
+                        "kind": "data_model_side_effect_confirmation",
+                        "actor_user_id": actor.user_id,
+                        "node_id": node.node_id,
+                        "run_id": flow_run.id,
+                        "payload_hash": confirmation.payload_hash,
+                        "idempotency_key": confirmation.idempotency_key,
+                        "expires_at": confirmation.expires_at,
+                        "request_payload": confirmation.request_payload,
+                    });
+                    service
+                        .repository
+                        .create_checkpoint(&CreateCheckpointInput {
+                            flow_run_id: flow_run.id,
+                            node_run_id: Some(node_run.id),
+                            status: "waiting_data_model_side_effect_confirmation".to_string(),
+                            reason: "等待 Data Model 写入确认".to_string(),
+                            locator_payload: json!({
+                                "node_id": node.node_id,
+                                "next_node_index": next_node_index(&compiled_plan, node_id)?,
+                            }),
+                            variable_snapshot: Value::Object(variable_pool.clone()),
+                            external_ref_payload: Some(confirmation_payload.clone()),
+                        })
+                        .await?;
+                    service
+                        .repository
+                        .create_callback_task(&CreateCallbackTaskInput {
+                            flow_run_id: flow_run.id,
+                            node_run_id: node_run.id,
+                            callback_kind: "data_model_side_effect_confirmation".to_string(),
+                            request_payload: confirmation_payload.clone(),
+                            external_ref_payload: Some(confirmation_payload),
+                        })
+                        .await?;
+                    service
+                        .repository
+                        .update_flow_run(&UpdateFlowRunInput {
+                            flow_run_id: flow_run.id,
+                            status: domain::FlowRunStatus::WaitingCallback,
+                            output_payload: json!({}),
+                            error_payload: None,
+                            finished_at: None,
+                        })
+                        .await?;
+                    append_runtime_event(
+                        service,
+                        flow_run.id,
+                        debug_stream_events::waiting_callback(
+                            flow_run.id,
+                            node_run.id,
+                            &node.node_id,
+                        ),
+                    )
+                    .await;
+                    close_runtime_event_stream(
+                        service,
+                        flow_run.id,
+                        RuntimeEventCloseReason::WaitingCallback,
+                    )
+                    .await;
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
                 last_output_payload = execution.output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
@@ -565,6 +687,7 @@ where
                         output_payload: execution.output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
+                        debug_payload: json!({}),
                         finished_at: Some(OffsetDateTime::now_utc()),
                     },
                 )
@@ -632,6 +755,7 @@ where
                         output_payload,
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true }),
+                        debug_payload: json!({}),
                         finished_at: Some(OffsetDateTime::now_utc()),
                     },
                 )
@@ -647,6 +771,7 @@ where
                         output_payload: json!({}),
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true, "waiting": "human_input" }),
+                        debug_payload: json!({}),
                         finished_at: None,
                     },
                 )
@@ -692,11 +817,23 @@ where
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
                         status: domain::FlowRunStatus::WaitingHuman,
-                        output_payload: last_output_payload.clone(),
+                        output_payload: json!({}),
                         error_payload: None,
                         finished_at: None,
                     })
                     .await?;
+                append_runtime_event(
+                    service,
+                    flow_run.id,
+                    debug_stream_events::waiting_human(flow_run.id, node_run.id, &node.node_id),
+                )
+                .await;
+                close_runtime_event_stream(
+                    service,
+                    flow_run.id,
+                    RuntimeEventCloseReason::WaitingHuman,
+                )
+                .await;
                 return load_run_detail(&service.repository, command.application_id, flow_run.id)
                     .await;
             }
@@ -711,6 +848,7 @@ where
                         output_payload: json!({}),
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true, "waiting": node.node_type }),
+                        debug_payload: json!({}),
                         finished_at: None,
                     },
                 )
@@ -762,11 +900,23 @@ where
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
                         status: domain::FlowRunStatus::WaitingCallback,
-                        output_payload: last_output_payload.clone(),
+                        output_payload: json!({}),
                         error_payload: None,
                         finished_at: None,
                     })
                     .await?;
+                append_runtime_event(
+                    service,
+                    flow_run.id,
+                    debug_stream_events::waiting_callback(flow_run.id, node_run.id, &node.node_id),
+                )
+                .await;
+                close_runtime_event_stream(
+                    service,
+                    flow_run.id,
+                    RuntimeEventCloseReason::WaitingCallback,
+                )
+                .await;
                 return load_run_detail(&service.repository, command.application_id, flow_run.id)
                     .await;
             }

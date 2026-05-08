@@ -1,4 +1,8 @@
-import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
+import {
+  getLlmNodeOutputs,
+  validatePublicOutputKey,
+  type FlowAuthoringDocument
+} from '@1flowbase/flow-schema';
 import type { FlowBinding, FlowNodeDocument } from '@1flowbase/flow-schema';
 
 import { evaluateSchemaRule } from '../../../shared/schema-ui/runtime/rule-evaluator';
@@ -8,6 +12,7 @@ import {
   getActiveNodeBindings
 } from './data-model-query-binding';
 import { getLlmModelProvider } from './llm-node-config';
+import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 import type { InspectorSectionKey, NodeDefinitionField } from './node-definitions';
 import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { hasPluginContributionRef } from './plugin-node-definitions';
@@ -109,6 +114,38 @@ function isFieldVisibleForNode(
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getAllowedPluginNodeOutputKeys(
+  node: FlowNodeDocument
+): Set<string> | null {
+  const rawSnapshot = node.output_schema_snapshot;
+
+  if (!isRecord(rawSnapshot) || !Array.isArray(rawSnapshot.outputs)) {
+    return null;
+  }
+
+  const allowed = rawSnapshot.outputs
+    .map((entry) => {
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      if (typeof entry.key !== 'string') {
+        return null;
+      }
+
+      const outputKey = entry.key.trim();
+
+      return outputKey.length > 0 ? outputKey : null;
+    })
+    .filter((key): key is string => key !== null);
+
+  return new Set(allowed);
+}
+
 function collectBindingSelectors(binding: FlowBinding): string[][] {
   switch (binding.kind) {
     case 'templated_text':
@@ -158,6 +195,26 @@ function pushFieldIssue(
     title,
     message
   });
+}
+
+function getAllowedPublicOutputKeysForNode(
+  node: FlowNodeDocument
+): Set<string> | null {
+  if (node.type === 'plugin_node' && hasPluginContributionRef(node)) {
+    return getAllowedPluginNodeOutputKeys(node);
+  }
+
+  if (node.type === 'llm') {
+    return new Set(getLlmNodeOutputs(node.config).map((output) => output.key));
+  }
+
+  const contract = getBuiltinNodeRuntimeContract(node.type);
+
+  if (!contract) {
+    return null;
+  }
+
+  return new Set(contract.defaults.outputs.map((output) => output.key));
 }
 
 export function validateDocument(
@@ -322,7 +379,7 @@ export function validateDocument(
         fieldKey: null,
         title: '插件节点缺少贡献身份',
         message:
-          '当前 plugin_node 缺少 plugin_id / plugin_version / contribution_code / node_shell / schema_version。'
+          '当前 plugin_node 缺少 plugin_id / plugin_version / contribution_code / node_shell / schema_version / plugin_unique_identifier / package_id / contribution_checksum / compiled_contribution_hash / output_schema_snapshot。'
       });
     }
 
@@ -345,9 +402,12 @@ export function validateDocument(
     }
 
     const seenOutputKeys = new Set<string>();
+    const allowedPublicOutputKeys = getAllowedPublicOutputKeysForNode(node);
 
     for (const output of node.outputs) {
-      if (output.key.trim().length === 0) {
+      const outputKey = output.key.trim();
+
+      if (outputKey.length === 0) {
         pushFieldIssue(
           issues,
           node,
@@ -358,7 +418,7 @@ export function validateDocument(
         continue;
       }
 
-      if (seenOutputKeys.has(output.key)) {
+      if (seenOutputKeys.has(outputKey)) {
         pushFieldIssue(
           issues,
           node,
@@ -369,7 +429,33 @@ export function validateDocument(
         continue;
       }
 
-      seenOutputKeys.add(output.key);
+      seenOutputKeys.add(outputKey);
+
+      const publicOutputKeyValidation = validatePublicOutputKey(outputKey);
+
+      if (!publicOutputKeyValidation.ok) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          '输出变量名保留',
+          '输出契约中的变量名是系统保留字段，请改用业务字段名。'
+        );
+        continue;
+      }
+
+      if (
+        allowedPublicOutputKeys &&
+        !allowedPublicOutputKeys.has(outputKey)
+      ) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          '输出变量名未知',
+          '输出契约中的变量名不属于当前节点运行时契约。'
+        );
+      }
     }
 
     if (

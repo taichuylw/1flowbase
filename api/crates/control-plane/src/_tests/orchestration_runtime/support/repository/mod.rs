@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Default)]
 struct InMemoryOrchestrationRuntimeState {
-    compiled_plans_by_draft_id: HashMap<Uuid, domain::CompiledPlanRecord>,
+    compiled_plans_by_id: HashMap<Uuid, domain::CompiledPlanRecord>,
     pub(super) flow_runs_by_id: HashMap<Uuid, domain::FlowRunRecord>,
     node_runs_by_id: HashMap<Uuid, domain::NodeRunRecord>,
     checkpoints_by_id: HashMap<Uuid, domain::CheckpointRecord>,
@@ -17,6 +17,8 @@ struct InMemoryOrchestrationRuntimeState {
     cost_ledger_by_flow_run_id: HashMap<Uuid, Vec<domain::CostLedgerRecord>>,
     credit_ledger_by_idempotency: HashMap<(Uuid, String), domain::CreditLedgerRecord>,
     billing_sessions_by_idempotency: HashMap<(Uuid, String), domain::BillingSessionRecord>,
+    data_model_side_effect_receipts_by_idempotency:
+        HashMap<(Uuid, String), domain::DataModelSideEffectReceiptRecord>,
     audit_hashes_by_flow_run_id: HashMap<Uuid, Vec<domain::AuditHashRecord>>,
     capability_invocations_by_flow_run_id: HashMap<Uuid, Vec<domain::CapabilityInvocationRecord>>,
     installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
@@ -159,6 +161,8 @@ impl InMemoryOrchestrationRuntimeRepository {
         let capability_node_contribution = domain::NodeContributionRegistryEntry {
             installation_id: capability_installation_id,
             provider_code: "fixture_capability".to_string(),
+            plugin_unique_identifier: "fixture_capability".to_string(),
+            package_id: "fixture_capability@0.1.0".to_string(),
             plugin_id: "fixture_capability@0.1.0".to_string(),
             plugin_version: "0.1.0".to_string(),
             contribution_code: "fixture_action".to_string(),
@@ -168,8 +172,17 @@ impl InMemoryOrchestrationRuntimeRepository {
             description: "Fixture capability node".to_string(),
             icon: "puzzle".to_string(),
             schema_ui: json!({}),
-            schema_version: "1flowbase.node-contribution/v1".to_string(),
-            output_schema: json!({}),
+            schema_version: "1flowbase.node-contribution/v2".to_string(),
+            output_schema: json!({
+                "outputs": [{ "key": "answer", "title": "回答", "valueType": "string" }]
+            }),
+            contribution_checksum: "sha256:contribution".to_string(),
+            compiled_contribution_hash: "sha256:compiled".to_string(),
+            output_schema_snapshot: json!({
+                "outputs": [{ "key": "answer", "title": "回答", "valueType": "string" }]
+            }),
+            side_effect_policy: "external_read".to_string(),
+            infra_contracts: vec![],
             required_auth: vec!["provider_instance".to_string()],
             visibility: "public".to_string(),
             experimental: false,

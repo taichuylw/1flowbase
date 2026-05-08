@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust 2021, plugin-framework, control-plane plugin repository, TypeScript flow schema, React host renderers.
 
+**Status:** Completed on 2026-05-08.
+
 ---
 
 ## Files
@@ -27,33 +29,33 @@
 
 ### Task 1: Extend contribution identity
 
-- [ ] Add `plugin_unique_identifier`.
-- [ ] Add `package_id`.
-- [ ] Add `contribution_checksum`.
-- [ ] Add `compiled_contribution_hash`.
-- [ ] Add `output_schema_snapshot`.
-- [ ] Store these on node instances and compiled plan entries.
+- [x] Add `plugin_unique_identifier`.
+- [x] Add `package_id`.
+- [x] Add `contribution_checksum`.
+- [x] Add `compiled_contribution_hash`.
+- [x] Add `output_schema_snapshot`.
+- [x] Store these on node instances and compiled plan entries.
 
 ### Task 2: Enforce host renderer allowlist
 
-- [ ] Reject unknown field renderer codes.
-- [ ] Reject plugin-provided React panel declarations.
-- [ ] Treat renderer allowlist as host capability, not plugin capability.
-- [ ] Keep panel schema declarative.
+- [x] Reject unknown field renderer codes.
+- [x] Reject plugin-provided React panel declarations.
+- [x] Treat renderer allowlist as host capability, not plugin capability.
+- [x] Keep panel schema declarative.
 
 ### Task 3: Enforce output and policy rules
 
-- [ ] Reject public output keys `metadata`, `usage`, `debug`, `error`, and `__*`.
-- [ ] Require side-effect declaration: `none`, `external_read`, `external_write`, or `durable_write`.
-- [ ] Keep metrics/error/debug fields out of `output_schema.outputs`.
-- [ ] Reject plugin infra contracts for cache-store, distributed-lock, event-bus, task-queue, and object storage.
+- [x] Reject public output keys `metadata`, `usage`, `debug`, `error`, and `__*`.
+- [x] Require side-effect declaration: `none`, `external_read`, `external_write`, or `durable_write`.
+- [x] Keep metrics/error/debug fields out of `output_schema.outputs`.
+- [x] Reject plugin infra contracts for cache-store, distributed-lock, event-bus, task-queue, and object storage.
 
 ### Task 4: Runtime stale contribution handling
 
-- [ ] Compile fails if package is missing.
-- [ ] Compile fails if checksum or output schema snapshot drifts.
-- [ ] Existing nodes require explicit recompile or migration prompt after plugin upgrade.
-- [ ] Executor unknown output keys are rejected by the payload builder and recorded as contract errors.
+- [x] Compile fails if package is missing.
+- [x] Compile fails if checksum or output schema snapshot drifts.
+- [x] Existing nodes require explicit recompile or migration prompt after plugin upgrade.
+- [x] Executor unknown output keys are rejected by the payload builder and recorded as contract errors.
 
 ### Task 5: Verification
 
@@ -64,6 +66,46 @@ cargo test -p orchestration-runtime plugin -- --test-threads=1
 cargo test -p control-plane plugin_management -- --test-threads=1
 pnpm --dir web/app test -- node-schema-registry agent-flow
 ```
+
+Additional targeted verification:
+
+```bash
+cargo test -p plugin-framework manifest_v1 -- --test-threads=1
+cargo test -p orchestration-runtime plugin -- --test-threads=1
+cargo test -p storage-postgres node_contribution -- --test-threads=1
+cargo test -p control-plane plugin_management -- --test-threads=1
+cargo test -p control-plane orchestration_runtime -- --test-threads=1
+cargo test -p api-server node_contribution -- --test-threads=1
+cargo test -p plugin-runner capability_runtime -- --test-threads=1
+pnpm --dir web/packages/flow-schema test
+pnpm --dir web/packages/api-client test -- node-contributions console-node-contributions
+pnpm --dir web/app test -- node-contribution-picker validate-document node-picker-popover
+cargo fmt -p plugin-framework -p control-plane -p orchestration-runtime -p storage-postgres -p api-server -p domain -p plugin-runner -- --check
+git diff --check
+```
+
+Evidence:
+
+- `cargo test -p plugin-framework manifest_v1 -- --test-threads=1`: 19 passed.
+- `cargo test -p orchestration-runtime plugin -- --test-threads=1`: 8 passed.
+- `cargo test -p storage-postgres node_contribution -- --test-threads=1`: 2 passed.
+- `cargo test -p control-plane plugin_management -- --test-threads=1`: 21 passed.
+- `cargo test -p control-plane orchestration_runtime -- --test-threads=1`: 78 passed.
+- `cargo test -p api-server node_contribution -- --test-threads=1`: 1 passed.
+- `cargo test -p plugin-runner capability_runtime -- --test-threads=1`: 1 integration test passed.
+- `pnpm --dir web/packages/flow-schema test`: 1 file / 35 tests passed.
+- `pnpm --dir web/packages/api-client test -- node-contributions console-node-contributions`: 4 files / 25 tests passed.
+- `pnpm --dir web/app test -- node-contribution-picker validate-document node-picker-popover`: 3 files / 33 tests passed.
+- `pnpm --dir web/app test -- node-schema-registry agent-flow`: 41 files / 262 tests passed.
+- `cargo fmt -p plugin-framework -p control-plane -p orchestration-runtime -p storage-postgres -p api-server -p domain -p plugin-runner -- --check`: passed.
+- `git diff --check`: passed.
+- Independent serial review re-check: PASS after resolving migration fake v2 rows, reserved executor keys, and incomplete output schema validation.
+
+Residual risks:
+
+- Database constraints validate `output_schema_snapshot.outputs` shape and legacy hash rejection, while per-output `key/title/valueType` validation is enforced in manifest parsing and compile-context conversion.
+- Existing node contribution registry rows that cannot prove v2 identity/hash/snapshot are deleted by the migration and must be restored through plugin install/sync.
+- Full OpenAPI/client generation is deferred to plan 09 cutover.
 
 Expected:
 

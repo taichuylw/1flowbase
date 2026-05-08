@@ -8,6 +8,10 @@ use crate::compiled_plan::{
     CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
     LlmRoutingMode,
 };
+use crate::payload_builder::PublicOutputContract;
+
+const NODE_CONTRIBUTION_SCHEMA_VERSION: &str = "1flowbase.node-contribution/v2";
+const FLOW_SCHEMA_VERSION: &str = "1flowbase.flow/v2";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FlowCompileContext {
@@ -40,11 +44,17 @@ pub struct FlowCompileProviderInstance {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlowCompileNodeContribution {
     pub installation_id: uuid::Uuid,
+    pub plugin_unique_identifier: String,
+    pub package_id: String,
     pub plugin_id: String,
     pub plugin_version: String,
     pub contribution_code: String,
     pub node_shell: String,
     pub schema_version: String,
+    pub contribution_checksum: String,
+    pub compiled_contribution_hash: String,
+    pub output_schema_snapshot: Vec<CompiledOutput>,
+    pub side_effect_policy: String,
     pub dependency_status: String,
 }
 
@@ -68,6 +78,9 @@ impl FlowCompiler {
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("schemaVersion missing"))?
             .to_string();
+        if schema_version != FLOW_SCHEMA_VERSION {
+            bail!("unsupported flow schemaVersion: {schema_version}");
+        }
         let (nodes, topological_order, compile_issues) =
             build_nodes_and_topology(document, context)?;
 
@@ -243,11 +256,14 @@ fn compile_node(
             .ok_or_else(|| anyhow!("node {node_id} missing outputs"))?,
     )
     .with_context(|| format!("failed to compile outputs for node {node_id}"))?;
+    if node_type == "start" && !outputs.is_empty() {
+        bail!("start node {node_id} outputs must be empty");
+    }
     let llm_runtime = (node_type == "llm")
         .then(|| compile_llm_runtime(&node_id, &config, context, compile_issues))
         .flatten();
     let plugin_runtime = (node_type == "plugin_node")
-        .then(|| compile_plugin_runtime(&node_id, node, context, compile_issues))
+        .then(|| compile_plugin_runtime(&node_id, node, &outputs, context, compile_issues))
         .flatten();
 
     Ok(CompiledNode {
@@ -622,9 +638,42 @@ fn compile_failover_queue_target(
 fn compile_plugin_runtime(
     node_id: &str,
     node: &Value,
+    compiled_outputs: &[CompiledOutput],
     context: &FlowCompileContext,
     compile_issues: &mut Vec<CompileIssue>,
 ) -> Option<CompiledPluginRuntime> {
+    let schema_version = required_plugin_string(
+        node_id,
+        node,
+        "schema_version",
+        CompileIssueCode::MissingSchemaVersion,
+        compile_issues,
+    )?;
+    if schema_version != NODE_CONTRIBUTION_SCHEMA_VERSION {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::UnsupportedPluginContributionSchemaVersion,
+            message: format!(
+                "node {node_id} uses unsupported plugin contribution schema_version {schema_version}"
+            ),
+        });
+        return None;
+    }
+
+    let plugin_unique_identifier = required_plugin_string(
+        node_id,
+        node,
+        "plugin_unique_identifier",
+        CompileIssueCode::MissingPluginUniqueIdentifier,
+        compile_issues,
+    )?;
+    let package_id = required_plugin_string(
+        node_id,
+        node,
+        "package_id",
+        CompileIssueCode::MissingPackageId,
+        compile_issues,
+    )?;
     let plugin_id = required_plugin_string(
         node_id,
         node,
@@ -653,13 +702,21 @@ fn compile_plugin_runtime(
         CompileIssueCode::MissingNodeShell,
         compile_issues,
     )?;
-    let schema_version = required_plugin_string(
+    let contribution_checksum = required_plugin_string(
         node_id,
         node,
-        "schema_version",
-        CompileIssueCode::MissingSchemaVersion,
+        "contribution_checksum",
+        CompileIssueCode::MissingContributionChecksum,
         compile_issues,
     )?;
+    let compiled_contribution_hash = required_plugin_string(
+        node_id,
+        node,
+        "compiled_contribution_hash",
+        CompileIssueCode::MissingCompiledContributionHash,
+        compile_issues,
+    )?;
+    let output_schema_snapshot = compile_output_schema_snapshot(node_id, node, compile_issues)?;
 
     let lookup_key = node_contribution_lookup_key(
         &plugin_id,
@@ -679,6 +736,16 @@ fn compile_plugin_runtime(
         return None;
     };
 
+    if contribution.plugin_unique_identifier != plugin_unique_identifier
+        || contribution.package_id != package_id
+    {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingPluginContribution,
+            message: format!("node {node_id} contribution identity no longer matches registry"),
+        });
+    }
+
     if contribution.dependency_status != "ready" {
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
@@ -690,14 +757,75 @@ fn compile_plugin_runtime(
         });
     }
 
+    if contribution.contribution_checksum != contribution_checksum
+        || contribution.compiled_contribution_hash != compiled_contribution_hash
+    {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::PluginContributionChecksumMismatch,
+            message: format!(
+                "node {node_id} contribution checksum changed for {contribution_code}"
+            ),
+        });
+    }
+
+    if contribution.output_schema_snapshot != output_schema_snapshot
+        || compiled_outputs != output_schema_snapshot
+    {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::PluginContributionOutputSchemaMismatch,
+            message: format!(
+                "node {node_id} output schema snapshot changed for {contribution_code}"
+            ),
+        });
+    }
+
     Some(CompiledPluginRuntime {
         installation_id: contribution.installation_id,
+        plugin_unique_identifier: contribution.plugin_unique_identifier.clone(),
+        package_id: contribution.package_id.clone(),
         plugin_id: contribution.plugin_id.clone(),
         plugin_version: contribution.plugin_version.clone(),
         contribution_code: contribution.contribution_code.clone(),
         node_shell: contribution.node_shell.clone(),
         schema_version: contribution.schema_version.clone(),
+        contribution_checksum: contribution.contribution_checksum.clone(),
+        compiled_contribution_hash: contribution.compiled_contribution_hash.clone(),
+        output_schema_snapshot: contribution.output_schema_snapshot.clone(),
+        side_effect_policy: contribution.side_effect_policy.clone(),
     })
+}
+
+fn compile_output_schema_snapshot(
+    node_id: &str,
+    node: &Value,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<Vec<CompiledOutput>> {
+    let Some(outputs) = node
+        .get("output_schema_snapshot")
+        .and_then(|snapshot| snapshot.get("outputs"))
+        .and_then(Value::as_array)
+    else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::MissingOutputSchemaSnapshot,
+            message: format!("node {node_id} missing output_schema_snapshot.outputs"),
+        });
+        return None;
+    };
+
+    match compile_outputs(outputs) {
+        Ok(outputs) => Some(outputs),
+        Err(error) => {
+            compile_issues.push(CompileIssue {
+                node_id: node_id.to_string(),
+                code: CompileIssueCode::PluginContributionOutputSchemaMismatch,
+                message: format!("node {node_id} has invalid output_schema_snapshot: {error}"),
+            });
+            None
+        }
+    }
 }
 
 fn required_plugin_string(
@@ -764,6 +892,14 @@ fn active_binding_values(
     node_type: &str,
     binding_values: &serde_json::Map<String, Value>,
 ) -> BTreeMap<String, Value> {
+    if node_type == "llm" {
+        return binding_values
+            .iter()
+            .filter(|(key, _)| key.as_str() == "prompt_messages")
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+    }
+
     let Some(active_keys) = active_data_model_binding_keys(node_type) else {
         return binding_values
             .iter()
@@ -798,7 +934,7 @@ fn active_data_model_binding_keys(node_type: &str) -> Option<&'static [&'static 
 }
 
 fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
-    output_values
+    let outputs: Vec<CompiledOutput> = output_values
         .iter()
         .map(|output| {
             Ok(CompiledOutput {
@@ -807,7 +943,11 @@ fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
                 value_type: required_string(output, "valueType")?.to_string(),
             })
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+
+    PublicOutputContract::from_compiled_outputs(&outputs)?;
+
+    Ok(outputs)
 }
 
 fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<String>>> {
