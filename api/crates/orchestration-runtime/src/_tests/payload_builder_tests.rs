@@ -131,8 +131,11 @@ fn payload_builder_projects_declared_selector_paths_without_copying_output_paylo
     .unwrap();
     let built = contract
         .build_node_payloads(RawNodeExecutionResult {
-            executor_output: object([("text", json!("accepted"))]),
-            metrics_facts: object([("usage", json!({ "total_tokens": 128 }))]),
+            executor_output: object([
+                ("text", json!("accepted")),
+                ("usage", json!({ "total_tokens": 128 })),
+            ]),
+            metrics_facts: Map::new(),
             error_facts: Map::new(),
             debug_facts: Map::new(),
             provider_events: Vec::new(),
@@ -200,9 +203,7 @@ fn payload_builder_allows_context_keys_across_non_public_buckets() {
     assert_eq!(
         built.output_payload,
         json!({
-            "text": "visible output",
-            "provider_code": "openai_compatible",
-            "message": "provider failed"
+            "text": "visible output"
         })
     );
     assert_eq!(
@@ -223,7 +224,7 @@ fn payload_builder_allows_context_keys_across_non_public_buckets() {
 }
 
 #[test]
-fn payload_builder_merges_runtime_facts_into_output_payload() {
+fn payload_builder_keeps_runtime_facts_out_of_output_payload() {
     let contract = PublicOutputContract::from_compiled_outputs(&[output("text")]).unwrap();
     let raw = RawNodeExecutionResult {
         executor_output: object([
@@ -245,10 +246,7 @@ fn payload_builder_merges_runtime_facts_into_output_payload() {
         json!({
             "__raw_response": { "id": "debug-1" },
             "error": { "message": "provider failed" },
-            "latency_ms": 42,
-            "retryable": false,
             "text": "visible output",
-            "trace_id": "trace-1",
             "usage": { "input_tokens": 3, "output_tokens": 5 }
         })
     );

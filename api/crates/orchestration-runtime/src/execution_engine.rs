@@ -950,6 +950,34 @@ fn build_successful_llm_execution(
     let text_parts = split_llm_think_tags(&raw_text);
     let mut executor_output = Map::new();
     executor_output.insert("text".to_string(), Value::String(text_parts.text.clone()));
+    executor_output.insert(
+        "provider_route".to_string(),
+        build_llm_provider_route_payload(runtime),
+    );
+    if let Some(finish_reason) = result.finish_reason.as_ref() {
+        executor_output.insert(
+            "finish_reason".to_string(),
+            serde_json::to_value(finish_reason).unwrap_or(Value::Null),
+        );
+    }
+    if !result.tool_calls.is_empty() {
+        executor_output.insert(
+            "tool_calls".to_string(),
+            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+        );
+    }
+    if !result.mcp_calls.is_empty() {
+        executor_output.insert(
+            "mcp_calls".to_string(),
+            serde_json::to_value(&result.mcp_calls).unwrap_or(Value::Null),
+        );
+    }
+    if !result.provider_metadata.is_null() {
+        executor_output.insert(
+            "provider_metadata".to_string(),
+            result.provider_metadata.clone(),
+        );
+    }
     if let Some(reasoning_content) = text_parts.reasoning_content {
         executor_output.insert(
             "reasoning_content".to_string(),
@@ -1003,6 +1031,15 @@ fn object_from_value(value: Value) -> Result<Map<String, Value>> {
         .ok_or_else(|| anyhow!("payload bucket facts must be an object"))
 }
 
+fn build_llm_provider_route_payload(runtime: &CompiledLlmRuntime) -> Value {
+    json!({
+        "provider_instance_id": runtime.provider_instance_id,
+        "provider_code": runtime.provider_code,
+        "protocol": runtime.protocol,
+        "model": runtime.model,
+    })
+}
+
 fn build_llm_debug_facts(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
@@ -1030,33 +1067,11 @@ fn build_llm_debug_facts(
         Value::Array(vec![Value::String(attempt_ref.clone())]),
     );
     debug.insert("winner_attempt_ref".to_string(), Value::String(attempt_ref));
-    debug.insert(
-        "provider_route".to_string(),
-        json!({
-            "provider_instance_id": runtime.provider_instance_id,
-            "provider_code": runtime.provider_code,
-            "protocol": runtime.protocol,
-            "model": runtime.model,
-        }),
-    );
-
-    if let Some(result) = result {
+    if result.is_none() {
         debug.insert(
-            "tool_calls".to_string(),
-            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+            "provider_route".to_string(),
+            build_llm_provider_route_payload(runtime),
         );
-        if !result.mcp_calls.is_empty() {
-            debug.insert(
-                "mcp_calls".to_string(),
-                serde_json::to_value(&result.mcp_calls).unwrap_or(Value::Null),
-            );
-        }
-        if !result.provider_metadata.is_null() {
-            debug.insert(
-                "provider_metadata".to_string(),
-                result.provider_metadata.clone(),
-            );
-        }
     }
 
     debug

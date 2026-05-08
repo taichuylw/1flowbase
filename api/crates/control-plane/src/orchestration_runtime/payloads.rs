@@ -1,34 +1,12 @@
 use serde_json::Value;
 
-fn remove_payload_keys(
-    output_payload: &mut serde_json::Map<String, Value>,
-    payload: Option<&Value>,
-) {
-    let Some(payload) = payload.and_then(Value::as_object) else {
-        return;
-    };
-
-    for key in payload.keys() {
-        output_payload.remove(key);
-    }
-}
-
 pub(super) fn persisted_node_output_payload(
     output_payload: &Value,
-    metrics_payload: &Value,
-    error_payload: Option<&Value>,
-    debug_payload: &Value,
+    _metrics_payload: &Value,
+    _error_payload: Option<&Value>,
+    _debug_payload: &Value,
 ) -> Value {
-    let Some(output_object) = output_payload.as_object() else {
-        return output_payload.clone();
-    };
-    let mut persisted_output = output_object.clone();
-
-    remove_payload_keys(&mut persisted_output, Some(metrics_payload));
-    remove_payload_keys(&mut persisted_output, error_payload);
-    remove_payload_keys(&mut persisted_output, Some(debug_payload));
-
-    Value::Object(persisted_output)
+    output_payload.clone()
 }
 
 #[cfg(test)]
@@ -38,17 +16,17 @@ mod tests {
     use super::persisted_node_output_payload;
 
     #[test]
-    fn persisted_output_keeps_success_output_separate_from_metrics_and_debug() {
+    fn persisted_output_preserves_executor_output_fields_even_when_payload_names_overlap() {
         let output_payload = json!({
             "text": "正式回答",
             "reasoning_content": "先分析",
-            "attempts": [{ "status": "succeeded" }],
-            "event_count": 12,
-            "provider_events": [{ "type": "text_delta", "delta": "正式回答" }],
+            "finish_reason": "stop",
+            "provider_route": { "provider_code": "openai_compatible" },
+            "provider_metadata": { "response_id": "chatcmpl-1" },
         });
         let metrics_payload = json!({
-            "attempts": [{ "status": "succeeded" }],
-            "event_count": 12,
+            "finish_reason": "stop",
+            "provider_code": "openai_compatible",
         });
         let debug_payload = json!({
             "provider_events": [{ "type": "text_delta", "delta": "正式回答" }],
@@ -62,6 +40,9 @@ mod tests {
             json!({
                 "text": "正式回答",
                 "reasoning_content": "先分析",
+                "finish_reason": "stop",
+                "provider_route": { "provider_code": "openai_compatible" },
+                "provider_metadata": { "response_id": "chatcmpl-1" },
             })
         );
     }

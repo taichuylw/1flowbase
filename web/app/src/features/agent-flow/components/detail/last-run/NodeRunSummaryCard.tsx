@@ -20,16 +20,25 @@ function formatDuration(startedAt: string, finishedAt: string | null) {
 }
 
 function summarizeTokenUsage(lastRun: NodeLastRun) {
-  const outputPayload = lastRun.node_run.output_payload;
+  const metricsPayload = lastRun.node_run.metrics_payload;
+  if (
+    !metricsPayload ||
+    typeof metricsPayload !== 'object' ||
+    Array.isArray(metricsPayload)
+  ) {
+    return '—';
+  }
+
+  const metricsRecord = metricsPayload as Record<string, unknown>;
   const usage =
-    outputPayload &&
-    typeof outputPayload === 'object' &&
-    !Array.isArray(outputPayload)
-      ? (outputPayload as Record<string, unknown>).usage
-      : null;
+    metricsRecord.usage &&
+    typeof metricsRecord.usage === 'object' &&
+    !Array.isArray(metricsRecord.usage)
+      ? (metricsRecord.usage as Record<string, unknown>)
+      : metricsRecord;
   const value =
-    usage && typeof usage === 'object' && !Array.isArray(usage)
-      ? (usage as Record<string, unknown>).total_tokens
+    typeof usage.total_tokens === 'number' || typeof usage.total_tokens === 'string'
+      ? usage.total_tokens
       : undefined;
 
   if (typeof value === 'number') {

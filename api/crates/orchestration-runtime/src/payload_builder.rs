@@ -97,9 +97,6 @@ impl PublicOutputContract {
         let mut debug_payload = raw.debug_facts.clone();
 
         merge_output_facts(&mut output_payload, raw.executor_output)?;
-        merge_output_facts(&mut output_payload, raw.metrics_facts)?;
-        merge_output_facts(&mut output_payload, raw.error_facts)?;
-        merge_output_facts(&mut output_payload, raw.debug_facts)?;
 
         if !raw.provider_events.is_empty() {
             insert_unique(

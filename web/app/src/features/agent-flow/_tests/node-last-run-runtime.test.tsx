@@ -59,10 +59,7 @@ function sampleNodeLastRun() {
       },
       output_payload: {
         text: '退款政策摘要',
-        usage: {
-          total_tokens: 128
-        },
-        route: {
+        provider_route: {
           provider_code: 'openai'
         },
         finish_reason: 'stop',
@@ -70,7 +67,10 @@ function sampleNodeLastRun() {
       },
       error_payload: null,
       metrics_payload: {
-        output_contract_count: 2
+        output_contract_count: 2,
+        usage: {
+          total_tokens: 128
+        }
       },
       debug_payload: {
         provider_events: [

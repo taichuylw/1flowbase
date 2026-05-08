@@ -62,16 +62,12 @@ describe('NodeLastRunTab', () => {
         output_payload: {
           text: '退款政策摘要',
           reasoning_content: '先分析退款场景',
-          usage: {
-            total_tokens: 72
+          provider_metadata: {
+            response_id: 'chatcmpl-1'
           },
-          provider_code: 'openai_compatible',
-          provider_events: [
-            {
-              type: 'text_delta',
-              delta: '退款政策摘要'
-            }
-          ]
+          provider_route: {
+            provider_code: 'openai_compatible'
+          }
         },
         error_payload: null,
         metrics_payload: {
@@ -88,9 +84,6 @@ describe('NodeLastRunTab', () => {
           assistant_message: {
             role: 'assistant',
             content: '退款政策摘要'
-          },
-          provider_route: {
-            provider_code: 'openai_compatible'
           },
           provider_events: [
             {
@@ -126,14 +119,15 @@ describe('NodeLastRunTab', () => {
     expect(outputJson).toHaveTextContent('退款政策摘要');
     expect(outputJson).toHaveTextContent('reasoning_content');
     expect(outputJson).toHaveTextContent('先分析退款场景');
-    expect(outputJson).toHaveTextContent('usage');
+    expect(outputJson).toHaveTextContent('provider_metadata');
+    expect(outputJson).toHaveTextContent('provider_route');
     expect(outputJson).not.toHaveTextContent('provider_events');
     expect(outputJson).not.toHaveTextContent('text_delta');
     const processJson = screen.getByLabelText('数据处理 JSON');
     expect(processJson).toHaveTextContent('provider_events');
     expect(processJson).toHaveTextContent('text_delta');
     expect(processJson).toHaveTextContent('assistant_message');
-    expect(processJson).toHaveTextContent('provider_route');
+    expect(processJson).not.toHaveTextContent('provider_route');
     expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();
     expect(screen.queryByText('执行人')).not.toBeInTheDocument();

@@ -242,10 +242,15 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
         serde_json::json!("echo:gpt-5.4-mini:请总结退款政策")
     );
     assert_eq!(
-        outcome.node_run.output_payload["usage"]["total_tokens"],
+        outcome.node_run.metrics_payload["usage"]["total_tokens"],
         serde_json::json!(12)
     );
-    assert!(outcome.node_run.output_payload.get("route").is_some());
+    assert!(outcome.node_run.output_payload.get("route").is_none());
+    assert!(outcome
+        .node_run
+        .output_payload
+        .get("provider_route")
+        .is_some());
     assert_eq!(
         outcome.flow_run.output_payload,
         outcome.node_run.output_payload
@@ -498,7 +503,12 @@ async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
     assert!(llm_node.output_payload.get("attempts").is_none());
     assert!(llm_node.output_payload.get("event_count").is_none());
     assert!(llm_node.output_payload.get("provider_code").is_none());
+    assert_eq!(
+        llm_node.output_payload["provider_route"]["provider_code"],
+        "fixture_provider"
+    );
     assert!(llm_node.debug_payload.get("reasoning_content").is_none());
+    assert!(llm_node.debug_payload.get("provider_route").is_none());
 
     let events = stream.events();
     assert!(events
@@ -831,8 +841,9 @@ async fn live_debug_checkpoint_snapshot_stores_llm_output_metrics_without_proces
         llm_node.output_payload["text"],
         json!("echo:gpt-5.4-mini:请总结退款政策")
     );
-    assert_eq!(llm_node.output_payload["usage"]["total_tokens"], json!(12));
-    assert!(llm_node.output_payload.get("route").is_some());
+    assert!(llm_node.output_payload.get("usage").is_none());
+    assert!(llm_node.output_payload.get("route").is_none());
+    assert!(llm_node.output_payload.get("provider_route").is_some());
     assert!(llm_node.metrics_payload.get("usage").is_some());
 
     let snapshot = &waiting_detail
