@@ -50,64 +50,6 @@ function findRuntimeDebugArtifactRef(value: unknown): string | null {
   return null;
 }
 
-function getDurationMs(startedAt: string, finishedAt: string | null) {
-  if (!finishedAt) {
-    return null;
-  }
-
-  const started = Date.parse(startedAt);
-  const finished = Date.parse(finishedAt);
-
-  if (Number.isNaN(started) || Number.isNaN(finished)) {
-    return null;
-  }
-
-  return Math.max(0, finished - started);
-}
-
-function getMetricsPayload(lastRun: NodeLastRun) {
-  const metrics = lastRun.node_run.metrics_payload ?? {};
-  const errorPayload =
-    lastRun.node_run.error_payload &&
-    typeof lastRun.node_run.error_payload === 'object'
-      ? lastRun.node_run.error_payload
-      : {};
-
-  return {
-    usage:
-      (metrics.usage as unknown) ??
-      (typeof metrics.total_tokens === 'number' || typeof metrics.total_tokens === 'string'
-        ? { total_tokens: metrics.total_tokens }
-        : null),
-    duration_ms: getDurationMs(
-      lastRun.node_run.started_at,
-      lastRun.node_run.finished_at
-    ),
-    route:
-      (metrics.route as unknown) ?? {
-        provider_instance_id:
-          (metrics.provider_instance_id as unknown) ??
-          (errorPayload as Record<string, unknown>).provider_instance_id,
-        provider_code:
-          (metrics.provider_code as unknown) ??
-          (errorPayload as Record<string, unknown>).provider_code,
-        protocol:
-          (metrics.protocol as unknown) ??
-          (errorPayload as Record<string, unknown>).protocol
-      },
-    attempt:
-      (metrics.attempt as unknown) ??
-      (metrics.attempt_id as unknown) ??
-      (metrics.attempt_index as unknown) ??
-      null,
-    finish_reason:
-      (metrics.finish_reason as unknown) ??
-      (errorPayload as Record<string, unknown>).finish_reason ??
-      null,
-    metrics_payload: metrics
-  };
-}
-
 const EDITOR_OPTIONS = {
   readOnly: true,
   domReadOnly: true,
@@ -151,6 +93,41 @@ function JsonEditor({ height, value }: { height: string; value: string }) {
       />
     </Suspense>
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getProcessPayload(lastRun: NodeLastRun) {
+  const debugPayload = lastRun.node_run.debug_payload;
+
+  return isRecord(debugPayload) ? debugPayload : {};
+}
+
+function isSameJsonValue(left: unknown, right: unknown) {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
+export function omitProcessPayloadFromOutput(
+  outputPayload: unknown,
+  processPayload: unknown
+) {
+  if (!isRecord(outputPayload) || !isRecord(processPayload)) {
+    return outputPayload;
+  }
+
+  const entries = Object.entries(outputPayload).filter(
+    ([key, value]) =>
+      !Object.prototype.hasOwnProperty.call(processPayload, key) ||
+      !isSameJsonValue(value, processPayload[key])
+  );
+
+  return Object.fromEntries(entries);
 }
 
 export function NodeRunJsonBlock({
@@ -276,6 +253,11 @@ export function NodeRunJsonBlock({
 
 export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
   const applicationId = lastRun.flow_run.application_id;
+  const processPayload = getProcessPayload(lastRun);
+  const outputPayload = omitProcessPayloadFromOutput(
+    lastRun.node_run.output_payload,
+    processPayload
+  );
 
   return (
     <Card title="节点输入输出">
@@ -288,29 +270,15 @@ export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
           }
         />
         <NodeRunJsonBlock
-          payload={lastRun.node_run.output_payload}
+          payload={processPayload}
+          title="数据处理"
+          onLoadArtifact={(artifactRef) =>
+            fetchRuntimeDebugArtifact(applicationId, artifactRef)
+          }
+        />
+        <NodeRunJsonBlock
+          payload={outputPayload}
           title="输出"
-          onLoadArtifact={(artifactRef) =>
-            fetchRuntimeDebugArtifact(applicationId, artifactRef)
-          }
-        />
-        <NodeRunJsonBlock
-          payload={getMetricsPayload(lastRun)}
-          title="指标"
-          onLoadArtifact={(artifactRef) =>
-            fetchRuntimeDebugArtifact(applicationId, artifactRef)
-          }
-        />
-        <NodeRunJsonBlock
-          payload={lastRun.node_run.error_payload}
-          title="错误"
-          onLoadArtifact={(artifactRef) =>
-            fetchRuntimeDebugArtifact(applicationId, artifactRef)
-          }
-        />
-        <NodeRunJsonBlock
-          payload={lastRun.node_run.debug_payload ?? {}}
-          title="Debug"
           onLoadArtifact={(artifactRef) =>
             fetchRuntimeDebugArtifact(applicationId, artifactRef)
           }

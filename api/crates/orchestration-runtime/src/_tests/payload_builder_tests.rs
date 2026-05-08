@@ -2,6 +2,7 @@ use orchestration_runtime::{
     compiled_plan::CompiledOutput,
     payload_builder::{PublicOutputContract, RawNodeExecutionResult},
 };
+use plugin_framework::provider_contract::ProviderStreamEvent;
 use serde_json::{json, Map, Value};
 
 fn output(key: &str) -> CompiledOutput {
@@ -9,6 +10,16 @@ fn output(key: &str) -> CompiledOutput {
         key: key.to_string(),
         title: key.to_string(),
         value_type: "string".to_string(),
+        selector: Vec::new(),
+    }
+}
+
+fn output_with_selector(key: &str, selector: &[&str]) -> CompiledOutput {
+    CompiledOutput {
+        key: key.to_string(),
+        title: key.to_string(),
+        value_type: "json".to_string(),
+        selector: selector.iter().map(|segment| segment.to_string()).collect(),
     }
 }
 
@@ -20,12 +31,16 @@ fn object(entries: impl IntoIterator<Item = (&'static str, Value)>) -> Map<Strin
 }
 
 #[test]
-fn payload_builder_rejects_unknown_public_output_keys() {
+fn payload_builder_keeps_complete_output_object_and_only_declares_selector_values() {
     let contract = PublicOutputContract::from_compiled_outputs(&[output("text")]).unwrap();
     let raw = RawNodeExecutionResult {
         executor_output: object([
             ("text", json!("accepted")),
-            ("unexpected", json!("must fail")),
+            ("usage", json!({ "input_tokens": 3, "output_tokens": 5 })),
+            ("route", json!({ "provider_code": "openai" })),
+            ("error", json!({ "message": "provider failed" })),
+            ("raw_response_ref", json!("artifact-1")),
+            ("unexpected", json!("kept for output inspection")),
         ]),
         metrics_facts: Map::new(),
         error_facts: Map::new(),
@@ -33,11 +48,25 @@ fn payload_builder_rejects_unknown_public_output_keys() {
         provider_events: Vec::new(),
     };
 
-    let error = contract
-        .build_node_payloads(raw)
-        .expect_err("unknown public output key must fail the build");
+    let built = contract.build_node_payloads(raw).unwrap();
 
-    assert!(error.to_string().contains("unexpected"));
+    assert_eq!(
+        built.output_payload,
+        json!({
+            "error": { "message": "provider failed" },
+            "raw_response_ref": "artifact-1",
+            "route": { "provider_code": "openai" },
+            "text": "accepted",
+            "unexpected": "kept for output inspection",
+            "usage": { "input_tokens": 3, "output_tokens": 5 }
+        })
+    );
+    assert_eq!(
+        contract
+            .project_variable_payload(&built.output_payload)
+            .unwrap(),
+        json!({ "text": "accepted" })
+    );
 }
 
 #[test]
@@ -65,7 +94,62 @@ fn payload_builder_allows_unknown_keys_when_structured_expansion_is_explicit() {
 }
 
 #[test]
-fn payload_builder_keeps_reserved_keys_out_of_structured_expansion() {
+fn payload_builder_allows_runtime_fields_as_declared_selectors() {
+    let contract =
+        PublicOutputContract::from_compiled_outputs(&[output("text"), output("usage")]).unwrap();
+    let raw = RawNodeExecutionResult {
+        executor_output: object([
+            ("text", json!("accepted")),
+            ("usage", json!({ "total_tokens": 8 })),
+            ("route", json!({ "provider_code": "openai" })),
+        ]),
+        metrics_facts: Map::new(),
+        error_facts: Map::new(),
+        debug_facts: Map::new(),
+        provider_events: Vec::new(),
+    };
+
+    let built = contract.build_node_payloads(raw).unwrap();
+
+    assert_eq!(
+        contract
+            .project_variable_payload(&built.output_payload)
+            .unwrap(),
+        json!({
+            "text": "accepted",
+            "usage": { "total_tokens": 8 }
+        })
+    );
+}
+
+#[test]
+fn payload_builder_projects_declared_selector_paths_without_copying_output_payload() {
+    let contract = PublicOutputContract::from_compiled_outputs(&[output_with_selector(
+        "token_usage",
+        &["usage", "total_tokens"],
+    )])
+    .unwrap();
+    let built = contract
+        .build_node_payloads(RawNodeExecutionResult {
+            executor_output: object([("text", json!("accepted"))]),
+            metrics_facts: object([("usage", json!({ "total_tokens": 128 }))]),
+            error_facts: Map::new(),
+            debug_facts: Map::new(),
+            provider_events: Vec::new(),
+        })
+        .unwrap();
+
+    assert_eq!(built.output_payload["usage"]["total_tokens"], json!(128));
+    assert_eq!(
+        contract
+            .project_variable_payload(&built.output_payload)
+            .unwrap(),
+        json!({ "token_usage": 128 })
+    );
+}
+
+#[test]
+fn payload_builder_keeps_runtime_fields_in_complete_output_payload() {
     let contract = PublicOutputContract::from_compiled_outputs(&[output("text")])
         .unwrap()
         .with_structured_expansion(true);
@@ -85,18 +169,13 @@ fn payload_builder_keeps_reserved_keys_out_of_structured_expansion() {
 
     let built = contract.build_node_payloads(raw).unwrap();
 
-    assert_eq!(built.output_payload, json!({ "text": "accepted" }));
     assert_eq!(
-        built.metrics_payload,
+        built.output_payload,
         json!({
-            "provider_code": "openai_compatible",
-            "queue_snapshot_id": "queue-snapshot-1"
-        })
-    );
-    assert_eq!(
-        built.debug_payload,
-        json!({
+            "text": "accepted",
             "metadata": { "provider": "internal" },
+            "provider_code": "openai_compatible",
+            "queue_snapshot_id": "queue-snapshot-1",
             "raw_response_ref": "artifact-1"
         })
     );
@@ -118,7 +197,14 @@ fn payload_builder_allows_context_keys_across_non_public_buckets() {
 
     let built = contract.build_node_payloads(raw).unwrap();
 
-    assert_eq!(built.output_payload, json!({ "text": "visible output" }));
+    assert_eq!(
+        built.output_payload,
+        json!({
+            "text": "visible output",
+            "provider_code": "openai_compatible",
+            "message": "provider failed"
+        })
+    );
     assert_eq!(
         built.metrics_payload,
         json!({ "provider_code": "openai_compatible" })
@@ -137,7 +223,7 @@ fn payload_builder_allows_context_keys_across_non_public_buckets() {
 }
 
 #[test]
-fn payload_builder_keeps_payload_buckets_mutually_exclusive() {
+fn payload_builder_merges_runtime_facts_into_output_payload() {
     let contract = PublicOutputContract::from_compiled_outputs(&[output("text")]).unwrap();
     let raw = RawNodeExecutionResult {
         executor_output: object([
@@ -154,53 +240,38 @@ fn payload_builder_keeps_payload_buckets_mutually_exclusive() {
 
     let built = contract.build_node_payloads(raw).unwrap();
 
-    assert_eq!(built.output_payload, json!({ "text": "visible output" }));
     assert_eq!(
-        built.metrics_payload,
+        built.output_payload,
         json!({
+            "__raw_response": { "id": "debug-1" },
+            "error": { "message": "provider failed" },
             "latency_ms": 42,
+            "retryable": false,
+            "text": "visible output",
+            "trace_id": "trace-1",
             "usage": { "input_tokens": 3, "output_tokens": 5 }
         })
     );
-    assert_eq!(
-        built.error_payload,
-        json!({
-            "error": { "message": "provider failed" },
-            "retryable": false
-        })
-    );
-    assert_eq!(
-        built.debug_payload,
-        json!({
-            "__raw_response": { "id": "debug-1" },
-            "trace_id": "trace-1"
-        })
-    );
-
-    let output_payload = built.output_payload.as_object().unwrap();
-    let metrics_payload = built.metrics_payload.as_object().unwrap();
-    let error_payload = built.error_payload.as_object().unwrap();
-    let debug_payload = built.debug_payload.as_object().unwrap();
-    let bucket_keys: [(&str, &Map<String, Value>); 3] = [
-        ("metrics", metrics_payload),
-        ("error", error_payload),
-        ("debug", debug_payload),
-    ];
-
-    for key in output_payload.keys() {
-        for (bucket_name, bucket) in &bucket_keys {
-            assert!(
-                !bucket.contains_key(key),
-                "public output key {key} leaked into {bucket_name} payload"
-            );
-        }
-    }
 }
 
 #[test]
-fn payload_builder_rejects_reserved_declared_public_outputs() {
-    let error = PublicOutputContract::from_compiled_outputs(&[output("provider_code")])
-        .expect_err("reserved output contract keys must be rejected");
+fn payload_builder_keeps_stream_events_in_process_payload_not_output_payload() {
+    let contract = PublicOutputContract::from_compiled_outputs(&[output("text")]).unwrap();
+    let built = contract
+        .build_node_payloads(RawNodeExecutionResult {
+            executor_output: object([("text", json!("accepted"))]),
+            metrics_facts: Map::new(),
+            error_facts: Map::new(),
+            debug_facts: Map::new(),
+            provider_events: vec![ProviderStreamEvent::TextDelta {
+                delta: "accepted".to_string(),
+            }],
+        })
+        .unwrap();
 
-    assert!(error.to_string().contains("provider_code"));
+    assert!(built.output_payload.get("provider_events").is_none());
+    assert_eq!(
+        built.debug_payload["provider_events"][0]["type"],
+        json!("text_delta")
+    );
 }

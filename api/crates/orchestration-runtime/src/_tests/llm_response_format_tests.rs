@@ -115,6 +115,7 @@ fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
                 key: "text".to_string(),
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({
                 "response_format": response_format

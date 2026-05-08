@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use plugin_framework::provider_contract::ProviderStreamEvent;
@@ -31,23 +31,33 @@ pub struct BuiltNodePayloads {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicOutputContract {
-    output_keys: BTreeSet<String>,
+    output_selectors: BTreeMap<String, Vec<String>>,
     allows_structured_expansion: bool,
 }
 
 impl PublicOutputContract {
     pub fn from_compiled_outputs(outputs: &[CompiledOutput]) -> Result<Self> {
         for output in outputs {
-            if reserved_payload_bucket(&output.key).is_some() {
+            if output.key.starts_with("__") {
                 return Err(anyhow!(
-                    "reserved public output key `{}` cannot be declared by this node output contract",
+                    "internal public output key `{}` cannot be declared by this node output contract",
                     output.key
                 ));
             }
         }
 
         Ok(Self {
-            output_keys: outputs.iter().map(|output| output.key.clone()).collect(),
+            output_selectors: outputs
+                .iter()
+                .map(|output| {
+                    let selector = if output.selector.is_empty() {
+                        vec![output.key.clone()]
+                    } else {
+                        output.selector.clone()
+                    };
+                    (output.key.clone(), selector)
+                })
+                .collect(),
             allows_structured_expansion: false,
         })
     }
@@ -62,34 +72,34 @@ impl PublicOutputContract {
     }
 
     pub fn contains_output_key(&self, key: &str) -> bool {
-        self.output_keys.contains(key)
+        self.output_selectors.contains_key(key)
+    }
+
+    pub fn project_variable_payload(&self, output_payload: &Value) -> Result<Value> {
+        let payload = output_payload
+            .as_object()
+            .ok_or_else(|| anyhow!("node output payload must be an object"))?;
+        let mut variable_payload = Map::new();
+
+        for (key, selector) in &self.output_selectors {
+            if let Some(value) = read_output_selector(payload, selector) {
+                variable_payload.insert(key.clone(), value.clone());
+            }
+        }
+
+        Ok(Value::Object(variable_payload))
     }
 
     pub fn build_node_payloads(&self, raw: RawNodeExecutionResult) -> Result<BuiltNodePayloads> {
         let mut output_payload = Map::new();
-        let mut metrics_payload = Map::new();
-        let mut error_payload = Map::new();
-        let mut debug_payload = Map::new();
+        let metrics_payload = raw.metrics_facts.clone();
+        let error_payload = raw.error_facts.clone();
+        let mut debug_payload = raw.debug_facts.clone();
 
-        for (key, value) in raw.executor_output {
-            match classify_executor_output_key(&key, self) {
-                PayloadBucket::Output => insert_unique(&mut output_payload, key, value, "output")?,
-                PayloadBucket::Metrics => {
-                    insert_unique(&mut metrics_payload, key, value, "metrics")?
-                }
-                PayloadBucket::Error => insert_unique(&mut error_payload, key, value, "error")?,
-                PayloadBucket::Debug => insert_unique(&mut debug_payload, key, value, "debug")?,
-                PayloadBucket::Unknown => {
-                    return Err(anyhow!(
-                        "unknown public output key `{key}` is not declared by this node output contract"
-                    ));
-                }
-            }
-        }
-
-        merge_non_public_facts(&mut metrics_payload, raw.metrics_facts, "metrics")?;
-        merge_non_public_facts(&mut error_payload, raw.error_facts, "error")?;
-        merge_non_public_facts(&mut debug_payload, raw.debug_facts, "debug")?;
+        merge_output_facts(&mut output_payload, raw.executor_output)?;
+        merge_output_facts(&mut output_payload, raw.metrics_facts)?;
+        merge_output_facts(&mut output_payload, raw.error_facts)?;
+        merge_output_facts(&mut output_payload, raw.debug_facts)?;
 
         if !raw.provider_events.is_empty() {
             insert_unique(
@@ -100,10 +110,6 @@ impl PublicOutputContract {
             )?;
         }
 
-        reject_public_bucket_overlap("metrics", &output_payload, &metrics_payload)?;
-        reject_public_bucket_overlap("error", &output_payload, &error_payload)?;
-        reject_public_bucket_overlap("debug", &output_payload, &debug_payload)?;
-
         Ok(BuiltNodePayloads {
             output_payload: Value::Object(output_payload),
             metrics_payload: Value::Object(metrics_payload),
@@ -113,73 +119,27 @@ impl PublicOutputContract {
     }
 }
 
+fn read_output_selector<'a>(
+    output_payload: &'a Map<String, Value>,
+    selector: &[String],
+) -> Option<&'a Value> {
+    let (first, rest) = selector.split_first()?;
+    let mut current = output_payload.get(first)?;
+
+    for segment in rest {
+        current = current.as_object()?.get(segment)?;
+    }
+
+    Some(current)
+}
+
 pub fn is_reserved_payload_key(key: &str) -> bool {
-    reserved_payload_bucket(key).is_some()
+    key.starts_with("__")
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PayloadBucket {
-    Output,
-    Metrics,
-    Error,
-    Debug,
-    Unknown,
-}
-
-fn classify_executor_output_key(key: &str, contract: &PublicOutputContract) -> PayloadBucket {
-    if let Some(bucket) = reserved_payload_bucket(key) {
-        return bucket;
-    }
-
-    if contract.contains_output_key(key) || contract.allows_structured_expansion() {
-        return PayloadBucket::Output;
-    }
-
-    PayloadBucket::Unknown
-}
-
-fn reserved_payload_bucket(key: &str) -> Option<PayloadBucket> {
-    if key.starts_with("__") {
-        return Some(PayloadBucket::Debug);
-    }
-
-    match key {
-        "usage"
-        | "route"
-        | "attempts"
-        | "finish_reason"
-        | "provider_instance_id"
-        | "provider_code"
-        | "protocol"
-        | "model"
-        | "event_count"
-        | "queue_snapshot_id" => Some(PayloadBucket::Metrics),
-        "error" => Some(PayloadBucket::Error),
-        "metadata"
-        | "debug"
-        | "provider_metadata"
-        | "tool_calls"
-        | "mcp_calls"
-        | "provider_events"
-        | "raw_response_ref"
-        | "raw_response_refs"
-        | "raw_ref"
-        | "raw_refs"
-        | "context_projection_ref"
-        | "context_projection_refs"
-        | "attempt_ref"
-        | "attempt_refs" => Some(PayloadBucket::Debug),
-        _ => None,
-    }
-}
-
-fn merge_non_public_facts(
-    target: &mut Map<String, Value>,
-    facts: Map<String, Value>,
-    bucket_name: &'static str,
-) -> Result<()> {
+fn merge_output_facts(target: &mut Map<String, Value>, facts: Map<String, Value>) -> Result<()> {
     for (key, value) in facts {
-        insert_unique(target, key, value, bucket_name)?;
+        insert_unique(target, key, value, "output")?;
     }
     Ok(())
 }
@@ -190,26 +150,15 @@ fn insert_unique(
     value: Value,
     bucket_name: &'static str,
 ) -> Result<()> {
+    if target.get(&key) == Some(&value) {
+        return Ok(());
+    }
+
     if target.contains_key(&key) {
         return Err(anyhow!(
             "duplicate key `{key}` in {bucket_name} payload bucket"
         ));
     }
     target.insert(key, value);
-    Ok(())
-}
-
-fn reject_public_bucket_overlap(
-    non_public_name: &'static str,
-    output_payload: &Map<String, Value>,
-    non_public_payload: &Map<String, Value>,
-) -> Result<()> {
-    for key in output_payload.keys() {
-        if non_public_payload.contains_key(key) {
-            return Err(anyhow!(
-                "public output key `{key}` also appears in {non_public_name} payload bucket"
-            ));
-        }
-    }
     Ok(())
 }

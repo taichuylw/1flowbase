@@ -937,8 +937,10 @@ fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
     let outputs: Vec<CompiledOutput> = output_values
         .iter()
         .map(|output| {
+            let key = required_string(output, "key")?.to_string();
             Ok(CompiledOutput {
-                key: required_string(output, "key")?.to_string(),
+                selector: read_output_selector(output).unwrap_or_else(|| vec![key.clone()]),
+                key,
                 title: required_string(output, "title")?.to_string(),
                 value_type: required_string(output, "valueType")?.to_string(),
             })
@@ -948,6 +950,20 @@ fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
     PublicOutputContract::from_compiled_outputs(&outputs)?;
 
     Ok(outputs)
+}
+
+fn read_output_selector(output: &Value) -> Option<Vec<String>> {
+    let selector = output.get("selector")?.as_array()?;
+    let segments = selector
+        .iter()
+        .filter_map(|segment| segment.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
 }
 
 fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<String>>> {

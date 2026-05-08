@@ -82,7 +82,13 @@ function mapNodeOutputVariables(
     return [{ key: nodeId, label: nodeLabel, value }];
   }
 
-  const entries = Object.entries(value as Record<string, unknown>);
+  const valueRecord = value as Record<string, unknown>;
+  const entries = outputs?.length
+    ? outputs.flatMap((output) => {
+        const selectorValue = readOutputSelector(valueRecord, output);
+        return selectorValue.found ? [[output.key, selectorValue.value] as const] : [];
+      })
+    : Object.entries(valueRecord);
 
   return entries.map(([key, entryValue]) => ({
     key: `${nodeId}.${key}`,
@@ -96,6 +102,30 @@ function mapNodeOutputVariables(
         }
       : {})
   }));
+}
+
+function readOutputSelector(
+  value: Record<string, unknown>,
+  output: FlowNodeOutputDocument
+): { found: true; value: unknown } | { found: false } {
+  const selector = output.selector?.length ? output.selector : [output.key];
+  let current: unknown = value;
+
+  for (const segment of selector) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return { found: false };
+    }
+
+    const record = current as Record<string, unknown>;
+
+    if (!Object.prototype.hasOwnProperty.call(record, segment)) {
+      return { found: false };
+    }
+
+    current = record[segment];
+  }
+
+  return { found: true, value: current };
 }
 
 function isRuntimeDebugArtifactPreview(
@@ -288,6 +318,7 @@ export function mapRunDetailToVariableGroups(
     applicationId: string;
     draftId: string;
     runContext: AgentFlowRunContext;
+    nodeMetadata?: Record<string, string | NodeVariableDisplayMeta>;
   }
 ): AgentFlowVariableGroup[] {
   const inputItems = options.runContext.fields.map((field) => {
@@ -300,12 +331,20 @@ export function mapRunDetailToVariableGroups(
     };
   });
   const nodeOutputItems = detail.node_runs.flatMap((nodeRun) =>
-    mapNodeOutputVariables(
-      nodeRun.node_id,
-      nodeRun.node_alias,
-      nodeRun.node_type,
-      nodeRun.output_payload
-    )
+    {
+      const metadata = normalizeNodeVariableDisplayMeta(
+        options.nodeMetadata?.[nodeRun.node_id],
+        nodeRun.node_id
+      );
+
+      return mapNodeOutputVariables(
+        nodeRun.node_id,
+        metadata.label,
+        metadata.nodeType ?? nodeRun.node_type,
+        nodeRun.output_payload,
+        metadata.outputs
+      );
+    }
   );
   const sessionItems: AgentFlowVariableItem[] = [
     {

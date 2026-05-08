@@ -58,12 +58,27 @@ function sampleNodeLastRun() {
         user_prompt: '总结退款政策'
       },
       output_payload: {
-        rendered_templates: {}
+        text: '退款政策摘要',
+        usage: {
+          total_tokens: 128
+        },
+        route: {
+          provider_code: 'openai'
+        },
+        finish_reason: 'stop',
+        raw_response_ref: 'artifact-1'
       },
       error_payload: null,
       metrics_payload: {
-        output_contract_count: 1,
-        total_tokens: 128
+        output_contract_count: 2
+      },
+      debug_payload: {
+        provider_events: [
+          {
+            type: 'text_delta',
+            delta: '退款政策摘要'
+          }
+        ]
       },
       started_at: '2026-04-17T09:00:00Z',
       finished_at: '2026-04-17T09:00:01Z'
@@ -188,6 +203,15 @@ describe('node last run runtime', () => {
     expect(screen.getByText('token')).toBeInTheDocument();
     expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
     expect(screen.getByText('128')).toBeInTheDocument();
+    expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
+      'raw_response_ref'
+    );
+    expect(await screen.findByLabelText('数据处理 JSON')).toHaveTextContent(
+      'text_delta'
+    );
+    expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('错误 JSON')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /查看缓存/ }));
 

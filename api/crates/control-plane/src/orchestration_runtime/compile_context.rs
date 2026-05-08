@@ -182,13 +182,29 @@ fn compile_contribution_outputs(
     outputs
         .iter()
         .map(|output| {
+            let key = required_output_string(output, "key")?;
             Ok(orchestration_runtime::compiled_plan::CompiledOutput {
-                key: required_output_string(output, "key")?,
+                selector: read_output_selector(output).unwrap_or_else(|| vec![key.clone()]),
+                key,
                 title: required_output_string(output, "title")?,
                 value_type: required_output_string(output, "valueType")?,
             })
         })
         .collect()
+}
+
+fn read_output_selector(output: &serde_json::Value) -> Option<Vec<String>> {
+    let selector = output.get("selector")?.as_array()?;
+    let segments = selector
+        .iter()
+        .filter_map(|segment| segment.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
 }
 
 fn required_output_string(output: &serde_json::Value, field: &'static str) -> Result<String> {

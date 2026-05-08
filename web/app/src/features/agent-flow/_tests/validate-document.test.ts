@@ -43,8 +43,8 @@ function createCodeDocumentWithOutputs(
 }
 
 describe('validateDocument', () => {
-  test.each(['usage', 'debug', 'error', 'metadata', '__trace'])(
-    'flags reserved public output key %s',
+  test.each(['__trace'])(
+    'flags internal output selector key %s',
     (key) => {
       const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
       const answerNode = document.graph.nodes.find(
@@ -62,9 +62,9 @@ describe('validateDocument', () => {
       expect(issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            nodeId: 'node-answer',
-            fieldKey: 'config.output_contract',
-            title: '输出变量名保留'
+          nodeId: 'node-answer',
+          fieldKey: 'config.output_contract',
+          title: '输出变量名保留'
           })
         ])
       );
@@ -95,6 +95,39 @@ describe('validateDocument', () => {
         })
       ])
     );
+  });
+
+  test('accepts runtime fields when the node contract declares them as output selectors', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    llmNode.outputs = [
+      { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' }
+    ];
+
+    const issues = validateDocument(document);
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.nodeId === 'node-llm' &&
+          issue.fieldKey === 'config.output_contract' &&
+          issue.title === '输出变量名未知'
+      )
+    ).toBe(false);
+    expect(
+      issues.some(
+        (issue) =>
+          issue.nodeId === 'node-llm' &&
+          issue.fieldKey === 'config.output_contract' &&
+          issue.title === '输出变量名保留'
+      )
+    ).toBe(false);
   });
 
   test('accepts structured LLM output only when response format enables JSON', () => {
@@ -275,7 +308,7 @@ describe('validateDocument', () => {
     );
   });
 
-  test('flags reserved plugin_node output keys even when snapshot allows them', () => {
+  test('flags internal plugin_node output keys even when snapshot allows them', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes.push({
       ...createNodeDocument('plugin_node', 'node-plugin'),
@@ -289,9 +322,9 @@ describe('validateDocument', () => {
       contribution_checksum: 'checksum',
       compiled_contribution_hash: 'compiled-hash',
       output_schema_snapshot: {
-        outputs: [{ key: 'metadata', title: 'Metadata', valueType: 'json' }]
+        outputs: [{ key: '__trace', title: 'Trace', valueType: 'json' }]
       },
-      outputs: [{ key: 'metadata', title: 'Metadata', valueType: 'json' }]
+      outputs: [{ key: '__trace', title: 'Trace', valueType: 'json' }]
     });
 
     const issues = validateDocument(document);

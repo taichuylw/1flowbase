@@ -43,6 +43,7 @@ pub struct CompiledOutput {
     pub key: String,
     pub title: String,
     pub value_type: String,
+    pub selector: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

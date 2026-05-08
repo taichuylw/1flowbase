@@ -206,6 +206,88 @@ describe('DebugAssistantMessage', () => {
     });
   });
 
+  test('renders data processing for non-LLM trace items when debug payload exists', () => {
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-process',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '处理完成',
+      rawOutput: null,
+      traceSummary: [
+        {
+          nodeId: 'node-tool',
+          nodeRunId: 'node-run-tool',
+          nodeAlias: 'Tool',
+          nodeType: 'tool',
+          status: 'succeeded',
+          startedAt: '2026-04-25T10:00:00Z',
+          finishedAt: '2026-04-25T10:00:01Z',
+          durationMs: 1000,
+          inputPayload: { query: '退款' },
+          outputPayload: {
+            result: 'ok',
+            request: {
+              url: 'https://example.test/search'
+            }
+          },
+          errorPayload: null,
+          metricsPayload: {},
+          debugPayload: {
+            request: {
+              url: 'https://example.test/search'
+            }
+          }
+        }
+      ]
+    };
+
+    render(<DebugAssistantMessage message={message} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Tool/ }));
+
+    expect(screen.getByLabelText('数据处理 JSON')).toHaveTextContent(
+      'example.test'
+    );
+    const outputJson = screen.getByLabelText('输出 JSON');
+    expect(outputJson).toHaveTextContent('ok');
+    expect(outputJson).not.toHaveTextContent('example.test');
+  });
+
+  test('always renders data processing for trace items when debug payload is empty', () => {
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-empty-process',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '处理完成',
+      rawOutput: null,
+      traceSummary: [
+        {
+          nodeId: 'node-code',
+          nodeRunId: 'node-run-code',
+          nodeAlias: 'Code',
+          nodeType: 'code',
+          status: 'succeeded',
+          startedAt: '2026-04-25T10:00:00Z',
+          finishedAt: '2026-04-25T10:00:01Z',
+          durationMs: 1000,
+          inputPayload: { value: 1 },
+          outputPayload: { value: 2 },
+          errorPayload: null,
+          metricsPayload: {},
+          debugPayload: {}
+        }
+      ]
+    };
+
+    render(<DebugAssistantMessage message={message} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Code/ }));
+
+    expect(screen.getByLabelText('数据处理 JSON')).toHaveTextContent('{}');
+  });
+
   test('renders running streamed content immediately without typewriter delay', () => {
     vi.useFakeTimers();
     const baseMessage: AgentFlowDebugMessage = {

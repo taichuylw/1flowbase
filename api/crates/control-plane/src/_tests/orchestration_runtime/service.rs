@@ -263,7 +263,7 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
         );
     }
     assert_eq!(
-        outcome.node_run.debug_payload["message"]["content"],
+        outcome.node_run.debug_payload["assistant_message"]["content"],
         serde_json::json!("echo:gpt-5.4-mini:请总结退款政策")
     );
     assert!(outcome.node_run.debug_payload["provider_events"]

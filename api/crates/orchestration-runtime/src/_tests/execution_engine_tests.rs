@@ -495,6 +495,7 @@ fn base_plan() -> CompiledPlan {
                 key: "query".to_string(),
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -531,6 +532,7 @@ fn base_plan() -> CompiledPlan {
                 key: "text".to_string(),
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -567,6 +569,7 @@ fn base_plan() -> CompiledPlan {
                 key: "input".to_string(),
                 title: "人工输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -594,6 +597,7 @@ fn base_plan() -> CompiledPlan {
                 key: "answer".to_string(),
                 title: "对话输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -617,65 +621,47 @@ fn base_plan() -> CompiledPlan {
 }
 
 #[tokio::test]
-async fn llm_node_success_buckets_public_metrics_and_debug_payloads() {
+async fn llm_node_success_keeps_complete_output_payload() {
     let trace = run_llm_trace_with_fixture_provider().await;
 
-    assert_eq!(trace.output_payload, json!({ "text": "echo:gpt-5.4-mini" }));
-    for hidden_key in [
-        "message",
-        "usage",
-        "route",
-        "finish_reason",
-        "reasoning_content",
-        "tool_calls",
-        "provider_metadata",
-        "__raw_response_ref",
-        "__context_projection_id",
-        "__attempt_ids",
-        "__winner_attempt_id",
-        "error",
-    ] {
-        assert!(
-            trace.output_payload.get(hidden_key).is_none(),
-            "{hidden_key} must not leak into public output"
-        );
-    }
-
+    assert_eq!(trace.output_payload["text"], json!("echo:gpt-5.4-mini"));
     assert_eq!(
-        trace.metrics_payload["provider_instance_id"],
+        trace.output_payload["provider_instance_id"],
         "provider-ready"
     );
-    assert_eq!(trace.metrics_payload["provider_code"], "fixture_provider");
-    assert_eq!(trace.metrics_payload["protocol"], "openai_compatible");
-    assert_eq!(trace.metrics_payload["model"], "gpt-5.4-mini");
-    assert_eq!(trace.metrics_payload["event_count"], json!(3));
-    assert_eq!(trace.metrics_payload["finish_reason"], json!("stop"));
-    assert_eq!(trace.metrics_payload["usage"]["input_tokens"], json!(5));
+    assert_eq!(trace.output_payload["provider_code"], "fixture_provider");
+    assert_eq!(trace.output_payload["protocol"], "openai_compatible");
+    assert_eq!(trace.output_payload["model"], "gpt-5.4-mini");
+    assert_eq!(trace.output_payload["event_count"], json!(3));
+    assert_eq!(trace.output_payload["finish_reason"], json!("stop"));
+    assert_eq!(trace.output_payload["usage"]["input_tokens"], json!(5));
     assert_eq!(
-        trace.metrics_payload["route"]["provider_instance_id"],
+        trace.output_payload["route"]["provider_instance_id"],
         "provider-ready"
     );
     assert_eq!(
-        trace.metrics_payload["attempts"][0]["provider_instance_id"],
+        trace.output_payload["attempts"][0]["provider_instance_id"],
         "provider-ready"
     );
-
-    assert_eq!(trace.debug_payload["message"]["role"], "assistant");
     assert_eq!(
-        trace.debug_payload["message"]["content"],
+        trace.output_payload["assistant_message"]["role"],
+        "assistant"
+    );
+    assert_eq!(
+        trace.output_payload["assistant_message"]["content"],
         "echo:gpt-5.4-mini"
     );
-    assert_eq!(trace.debug_payload["raw_response_ref"], Value::Null);
+    assert_eq!(trace.output_payload["raw_response_ref"], Value::Null);
     assert_eq!(
-        trace.debug_payload["context_projection_ref"],
+        trace.output_payload["context_projection_ref"],
         "pending_projection_id:node-llm"
     );
     assert_eq!(
-        trace.debug_payload["attempt_refs"][0],
+        trace.output_payload["attempt_refs"][0],
         "pending_attempt_id:node-llm"
     );
     assert_eq!(
-        trace.debug_payload["winner_attempt_ref"],
+        trace.output_payload["winner_attempt_ref"],
         "pending_attempt_id:node-llm"
     );
     assert_eq!(
@@ -685,6 +671,7 @@ async fn llm_node_success_buckets_public_metrics_and_debug_payloads() {
             .len(),
         3
     );
+    assert!(trace.output_payload.get("provider_events").is_none());
 }
 
 #[tokio::test]
@@ -706,24 +693,20 @@ async fn llm_node_final_usage_preserves_input_cache_snapshot_fields() {
         .find(|trace| trace.node_id == "node-llm")
         .expect("llm trace should exist");
 
+    assert_eq!(trace.output_payload["text"], json!("cache-aware response"));
+    assert_eq!(trace.output_payload["usage"]["input_tokens"], json!(100));
     assert_eq!(
-        trace.output_payload,
-        json!({ "text": "cache-aware response" })
-    );
-    assert!(trace.output_payload.get("usage").is_none());
-    assert_eq!(trace.metrics_payload["usage"]["input_tokens"], json!(100));
-    assert_eq!(
-        trace.metrics_payload["usage"]["input_cache_hit_tokens"],
+        trace.output_payload["usage"]["input_cache_hit_tokens"],
         json!(40)
     );
     assert_eq!(
-        trace.metrics_payload["usage"]["input_cache_miss_tokens"],
+        trace.output_payload["usage"]["input_cache_miss_tokens"],
         json!(60)
     );
-    assert_eq!(trace.metrics_payload["usage"]["output_tokens"], json!(12));
-    assert_eq!(trace.metrics_payload["usage"]["total_tokens"], json!(112));
+    assert_eq!(trace.output_payload["usage"]["output_tokens"], json!(12));
+    assert_eq!(trace.output_payload["usage"]["total_tokens"], json!(112));
     assert_eq!(
-        trace.metrics_payload["usage"]["cache_write_tokens"],
+        trace.output_payload["usage"]["cache_write_tokens"],
         Value::Null
     );
 }
@@ -752,10 +735,9 @@ async fn llm_output_payload_keeps_think_tags_in_standard_text_content() {
         .find(|trace| trace.node_id == "node-llm")
         .expect("llm trace should exist");
 
-    assert_eq!(trace.output_payload, json!({ "text": "正式回答" }));
-    assert!(trace.output_payload.get("reasoning_content").is_none());
+    assert_eq!(trace.output_payload["text"], json!("正式回答"));
+    assert_eq!(trace.output_payload["reasoning_content"], "先分析用户问题");
     assert!(trace.output_payload.get("message").is_none());
-    assert_eq!(trace.debug_payload["reasoning_content"], "先分析用户问题");
 }
 
 struct ReasoningDeltaProviderInvoker;
@@ -819,10 +801,9 @@ async fn llm_output_payload_merges_reasoning_deltas_into_dify_style_text() {
         .find(|trace| trace.node_id == "node-llm")
         .expect("llm trace should exist");
 
-    assert_eq!(trace.output_payload, json!({ "text": "正式回答" }));
-    assert!(trace.output_payload.get("reasoning_content").is_none());
+    assert_eq!(trace.output_payload["text"], json!("正式回答"));
+    assert_eq!(trace.output_payload["reasoning_content"], "先分析");
     assert!(trace.output_payload.get("message").is_none());
-    assert_eq!(trace.debug_payload["reasoning_content"], "先分析");
 }
 
 #[tokio::test]
@@ -844,20 +825,17 @@ async fn llm_node_debug_payload_keeps_tool_mcp_and_provider_metadata() {
         .find(|trace| trace.node_id == "node-llm")
         .expect("llm trace should exist");
 
+    assert_eq!(trace.output_payload["text"], json!("tool-aware response"));
     assert_eq!(
-        trace.output_payload,
-        json!({ "text": "tool-aware response" })
+        trace.output_payload["tool_calls"][0]["name"],
+        "lookup_order"
     );
-    assert!(trace.output_payload.get("tool_calls").is_none());
-    assert!(trace.output_payload.get("mcp_calls").is_none());
-    assert!(trace.output_payload.get("provider_metadata").is_none());
-    assert_eq!(trace.debug_payload["tool_calls"][0]["name"], "lookup_order");
-    assert_eq!(trace.debug_payload["mcp_calls"][0]["method"], "get_order");
+    assert_eq!(trace.output_payload["mcp_calls"][0]["method"], "get_order");
     assert_eq!(
-        trace.debug_payload["provider_metadata"]["raw_id"],
+        trace.output_payload["provider_metadata"]["raw_id"],
         "provider-response-1"
     );
-    assert_eq!(trace.metrics_payload["finish_reason"], json!("tool_call"));
+    assert_eq!(trace.output_payload["finish_reason"], json!("tool_call"));
 }
 
 #[tokio::test]
@@ -1068,7 +1046,11 @@ async fn failover_queue_stops_when_primary_fails_after_finish_error_with_first_t
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
-            assert_eq!(outcome.node_traces[1].output_payload, json!({}));
+            assert_eq!(
+                outcome.node_traces[1].output_payload["error_kind"],
+                json!("provider_invalid_response")
+            );
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
             assert_eq!(
                 outcome.node_traces[1].metrics_payload["attempts"][0]["failed_after_first_token"],
@@ -1095,6 +1077,7 @@ fn plugin_plan() -> CompiledPlan {
                 key: "query".to_string(),
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -1122,6 +1105,7 @@ fn plugin_plan() -> CompiledPlan {
                 key: "answer".to_string(),
                 title: "回答".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({
                 "prompt": "Hello {{ node-start.query }}"
@@ -1141,6 +1125,7 @@ fn plugin_plan() -> CompiledPlan {
                     key: "answer".to_string(),
                     title: "回答".to_string(),
                     value_type: "string".to_string(),
+                    selector: Vec::new(),
                 }],
                 side_effect_policy: "external_read".to_string(),
             }),
@@ -1268,6 +1253,7 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
                 key: "result".to_string(),
                 title: "工具输出".to_string(),
                 value_type: "json".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({ "tool_name": "lookup_order" }),
             plugin_runtime: None,
@@ -1310,8 +1296,11 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
-            assert_eq!(outcome.node_traces[1].output_payload, json!({}));
-            assert!(outcome.node_traces[1].output_payload.get("error").is_none());
+            assert_eq!(
+                outcome.node_traces[1].output_payload["error_kind"],
+                json!("auth_failed")
+            );
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
             assert!(failure.error_payload["provider_summary"]
                 .as_str()
@@ -1340,8 +1329,10 @@ async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
                 failure.error_payload["message"],
                 json!("401 401 Unauthorized: Incorrect API key provided")
             );
-            assert_eq!(outcome.node_traces[1].output_payload, json!({}));
-            assert!(outcome.node_traces[1].output_payload.get("error").is_none());
+            assert_eq!(
+                outcome.node_traces[1].output_payload["message"],
+                json!("401 401 Unauthorized: Incorrect API key provided")
+            );
             assert!(outcome.node_traces[1].output_payload.get("text").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
         }
@@ -1366,7 +1357,11 @@ async fn llm_failure_after_first_token_does_not_write_public_output_to_variable_
                 failure.error_payload["error_kind"],
                 json!("provider_invalid_response")
             );
-            assert_eq!(outcome.node_traces[1].output_payload, json!({}));
+            assert_eq!(
+                outcome.node_traces[1].output_payload["error_kind"],
+                json!("provider_invalid_response")
+            );
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
             assert_eq!(
                 outcome.node_traces[1].metrics_payload["attempts"][0]["failed_after_first_token"],
@@ -1464,6 +1459,7 @@ async fn llm_json_schema_response_exposes_structured_output_only_when_declared()
         key: "structured_output".to_string(),
         title: "结构化输出".to_string(),
         value_type: "json".to_string(),
+        selector: Vec::new(),
     });
 
     let outcome = start_flow_debug_run(
@@ -1479,11 +1475,16 @@ async fn llm_json_schema_response_exposes_structured_output_only_when_declared()
     .unwrap();
 
     assert_eq!(
-        outcome.node_traces[1].output_payload,
-        json!({
-            "text": "{\"ok\":true}",
-            "structured_output": { "ok": true }
-        })
+        outcome.node_traces[1].output_payload["text"],
+        json!("{\"ok\":true}")
+    );
+    assert_eq!(
+        outcome.node_traces[1].output_payload["structured_output"],
+        json!({ "ok": true })
+    );
+    assert_eq!(
+        outcome.node_traces[1].output_payload["usage"]["total_tokens"],
+        json!(12)
     );
 }
 
@@ -1508,31 +1509,40 @@ async fn plugin_node_routes_to_capability_runtime_and_preserves_output_payload()
 }
 
 #[tokio::test]
-async fn plugin_node_rejects_executor_output_keys_outside_compiled_contract() {
-    let error = start_flow_debug_run(
+async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden_from_variable_pool(
+) {
+    let outcome = start_flow_debug_run(
         &plugin_plan(),
         &json!({ "node-start": { "query": "world" } }),
         &UnknownCapabilityOutputInvoker,
     )
     .await
-    .unwrap_err();
+    .unwrap();
 
-    assert!(error
-        .to_string()
-        .contains("unknown public output key `unexpected`"));
+    assert_eq!(
+        outcome.node_traces[1].output_payload["unexpected"],
+        json!(true)
+    );
+    assert!(outcome.variable_pool["node-plugin"]
+        .get("unexpected")
+        .is_none());
 }
 
 #[tokio::test]
-async fn plugin_node_rejects_reserved_executor_output_keys() {
-    let error = start_flow_debug_run(
+async fn plugin_node_keeps_runtime_named_executor_output_keys_hidden_from_variable_pool() {
+    let outcome = start_flow_debug_run(
         &plugin_plan(),
         &json!({ "node-start": { "query": "world" } }),
         &ReservedCapabilityOutputInvoker,
     )
     .await
-    .unwrap_err();
+    .unwrap();
 
-    assert!(error
-        .to_string()
-        .contains("reserved plugin output key `metadata`"));
+    assert_eq!(
+        outcome.node_traces[1].output_payload["metadata"]["secret"],
+        json!("x")
+    );
+    assert!(outcome.variable_pool["node-plugin"]
+        .get("metadata")
+        .is_none());
 }

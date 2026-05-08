@@ -14,6 +14,7 @@ use crate::{
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
+use super::super::payloads::persisted_node_output_payload;
 use super::super::{
     data_model_runtime, debug_stream_events, CancelFlowRunCommand, ContinueFlowDebugRunCommand,
     LiveProviderStreamEventSender, OrchestrationRuntimeService,
@@ -374,7 +375,12 @@ where
                     .map_err(|e| anyhow!("persist task panicked: {e}"))??;
                 let execution = execution_result?;
 
-                let public_output_payload = execution.output_payload.clone();
+                let public_output_payload = persisted_node_output_payload(
+                    &execution.output_payload,
+                    &execution.metrics_payload,
+                    execution.error_payload.as_ref(),
+                    &execution.debug_payload,
+                );
                 last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
@@ -467,7 +473,13 @@ where
                         &invoker,
                     )
                     .await?;
-                last_output_payload = execution.output_payload.clone();
+                let public_output_payload = persisted_node_output_payload(
+                    &execution.output_payload,
+                    &execution.metrics_payload,
+                    execution.error_payload.as_ref(),
+                    &execution.debug_payload,
+                );
+                last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
                 } else {
@@ -484,7 +496,7 @@ where
                     &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: node_status,
-                        output_payload: execution.output_payload.clone(),
+                        output_payload: public_output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
                         debug_payload: execution.debug_payload.clone(),
@@ -538,7 +550,7 @@ where
                     .await;
                 }
 
-                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+                variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "data_model_list" | "data_model_get" | "data_model_create" | "data_model_update"
             | "data_model_delete" => {
@@ -667,7 +679,13 @@ where
                     )
                     .await;
                 }
-                last_output_payload = execution.output_payload.clone();
+                let public_output_payload = persisted_node_output_payload(
+                    &execution.output_payload,
+                    &execution.metrics_payload,
+                    execution.error_payload.as_ref(),
+                    &json!({}),
+                );
+                last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
                 } else {
@@ -684,7 +702,7 @@ where
                     &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: node_status,
-                        output_payload: execution.output_payload.clone(),
+                        output_payload: public_output_payload.clone(),
                         error_payload: execution.error_payload.clone(),
                         metrics_payload: execution.metrics_payload.clone(),
                         debug_payload: json!({}),
@@ -727,7 +745,7 @@ where
                     .await;
                 }
 
-                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+                variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "template_transform" | "answer" => {
                 let output_key = first_output_key(node);

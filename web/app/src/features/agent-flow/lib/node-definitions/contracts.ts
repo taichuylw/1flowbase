@@ -28,22 +28,6 @@ const COMMON_RUNTIME_INPUTS = [
   { key: 'input_payload', title: 'Input Payload', valueType: 'json' }
 ];
 
-const COMMON_RUNTIME_METRICS = [
-  { key: 'usage', title: 'Usage', valueType: 'json' },
-  { key: 'duration_ms', title: 'Duration', valueType: 'number' },
-  { key: 'route', title: 'Route', valueType: 'json' },
-  { key: 'attempt', title: 'Attempt', valueType: 'json' },
-  { key: 'finish_reason', title: 'Finish Reason', valueType: 'string' }
-];
-
-const COMMON_RUNTIME_ERRORS = [
-  { key: 'error_payload', title: 'Error Payload', valueType: 'json' }
-];
-
-const COMMON_RUNTIME_DEBUG = [
-  { key: 'debug_payload', title: 'Debug Payload', valueType: 'json' }
-];
-
 function cloneJsonValue<T>(value: T): T {
   return structuredClone(value);
 }
@@ -82,10 +66,8 @@ function duplicateContract(contract: NodeRuntimeUiContract): NodeRuntimeUiContra
     },
     runtime: {
       inputs: contract.runtime.inputs?.map((item) => ({ ...item })),
-      outputs: duplicateOutputs(contract.runtime.outputs),
-      metrics: contract.runtime.metrics?.map((item) => ({ ...item })),
-      errors: contract.runtime.errors?.map((item) => ({ ...item })),
-      debug: contract.runtime.debug?.map((item) => ({ ...item }))
+      processData: contract.runtime.processData?.map((item) => ({ ...item })),
+      outputs: duplicateOutputs(contract.runtime.outputs)
     },
     policies: cloneJsonValue(contract.policies)
   };
@@ -225,10 +207,7 @@ function createNodeRuntimeContract({
     },
     runtime: {
       inputs: COMMON_RUNTIME_INPUTS.map((item) => ({ ...item })),
-      outputs: duplicateOutputs(runtimeOutputs ?? outputs),
-      metrics: COMMON_RUNTIME_METRICS.map((item) => ({ ...item })),
-      errors: COMMON_RUNTIME_ERRORS.map((item) => ({ ...item })),
-      debug: COMMON_RUNTIME_DEBUG.map((item) => ({ ...item }))
+      outputs: duplicateOutputs(runtimeOutputs ?? outputs)
     },
     policies: DEFAULT_RUNTIME_POLICY
   };

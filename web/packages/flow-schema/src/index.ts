@@ -54,48 +54,19 @@ export interface FlowNodeOutputDocument {
   title: string;
   valueType: string;
   description?: string;
+  selector?: string[];
 }
 
 export type PublicOutputKeyValidationResult =
   | { ok: true }
   | { ok: false; reason: 'reserved_public_output_key' };
 
-export const RESERVED_PUBLIC_OUTPUT_KEYS = [
-  'metadata',
-  'usage',
-  'debug',
-  'error',
-  'route',
-  'attempts',
-  'finish_reason',
-  'provider_instance_id',
-  'provider_code',
-  'protocol',
-  'model',
-  'event_count',
-  'queue_snapshot_id',
-  'provider_metadata',
-  'provider_events',
-  'tool_calls',
-  'mcp_calls',
-  'raw_response_ref',
-  'raw_response_refs',
-  'raw_ref',
-  'raw_refs',
-  'context_projection_ref',
-  'context_projection_refs',
-  'attempt_ref',
-  'attempt_refs'
-] as const;
-
-const RESERVED_PUBLIC_OUTPUT_KEY_SET = new Set<string>(
-  RESERVED_PUBLIC_OUTPUT_KEYS
-);
+export const RESERVED_PUBLIC_OUTPUT_KEYS = [] as const;
 
 export function validatePublicOutputKey(
   key: string
 ): PublicOutputKeyValidationResult {
-  if (RESERVED_PUBLIC_OUTPUT_KEY_SET.has(key) || key.startsWith('__')) {
+  if (key.startsWith('__')) {
     return { ok: false, reason: 'reserved_public_output_key' };
   }
 
@@ -177,10 +148,8 @@ export interface NodeRuntimeDisplaySchemaDocument {
 
 export interface NodeRuntimeContractRuntime {
   inputs?: NodeRuntimeDisplaySchemaDocument[];
+  processData?: NodeRuntimeDisplaySchemaDocument[];
   outputs: FlowNodeOutputDocument[];
-  metrics?: NodeRuntimeDisplaySchemaDocument[];
-  errors?: NodeRuntimeDisplaySchemaDocument[];
-  debug?: NodeRuntimeDisplaySchemaDocument[];
 }
 
 export interface NodeRuntimeContractPolicies {
@@ -208,7 +177,8 @@ export interface NodeRuntimeUiContract {
 }
 
 export const DEFAULT_LLM_NODE_OUTPUTS = [
-  { key: 'text', title: '模型输出', valueType: 'string' }
+  { key: 'text', title: '模型输出', valueType: 'string' },
+  { key: 'usage', title: '用量', valueType: 'json' }
 ] satisfies FlowNodeOutputDocument[];
 
 export const LLM_STRUCTURED_OUTPUT = {

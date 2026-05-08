@@ -278,7 +278,7 @@ async fn live_debug_persists_llm_debug_payload_without_polluting_public_outputs(
         serde_json::json!(5)
     );
     assert_eq!(
-        llm_node.debug_payload["message"]["content"],
+        llm_node.debug_payload["assistant_message"]["content"],
         "echo:gpt-5.4-mini:请查询订单"
     );
     assert!(llm_node.debug_payload["provider_events"]

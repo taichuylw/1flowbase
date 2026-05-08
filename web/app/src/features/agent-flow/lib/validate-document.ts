@@ -208,6 +208,10 @@ function getAllowedPublicOutputKeysForNode(
     return new Set(getLlmNodeOutputs(node.config).map((output) => output.key));
   }
 
+  if (node.type === 'code') {
+    return new Set(node.outputs.map((output) => output.key));
+  }
+
   const contract = getBuiltinNodeRuntimeContract(node.type);
 
   if (!contract) {

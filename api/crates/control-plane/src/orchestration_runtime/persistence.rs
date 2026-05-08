@@ -23,6 +23,8 @@ use crate::{
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
+use super::payloads::persisted_node_output_payload;
+
 pub(super) struct WaitingNodeResumeUpdate {
     pub(super) node_run_id: Uuid,
     pub(super) from_status: domain::NodeRunStatus,
@@ -750,7 +752,12 @@ where
             .update_node_run(&UpdateNodeRunInput {
                 node_run_id: node_run.id,
                 status,
-                output_payload: trace.output_payload.clone(),
+                output_payload: persisted_node_output_payload(
+                    &trace.output_payload,
+                    &trace.metrics_payload,
+                    trace.error_payload.as_ref(),
+                    &trace.debug_payload,
+                ),
                 error_payload: trace.error_payload.clone(),
                 metrics_payload: trace.metrics_payload.clone(),
                 debug_payload: trace.debug_payload.clone(),

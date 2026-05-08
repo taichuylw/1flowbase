@@ -57,6 +57,7 @@ fn plugin_compile_context() -> FlowCompileContext {
                 key: "answer".to_string(),
                 title: "回答".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             side_effect_policy: "external_read".to_string(),
             dependency_status: "ready".to_string(),
@@ -226,6 +227,10 @@ fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runti
         vec![vec!["node-start".to_string(), "query".to_string()]]
     );
     assert_eq!(
+        plan.nodes["node-llm"].outputs[0].selector,
+        vec!["text".to_string()]
+    );
+    assert_eq!(
         plan.nodes["node-llm"]
             .llm_runtime
             .as_ref()
@@ -242,6 +247,28 @@ fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runti
         "provider-selected"
     );
     assert!(plan.compile_issues.is_empty());
+}
+
+#[test]
+fn compile_outputs_preserve_declared_selector_paths() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["outputs"] = json!([
+        {
+            "key": "token_usage",
+            "title": "Token Usage",
+            "valueType": "number",
+            "selector": ["usage", "total_tokens"]
+        }
+    ]);
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(plan.nodes["node-llm"].outputs[0].key, "token_usage");
+    assert_eq!(
+        plan.nodes["node-llm"].outputs[0].selector,
+        vec!["usage".to_string(), "total_tokens".to_string()]
+    );
 }
 
 #[test]
@@ -487,16 +514,16 @@ fn compile_rejects_edge_that_targets_unknown_node() {
 }
 
 #[test]
-fn compile_rejects_reserved_public_output_keys() {
+fn compile_rejects_internal_public_output_keys() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["outputs"] =
-        json!([{ "key": "provider_code", "title": "Provider", "valueType": "string" }]);
+        json!([{ "key": "__trace", "title": "Trace", "valueType": "json" }]);
 
     let error =
         FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap_err();
 
-    assert!(format!("{error:#}").contains("provider_code"));
+    assert!(format!("{error:#}").contains("__trace"));
 }
 
 #[test]

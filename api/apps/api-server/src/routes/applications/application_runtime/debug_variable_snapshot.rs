@@ -38,15 +38,6 @@ pub struct DebugVariableSnapshotRunScopeResponse {
 fn preview_output_cache_payload(output_payload: &serde_json::Value) -> Option<serde_json::Value> {
     let payload = output_payload.as_object()?;
 
-    if let Some(node_output) = payload
-        .get("node_output")
-        .and_then(|value| value.as_object())
-    {
-        if !node_output.is_empty() {
-            return Some(serde_json::Value::Object(node_output.clone()));
-        }
-    }
-
     if payload.is_empty() {
         None
     } else {
@@ -54,16 +45,35 @@ fn preview_output_cache_payload(output_payload: &serde_json::Value) -> Option<se
     }
 }
 
-fn collect_node_output_keys(node: &serde_json::Value) -> HashSet<String> {
+#[derive(Debug, Clone)]
+struct PublicNodeOutputSelector {
+    key: String,
+    selector: Vec<String>,
+}
+
+fn collect_node_output_selectors(node: &serde_json::Value) -> Vec<PublicNodeOutputSelector> {
     node.get("outputs")
         .and_then(|value| value.as_array())
         .into_iter()
         .flatten()
         .filter_map(|output| {
-            output
+            let key = output
                 .get("key")
                 .and_then(|value| value.as_str())
-                .map(str::to_string)
+                .map(str::to_string)?;
+            let selector = output
+                .get("selector")
+                .and_then(|value| value.as_array())
+                .map(|segments| {
+                    segments
+                        .iter()
+                        .filter_map(|segment| segment.as_str().map(str::to_string))
+                        .collect::<Vec<_>>()
+                })
+                .filter(|segments| !segments.is_empty())
+                .unwrap_or_else(|| vec![key.clone()]);
+
+            Some(PublicNodeOutputSelector { key, selector })
         })
         .collect()
 }
@@ -114,7 +124,7 @@ fn collect_start_public_input_keys(
 
 fn collect_public_node_output_keys(
     document: &serde_json::Value,
-) -> HashMap<String, HashSet<String>> {
+) -> HashMap<String, Vec<PublicNodeOutputSelector>> {
     let mut public_outputs = HashMap::new();
     let Some(nodes) = document
         .get("graph")
@@ -135,10 +145,24 @@ fn collect_public_node_output_keys(
         else {
             continue;
         };
-        public_outputs.insert(node_id, collect_node_output_keys(node));
+        public_outputs.insert(node_id, collect_node_output_selectors(node));
     }
 
     public_outputs
+}
+
+fn read_output_selector<'a>(
+    output_payload: &'a serde_json::Map<String, serde_json::Value>,
+    selector: &[String],
+) -> Option<&'a serde_json::Value> {
+    let (first, rest) = selector.split_first()?;
+    let mut current = output_payload.get(first)?;
+
+    for segment in rest {
+        current = current.as_object()?.get(segment)?;
+    }
+
+    Some(current)
 }
 
 fn insert_variable_value(
@@ -210,12 +234,12 @@ fn merge_public_node_outputs(
     variable_cache: &mut serde_json::Map<String, serde_json::Value>,
     source_node_run_ids: &mut serde_json::Map<String, serde_json::Value>,
     node_run: &domain::NodeRunRecord,
-    public_output_keys: &HashMap<String, HashSet<String>>,
+    public_output_keys: &HashMap<String, Vec<PublicNodeOutputSelector>>,
 ) {
     if !is_snapshot_public_node_status(node_run.status) {
         return;
     }
-    let Some(allowed_keys) = public_output_keys.get(&node_run.node_id) else {
+    let Some(output_selectors) = public_output_keys.get(&node_run.node_id) else {
         return;
     };
     let Some(output_payload) = preview_output_cache_payload(&node_run.output_payload) else {
@@ -225,12 +249,17 @@ fn merge_public_node_outputs(
         return;
     };
 
-    for (key, value) in output_payload {
-        if !allowed_keys.contains(key) {
+    for output in output_selectors {
+        let Some(value) = read_output_selector(output_payload, &output.selector) else {
             continue;
-        }
-        insert_variable_value(variable_cache, &node_run.node_id, key, value);
-        insert_source_id(source_node_run_ids, &node_run.node_id, key, node_run.id);
+        };
+        insert_variable_value(variable_cache, &node_run.node_id, &output.key, value);
+        insert_source_id(
+            source_node_run_ids,
+            &node_run.node_id,
+            &output.key,
+            node_run.id,
+        );
     }
 }
 

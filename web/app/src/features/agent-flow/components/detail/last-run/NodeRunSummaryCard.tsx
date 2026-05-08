@@ -20,7 +20,17 @@ function formatDuration(startedAt: string, finishedAt: string | null) {
 }
 
 function summarizeTokenUsage(lastRun: NodeLastRun) {
-  const value = lastRun.node_run.metrics_payload.total_tokens;
+  const outputPayload = lastRun.node_run.output_payload;
+  const usage =
+    outputPayload &&
+    typeof outputPayload === 'object' &&
+    !Array.isArray(outputPayload)
+      ? (outputPayload as Record<string, unknown>).usage
+      : null;
+  const value =
+    usage && typeof usage === 'object' && !Array.isArray(usage)
+      ? (usage as Record<string, unknown>).total_tokens
+      : undefined;
 
   if (typeof value === 'number') {
     return `${value}`;

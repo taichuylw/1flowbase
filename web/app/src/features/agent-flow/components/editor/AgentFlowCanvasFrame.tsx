@@ -214,8 +214,14 @@ export function AgentFlowCanvasFrame({
       );
     },
     onSuccess: async (lastRun, variables) => {
+      const node = documentRef.current.graph.nodes.find(
+        (candidate) => candidate.id === variables.nodeId
+      );
       debugSession.rememberNodePreviewVariables({
-        [variables.nodeId]: extractNodePreviewVariableOutput(lastRun)
+        [variables.nodeId]: extractNodePreviewVariableOutput(
+          lastRun,
+          node?.outputs
+        )
       });
       queryClient.setQueryData(
         nodeLastRunQueryKey(applicationId, variables.nodeId),

@@ -196,7 +196,10 @@ where
                     });
                 }
 
-                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &execution.output_payload)?,
+                );
             }
             "plugin_node" => {
                 let execution = execute_capability_plugin_node(
@@ -232,7 +235,10 @@ where
                     });
                 }
 
-                variable_pool.insert(node.node_id.clone(), execution.output_payload);
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &execution.output_payload)?,
+                );
             }
             "template_transform" | "answer" => {
                 let output_key = first_output_key(node);
@@ -249,7 +255,10 @@ where
                                 .unwrap_or(Value::Null)
                         });
                 let output_payload = json!({ output_key: output_value });
-                variable_pool.insert(node.node_id.clone(), output_payload.clone());
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &output_payload)?,
+                );
                 node_traces.push(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
@@ -972,6 +981,11 @@ fn build_llm_node_payloads(
     PublicOutputContract::from_compiled_outputs(&node.outputs)?.build_node_payloads(raw)
 }
 
+fn project_node_variable_payload(node: &CompiledNode, output_payload: &Value) -> Result<Value> {
+    PublicOutputContract::from_compiled_outputs(&node.outputs)?
+        .project_variable_payload(output_payload)
+}
+
 fn object_from_value(value: Value) -> Result<Map<String, Value>> {
     value
         .as_object()
@@ -989,7 +1003,7 @@ fn build_llm_debug_facts(
     let mut debug = Map::new();
 
     debug.insert(
-        "message".to_string(),
+        "assistant_message".to_string(),
         json!({
             "role": "assistant",
             "content": result

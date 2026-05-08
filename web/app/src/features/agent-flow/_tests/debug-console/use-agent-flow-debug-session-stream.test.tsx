@@ -893,6 +893,18 @@ describe('useAgentFlowDebugSession streaming', () => {
           nodeId: 'node-llm',
           inputPayload: {
             user_prompt: '请总结退款政策'
+          },
+          debugPayload: {
+            provider_events: [
+              {
+                type: 'text_delta',
+                text: '退款'
+              },
+              {
+                type: 'text_delta',
+                text: '政策摘要'
+              }
+            ]
           }
         })
       ])

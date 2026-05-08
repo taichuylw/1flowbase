@@ -1,7 +1,8 @@
 import type {
   FlowAuthoringDocument,
   FlowBinding,
-  FlowNodeDocument
+  FlowNodeDocument,
+  FlowNodeOutputDocument
 } from '@1flowbase/flow-schema';
 import {
   cancelConsoleFlowRun,
@@ -174,15 +175,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function extractNodePreviewVariableOutput(
-  lastRun: ConsoleNodeLastRun
+  lastRun: ConsoleNodeLastRun,
+  outputs?: FlowNodeOutputDocument[]
 ): Record<string, unknown> {
   const outputPayload = lastRun.node_run.output_payload;
 
-  if (isRecord(outputPayload) && isRecord(outputPayload.node_output)) {
-    return outputPayload.node_output;
+  if (!isRecord(outputPayload)) {
+    return {};
   }
 
-  return isRecord(outputPayload) ? outputPayload : {};
+  if (!outputs?.length) {
+    return outputPayload;
+  }
+
+  return Object.fromEntries(
+    outputs.flatMap((output) => {
+      const selector = output.selector?.length ? output.selector : [output.key];
+      let current: unknown = outputPayload;
+
+      for (const segment of selector) {
+        if (
+          !isRecord(current) ||
+          !Object.prototype.hasOwnProperty.call(current, segment)
+        ) {
+          return [];
+        }
+
+        current = current[segment];
+      }
+
+      return [[output.key, current]];
+    })
+  );
 }
 
 export function buildFlowDebugRunInput(

@@ -291,13 +291,18 @@ function mergeVariableCache(
 }
 
 function buildVariableCacheFromTraceItems(
-  traceItems: AgentFlowTraceItem[]
+  traceItems: AgentFlowTraceItem[],
+  nodeMetadata: Record<string, NodeVariableDisplayMeta>
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
   for (const item of traceItems) {
     if (isRecord(item.outputPayload)) {
-      cache = mergeVariablePayload(cache, item.nodeId, item.outputPayload);
+      cache = mergeVariablePayload(
+        cache,
+        item.nodeId,
+        projectPayloadForNode(item.nodeId, item.outputPayload, nodeMetadata)
+      );
     }
   }
 
@@ -305,7 +310,8 @@ function buildVariableCacheFromTraceItems(
 }
 
 function buildVariableCacheFromRunDetail(
-  detail: FlowDebugRunDetail
+  detail: FlowDebugRunDetail,
+  nodeMetadata: Record<string, NodeVariableDisplayMeta>
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
@@ -314,7 +320,11 @@ function buildVariableCacheFromRunDetail(
       cache = mergeVariablePayload(
         cache,
         nodeRun.node_id,
-        nodeRun.output_payload
+        projectPayloadForNode(
+          nodeRun.node_id,
+          nodeRun.output_payload,
+          nodeMetadata
+        )
       );
     }
   }
@@ -367,6 +377,52 @@ function buildNodeVariableDisplayMetadata(
       }
     ])
   );
+}
+
+function readDeclaredOutputValue(
+  payload: Record<string, unknown>,
+  output: NonNullable<NodeVariableDisplayMeta['outputs']>[number]
+): { found: true; value: unknown } | { found: false } {
+  const selector = output.selector?.length ? output.selector : [output.key];
+  let current: unknown = payload;
+
+  for (const segment of selector) {
+    if (!isRecord(current)) {
+      return { found: false };
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+      return { found: false };
+    }
+
+    current = current[segment];
+  }
+
+  return { found: true, value: current };
+}
+
+function projectPayloadForNode(
+  nodeId: string,
+  payload: Record<string, unknown>,
+  nodeMetadata: Record<string, NodeVariableDisplayMeta>
+): Record<string, unknown> {
+  const outputs = nodeMetadata[nodeId]?.outputs;
+
+  if (!outputs?.length) {
+    return payload;
+  }
+
+  const projected: Record<string, unknown> = {};
+
+  for (const output of outputs) {
+    const result = readDeclaredOutputValue(payload, output);
+
+    if (result.found) {
+      projected[output.key] = result.value;
+    }
+  }
+
+  return projected;
 }
 
 function createDebugSessionState(applicationId: string, draftId: string) {
@@ -492,12 +548,17 @@ export function useAgentFlowDebugSession({
     [lastDetail, streamTraceItems]
   );
   const traceItems = rawTraceItems;
+  const nodeVariableDisplayMetadata = useMemo(
+    () => buildNodeVariableDisplayMetadata(document),
+    [document]
+  );
   const variableGroups = useMemo<AgentFlowVariableGroup[]>(() => {
     if (lastDetail) {
       return mapRunDetailToVariableGroups(lastDetail, {
         applicationId,
         draftId,
-        runContext
+        runContext,
+        nodeMetadata: nodeVariableDisplayMetadata
       });
     }
 
@@ -507,15 +568,15 @@ export function useAgentFlowDebugSession({
     });
     const cacheGroup = mapVariableCacheToVariableGroup(
       buildDisplayVariableCache(nodePreviewVariableCache, runContext),
-      buildNodeVariableDisplayMetadata(document)
+      nodeVariableDisplayMetadata
     );
 
     return cacheGroup ? [cacheGroup, ...groups] : groups;
   }, [
     applicationId,
     draftId,
-    document,
     lastDetail,
+    nodeVariableDisplayMetadata,
     nodePreviewVariableCache,
     runContext
   ]);
@@ -609,7 +670,10 @@ export function useAgentFlowDebugSession({
 
     setLastDetail(detail);
     setNodePreviewVariableCache((currentCache) =>
-      mergeVariableCache(currentCache, buildVariableCacheFromRunDetail(detail))
+      mergeVariableCache(
+        currentCache,
+        buildVariableCacheFromRunDetail(detail, nodeVariableDisplayMetadata)
+      )
     );
     setStatus(assistantMessage.status);
     setMessages((currentMessages) =>
@@ -762,6 +826,12 @@ export function useAgentFlowDebugSession({
           }
 
           const isTraceEvent =
+            event.type === 'node_started' ||
+            event.type === 'node_finished' ||
+            event.type === 'text_delta' ||
+            event.type === 'reasoning_delta' ||
+            event.type === 'usage_snapshot';
+          const isNodeStateEvent =
             event.type === 'node_started' || event.type === 'node_finished';
           const isTerminalEvent =
             event.type === 'flow_finished' ||
@@ -795,12 +865,17 @@ export function useAgentFlowDebugSession({
 
           if (isTraceEvent) {
             setStreamTraceItems(streamTraceItemsSnapshot);
-            setNodePreviewVariableCache((currentCache) =>
-              mergeVariableCache(
-                currentCache,
-                buildVariableCacheFromTraceItems(streamTraceItemsSnapshot)
-              )
-            );
+            if (isNodeStateEvent) {
+              setNodePreviewVariableCache((currentCache) =>
+                mergeVariableCache(
+                  currentCache,
+                  buildVariableCacheFromTraceItems(
+                    streamTraceItemsSnapshot,
+                    nodeVariableDisplayMetadata
+                  )
+                )
+              );
+            }
           }
 
           if (event.type === 'text_delta' || event.type === 'reasoning_delta') {
@@ -973,7 +1048,11 @@ export function useAgentFlowDebugSession({
       for (const nodeRun of lastDetail.node_runs) {
         cache[nodeRun.node_id] = {
           ...(cache[nodeRun.node_id] ?? {}),
-          ...nodeRun.output_payload
+          ...projectPayloadForNode(
+            nodeRun.node_id,
+            nodeRun.output_payload,
+            nodeVariableDisplayMetadata
+          )
         };
       }
     }

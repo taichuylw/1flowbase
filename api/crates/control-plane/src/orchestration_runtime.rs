@@ -34,6 +34,7 @@ mod debug_event_persister;
 pub mod debug_stream_events;
 mod inputs;
 mod live_debug_run;
+mod payloads;
 mod persistence;
 
 use self::{
@@ -42,6 +43,7 @@ use self::{
         build_compiled_plan_input, build_complete_flow_run_input, build_complete_node_run_input,
         build_flow_run_input, build_node_run_input,
     },
+    payloads::persisted_node_output_payload,
     persistence::{
         checkpoint_node_id, checkpoint_snapshot_from_record, next_node_started_at,
         persist_flow_debug_outcome, persist_preview_events, PersistFlowDebugOutcomeInput,
@@ -748,7 +750,16 @@ where
             waiting_node_resume: Some(WaitingNodeResumeUpdate {
                 node_run_id: callback_task.node_run_id,
                 from_status: waiting_node.status,
-                output_payload: execution.output_payload,
+                output_payload: persisted_node_output_payload(
+                    &execution.output_payload,
+                    &execution.metrics_payload,
+                    None,
+                    &json!({
+                        "callback_task_id": callback_task.id,
+                        "callback_kind": callback_task.callback_kind,
+                        "confirmed": true,
+                    }),
+                ),
                 metrics_payload: execution.metrics_payload,
                 debug_payload: json!({
                     "callback_task_id": callback_task.id,

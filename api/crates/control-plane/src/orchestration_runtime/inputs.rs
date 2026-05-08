@@ -9,6 +9,8 @@ use crate::ports::{
     UpsertCompiledPlanInput,
 };
 
+use super::payloads::persisted_node_output_payload;
+
 pub(super) fn build_compiled_plan_input(
     actor_user_id: Uuid,
     editor_state: &domain::FlowEditorState,
@@ -107,6 +109,12 @@ pub(super) fn build_complete_node_run_input(
     preview: &orchestration_runtime::preview_executor::NodePreviewOutcome,
     finished_at: OffsetDateTime,
 ) -> CompleteNodeRunInput {
+    let stored_metrics_payload = json!({
+        "output_contract_count": preview.output_contract.len(),
+        "provider_events": preview.provider_events.len(),
+        "runtime": preview.metrics_payload,
+    });
+
     CompleteNodeRunInput {
         node_run_id: node_run.id,
         status: if preview.is_failed() {
@@ -114,13 +122,14 @@ pub(super) fn build_complete_node_run_input(
         } else {
             domain::NodeRunStatus::Succeeded
         },
-        output_payload: preview.node_output.clone(),
+        output_payload: persisted_node_output_payload(
+            &preview.node_output,
+            &preview.metrics_payload,
+            preview.error_payload.as_ref(),
+            &preview.debug_payload,
+        ),
         error_payload: preview.error_payload.clone(),
-        metrics_payload: json!({
-            "output_contract_count": preview.output_contract.len(),
-            "provider_events": preview.provider_events.len(),
-            "runtime": preview.metrics_payload,
-        }),
+        metrics_payload: stored_metrics_payload,
         debug_payload: preview.debug_payload.clone(),
         finished_at,
     }
@@ -138,7 +147,12 @@ pub(super) fn build_complete_flow_run_input(
         } else {
             domain::FlowRunStatus::Succeeded
         },
-        output_payload: preview.node_output.clone(),
+        output_payload: persisted_node_output_payload(
+            &preview.node_output,
+            &preview.metrics_payload,
+            preview.error_payload.as_ref(),
+            &preview.debug_payload,
+        ),
         error_payload: preview.error_payload.clone(),
         finished_at,
     }

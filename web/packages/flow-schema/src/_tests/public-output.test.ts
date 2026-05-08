@@ -20,44 +20,14 @@ describe('schema v2 constants', () => {
 });
 
 describe('public output key validation', () => {
-  it.each([
-    'metadata',
-    'usage',
-    'debug',
-    'error',
-    'route',
-    'attempts',
-    'finish_reason',
-    'provider_instance_id',
-    'provider_code',
-    'protocol',
-    'model',
-    'event_count',
-    'queue_snapshot_id',
-    'provider_metadata',
-    'provider_events',
-    'tool_calls',
-    'mcp_calls',
-    'raw_response_ref',
-    'raw_response_refs',
-    'raw_ref',
-    'raw_refs',
-    'context_projection_ref',
-    'context_projection_refs',
-    'attempt_ref',
-    'attempt_refs',
-    '__raw'
-  ])(
-    'rejects reserved public output key %s',
-    (key) => {
-      expect(validatePublicOutputKey(key)).toEqual({
-        ok: false,
-        reason: 'reserved_public_output_key'
-      });
-    }
-  );
+  it('rejects internal public output keys', () => {
+    expect(validatePublicOutputKey('__raw')).toEqual({
+      ok: false,
+      reason: 'reserved_public_output_key'
+    });
+  });
 
-  it.each(['text', 'structured_output', 'answer', 'record_id'])(
+  it.each(['text', 'structured_output', 'answer', 'record_id', 'usage', 'error'])(
     'accepts public output key %s',
     (key) => {
       expect(validatePublicOutputKey(key)).toEqual({ ok: true });
@@ -66,9 +36,10 @@ describe('public output key validation', () => {
 });
 
 describe('LLM authoring outputs', () => {
-  it('defaults LLM public outputs to text only', () => {
+  it('defaults LLM public outputs to text and usage', () => {
     expect(DEFAULT_LLM_NODE_OUTPUTS).toEqual([
-      { key: 'text', title: '模型输出', valueType: 'string' }
+      { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' }
     ]);
   });
 
@@ -77,27 +48,32 @@ describe('LLM authoring outputs', () => {
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
 
     expect(llmNode?.outputs).toEqual([
-      { key: 'text', title: '模型输出', valueType: 'string' }
+      { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' }
     ]);
   });
 
   it('adds structured_output only for explicitly structured response formats', () => {
     expect(getLlmNodeOutputs()).toEqual([
-      { key: 'text', title: '模型输出', valueType: 'string' }
+      { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' }
     ]);
     expect(getLlmNodeOutputs({ response_format: { mode: 'text' } })).toEqual([
-      { key: 'text', title: '模型输出', valueType: 'string' }
+      { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' }
     ]);
     expect(
       getLlmNodeOutputs({ response_format: { mode: 'json_schema' } })
     ).toEqual([
       { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' },
       { key: 'structured_output', title: '结构化输出', valueType: 'json' }
     ]);
     expect(
       getLlmNodeOutputs({ response_format: { mode: 'json_object' } })
     ).toEqual([
       { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'usage', title: '用量', valueType: 'json' },
       { key: 'structured_output', title: '结构化输出', valueType: 'json' }
     ]);
   });

@@ -48,6 +48,10 @@ function durationMs(startedAt: string, finishedAt: string | null) {
   return Math.max(0, finished - started);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 function upsertTraceItem(
   items: AgentFlowTraceItem[],
   nextItem: AgentFlowTraceItem
@@ -64,6 +68,45 @@ function upsertTraceItem(
   );
 }
 
+function appendProcessEvent(
+  item: AgentFlowTraceItem,
+  processEvent: Record<string, unknown>
+): AgentFlowTraceItem {
+  const debugPayload = isRecord(item.debugPayload) ? item.debugPayload : {};
+  const providerEvents = Array.isArray(debugPayload.provider_events)
+    ? debugPayload.provider_events
+    : [];
+
+  return {
+    ...item,
+    debugPayload: {
+      ...debugPayload,
+      provider_events: [...providerEvents, processEvent]
+    }
+  };
+}
+
+function appendProcessEventToTrace(
+  items: AgentFlowTraceItem[],
+  event: {
+    node_run_id?: string | null;
+    node_id: string;
+  },
+  processEvent: Record<string, unknown>
+) {
+  const eventKey = event.node_run_id ?? event.node_id;
+
+  return items.map((item) => {
+    const itemKey = getTraceItemKey(item);
+    const matchesByKey = itemKey === eventKey;
+    const matchesByNodeId = !event.node_run_id && item.nodeId === event.node_id;
+
+    return matchesByKey || matchesByNodeId
+      ? appendProcessEvent(item, processEvent)
+      : item;
+  });
+}
+
 function extractOutputText(output: Record<string, unknown>) {
   for (const key of ['answer', 'text', 'content', 'message']) {
     const value = output[key];
@@ -74,6 +117,17 @@ function extractOutputText(output: Record<string, unknown>) {
   }
 
   return '';
+}
+
+function chooseFinishedDebugPayload(
+  existingDebugPayload: Record<string, unknown> | undefined,
+  eventDebugPayload: Record<string, unknown> | undefined
+) {
+  if (!eventDebugPayload || Object.keys(eventDebugPayload).length === 0) {
+    return existingDebugPayload ?? {};
+  }
+
+  return eventDebugPayload;
 }
 
 export function applyDebugStreamEventToTrace(
@@ -120,7 +174,24 @@ export function applyDebugStreamEventToTrace(
       outputPayload: event.output_payload ?? {},
       errorPayload: event.error_payload ?? null,
       metricsPayload: event.metrics_payload ?? {},
-      debugPayload: event.debug_payload ?? existing?.debugPayload ?? {}
+      debugPayload: chooseFinishedDebugPayload(
+        existing?.debugPayload,
+        event.debug_payload
+      )
+    });
+  }
+
+  if (event.type === 'text_delta' || event.type === 'reasoning_delta') {
+    return appendProcessEventToTrace(items, event, {
+      type: event.type,
+      text: event.text
+    });
+  }
+
+  if (event.type === 'usage_snapshot') {
+    return appendProcessEventToTrace(items, event, {
+      type: event.type,
+      usage: event.usage
     });
   }
 

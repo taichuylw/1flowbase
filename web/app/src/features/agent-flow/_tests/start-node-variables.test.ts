@@ -120,7 +120,8 @@ describe('start node variables', () => {
       expect.arrayContaining([
         'Start/query',
         'Start/files',
-        'LLM/text'
+        'LLM/text',
+        'LLM/usage'
       ])
     );
     expect(textOutput?.outputLabel).toBe('text');
@@ -133,13 +134,18 @@ describe('start node variables', () => {
           outputLabel: 'text',
           value: ['node-llm', 'text'],
           displayLabel: 'LLM/text'
+        }),
+        expect.objectContaining({
+          outputKey: 'usage',
+          outputLabel: 'usage',
+          value: ['node-llm', 'usage'],
+          displayLabel: 'LLM/usage'
         })
       ])
     );
 
     expect(selectorLabels).not.toContain('模型输出');
     expect(selectorLabels).not.toContain('LLM/reasoning_content');
-    expect(selectorLabels).not.toContain('LLM/usage');
   });
 
   test('fails fast when a start node carries unexpected outputs', () => {

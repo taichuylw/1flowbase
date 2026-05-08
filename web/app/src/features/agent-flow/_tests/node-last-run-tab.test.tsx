@@ -58,7 +58,17 @@ describe('NodeLastRunTab', () => {
           user_prompt: '总结退款政策'
         },
         output_payload: {
-          rendered_templates: {}
+          text: '退款政策摘要',
+          usage: {
+            total_tokens: 72
+          },
+          provider_code: 'openai_compatible',
+          provider_events: [
+            {
+              type: 'text_delta',
+              delta: '退款政策摘要'
+            }
+          ]
         },
         error_payload: null,
         metrics_payload: {
@@ -72,11 +82,12 @@ describe('NodeLastRunTab', () => {
           attempt: 2
         },
         debug_payload: {
-          response_ref: 'runtime_artifact:inline:response-1',
-          artifact_metadata: {
-            content_type: 'application/json',
-            original_size_bytes: 2048
-          }
+          provider_events: [
+            {
+              type: 'text_delta',
+              delta: '退款政策摘要'
+            }
+          ]
         },
         started_at: '2026-04-17T09:00:00Z',
         finished_at: '2026-04-17T09:00:01Z'
@@ -100,22 +111,15 @@ describe('NodeLastRunTab', () => {
     expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('user_prompt');
     expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('总结退款政策');
     const outputJson = screen.getByLabelText('输出 JSON');
-    expect(outputJson).not.toHaveTextContent('event_details');
-    expect(outputJson).not.toHaveTextContent('run_metadata');
-    expect(outputJson).not.toHaveTextContent('provider-openai-prod');
-    const metricsJson = screen.getByLabelText('指标 JSON');
-    expect(metricsJson).toHaveTextContent('provider-openai-prod');
-    expect(metricsJson).toHaveTextContent('openai_compatible');
-    expect(metricsJson).toHaveTextContent('primary');
-    expect(metricsJson).toHaveTextContent('attempt');
-    expect(metricsJson).toHaveTextContent('2');
-    expect(metricsJson).toHaveTextContent('finish_reason');
-    expect(metricsJson).toHaveTextContent('stop');
-    expect(metricsJson).toHaveTextContent('duration_ms');
-    const debugJson = screen.getByLabelText('Debug JSON');
-    expect(debugJson).toHaveTextContent('response_ref');
-    expect(debugJson).toHaveTextContent('artifact_metadata');
-    expect(debugJson).toHaveTextContent('2048');
+    expect(outputJson).toHaveTextContent('退款政策摘要');
+    expect(outputJson).toHaveTextContent('usage');
+    expect(outputJson).not.toHaveTextContent('provider_events');
+    expect(outputJson).not.toHaveTextContent('text_delta');
+    const processJson = screen.getByLabelText('数据处理 JSON');
+    expect(processJson).toHaveTextContent('provider_events');
+    expect(processJson).toHaveTextContent('text_delta');
+    expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();
     expect(screen.queryByText('执行人')).not.toBeInTheDocument();
     expect(screen.queryByText('Compiled Plan')).not.toBeInTheDocument();
     expect(screen.queryByText('输出契约数')).not.toBeInTheDocument();
@@ -194,6 +198,108 @@ describe('NodeLastRunTab', () => {
     );
     expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
       '完整 Last Run 内容'
+    );
+  });
+
+  test('renders data processing for non-LLM nodes when debug payload exists', async () => {
+    vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
+      flow_run: {
+        id: 'run-1',
+        application_id: 'app-1',
+        flow_id: 'flow-1',
+        draft_id: 'draft-1',
+        compiled_plan_id: 'plan-1',
+        run_mode: 'debug_node_preview',
+        status: 'succeeded',
+        target_node_id: 'node-tool',
+        input_payload: {},
+        output_payload: {},
+        error_payload: null,
+        created_by: 'user-1',
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z',
+        created_at: '2026-04-17T09:00:00Z'
+      },
+      node_run: {
+        id: 'node-run-1',
+        flow_run_id: 'run-1',
+        node_id: 'node-tool',
+        node_type: 'tool',
+        node_alias: 'Tool',
+        status: 'succeeded',
+        input_payload: { query: '退款' },
+        output_payload: { result: 'ok' },
+        error_payload: null,
+        metrics_payload: {},
+        debug_payload: {
+          request: {
+            url: 'https://example.test/search'
+          }
+        },
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z'
+      },
+      checkpoints: [],
+      events: []
+    });
+
+    render(
+      <AppProviders>
+        <NodeLastRunTab applicationId="app-1" nodeId="node-tool" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByLabelText('数据处理 JSON')).toHaveTextContent(
+      'example.test'
+    );
+  });
+
+  test('always renders data processing when debug payload is empty', async () => {
+    vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
+      flow_run: {
+        id: 'run-1',
+        application_id: 'app-1',
+        flow_id: 'flow-1',
+        draft_id: 'draft-1',
+        compiled_plan_id: 'plan-1',
+        run_mode: 'debug_node_preview',
+        status: 'succeeded',
+        target_node_id: 'node-code',
+        input_payload: {},
+        output_payload: {},
+        error_payload: null,
+        created_by: 'user-1',
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z',
+        created_at: '2026-04-17T09:00:00Z'
+      },
+      node_run: {
+        id: 'node-run-1',
+        flow_run_id: 'run-1',
+        node_id: 'node-code',
+        node_type: 'code',
+        node_alias: 'Code',
+        status: 'succeeded',
+        input_payload: { value: 1 },
+        output_payload: { value: 2 },
+        error_payload: null,
+        metrics_payload: {},
+        debug_payload: {},
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z'
+      },
+      checkpoints: [],
+      events: []
+    });
+
+    render(
+      <AppProviders>
+        <NodeLastRunTab applicationId="app-1" nodeId="node-code" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByLabelText('数据处理 JSON')).toHaveTextContent(
+      '{}'
     );
   });
 
