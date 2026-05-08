@@ -1,3 +1,8 @@
+import {
+  HistoryOutlined,
+  IssuesCloseOutlined,
+  SaveOutlined
+} from '@ant-design/icons';
 import { Button, Space, Tag, Typography } from 'antd';
 
 interface AgentFlowOverlayProps {
@@ -48,19 +53,30 @@ export function AgentFlowOverlay({
         </Tag>
       </Space>
       <Space size="small">
-        <Button onClick={onOpenIssues}>Issues</Button>
-        <Button onClick={onOpenHistory}>历史版本</Button>
+        <Button
+          aria-label="Issues"
+          icon={<IssuesCloseOutlined />}
+          onClick={onOpenIssues}
+          title="Issues"
+        />
+        <Button
+          aria-label="历史版本"
+          icon={<HistoryOutlined />}
+          onClick={onOpenHistory}
+          title="历史版本"
+        />
         <Button onClick={onOpenDebugConsole}>
           调试整流
         </Button>
         <Button
+          aria-label="保存"
           autoInsertSpace={false}
           disabled={saveDisabled}
+          icon={<SaveOutlined />}
           loading={saveLoading}
           onClick={onSaveDraft}
-        >
-          保存
-        </Button>
+          title="保存"
+        />
         <Button
           autoInsertSpace={false}
           type="primary"
