@@ -184,10 +184,6 @@ export function extractNodePreviewVariableOutput(
     return {};
   }
 
-  if (isRecord(outputPayload.node_output)) {
-    return outputPayload.node_output;
-  }
-
   return outputPayload;
 }
 

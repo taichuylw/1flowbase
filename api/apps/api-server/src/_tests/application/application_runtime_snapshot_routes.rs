@@ -342,7 +342,11 @@ async fn debug_variable_snapshot_uses_latest_node_run_output_in_selected_run() {
     )
     .bind(replacement_node_run_id)
     .bind(flow_run_id)
-    .bind(json!({ "text": "reply:newest policy" }))
+    .bind(json!({
+        "text": "reply:newest policy",
+        "usage": { "total_tokens": 128 },
+        "provider_route": { "provider_code": "openai_compatible" }
+    }))
     .execute(&pool)
     .await
     .unwrap();
@@ -353,7 +357,19 @@ async fn debug_variable_snapshot_uses_latest_node_run_output_in_selected_run() {
         "reply:newest policy"
     );
     assert_eq!(
+        snapshot["data"]["variable_cache"]["node-llm"]["usage"]["total_tokens"],
+        128
+    );
+    assert_eq!(
+        snapshot["data"]["variable_cache"]["node-llm"]["provider_route"]["provider_code"],
+        "openai_compatible"
+    );
+    assert_eq!(
         snapshot["data"]["source_node_run_ids"]["node-llm"]["text"],
+        replacement_node_run_id.to_string()
+    );
+    assert_eq!(
+        snapshot["data"]["source_node_run_ids"]["node-llm"]["usage"],
         replacement_node_run_id.to_string()
     );
 }

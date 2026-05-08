@@ -145,7 +145,7 @@ describe('NodeLastRunTab', () => {
     ).toBeDisabled();
   });
 
-  test('renders normalized node output for node preview envelopes', async () => {
+  test('renders API-provided node output without frontend envelope rewriting', async () => {
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
@@ -173,14 +173,8 @@ describe('NodeLastRunTab', () => {
         status: 'succeeded',
         input_payload: {},
         output_payload: {
-          target_node_id: 'node-llm',
-          node_output: {
-            text: '退款政策摘要',
-            usage: { total_tokens: 128 }
-          },
-          resolved_inputs: {
-            user_prompt: '总结退款政策'
-          }
+          text: '退款政策摘要',
+          usage: { total_tokens: 128 }
         },
         error_payload: null,
         metrics_payload: {},
@@ -201,8 +195,6 @@ describe('NodeLastRunTab', () => {
     const outputJson = await screen.findByLabelText('输出 JSON');
     expect(outputJson).toHaveTextContent('退款政策摘要');
     expect(outputJson).toHaveTextContent('total_tokens');
-    expect(outputJson).not.toHaveTextContent('target_node_id');
-    expect(outputJson).not.toHaveTextContent('resolved_inputs');
   });
 
   test('keeps output fields even when debug payload has the same keys', async () => {

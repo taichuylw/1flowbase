@@ -43,20 +43,14 @@ describe('node debug preview input', () => {
     });
   });
 
-  test('extracts actual node output from node preview envelope for downstream previews', () => {
+  test('extracts API-provided node output for downstream previews', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmOutput = extractNodePreviewVariableOutput({
       flow_run: {} as never,
       node_run: {
         output_payload: {
-          target_node_id: 'node-llm',
-          node_output: {
-            text: '退款政策摘要',
-            finish_reason: 'stop'
-          },
-          resolved_inputs: {
-            user_prompt: '请总结退款政策'
-          }
+          text: '退款政策摘要',
+          finish_reason: 'stop'
         }
       } as never,
       checkpoints: [],

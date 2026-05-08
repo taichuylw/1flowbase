@@ -103,18 +103,6 @@ export function pickProcessPayload(debugPayload: unknown) {
   return isRecord(debugPayload) ? debugPayload : {};
 }
 
-export function normalizeNodeOutputPayload(outputPayload: unknown) {
-  if (!isRecord(outputPayload)) {
-    return outputPayload;
-  }
-
-  if (isRecord(outputPayload.node_output)) {
-    return outputPayload.node_output;
-  }
-
-  return outputPayload;
-}
-
 export function NodeRunPayloadSections({
   inputPayload,
   debugPayload,
@@ -127,7 +115,6 @@ export function NodeRunPayloadSections({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const processPayload = pickProcessPayload(debugPayload);
-  const visibleOutputPayload = normalizeNodeOutputPayload(outputPayload);
 
   return (
     <>
@@ -142,7 +129,7 @@ export function NodeRunPayloadSections({
         onLoadArtifact={onLoadArtifact}
       />
       <NodeRunJsonBlock
-        payload={visibleOutputPayload}
+        payload={outputPayload}
         title="输出"
         onLoadArtifact={onLoadArtifact}
       />
