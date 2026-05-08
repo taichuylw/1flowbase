@@ -61,8 +61,13 @@ export function AgentFlowOverlay({
         >
           保存
         </Button>
-        <Button type="primary" disabled={publishDisabled} onClick={onOpenPublish}>
-          发布配置
+        <Button
+          autoInsertSpace={false}
+          type="primary"
+          disabled={publishDisabled}
+          onClick={onOpenPublish}
+        >
+          发布
         </Button>
       </Space>
     </div>

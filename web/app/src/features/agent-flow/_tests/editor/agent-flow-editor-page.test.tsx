@@ -268,7 +268,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '历史版本' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '调试整流' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '发布配置' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '发布' })).toBeInTheDocument();
   }, 20_000);
 
   test('opens preview from overlay action and starts the run from composer', async () => {
