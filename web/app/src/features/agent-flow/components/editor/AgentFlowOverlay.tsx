@@ -4,7 +4,7 @@ import {
   PlayCircleOutlined,
   SaveOutlined
 } from '@ant-design/icons';
-import { Button, Space, Tag, Typography } from 'antd';
+import { Button, Space, Tag, Tooltip, Typography } from 'antd';
 
 interface AgentFlowOverlayProps {
   applicationName: string;
@@ -46,9 +46,6 @@ export function AgentFlowOverlay({
         <Typography.Text strong>
           {applicationName}
         </Typography.Text>
-        <Tag color="green" bordered={false}>
-          {autosaveLabel}
-        </Tag>
         <Tag color={statusTag.color} bordered={false}>
           {statusTag.label}
         </Tag>
@@ -75,15 +72,16 @@ export function AgentFlowOverlay({
         >
           预览
         </Button>
-        <Button
-          aria-label="保存"
-          autoInsertSpace={false}
-          disabled={saveDisabled}
-          icon={<SaveOutlined />}
-          loading={saveLoading}
-          onClick={onSaveDraft}
-          title="保存"
-        />
+        <Tooltip title={autosaveLabel}>
+          <Button
+            aria-label="保存"
+            autoInsertSpace={false}
+            disabled={saveDisabled}
+            icon={<SaveOutlined />}
+            loading={saveLoading}
+            onClick={onSaveDraft}
+          />
+        </Tooltip>
         <Button
           autoInsertSpace={false}
           type="primary"
