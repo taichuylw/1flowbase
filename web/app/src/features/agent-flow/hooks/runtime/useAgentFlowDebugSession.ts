@@ -291,18 +291,13 @@ function mergeVariableCache(
 }
 
 function buildVariableCacheFromTraceItems(
-  traceItems: AgentFlowTraceItem[],
-  nodeMetadata: Record<string, NodeVariableDisplayMeta>
+  traceItems: AgentFlowTraceItem[]
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
   for (const item of traceItems) {
     if (isRecord(item.outputPayload)) {
-      cache = mergeVariablePayload(
-        cache,
-        item.nodeId,
-        projectPayloadForNode(item.nodeId, item.outputPayload, nodeMetadata)
-      );
+      cache = mergeVariablePayload(cache, item.nodeId, item.outputPayload);
     }
   }
 
@@ -310,8 +305,7 @@ function buildVariableCacheFromTraceItems(
 }
 
 function buildVariableCacheFromRunDetail(
-  detail: FlowDebugRunDetail,
-  nodeMetadata: Record<string, NodeVariableDisplayMeta>
+  detail: FlowDebugRunDetail
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
@@ -320,11 +314,7 @@ function buildVariableCacheFromRunDetail(
       cache = mergeVariablePayload(
         cache,
         nodeRun.node_id,
-        projectPayloadForNode(
-          nodeRun.node_id,
-          nodeRun.output_payload,
-          nodeMetadata
-        )
+        nodeRun.output_payload
       );
     }
   }
@@ -377,52 +367,6 @@ function buildNodeVariableDisplayMetadata(
       }
     ])
   );
-}
-
-function readDeclaredOutputValue(
-  payload: Record<string, unknown>,
-  output: NonNullable<NodeVariableDisplayMeta['outputs']>[number]
-): { found: true; value: unknown } | { found: false } {
-  const selector = output.selector?.length ? output.selector : [output.key];
-  let current: unknown = payload;
-
-  for (const segment of selector) {
-    if (!isRecord(current)) {
-      return { found: false };
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
-      return { found: false };
-    }
-
-    current = current[segment];
-  }
-
-  return { found: true, value: current };
-}
-
-function projectPayloadForNode(
-  nodeId: string,
-  payload: Record<string, unknown>,
-  nodeMetadata: Record<string, NodeVariableDisplayMeta>
-): Record<string, unknown> {
-  const outputs = nodeMetadata[nodeId]?.outputs;
-
-  if (!outputs?.length) {
-    return payload;
-  }
-
-  const projected: Record<string, unknown> = {};
-
-  for (const output of outputs) {
-    const result = readDeclaredOutputValue(payload, output);
-
-    if (result.found) {
-      projected[output.key] = result.value;
-    }
-  }
-
-  return projected;
 }
 
 function createDebugSessionState(applicationId: string, draftId: string) {
@@ -672,10 +616,7 @@ export function useAgentFlowDebugSession({
 
     setLastDetail(detail);
     setNodePreviewVariableCache((currentCache) =>
-      mergeVariableCache(
-        currentCache,
-        buildVariableCacheFromRunDetail(detail, nodeVariableDisplayMetadata)
-      )
+      mergeVariableCache(currentCache, buildVariableCacheFromRunDetail(detail))
     );
     setStatus(assistantMessage.status);
     setMessages((currentMessages) =>
@@ -871,10 +812,7 @@ export function useAgentFlowDebugSession({
               setNodePreviewVariableCache((currentCache) =>
                 mergeVariableCache(
                   currentCache,
-                  buildVariableCacheFromTraceItems(
-                    streamTraceItemsSnapshot,
-                    nodeVariableDisplayMetadata
-                  )
+                  buildVariableCacheFromTraceItems(streamTraceItemsSnapshot)
                 )
               );
             }
@@ -1058,11 +996,7 @@ export function useAgentFlowDebugSession({
       for (const nodeRun of lastDetail.node_runs) {
         cache[nodeRun.node_id] = {
           ...(cache[nodeRun.node_id] ?? {}),
-          ...projectPayloadForNode(
-            nodeRun.node_id,
-            nodeRun.output_payload,
-            nodeVariableDisplayMetadata
-          )
+          ...nodeRun.output_payload
         };
       }
     }

@@ -75,7 +75,11 @@ function createSucceededRunDetail() {
         node_alias: 'LLM',
         status: 'succeeded',
         input_payload: { user_prompt: '请总结退款政策' },
-        output_payload: { text: '退款政策摘要' },
+        output_payload: {
+          text: '退款政策摘要',
+          usage: { total_tokens: 128 },
+          raw_response: { id: 'chatcmpl-1' }
+        },
         error_payload: null,
         metrics_payload: { total_tokens: 128 },
         started_at: '2026-04-25T10:00:00Z',
@@ -409,7 +413,9 @@ describe('useAgentFlowDebugSession', () => {
           query: '请总结退款政策'
         }),
         'node-llm': expect.objectContaining({
-          text: '退款政策摘要'
+          text: '退款政策摘要',
+          usage: { total_tokens: 128 },
+          raw_response: { id: 'chatcmpl-1' }
         })
       })
     );

@@ -287,19 +287,18 @@ export function mapVariableCacheToVariableGroup(
   variableCache: NodeDebugPreviewVariableCache,
   nodeMetadata: Record<string, string | NodeVariableDisplayMeta> = {}
 ): AgentFlowVariableGroup | null {
-  const items = Object.entries(variableCache).flatMap(([nodeId, value]) => {
+  const items = Object.entries(variableCache).map(([nodeId, value]) => {
     const metadata = normalizeNodeVariableDisplayMeta(
       nodeMetadata[nodeId],
       nodeId
     );
 
-    return mapNodeOutputVariables(
-      nodeId,
-      metadata.label,
-      metadata.nodeType,
-      value,
-      metadata.outputs
-    );
+    return {
+      key: nodeId,
+      label: metadata.label,
+      helperText: metadata.nodeType,
+      value
+    };
   });
 
   if (items.length === 0) {
@@ -330,22 +329,20 @@ export function mapRunDetailToVariableGroups(
       value: detailValue === undefined ? field.value : detailValue
     };
   });
-  const nodeOutputItems = detail.node_runs.flatMap((nodeRun) =>
-    {
-      const metadata = normalizeNodeVariableDisplayMeta(
-        options.nodeMetadata?.[nodeRun.node_id],
-        nodeRun.node_id
-      );
+  const nodeOutputItems = detail.node_runs.flatMap((nodeRun) => {
+    const metadata = normalizeNodeVariableDisplayMeta(
+      options.nodeMetadata?.[nodeRun.node_id],
+      nodeRun.node_alias || nodeRun.node_id
+    );
 
-      return mapNodeOutputVariables(
-        nodeRun.node_id,
-        metadata.label,
-        metadata.nodeType ?? nodeRun.node_type,
-        nodeRun.output_payload,
-        metadata.outputs
-      );
-    }
-  );
+    return mapNodeOutputVariables(
+      nodeRun.node_id,
+      metadata.label,
+      metadata.nodeType ?? nodeRun.node_type,
+      nodeRun.output_payload,
+      metadata.outputs
+    );
+  });
   const sessionItems: AgentFlowVariableItem[] = [
     {
       key: 'flow_run.id',

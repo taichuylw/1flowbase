@@ -88,12 +88,13 @@ const createRunDetail = (): FlowDebugRunDetail => ({
 });
 
 describe('debug console variable groups', () => {
-  test('maps variable cache entries at public output key level', () => {
+  test('maps variable cache entries at complete node output level', () => {
     const group = mapVariableCacheToVariableGroup(
       {
         'node-llm': {
           text: '你好?',
-          structured_output: { intent: 'refund' }
+          structured_output: { intent: 'refund' },
+          usage: { total_tokens: 12 }
         }
       },
       {
@@ -116,16 +117,14 @@ describe('debug console variable groups', () => {
       title: 'Variable Cache',
       items: [
         {
-          key: 'node-llm.text',
-          label: 'LLM/text',
-          helperText: '模型输出',
-          value: '你好?'
-        },
-        {
-          key: 'node-llm.structured_output',
-          label: 'LLM/structured_output',
-          helperText: '结构化输出',
-          value: { intent: 'refund' }
+          key: 'node-llm',
+          label: 'LLM',
+          helperText: 'llm',
+          value: {
+            text: '你好?',
+            structured_output: { intent: 'refund' },
+            usage: { total_tokens: 12 }
+          }
         }
       ]
     });

@@ -176,7 +176,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function extractNodePreviewVariableOutput(
   lastRun: ConsoleNodeLastRun,
-  outputs?: FlowNodeOutputDocument[]
+  _outputs?: FlowNodeOutputDocument[]
 ): Record<string, unknown> {
   const outputPayload = lastRun.node_run.output_payload;
 
@@ -184,29 +184,11 @@ export function extractNodePreviewVariableOutput(
     return {};
   }
 
-  if (!outputs?.length) {
-    return outputPayload;
+  if (isRecord(outputPayload.node_output)) {
+    return outputPayload.node_output;
   }
 
-  return Object.fromEntries(
-    outputs.flatMap((output) => {
-      const selector = output.selector?.length ? output.selector : [output.key];
-      let current: unknown = outputPayload;
-
-      for (const segment of selector) {
-        if (
-          !isRecord(current) ||
-          !Object.prototype.hasOwnProperty.call(current, segment)
-        ) {
-          return [];
-        }
-
-        current = current[segment];
-      }
-
-      return [[output.key, current]];
-    })
-  );
+  return outputPayload;
 }
 
 export function buildFlowDebugRunInput(
@@ -390,6 +372,39 @@ function findNodeOutput(node: FlowNodeDocument | undefined, outputKey: string) {
     : undefined;
 }
 
+function readCachedOutputValue(
+  payload: Record<string, unknown> | undefined,
+  output: FlowNodeOutputDocument | undefined,
+  outputKey: string
+): { found: true; value: unknown } | { found: false } {
+  if (!payload) {
+    return { found: false };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, outputKey)) {
+    return { found: true, value: payload[outputKey] };
+  }
+
+  if (!output?.selector?.length) {
+    return { found: false };
+  }
+
+  let current: unknown = payload;
+
+  for (const segment of output.selector) {
+    if (
+      !isRecord(current) ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
+      return { found: false };
+    }
+
+    current = current[segment];
+  }
+
+  return { found: true, value: current };
+}
+
 function buildMissingPreviewField(
   document: FlowAuthoringDocument,
   nodeId: string,
@@ -506,6 +521,15 @@ export function buildNodeDebugPreviewPlan(
 
   for (const [sourceNodeId, outputKey] of selectors) {
     const cacheKey = `${sourceNodeId}.${outputKey}`;
+    const sourceNode = document.graph.nodes.find(
+      (entry) => entry.id === sourceNodeId
+    );
+    const sourceOutput = findNodeOutput(sourceNode, outputKey);
+    const cachedOutput = readCachedOutputValue(
+      variableCache[sourceNodeId],
+      sourceOutput,
+      outputKey
+    );
 
     if (visited.has(cacheKey)) {
       continue;
@@ -513,16 +537,9 @@ export function buildNodeDebugPreviewPlan(
 
     visited.add(cacheKey);
 
-    if (
-      Object.prototype.hasOwnProperty.call(
-        variableCache[sourceNodeId] ?? {},
-        outputKey
-      ) &&
-      hasPreviewVariableValue(variableCache[sourceNodeId]?.[outputKey])
-    ) {
+    if (cachedOutput.found && hasPreviewVariableValue(cachedOutput.value)) {
       inputPayload[sourceNodeId] ??= {};
-      inputPayload[sourceNodeId][outputKey] =
-        variableCache[sourceNodeId]?.[outputKey];
+      inputPayload[sourceNodeId][outputKey] = cachedOutput.value;
       continue;
     }
 

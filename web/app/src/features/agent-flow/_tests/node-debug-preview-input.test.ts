@@ -81,6 +81,60 @@ describe('node debug preview input', () => {
     });
   });
 
+  test('builds node preview input from full cached node output using output selector', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const answerNode = document.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('default document is missing answer node');
+    }
+
+    document.graph.nodes.push({
+      id: 'node-tool',
+      type: 'plugin_node',
+      alias: 'Tool',
+      description: '',
+      containerId: null,
+      position: { x: 420, y: 220 },
+      configVersion: 1,
+      config: {},
+      bindings: {},
+      outputs: [
+        {
+          key: 'result',
+          title: 'Result',
+          valueType: 'string',
+          selector: ['message', 'content']
+        }
+      ]
+    });
+    answerNode.bindings = {
+      answer_template: {
+        kind: 'selector',
+        value: ['node-tool', 'result']
+      }
+    };
+
+    expect(
+      buildNodeDebugPreviewPlan(document, 'node-answer', {
+        'node-tool': {
+          message: { content: '退款政策摘要' },
+          usage: { total_tokens: 128 },
+          raw_response: { id: 'chatcmpl-1' }
+        }
+      })
+    ).toEqual({
+      input_payload: {
+        'node-tool': {
+          result: '退款政策摘要'
+        }
+      },
+      missing_fields: []
+    });
+  });
+
   test('extracts selector dependencies from active Data Model query binding', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes.push({
