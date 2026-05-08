@@ -947,9 +947,9 @@ fn build_successful_llm_execution(
     provider_events: Vec<ProviderStreamEvent>,
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
-    let text_parts = split_llm_think_tags(&raw_text);
+    let answer_text = strip_llm_think_tags(&raw_text);
     let mut executor_output = Map::new();
-    executor_output.insert("text".to_string(), Value::String(text_parts.text.clone()));
+    executor_output.insert("text".to_string(), Value::String(raw_text));
     executor_output.insert(
         "provider_route".to_string(),
         build_llm_provider_route_payload(runtime),
@@ -978,19 +978,12 @@ fn build_successful_llm_execution(
             result.provider_metadata.clone(),
         );
     }
-    if let Some(reasoning_content) = text_parts.reasoning_content {
-        executor_output.insert(
-            "reasoning_content".to_string(),
-            Value::String(reasoning_content),
-        );
-    }
-
     if declares_public_output(node, "structured_output")
         && is_structured_response_format(&node.config)
     {
         executor_output.insert(
             "structured_output".to_string(),
-            parse_structured_llm_output(&text_parts.text),
+            parse_structured_llm_output(&answer_text),
         );
     }
 
@@ -1093,35 +1086,23 @@ fn parse_structured_llm_output(text: &str) -> Value {
     serde_json::from_str(text).unwrap_or(Value::Null)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct LlmTextParts {
-    text: String,
-    reasoning_content: Option<String>,
-}
-
-fn split_llm_think_tags(text: &str) -> LlmTextParts {
+fn strip_llm_think_tags(text: &str) -> String {
     let mut answer = String::new();
-    let mut reasoning = String::new();
     let mut remaining = text;
 
     while let Some(start) = remaining.find("<think>") {
         answer.push_str(&remaining[..start]);
         let after_start = &remaining[start + "<think>".len()..];
         if let Some(end) = after_start.find("</think>") {
-            reasoning.push_str(&after_start[..end]);
             remaining = &after_start[end + "</think>".len()..];
         } else {
-            reasoning.push_str(after_start);
             remaining = "";
             break;
         }
     }
     answer.push_str(remaining);
 
-    LlmTextParts {
-        text: answer,
-        reasoning_content: (!reasoning.is_empty()).then_some(reasoning),
-    }
+    answer
 }
 
 fn resolve_final_llm_content(

@@ -18,8 +18,7 @@ mod tests {
     #[test]
     fn persisted_output_preserves_executor_output_fields_even_when_payload_names_overlap() {
         let output_payload = json!({
-            "text": "正式回答",
-            "reasoning_content": "先分析",
+            "text": "<think>先分析</think>正式回答",
             "finish_reason": "stop",
             "provider_route": { "provider_code": "openai_compatible" },
             "provider_metadata": { "response_id": "chatcmpl-1" },
@@ -38,8 +37,7 @@ mod tests {
         assert_eq!(
             persisted,
             json!({
-                "text": "正式回答",
-                "reasoning_content": "先分析",
+                "text": "<think>先分析</think>正式回答",
                 "finish_reason": "stop",
                 "provider_route": { "provider_code": "openai_compatible" },
                 "provider_metadata": { "response_id": "chatcmpl-1" },

@@ -495,11 +495,8 @@ async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
         .iter()
         .find(|node_run| node_run.node_id == "node-llm")
         .expect("llm node run should be persisted");
-    assert_eq!(llm_node.output_payload["text"], "正式回答");
-    assert_eq!(
-        llm_node.output_payload["reasoning_content"],
-        "先分析用户问题"
-    );
+    assert_eq!(llm_node.output_payload["text"], "<think>先分析</think>结果");
+    assert!(llm_node.output_payload.get("reasoning_content").is_none());
     assert!(llm_node.output_payload.get("attempts").is_none());
     assert!(llm_node.output_payload.get("event_count").is_none());
     assert!(llm_node.output_payload.get("provider_code").is_none());
