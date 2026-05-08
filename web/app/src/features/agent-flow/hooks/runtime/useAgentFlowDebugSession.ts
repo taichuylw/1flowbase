@@ -42,6 +42,7 @@ let debugMessageIdSequence = 0;
 
 interface PersistedDebugSessionPayload {
   version: number;
+  debugSessionId?: string;
   inputValues: Record<string, unknown>;
 }
 
@@ -61,9 +62,9 @@ export function buildAgentFlowDebugSessionStorageKey(
   return `${DEBUG_SESSION_STORAGE_PREFIX}:${applicationId}:${draftId}`;
 }
 
-function readPersistedInputValues(
+function readPersistedDebugSessionPayload(
   storageKey: string
-): Record<string, unknown> | null {
+): PersistedDebugSessionPayload | null {
   const rawValue = window.localStorage.getItem(storageKey);
 
   if (!rawValue) {
@@ -81,21 +82,44 @@ function readPersistedInputValues(
       return null;
     }
 
-    return parsedValue.inputValues;
+    return parsedValue;
   } catch {
     return null;
   }
+}
+
+function readPersistedInputValues(
+  storageKey: string
+): Record<string, unknown> | null {
+  return readPersistedDebugSessionPayload(storageKey)?.inputValues ?? null;
 }
 
 function writePersistedInputValues(
   storageKey: string,
   inputValues: Record<string, unknown>
 ) {
+  const currentPayload = readPersistedDebugSessionPayload(storageKey);
   window.localStorage.setItem(
     storageKey,
     JSON.stringify({
       version: DEBUG_SESSION_STORAGE_VERSION,
+      debugSessionId: currentPayload?.debugSessionId,
       inputValues
+    } satisfies PersistedDebugSessionPayload)
+  );
+}
+
+function writePersistedDebugSessionId(
+  storageKey: string,
+  debugSessionId: string
+) {
+  const currentPayload = readPersistedDebugSessionPayload(storageKey);
+  window.localStorage.setItem(
+    storageKey,
+    JSON.stringify({
+      version: DEBUG_SESSION_STORAGE_VERSION,
+      debugSessionId,
+      inputValues: currentPayload?.inputValues ?? {}
     } satisfies PersistedDebugSessionPayload)
   );
 }
@@ -369,15 +393,31 @@ function buildNodeVariableDisplayMetadata(
   );
 }
 
-function createDebugSessionState(applicationId: string, draftId: string) {
+function createDebugSessionState(
+  applicationId: string,
+  draftId: string,
+  persistedDebugSessionId?: string
+) {
+  const scope = `${applicationId}:${draftId}`;
+
+  if (
+    typeof persistedDebugSessionId === 'string' &&
+    persistedDebugSessionId.startsWith(`${scope}:`)
+  ) {
+    return {
+      scope,
+      id: persistedDebugSessionId
+    };
+  }
+
   const random =
     typeof globalThis.crypto?.randomUUID === 'function'
       ? globalThis.crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   return {
-    scope: `${applicationId}:${draftId}`,
-    id: `${applicationId}:${draftId}:${random}`
+    scope,
+    id: `${scope}:${random}`
   };
 }
 
@@ -415,7 +455,11 @@ export function useAgentFlowDebugSession({
   const previousStorageKeyRef = useRef(storageKey);
   const debugSessionScope = `${applicationId}:${draftId}`;
   const [debugSessionState, setDebugSessionState] = useState(() =>
-    createDebugSessionState(applicationId, draftId)
+    createDebugSessionState(
+      applicationId,
+      draftId,
+      readPersistedDebugSessionPayload(storageKey)?.debugSessionId
+    )
   );
   const lastSubmittedPromptRef = useRef<string | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
@@ -431,9 +475,21 @@ export function useAgentFlowDebugSession({
     setDebugSessionState((current) =>
       current.scope === debugSessionScope
         ? current
-        : createDebugSessionState(applicationId, draftId)
+        : createDebugSessionState(
+            applicationId,
+            draftId,
+            readPersistedDebugSessionPayload(storageKey)?.debugSessionId
+          )
     );
-  }, [applicationId, debugSessionScope, draftId]);
+  }, [applicationId, debugSessionScope, draftId, storageKey]);
+
+  useEffect(() => {
+    if (debugSessionState.scope !== debugSessionScope) {
+      return;
+    }
+
+    writePersistedDebugSessionId(storageKey, debugSessionState.id);
+  }, [debugSessionScope, debugSessionState, storageKey]);
 
   useEffect(() => {
     setRunContext((currentRunContext) => {
@@ -1021,9 +1077,11 @@ export function useAgentFlowDebugSession({
 
   function resetVariableCache() {
     variableSnapshotRestoreGenerationRef.current += 1;
+    const nextDebugSessionState = createDebugSessionState(applicationId, draftId);
     stoppingRef.current = false;
     setStopping(false);
-    setDebugSessionState(createDebugSessionState(applicationId, draftId));
+    writePersistedDebugSessionId(storageKey, nextDebugSessionState.id);
+    setDebugSessionState(nextDebugSessionState);
     cancelActiveDebugStream();
     stopPolling();
     clearScheduledAssistantMessageFlush();

@@ -290,6 +290,48 @@ describe('useAgentFlowDebugSession', () => {
     );
   });
 
+  test('reuses persisted debug session id when the editor remounts', async () => {
+    const queryClient = createQueryClient();
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const fetchSnapshotSpy = vi
+      .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValue({ variable_cache: {} });
+
+    const firstRender = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await waitFor(() => {
+      expect(fetchSnapshotSpy).toHaveBeenCalledTimes(1);
+    });
+    const firstSessionId = firstRender.result.current.debugSessionId;
+
+    firstRender.unmount();
+
+    const secondRender = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await waitFor(() => {
+      expect(fetchSnapshotSpy).toHaveBeenCalledTimes(2);
+    });
+
+    expect(secondRender.result.current.debugSessionId).toBe(firstSessionId);
+    expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', firstSessionId);
+  });
+
   test('ignores a delayed durable snapshot after resetting variable cache', async () => {
     const queryClient = createQueryClient();
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
