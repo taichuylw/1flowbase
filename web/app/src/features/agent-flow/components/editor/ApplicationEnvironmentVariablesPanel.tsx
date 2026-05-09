@@ -10,9 +10,11 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Select,
+  Segmented,
   Space,
   Tooltip,
   Typography
@@ -38,7 +40,7 @@ const valueTypeOptions = [
 interface EnvironmentVariableFormValues {
   name: string;
   value_type: string;
-  value: string;
+  value?: string | number | boolean | null;
   description?: string;
 }
 
@@ -57,13 +59,73 @@ function formatVariableValue(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-function parseVariableValue(valueType: string, rawValue: string) {
+function formatFormValue(
+  valueType: string,
+  value: unknown
+): EnvironmentVariableFormValues['value'] {
   if (valueType === 'string') {
-    return rawValue;
+    return typeof value === 'string' ? value : '';
   }
 
   if (valueType === 'number') {
-    const parsed = Number(rawValue);
+    return typeof value === 'number' ? value : null;
+  }
+
+  if (valueType === 'boolean') {
+    return typeof value === 'boolean' ? value : false;
+  }
+
+  return formatVariableValue(value);
+}
+
+function createDefaultValueForType(valueType: string) {
+  if (valueType === 'boolean') {
+    return false;
+  }
+
+  if (valueType === 'object') {
+    return '{}';
+  }
+
+  if (valueType.startsWith('array[')) {
+    return '[]';
+  }
+
+  return '';
+}
+
+function getValuePlaceholder(valueType: string) {
+  if (valueType === 'object') {
+    return '{\n  "key": "value"\n}';
+  }
+
+  if (valueType === 'array[string]') {
+    return '[\n  "item"\n]';
+  }
+
+  if (valueType === 'array[number]') {
+    return '[\n  1\n]';
+  }
+
+  if (valueType === 'array[boolean]') {
+    return '[\n  true\n]';
+  }
+
+  if (valueType === 'array[object]') {
+    return '[\n  { "key": "value" }\n]';
+  }
+
+  return '请输入变量值';
+}
+
+function parseVariableValue(valueType: string, rawValue: unknown) {
+  if (valueType === 'string') {
+    return typeof rawValue === 'string' ? rawValue : '';
+  }
+
+  if (valueType === 'number') {
+    const parsed =
+      typeof rawValue === 'number' ? rawValue : Number(String(rawValue));
     if (!Number.isFinite(parsed)) {
       throw new Error('value');
     }
@@ -71,12 +133,16 @@ function parseVariableValue(valueType: string, rawValue: string) {
   }
 
   if (valueType === 'boolean') {
-    if (rawValue === 'true') {
+    if (rawValue === true || rawValue === 'true') {
       return true;
     }
-    if (rawValue === 'false') {
+    if (rawValue === false || rawValue === 'false') {
       return false;
     }
+    throw new Error('value');
+  }
+
+  if (typeof rawValue !== 'string') {
     throw new Error('value');
   }
 
@@ -121,6 +187,7 @@ export function ApplicationEnvironmentVariablesPanel({
   const [modalOpen, setModalOpen] = useState(false);
   const [valueError, setValueError] = useState<string | null>(null);
   const [form] = Form.useForm<EnvironmentVariableFormValues>();
+  const selectedValueType = Form.useWatch('value_type', form) ?? 'string';
 
   useEffect(() => {
     setDraftVariables(variables);
@@ -146,7 +213,7 @@ export function ApplicationEnvironmentVariablesPanel({
     form.setFieldsValue({
       name: '',
       value_type: 'string',
-      value: '',
+      value: createDefaultValueForType('string'),
       description: ''
     });
     setModalOpen(true);
@@ -159,10 +226,18 @@ export function ApplicationEnvironmentVariablesPanel({
     form.setFieldsValue({
       name: variable.name,
       value_type: variable.value_type,
-      value: formatVariableValue(variable.value),
+      value: formatFormValue(variable.value_type, variable.value),
       description: variable.description
     });
     setModalOpen(true);
+  }
+
+  function handleValueTypeChange(valueType: string) {
+    setValueError(null);
+    form.setFieldsValue({
+      value_type: valueType,
+      value: createDefaultValueForType(valueType)
+    });
   }
 
   async function submitModal() {
@@ -340,19 +415,57 @@ export function ApplicationEnvironmentVariablesPanel({
             label="类型"
             rules={[{ required: true, message: '请选择类型' }]}
           >
-            <Select options={valueTypeOptions} />
+            <Select
+              options={valueTypeOptions}
+              onChange={handleValueTypeChange}
+            />
           </Form.Item>
           <Form.Item
             name="value"
             label="值"
             validateStatus={valueError ? 'error' : undefined}
             help={valueError ?? undefined}
-            rules={[{ required: true, message: '请输入变量值' }]}
+            rules={[
+              {
+                validator(_, value) {
+                  if (
+                    value === undefined ||
+                    value === null ||
+                    (typeof value === 'string' && value.trim().length === 0)
+                  ) {
+                    return Promise.reject(new Error('请输入变量值'));
+                  }
+
+                  return Promise.resolve();
+                }
+              }
+            ]}
           >
-            <Input.TextArea
-              autoSize={{ minRows: 3, maxRows: 8 }}
-              onChange={() => setValueError(null)}
-            />
+            {selectedValueType === 'number' ? (
+              <InputNumber
+                className="agent-flow-editor__environment-variable-number-input"
+                placeholder={getValuePlaceholder(selectedValueType)}
+                onChange={() => setValueError(null)}
+              />
+            ) : selectedValueType === 'boolean' ? (
+              <Segmented
+                block
+                options={[
+                  { label: 'true', value: true },
+                  { label: 'false', value: false }
+                ]}
+                onChange={() => setValueError(null)}
+              />
+            ) : (
+              <Input.TextArea
+                autoSize={{
+                  minRows: selectedValueType === 'string' ? 3 : 5,
+                  maxRows: 10
+                }}
+                placeholder={getValuePlaceholder(selectedValueType)}
+                onChange={() => setValueError(null)}
+              />
+            )}
           </Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />

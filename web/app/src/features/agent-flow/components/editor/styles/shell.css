@@ -145,6 +145,10 @@
   white-space: nowrap;
 }
 
+.agent-flow-editor__environment-variable-number-input {
+  width: 100%;
+}
+
 .agent-flow-editor__system-variables-header {
   display: flex;
   align-items: flex-start;
