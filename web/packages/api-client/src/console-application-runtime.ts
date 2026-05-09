@@ -20,6 +20,7 @@ export interface ConsoleFlowRunDetail {
   flow_id: string;
   draft_id: string;
   compiled_plan_id: string | null;
+  debug_session_id?: string;
   run_mode: ConsoleFlowRunMode;
   status: string;
   target_node_id: string | null;

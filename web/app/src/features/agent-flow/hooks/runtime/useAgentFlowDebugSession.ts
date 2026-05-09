@@ -432,6 +432,9 @@ export function useAgentFlowDebugSession({
 }) {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const actorUserId = useAuthStore(
+    (state) => state.actor?.id ?? state.me?.id ?? null
+  );
   const storageKey = useMemo(
     () => buildAgentFlowDebugSessionStorageKey(applicationId, draftId),
     [applicationId, draftId]
@@ -560,13 +563,18 @@ export function useAgentFlowDebugSession({
         applicationId,
         draftId,
         runContext,
-        nodeMetadata: nodeVariableDisplayMetadata
+        nodeMetadata: nodeVariableDisplayMetadata,
+        debugSessionId: debugSessionState.id,
+        actorUserId
       });
     }
 
     const groups = mapRunContextToVariableGroups(runContext, {
       applicationId,
-      draftId
+      draftId,
+      debugSessionId: debugSessionState.id,
+      flowId: document.meta.flowId,
+      actorUserId
     });
     const cacheGroup = mapVariableCacheToVariableGroup(
       buildDisplayVariableCache(nodePreviewVariableCache, runContext),
@@ -576,7 +584,10 @@ export function useAgentFlowDebugSession({
     return cacheGroup ? [cacheGroup, ...groups] : groups;
   }, [
     applicationId,
+    actorUserId,
+    debugSessionState.id,
     draftId,
+    document.meta.flowId,
     lastDetail,
     nodeVariableDisplayMetadata,
     nodePreviewVariableCache,

@@ -3,6 +3,7 @@ import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import {
   buildRunContextFromDocument,
+  mapRunContextToVariableGroups,
   mapRunDetailToVariableGroups,
   mapVariableCacheToVariableGroup
 } from '../../lib/debug-console/variable-groups';
@@ -15,6 +16,7 @@ const createRunDetail = (): FlowDebugRunDetail => ({
     flow_id: 'flow-1',
     draft_id: 'draft-1',
     compiled_plan_id: 'plan-1',
+    debug_session_id: 'debug-session-1',
     run_mode: 'debug_flow_run' as const,
     status: 'succeeded',
     target_node_id: null,
@@ -88,6 +90,46 @@ const createRunDetail = (): FlowDebugRunDetail => ({
 });
 
 describe('debug console variable groups', () => {
+  test('maps draft system variables into the visible variable groups', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const runContext = buildRunContextFromDocument(document);
+
+    const variableGroups = mapRunContextToVariableGroups(runContext, {
+      applicationId: 'app-1',
+      draftId: 'draft-1',
+      debugSessionId: 'debug-session-1',
+      flowId: 'flow-1',
+      actorUserId: 'user-1'
+    });
+
+    const systemGroup = variableGroups.find(
+      (group) => group.title === 'System Variables'
+    );
+
+    expect(systemGroup?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'sys.conversation_id',
+          label: 'sys.conversation_id',
+          value: 'debug-session-1',
+          isReadOnly: true
+        }),
+        expect.objectContaining({
+          key: 'sys.app_id',
+          value: 'app-1'
+        }),
+        expect.objectContaining({
+          key: 'sys.workflow_id',
+          value: 'flow-1'
+        }),
+        expect.objectContaining({
+          key: 'sys.workflow_run_id',
+          value: null
+        })
+      ])
+    );
+  });
+
   test('maps variable cache entries at complete node output level', () => {
     const group = mapVariableCacheToVariableGroup(
       {
@@ -140,7 +182,9 @@ describe('debug console variable groups', () => {
       runContext
     });
 
-    const inputGroup = variableGroups.find((group) => group.title === 'Input Variables');
+    const inputGroup = variableGroups.find(
+      (group) => group.title === 'Input Variables'
+    );
     const inputKeys = (inputGroup?.items ?? []).map((item) => item.key);
 
     expect(inputKeys).toEqual(
@@ -151,6 +195,27 @@ describe('debug console variable groups', () => {
     expect(
       inputGroup?.items.find((item) => item.key === 'node-start.query')?.value
     ).toBe('请总结退款政策');
+
+    const systemGroup = variableGroups.find(
+      (group) => group.title === 'System Variables'
+    );
+
+    expect(systemGroup?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'sys.conversation_id',
+          value: 'debug-session-1'
+        }),
+        expect.objectContaining({
+          key: 'sys.user_id',
+          value: 'user-1'
+        }),
+        expect.objectContaining({
+          key: 'sys.workflow_run_id',
+          value: 'flow-run-1'
+        })
+      ])
+    );
 
     const outputGroup = variableGroups.find(
       (group) => group.title === 'Node Outputs'
@@ -232,7 +297,8 @@ describe('debug console variable groups', () => {
       outputGroup?.items.find((item) => item.label === 'LLM/records')?.value
     ).toEqual([{ id: '1' }]);
     expect(
-      outputGroup?.items.find((item) => item.label === 'LLM/empty_record')?.value
+      outputGroup?.items.find((item) => item.label === 'LLM/empty_record')
+        ?.value
     ).toEqual({});
   });
 

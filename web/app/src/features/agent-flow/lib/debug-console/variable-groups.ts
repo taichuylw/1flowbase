@@ -12,6 +12,10 @@ import {
   type FlowDebugRunDetail,
   type NodeDebugPreviewVariableCache
 } from '../../api/runtime';
+import {
+  agentFlowSystemVariables,
+  systemVariableNodeId
+} from '../system-variables';
 import { getNodeVariableOutputs } from '../start-node-variables';
 import { formatNodeVariablePathLabel } from '../variable-labels';
 import { getBuiltinNodeRuntimeContract } from '../node-definitions/contracts';
@@ -20,6 +24,14 @@ export interface NodeVariableDisplayMeta {
   label: string;
   nodeType?: string;
   outputs?: FlowNodeOutputDocument[];
+}
+
+interface SystemVariableContext {
+  applicationId: string;
+  debugSessionId?: string | null;
+  flowId?: string | null;
+  flowRunId?: string | null;
+  actorUserId?: string | null;
 }
 
 function normalizeNodeVariableDisplayMeta(
@@ -86,7 +98,9 @@ function mapNodeOutputVariables(
   const entries = outputs?.length
     ? outputs.flatMap((output) => {
         const selectorValue = readOutputSelector(valueRecord, output);
-        return selectorValue.found ? [[output.key, selectorValue.value] as const] : [];
+        return selectorValue.found
+          ? [[output.key, selectorValue.value] as const]
+          : [];
       })
     : Object.entries(valueRecord);
 
@@ -128,9 +142,7 @@ function readOutputSelector(
   return { found: true, value: current };
 }
 
-function isRuntimeDebugArtifactPreview(
-  value: unknown
-): value is {
+function isRuntimeDebugArtifactPreview(value: unknown): value is {
   __runtime_debug_artifact: true;
   is_truncated: boolean;
   artifact_ref: string;
@@ -197,6 +209,30 @@ function readRunDetailInputValue(
     : undefined;
 }
 
+function mapSystemVariablesToGroup(
+  context: SystemVariableContext
+): AgentFlowVariableGroup {
+  const values: Record<string, unknown> = {
+    conversation_id: context.debugSessionId ?? null,
+    dialog_count: 0,
+    user_id: context.actorUserId ?? null,
+    app_id: context.applicationId,
+    workflow_id: context.flowId ?? null,
+    workflow_run_id: context.flowRunId ?? null
+  };
+
+  return {
+    title: 'System Variables',
+    items: agentFlowSystemVariables.map((variable) => ({
+      key: `${systemVariableNodeId}.${variable.key}`,
+      label: variable.title,
+      helperText: variable.description,
+      value: values[variable.key],
+      isReadOnly: true
+    }))
+  };
+}
+
 export function getRunContextValues(
   runContext: AgentFlowRunContext
 ): Record<string, unknown> {
@@ -212,21 +248,24 @@ export function buildRunContextFromDocument(
 ): AgentFlowRunContext {
   const startNode = document.graph.nodes.find((node) => node.type === 'start');
   const startPayload =
-    buildFlowDebugRunInput(document, rememberedInputs ?? undefined).input_payload[
-      startNode?.id ?? 'node-start'
-    ] ?? {};
+    buildFlowDebugRunInput(document, rememberedInputs ?? undefined)
+      .input_payload[startNode?.id ?? 'node-start'] ?? {};
 
   return {
     environmentLabel: 'draft',
-    remembered: Boolean(rememberedInputs && Object.keys(rememberedInputs).length > 0),
-    fields: (startNode ? getNodeVariableOutputs(startNode) : []).map((output) => ({
-      nodeId: startNode?.id ?? 'node-start',
-      nodeLabel: startNode?.alias ?? startNode?.id ?? 'node-start',
-      key: output.key,
-      title: output.title,
-      valueType: output.valueType,
-      value: startPayload[output.key]
-    }))
+    remembered: Boolean(
+      rememberedInputs && Object.keys(rememberedInputs).length > 0
+    ),
+    fields: (startNode ? getNodeVariableOutputs(startNode) : []).map(
+      (output) => ({
+        nodeId: startNode?.id ?? 'node-start',
+        nodeLabel: startNode?.alias ?? startNode?.id ?? 'node-start',
+        key: output.key,
+        title: output.title,
+        valueType: output.valueType,
+        value: startPayload[output.key]
+      })
+    )
   };
 }
 
@@ -235,6 +274,9 @@ export function mapRunContextToVariableGroups(
   options: {
     applicationId: string;
     draftId: string;
+    debugSessionId?: string | null;
+    flowId?: string | null;
+    actorUserId?: string | null;
   }
 ): AgentFlowVariableGroup[] {
   return [
@@ -246,6 +288,12 @@ export function mapRunContextToVariableGroups(
         value: field.value
       }))
     },
+    mapSystemVariablesToGroup({
+      applicationId: options.applicationId,
+      debugSessionId: options.debugSessionId,
+      flowId: options.flowId,
+      actorUserId: options.actorUserId
+    }),
     {
       title: 'Conversation / Session',
       items: [
@@ -318,10 +366,16 @@ export function mapRunDetailToVariableGroups(
     draftId: string;
     runContext: AgentFlowRunContext;
     nodeMetadata?: Record<string, string | NodeVariableDisplayMeta>;
+    debugSessionId?: string | null;
+    actorUserId?: string | null;
   }
 ): AgentFlowVariableGroup[] {
   const inputItems = options.runContext.fields.map((field) => {
-    const detailValue = readRunDetailInputValue(detail, field.nodeId, field.key);
+    const detailValue = readRunDetailInputValue(
+      detail,
+      field.nodeId,
+      field.key
+    );
 
     return {
       key: `${field.nodeId}.${field.key}`,
@@ -375,6 +429,14 @@ export function mapRunDetailToVariableGroups(
       title: 'Node Outputs',
       items: nodeOutputItems
     },
+    mapSystemVariablesToGroup({
+      applicationId: detail.flow_run.application_id,
+      debugSessionId:
+        detail.flow_run.debug_session_id ?? options.debugSessionId,
+      flowId: detail.flow_run.flow_id,
+      flowRunId: detail.flow_run.id,
+      actorUserId: detail.flow_run.created_by ?? options.actorUserId
+    }),
     {
       title: 'Conversation / Session',
       items: [

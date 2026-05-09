@@ -247,15 +247,15 @@ describe('useAgentFlowDebugSession', () => {
     const fetchSnapshotSpy = vi
       .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
       .mockResolvedValue({
-      variable_cache: {
-        'node-start': {
-          query: '沿用 durable 输入'
-        },
-        'node-llm': {
-          text: '沿用 durable 输出'
+        variable_cache: {
+          'node-start': {
+            query: '沿用 durable 输入'
+          },
+          'node-llm': {
+            text: '沿用 durable 输出'
+          }
         }
-      }
-    });
+      });
 
     const { result } = renderHook(
       () =>
@@ -341,7 +341,7 @@ describe('useAgentFlowDebugSession', () => {
     vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
       .mockReturnValueOnce(
         new Promise<runtimeApi.DebugVariableSnapshot>((resolve) => {
-        resolveSnapshot = resolve;
+          resolveSnapshot = resolve;
         })
       )
       .mockResolvedValue({ variable_cache: {} });
@@ -369,7 +369,9 @@ describe('useAgentFlowDebugSession', () => {
       });
     });
 
-    expect(result.current.getNodePreviewVariableCache()['node-llm']).toBeUndefined();
+    expect(
+      result.current.getNodePreviewVariableCache()['node-llm']
+    ).toBeUndefined();
   });
 
   test('creates user and assistant messages after a debug run succeeds', async () => {
@@ -435,8 +437,25 @@ describe('useAgentFlowDebugSession', () => {
       expect.arrayContaining([
         'Input Variables',
         'Node Outputs',
+        'System Variables',
         'Conversation / Session',
         'Environment'
+      ])
+    );
+    const systemVariablesGroup = result.current.variableGroups.find(
+      (group) => group.title === 'System Variables'
+    );
+
+    expect(systemVariablesGroup?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'sys.user_id',
+          value: 'user-1'
+        }),
+        expect.objectContaining({
+          key: 'sys.workflow_run_id',
+          value: 'flow-run-1'
+        })
       ])
     );
     const inputVariablesGroup = result.current.variableGroups.find(
@@ -461,9 +480,9 @@ describe('useAgentFlowDebugSession', () => {
         })
       })
     );
-    expect(result.current.getNodePreviewVariableCache()['node-llm']).not.toHaveProperty(
-      'user_prompt'
-    );
+    expect(
+      result.current.getNodePreviewVariableCache()['node-llm']
+    ).not.toHaveProperty('user_prompt');
     expect(
       result.current.getNodePreviewVariableCache()['node-answer']
     ).not.toHaveProperty('answer_template');
