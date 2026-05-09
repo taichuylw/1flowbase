@@ -289,6 +289,21 @@ describe('AgentFlowEditorShell', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '发布' })).toBeInTheDocument();
+    expect(
+      within(document.querySelector('.agent-flow-editor__overlay')!)
+        .getAllByRole('button')
+        .map(
+          (button) => button.getAttribute('aria-label') ?? button.textContent
+        )
+    ).toEqual([
+      '预览',
+      'Issues',
+      '系统变量',
+      '环境变量',
+      '保存',
+      '发布',
+      '历史版本'
+    ]);
   }, 20_000);
 
   test('opens readonly system variables from the canvas overlay', async () => {

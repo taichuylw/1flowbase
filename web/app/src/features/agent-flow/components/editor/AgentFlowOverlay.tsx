@@ -55,18 +55,6 @@ export function AgentFlowOverlay({
       </Space>
       <Space size="small">
         <Button
-          aria-label="Issues"
-          icon={<IssuesCloseOutlined />}
-          onClick={onOpenIssues}
-          title="Issues"
-        />
-        <Button
-          aria-label="历史版本"
-          icon={<HistoryOutlined />}
-          onClick={onOpenHistory}
-          title="历史版本"
-        />
-        <Button
           aria-label="预览"
           autoInsertSpace={false}
           icon={<PlayCircleOutlined />}
@@ -76,14 +64,11 @@ export function AgentFlowOverlay({
           预览
         </Button>
         <Button
-          aria-label="环境变量"
-          autoInsertSpace={false}
-          icon={<DatabaseOutlined />}
-          onClick={onOpenEnvironmentVariables}
-          title="环境变量"
-        >
-          环境变量
-        </Button>
+          aria-label="Issues"
+          icon={<IssuesCloseOutlined />}
+          onClick={onOpenIssues}
+          title="Issues"
+        />
         <Button
           aria-label="系统变量"
           autoInsertSpace={false}
@@ -92,6 +77,15 @@ export function AgentFlowOverlay({
           title="系统变量"
         >
           系统变量
+        </Button>
+        <Button
+          aria-label="环境变量"
+          autoInsertSpace={false}
+          icon={<DatabaseOutlined />}
+          onClick={onOpenEnvironmentVariables}
+          title="环境变量"
+        >
+          环境变量
         </Button>
         <Tooltip title={autosaveLabel}>
           <Button
@@ -111,6 +105,12 @@ export function AgentFlowOverlay({
         >
           发布
         </Button>
+        <Button
+          aria-label="历史版本"
+          icon={<HistoryOutlined />}
+          onClick={onOpenHistory}
+          title="历史版本"
+        />
       </Space>
     </div>
   );
