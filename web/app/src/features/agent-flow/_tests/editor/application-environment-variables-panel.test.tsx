@@ -50,6 +50,33 @@ describe('ApplicationEnvironmentVariablesPanel', () => {
     });
   });
 
+  test('keeps a newly added object field editable before it has a key', () => {
+    const onChange = vi.fn();
+
+    render(
+      <EnvironmentVariableValueEditor
+        value={{}}
+        valueType="object"
+        onChange={onChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '添加字段' }));
+
+    expect(screen.getByLabelText('对象键 2')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('对象键 2'), {
+      target: { value: 'ApiBaseUrl' }
+    });
+    fireEvent.change(screen.getByLabelText('对象值 2'), {
+      target: { value: 'https://api.example.com' }
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      ApiBaseUrl: 'https://api.example.com'
+    });
+  });
+
   test('edits array string values as item rows', () => {
     const onChange = vi.fn();
 
@@ -66,5 +93,32 @@ describe('ApplicationEnvironmentVariablesPanel', () => {
     });
 
     expect(onChange).toHaveBeenLastCalledWith(['first', 'second']);
+  });
+
+  test('keeps invalid array object json editable while reporting the draft', () => {
+    const onChange = vi.fn();
+
+    render(
+      <EnvironmentVariableValueEditor
+        value={[{}]}
+        valueType="array[object]"
+        onChange={onChange}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('数组对象 1'), {
+      target: { value: '{' }
+    });
+
+    expect(screen.getByLabelText('数组对象 1')).toHaveValue('{');
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('数组对象 1'), {
+      target: { value: '{ "ApiBaseUrl": "https://api.example.com" }' }
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      { ApiBaseUrl: 'https://api.example.com' }
+    ]);
   });
 });

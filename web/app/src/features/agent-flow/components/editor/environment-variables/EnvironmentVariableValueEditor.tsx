@@ -13,7 +13,7 @@ import {
   Space,
   Typography
 } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const scalarObjectValueTypes = ['string', 'number', 'boolean'] as const;
 
@@ -86,7 +86,15 @@ function createObjectFromRows(rows: ObjectValueRow[]) {
 }
 
 function formatJson(value: unknown) {
-  return JSON.stringify(value, null, 2);
+  return JSON.stringify(value, null, 2) ?? '';
+}
+
+function areJsonValuesEqual(left: unknown, right: unknown) {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return Object.is(left, right);
+  }
 }
 
 function createDefaultItem(valueType: string) {
@@ -195,11 +203,25 @@ function ObjectValueEditor({
   onChange,
   onValueErrorChange
 }: EnvironmentVariableValueEditorProps) {
-  const rows = useMemo(() => createObjectRows(value), [value]);
+  const [rows, setRows] = useState(() => createObjectRows(value));
+  const lastEmittedValueRef = useRef<unknown>(value);
+
+  useEffect(() => {
+    if (areJsonValuesEqual(value, lastEmittedValueRef.current)) {
+      return;
+    }
+
+    lastEmittedValueRef.current = value;
+    setRows(createObjectRows(value));
+  }, [value]);
 
   function updateRows(nextRows: ObjectValueRow[]) {
+    const nextValue = createObjectFromRows(nextRows);
+
+    setRows(nextRows);
+    lastEmittedValueRef.current = nextValue;
     onValueErrorChange?.(null);
-    onChange?.(createObjectFromRows(nextRows));
+    onChange?.(nextValue);
   }
 
   return (
@@ -312,6 +334,7 @@ function ObjectValueEditor({
         </div>
       ))}
       <Button
+        aria-label="添加字段"
         icon={<PlusOutlined />}
         size="small"
         onClick={() => updateRows([...rows, createEmptyObjectRow()])}
@@ -322,15 +345,95 @@ function ObjectValueEditor({
   );
 }
 
+function ArrayObjectValueInput({
+  item,
+  index,
+  onApply,
+  onValueErrorChange
+}: {
+  item: unknown;
+  index: number;
+  onApply: (value: unknown) => void;
+  onValueErrorChange?: (message: string | null) => void;
+}) {
+  const [content, setContent] = useState(() => formatJson(item));
+  const lastAppliedValueRef = useRef<unknown>(item);
+
+  useEffect(() => {
+    if (areJsonValuesEqual(item, lastAppliedValueRef.current)) {
+      return;
+    }
+
+    lastAppliedValueRef.current = item;
+    setContent(formatJson(item));
+  }, [item]);
+
+  return (
+    <Input.TextArea
+      aria-label={`数组对象 ${index + 1}`}
+      autoSize={{ minRows: 2, maxRows: 5 }}
+      className="agent-flow-editor__env-array-value"
+      placeholder='{ "key": "value" }'
+      value={content}
+      onChange={(event) => {
+        const nextContent = event.target.value;
+
+        setContent(nextContent);
+
+        try {
+          const nextValue = JSON.parse(nextContent);
+
+          if (
+            !nextValue ||
+            typeof nextValue !== 'object' ||
+            Array.isArray(nextValue)
+          ) {
+            onValueErrorChange?.('数组对象必须是合法 JSON 对象');
+            return;
+          }
+
+          lastAppliedValueRef.current = nextValue;
+          onApply(nextValue);
+          onValueErrorChange?.(null);
+        } catch {
+          onValueErrorChange?.('数组对象必须是合法 JSON 对象');
+        }
+      }}
+    />
+  );
+}
+
 function ArrayValueEditor({
   value,
   valueType,
   onChange,
   onValueErrorChange
 }: EnvironmentVariableValueEditorProps) {
-  const items = normalizeArrayValue(valueType, value);
+  const [items, setItems] = useState(() =>
+    normalizeArrayValue(valueType, value)
+  );
+  const lastEmittedValueRef = useRef<unknown>(value);
+  const previousValueTypeRef = useRef(valueType);
+
+  useEffect(() => {
+    const valueTypeChanged = previousValueTypeRef.current !== valueType;
+
+    previousValueTypeRef.current = valueType;
+
+    if (
+      !valueTypeChanged &&
+      areJsonValuesEqual(value, lastEmittedValueRef.current)
+    ) {
+      return;
+    }
+
+    lastEmittedValueRef.current = value;
+    setItems(normalizeArrayValue(valueType, value));
+  }, [value, valueType]);
 
   function updateItems(nextItems: unknown[]) {
+    setItems(nextItems);
+    lastEmittedValueRef.current = nextItems;
     onValueErrorChange?.(null);
     onChange?.(nextItems);
   }
@@ -376,26 +479,17 @@ function ArrayValueEditor({
               }
             />
           ) : valueType === 'array[object]' ? (
-            <Input.TextArea
-              aria-label={`数组对象 ${index + 1}`}
-              autoSize={{ minRows: 2, maxRows: 5 }}
-              className="agent-flow-editor__env-array-value"
-              placeholder='{ "key": "value" }'
-              value={formatJson(item)}
-              onChange={(event) => {
-                try {
-                  updateItems(
-                    items.map((candidate, candidateIndex) =>
-                      candidateIndex === index
-                        ? JSON.parse(event.target.value)
-                        : candidate
-                    )
-                  );
-                  onValueErrorChange?.(null);
-                } catch {
-                  onValueErrorChange?.('数组对象必须是合法 JSON 对象');
-                }
-              }}
+            <ArrayObjectValueInput
+              index={index}
+              item={item}
+              onApply={(nextValue) =>
+                updateItems(
+                  items.map((candidate, candidateIndex) =>
+                    candidateIndex === index ? nextValue : candidate
+                  )
+                )
+              }
+              onValueErrorChange={onValueErrorChange}
             />
           ) : (
             <Input
@@ -426,6 +520,7 @@ function ArrayValueEditor({
         </div>
       ))}
       <Button
+        aria-label="添加项"
         icon={<PlusOutlined />}
         size="small"
         onClick={() => updateItems([...items, createDefaultItem(valueType)])}
