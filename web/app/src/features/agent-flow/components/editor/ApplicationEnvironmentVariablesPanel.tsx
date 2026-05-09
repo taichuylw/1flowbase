@@ -1,14 +1,20 @@
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CloseOutlined,
+  CodeOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined
+} from '@ant-design/icons';
 import {
   Button,
+  Empty,
   Form,
   Input,
   Modal,
   Popconfirm,
   Select,
   Space,
-  Table,
-  Tag,
+  Tooltip,
   Typography
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
@@ -226,66 +232,74 @@ export function ApplicationEnvironmentVariablesPanel({
             添加环境变量
           </Button>
         </div>
-        <Table
-          dataSource={draftVariables}
-          loading={loading}
-          pagination={false}
-          rowKey="name"
-          size="small"
-          columns={[
-            {
-              title: '变量',
-              dataIndex: 'name',
-              render: (name: string) => (
-                <Typography.Text code>
-                  {formatEnvironmentVariableTitle(name)}
-                </Typography.Text>
-              )
-            },
-            {
-              title: '类型',
-              dataIndex: 'value_type',
-              width: 120,
-              render: (valueType: string) => (
-                <Tag bordered={false}>{valueType}</Tag>
-              )
-            },
-            {
-              title: '值',
-              dataIndex: 'value',
-              ellipsis: true,
-              render: (value: unknown) => (
-                <Typography.Text>{formatVariableValue(value)}</Typography.Text>
-              )
-            },
-            {
-              title: '操作',
-              key: 'actions',
-              width: 120,
-              render: (_, __, index) => (
-                <Space size="small">
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => openEditModal(index)}
+        <div
+          aria-busy={loading}
+          className="agent-flow-editor__environment-variable-list"
+        >
+          {draftVariables.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" />
+          ) : (
+            draftVariables.map((variable, index) => (
+              <div
+                className="agent-flow-editor__environment-variable-row"
+                key={variable.name}
+              >
+                <CodeOutlined className="agent-flow-editor__environment-variable-icon" />
+                <div className="agent-flow-editor__environment-variable-content">
+                  <div className="agent-flow-editor__environment-variable-title">
+                    <Typography.Text strong>
+                      {formatEnvironmentVariableTitle(variable.name)}
+                    </Typography.Text>
+                    <Typography.Text type="secondary">
+                      {variable.value_type}
+                    </Typography.Text>
+                  </div>
+                  <Typography.Text
+                    className="agent-flow-editor__environment-variable-value"
+                    type="secondary"
                   >
-                    编辑
-                  </Button>
+                    {formatVariableValue(variable.value)}
+                  </Typography.Text>
+                  {variable.description ? (
+                    <Typography.Text
+                      className="agent-flow-editor__environment-variable-description"
+                      type="secondary"
+                    >
+                      {variable.description}
+                    </Typography.Text>
+                  ) : null}
+                </div>
+                <Space size={2}>
+                  <Tooltip title="编辑">
+                    <Button
+                      aria-label={`编辑 ${variable.name}`}
+                      icon={<EditOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => openEditModal(index)}
+                    />
+                  </Tooltip>
                   <Popconfirm
                     title="删除环境变量"
                     okText="删除"
                     cancelText="取消"
                     onConfirm={() => deleteVariable(index)}
                   >
-                    <Button danger type="link" size="small">
-                      删除
-                    </Button>
+                    <Tooltip title="删除">
+                      <Button
+                        aria-label={`删除 ${variable.name}`}
+                        danger
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        type="text"
+                      />
+                    </Tooltip>
                   </Popconfirm>
                 </Space>
-              )
-            }
-          ]}
-        />
+              </div>
+            ))
+          )}
+        </div>
       </div>
       <Modal
         title={modalTitle}
@@ -293,6 +307,7 @@ export function ApplicationEnvironmentVariablesPanel({
         confirmLoading={loading}
         okText="保存"
         cancelText="取消"
+        width={420}
         onCancel={() => setModalOpen(false)}
         onOk={() => {
           void submitModal();

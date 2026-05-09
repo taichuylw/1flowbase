@@ -63,7 +63,7 @@
   z-index: 12;
   display: flex;
   flex-direction: column;
-  width: min(680px, calc(100% - 32px));
+  width: min(520px, calc(100% - 32px));
   max-height: min(74vh, calc(100% - var(--agent-flow-secondary-top) - 24px));
   overflow: hidden;
   border: 1px solid #e6eaf1;
@@ -75,15 +75,74 @@
 .agent-flow-editor__environment-variables-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   min-height: 0;
-  padding: 12px;
+  padding: 16px 18px 18px;
   overflow: auto;
 }
 
 .agent-flow-editor__environment-variables-toolbar {
   display: flex;
   justify-content: flex-start;
+}
+
+.agent-flow-editor__environment-variable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-flow-editor__environment-variable-list .ant-empty {
+  margin: 36px 0;
+}
+
+.agent-flow-editor__environment-variable-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.06);
+}
+
+.agent-flow-editor__environment-variable-icon {
+  flex: 0 0 auto;
+  color: #008f7a;
+  font-size: 18px;
+}
+
+.agent-flow-editor__environment-variable-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-flow-editor__environment-variable-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-flow-editor__environment-variable-title .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-flow-editor__environment-variable-value.ant-typography,
+.agent-flow-editor__environment-variable-description.ant-typography {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-flow-editor__system-variables-header {
