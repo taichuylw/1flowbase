@@ -16,11 +16,13 @@ import {
 export function ApplicationApiKeysPanel({
   applicationId,
   csrfToken,
-  onCreatedToken
+  onCreatedToken,
+  variant = 'panel'
 }: {
   applicationId: string;
   csrfToken: string;
   onCreatedToken: (token: string | null) => void;
+  variant?: 'panel' | 'embedded';
 }) {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -56,8 +58,16 @@ export function ApplicationApiKeysPanel({
     }
   });
 
+  const Root = variant === 'embedded' ? 'div' : 'section';
+
   return (
-    <section className="application-api-panel">
+    <Root
+      className={
+        variant === 'embedded'
+          ? 'application-api-keys-embedded'
+          : 'application-api-panel'
+      }
+    >
       <div className="application-api-panel__header">
         <div>
           <Typography.Title level={4}>API Keys</Typography.Title>
@@ -133,6 +143,6 @@ export function ApplicationApiKeysPanel({
           </Typography.Text>
         </Space>
       </Modal>
-    </section>
+    </Root>
   );
 }

@@ -61,6 +61,13 @@
   overflow-wrap: anywhere;
 }
 
+.application-api-keys-embedded {
+  width: 100%;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .application-api-panel__header {
   display: flex;
   align-items: flex-start;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -136,13 +136,54 @@ describe('ApplicationApiPage', () => {
 
     expect(await screen.findByText('需要先发布公开 API')).toBeInTheDocument();
     expect(screen.getByText('/api/1flowbase/runs')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'API Keys' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'API Keys' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '创建 Key' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'API Keys' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Native API' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'OpenAI Compatible' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Anthropic Compatible' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Mapping' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Debug' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '发布当前版本' })).toBeInTheDocument();
+  });
+
+  test('keeps API Keys inside the public API header card when published', async () => {
+    publicApi.fetchApplicationApiPublication.mockResolvedValue({
+      id: 'publication-1',
+      version_sequence: 1,
+      api_enabled: true,
+      mapping_snapshot: mapping,
+      created_at: '2026-05-09T00:00:00Z',
+      updated_at: '2026-05-09T00:00:00Z'
+    });
+    publicApi.fetchApplicationApiKeys.mockResolvedValue([
+      {
+        id: 'key-1',
+        name: 'Server key',
+        token_prefix: 'apk_',
+        creator_user_id: 'user-1',
+        enabled: true,
+        expires_at: null,
+        created_at: '2026-05-09T00:00:00Z',
+        updated_at: '2026-05-09T00:00:00Z'
+      }
+    ]);
+
+    const { container } = renderWithProviders(<ApplicationApiPage application={application} />);
+
+    const statusCard = await waitFor(() => {
+      const node = container.querySelector('.application-api-status');
+      expect(node).toBeTruthy();
+      return node as HTMLElement;
+    });
+
+    expect(within(statusCard).getByText('API Keys')).toBeInTheDocument();
+    expect(await within(statusCard).findByText('Server key')).toBeInTheDocument();
+    expect(
+      within(statusCard).getByRole('button', { name: '创建 Key' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'API Keys' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Native API' })).toBeInTheDocument();
   });
 
   test('shows created token once without writing it to storage or URL', async () => {

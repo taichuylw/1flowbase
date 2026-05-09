@@ -67,17 +67,6 @@ export function ApplicationApiPage({
 
   const tabs = [
     {
-      key: 'keys',
-      label: 'API Keys',
-      children: (
-        <ApplicationApiKeysPanel
-          applicationId={application.id}
-          csrfToken={csrfToken}
-          onCreatedToken={setCreatedToken}
-        />
-      )
-    },
-    {
       key: 'native',
       label: 'Native API',
       children: (
@@ -137,7 +126,14 @@ export function ApplicationApiPage({
         publication={publication}
         loading={statusMutation.isPending}
         onToggleEnabled={(enabled) => statusMutation.mutate(enabled)}
-      />
+      >
+        <ApplicationApiKeysPanel
+          applicationId={application.id}
+          csrfToken={csrfToken}
+          onCreatedToken={setCreatedToken}
+          variant="embedded"
+        />
+      </ApplicationApiStatusBar>
       {!publication ? (
         <Alert
           type="warning"

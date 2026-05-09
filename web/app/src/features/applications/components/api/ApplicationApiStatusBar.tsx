@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Alert, Space, Switch, Typography } from 'antd';
 
 import type { ApplicationApiPublication } from '../../api/public-api';
@@ -24,11 +26,13 @@ function PublicEndpointList() {
 export function ApplicationApiStatusBar({
   publication,
   loading,
-  onToggleEnabled
+  onToggleEnabled,
+  children
 }: {
   publication: ApplicationApiPublication | null;
   loading?: boolean;
   onToggleEnabled?: (enabled: boolean) => void;
+  children?: ReactNode;
 }) {
   if (!publication) {
     return (
@@ -41,6 +45,7 @@ export function ApplicationApiStatusBar({
             description="发布后，应用 API Key 会自动绑定当前 active publication；公开 URL 不包含 application_id。"
           />
           <PublicEndpointList />
+          {children}
         </Space>
       </section>
     );
@@ -63,6 +68,7 @@ export function ApplicationApiStatusBar({
           </Typography.Text>
         </Space>
         <PublicEndpointList />
+        {children}
       </Space>
     </section>
   );
