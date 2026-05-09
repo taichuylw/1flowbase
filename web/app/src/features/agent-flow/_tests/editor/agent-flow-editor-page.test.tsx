@@ -562,7 +562,8 @@ describe('AgentFlowEditorShell', () => {
     );
 
     expect(screen.getByText('版本 1')).toBeInTheDocument();
-    expect(screen.getByText(/初始化默认草稿/)).toBeInTheDocument();
+    expect(screen.queryByText(/初始化默认草稿/)).not.toBeInTheDocument();
+    expect(screen.getByText(/2026-04-15 09:00:00/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '恢复版本 1' }));
 
     expect(restoreVersion).toHaveBeenCalledWith('version-1');

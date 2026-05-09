@@ -25,6 +25,27 @@ const historyDrawerSchema = {
   getContainer: false
 } as const;
 
+function formatVersionCreatedAt(value: string) {
+  const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
+
+  if (isoMatch) {
+    return `${isoMatch[1]} ${isoMatch[2]}`;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const pad = (part: number) => String(part).padStart(2, '0');
+
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  ].join(' ');
+}
+
 export function VersionHistoryDrawer({
   open,
   onClose,
@@ -33,30 +54,38 @@ export function VersionHistoryDrawer({
   onRestore
 }: VersionHistoryDrawerProps) {
   return (
-    <SchemaDrawerPanel open={open} schema={historyDrawerSchema} onClose={onClose}>
+    <SchemaDrawerPanel
+      open={open}
+      schema={historyDrawerSchema}
+      onClose={onClose}
+    >
       <List
         dataSource={versions}
         locale={{ emptyText: '当前还没有可恢复的历史版本' }}
-        renderItem={(version) => (
-          <List.Item
-            actions={[
-              <Button
-                key={version.id}
-                loading={restoring}
-                onClick={() => {
-                  void onRestore(version.id);
-                }}
-              >
-                恢复版本 {version.sequence}
-              </Button>
-            ]}
-          >
-            <List.Item.Meta
-              title={`版本 ${version.sequence}`}
-              description={`${version.summary} · ${version.created_at}`}
-            />
-          </List.Item>
-        )}
+        renderItem={(version) => {
+          const createdAt = formatVersionCreatedAt(version.created_at);
+
+          return (
+            <List.Item
+              actions={[
+                <Button
+                  key={version.id}
+                  loading={restoring}
+                  onClick={() => {
+                    void onRestore(version.id);
+                  }}
+                >
+                  恢复版本 {version.sequence}
+                </Button>
+              ]}
+            >
+              <List.Item.Meta
+                title={`版本 ${version.sequence}`}
+                description={createdAt}
+              />
+            </List.Item>
+          );
+        }}
       />
     </SchemaDrawerPanel>
   );
