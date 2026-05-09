@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use control_plane::errors::ControlPlaneError;
 use control_plane::ports::{
     ApplicationRepository, ApplicationVisibility, AuthRepository, CreateApplicationInput,
-    CreateApplicationTagInput, DeleteApplicationInput, UpdateApplicationInput,
+    CreateApplicationTagInput, DeleteApplicationInput, ReplaceApplicationEnvironmentVariablesInput,
+    UpdateApplicationInput,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -413,6 +414,131 @@ impl ApplicationRepository for PgControlPlaneStore {
             name: row.get("name"),
             application_count: row.get("application_count"),
         })
+    }
+
+    async fn list_application_environment_variables(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationEnvironmentVariable>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                env.application_id,
+                env.name,
+                env.value_type,
+                env.value_json,
+                env.description,
+                env.updated_at
+            from application_environment_variables env
+            join applications app on app.id = env.application_id
+            where app.workspace_id = $1
+              and env.application_id = $2
+            order by env.name asc
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(application_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| domain::ApplicationEnvironmentVariable {
+                application_id: row.get("application_id"),
+                name: row.get("name"),
+                value_type: row.get("value_type"),
+                value: row.get("value_json"),
+                description: row.get("description"),
+                updated_at: row.get("updated_at"),
+            })
+            .collect())
+    }
+
+    async fn replace_application_environment_variables(
+        &self,
+        input: &ReplaceApplicationEnvironmentVariablesInput,
+    ) -> Result<Vec<domain::ApplicationEnvironmentVariable>> {
+        let mut tx = self.pool().begin().await?;
+        let exists = sqlx::query_scalar::<_, bool>(
+            r#"
+            select exists(
+                select 1
+                from applications
+                where workspace_id = $1
+                  and id = $2
+            )
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.application_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        if !exists {
+            anyhow::bail!(ControlPlaneError::NotFound("application"));
+        }
+
+        sqlx::query("delete from application_environment_variables where application_id = $1")
+            .bind(input.application_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for variable in &input.variables {
+            sqlx::query(
+                r#"
+                insert into application_environment_variables (
+                    application_id,
+                    name,
+                    value_type,
+                    value_json,
+                    description,
+                    created_by,
+                    updated_by
+                ) values ($1, $2, $3, $4, $5, $6, $6)
+                "#,
+            )
+            .bind(input.application_id)
+            .bind(&variable.name)
+            .bind(&variable.value_type)
+            .bind(&variable.value)
+            .bind(&variable.description)
+            .bind(input.actor_user_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let rows = sqlx::query(
+            r#"
+            select
+                application_id,
+                name,
+                value_type,
+                value_json,
+                description,
+                updated_at
+            from application_environment_variables
+            where application_id = $1
+            order by name asc
+            "#,
+        )
+        .bind(input.application_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| domain::ApplicationEnvironmentVariable {
+                application_id: row.get("application_id"),
+                name: row.get("name"),
+                value_type: row.get("value_type"),
+                value: row.get("value_json"),
+                description: row.get("description"),
+                updated_at: row.get("updated_at"),
+            })
+            .collect())
     }
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {

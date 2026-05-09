@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ConsoleApplicationEnvironmentVariable,
   ConsoleApplicationOrchestrationState,
   ConsoleNodeContributionEntry,
   SaveConsoleApplicationDraftInput
@@ -32,6 +33,11 @@ import {
   startNodeDebugPreview,
   type NodeDebugPreviewPlan
 } from '../../api/runtime';
+import {
+  applicationEnvironmentVariablesQueryKey,
+  replaceApplicationEnvironmentVariables
+} from '../../../applications/api/applications';
+import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
 import {
   fetchModelProviderOptions,
   modelProviderOptionsQueryKey
@@ -66,6 +72,7 @@ import { VersionHistoryDrawer } from '../history/VersionHistoryDrawer';
 import { IssuesDrawer } from '../issues/IssuesDrawer';
 import { AgentFlowCanvas } from './AgentFlowCanvas';
 import { AgentFlowOverlay } from './AgentFlowOverlay';
+import { ApplicationEnvironmentVariablesPanel } from './ApplicationEnvironmentVariablesPanel';
 import { SystemVariablesPanel } from './SystemVariablesPanel';
 
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
@@ -82,6 +89,7 @@ const VARIABLE_CACHE_MIN_DETAIL_WIDTH = 220;
 interface AgentFlowCanvasFrameProps {
   applicationId: string;
   applicationName: string;
+  initialEnvironmentVariables?: ConsoleApplicationEnvironmentVariable[];
   nodeContributions: ConsoleNodeContributionEntry[];
   saveDraftOverride?: (
     input: SaveConsoleApplicationDraftInput
@@ -94,6 +102,7 @@ interface AgentFlowCanvasFrameProps {
 export function AgentFlowCanvasFrame({
   applicationId,
   applicationName,
+  initialEnvironmentVariables = [],
   nodeContributions,
   saveDraftOverride,
   restoreVersionOverride
@@ -147,6 +156,11 @@ export function AgentFlowCanvasFrame({
   } | null>(null);
   const [variableCacheOpen, setVariableCacheOpen] = useState(false);
   const [systemVariablesOpen, setSystemVariablesOpen] = useState(false);
+  const [environmentVariablesOpen, setEnvironmentVariablesOpen] =
+    useState(false);
+  const [environmentVariables, setEnvironmentVariables] = useState<
+    AgentFlowEnvironmentVariable[]
+  >(initialEnvironmentVariables);
   const [selectedVariable, setSelectedVariable] =
     useState<SelectedVariableInfo | null>(null);
   const [variableCacheHeight, setVariableCacheHeight] = useState(
@@ -162,6 +176,34 @@ export function AgentFlowCanvasFrame({
     queryKey: modelProviderOptionsQueryKey,
     queryFn: fetchModelProviderOptions
   });
+  const environmentVariablesMutation = useMutation({
+    mutationFn: (variables: AgentFlowEnvironmentVariable[]) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return replaceApplicationEnvironmentVariables(
+        applicationId,
+        variables,
+        csrfToken
+      );
+    },
+    onSuccess(nextVariables) {
+      setEnvironmentVariables(nextVariables);
+      queryClient.setQueryData(
+        applicationEnvironmentVariablesQueryKey(applicationId),
+        nextVariables
+      );
+      message.success('环境变量已保存');
+    },
+    onError() {
+      message.error('环境变量保存失败');
+    }
+  });
+
+  useEffect(() => {
+    setEnvironmentVariables(initialEnvironmentVariables);
+  }, [initialEnvironmentVariables]);
   const navigation = useContainerNavigation();
   const draftSync = useDraftSync({
     applicationId,
@@ -174,7 +216,8 @@ export function AgentFlowCanvasFrame({
   const debugSession = useAgentFlowDebugSession({
     applicationId,
     draftId: draftMeta.draftId,
-    document: workingDocument
+    document: workingDocument,
+    environmentVariables
   });
   const issues = useMemo(
     () =>
@@ -182,9 +225,11 @@ export function AgentFlowCanvasFrame({
         workingDocument,
         modelProviderOptionsQuery.isSuccess
           ? modelProviderOptionsQuery.data
-          : null
+          : null,
+        environmentVariables
       ),
     [
+      environmentVariables,
       workingDocument,
       modelProviderOptionsQuery.data,
       modelProviderOptionsQuery.isSuccess
@@ -676,6 +721,7 @@ export function AgentFlowCanvasFrame({
         }
         onOpenIssues={() => setPanelState({ issuesOpen: true })}
         onOpenHistory={() => setPanelState({ historyOpen: true })}
+        onOpenEnvironmentVariables={() => setEnvironmentVariablesOpen(true)}
         onOpenSystemVariables={() => setSystemVariablesOpen(true)}
         onOpenPublish={() => undefined}
         publishDisabled={false}
@@ -721,6 +767,16 @@ export function AgentFlowCanvasFrame({
         {systemVariablesOpen ? (
           <SystemVariablesPanel onClose={() => setSystemVariablesOpen(false)} />
         ) : null}
+        {environmentVariablesOpen ? (
+          <ApplicationEnvironmentVariablesPanel
+            loading={environmentVariablesMutation.isPending}
+            variables={environmentVariables}
+            onClose={() => setEnvironmentVariablesOpen(false)}
+            onSave={(nextVariables) =>
+              environmentVariablesMutation.mutate(nextVariables)
+            }
+          />
+        ) : null}
         {selectedNodeId ? (
           <div
             className="agent-flow-editor__detail-dock"
@@ -743,6 +799,7 @@ export function AgentFlowCanvasFrame({
             />
             <NodeDetailPanel
               applicationId={applicationId}
+              environmentVariables={environmentVariables}
               onClose={detailActions.closeDetail}
               onRunNode={selectedNodeId ? handleRunSelectedNode : undefined}
               runLoading={nodePreviewMutation.isPending}

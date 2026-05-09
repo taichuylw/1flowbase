@@ -34,6 +34,7 @@ import {
   mapVariableCacheToVariableGroup,
   type NodeVariableDisplayMeta
 } from '../../lib/debug-console/variable-groups';
+import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
 
 const DEBUG_SESSION_STORAGE_VERSION = 1;
 const DEBUG_SESSION_STORAGE_PREFIX = '1flowbase.agent-flow.debug-session';
@@ -424,11 +425,13 @@ function createDebugSessionState(
 export function useAgentFlowDebugSession({
   applicationId,
   draftId,
-  document
+  document,
+  environmentVariables = []
 }: {
   applicationId: string;
   draftId: string;
   document: FlowAuthoringDocument;
+  environmentVariables?: AgentFlowEnvironmentVariable[];
 }) {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
@@ -518,7 +521,8 @@ export function useAgentFlowDebugSession({
     }
 
     let disposed = false;
-    const restoreGeneration = (variableSnapshotRestoreGenerationRef.current += 1);
+    const restoreGeneration =
+      (variableSnapshotRestoreGenerationRef.current += 1);
 
     setNodePreviewVariableCache({});
     fetchDebugVariableSnapshot(applicationId, debugSessionState.id)
@@ -565,7 +569,8 @@ export function useAgentFlowDebugSession({
         runContext,
         nodeMetadata: nodeVariableDisplayMetadata,
         debugSessionId: debugSessionState.id,
-        actorUserId
+        actorUserId,
+        environmentVariables
       });
     }
 
@@ -574,7 +579,8 @@ export function useAgentFlowDebugSession({
       draftId,
       debugSessionId: debugSessionState.id,
       flowId: document.meta.flowId,
-      actorUserId
+      actorUserId,
+      environmentVariables
     });
     const cacheGroup = mapVariableCacheToVariableGroup(
       buildDisplayVariableCache(nodePreviewVariableCache, runContext),
@@ -588,6 +594,7 @@ export function useAgentFlowDebugSession({
     debugSessionState.id,
     draftId,
     document.meta.flowId,
+    environmentVariables,
     lastDetail,
     nodeVariableDisplayMetadata,
     nodePreviewVariableCache,
@@ -1088,7 +1095,10 @@ export function useAgentFlowDebugSession({
 
   function resetVariableCache() {
     variableSnapshotRestoreGenerationRef.current += 1;
-    const nextDebugSessionState = createDebugSessionState(applicationId, draftId);
+    const nextDebugSessionState = createDebugSessionState(
+      applicationId,
+      draftId
+    );
     stoppingRef.current = false;
     setStopping(false);
     writePersistedDebugSessionId(storageKey, nextDebugSessionState.id);

@@ -99,7 +99,15 @@ describe('debug console variable groups', () => {
       draftId: 'draft-1',
       debugSessionId: 'debug-session-1',
       flowId: 'flow-1',
-      actorUserId: 'user-1'
+      actorUserId: 'user-1',
+      environmentVariables: [
+        {
+          name: 'ApiBaseUrl',
+          value_type: 'string',
+          value: 'https://api.example.com',
+          description: '当前应用 API 地址'
+        }
+      ]
     });
 
     const systemGroup = variableGroups.find(
@@ -128,6 +136,19 @@ describe('debug console variable groups', () => {
         })
       ])
     );
+
+    const environmentGroup = variableGroups.find(
+      (group) => group.title === 'Environment Variables'
+    );
+
+    expect(environmentGroup?.items).toEqual([
+      expect.objectContaining({
+        key: 'env.ApiBaseUrl',
+        label: 'env.ApiBaseUrl',
+        value: 'https://api.example.com',
+        isReadOnly: true
+      })
+    ]);
   });
 
   test('maps variable cache entries at complete node output level', () => {

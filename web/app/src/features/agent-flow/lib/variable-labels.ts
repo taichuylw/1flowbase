@@ -6,6 +6,10 @@ export function formatNodeVariableLabel(
     return `sys.${variableName}`;
   }
 
+  if (nodeName === 'env') {
+    return `env.${variableName}`;
+  }
+
   return `${nodeName}/${variableName}`;
 }
 

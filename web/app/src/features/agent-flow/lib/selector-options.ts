@@ -5,6 +5,11 @@ import {
   agentFlowSystemVariables,
   systemVariableNodeId
 } from './system-variables';
+import {
+  environmentVariableNodeId,
+  formatEnvironmentVariableTitle,
+  type AgentFlowEnvironmentVariable
+} from './application-environment-variables';
 import { formatNodeVariableLabel } from './variable-labels';
 
 export interface FlowSelectorOption {
@@ -45,7 +50,8 @@ function collectUpstreamNodeIds(
 
 export function listVisibleSelectorOptions(
   document: FlowAuthoringDocument,
-  nodeId: string
+  nodeId: string,
+  environmentVariables: AgentFlowEnvironmentVariable[] = []
 ): FlowSelectorOption[] {
   const visibleNodeIds = collectUpstreamNodeIds(document, nodeId);
   const systemOptions = agentFlowSystemVariables.map((variable) => ({
@@ -55,6 +61,14 @@ export function listVisibleSelectorOptions(
     outputLabel: variable.title,
     value: [systemVariableNodeId, variable.key],
     displayLabel: variable.title
+  }));
+  const environmentOptions = environmentVariables.map((variable) => ({
+    nodeId: environmentVariableNodeId,
+    nodeLabel: '环境变量',
+    outputKey: variable.name,
+    outputLabel: formatEnvironmentVariableTitle(variable.name),
+    value: [environmentVariableNodeId, variable.name],
+    displayLabel: formatEnvironmentVariableTitle(variable.name)
   }));
 
   const nodeOptions = document.graph.nodes
@@ -70,7 +84,7 @@ export function listVisibleSelectorOptions(
       }))
     );
 
-  return [...systemOptions, ...nodeOptions];
+  return [...systemOptions, ...environmentOptions, ...nodeOptions];
 }
 
 export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {
@@ -104,13 +118,18 @@ export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {
 export function isSelectorVisible(
   document: FlowAuthoringDocument,
   nodeId: string,
-  selector: string[]
+  selector: string[],
+  environmentVariables: AgentFlowEnvironmentVariable[] = []
 ): boolean {
   if (selector.length < 2) {
     return false;
   }
 
-  return listVisibleSelectorOptions(document, nodeId).some(
+  return listVisibleSelectorOptions(
+    document,
+    nodeId,
+    environmentVariables
+  ).some(
     (option) =>
       option.value.length === selector.length &&
       option.value.every((segment, index) => segment === selector[index])

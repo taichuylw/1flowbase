@@ -249,6 +249,11 @@ where
         .as_object()
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
+    let environment_variables = service
+        .repository
+        .list_application_environment_variables(application.workspace_id, application.id)
+        .await?;
+    inject_application_environment_variables(&mut variable_pool, &environment_variables);
     inject_system_variables(&mut variable_pool, &flow_run);
     let mut last_output_payload = json!({});
     let flow_span = append_host_span(
@@ -1002,5 +1007,20 @@ fn inject_system_variables(
             "workflow_id": flow_run.flow_id.to_string(),
             "workflow_run_id": flow_run.id.to_string(),
         }),
+    );
+}
+
+fn inject_application_environment_variables(
+    variable_pool: &mut serde_json::Map<String, Value>,
+    variables: &[domain::ApplicationEnvironmentVariable],
+) {
+    variable_pool.insert(
+        "env".to_string(),
+        Value::Object(
+            variables
+                .iter()
+                .map(|variable| (variable.name.clone(), variable.value.clone()))
+                .collect(),
+        ),
     );
 }

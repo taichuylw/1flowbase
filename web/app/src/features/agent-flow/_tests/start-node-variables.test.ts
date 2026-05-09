@@ -119,6 +119,35 @@ describe('start node variables', () => {
     );
   });
 
+  test('exposes application environment variables to any node', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.edges = document.graph.edges.filter(
+      (edge) => edge.target !== 'node-answer'
+    );
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-answer', [
+        {
+          name: 'ApiBaseUrl',
+          value_type: 'string',
+          value: 'https://api.example.com',
+          description: '当前应用 API 地址'
+        }
+      ]).map((option) => ({
+        value: option.value,
+        label: option.displayLabel
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          value: ['env', 'ApiBaseUrl'],
+          label: 'env.ApiBaseUrl'
+        }
+      ])
+    );
+  });
+
   test('exposes only public LLM runtime output variables to downstream selectors', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');

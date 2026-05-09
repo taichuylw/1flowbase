@@ -16,6 +16,10 @@ import {
   agentFlowSystemVariables,
   systemVariableNodeId
 } from '../system-variables';
+import {
+  formatEnvironmentVariableTitle,
+  type AgentFlowEnvironmentVariable
+} from '../application-environment-variables';
 import { getNodeVariableOutputs } from '../start-node-variables';
 import { formatNodeVariablePathLabel } from '../variable-labels';
 import { getBuiltinNodeRuntimeContract } from '../node-definitions/contracts';
@@ -233,6 +237,25 @@ function mapSystemVariablesToGroup(
   };
 }
 
+function mapEnvironmentVariablesToGroup(
+  variables: AgentFlowEnvironmentVariable[] = []
+): AgentFlowVariableGroup | null {
+  if (variables.length === 0) {
+    return null;
+  }
+
+  return {
+    title: 'Environment Variables',
+    items: variables.map((variable) => ({
+      key: formatEnvironmentVariableTitle(variable.name),
+      label: formatEnvironmentVariableTitle(variable.name),
+      helperText: variable.description || variable.value_type,
+      value: variable.value,
+      isReadOnly: true
+    }))
+  };
+}
+
 export function getRunContextValues(
   runContext: AgentFlowRunContext
 ): Record<string, unknown> {
@@ -277,8 +300,13 @@ export function mapRunContextToVariableGroups(
     debugSessionId?: string | null;
     flowId?: string | null;
     actorUserId?: string | null;
+    environmentVariables?: AgentFlowEnvironmentVariable[];
   }
 ): AgentFlowVariableGroup[] {
+  const environmentGroup = mapEnvironmentVariablesToGroup(
+    options.environmentVariables
+  );
+
   return [
     {
       title: 'Input Variables',
@@ -294,6 +322,7 @@ export function mapRunContextToVariableGroups(
       flowId: options.flowId,
       actorUserId: options.actorUserId
     }),
+    ...(environmentGroup ? [environmentGroup] : []),
     {
       title: 'Conversation / Session',
       items: [
@@ -368,6 +397,7 @@ export function mapRunDetailToVariableGroups(
     nodeMetadata?: Record<string, string | NodeVariableDisplayMeta>;
     debugSessionId?: string | null;
     actorUserId?: string | null;
+    environmentVariables?: AgentFlowEnvironmentVariable[];
   }
 ): AgentFlowVariableGroup[] {
   const inputItems = options.runContext.fields.map((field) => {
@@ -419,6 +449,9 @@ export function mapRunDetailToVariableGroups(
       value: detail.flow_run.finished_at
     }
   ];
+  const environmentGroup = mapEnvironmentVariablesToGroup(
+    options.environmentVariables
+  );
 
   return [
     {
@@ -437,6 +470,7 @@ export function mapRunDetailToVariableGroups(
       flowRunId: detail.flow_run.id,
       actorUserId: detail.flow_run.created_by ?? options.actorUserId
     }),
+    ...(environmentGroup ? [environmentGroup] : []),
     {
       title: 'Conversation / Session',
       items: [

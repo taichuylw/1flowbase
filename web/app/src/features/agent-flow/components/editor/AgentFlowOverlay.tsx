@@ -17,6 +17,7 @@ interface AgentFlowOverlayProps {
   onOpenDebugConsole: () => void;
   onOpenIssues: () => void;
   onOpenHistory: () => void;
+  onOpenEnvironmentVariables: () => void;
   onOpenSystemVariables: () => void;
   onOpenPublish: () => void;
   publishDisabled: boolean;
@@ -32,6 +33,7 @@ export function AgentFlowOverlay({
   onOpenDebugConsole,
   onOpenIssues,
   onOpenHistory,
+  onOpenEnvironmentVariables,
   onOpenSystemVariables,
   onOpenPublish,
   publishDisabled
@@ -72,6 +74,15 @@ export function AgentFlowOverlay({
           title="预览"
         >
           预览
+        </Button>
+        <Button
+          aria-label="环境变量"
+          autoInsertSpace={false}
+          icon={<DatabaseOutlined />}
+          onClick={onOpenEnvironmentVariables}
+          title="环境变量"
+        >
+          环境变量
         </Button>
         <Button
           aria-label="系统变量"

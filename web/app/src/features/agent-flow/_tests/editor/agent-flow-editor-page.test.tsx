@@ -37,6 +37,7 @@ vi.mock('../../../../shared/schema-ui/overlay-shell/SchemaDrawerPanel', () => ({
 import * as orchestrationApi from '../../api/orchestration';
 import * as nodeContributionsApi from '../../api/node-contributions';
 import * as runtimeApi from '../../api/runtime';
+import * as applicationsApi from '../../../applications/api/applications';
 import { VersionHistoryDrawer } from '../../components/history/VersionHistoryDrawer';
 import { AgentFlowEditorShell } from '../../components/editor/AgentFlowEditorShell';
 import { NODE_DETAIL_DEFAULT_WIDTH } from '../../lib/detail-panel-width';
@@ -149,6 +150,10 @@ beforeEach(() => {
     }
   });
   vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue(null);
+  vi.spyOn(
+    applicationsApi,
+    'fetchApplicationEnvironmentVariables'
+  ).mockResolvedValue([]);
   vi.spyOn(nodeContributionsApi, 'fetchNodeContributions').mockResolvedValue(
     []
   );
@@ -307,6 +312,35 @@ describe('AgentFlowEditorShell', () => {
     ).toBeInTheDocument();
   }, 20_000);
 
+  test('opens application environment variables from the canvas overlay', async () => {
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialEnvironmentVariables={[
+          {
+            name: 'ApiBaseUrl',
+            value_type: 'string',
+            value: 'https://api.example.com',
+            description: '当前应用 API 地址',
+            updated_at: '2026-05-09T09:30:00Z'
+          }
+        ]}
+        initialState={createInitialState()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '环境变量' }));
+
+    const panel = screen.getByRole('region', { name: '环境变量' });
+
+    expect(panel).toBeInTheDocument();
+    expect(within(panel).getByText('env.ApiBaseUrl')).toBeInTheDocument();
+    expect(
+      within(panel).getByText('https://api.example.com')
+    ).toBeInTheDocument();
+  }, 20_000);
+
   test('opens preview from overlay action and starts the run from composer', async () => {
     const initialState = createInitialState();
 
@@ -333,10 +367,11 @@ describe('AgentFlowEditorShell', () => {
     await waitFor(() => {
       expect(runtimeApi.startFlowDebugRun).toHaveBeenCalledWith(
         'app-1',
-        {
+        expect.objectContaining({
           document: initialState.draft.document,
-          input_payload: { 'node-start': { query: '请总结退款政策' } }
-        },
+          input_payload: { 'node-start': { query: '请总结退款政策' } },
+          debug_session_id: expect.stringMatching(/^app-1:draft-1:/)
+        }),
         'csrf-123'
       );
     });

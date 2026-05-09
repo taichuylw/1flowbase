@@ -732,6 +732,25 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         .expect("application run detail query should succeed")
         .expect("application run detail should exist")
     }
+
+    pub async fn replace_application_environment_variables_for_tests(
+        &self,
+        actor_user_id: Uuid,
+        application_id: Uuid,
+        variables: Vec<ApplicationEnvironmentVariableInput>,
+    ) {
+        ApplicationRepository::replace_application_environment_variables(
+            &self.repository,
+            &ReplaceApplicationEnvironmentVariablesInput {
+                actor_user_id,
+                workspace_id: Uuid::nil(),
+                application_id,
+                variables,
+            },
+        )
+        .await
+        .expect("replace application environment variables should succeed");
+    }
 }
 
 fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
