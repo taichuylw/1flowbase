@@ -308,6 +308,9 @@ describe('AgentFlowEditorShell', () => {
     expect(
       screen.getByTestId('agent-flow-editor-variables-dock')
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('separator', { name: '调整系统变量宽度' })
+    ).toBeInTheDocument();
     expect(within(panel).getByText('sys.conversation_id')).toBeInTheDocument();
     expect(within(panel).getByText('sys.workflow_run_id')).toBeInTheDocument();
     expect(
@@ -341,10 +344,55 @@ describe('AgentFlowEditorShell', () => {
     expect(
       screen.getByTestId('agent-flow-editor-variables-dock')
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('separator', { name: '调整环境变量宽度' })
+    ).toBeInTheDocument();
     expect(within(panel).getByText('env.ApiBaseUrl')).toBeInTheDocument();
     expect(
       within(panel).getByText('https://api.example.com')
     ).toBeInTheDocument();
+  }, 20_000);
+
+  test('resizes the docked environment variables panel by dragging its left handle', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () =>
+        ({
+          x: 0,
+          y: 0,
+          width: 1280,
+          height: 720,
+          top: 0,
+          right: 1280,
+          bottom: 720,
+          left: 0,
+          toJSON: () => ({})
+        }) as DOMRect
+    );
+
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '环境变量' }));
+
+    const variablesDock = screen.getByTestId(
+      'agent-flow-editor-variables-dock'
+    );
+
+    expect(variablesDock).toHaveStyle('width: 520px');
+
+    fireEvent.mouseDown(
+      screen.getByRole('separator', { name: '调整环境变量宽度' }),
+      { clientX: 760 }
+    );
+    fireEvent.mouseMove(window, { clientX: 700 });
+    fireEvent.mouseUp(window);
+
+    expect(variablesDock).toHaveStyle('width: 580px');
   }, 20_000);
 
   test('opens preview from overlay action and starts the run from composer', async () => {

@@ -287,17 +287,8 @@
   overflow: hidden;
 }
 
-.agent-flow-editor__debug-console-dock {
-  position: absolute;
-  top: var(--agent-flow-secondary-top);
-  right: 16px;
-  z-index: 11;
-  display: flex;
-  height: min(85vh, calc(100% - var(--agent-flow-secondary-top) - 24px));
-  min-height: 0;
-  overflow: hidden;
-}
-
+.agent-flow-editor__side-dock,
+.agent-flow-editor__debug-console-dock,
 .agent-flow-editor__variables-dock {
   position: absolute;
   top: var(--agent-flow-secondary-top);
@@ -306,7 +297,6 @@
   display: flex;
   height: min(85vh, calc(100% - var(--agent-flow-secondary-top) - 24px));
   min-height: 0;
-  max-width: calc(100% - 32px);
   overflow: hidden;
 }
 
@@ -338,7 +328,7 @@
   background: rgba(66, 121, 93, 0.38);
 }
 
-.agent-flow-editor__debug-console-resize-handle {
+.agent-flow-editor__side-dock-resize-handle {
   position: relative;
   flex: 0 0 12px;
   width: 12px;
@@ -346,7 +336,7 @@
   touch-action: none;
 }
 
-.agent-flow-editor__debug-console-resize-handle::before {
+.agent-flow-editor__side-dock-resize-handle::before {
   content: '';
   position: absolute;
   top: 16px;
@@ -359,10 +349,14 @@
   transition: background-color 120ms ease;
 }
 
-.agent-flow-editor__debug-console-resize-handle:hover::before,
-.agent-flow-editor__debug-console-resize-handle:active::before,
+.agent-flow-editor__side-dock-resize-handle:hover::before,
+.agent-flow-editor__side-dock-resize-handle:active::before,
+.agent-flow-editor__side-dock[data-resizing='true']
+  .agent-flow-editor__side-dock-resize-handle::before,
 .agent-flow-editor__debug-console-dock[data-resizing='true']
-  .agent-flow-editor__debug-console-resize-handle::before {
+  .agent-flow-editor__side-dock-resize-handle::before,
+.agent-flow-editor__variables-dock[data-resizing='true']
+  .agent-flow-editor__side-dock-resize-handle::before {
   background: rgba(66, 121, 93, 0.38);
 }
 
