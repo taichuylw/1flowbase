@@ -1,5 +1,6 @@
 import {
-  DatabaseOutlined,
+  CodeOutlined,
+  GlobalOutlined,
   HistoryOutlined,
   IssuesCloseOutlined,
   PlayCircleOutlined,
@@ -72,7 +73,7 @@ export function AgentFlowOverlay({
         <Button
           aria-label="系统变量"
           autoInsertSpace={false}
-          icon={<DatabaseOutlined />}
+          icon={<GlobalOutlined />}
           onClick={onOpenSystemVariables}
           title="系统变量"
         >
@@ -81,7 +82,7 @@ export function AgentFlowOverlay({
         <Button
           aria-label="环境变量"
           autoInsertSpace={false}
-          icon={<DatabaseOutlined />}
+          icon={<CodeOutlined />}
           onClick={onOpenEnvironmentVariables}
           title="环境变量"
         >
