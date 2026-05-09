@@ -95,7 +95,7 @@ describe('ApplicationEnvironmentVariablesPanel', () => {
     expect(onChange).toHaveBeenLastCalledWith(['first', 'second']);
   });
 
-  test('keeps invalid array object json editable while reporting the draft', () => {
+  test('edits array object values as object field rows', () => {
     const onChange = vi.fn();
 
     render(
@@ -106,15 +106,13 @@ describe('ApplicationEnvironmentVariablesPanel', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('数组对象 1'), {
-      target: { value: '{' }
+    expect(screen.getByLabelText('数组对象 1')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('数组对象 1 字段键 1'), {
+      target: { value: 'ApiBaseUrl' }
     });
-
-    expect(screen.getByLabelText('数组对象 1')).toHaveValue('{');
-    expect(onChange).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByLabelText('数组对象 1'), {
-      target: { value: '{ "ApiBaseUrl": "https://api.example.com" }' }
+    fireEvent.change(screen.getByLabelText('数组对象 1 字段值 1'), {
+      target: { value: 'https://api.example.com' }
     });
 
     expect(onChange).toHaveBeenLastCalledWith([

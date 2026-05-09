@@ -32,6 +32,11 @@ interface EnvironmentVariableValueEditorProps {
   onValueErrorChange?: (message: string | null) => void;
 }
 
+interface ObjectValueEditorProps extends EnvironmentVariableValueEditorProps {
+  addButtonLabel?: string;
+  ariaLabelPrefix?: string;
+}
+
 function inferScalarType(value: unknown): ScalarObjectValueType {
   if (typeof value === 'number') {
     return 'number';
@@ -201,8 +206,10 @@ function StructuredJsonEditor({
 function ObjectValueEditor({
   value,
   onChange,
-  onValueErrorChange
-}: EnvironmentVariableValueEditorProps) {
+  onValueErrorChange,
+  addButtonLabel = '添加字段',
+  ariaLabelPrefix = '对象'
+}: ObjectValueEditorProps) {
   const [rows, setRows] = useState(() => createObjectRows(value));
   const lastEmittedValueRef = useRef<unknown>(value);
 
@@ -229,7 +236,7 @@ function ObjectValueEditor({
       {rows.map((row, index) => (
         <div className="agent-flow-editor__env-object-row" key={index}>
           <Input
-            aria-label={`对象键 ${index + 1}`}
+            aria-label={`${ariaLabelPrefix}键 ${index + 1}`}
             placeholder="key"
             value={row.key}
             onChange={(event) =>
@@ -243,7 +250,7 @@ function ObjectValueEditor({
             }
           />
           <Select
-            aria-label={`对象值类型 ${index + 1}`}
+            aria-label={`${ariaLabelPrefix}值类型 ${index + 1}`}
             className="agent-flow-editor__env-object-type-select"
             options={scalarObjectValueTypes.map((type) => ({
               label: type,
@@ -271,7 +278,7 @@ function ObjectValueEditor({
           />
           {row.type === 'number' ? (
             <InputNumber
-              aria-label={`对象值 ${index + 1}`}
+              aria-label={`${ariaLabelPrefix}值 ${index + 1}`}
               className="agent-flow-editor__env-object-value"
               value={typeof row.value === 'number' ? row.value : null}
               onChange={(nextValue) =>
@@ -305,7 +312,7 @@ function ObjectValueEditor({
             />
           ) : (
             <Input
-              aria-label={`对象值 ${index + 1}`}
+              aria-label={`${ariaLabelPrefix}值 ${index + 1}`}
               className="agent-flow-editor__env-object-value"
               placeholder="value"
               value={typeof row.value === 'string' ? row.value : ''}
@@ -321,7 +328,7 @@ function ObjectValueEditor({
             />
           )}
           <Button
-            aria-label={`删除对象字段 ${index + 1}`}
+            aria-label={`删除${ariaLabelPrefix}字段 ${index + 1}`}
             disabled={rows.length === 1}
             icon={<DeleteOutlined />}
             type="text"
@@ -334,72 +341,48 @@ function ObjectValueEditor({
         </div>
       ))}
       <Button
-        aria-label="添加字段"
+        aria-label={addButtonLabel}
         icon={<PlusOutlined />}
         size="small"
         onClick={() => updateRows([...rows, createEmptyObjectRow()])}
       >
-        添加字段
+        {addButtonLabel}
       </Button>
     </div>
   );
 }
 
-function ArrayObjectValueInput({
+function ArrayObjectValueEditor({
   item,
   index,
-  onApply,
+  onChange,
   onValueErrorChange
 }: {
   item: unknown;
   index: number;
-  onApply: (value: unknown) => void;
+  onChange: (value: unknown) => void;
   onValueErrorChange?: (message: string | null) => void;
 }) {
-  const [content, setContent] = useState(() => formatJson(item));
-  const lastAppliedValueRef = useRef<unknown>(item);
-
-  useEffect(() => {
-    if (areJsonValuesEqual(item, lastAppliedValueRef.current)) {
-      return;
-    }
-
-    lastAppliedValueRef.current = item;
-    setContent(formatJson(item));
-  }, [item]);
-
   return (
-    <Input.TextArea
+    <div
       aria-label={`数组对象 ${index + 1}`}
-      autoSize={{ minRows: 2, maxRows: 5 }}
-      className="agent-flow-editor__env-array-value"
-      placeholder='{ "key": "value" }'
-      value={content}
-      onChange={(event) => {
-        const nextContent = event.target.value;
-
-        setContent(nextContent);
-
-        try {
-          const nextValue = JSON.parse(nextContent);
-
-          if (
-            !nextValue ||
-            typeof nextValue !== 'object' ||
-            Array.isArray(nextValue)
-          ) {
-            onValueErrorChange?.('数组对象必须是合法 JSON 对象');
-            return;
-          }
-
-          lastAppliedValueRef.current = nextValue;
-          onApply(nextValue);
-          onValueErrorChange?.(null);
-        } catch {
-          onValueErrorChange?.('数组对象必须是合法 JSON 对象');
-        }
-      }}
-    />
+      className="agent-flow-editor__env-array-object-value"
+    >
+      <Typography.Text
+        className="agent-flow-editor__env-array-object-title"
+        type="secondary"
+      >
+        对象字段
+      </Typography.Text>
+      <ObjectValueEditor
+        addButtonLabel={`添加数组对象 ${index + 1} 字段`}
+        ariaLabelPrefix={`数组对象 ${index + 1} 字段`}
+        value={item}
+        valueType="object"
+        onChange={onChange}
+        onValueErrorChange={onValueErrorChange}
+      />
+    </div>
   );
 }
 
@@ -479,10 +462,10 @@ function ArrayValueEditor({
               }
             />
           ) : valueType === 'array[object]' ? (
-            <ArrayObjectValueInput
+            <ArrayObjectValueEditor
               index={index}
               item={item}
-              onApply={(nextValue) =>
+              onChange={(nextValue) =>
                 updateItems(
                   items.map((candidate, candidateIndex) =>
                     candidateIndex === index ? nextValue : candidate
