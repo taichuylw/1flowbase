@@ -509,6 +509,8 @@ describe('AgentFlowEditorShell', () => {
               trigger: 'autosave',
               change_kind: 'logical',
               summary: '初始化默认草稿',
+              summary_is_custom: false,
+              is_protected: false,
               created_at: '2026-04-15T09:00:00Z'
             }
           ]
@@ -536,6 +538,8 @@ describe('AgentFlowEditorShell', () => {
         trigger: 'autosave' as const,
         change_kind: 'logical' as const,
         summary: '初始化默认草稿',
+        summary_is_custom: false,
+        is_protected: false,
         created_at: '2026-04-15T09:00:00Z'
       }
     ];
@@ -558,6 +562,7 @@ describe('AgentFlowEditorShell', () => {
         versions={versions}
         restoring={false}
         onRestore={restoreVersion}
+        onUpdate={vi.fn()}
       />
     );
 
@@ -567,6 +572,52 @@ describe('AgentFlowEditorShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '恢复版本 1' }));
 
     expect(restoreVersion).toHaveBeenCalledWith('version-1');
+  });
+
+  test('edits and protects history versions', async () => {
+    const versions = [
+      {
+        id: 'version-1',
+        sequence: 1,
+        trigger: 'autosave' as const,
+        change_kind: 'logical' as const,
+        summary: '初始化默认草稿',
+        summary_is_custom: false,
+        is_protected: false,
+        created_at: '2026-04-15T09:00:00Z'
+      }
+    ];
+    const updateVersion = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <VersionHistoryDrawer
+        open
+        onClose={vi.fn()}
+        versions={versions}
+        restoring={false}
+        onRestore={vi.fn()}
+        onUpdate={updateVersion}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑标题 版本 1' }));
+    fireEvent.change(screen.getByLabelText('版本标题'), {
+      target: { value: '上线前稳定版本' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存版本标题' }));
+
+    await waitFor(() => {
+      expect(updateVersion).toHaveBeenCalledWith('version-1', {
+        summary: '上线前稳定版本',
+        summary_is_custom: true
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '置顶保护 版本 1' }));
+
+    expect(updateVersion).toHaveBeenLastCalledWith('version-1', {
+      is_protected: true
+    });
   });
 
   test('renders editor chrome on small screens', async () => {

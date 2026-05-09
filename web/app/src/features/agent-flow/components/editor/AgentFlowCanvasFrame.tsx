@@ -33,6 +33,7 @@ import {
   startNodeDebugPreview,
   type NodeDebugPreviewPlan
 } from '../../api/runtime';
+import { orchestrationQueryKey, updateVersion } from '../../api/orchestration';
 import {
   applicationEnvironmentVariablesQueryKey,
   replaceApplicationEnvironmentVariables
@@ -139,6 +140,9 @@ export function AgentFlowCanvasFrame({
     (state) => state.nodeDetailWidth
   );
   const setPanelState = useAgentFlowEditorStore((state) => state.setPanelState);
+  const syncSavedServerState = useAgentFlowEditorStore(
+    (state) => state.syncSavedServerState
+  );
   const documentRef = useRef(workingDocument);
   const lastSavedDocumentRef = useRef(lastSavedDocument);
   const viewportSnapshotRef = useRef(workingDocument.editor.viewport);
@@ -209,6 +213,29 @@ export function AgentFlowCanvasFrame({
     },
     onError() {
       message.error('环境变量保存失败');
+    }
+  });
+  const versionMetadataMutation = useMutation({
+    mutationFn: ({
+      versionId,
+      input
+    }: {
+      versionId: string;
+      input: Parameters<typeof updateVersion>[2];
+    }) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return updateVersion(applicationId, versionId, input, csrfToken);
+    },
+    onSuccess(nextState) {
+      syncSavedServerState(nextState);
+      queryClient.setQueryData(orchestrationQueryKey(applicationId), nextState);
+      message.success('历史版本已更新');
+    },
+    onError() {
+      message.error('历史版本更新失败');
     }
   });
 
@@ -1062,8 +1089,16 @@ export function AgentFlowCanvasFrame({
         open={historyOpen}
         versions={versions}
         restoring={isRestoringVersion}
+        updatingVersionId={
+          versionMetadataMutation.isPending
+            ? (versionMetadataMutation.variables?.versionId ?? null)
+            : null
+        }
         onClose={() => setPanelState({ historyOpen: false })}
         onRestore={draftSync.restoreVersion}
+        onUpdate={(versionId, input) =>
+          versionMetadataMutation.mutateAsync({ versionId, input })
+        }
       />
     </section>
   );

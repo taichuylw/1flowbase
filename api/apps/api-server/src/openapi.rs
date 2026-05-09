@@ -17,6 +17,7 @@ use utoipa::OpenApi;
         crate::routes::application_orchestration::get_orchestration,
         crate::routes::application_orchestration::save_draft,
         crate::routes::application_orchestration::restore_version,
+        crate::routes::application_orchestration::update_version,
         crate::routes::application_runtime::start_flow_debug_run,
         crate::routes::application_runtime::cancel_flow_run,
         crate::routes::application_runtime::resume_flow_run,
