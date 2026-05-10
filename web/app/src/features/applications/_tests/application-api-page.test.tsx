@@ -135,8 +135,9 @@ describe('ApplicationApiPage', () => {
     renderWithProviders(<ApplicationApiPage application={application} />);
 
     expect(await screen.findByText('需要先发布公开 API')).toBeInTheDocument();
-    expect(screen.getByText('API Keys')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'API 密钥' })).toBeInTheDocument();
+    expect(screen.queryByText('API Keys')).not.toBeInTheDocument();
+    expect(screen.queryByText('完整 token 只在创建后显示一次。')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '创建 Key' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'API Keys' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Native API' })).toBeInTheDocument();
@@ -204,10 +205,13 @@ describe('ApplicationApiPage', () => {
       return node as HTMLElement;
     });
 
-    expect(within(statusCard).getByText('API Keys')).toBeInTheDocument();
     expect(
       within(statusCard).getByRole('button', { name: 'API 密钥' })
     ).toBeInTheDocument();
+    expect(within(statusCard).queryByText('API Keys')).not.toBeInTheDocument();
+    expect(
+      within(statusCard).queryByText('完整 token 只在创建后显示一次。')
+    ).not.toBeInTheDocument();
     expect(within(statusCard).queryByRole('table')).not.toBeInTheDocument();
     expect(within(statusCard).queryByText('Server key')).not.toBeInTheDocument();
 
@@ -250,6 +254,7 @@ describe('ApplicationApiPage', () => {
     fireEvent.click(createButtons[createButtons.length - 1]);
 
     expect(await screen.findByText('apk_full_secret')).toBeInTheDocument();
+    expect(screen.getByText('完整 token 只在创建后显示一次。')).toBeInTheDocument();
     expect(publicApi.createApplicationApiKey).toHaveBeenCalledWith(
       'app-1',
       'Server key',

@@ -18,22 +18,22 @@ export function ApplicationApiStatusBar({
   if (!publication) {
     return (
       <section className="application-api-status">
-        <Space direction="vertical" size={12} className="application-api-status__main">
+        <div className="application-api-status__header">
           <Alert
             type="warning"
             showIcon
             message="当前应用还没有已发布的公开 API 版本"
             description="发布后，应用 API Key 会自动绑定当前 active publication；公开 URL 不包含 application_id。"
           />
-          {children}
-        </Space>
+          <div className="application-api-status__actions">{children}</div>
+        </div>
       </section>
     );
   }
 
   return (
     <section className="application-api-status">
-      <Space direction="vertical" size={12} className="application-api-status__main">
+      <div className="application-api-status__header">
         <Space align="center" wrap>
           <Typography.Text strong>公开 API</Typography.Text>
           <Switch
@@ -47,8 +47,8 @@ export function ApplicationApiStatusBar({
             active publication v{publication.version_sequence}
           </Typography.Text>
         </Space>
-        {children}
-      </Space>
+        <div className="application-api-status__actions">{children}</div>
+      </div>
     </section>
   );
 }

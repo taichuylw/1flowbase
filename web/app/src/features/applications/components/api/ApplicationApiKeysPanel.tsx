@@ -90,16 +90,8 @@ export function ApplicationApiKeysPanel({
 
   if (variant === 'embedded') {
     return (
-      <div className="application-api-keys-embedded">
-        <div className="application-api-keys-embedded__main">
-          <div>
-            <Typography.Text strong>API Keys</Typography.Text>
-            <Typography.Text type="secondary">
-              完整 token 只在创建后显示一次。
-            </Typography.Text>
-          </div>
-          <Button onClick={() => setListOpen(true)}>API 密钥</Button>
-        </div>
+      <>
+        <Button onClick={() => setListOpen(true)}>API 密钥</Button>
         <Modal
           title="API Keys"
           open={listOpen}
@@ -111,7 +103,7 @@ export function ApplicationApiKeysPanel({
           <Space direction="vertical" size={16} className="application-api-key-list-modal">
             <div className="application-api-panel__header">
               <Typography.Text type="secondary">
-                已创建 {keys.length} 个 Key，完整 token 只在创建后显示一次。
+                已创建 {keys.length} 个 Key。
               </Typography.Text>
               <Button type="primary" onClick={() => setCreateOpen(true)}>
                 创建 Key
@@ -153,6 +145,7 @@ export function ApplicationApiKeysPanel({
           onCancel={() => setCreatedKey(null)}
         >
           <Space direction="vertical" className="application-api-token-modal">
+            <Typography.Text>完整 token 只在创建后显示一次。</Typography.Text>
             <Typography.Text type="secondary">
               关闭后页面不再显示完整 token。
             </Typography.Text>
@@ -161,7 +154,7 @@ export function ApplicationApiKeysPanel({
             </Typography.Text>
           </Space>
         </Modal>
-      </div>
+      </>
     );
   }
 
@@ -170,7 +163,7 @@ export function ApplicationApiKeysPanel({
       <div className="application-api-panel__header">
         <div>
           <Typography.Title level={4}>API Keys</Typography.Title>
-          <Typography.Text type="secondary">完整 token 只在创建后显示一次。</Typography.Text>
+          <Typography.Text type="secondary">用于调用当前应用公开 API。</Typography.Text>
         </div>
         <Button type="primary" onClick={() => setCreateOpen(true)}>
           创建 Key
@@ -210,6 +203,7 @@ export function ApplicationApiKeysPanel({
         onCancel={() => setCreatedKey(null)}
       >
         <Space direction="vertical" className="application-api-token-modal">
+          <Typography.Text>完整 token 只在创建后显示一次。</Typography.Text>
           <Typography.Text type="secondary">
             关闭后页面不再显示完整 token。
           </Typography.Text>
