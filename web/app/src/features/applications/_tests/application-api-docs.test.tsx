@@ -42,41 +42,13 @@ describe('ApplicationApiDocsPanel', () => {
         <ApplicationApiDocsPanel
           applicationId="app-1"
           applicationName="Support Agent"
-          publication={{
-            id: 'pub-1',
-            application_id: 'app-1',
-            flow_id: 'flow-1',
-            flow_version_id: 'version-1',
-            compiled_plan_id: 'compiled-1',
-            version_sequence: 3,
-            active: true,
-            api_enabled: true,
-            public_url: '/api/1flowbase/runs',
-            created_by: 'user-1',
-            created_at: '2026-05-09T00:00:00Z',
-            mapping_snapshot: {
-              input: {
-                query_target: 'start.query',
-                model_target: null,
-                inputs_target: null,
-                history_target: null,
-                attachments_target: null
-              },
-              output: {
-                answer_selector: 'answer',
-                usage_selector: null,
-                files_selector: null,
-                error_selector: null
-              }
-            }
-          }}
           defaultCategoryId="openai-compatible-api"
         />
       </AppProviders>
     );
 
     expect(screen.getByText('Support Agent API 文档')).toBeInTheDocument();
-    expect(screen.getByText('active publication v3')).toBeInTheDocument();
+    expect(screen.queryByText('active publication v3')).not.toBeInTheDocument();
     expect(explorerState.lastProps?.queryState).toEqual({
       categoryId: 'openai-compatible-api',
       operationId: null

@@ -72,7 +72,6 @@ export function ApplicationApiPage({
         <ApplicationApiDocsPanel
           applicationId={application.id}
           applicationName={application.name}
-          publication={publication}
           defaultCategoryId="application-native-api"
         />
       )
@@ -84,7 +83,6 @@ export function ApplicationApiPage({
         <ApplicationApiDocsPanel
           applicationId={application.id}
           applicationName={application.name}
-          publication={publication}
           defaultCategoryId="openai-compatible-api"
         />
       )
@@ -96,7 +94,6 @@ export function ApplicationApiPage({
         <ApplicationApiDocsPanel
           applicationId={application.id}
           applicationName={application.name}
-          publication={publication}
           defaultCategoryId="anthropic-compatible-api"
         />
       )

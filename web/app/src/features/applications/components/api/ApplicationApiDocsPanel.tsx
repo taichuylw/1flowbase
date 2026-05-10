@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-import { Alert, Space, Typography } from 'antd';
+import { Space, Typography } from 'antd';
 
 import { ApiDocsExplorer } from '../../../../shared/ui/api-docs/ApiDocsExplorer';
 import { getApplicationsApiBaseUrl } from '../../api/applications';
@@ -10,19 +10,16 @@ import {
   applicationApiDocsOperationSpecQueryKey,
   fetchApplicationApiDocsCatalog,
   fetchApplicationApiDocsCategoryOperations,
-  fetchApplicationApiDocsOperationSpec,
-  type ApplicationApiPublication
+  fetchApplicationApiDocsOperationSpec
 } from '../../api/public-api';
 
 export function ApplicationApiDocsPanel({
   applicationId,
   applicationName,
-  publication,
   defaultCategoryId
 }: {
   applicationId: string;
   applicationName: string;
-  publication: ApplicationApiPublication | null;
   defaultCategoryId: string;
 }) {
   const [queryState, setQueryState] = useState<{
@@ -39,16 +36,6 @@ export function ApplicationApiDocsPanel({
     <section className="application-api-panel">
       <Space direction="vertical" size={12} className="application-api-docs-head">
         <Typography.Title level={4}>{applicationName} API 文档</Typography.Title>
-        <Alert
-          type={publication?.api_enabled ? 'success' : 'warning'}
-          showIcon
-          message={
-            publication
-              ? `active publication v${publication.version_sequence}`
-              : '尚未发布公开 API'
-          }
-          description="OpenAI 与 Anthropic 兼容端点当前只支持 text-chat 子集；tools、文件/图片块和等待态恢复请使用 Native API。"
-        />
       </Space>
       <ApiDocsExplorer
         queryState={queryState}
