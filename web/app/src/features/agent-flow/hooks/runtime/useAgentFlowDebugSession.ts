@@ -1122,11 +1122,19 @@ export function useAgentFlowDebugSession({
     return cache;
   }
 
-  function rememberNodePreviewVariables(
+  function rememberNodePreviewInputs(
     inputPayload: NodeDebugPreviewVariableCache
   ) {
     setNodePreviewInputCache((currentCache) => {
       return mergeVariableCache(currentCache, inputPayload);
+    });
+  }
+
+  function rememberNodePreviewOutputs(
+    outputPayload: NodeDebugPreviewVariableCache
+  ) {
+    setNodePreviewOutputCache((currentCache) => {
+      return mergeVariableCache(currentCache, outputPayload);
     });
   }
 
@@ -1165,7 +1173,8 @@ export function useAgentFlowDebugSession({
     clearSession,
     setRunContextValue,
     getNodePreviewVariableCache,
-    rememberNodePreviewVariables,
+    rememberNodePreviewInputs,
+    rememberNodePreviewOutputs,
     resetVariableCache
   };
 }

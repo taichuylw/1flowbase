@@ -307,7 +307,7 @@ export function AgentFlowCanvasFrame({
       const node = documentRef.current.graph.nodes.find(
         (candidate) => candidate.id === variables.nodeId
       );
-      debugSession.rememberNodePreviewVariables({
+      debugSession.rememberNodePreviewOutputs({
         [variables.nodeId]: extractNodePreviewVariableOutput(
           lastRun,
           node?.outputs
@@ -835,7 +835,7 @@ export function AgentFlowCanvasFrame({
     nodeId: string,
     inputPayload: Record<string, Record<string, unknown>>
   ) {
-    debugSession.rememberNodePreviewVariables(inputPayload);
+    debugSession.rememberNodePreviewInputs(inputPayload);
     nodePreviewMutation.mutate({ nodeId, inputPayload });
   }
 

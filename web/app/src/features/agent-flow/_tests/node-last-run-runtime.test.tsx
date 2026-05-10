@@ -228,6 +228,7 @@ describe('node last run runtime', () => {
       'agent-flow-editor-variable-cache-sidebar'
     );
     expect(within(variableSidebar).getByText('Start/query')).toBeInTheDocument();
+    expect(within(variableSidebar).getByText('LLM/text')).toBeInTheDocument();
   }, 30_000);
 
   test('asks for referenced variables before running when cache is empty', async () => {
