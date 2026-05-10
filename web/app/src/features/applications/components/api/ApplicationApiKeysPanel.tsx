@@ -26,6 +26,7 @@ export function ApplicationApiKeysPanel({
 }) {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedApplicationApiKey | null>(null);
   const [form] = Form.useForm<{ name: string }>();
   const keysQuery = useQuery({
@@ -58,16 +59,114 @@ export function ApplicationApiKeysPanel({
     }
   });
 
-  const Root = variant === 'embedded' ? 'div' : 'section';
+  const keys = keysQuery.data ?? [];
+  const keyTable = (
+    <Table<ApplicationApiKey>
+      rowKey="id"
+      loading={keysQuery.isLoading}
+      dataSource={keys}
+      pagination={false}
+      columns={[
+        { title: '名称', dataIndex: 'name' },
+        { title: '前缀', dataIndex: 'token_prefix' },
+        { title: '创建时间', dataIndex: 'created_at' },
+        {
+          title: '操作',
+          key: 'actions',
+          render: (_, record) => (
+            <Button
+              danger
+              size="small"
+              loading={revokeMutation.isPending}
+              onClick={() => revokeMutation.mutate(record.id)}
+            >
+              撤销
+            </Button>
+          )
+        }
+      ]}
+    />
+  );
+
+  if (variant === 'embedded') {
+    return (
+      <div className="application-api-keys-embedded">
+        <div className="application-api-keys-embedded__main">
+          <div>
+            <Typography.Text strong>API Keys</Typography.Text>
+            <Typography.Text type="secondary">
+              完整 token 只在创建后显示一次。
+            </Typography.Text>
+          </div>
+          <Button onClick={() => setListOpen(true)}>API 密钥</Button>
+        </div>
+        <Modal
+          title="API Keys"
+          open={listOpen}
+          destroyOnHidden
+          width={840}
+          footer={null}
+          onCancel={() => setListOpen(false)}
+        >
+          <Space direction="vertical" size={16} className="application-api-key-list-modal">
+            <div className="application-api-panel__header">
+              <Typography.Text type="secondary">
+                已创建 {keys.length} 个 Key，完整 token 只在创建后显示一次。
+              </Typography.Text>
+              <Button type="primary" onClick={() => setCreateOpen(true)}>
+                创建 Key
+              </Button>
+            </div>
+            {keyTable}
+          </Space>
+        </Modal>
+        <Modal
+          title="创建 API Key"
+          open={createOpen}
+          destroyOnHidden
+          okText="创建"
+          confirmLoading={createMutation.isPending}
+          onCancel={() => setCreateOpen(false)}
+          onOk={() => form.submit()}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={(values) => createMutation.mutate(values.name)}
+          >
+            <Form.Item
+              name="name"
+              label="Key 名称"
+              rules={[{ required: true, message: '请输入 Key 名称' }]}
+            >
+              <Input autoFocus />
+            </Form.Item>
+          </Form>
+        </Modal>
+        <Modal
+          title="保存这次创建的 API Key"
+          open={Boolean(createdKey)}
+          destroyOnHidden
+          okText="关闭"
+          cancelButtonProps={{ style: { display: 'none' } }}
+          onOk={() => setCreatedKey(null)}
+          onCancel={() => setCreatedKey(null)}
+        >
+          <Space direction="vertical" className="application-api-token-modal">
+            <Typography.Text type="secondary">
+              关闭后页面不再显示完整 token。
+            </Typography.Text>
+            <Typography.Text code copyable>
+              {createdKey?.token}
+            </Typography.Text>
+          </Space>
+        </Modal>
+      </div>
+    );
+  }
 
   return (
-    <Root
-      className={
-        variant === 'embedded'
-          ? 'application-api-keys-embedded'
-          : 'application-api-panel'
-      }
-    >
+    <section className="application-api-panel">
       <div className="application-api-panel__header">
         <div>
           <Typography.Title level={4}>API Keys</Typography.Title>
@@ -77,31 +176,7 @@ export function ApplicationApiKeysPanel({
           创建 Key
         </Button>
       </div>
-      <Table<ApplicationApiKey>
-        rowKey="id"
-        loading={keysQuery.isLoading}
-        dataSource={keysQuery.data ?? []}
-        pagination={false}
-        columns={[
-          { title: '名称', dataIndex: 'name' },
-          { title: '前缀', dataIndex: 'token_prefix' },
-          { title: '创建时间', dataIndex: 'created_at' },
-          {
-            title: '操作',
-            key: 'actions',
-            render: (_, record) => (
-              <Button
-                danger
-                size="small"
-                loading={revokeMutation.isPending}
-                onClick={() => revokeMutation.mutate(record.id)}
-              >
-                撤销
-              </Button>
-            )
-          }
-        ]}
-      />
+      {keyTable}
       <Modal
         title="创建 API Key"
         open={createOpen}
@@ -143,6 +218,6 @@ export function ApplicationApiKeysPanel({
           </Typography.Text>
         </Space>
       </Modal>
-    </Root>
+    </section>
   );
 }

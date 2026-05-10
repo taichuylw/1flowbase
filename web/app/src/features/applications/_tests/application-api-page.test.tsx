@@ -135,8 +135,9 @@ describe('ApplicationApiPage', () => {
     renderWithProviders(<ApplicationApiPage application={application} />);
 
     expect(await screen.findByText('需要先发布公开 API')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'API Keys' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '创建 Key' })).toBeInTheDocument();
+    expect(screen.getByText('API Keys')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'API 密钥' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '创建 Key' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'API Keys' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Native API' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'OpenAI Compatible' })).toBeInTheDocument();
@@ -173,7 +174,7 @@ describe('ApplicationApiPage', () => {
     expect(screen.getByRole('tab', { name: 'Anthropic Compatible' })).toBeInTheDocument();
   });
 
-  test('keeps API Keys inside the public API header card when published', async () => {
+  test('opens API key list from the public API header action', async () => {
     publicApi.fetchApplicationApiPublication.mockResolvedValue({
       id: 'publication-1',
       version_sequence: 1,
@@ -204,10 +205,17 @@ describe('ApplicationApiPage', () => {
     });
 
     expect(within(statusCard).getByText('API Keys')).toBeInTheDocument();
-    expect(await within(statusCard).findByText('Server key')).toBeInTheDocument();
     expect(
-      within(statusCard).getByRole('button', { name: '创建 Key' })
+      within(statusCard).getByRole('button', { name: 'API 密钥' })
     ).toBeInTheDocument();
+    expect(within(statusCard).queryByRole('table')).not.toBeInTheDocument();
+    expect(within(statusCard).queryByText('Server key')).not.toBeInTheDocument();
+
+    fireEvent.click(within(statusCard).getByRole('button', { name: 'API 密钥' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'API Keys' });
+    expect(within(dialog).getByText('Server key')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '创建 Key' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'API Keys' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Native API' })).toBeInTheDocument();
   });

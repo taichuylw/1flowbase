@@ -29,7 +29,8 @@
 .application-api-status__main,
 .application-api-panel__stack,
 .application-api-docs-head,
-.application-api-token-modal {
+.application-api-token-modal,
+.application-api-key-list-modal {
   width: 100%;
   min-width: 0;
 }
@@ -37,8 +38,24 @@
 .application-api-keys-embedded {
   width: 100%;
   min-width: 0;
-  padding-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
+}
+
+.application-api-keys-embedded__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.application-api-keys-embedded__main > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .application-api-panel__header {
@@ -60,8 +77,18 @@
     flex-direction: column;
   }
 
+  .application-api-keys-embedded__main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .application-api-keys-embedded__main > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .application-api-mapping-grid {
     grid-template-columns: 1fr;
   }
-
 }
