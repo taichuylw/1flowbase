@@ -142,7 +142,7 @@ async fn application_public_api_list_only_returns_current_actor_keys_for_current
 }
 
 #[tokio::test]
-async fn application_public_api_revoke_hides_key_and_makes_token_unusable() {
+async fn application_public_api_delete_removes_key_and_makes_token_unusable() {
     let harness = ApplicationPublicApiTestHarness::new();
     let application = harness.seed_application(actor_user_id(), "Support Bot");
     let service = ApplicationApiKeyService::new(harness.repository());
@@ -177,6 +177,7 @@ async fn application_public_api_revoke_hides_key_and_makes_token_unusable() {
         .await
         .unwrap_err();
 
+    assert!(!harness.repository().contains_api_key(created.api_key.id));
     assert!(listed.is_empty());
     assert!(auth_error.to_string().contains("not_authenticated"));
 }

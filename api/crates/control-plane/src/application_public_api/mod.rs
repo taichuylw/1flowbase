@@ -166,6 +166,14 @@ impl ApplicationPublicApiTestRepository {
             .insert(application.id, application.clone());
         application
     }
+
+    pub fn contains_api_key(&self, api_key_id: Uuid) -> bool {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .api_keys
+            .contains_key(&api_key_id)
+    }
 }
 
 #[cfg(test)]
@@ -563,15 +571,17 @@ impl ApiKeyRepository for ApplicationPublicApiTestRepository {
             .inner
             .lock()
             .expect("application public api test repo mutex poisoned");
-        let api_key = inner
+        let can_delete = inner
             .api_keys
-            .get_mut(&api_key_id)
+            .get(&api_key_id)
             .filter(|api_key| api_key.key_kind == domain::ApiKeyKind::ApplicationApiKey)
             .filter(|api_key| api_key.application_id == Some(application_id))
             .filter(|api_key| api_key.creator_user_id == creator_user_id)
-            .ok_or(ControlPlaneError::NotFound("application_api_key"))?;
-        api_key.enabled = false;
-        api_key.updated_at = OffsetDateTime::now_utc();
+            .is_some();
+        if !can_delete {
+            return Err(ControlPlaneError::NotFound("application_api_key").into());
+        }
+        inner.api_keys.remove(&api_key_id);
         Ok(())
     }
 

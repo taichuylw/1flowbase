@@ -857,9 +857,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
     ) -> Result<()> {
         let result = sqlx::query(
             r#"
-            update api_keys
-            set enabled = false,
-                updated_at = now()
+            delete from api_keys
             where id = $1
               and key_kind = 'application_api_key'
               and application_id = $2

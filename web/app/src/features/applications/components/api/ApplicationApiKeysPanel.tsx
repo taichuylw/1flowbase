@@ -54,7 +54,7 @@ export function ApplicationApiKeysPanel({
   const revokeMutation = useMutation({
     mutationFn: (keyId: string) => revokeApplicationApiKey(applicationId, keyId, csrfToken),
     onSuccess: () => {
-      message.success('API Key 已撤销');
+      message.success('API Key 已删除');
       invalidate();
     }
   });
@@ -77,10 +77,11 @@ export function ApplicationApiKeysPanel({
             <Button
               danger
               size="small"
+              aria-label="删除"
               loading={revokeMutation.isPending}
               onClick={() => revokeMutation.mutate(record.id)}
             >
-              撤销
+              删除
             </Button>
           )
         }

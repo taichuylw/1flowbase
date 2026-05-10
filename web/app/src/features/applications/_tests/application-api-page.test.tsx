@@ -220,6 +220,7 @@ describe('ApplicationApiPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'API Keys' });
     expect(within(dialog).getByText('Server key')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '创建 Key' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '删除' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'API Keys' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Native API' })).toBeInTheDocument();
   });
