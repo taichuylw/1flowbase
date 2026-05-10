@@ -39,6 +39,7 @@ pub struct NodeExecutionTrace {
     pub output_payload: Value,
     pub error_payload: Option<Value>,
     pub metrics_payload: Value,
+    pub debug_payload: Value,
     pub provider_events: Vec<ProviderStreamEvent>,
 }
 

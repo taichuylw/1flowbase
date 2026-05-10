@@ -1,14 +1,15 @@
 use control_plane::orchestration_runtime::{
-    ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
-    StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
+    CompleteCallbackTaskCommand, ContinueFlowDebugRunCommand, OrchestrationRuntimeService,
+    PrepareFlowDebugRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
 };
 use control_plane::{
     capability_plugin_runtime::CapabilityPluginRuntimePort,
+    errors::ControlPlaneError,
     ports::{
         ApplicationRepository, FlowRepository, ModelDefinitionRepository, ModelProviderRepository,
         NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
         ProviderRuntimePort, RuntimeEventDurability, RuntimeEventEnvelope, RuntimeEventPayload,
-        RuntimeEventSource,
+        RuntimeEventSource, UpsertDataModelSideEffectReceiptInput,
     },
 };
 use serde_json::{json, Value};
@@ -16,21 +17,33 @@ use time::Duration;
 use uuid::Uuid;
 
 fn runtime_text_delta(run_id: Uuid, node_run_id: Uuid, text: &str) -> RuntimeEventEnvelope {
-    RuntimeEventEnvelope::new(
+    runtime_text_delta_with_payload(
         run_id,
         1,
+        serde_json::json!({
+            "type": "text_delta",
+            "node_run_id": node_run_id,
+            "node_id": "node-llm",
+            "text": text,
+        }),
+    )
+}
+
+fn runtime_text_delta_with_payload(
+    run_id: Uuid,
+    sequence: i64,
+    payload: Value,
+) -> RuntimeEventEnvelope {
+    RuntimeEventEnvelope::new(
+        run_id,
+        sequence,
         RuntimeEventPayload {
             event_type: "text_delta".to_string(),
             source: RuntimeEventSource::Provider,
             durability: RuntimeEventDurability::DurableRequired,
             persist_required: true,
             trace_visible: false,
-            payload: serde_json::json!({
-                "type": "text_delta",
-                "node_run_id": node_run_id,
-                "node_id": "node-llm",
-                "text": text,
-            }),
+            payload,
         },
     )
 }
@@ -78,6 +91,76 @@ async fn debug_event_persister_coalesces_text_delta_run_events() {
 }
 
 #[tokio::test]
+async fn debug_event_persister_persists_delta_cursor_and_artifact_metadata() {
+    let repository =
+        crate::orchestration_runtime::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+    let events = vec![
+        runtime_text_delta_with_payload(
+            run_id,
+            7,
+            json!({
+                "type": "text_delta",
+                "node_run_id": node_run_id,
+                "node_id": "node-llm",
+                "text": "退",
+                "text_ref": "runtime_artifact:inline:chunk-1",
+                "truncation": {
+                    "truncated": true,
+                    "reason": "max_bytes",
+                    "original_bytes": 200
+                }
+            }),
+        ),
+        runtime_text_delta_with_payload(
+            run_id,
+            8,
+            json!({
+                "type": "text_delta",
+                "node_run_id": node_run_id,
+                "node_id": "node-llm",
+                "text": "款",
+                "artifact_refs": ["runtime_artifact:object:chunk-2"]
+            }),
+        ),
+    ];
+
+    control_plane::orchestration_runtime::persist_debug_stream_events(&repository, events)
+        .await
+        .unwrap();
+
+    let run_events = repository.events_for_flow_run(run_id);
+    assert_eq!(run_events.len(), 1);
+    let event = &run_events[0];
+    assert_eq!(event.node_run_id, Some(node_run_id));
+    assert_eq!(event.event_type, "text_delta");
+    assert_eq!(event.payload["event_type"], "text_delta");
+    assert_eq!(event.payload["node_run_id"], node_run_id.to_string());
+    assert_eq!(event.payload["content_type"], "text");
+    assert_eq!(event.payload["sequence_start"], 7);
+    assert_eq!(event.payload["sequence_end"], 8);
+    assert_eq!(
+        event.payload["event_ids"],
+        json!([format!("{run_id}:7"), format!("{run_id}:8")])
+    );
+    assert_eq!(event.payload["truncated"], true);
+    assert_eq!(event.payload["truncation"]["reason"], "max_bytes");
+    assert_eq!(event.payload["truncation"]["original_bytes"], 200);
+    assert_eq!(
+        event.payload["content_refs"],
+        json!(["runtime_artifact:inline:chunk-1"])
+    );
+    assert_eq!(
+        event.payload["artifact_refs"],
+        json!([
+            "runtime_artifact:inline:chunk-1",
+            "runtime_artifact:object:chunk-2"
+        ])
+    );
+}
+
+#[tokio::test]
 async fn debug_event_persister_coalesces_reasoning_delta_separately_from_text() {
     let repository =
         crate::orchestration_runtime::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
@@ -116,6 +199,7 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -144,6 +228,7 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -152,6 +237,52 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
         outcome.preview_payload["metrics_payload"]["provider_instance_id"],
         serde_json::json!(seeded.source_provider_instance_id.to_string())
     );
+    assert_eq!(
+        outcome.node_run.output_payload["text"],
+        serde_json::json!("echo:gpt-5.4-mini:请总结退款政策")
+    );
+    assert_eq!(
+        outcome.node_run.output_payload["usage"]["total_tokens"],
+        serde_json::json!(12)
+    );
+    assert_eq!(
+        outcome.node_run.metrics_payload["runtime"]["usage"]["total_tokens"],
+        serde_json::json!(12)
+    );
+    assert!(outcome.node_run.output_payload.get("route").is_none());
+    assert!(outcome
+        .node_run
+        .output_payload
+        .get("provider_route")
+        .is_some());
+    assert_eq!(
+        outcome.flow_run.output_payload,
+        outcome.node_run.output_payload
+    );
+    for hidden_key in [
+        "resolved_inputs",
+        "rendered_templates",
+        "output_contract",
+        "metrics_payload",
+        "debug_payload",
+        "provider_events",
+    ] {
+        assert!(
+            outcome.node_run.output_payload.get(hidden_key).is_none(),
+            "{hidden_key} must not leak into node preview output"
+        );
+        assert!(
+            outcome.flow_run.output_payload.get(hidden_key).is_none(),
+            "{hidden_key} must not leak into flow preview output"
+        );
+    }
+    assert_eq!(
+        outcome.node_run.debug_payload["assistant_message"]["content"],
+        serde_json::json!("echo:gpt-5.4-mini:请总结退款政策")
+    );
+    assert!(outcome.node_run.debug_payload["provider_events"]
+        .as_array()
+        .is_some_and(|events| !events.is_empty()));
 }
 
 #[tokio::test]
@@ -168,7 +299,7 @@ async fn start_node_debug_preview_uses_request_document_snapshot() {
                 "node-start": { "query": "draft prompt" }
             }),
             document_snapshot: Some(serde_json::json!({
-                "schemaVersion": "1flowbase.flow/v1",
+                "schemaVersion": "1flowbase.flow/v2",
                 "meta": {
                     "flowId": seeded.flow_id.to_string(),
                     "name": "Support Agent",
@@ -187,7 +318,7 @@ async fn start_node_debug_preview_uses_request_document_snapshot() {
                             "configVersion": 1,
                             "config": {},
                             "bindings": {},
-                            "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                            "outputs": []
                         },
                         {
                             "id": "node-llm",
@@ -205,7 +336,7 @@ async fn start_node_debug_preview_uses_request_document_snapshot() {
                                 }
                             },
                             "bindings": {
-                                "user_prompt": { "kind": "templated_text", "value": "snapshot {{node-start.query}}" }
+                                "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "snapshot {{node-start.query}}" } }] }
                             },
                             "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                         }
@@ -228,6 +359,7 @@ async fn start_node_debug_preview_uses_request_document_snapshot() {
                     "activeContainerPath": []
                 }
             })),
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -254,6 +386,7 @@ async fn start_node_debug_preview_records_provider_invocation_duration() {
                 "node-start": { "query": "请总结退款政策" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -282,6 +415,7 @@ async fn start_flow_debug_run_returns_running_detail_before_background_continuat
                 "node-start": { "query": "world" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -305,6 +439,7 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -345,11 +480,12 @@ async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
 
-    service
+    let detail = service
         .continue_flow_debug_run(ContinueFlowDebugRunCommand {
             application_id: seeded.application_id,
             flow_run_id: detail.flow_run.id,
@@ -357,6 +493,23 @@ async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
         })
         .await
         .unwrap();
+
+    let llm_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-llm")
+        .expect("llm node run should be persisted");
+    assert_eq!(llm_node.output_payload["text"], "<think>先分析</think>结果");
+    assert!(llm_node.output_payload.get("reasoning_content").is_none());
+    assert!(llm_node.output_payload.get("attempts").is_none());
+    assert!(llm_node.output_payload.get("event_count").is_none());
+    assert!(llm_node.output_payload.get("provider_code").is_none());
+    assert_eq!(
+        llm_node.output_payload["provider_route"]["provider_code"],
+        "fixture_provider"
+    );
+    assert!(llm_node.debug_payload.get("reasoning_content").is_none());
+    assert!(llm_node.debug_payload.get("provider_route").is_none());
 
     let events = stream.events();
     assert!(events
@@ -386,6 +539,7 @@ async fn live_provider_text_delta_with_think_tags_is_split_into_reasoning_and_an
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -464,6 +618,7 @@ async fn fast_stream_provider_events_are_durably_persisted_to_runtime_observabil
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -533,6 +688,7 @@ async fn provider_error_after_live_delta_drains_runtime_event_stream_forwarding(
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -572,6 +728,159 @@ async fn provider_error_after_live_delta_drains_runtime_event_stream_forwarding(
 }
 
 #[tokio::test]
+async fn provider_error_after_live_delta_keeps_partial_output_out_of_run_state() {
+    let service = OrchestrationRuntimeService::for_tests_with_live_events_then_error(vec![
+        plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {
+            delta: "partial before error".to_string(),
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream);
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let failed_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(failed_detail.flow_run.status, domain::FlowRunStatus::Failed);
+    assert_eq!(failed_detail.flow_run.output_payload, json!({}));
+    let llm_node = node_run(&failed_detail, "node-llm");
+    assert_eq!(llm_node.status, domain::NodeRunStatus::Failed);
+    assert_eq!(llm_node.output_payload, json!({}));
+    assert!(llm_node.output_payload.get("text").is_none());
+    assert!(llm_node.output_payload.get("usage").is_none());
+    assert!(llm_node.output_payload.get("tool_calls").is_none());
+    assert!(failed_detail
+        .node_runs
+        .iter()
+        .all(|node_run| node_run.node_id != "node-answer"));
+}
+
+#[tokio::test]
+async fn live_debug_checkpoint_snapshot_stores_llm_output_metrics_without_process_events() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
+    };
+
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        ProviderStreamEvent::TextDelta {
+            delta: "visible output".to_string(),
+        },
+        ProviderStreamEvent::ToolCallCommit {
+            call: ProviderToolCall {
+                id: "tool-call-1".to_string(),
+                name: "lookup_policy".to_string(),
+                arguments: json!({ "query": "refund" }),
+            },
+        },
+        ProviderStreamEvent::UsageSnapshot {
+            usage: ProviderUsage {
+                input_tokens: Some(5),
+                output_tokens: Some(7),
+                reasoning_tokens: None,
+                input_cache_hit_tokens: None,
+                input_cache_miss_tokens: None,
+                cache_read_tokens: None,
+                cache_write_tokens: None,
+                total_tokens: Some(12),
+            },
+        },
+        ProviderStreamEvent::Finish {
+            reason: ProviderFinishReason::Stop,
+        },
+    ]);
+    let seeded = service
+        .seed_application_with_human_input_flow("Support Agent")
+        .await;
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let waiting_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        waiting_detail.flow_run.status,
+        domain::FlowRunStatus::WaitingHuman
+    );
+    assert_eq!(waiting_detail.flow_run.output_payload, json!({}));
+    let llm_node = node_run(&waiting_detail, "node-llm");
+    assert_eq!(
+        llm_node.output_payload["text"],
+        json!("echo:gpt-5.4-mini:请总结退款政策")
+    );
+    assert_eq!(
+        llm_node.output_payload["usage"],
+        llm_node.metrics_payload["usage"]
+    );
+    assert!(llm_node.output_payload.get("route").is_none());
+    assert!(llm_node.output_payload.get("provider_route").is_some());
+    assert!(llm_node.metrics_payload.get("usage").is_some());
+
+    let snapshot = &waiting_detail
+        .checkpoints
+        .last()
+        .expect("waiting human checkpoint should be stored")
+        .variable_snapshot;
+    let llm_snapshot = snapshot
+        .get("node-llm")
+        .expect("llm output should be available to waiting node");
+    assert_eq!(
+        llm_snapshot["text"],
+        json!("echo:gpt-5.4-mini:请总结退款政策")
+    );
+    assert_eq!(llm_snapshot["usage"]["total_tokens"], json!(12));
+    for hidden_key in [
+        "tool_calls",
+        "error",
+        "__context_projection_id",
+        "__attempt_ids",
+    ] {
+        assert!(
+            llm_node.output_payload.get(hidden_key).is_none(),
+            "{hidden_key} must not be persisted in node output"
+        );
+        assert!(
+            llm_snapshot.get(hidden_key).is_none(),
+            "{hidden_key} must not be persisted in checkpoint variables"
+        );
+    }
+}
+
+#[tokio::test]
 async fn successful_live_debug_run_emits_flow_lifecycle_and_closes_runtime_stream() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;
@@ -585,6 +894,7 @@ async fn successful_live_debug_run_emits_flow_lifecycle_and_closes_runtime_strea
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -629,6 +939,7 @@ async fn opens_flow_debug_run_shell_without_compiling_plan() {
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -648,6 +959,7 @@ async fn prepare_flow_debug_run_rejects_shell_input_mismatch() {
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "input A" } }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -659,6 +971,7 @@ async fn prepare_flow_debug_run_rejects_shell_input_mismatch() {
             flow_run_id: shell.id,
             input_payload: serde_json::json!({ "node-start": { "query": "input B" } }),
             document_snapshot: None,
+            debug_session_id: String::new(),
         })
         .await
         .unwrap_err();
@@ -687,6 +1000,7 @@ async fn concurrent_prepare_flow_debug_run_does_not_fail_attached_shell() {
             application_id: seeded.application_id,
             input_payload: input_payload.clone(),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -697,6 +1011,7 @@ async fn concurrent_prepare_flow_debug_run_does_not_fail_attached_shell() {
         flow_run_id: shell.id,
         input_payload: input_payload.clone(),
         document_snapshot: None,
+        debug_session_id: String::new(),
     };
     let second_command = PrepareFlowDebugRunCommand {
         actor_user_id: seeded.actor_user_id,
@@ -704,6 +1019,7 @@ async fn concurrent_prepare_flow_debug_run_does_not_fail_attached_shell() {
         flow_run_id: shell.id,
         input_payload,
         document_snapshot: None,
+        debug_session_id: String::new(),
     };
 
     let (first, second) = tokio::join!(
@@ -737,6 +1053,7 @@ async fn start_flow_debug_run_marks_shell_failed_when_preparation_fails() {
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: Some(serde_json::json!({})),
+            debug_session_id: None,
         })
         .await
         .unwrap_err();
@@ -772,6 +1089,7 @@ async fn failed_prepare_emits_flow_failed_lifecycle_and_closes_runtime_stream() 
             application_id: seeded.application_id,
             input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
             document_snapshot: Some(serde_json::json!({})),
+            debug_session_id: None,
         })
         .await
         .unwrap_err();
@@ -811,6 +1129,7 @@ async fn start_flow_debug_run_records_gateway_billing_audit_trace() {
                 "node-start": { "query": "world" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -860,6 +1179,7 @@ async fn continue_flow_debug_run_executes_plugin_node_through_capability_runtime
                 "node-start": { "query": "world" }
             }),
             document_snapshot: None,
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -892,6 +1212,7 @@ async fn orchestration_runtime_data_model_node_compiles_with_code_and_action() {
                 vec![data_model_node("node-list", "list", json!({}), json!({}))],
                 vec![],
             )),
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -922,6 +1243,7 @@ async fn orchestration_runtime_data_model_list_returns_records_and_total() {
                 ],
                 vec![("node-create", "node-list")],
             )),
+            debug_session_id: None,
         })
         .await
         .unwrap();
@@ -996,6 +1318,304 @@ async fn orchestration_runtime_data_model_create_rejects_non_object_payload() {
         .as_ref()
         .and_then(|payload| payload["message"].as_str())
         .is_some_and(|message| message.contains("payload")));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_write_requires_side_effect_policy() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node(
+            "node-create",
+            "create",
+            json!({
+                "payload": { "title": "Order A", "status": "draft" },
+                "side_effect_policy": "disabled"
+            }),
+            json!({}),
+        )],
+        vec![],
+    )
+    .await;
+
+    assert_eq!(detail.flow_run.status, domain::FlowRunStatus::Failed);
+    let create_node = node_run(&detail, "node-create");
+    assert_eq!(create_node.status, domain::NodeRunStatus::Failed);
+    assert!(create_node
+        .error_payload
+        .as_ref()
+        .and_then(|payload| payload["message"].as_str())
+        .is_some_and(|message| message.contains("DATA_MODEL_SIDE_EFFECT_DISABLED")));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_confirm_each_run_waits_for_callback() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let detail = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node(
+            "node-create",
+            "create",
+            json!({
+                "payload": { "title": "Order A", "status": "draft" },
+                "side_effect_policy": "confirm_each_run"
+            }),
+            json!({}),
+        )],
+        vec![],
+    )
+    .await;
+
+    assert_eq!(
+        detail.flow_run.status,
+        domain::FlowRunStatus::WaitingCallback
+    );
+    let create_node = node_run(&detail, "node-create");
+    assert_eq!(create_node.status, domain::NodeRunStatus::WaitingCallback);
+    assert_eq!(create_node.output_payload, json!({}));
+    assert_eq!(
+        create_node.debug_payload["side_effect_policy"],
+        json!("confirm_each_run")
+    );
+    assert!(create_node.debug_payload["idempotency_key"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("data_model:")));
+    assert_eq!(
+        create_node.debug_payload["payload_hash"]
+            .as_str()
+            .map(|value| value.starts_with("sha256:")),
+        Some(true)
+    );
+    assert_eq!(detail.checkpoints.len(), 1);
+    assert_eq!(
+        detail.checkpoints[0].status,
+        "waiting_data_model_side_effect_confirmation"
+    );
+    assert_eq!(detail.callback_tasks.len(), 1);
+    assert_eq!(
+        detail.callback_tasks[0].callback_kind,
+        "data_model_side_effect_confirmation"
+    );
+    assert_eq!(
+        detail.callback_tasks[0].request_payload["node_id"],
+        json!("node-create")
+    );
+    assert_eq!(
+        detail.callback_tasks[0].request_payload["run_id"],
+        json!(detail.flow_run.id)
+    );
+    assert_eq!(
+        detail.callback_tasks[0].request_payload["actor_user_id"],
+        json!(seeded.actor_user_id)
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_confirmed_callback_executes_write_once() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let waiting = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node(
+            "node-create",
+            "create",
+            json!({
+                "payload": { "title": "Order A", "status": "draft" },
+                "side_effect_policy": "confirm_each_run"
+            }),
+            json!({}),
+        )],
+        vec![],
+    )
+    .await;
+
+    let completed = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: waiting.callback_tasks[0].id,
+            response_payload: json!({ "approved": true }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(completed.callback_tasks[0].status.as_str(), "completed");
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    let create_node = node_run(&completed, "node-create");
+    assert_eq!(create_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(
+        create_node.output_payload["record"]["title"],
+        json!("Order A")
+    );
+    assert!(create_node
+        .output_payload
+        .get("__side_effect_receipt")
+        .is_none());
+    assert_eq!(
+        create_node.metrics_payload["side_effect_receipt"]["status"],
+        json!("succeeded")
+    );
+    assert_eq!(
+        create_node.metrics_payload["side_effect_replayed"],
+        json!(false)
+    );
+
+    let duplicate_error = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: waiting.callback_tasks[0].id,
+            response_payload: json!({ "approved": true }),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        duplicate_error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("callback_task_not_pending"))
+    ));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_confirmed_callback_replays_same_run_receipt() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let waiting = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node(
+            "node-create",
+            "create",
+            json!({
+                "payload": { "title": "Order A", "status": "draft" },
+                "side_effect_policy": "confirm_each_run"
+            }),
+            json!({}),
+        )],
+        vec![],
+    )
+    .await;
+    let create_node = node_run(&waiting, "node-create");
+    let callback_payload = &waiting.callback_tasks[0].request_payload;
+    service
+        .upsert_data_model_side_effect_receipt_for_tests(&UpsertDataModelSideEffectReceiptInput {
+            workspace_id: Uuid::nil(),
+            application_id: seeded.application_id,
+            draft_id: waiting.flow_run.draft_id,
+            flow_run_id: waiting.flow_run.id,
+            node_run_id: create_node.id,
+            node_id: "node-create".to_string(),
+            action: "create".to_string(),
+            model_code: "orders".to_string(),
+            record_id: Some("record-from-receipt".to_string()),
+            deleted_id: None,
+            affected_count: 1,
+            idempotency_key: callback_payload["idempotency_key"]
+                .as_str()
+                .expect("callback idempotency key")
+                .to_string(),
+            payload_hash: callback_payload["payload_hash"]
+                .as_str()
+                .expect("callback payload hash")
+                .to_string(),
+            actor_user_id: seeded.actor_user_id,
+            scope_id: Uuid::nil(),
+            status: "succeeded".to_string(),
+            output_payload: json!({
+                "record": {
+                    "id": "record-from-receipt",
+                    "title": "Order From Receipt"
+                }
+            }),
+        })
+        .await;
+
+    let completed = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: waiting.callback_tasks[0].id,
+            response_payload: json!({ "approved": true }),
+        })
+        .await
+        .unwrap();
+
+    let create_node = node_run(&completed, "node-create");
+    assert_eq!(
+        create_node.output_payload["record"]["id"],
+        json!("record-from-receipt")
+    );
+    assert_eq!(
+        create_node.metrics_payload["side_effect_replayed"],
+        json!(true)
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_data_model_confirmation_rejects_different_actor() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Data Model Agent").await;
+
+    let waiting = run_data_model_flow(
+        &service,
+        seeded.actor_user_id,
+        seeded.application_id,
+        seeded.flow_id,
+        vec![data_model_node(
+            "node-create",
+            "create",
+            json!({
+                "payload": { "title": "Order A", "status": "draft" },
+                "side_effect_policy": "confirm_each_run"
+            }),
+            json!({}),
+        )],
+        vec![],
+    )
+    .await;
+
+    let error = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: Uuid::now_v7(),
+            application_id: seeded.application_id,
+            callback_task_id: waiting.callback_tasks[0].id,
+            response_payload: json!({ "approved": true }),
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::PermissionDenied(
+            "data_model_side_effect_confirmation_actor"
+        ))
+    ));
+
+    let completed = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: waiting.callback_tasks[0].id,
+            response_payload: json!({ "approved": true }),
+        })
+        .await
+        .unwrap();
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
 }
 
 #[tokio::test]
@@ -1130,6 +1750,7 @@ async fn run_data_model_flow(
             application_id,
             input_payload: json!({}),
             document_snapshot: Some(data_model_flow_document(flow_id, nodes, edges)),
+            debug_session_id: None,
         })
         .await
         .expect("data model debug run should start");
@@ -1204,12 +1825,12 @@ fn data_model_flow_document(
         "configVersion": 1,
         "config": {},
         "bindings": {},
-        "outputs": [{ "key": "query", "title": "Input", "valueType": "string" }]
+        "outputs": []
     })];
     nodes.extend(data_model_nodes);
 
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": {
             "flowId": flow_id.to_string(),
             "name": "Data Model Agent",
@@ -1240,6 +1861,12 @@ fn data_model_flow_document(
 
 fn data_model_node(id: &str, action: &str, config_patch: Value, bindings: Value) -> Value {
     let mut config = serde_json::Map::from_iter([("data_model_code".to_string(), json!("orders"))]);
+    if matches!(action, "create" | "update" | "delete") {
+        config.insert(
+            "side_effect_policy".to_string(),
+            json!("allow_with_idempotency"),
+        );
+    }
     if let Some(patch) = config_patch.as_object() {
         config.extend(patch.clone());
     }

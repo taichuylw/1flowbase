@@ -19,6 +19,8 @@ fn map_registry_row(
     PgNodeContributionMapper::to_registry_entry(StoredNodeContributionRegistryRow {
         installation_id: row.get("installation_id"),
         provider_code: row.get("provider_code"),
+        plugin_unique_identifier: row.get("plugin_unique_identifier"),
+        package_id: row.get("package_id"),
         plugin_id: row.get("plugin_id"),
         plugin_version: row.get("plugin_version"),
         contribution_code: row.get("contribution_code"),
@@ -30,6 +32,11 @@ fn map_registry_row(
         schema_ui: row.get("schema_ui"),
         schema_version: row.get("schema_version"),
         output_schema: row.get("output_schema"),
+        contribution_checksum: row.get("contribution_checksum"),
+        compiled_contribution_hash: row.get("compiled_contribution_hash"),
+        output_schema_snapshot: row.get("output_schema_snapshot"),
+        side_effect_policy: row.get("side_effect_policy"),
+        infra_contracts: row.get("infra_contracts"),
         required_auth: row.get("required_auth"),
         visibility: row.get("visibility"),
         experimental: row.get("experimental"),
@@ -63,6 +70,8 @@ impl NodeContributionRepository for PgControlPlaneStore {
                     id,
                     installation_id,
                     provider_code,
+                    plugin_unique_identifier,
+                    package_id,
                     plugin_id,
                     plugin_version,
                     contribution_code,
@@ -74,6 +83,11 @@ impl NodeContributionRepository for PgControlPlaneStore {
                     schema_ui,
                     schema_version,
                     output_schema,
+                    contribution_checksum,
+                    compiled_contribution_hash,
+                    output_schema_snapshot,
+                    side_effect_policy,
+                    infra_contracts,
                     required_auth,
                     visibility,
                     experimental,
@@ -81,13 +95,15 @@ impl NodeContributionRepository for PgControlPlaneStore {
                     dependency_plugin_version_range
                 ) values (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                    $18, $19
+                    $18, $19, $20, $21, $22, $23, $24, $25, $26
                 )
                 "#,
             )
             .bind(Uuid::now_v7())
             .bind(input.installation_id)
             .bind(&input.provider_code)
+            .bind(&entry.plugin_unique_identifier)
+            .bind(&entry.package_id)
             .bind(&input.plugin_id)
             .bind(&input.plugin_version)
             .bind(&entry.contribution_code)
@@ -99,6 +115,11 @@ impl NodeContributionRepository for PgControlPlaneStore {
             .bind(&entry.schema_ui)
             .bind(&entry.schema_version)
             .bind(&entry.output_schema)
+            .bind(&entry.contribution_checksum)
+            .bind(&entry.compiled_contribution_hash)
+            .bind(&entry.output_schema_snapshot)
+            .bind(&entry.side_effect_policy)
+            .bind(serde_json::to_value(&entry.infra_contracts)?)
             .bind(serde_json::to_value(&entry.required_auth)?)
             .bind(&entry.visibility)
             .bind(entry.experimental)
@@ -121,6 +142,8 @@ impl NodeContributionRepository for PgControlPlaneStore {
             select
                 reg.installation_id,
                 reg.provider_code,
+                reg.plugin_unique_identifier,
+                reg.package_id,
                 reg.plugin_id,
                 reg.plugin_version,
                 reg.contribution_code,
@@ -132,20 +155,30 @@ impl NodeContributionRepository for PgControlPlaneStore {
                 reg.schema_ui,
                 reg.schema_version,
                 reg.output_schema,
+                reg.contribution_checksum,
+                reg.compiled_contribution_hash,
+                reg.output_schema_snapshot,
+                reg.side_effect_policy,
+                reg.infra_contracts,
                 reg.required_auth,
                 reg.visibility,
                 reg.experimental,
                 reg.dependency_installation_kind,
                 reg.dependency_plugin_version_range,
                 assigned.id as assigned_installation_id,
-                assigned.plugin_version as assigned_plugin_version,
-                assigned.desired_state as assigned_desired_state
+                installed.desired_state as installed_desired_state
             from node_contribution_registry reg
             left join plugin_assignments pa
                 on pa.workspace_id = $1
-               and pa.provider_code = reg.provider_code
+               and pa.installation_id = reg.installation_id
             left join plugin_installations assigned
                 on assigned.id = pa.installation_id
+            left join plugin_installations installed
+                on installed.id = reg.installation_id
+               and installed.plugin_id = reg.package_id
+               and installed.plugin_version = reg.plugin_version
+               and installed.contract_version = '1flowbase.capability/v1'
+            where reg.schema_version = '1flowbase.node-contribution/v2'
             order by reg.category asc, reg.title asc, reg.contribution_code asc
             "#,
         )
@@ -156,87 +189,18 @@ impl NodeContributionRepository for PgControlPlaneStore {
         rows.into_iter()
             .map(|row| {
                 let assigned_installation_id: Option<Uuid> = row.get("assigned_installation_id");
-                let assigned_desired_state: Option<String> = row.get("assigned_desired_state");
-                let assigned_plugin_version: Option<String> = row.get("assigned_plugin_version");
+                let installed_desired_state: Option<String> = row.get("installed_desired_state");
                 let dependency_status = if assigned_installation_id.is_none() {
                     NodeContributionDependencyStatus::MissingPlugin
-                } else if assigned_desired_state.as_deref() == Some("disabled") {
+                } else if installed_desired_state.is_none() {
+                    NodeContributionDependencyStatus::MissingPlugin
+                } else if installed_desired_state.as_deref() == Some("disabled") {
                     NodeContributionDependencyStatus::DisabledPlugin
-                } else if !version_matches_range(
-                    assigned_plugin_version.as_deref().unwrap_or_default(),
-                    row.get("dependency_plugin_version_range"),
-                ) {
-                    NodeContributionDependencyStatus::VersionMismatch
                 } else {
                     NodeContributionDependencyStatus::Ready
                 };
                 map_registry_row(row, dependency_status)
             })
             .collect()
-    }
-}
-
-fn version_matches_range(version: &str, range: &str) -> bool {
-    let trimmed = range.trim();
-    if trimmed.is_empty() {
-        return true;
-    }
-
-    trimmed
-        .split(',')
-        .map(str::trim)
-        .filter(|constraint| !constraint.is_empty())
-        .all(|constraint| {
-            let (operator, expected) = if let Some(value) = constraint.strip_prefix(">=") {
-                (">=", value)
-            } else if let Some(value) = constraint.strip_prefix("<=") {
-                ("<=", value)
-            } else if let Some(value) = constraint.strip_prefix('>') {
-                (">", value)
-            } else if let Some(value) = constraint.strip_prefix('<') {
-                ("<", value)
-            } else if let Some(value) = constraint.strip_prefix('=') {
-                ("=", value)
-            } else {
-                ("=", constraint)
-            };
-            let ordering = compare_plugin_versions(version, expected.trim());
-            match operator {
-                ">=" => ordering.is_ge(),
-                "<=" => ordering.is_le(),
-                ">" => ordering.is_gt(),
-                "<" => ordering.is_lt(),
-                "=" => ordering.is_eq(),
-                _ => false,
-            }
-        })
-}
-
-fn compare_plugin_versions(left: &str, right: &str) -> std::cmp::Ordering {
-    let mut left_parts = left.split('.');
-    let mut right_parts = right.split('.');
-
-    loop {
-        match (left_parts.next(), right_parts.next()) {
-            (None, None) => return std::cmp::Ordering::Equal,
-            (Some(left_part), Some(right_part)) => {
-                let ordering = match (left_part.parse::<u64>(), right_part.parse::<u64>()) {
-                    (Ok(left_number), Ok(right_number)) => left_number.cmp(&right_number),
-                    _ => left_part.cmp(right_part),
-                };
-
-                if ordering != std::cmp::Ordering::Equal {
-                    return ordering;
-                }
-            }
-            (Some(left_part), None) => match left_part.parse::<u64>() {
-                Ok(0) => continue,
-                Ok(_) | Err(_) => return std::cmp::Ordering::Greater,
-            },
-            (None, Some(right_part)) => match right_part.parse::<u64>() {
-                Ok(0) => continue,
-                Ok(_) | Err(_) => return std::cmp::Ordering::Less,
-            },
-        }
     }
 }

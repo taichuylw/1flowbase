@@ -104,6 +104,7 @@ pub struct CompiledPlanRecord {
     pub flow_id: Uuid,
     pub draft_id: Uuid,
     pub schema_version: String,
+    pub document_hash: String,
     pub document_updated_at: OffsetDateTime,
     pub plan: serde_json::Value,
     pub created_by: Uuid,
@@ -118,6 +119,9 @@ pub struct FlowRunRecord {
     pub flow_id: Uuid,
     pub draft_id: Uuid,
     pub compiled_plan_id: Option<Uuid>,
+    pub debug_session_id: String,
+    pub flow_schema_version: String,
+    pub document_hash: String,
     pub run_mode: FlowRunMode,
     pub target_node_id: Option<String>,
     pub status: FlowRunStatus,
@@ -142,6 +146,7 @@ pub struct NodeRunRecord {
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
     pub metrics_payload: serde_json::Value,
+    pub debug_payload: serde_json::Value,
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
 }
@@ -181,6 +186,47 @@ pub struct RunEventRecord {
     pub sequence: i64,
     pub event_type: String,
     pub payload: serde_json::Value,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeDebugArtifactRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub application_id: Uuid,
+    pub flow_run_id: Option<Uuid>,
+    pub node_run_id: Option<Uuid>,
+    pub run_event_id: Option<Uuid>,
+    pub artifact_kind: String,
+    pub content_type: String,
+    pub original_size_bytes: i64,
+    pub preview_size_bytes: i64,
+    pub storage_id: Uuid,
+    pub storage_ref: String,
+    pub retention_state: String,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DataModelSideEffectReceiptRecord {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub application_id: Uuid,
+    pub draft_id: Uuid,
+    pub flow_run_id: Uuid,
+    pub node_run_id: Uuid,
+    pub node_id: String,
+    pub action: String,
+    pub model_code: String,
+    pub record_id: Option<String>,
+    pub deleted_id: Option<String>,
+    pub affected_count: i64,
+    pub idempotency_key: String,
+    pub payload_hash: String,
+    pub actor_user_id: Uuid,
+    pub scope_id: Uuid,
+    pub status: String,
+    pub output_payload: serde_json::Value,
     pub created_at: OffsetDateTime,
 }
 

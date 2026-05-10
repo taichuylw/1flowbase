@@ -194,6 +194,15 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             .map(|event| event.sequence)
             .unwrap_or_else(|| from_sequence.unwrap_or(0));
         let (sender, live_events) = mpsc::unbounded_channel();
+
+        if replay.is_empty() && run.closed.load(Ordering::SeqCst) {
+            drop(sender);
+            return Ok(RuntimeEventSubscription {
+                replay,
+                live_events,
+            });
+        }
+
         let live_run = Arc::clone(&run);
 
         tokio::spawn(async move {

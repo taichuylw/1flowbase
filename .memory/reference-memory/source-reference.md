@@ -14,8 +14,8 @@ match_when:
   - 需要查找上层相邻项目源码
   - 需要确认前端技术边界参考文档
 created_at: 2026-04-12 19
-updated_at: 2026-05-04 18
-last_verified_at: 2026-05-04 18
+updated_at: 2026-05-07 23
+last_verified_at: 2026-05-07 23
 decision_policy: index_only
 scope:
   - ../1flowbase-latest
@@ -71,6 +71,7 @@ scope:
   - Aion/Rust 相关实现参考入口。
 - `../dify`
   - 可作为插件、运行时、平台边界等方向的源码参考；画布/xyflow 交互可看 `../dify/web/app/components/workflow/index.tsx` 与 `../dify/web/app/components/workflow/hooks/use-nodes-interactions.ts`。
+  - Agent Flow 变量、debug run、stream、offload、插件依赖参考可优先看 `../dify/api/models/workflow.py`、`../dify/api/services/workflow_draft_variable_service.py`、`../dify/api/services/workflow_event_snapshot_service.py`、`../dify/api/services/plugin/dependencies_analysis.py`、`../dify/web/app/components/workflow/nodes/_base/components/variable/utils.ts`。
 - `../dify-official-plugins`
   - Dify 官方插件源码参考入口。
 - `../dify-plugin-daemon`

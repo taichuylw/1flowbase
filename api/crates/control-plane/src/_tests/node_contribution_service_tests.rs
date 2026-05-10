@@ -129,6 +129,8 @@ fn sample_entry(
     NodeContributionRegistryEntry {
         installation_id: Uuid::now_v7(),
         provider_code: "prompt_pack".into(),
+        plugin_unique_identifier: "prompt_pack".into(),
+        package_id: "prompt_pack@0.1.0".into(),
         plugin_id: "prompt_pack@0.1.0".into(),
         plugin_version: "0.1.0".into(),
         contribution_code: contribution_code.into(),
@@ -138,8 +140,17 @@ fn sample_entry(
         description: "Prompt node".into(),
         icon: "spark".into(),
         schema_ui: serde_json::json!({}),
-        schema_version: "1flowbase.node-contribution/v1".into(),
-        output_schema: serde_json::json!({}),
+        schema_version: "1flowbase.node-contribution/v2".into(),
+        output_schema: serde_json::json!({
+            "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+        }),
+        contribution_checksum: "sha256:contribution".into(),
+        compiled_contribution_hash: "sha256:compiled".into(),
+        output_schema_snapshot: serde_json::json!({
+            "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+        }),
+        side_effect_policy: "external_read".into(),
+        infra_contracts: vec![],
         required_auth: vec!["provider_instance".into()],
         visibility: "public".into(),
         experimental: false,

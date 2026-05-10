@@ -184,6 +184,217 @@ describe('useAgentFlowDebugSession streaming', () => {
     }
   });
 
+  test('deduplicates repeated envelope delta events by event_id', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'run-envelope',
+            status: 'running',
+            event_id: 'evt-run'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            run_id: 'run-envelope',
+            sequence: 1,
+            node_run_id: 'node-run-llm',
+            node_id: 'node-llm',
+            text: '退款'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            run_id: 'run-envelope',
+            sequence: 1,
+            node_run_id: 'node-run-llm',
+            node_id: 'node-llm',
+            text: '退款',
+            event_id: 'event-same-id'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            run_id: 'run-envelope',
+            sequence: 2,
+            node_run_id: 'node-run-llm',
+            node_id: 'node-llm',
+            text: '政策',
+            event_id: 'event-same-id'
+          });
+          handlers.onEvent({
+            type: 'flow_finished',
+            run_id: 'run-envelope',
+            status: 'succeeded',
+            output: { answer: '退款政策' }
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('退款');
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          content: '退款政策'
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not dedupe legacy events without envelope metadata', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'run-legacy',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: '复'
+          });
+          handlers.onEvent({
+            type: 'text_delta',
+            node_id: 'node-llm',
+            text: '复'
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('退款');
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          content: '复复'
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not overwrite trace rows when same node_id appears in different node_run_id', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const queryClient = createQueryClient();
+      vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+        async (_applicationId, _input, _csrfToken, handlers) => {
+          handlers.onEvent({
+            type: 'flow_started',
+            run_id: 'run-trace',
+            status: 'running'
+          });
+          handlers.onEvent({
+            type: 'node_started',
+            node_run_id: 'node-run-1',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            title: 'LLM-1',
+            input_payload: {}
+          });
+          handlers.onEvent({
+            type: 'node_started',
+            node_run_id: 'node-run-2',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            title: 'LLM-2',
+            input_payload: {}
+          });
+          handlers.onEvent({
+            type: 'node_finished',
+            node_run_id: 'node-run-1',
+            node_id: 'node-llm',
+            status: 'succeeded',
+            output_payload: {},
+            error_payload: null,
+            metrics_payload: {},
+            started_at: '2026-01-01T00:00:00Z',
+            finished_at: '2026-01-01T00:00:01Z'
+          });
+          handlers.onEvent({
+            type: 'node_finished',
+            node_run_id: 'node-run-2',
+            node_id: 'node-llm',
+            status: 'succeeded',
+            output_payload: {},
+            error_payload: null,
+            metrics_payload: {},
+            started_at: '2026-01-01T00:00:02Z',
+            finished_at: '2026-01-01T00:00:03Z'
+          });
+        }
+      );
+      const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+      const { result } = renderHook(
+        () =>
+          useAgentFlowDebugSession({
+            applicationId: 'app-1',
+            draftId: 'draft-1',
+            document
+          }),
+        { wrapper: createWrapper(queryClient) }
+      );
+
+      await act(async () => {
+        await result.current.submitPrompt('退款');
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(result.current.traceItems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            nodeRunId: 'node-run-1',
+            nodeId: 'node-llm',
+            status: 'succeeded'
+          }),
+          expect.objectContaining({
+            nodeRunId: 'node-run-2',
+            nodeId: 'node-llm',
+            status: 'succeeded'
+          })
+        ])
+      );
+      expect(result.current.traceItems).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('keeps stream error state when a pending text delta flush exists', async () => {
     vi.useFakeTimers();
 
@@ -613,6 +824,15 @@ describe('useAgentFlowDebugSession streaming', () => {
             output_payload: { text: '退款政策摘要' },
             error_payload: null,
             metrics_payload: { total_tokens: 128 },
+            debug_payload: {
+              assistant_message: {
+                role: 'assistant',
+                content: '退款政策摘要'
+              },
+              provider_route: {
+                provider_code: 'openai_compatible'
+              }
+            },
             started_at: '2026-04-25T10:00:01Z',
             finished_at: '2026-04-25T10:00:02Z'
           });
@@ -650,6 +870,7 @@ describe('useAgentFlowDebugSession streaming', () => {
       'app-1',
       {
         document,
+        debug_session_id: expect.stringMatching(/^app-1:draft-1:/),
         input_payload: {
           'node-start': { files: undefined, query: '请总结退款政策' }
         }
@@ -676,6 +897,28 @@ describe('useAgentFlowDebugSession streaming', () => {
           nodeId: 'node-llm',
           nodeAlias: 'LLM',
           status: 'succeeded'
+        }),
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          inputPayload: {
+            user_prompt: '请总结退款政策'
+          },
+          debugPayload: expect.objectContaining({
+            provider_events: [
+              {
+                type: 'text_delta',
+                text: '退款'
+              },
+              {
+                type: 'text_delta',
+                text: '政策摘要'
+              }
+            ],
+            assistant_message: {
+              role: 'assistant',
+              content: '退款政策摘要'
+            }
+          })
         })
       ])
     );
@@ -689,6 +932,9 @@ describe('useAgentFlowDebugSession streaming', () => {
         })
       })
     );
+    expect(
+      result.current.getNodePreviewVariableCache()['node-llm']
+    ).not.toHaveProperty('user_prompt');
     expect(
       runtimeApi.buildNodeDebugPreviewPlan(
         document,
@@ -712,6 +958,7 @@ describe('useAgentFlowDebugSession streaming', () => {
       'app-1',
       {
         document,
+        debug_session_id: expect.stringMatching(/^app-1:draft-1:/),
         input_payload: {
           'node-start': { files: undefined, query: '' }
         }
@@ -774,6 +1021,53 @@ describe('useAgentFlowDebugSession streaming', () => {
         runId: 'flow-run-stream',
         status: 'cancelled',
         content: 'partial answer'
+      })
+    );
+  });
+
+  test('marks streamed debug run waiting after explicit waiting event', async () => {
+    const queryClient = createQueryClient();
+    vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
+      async (_applicationId, _input, _csrfToken, handlers) => {
+        handlers.onEvent({
+          type: 'flow_started',
+          run_id: 'flow-run-waiting',
+          status: 'running'
+        });
+        handlers.onEvent({
+          type: 'waiting_human',
+          run_id: 'flow-run-waiting',
+          node_run_id: 'node-run-human',
+          node_id: 'node-human',
+          status: 'waiting_human',
+          event_id: 'flow-run-waiting:2',
+          sequence: 2
+        });
+        handlers.onCompleted?.();
+      }
+    );
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await act(async () => {
+      await result.current.submitPrompt('请人工确认');
+    });
+
+    expect(result.current.status).toBe('waiting_human');
+    expect(result.current.messages.at(-1)).toEqual(
+      expect.objectContaining({
+        role: 'assistant',
+        runId: 'flow-run-waiting',
+        status: 'waiting_human'
       })
     );
   });

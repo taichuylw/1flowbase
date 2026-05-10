@@ -27,6 +27,7 @@ import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugS
 import {
   buildNodeDebugPreviewPlan,
   extractNodePreviewVariableOutput,
+  fetchRuntimeDebugArtifact,
   nodeLastRunQueryKey,
   startNodeDebugPreview,
   type NodeDebugPreviewPlan
@@ -206,14 +207,21 @@ export function AgentFlowCanvasFrame({
         nodeId,
         {
           input_payload: inputPayload,
-          document: getDocumentWithLatestViewport(documentRef.current)
+          document: getDocumentWithLatestViewport(documentRef.current),
+          debug_session_id: debugSession.debugSessionId
         },
         csrfToken
       );
     },
     onSuccess: async (lastRun, variables) => {
+      const node = documentRef.current.graph.nodes.find(
+        (candidate) => candidate.id === variables.nodeId
+      );
       debugSession.rememberNodePreviewVariables({
-        [variables.nodeId]: extractNodePreviewVariableOutput(lastRun)
+        [variables.nodeId]: extractNodePreviewVariableOutput(
+          lastRun,
+          node?.outputs
+        )
       });
       queryClient.setQueryData(
         nodeLastRunQueryKey(applicationId, variables.nodeId),
@@ -810,6 +818,9 @@ export function AgentFlowCanvasFrame({
             <div className="agent-flow-editor__variable-cache-body">
               <DebugVariablesPane
                 onSelectedValueChange={handleVariableCacheValueChange}
+                onLoadFullValue={(artifactRef) =>
+                  fetchRuntimeDebugArtifact(applicationId, artifactRef)
+                }
                 groups={debugSession.variableGroups}
                 onSelectedChange={setSelectedVariable}
                 sidebarWidth={boundedVariableCacheSidebarWidth}
@@ -841,6 +852,9 @@ export function AgentFlowCanvasFrame({
               onChangeRunContextValue={debugSession.setRunContextValue}
               onClearSession={debugSession.clearSession}
               onClose={() => setPanelState({ debugConsoleOpen: false })}
+              onLoadArtifact={(artifactRef) =>
+                fetchRuntimeDebugArtifact(applicationId, artifactRef)
+              }
               onSubmitPrompt={() => {
                 void debugSession.submitPrompt();
               }}

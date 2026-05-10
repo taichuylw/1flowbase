@@ -4,6 +4,9 @@ import type {
   FlowStartInputField,
   FlowStartInputType
 } from '@1flowbase/flow-schema';
+import { getLlmNodeOutputs, isValidPublicOutputKey } from '@1flowbase/flow-schema';
+
+import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 
 export const startInputTypeOptions = [
   { value: 'text', label: '文本', valueType: 'string' },
@@ -158,5 +161,20 @@ export function getNodeVariableOutputs(
     return [];
   }
 
-  return node.outputs;
+  if (node.type === 'llm') {
+    return getLlmNodeOutputs(node.config);
+  }
+
+  if (node.type === 'plugin_node') {
+    return node.outputs.filter((output) => isValidPublicOutputKey(output.key));
+  }
+
+  const contract = getBuiltinNodeRuntimeContract(node.type);
+  if (contract) {
+    return contract.defaults.outputs.filter((output) =>
+      isValidPublicOutputKey(output.key)
+    );
+  }
+
+  return node.outputs.filter((output) => isValidPublicOutputKey(output.key));
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::sse::{KeepAlive, Sse},
     routing::{get, post},
@@ -38,11 +38,20 @@ use crate::{
 };
 
 use super::debug_run_stream;
+mod debug_variable_snapshot;
+mod runtime_debug_artifacts;
+
+use debug_variable_snapshot::build_debug_variable_snapshot;
+pub use debug_variable_snapshot::DebugVariableSnapshotResponse;
+use runtime_debug_artifacts::{
+    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
+    offload_debug_variable_snapshot_artifacts,
+};
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
     matches!(
         event_type,
-        "flow_finished" | "flow_failed" | "flow_cancelled"
+        "flow_finished" | "flow_failed" | "flow_cancelled" | "waiting_human" | "waiting_callback"
     )
 }
 
@@ -217,12 +226,25 @@ where
 pub struct StartNodeDebugPreviewBody {
     pub input_payload: serde_json::Value,
     pub document: Option<serde_json::Value>,
+    pub debug_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartFlowDebugRunBody {
     pub input_payload: serde_json::Value,
     pub document: Option<serde_json::Value>,
+    pub debug_session_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DebugRunStreamQuery {
+    pub from_sequence: Option<i64>,
+    pub last_event_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DebugVariableSnapshotQuery {
+    pub debug_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -277,6 +299,7 @@ pub struct NodeRunResponse {
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
     pub metrics_payload: serde_json::Value,
+    pub debug_payload: serde_json::Value,
     pub started_at: String,
     pub finished_at: Option<String>,
 }
@@ -329,11 +352,6 @@ pub struct ApplicationRunDetailResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct DebugVariableSnapshotResponse {
-    pub variable_cache: serde_json::Value,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
 pub struct RuntimeDebugStreamResponse {
     pub parts: Vec<RuntimeDebugStreamPartResponse>,
 }
@@ -369,6 +387,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             post(start_flow_debug_run_stream),
         )
         .route(
+            "/applications/:id/orchestration/runs/:run_id/debug-stream",
+            get(subscribe_flow_debug_run_stream),
+        )
+        .route(
             "/applications/:id/orchestration/runs/:run_id/resume",
             post(resume_flow_run),
         )
@@ -387,6 +409,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/orchestration/debug-variable-snapshot",
             get(get_debug_variable_snapshot),
+        )
+        .route(
+            "/applications/:id/orchestration/debug-artifacts/:artifact_id",
+            get(get_runtime_debug_artifact),
         )
         .route("/applications/:id/logs/runs", get(list_application_runs))
         .route(
@@ -454,6 +480,7 @@ fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
         output_payload: run.output_payload,
         error_payload: run.error_payload,
         metrics_payload: run.metrics_payload,
+        debug_payload: run.debug_payload,
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
     }
@@ -545,109 +572,6 @@ fn to_node_last_run_response(last_run: domain::NodeLastRun) -> NodeLastRunRespon
     }
 }
 
-fn merge_variable_object_missing(
-    variable_cache: &mut serde_json::Map<String, serde_json::Value>,
-    payload: &serde_json::Value,
-) {
-    let Some(payload) = payload.as_object() else {
-        return;
-    };
-
-    for (node_id, node_payload) in payload {
-        let Some(node_payload) = node_payload.as_object() else {
-            continue;
-        };
-        let cache_entry = variable_cache
-            .entry(node_id.clone())
-            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-        let Some(cache_entry) = cache_entry.as_object_mut() else {
-            continue;
-        };
-
-        for (key, value) in node_payload {
-            cache_entry
-                .entry(key.clone())
-                .or_insert_with(|| value.clone());
-        }
-    }
-}
-
-fn preview_output_cache_payload(output_payload: &serde_json::Value) -> Option<serde_json::Value> {
-    let payload = output_payload.as_object()?;
-
-    if let Some(node_output) = payload
-        .get("node_output")
-        .and_then(|value| value.as_object())
-    {
-        if !node_output.is_empty() {
-            return Some(serde_json::Value::Object(node_output.clone()));
-        }
-    }
-
-    if payload.is_empty() {
-        None
-    } else {
-        Some(serde_json::Value::Object(payload.clone()))
-    }
-}
-
-fn merge_node_output_missing(
-    variable_cache: &mut serde_json::Map<String, serde_json::Value>,
-    node_id: &str,
-    output_payload: &serde_json::Value,
-) {
-    let Some(output_payload) = preview_output_cache_payload(output_payload) else {
-        return;
-    };
-
-    let mut payload = serde_json::Map::new();
-    payload.insert(node_id.to_string(), output_payload);
-    merge_variable_object_missing(variable_cache, &serde_json::Value::Object(payload));
-}
-
-async fn build_debug_variable_snapshot(
-    store: &MainDurableStore,
-    application_id: Uuid,
-    draft_id: Uuid,
-) -> Result<DebugVariableSnapshotResponse, ApiError> {
-    let runs = <MainDurableStore as OrchestrationRuntimeRepository>::list_application_runs(
-        store,
-        application_id,
-    )
-    .await?;
-    let mut variable_cache = serde_json::Map::new();
-
-    for run in runs {
-        let Some(detail) =
-            <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
-                store,
-                application_id,
-                run.id,
-            )
-            .await?
-        else {
-            continue;
-        };
-
-        if detail.flow_run.draft_id != draft_id {
-            continue;
-        }
-
-        merge_variable_object_missing(&mut variable_cache, &detail.flow_run.input_payload);
-        for node_run in detail.node_runs {
-            merge_node_output_missing(
-                &mut variable_cache,
-                &node_run.node_id,
-                &node_run.output_payload,
-            );
-        }
-    }
-
-    Ok(DebugVariableSnapshotResponse {
-        variable_cache: serde_json::Value::Object(variable_cache),
-    })
-}
-
 fn to_runtime_debug_stream_part_response(
     part: observability::DebugStreamPart,
 ) -> RuntimeDebugStreamPartResponse {
@@ -672,6 +596,38 @@ async fn ensure_application_visible(
         .get_application(actor_user_id, application_id)
         .await?;
     Ok(())
+}
+
+fn parse_runtime_event_cursor(run_id: Uuid, event_id: &str) -> Option<i64> {
+    if let Ok(sequence) = event_id.parse::<i64>() {
+        return Some(sequence);
+    }
+
+    let (cursor_run_id, sequence) = event_id.rsplit_once(':')?;
+    if cursor_run_id != run_id.to_string() {
+        return None;
+    }
+
+    sequence.parse::<i64>().ok()
+}
+
+fn debug_run_stream_from_sequence(
+    run_id: Uuid,
+    query: &DebugRunStreamQuery,
+    headers: &HeaderMap,
+) -> Option<i64> {
+    query.from_sequence.or_else(|| {
+        query
+            .last_event_id
+            .as_deref()
+            .and_then(|event_id| parse_runtime_event_cursor(run_id, event_id))
+            .or_else(|| {
+                headers
+                    .get("last-event-id")
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|event_id| parse_runtime_event_cursor(run_id, event_id))
+            })
+    })
 }
 
 #[utoipa::path(
@@ -710,6 +666,7 @@ pub async fn start_flow_debug_run(
             application_id: id,
             input_payload: body.input_payload,
             document_snapshot: body.document,
+            debug_session_id: body.debug_session_id,
         })
         .await?;
     let flow_run_id = detail.flow_run.id;
@@ -723,20 +680,39 @@ pub async fn start_flow_debug_run(
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         );
-        if let Err(error) = background_service
+        let continue_result = background_service
             .continue_flow_debug_run(ContinueFlowDebugRunCommand {
                 application_id: id,
                 flow_run_id,
                 workspace_id,
             })
-            .await
-        {
-            error!(
-                application_id = %id,
-                flow_run_id = %flow_run_id,
-                error = %error,
-                "failed to continue flow debug run"
-            );
+            .await;
+        match continue_result {
+            Ok(detail) => {
+                if let Err(error) = offload_application_run_detail_artifacts(
+                    background_state.clone(),
+                    workspace_id,
+                    id,
+                    detail,
+                )
+                .await
+                {
+                    error!(
+                        application_id = %id,
+                        flow_run_id = %flow_run_id,
+                        error = %error.0,
+                        "failed to offload flow debug artifacts"
+                    );
+                }
+            }
+            Err(error) => {
+                error!(
+                    application_id = %id,
+                    flow_run_id = %flow_run_id,
+                    error = %error,
+                    "failed to continue flow debug run"
+                );
+            }
         }
     });
 
@@ -750,6 +726,7 @@ pub async fn start_flow_debug_run_stream(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    Query(stream_query): Query<DebugRunStreamQuery>,
     Json(body): Json<StartFlowDebugRunBody>,
 ) -> Result<Sse<debug_run_stream::DebugRunSseStream>, ApiError> {
     let request_received_at = std::time::Instant::now();
@@ -768,6 +745,7 @@ pub async fn start_flow_debug_run_stream(
             application_id: id,
             input_payload: body.input_payload.clone(),
             document_snapshot: body.document.clone(),
+            debug_session_id: body.debug_session_id.clone(),
         })
         .await?;
     let run_id = shell.id;
@@ -796,7 +774,7 @@ pub async fn start_flow_debug_run_stream(
     tokio::spawn(debug_run_stream::send_runtime_event_stream(
         state.runtime_event_stream.clone(),
         run_id,
-        None,
+        debug_run_stream_from_sequence(run_id, &stream_query, &headers),
         sender,
     ));
 
@@ -816,6 +794,7 @@ pub async fn start_flow_debug_run_stream(
                 flow_run_id: run_id,
                 input_payload: body.input_payload,
                 document_snapshot: body.document,
+                debug_session_id: body.debug_session_id.unwrap_or_default(),
             })
             .await;
         let result = match prepare_result {
@@ -832,7 +811,23 @@ pub async fn start_flow_debug_run_stream(
         };
 
         match result {
-            Ok(_) => {}
+            Ok(detail) => {
+                if let Err(error) = offload_application_run_detail_artifacts(
+                    background_state.clone(),
+                    workspace_id,
+                    id,
+                    detail,
+                )
+                .await
+                {
+                    error!(
+                        application_id = %id,
+                        flow_run_id = %run_id,
+                        error = %error.0,
+                        "failed to offload streamed flow debug artifacts"
+                    );
+                }
+            }
             Err(error) => {
                 fail_runtime_event_stream_if_missing_terminal(
                     background_state.runtime_event_stream.clone(),
@@ -857,6 +852,35 @@ pub async fn start_flow_debug_run_stream(
         http_to_sse_open_ms = request_received_at.elapsed().as_millis() as u64,
         "flow debug stream opened"
     );
+
+    Ok(Sse::new(debug_run_stream::DebugRunSseStream::new(receiver))
+        .keep_alive(KeepAlive::default()))
+}
+
+pub async fn subscribe_flow_debug_run_stream(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    Query(stream_query): Query<DebugRunStreamQuery>,
+) -> Result<Sse<debug_run_stream::DebugRunSseStream>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let flow_run = state
+        .store
+        .get_flow_run(id, run_id)
+        .await?
+        .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    if flow_run.created_by != context.user.id {
+        return Err(ControlPlaneError::NotFound("flow_run").into());
+    }
+
+    let (sender, receiver) = mpsc::channel(32);
+    tokio::spawn(debug_run_stream::send_runtime_event_stream(
+        state.runtime_event_stream.clone(),
+        run_id,
+        debug_run_stream_from_sequence(run_id, &stream_query, &headers),
+        sender,
+    ));
 
     Ok(Sse::new(debug_run_stream::DebugRunSseStream::new(receiver))
         .keep_alive(KeepAlive::default()))
@@ -900,6 +924,13 @@ pub async fn cancel_flow_run(
             flow_run_id: run_id,
         })
         .await?;
+    let detail = offload_application_run_detail_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        detail,
+    )
+    .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -947,6 +978,13 @@ pub async fn resume_flow_run(
         input_payload: body.input_payload,
     })
     .await?;
+    let detail = offload_application_run_detail_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        detail,
+    )
+    .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -991,6 +1029,13 @@ pub async fn complete_callback_task(
         response_payload: body.response_payload,
     })
     .await?;
+    let detail = offload_application_run_detail_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        detail,
+    )
+    .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -1034,14 +1079,33 @@ pub async fn start_node_debug_preview(
         node_id,
         input_payload: body.input_payload,
         document_snapshot: body.document,
+        debug_session_id: body.debug_session_id,
     })
     .await?;
 
+    let detail = offload_application_run_detail_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        domain::ApplicationRunDetail {
+            flow_run: outcome.flow_run,
+            node_runs: vec![outcome.node_run],
+            checkpoints: Vec::new(),
+            callback_tasks: Vec::new(),
+            events: outcome.events,
+        },
+    )
+    .await?;
+    let node_run = detail
+        .node_runs
+        .into_iter()
+        .next()
+        .ok_or(ControlPlaneError::NotFound("node_run"))?;
     let response = to_node_last_run_response(domain::NodeLastRun {
-        flow_run: outcome.flow_run,
-        node_run: outcome.node_run,
+        flow_run: detail.flow_run,
+        node_run,
         checkpoints: Vec::new(),
-        events: outcome.events,
+        events: detail.events,
     });
 
     Ok((StatusCode::CREATED, Json(ApiSuccess::new(response))))
@@ -1062,6 +1126,7 @@ pub async fn get_debug_variable_snapshot(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    Query(query): Query<DebugVariableSnapshotQuery>,
 ) -> Result<Json<ApiSuccess<DebugVariableSnapshotResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     ensure_application_visible(&state, context.user.id, id).await?;
@@ -1069,9 +1134,50 @@ pub async fn get_debug_variable_snapshot(
         .get_or_create_editor_state(context.user.id, id)
         .await?;
 
-    Ok(Json(ApiSuccess::new(
-        build_debug_variable_snapshot(&state.store, id, editor_state.draft.id).await?,
-    )))
+    let snapshot = build_debug_variable_snapshot(
+        &state.store,
+        id,
+        context.actor.current_workspace_id,
+        context.actor.user_id,
+        query.debug_session_id,
+        &editor_state,
+    )
+    .await?;
+    let snapshot = offload_debug_variable_snapshot_artifacts(
+        state,
+        context.actor.current_workspace_id,
+        id,
+        snapshot,
+    )
+    .await?;
+
+    Ok(Json(ApiSuccess::new(snapshot)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/orchestration/debug-artifacts/{artifact_id}",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("artifact_id" = String, Path, description = "Runtime debug artifact id")
+    ),
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_runtime_debug_artifact(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, artifact_id)): Path<(Uuid, Uuid)>,
+) -> Result<axum::response::Response, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+
+    load_runtime_debug_artifact_response(state, context.actor.current_workspace_id, id, artifact_id)
+        .await
 }
 
 #[utoipa::path(
@@ -1136,6 +1242,13 @@ pub async fn get_application_run_detail(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    let detail = offload_application_run_detail_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        detail,
+    )
+    .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
@@ -1213,8 +1326,102 @@ pub async fn get_node_last_run(
         id,
         &node_id,
     )
-    .await?
-    .map(to_node_last_run_response);
+    .await?;
+    let last_run = if let Some(last_run) = last_run {
+        let checkpoints = last_run.checkpoints;
+        let detail = offload_application_run_detail_artifacts(
+            state.clone(),
+            context.actor.current_workspace_id,
+            id,
+            domain::ApplicationRunDetail {
+                flow_run: last_run.flow_run,
+                node_runs: vec![last_run.node_run],
+                checkpoints: checkpoints.clone(),
+                callback_tasks: Vec::new(),
+                events: last_run.events,
+            },
+        )
+        .await?;
+        let node_run = detail
+            .node_runs
+            .into_iter()
+            .next()
+            .ok_or(ControlPlaneError::NotFound("node_run"))?;
+        Some(to_node_last_run_response(domain::NodeLastRun {
+            flow_run: detail.flow_run,
+            node_run,
+            checkpoints,
+            events: detail.events,
+        }))
+    } else {
+        None
+    };
 
     Ok(Json(ApiSuccess::new(last_run)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn runtime_event_cursor_accepts_numeric_and_run_scoped_event_ids() {
+        let run_id = Uuid::now_v7();
+
+        assert_eq!(parse_runtime_event_cursor(run_id, "7"), Some(7));
+        assert_eq!(
+            parse_runtime_event_cursor(run_id, &format!("{run_id}:8")),
+            Some(8)
+        );
+        assert_eq!(
+            parse_runtime_event_cursor(Uuid::now_v7(), &format!("{run_id}:8")),
+            None
+        );
+        assert_eq!(parse_runtime_event_cursor(run_id, "not-a-cursor"), None);
+    }
+
+    #[test]
+    fn debug_run_stream_cursor_prefers_query_before_last_event_id_header() {
+        let run_id = Uuid::now_v7();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "last-event-id",
+            HeaderValue::from_str(&format!("{run_id}:11")).unwrap(),
+        );
+
+        assert_eq!(
+            debug_run_stream_from_sequence(
+                run_id,
+                &DebugRunStreamQuery {
+                    from_sequence: Some(9),
+                    last_event_id: Some(format!("{run_id}:10")),
+                },
+                &headers,
+            ),
+            Some(9)
+        );
+        assert_eq!(
+            debug_run_stream_from_sequence(
+                run_id,
+                &DebugRunStreamQuery {
+                    from_sequence: None,
+                    last_event_id: Some(format!("{run_id}:10")),
+                },
+                &headers,
+            ),
+            Some(10)
+        );
+        assert_eq!(
+            debug_run_stream_from_sequence(
+                run_id,
+                &DebugRunStreamQuery {
+                    from_sequence: None,
+                    last_event_id: None,
+                },
+                &headers,
+            ),
+            Some(11)
+        );
+    }
 }

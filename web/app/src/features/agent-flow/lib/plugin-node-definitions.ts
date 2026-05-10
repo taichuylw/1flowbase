@@ -1,16 +1,26 @@
-import type {
-  BuiltinFlowNodeType,
-  FlowNodeDocument,
-  FlowPluginContributionRef
+import {
+  NODE_CONTRIBUTION_SCHEMA_VERSION,
+  type BuiltinFlowNodeType,
+  type FlowNodeDocument,
+  type FlowPluginContributionOutputSchemaSnapshot,
+  type FlowPluginContributionRef
 } from '@1flowbase/flow-schema';
 
 import type { AgentFlowNodeContributionEntry } from '../api/node-contributions';
 import type { NodeDefinition, NodeDefinitionMeta } from './node-definitions/types';
+import {
+  builtinNodeRuntimeContractTypes,
+  getBuiltinNodeRuntimeContract
+} from './node-definitions/contracts';
 
 export interface BuiltinNodePickerOption {
   kind: 'builtin';
   type: BuiltinFlowNodeType;
   label: string;
+  description: string;
+  category: string | null;
+  inputKeys: string[];
+  outputKeys: string[];
 }
 
 export interface PluginContributionPickerOption {
@@ -25,31 +35,44 @@ export type NodePickerOption =
   | BuiltinNodePickerOption
   | PluginContributionPickerOption;
 
-export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] = [
-  { kind: 'builtin', type: 'start', label: 'Start' },
-  { kind: 'builtin', type: 'answer', label: 'Answer' },
-  { kind: 'builtin', type: 'llm', label: 'LLM' },
-  { kind: 'builtin', type: 'template_transform', label: 'Template Transform' },
-  { kind: 'builtin', type: 'knowledge_retrieval', label: 'Knowledge Retrieval' },
-  { kind: 'builtin', type: 'question_classifier', label: 'Question Classifier' },
-  { kind: 'builtin', type: 'if_else', label: 'If / Else' },
-  { kind: 'builtin', type: 'http_request', label: 'HTTP Request' },
-  { kind: 'builtin', type: 'tool', label: 'Tool' },
-  { kind: 'builtin', type: 'data_model_list', label: 'Data Model List' },
-  { kind: 'builtin', type: 'data_model_get', label: 'Data Model Get' },
-  { kind: 'builtin', type: 'data_model_create', label: 'Data Model Create' },
-  { kind: 'builtin', type: 'data_model_update', label: 'Data Model Update' },
-  { kind: 'builtin', type: 'data_model_delete', label: 'Data Model Delete' },
-  { kind: 'builtin', type: 'variable_assigner', label: 'Variable Assigner' },
-  { kind: 'builtin', type: 'iteration', label: 'Iteration' },
-  { kind: 'builtin', type: 'loop', label: 'Loop' }
-];
+export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =
+  builtinNodeRuntimeContractTypes
+    .filter((nodeType): nodeType is BuiltinFlowNodeType => nodeType !== 'plugin_node')
+    .map((nodeType) => {
+      const contract = getBuiltinNodeRuntimeContract(nodeType);
+
+      if (!contract) {
+        throw new Error(`Missing runtime contract for node picker: ${nodeType}`);
+      }
+
+      return {
+        kind: 'builtin',
+        type: nodeType,
+        label: contract.meta.title,
+        description: contract.defaults.description ?? contract.card.description ?? '',
+        category: contract.card.category ?? null,
+        inputKeys: contract.ports.inputs.map((port) => port.key),
+        outputKeys: contract.ports.outputs.map((port) => port.key)
+      };
+    });
 
 const DEPENDENCY_STATUS_LABELS: Record<string, string> = {
   missing_plugin: '缺少依赖插件',
   version_mismatch: '依赖版本不匹配',
   disabled_plugin: '依赖插件未就绪'
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getContributionOutputSchemaSnapshot(
+  contribution: AgentFlowNodeContributionEntry
+): FlowPluginContributionOutputSchemaSnapshot {
+  return isRecord(contribution.output_schema_snapshot)
+    ? contribution.output_schema_snapshot
+    : {};
+}
 
 export const pluginNodeDefinition: NodeDefinition = {
   label: 'Plugin Node',
@@ -105,7 +128,7 @@ export function getNodePickerOptionNodeType(option: NodePickerOption) {
 
 export function getNodePickerOptionDescription(option: NodePickerOption) {
   return option.kind === 'builtin'
-    ? null
+    ? option.description
     : option.disabledReason ?? option.contribution.description ?? null;
 }
 
@@ -117,29 +140,52 @@ export function toPluginContributionRef(
     plugin_version: contribution.plugin_version,
     contribution_code: contribution.contribution_code,
     node_shell: contribution.node_shell,
-    schema_version: contribution.schema_version
+    schema_version: contribution.schema_version,
+    plugin_unique_identifier: contribution.plugin_unique_identifier,
+    package_id: contribution.package_id,
+    contribution_checksum: contribution.contribution_checksum,
+    compiled_contribution_hash: contribution.compiled_contribution_hash,
+    output_schema_snapshot: getContributionOutputSchemaSnapshot(contribution)
   };
+}
+
+function hasContributionOutput(
+  entry: unknown
+): entry is FlowPluginContributionOutputSchemaSnapshot {
+  return (
+    isRecord(entry) &&
+    Array.isArray(entry.outputs)
+  );
 }
 
 export function hasPluginContributionRef(
   node: Partial<FlowPluginContributionRef>
 ): node is FlowPluginContributionRef {
+  if (node.schema_version !== NODE_CONTRIBUTION_SCHEMA_VERSION) {
+    return false;
+  }
+
   return [
     node.plugin_id,
     node.plugin_version,
     node.contribution_code,
     node.node_shell,
-    node.schema_version
-  ].every((value) => typeof value === 'string' && value.trim().length > 0);
+    node.plugin_unique_identifier,
+    node.package_id,
+    node.contribution_checksum,
+    node.compiled_contribution_hash
+  ].every((value) => typeof value === 'string' && value.trim().length > 0) &&
+    hasContributionOutput(node.output_schema_snapshot);
 }
 
 export function createPluginNodeOutputs(
   contribution: AgentFlowNodeContributionEntry
 ): FlowNodeDocument['outputs'] {
-  const schemaOutputs = contribution.output_schema.outputs;
+  const schemaOutputs =
+    getContributionOutputSchemaSnapshot(contribution).outputs;
 
   if (!Array.isArray(schemaOutputs)) {
-    return [{ key: 'result', title: '节点输出', valueType: 'json' }];
+    return [];
   }
 
   const outputs = schemaOutputs
@@ -155,15 +201,13 @@ export function createPluginNodeOutputs(
       const title =
         typeof entry.title === 'string' && entry.title.trim().length > 0
           ? entry.title
-          : key;
+          : null;
       const valueType =
         typeof entry.valueType === 'string' && entry.valueType.trim().length > 0
           ? entry.valueType
-          : typeof entry.value_type === 'string' && entry.value_type.trim().length > 0
-            ? entry.value_type
-            : 'json';
+          : null;
 
-      if (!key || !title) {
+      if (!key || !title || !valueType) {
         return null;
       }
 
@@ -175,7 +219,5 @@ export function createPluginNodeOutputs(
     })
     .filter((entry): entry is FlowNodeDocument['outputs'][number] => entry !== null);
 
-  return outputs.length > 0
-    ? outputs
-    : [{ key: 'result', title: '节点输出', valueType: 'json' }];
+  return outputs;
 }

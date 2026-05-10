@@ -89,11 +89,19 @@ where
             key,
             orchestration_runtime::compiler::FlowCompileNodeContribution {
                 installation_id: entry.installation_id,
+                plugin_unique_identifier: entry.plugin_unique_identifier,
+                package_id: entry.package_id,
                 plugin_id: entry.plugin_id,
                 plugin_version: entry.plugin_version,
                 contribution_code: entry.contribution_code,
                 node_shell: entry.node_shell,
                 schema_version: entry.schema_version,
+                contribution_checksum: entry.contribution_checksum,
+                compiled_contribution_hash: entry.compiled_contribution_hash,
+                output_schema_snapshot: compile_contribution_outputs(
+                    &entry.output_schema_snapshot,
+                )?,
+                side_effect_policy: entry.side_effect_policy,
                 dependency_status: entry.dependency_status.as_str().to_string(),
             },
         );
@@ -131,6 +139,28 @@ pub(super) fn ensure_compiled_plan_runnable(
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingSchemaVersion => {
                 "schema_version"
             }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginUniqueIdentifier => {
+                "plugin_unique_identifier"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingPackageId => {
+                "package_id"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingContributionChecksum => {
+                "contribution_checksum"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingCompiledContributionHash => {
+                "compiled_contribution_hash"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::MissingOutputSchemaSnapshot
+            | orchestration_runtime::compiled_plan::CompileIssueCode::PluginContributionOutputSchemaMismatch => {
+                "output_schema_snapshot"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::UnsupportedPluginContributionSchemaVersion => {
+                "schema_version"
+            }
+            orchestration_runtime::compiled_plan::CompileIssueCode::PluginContributionChecksumMismatch => {
+                "contribution_checksum"
+            }
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginContribution
             | orchestration_runtime::compiled_plan::CompileIssueCode::PluginContributionDependencyNotReady =>
                 "contribution_code",
@@ -139,6 +169,52 @@ pub(super) fn ensure_compiled_plan_runnable(
     }
 
     Ok(())
+}
+
+fn compile_contribution_outputs(
+    output_schema_snapshot: &serde_json::Value,
+) -> Result<Vec<orchestration_runtime::compiled_plan::CompiledOutput>> {
+    let outputs = output_schema_snapshot
+        .get("outputs")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(ControlPlaneError::InvalidInput("output_schema_snapshot"))?;
+
+    outputs
+        .iter()
+        .map(|output| {
+            let key = required_output_string(output, "key")?;
+            Ok(orchestration_runtime::compiled_plan::CompiledOutput {
+                selector: read_output_selector(output).unwrap_or_else(|| vec![key.clone()]),
+                key,
+                title: required_output_string(output, "title")?,
+                value_type: required_output_string(output, "valueType")?,
+            })
+        })
+        .collect()
+}
+
+fn read_output_selector(output: &serde_json::Value) -> Option<Vec<String>> {
+    let selector = output.get("selector")?.as_array()?;
+    let segments = selector
+        .iter()
+        .filter_map(|segment| segment.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
+}
+
+fn required_output_string(output: &serde_json::Value, field: &'static str) -> Result<String> {
+    output
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| ControlPlaneError::InvalidInput(field).into())
 }
 
 pub(super) fn node_contribution_lookup_key(
@@ -228,7 +304,7 @@ mod tests {
         }
 
         json!({
-            "schemaVersion": "1flowbase.flow/v1",
+            "schemaVersion": "1flowbase.flow/v2",
             "meta": {
                 "flowId": flow_id.to_string(),
                 "name": "Compile Context Test",
@@ -247,7 +323,7 @@ mod tests {
                         "configVersion": 1,
                         "config": {},
                         "bindings": {},
-                        "outputs": [{ "key": "query", "title": "用户输入", "valueType": "string" }]
+                        "outputs": []
                     },
                     {
                         "id": "node-llm",
@@ -262,7 +338,7 @@ mod tests {
                             "temperature": 0.2
                         },
                         "bindings": {
-                            "user_prompt": { "kind": "selector", "value": ["node-start", "query"] }
+                            "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
                         },
                         "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
                     }

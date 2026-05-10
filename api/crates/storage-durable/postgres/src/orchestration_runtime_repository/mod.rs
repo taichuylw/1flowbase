@@ -9,9 +9,12 @@ use control_plane::{
         AppendRuntimeSpanInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
         CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
-        CreateFlowRunShellInput, CreateNodeRunInput, FailQueuedFlowRunShellInput,
+        CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
+        DataModelSideEffectReceiptClaim, FailQueuedFlowRunShellInput, GetRuntimeDebugArtifactInput,
         LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-        UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+        UpdateFlowRunInput, UpdateFlowRunPayloadsInput, UpdateNodeRunInput,
+        UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput, UpsertCompiledPlanInput,
+        UpsertDataModelSideEffectReceiptInput,
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -28,9 +31,11 @@ use record_mappers::*;
 use sequencing::*;
 
 include!("event_methods.rs");
+include!("artifact_methods.rs");
 include!("flow_run_methods.rs");
 include!("ledger_methods.rs");
 include!("read_methods.rs");
+include!("side_effect_receipt_methods.rs");
 
 #[async_trait]
 impl OrchestrationRuntimeRepository for PgControlPlaneStore {
@@ -137,6 +142,13 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         PgControlPlaneStore::create_callback_task(self, input).await
     }
 
+    async fn get_callback_task(
+        &self,
+        callback_task_id: Uuid,
+    ) -> Result<Option<domain::CallbackTaskRecord>> {
+        PgControlPlaneStore::get_callback_task(self, callback_task_id).await
+    }
+
     async fn complete_callback_task(
         &self,
         input: &CompleteCallbackTaskInput,
@@ -156,6 +168,64 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         inputs: &[AppendRunEventInput],
     ) -> Result<Vec<domain::RunEventRecord>> {
         PgControlPlaneStore::append_run_events(self, inputs).await
+    }
+
+    async fn update_flow_run_payloads(
+        &self,
+        input: &UpdateFlowRunPayloadsInput,
+    ) -> Result<domain::FlowRunRecord> {
+        PgControlPlaneStore::update_flow_run_payloads(self, input).await
+    }
+
+    async fn update_node_run_payloads(
+        &self,
+        input: &UpdateNodeRunPayloadsInput,
+    ) -> Result<domain::NodeRunRecord> {
+        PgControlPlaneStore::update_node_run_payloads(self, input).await
+    }
+
+    async fn update_run_event_payload(
+        &self,
+        input: &UpdateRunEventPayloadInput,
+    ) -> Result<domain::RunEventRecord> {
+        PgControlPlaneStore::update_run_event_payload(self, input).await
+    }
+
+    async fn create_runtime_debug_artifact(
+        &self,
+        input: &CreateRuntimeDebugArtifactInput,
+    ) -> Result<domain::RuntimeDebugArtifactRecord> {
+        PgControlPlaneStore::create_runtime_debug_artifact(self, input).await
+    }
+
+    async fn get_runtime_debug_artifact(
+        &self,
+        input: &GetRuntimeDebugArtifactInput,
+    ) -> Result<Option<domain::RuntimeDebugArtifactRecord>> {
+        PgControlPlaneStore::get_runtime_debug_artifact(self, input).await
+    }
+
+    async fn get_data_model_side_effect_receipt(
+        &self,
+        workspace_id: Uuid,
+        idempotency_key: &str,
+    ) -> Result<Option<domain::DataModelSideEffectReceiptRecord>> {
+        PgControlPlaneStore::get_data_model_side_effect_receipt(self, workspace_id, idempotency_key)
+            .await
+    }
+
+    async fn claim_data_model_side_effect_receipt(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> Result<DataModelSideEffectReceiptClaim> {
+        PgControlPlaneStore::claim_data_model_side_effect_receipt(self, input).await
+    }
+
+    async fn upsert_data_model_side_effect_receipt(
+        &self,
+        input: &UpsertDataModelSideEffectReceiptInput,
+    ) -> Result<domain::DataModelSideEffectReceiptRecord> {
+        PgControlPlaneStore::upsert_data_model_side_effect_receipt(self, input).await
     }
 
     async fn append_runtime_span(

@@ -153,6 +153,7 @@ export function mapRunDetailToTrace(
   detail: FlowDebugRunDetail
 ): AgentFlowTraceItem[] {
   return detail.node_runs.map((nodeRun) => ({
+    nodeRunId: nodeRun.id,
     nodeId: nodeRun.node_id,
     nodeAlias: nodeRun.node_alias,
     nodeType: nodeRun.node_type,
@@ -169,7 +170,8 @@ export function mapRunDetailToTrace(
     inputPayload: nodeRun.input_payload,
     outputPayload: nodeRun.output_payload,
     errorPayload: nodeRun.error_payload,
-    metricsPayload: nodeRun.metrics_payload
+    metricsPayload: nodeRun.metrics_payload,
+    debugPayload: nodeRun.debug_payload ?? {}
   }));
 }
 

@@ -18,12 +18,14 @@ export function DebugConversationPane({
   runContext,
   messages,
   onChangeQuery,
+  onLoadArtifact,
   onSubmitPrompt
 }: {
   status: AgentFlowDebugSessionStatus;
   runContext: AgentFlowRunContext;
   messages: AgentFlowDebugMessage[];
   onChangeQuery: (value: string) => void;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onSubmitPrompt: () => void;
 }) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +113,7 @@ export function DebugConversationPane({
                 <DebugAssistantMessage
                   key={message.id}
                   message={message}
+                  onLoadArtifact={onLoadArtifact}
                 />
               ) : (
                 <article

@@ -1,5 +1,6 @@
 use super::*;
 use super::{catalog::normalize_official_entries, filesystem::copy_installation_artifact};
+use sha2::{Digest, Sha256};
 
 pub struct InstallPluginCommand {
     pub actor_user_id: Uuid,
@@ -84,6 +85,9 @@ fn build_node_contribution_sync_input(
     installation: &domain::PluginInstallationRecord,
     manifest: &PluginManifestV1,
 ) -> ReplaceInstallationNodeContributionsInput {
+    let plugin_unique_identifier = stable_plugin_unique_identifier(&installation.plugin_id);
+    let package_id = installation.plugin_id.clone();
+
     ReplaceInstallationNodeContributionsInput {
         installation_id: installation.id,
         provider_code: installation.provider_code.clone(),
@@ -93,6 +97,8 @@ fn build_node_contribution_sync_input(
             .node_contributions
             .iter()
             .map(|entry| NodeContributionRegistryInput {
+                plugin_unique_identifier: plugin_unique_identifier.clone(),
+                package_id: package_id.clone(),
                 contribution_code: entry.contribution_code.clone(),
                 node_shell: entry.node_shell.clone(),
                 category: entry.category.clone(),
@@ -102,6 +108,20 @@ fn build_node_contribution_sync_input(
                 schema_ui: entry.schema_ui.clone(),
                 schema_version: entry.schema_version.clone(),
                 output_schema: entry.output_schema.clone(),
+                contribution_checksum: stable_sha256_json(
+                    &serde_json::to_value(entry).unwrap_or_else(|_| json!({})),
+                ),
+                compiled_contribution_hash: stable_sha256_json(&json!({
+                    "schema_version": entry.schema_version,
+                    "node_shell": entry.node_shell,
+                    "schema_ui": entry.schema_ui,
+                    "output_schema": entry.output_schema,
+                    "side_effect_policy": entry.side_effect_policy,
+                    "infra_contracts": entry.infra_contracts,
+                })),
+                output_schema_snapshot: entry.output_schema.clone(),
+                side_effect_policy: entry.side_effect_policy.clone(),
+                infra_contracts: entry.infra_contracts.clone(),
                 required_auth: entry.required_auth.clone(),
                 visibility: entry.visibility.clone(),
                 experimental: entry.experimental,
@@ -110,6 +130,19 @@ fn build_node_contribution_sync_input(
             })
             .collect(),
     }
+}
+
+fn stable_plugin_unique_identifier(plugin_id: &str) -> String {
+    plugin_id
+        .split_once('@')
+        .map(|(stable_id, _)| stable_id)
+        .unwrap_or(plugin_id)
+        .to_string()
+}
+
+fn stable_sha256_json(value: &serde_json::Value) -> String {
+    let bytes = serde_json::to_vec(value).unwrap_or_default();
+    format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
 pub(super) fn map_model_discovery_mode(
@@ -651,10 +684,74 @@ where
                         .await?;
                     Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
                 }
-                RoutedPluginPackageKind::CapabilityPlugin => Err(ControlPlaneError::InvalidInput(
-                    "capability_plugin_install_not_supported_yet",
-                )
-                .into()),
+                RoutedPluginPackageKind::CapabilityPlugin => {
+                    let manifest = load_plugin_manifest(&install_path)?;
+                    let mut metadata_json = json!({
+                        "node_contributions": manifest
+                            .node_contributions
+                            .iter()
+                            .map(|entry| entry.contribution_code.clone())
+                            .collect::<Vec<_>>(),
+                    });
+                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
+                        metadata_json["install_kind"] = install_kind;
+                    }
+                    let installation = self
+                        .repository
+                        .upsert_installation(&UpsertPluginInstallationInput {
+                            installation_id: Uuid::now_v7(),
+                            provider_code: stable_plugin_unique_identifier(&manifest.plugin_id),
+                            plugin_id: manifest.versioned_plugin_id().map_err(map_framework_error)?,
+                            plugin_version: manifest.version.clone(),
+                            contract_version: manifest.contract_version.clone(),
+                            protocol: manifest.runtime.protocol.clone(),
+                            display_name: manifest.display_name.clone(),
+                            source_kind: source_metadata.source_kind.clone(),
+                            trust_level: source_metadata.trust_level.clone(),
+                            verification_status: domain::PluginVerificationStatus::Valid,
+                            desired_state: domain::PluginDesiredState::Disabled,
+                            artifact_status: domain::PluginArtifactStatus::Ready,
+                            runtime_status: domain::PluginRuntimeStatus::Inactive,
+                            availability_status: derive_availability_status(
+                                domain::PluginDesiredState::Disabled,
+                                domain::PluginArtifactStatus::Ready,
+                                domain::PluginRuntimeStatus::Inactive,
+                            ),
+                            package_path: source_metadata
+                                .package_bytes
+                                .as_ref()
+                                .map(|_| package_archive_path.display().to_string()),
+                            installed_path: install_path.display().to_string(),
+                            checksum: source_metadata.checksum.clone(),
+                            manifest_fingerprint: Some(manifest_fingerprint),
+                            signature_status: source_metadata.signature_status.clone(),
+                            signature_algorithm: source_metadata.signature_algorithm.clone(),
+                            signing_key_id: source_metadata.signing_key_id.clone(),
+                            last_load_error: None,
+                            metadata_json,
+                            actor_user_id: command.actor_user_id,
+                        })
+                        .await?;
+                    self.repository
+                        .replace_installation_node_contributions(
+                            &build_node_contribution_sync_input(&installation, &manifest),
+                        )
+                        .await?;
+                    self.repository
+                        .append_audit_log(&audit_log(
+                            Some(actor.current_workspace_id),
+                            Some(command.actor_user_id),
+                            "plugin_installation",
+                            Some(installation.id),
+                            "plugin.installed",
+                            json!({
+                                "provider_code": installation.provider_code,
+                                "plugin_id": installation.plugin_id,
+                            }),
+                        ))
+                        .await?;
+                    Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
+                }
             }
         }
         .await;

@@ -12,6 +12,7 @@ import { NodeRunSummaryCard } from '../components/detail/last-run/NodeRunSummary
 import { LlmCardModelBadge } from '../components/nodes/LlmCardModelBadge';
 import type { NodeLastRun } from '../api/runtime';
 import { getAgentFlowNodeTypeIcon } from '../lib/node-type-icons';
+import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 
 function getNode(adapter: SchemaViewRendererProps['adapter']) {
   return adapter.getDerived('node') as FlowNodeDocument | null | undefined;
@@ -91,7 +92,12 @@ function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
     | { summary?: string; helpHref?: string | null }
     | null
     | undefined;
-  const displayContent = description || meta?.summary || '节点配置将在这里展示';
+  const contract = getBuiltinNodeRuntimeContract(node.type);
+  const displayContent =
+    description ||
+    contract?.card.description ||
+    meta?.summary ||
+    '节点配置将在这里展示';
 
   return (
     <div className="agent-flow-node-card__description">{displayContent}</div>

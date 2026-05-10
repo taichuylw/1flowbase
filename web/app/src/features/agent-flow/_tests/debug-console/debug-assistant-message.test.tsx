@@ -49,7 +49,8 @@ describe('DebugAssistantMessage', () => {
           inputPayload: {},
           outputPayload: { query: '退款' },
           errorPayload: null,
-          metricsPayload: {}
+          metricsPayload: {},
+          debugPayload: {}
         },
         {
           nodeId: 'node-llm',
@@ -62,7 +63,10 @@ describe('DebugAssistantMessage', () => {
           inputPayload: { user_prompt: '退款' },
           outputPayload: { text: '退款处理中' },
           errorPayload: { code: 'still_running' },
-          metricsPayload: { total_tokens: 128 }
+          metricsPayload: { total_tokens: 128 },
+          debugPayload: {
+            response_ref: 'runtime_artifact:inline:response-1'
+          }
         }
       ]
     };
@@ -123,15 +127,176 @@ describe('DebugAssistantMessage', () => {
     expect(screen.getByText('输出')).toBeInTheDocument();
     expect(screen.queryByText('错误')).not.toBeInTheDocument();
     expect(screen.queryByText('指标')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debug')).not.toBeInTheDocument();
     expect(screen.getByText(/user_prompt/)).toBeInTheDocument();
     const outputJson = screen.getByLabelText('输出 JSON');
     expect(outputJson).toHaveTextContent('退款处理中');
-    expect(outputJson).toHaveTextContent('still_running');
-    expect(outputJson).toHaveTextContent('total_tokens');
+    expect(outputJson).not.toHaveTextContent('still_running');
+    expect(outputJson).not.toHaveTextContent('total_tokens');
+    expect(screen.queryByLabelText('错误 JSON')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('数据处理 JSON')).toHaveTextContent(
+      'response_ref'
+    );
 
     fireEvent.click(inputToggle);
 
     expect(inputToggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('loads truncated trace artifact values on explicit action', async () => {
+    const onLoadArtifact = vi
+      .fn()
+      .mockResolvedValue({ text: '完整 Trace 内容' });
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-artifact',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '处理完成',
+      rawOutput: null,
+      traceSummary: [
+        {
+          nodeId: 'node-llm',
+          nodeRunId: 'node-run-llm',
+          nodeAlias: 'LLM',
+          nodeType: 'llm',
+          status: 'succeeded',
+          startedAt: '2026-04-25T10:00:00Z',
+          finishedAt: '2026-04-25T10:00:01Z',
+          durationMs: 1000,
+          inputPayload: {},
+          outputPayload: {
+            text: {
+              __runtime_debug_artifact: true,
+              is_truncated: true,
+              original_size_bytes: 4096,
+              preview_size_bytes: 128,
+              content_type: 'application/json',
+              artifact_ref: 'artifact-1',
+              preview: '{"text":"preview'
+            }
+          },
+          errorPayload: null,
+          metricsPayload: {},
+          debugPayload: {}
+        }
+      ]
+    };
+
+    render(
+      <AppProviders>
+        <DebugAssistantMessage
+          message={message}
+          onLoadArtifact={onLoadArtifact}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /LLM/ }));
+    fireEvent.click(screen.getByRole('button', { name: '加载完整值' }));
+
+    expect(onLoadArtifact).toHaveBeenCalledWith('artifact-1');
+    await waitFor(() => {
+      expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
+        '完整 Trace 内容'
+      );
+    });
+  });
+
+  test('renders raw debug payload as data processing for trace items', () => {
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-process',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '处理完成',
+      rawOutput: null,
+      traceSummary: [
+        {
+          nodeId: 'node-tool',
+          nodeRunId: 'node-run-tool',
+          nodeAlias: 'Tool',
+          nodeType: 'tool',
+          status: 'succeeded',
+          startedAt: '2026-04-25T10:00:00Z',
+          finishedAt: '2026-04-25T10:00:01Z',
+          durationMs: 1000,
+          inputPayload: { query: '退款' },
+          outputPayload: {
+            result: 'ok',
+            request: {
+              url: 'https://example.test/search'
+            }
+          },
+          errorPayload: null,
+          metricsPayload: {},
+          debugPayload: {
+            assistant_message: {
+              role: 'assistant',
+              content: '内部最终文本'
+            },
+            provider_route: {
+              provider_code: 'openai'
+            },
+            provider_events: [
+              {
+                type: 'tool_call_commit',
+                name: 'search'
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    render(<DebugAssistantMessage message={message} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Tool/ }));
+
+    const processJson = screen.getByLabelText('数据处理 JSON');
+    expect(processJson).toHaveTextContent('provider_events');
+    expect(processJson).toHaveTextContent('tool_call_commit');
+    expect(processJson).toHaveTextContent('assistant_message');
+    expect(processJson).toHaveTextContent('provider_route');
+    const outputJson = screen.getByLabelText('输出 JSON');
+    expect(outputJson).toHaveTextContent('ok');
+    expect(outputJson).toHaveTextContent('example.test');
+  });
+
+  test('always renders data processing for trace items when debug payload is empty', () => {
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-empty-process',
+      role: 'assistant',
+      status: 'completed',
+      runId: 'run-1',
+      content: '处理完成',
+      rawOutput: null,
+      traceSummary: [
+        {
+          nodeId: 'node-code',
+          nodeRunId: 'node-run-code',
+          nodeAlias: 'Code',
+          nodeType: 'code',
+          status: 'succeeded',
+          startedAt: '2026-04-25T10:00:00Z',
+          finishedAt: '2026-04-25T10:00:01Z',
+          durationMs: 1000,
+          inputPayload: { value: 1 },
+          outputPayload: { value: 2 },
+          errorPayload: null,
+          metricsPayload: {},
+          debugPayload: {}
+        }
+      ]
+    };
+
+    render(<DebugAssistantMessage message={message} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Code/ }));
+
+    expect(screen.getByLabelText('数据处理 JSON')).toHaveTextContent('{}');
   });
 
   test('renders running streamed content immediately without typewriter delay', () => {

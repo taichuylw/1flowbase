@@ -1,4 +1,6 @@
-export const FLOW_SCHEMA_VERSION = '1flowbase.flow/v1';
+export const FLOW_SCHEMA_VERSION = '1flowbase.flow/v2';
+export const NODE_CONTRIBUTION_SCHEMA_VERSION =
+  '1flowbase.node-contribution/v2';
 
 export type BuiltinFlowNodeType =
   | 'start'
@@ -51,13 +53,157 @@ export interface FlowNodeOutputDocument {
   key: string;
   title: string;
   valueType: string;
+  description?: string;
+  selector?: string[];
+}
+
+export type PublicOutputKeyValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'reserved_public_output_key' };
+
+export const RESERVED_PUBLIC_OUTPUT_KEYS = [] as const;
+
+export function validatePublicOutputKey(
+  key: string
+): PublicOutputKeyValidationResult {
+  if (key.startsWith('__')) {
+    return { ok: false, reason: 'reserved_public_output_key' };
+  }
+
+  return { ok: true };
+}
+
+export function isValidPublicOutputKey(key: string): boolean {
+  return validatePublicOutputKey(key).ok;
+}
+
+export type NodeRuntimeSideEffectPolicy =
+  | 'none'
+  | 'external_read'
+  | 'external_write'
+  | 'durable_write';
+
+export interface NodeRuntimeContractMeta {
+  type: FlowNodeType;
+  title: string;
+  description?: string;
+  schemaVersion?: typeof NODE_CONTRIBUTION_SCHEMA_VERSION;
+  contributionRef?: FlowPluginContributionRef;
+}
+
+export interface NodeRuntimeContractDefaults {
+  alias: string;
+  description?: string;
+  configVersion: number;
+  config: Record<string, unknown>;
+  bindings: Record<string, FlowBinding>;
+  outputs: FlowNodeOutputDocument[];
+}
+
+export interface NodeRuntimePortDocument {
+  key: string;
+  title: string;
+  description?: string;
+}
+
+export interface NodeRuntimeContractPorts {
+  inputs: NodeRuntimePortDocument[];
+  outputs: NodeRuntimePortDocument[];
+}
+
+export interface NodeRuntimeContractCard {
+  title: string;
+  description?: string;
+  icon?: string;
+  category?: string;
+}
+
+export interface NodeRuntimePanelFieldDocument {
+  key: string;
+  title: string;
+  valueType: string;
+  renderer: string;
+  required?: boolean;
+  description?: string;
+  options?: unknown[];
+}
+
+export interface NodeRuntimePanelSectionDocument {
+  key?: string;
+  title?: string;
+  fields?: NodeRuntimePanelFieldDocument[];
+  blocks?: Array<Record<string, unknown>>;
+}
+
+export interface NodeRuntimeContractPanel {
+  sections: NodeRuntimePanelSectionDocument[];
+}
+
+export interface NodeRuntimeDisplaySchemaDocument {
+  key: string;
+  title: string;
+  valueType: string;
+  description?: string;
+}
+
+export interface NodeRuntimeContractRuntime {
+  inputs?: NodeRuntimeDisplaySchemaDocument[];
+  processData?: NodeRuntimeDisplaySchemaDocument[];
+  outputs: FlowNodeOutputDocument[];
+}
+
+export interface NodeRuntimeContractPolicies {
+  sideEffect: NodeRuntimeSideEffectPolicy;
+  timeoutMs?: number;
+  retry?: {
+    maxAttempts: number;
+  };
+  errorHandling?: {
+    mode: 'fail' | 'continue';
+  };
+  singleRunForm?: {
+    enabled: boolean;
+  };
+}
+
+export interface NodeRuntimeUiContract {
+  meta: NodeRuntimeContractMeta;
+  defaults: NodeRuntimeContractDefaults;
+  ports: NodeRuntimeContractPorts;
+  card: NodeRuntimeContractCard;
+  panel: NodeRuntimeContractPanel;
+  runtime: NodeRuntimeContractRuntime;
+  policies: NodeRuntimeContractPolicies;
 }
 
 export const DEFAULT_LLM_NODE_OUTPUTS = [
   { key: 'text', title: '模型输出', valueType: 'string' },
-  { key: 'reasoning_content', title: '推理内容', valueType: 'string' },
-  { key: 'usage', title: '模型用量', valueType: 'json' }
+  { key: 'usage', title: '用量', valueType: 'json' }
 ] satisfies FlowNodeOutputDocument[];
+
+export const LLM_STRUCTURED_OUTPUT = {
+  key: 'structured_output',
+  title: '结构化输出',
+  valueType: 'json'
+} satisfies FlowNodeOutputDocument;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function getLlmNodeOutputs(
+  config?: Record<string, unknown>
+): FlowNodeOutputDocument[] {
+  const responseFormat = config?.response_format;
+  const mode = isRecord(responseFormat) ? responseFormat.mode : undefined;
+  const outputs = DEFAULT_LLM_NODE_OUTPUTS.map((output) => ({ ...output }));
+
+  if (mode === 'json_object' || mode === 'json_schema') {
+    outputs.push({ ...LLM_STRUCTURED_OUTPUT });
+  }
+
+  return outputs;
+}
 
 export interface FlowPluginContributionRef {
   plugin_id: string;
@@ -65,6 +211,16 @@ export interface FlowPluginContributionRef {
   contribution_code: string;
   node_shell: string;
   schema_version: string;
+  plugin_unique_identifier: string;
+  package_id: string;
+  contribution_checksum: string;
+  compiled_contribution_hash: string;
+  output_schema_snapshot: FlowPluginContributionOutputSchemaSnapshot;
+}
+
+export interface FlowPluginContributionOutputSchemaSnapshot {
+  outputs?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
 }
 
 export type LlmPromptMessageRole = 'system' | 'user' | 'assistant';
@@ -147,6 +303,11 @@ export interface FlowNodeDocument {
   contribution_code?: string;
   node_shell?: string;
   schema_version?: string;
+  plugin_unique_identifier?: string;
+  package_id?: string;
+  contribution_checksum?: string;
+  compiled_contribution_hash?: string;
+  output_schema_snapshot?: FlowPluginContributionOutputSchemaSnapshot;
   alias: string;
   description?: string;
   containerId: string | null;
@@ -262,7 +423,11 @@ export function createDefaultAgentFlowDocument({
               ]
             }
           },
-          outputs: DEFAULT_LLM_NODE_OUTPUTS.map((output) => ({ ...output }))
+          outputs: getLlmNodeOutputs({
+            response_format: {
+              mode: 'text'
+            }
+          })
         },
         {
           id: 'node-answer',

@@ -5,9 +5,11 @@ use control_plane::{
         AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
         ApplicationRepository, AttachCompiledPlanToFlowRunInput, CreateApplicationInput,
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
-        CreateFlowRunShellInput, CreateNodeRunInput, FlowRepository,
-        LinkUsageLedgerToModelFailoverAttemptInput, OrchestrationRuntimeRepository,
-        UpdateFlowRunInput, UpdateNodeRunInput, UpsertCompiledPlanInput,
+        CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
+        FlowRepository, GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
+        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
+        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
+        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
     },
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
@@ -94,6 +96,7 @@ async fn seed_user(store: &PgControlPlaneStore, workspace_id: Uuid, account_pref
 
 #[derive(Debug, Clone)]
 struct RuntimeSeedState {
+    workspace_id: Uuid,
     application_id: Uuid,
     actor_user_id: Uuid,
     flow_id: Uuid,
@@ -136,6 +139,7 @@ async fn seed_runtime_base_with_workspace_name(
     .unwrap();
 
     RuntimeSeedState {
+        workspace_id,
         application_id: application.id,
         actor_user_id,
         flow_id: editor_state.flow.id,
@@ -154,10 +158,11 @@ async fn seed_compiled_plan(
             actor_user_id: seeded.actor_user_id,
             flow_id: seeded.flow_id,
             flow_draft_id: seeded.draft_id,
-            schema_version: "1flowbase.flow/v1".into(),
+            schema_version: "1flowbase.flow/v2".into(),
+            document_hash: "test-document-hash".to_string(),
             document_updated_at: seeded.draft_updated_at,
             plan: json!({
-                "schema_version": "1flowbase.flow/v1",
+                "schema_version": "1flowbase.flow/v2",
                 "topological_order": ["node-start", "node-llm"]
             }),
         },
@@ -199,6 +204,9 @@ async fn seed_flow_run_with_mode(
             flow_id: seeded.flow_id,
             flow_draft_id: seeded.draft_id,
             compiled_plan_id: compiled.id,
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: "test-document-hash".to_string(),
             run_mode,
             target_node_id,
             status: FlowRunStatus::Running,
@@ -221,7 +229,7 @@ async fn seed_node_run(
         "node-llm",
         "llm",
         "LLM",
-        json!({ "user_prompt": "总结退款政策" }),
+        json!({ "prompt_messages": ["总结退款政策"] }),
         started_at,
     )
     .await
@@ -245,11 +253,372 @@ async fn seed_node_run_for(
             node_alias: node_alias.into(),
             status: NodeRunStatus::Running,
             input_payload,
+            debug_payload: json!({}),
             started_at,
         },
     )
     .await
     .unwrap()
+}
+
+#[tokio::test]
+async fn data_model_side_effect_receipts_upsert_and_get_by_workspace_key() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-05-08 10:00:00 UTC);
+    let run = seed_flow_run(&store, &seeded, &compiled, started_at).await;
+    let node_run = seed_node_run_for(
+        &store,
+        &run,
+        "node-create",
+        "data_model_create",
+        "Data Model Create",
+        json!({ "payload": { "title": "Order A" } }),
+        started_at,
+    )
+    .await;
+    let payload_hash = "sha256:test".to_string();
+    let idempotency_key = format!(
+        "data_model:{}:{}:{}:{}:{}:{}:{}",
+        seeded.workspace_id,
+        seeded.application_id,
+        seeded.draft_id,
+        run.id,
+        node_run.node_id,
+        "create",
+        payload_hash
+    );
+    let input = UpsertDataModelSideEffectReceiptInput {
+        workspace_id: seeded.workspace_id,
+        application_id: seeded.application_id,
+        draft_id: seeded.draft_id,
+        flow_run_id: run.id,
+        node_run_id: node_run.id,
+        node_id: node_run.node_id.clone(),
+        action: "create".to_string(),
+        model_code: "orders".to_string(),
+        record_id: Some("record-1".to_string()),
+        deleted_id: None,
+        affected_count: 1,
+        idempotency_key: idempotency_key.clone(),
+        payload_hash,
+        actor_user_id: seeded.actor_user_id,
+        scope_id: seeded.workspace_id,
+        status: "succeeded".to_string(),
+        output_payload: json!({
+            "record": {
+                "id": "record-1",
+                "title": "Order A"
+            }
+        }),
+    };
+
+    let claim =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::claim_data_model_side_effect_receipt(
+            &store, &input,
+        )
+        .await
+        .unwrap();
+    assert!(claim.claimed);
+    assert_eq!(claim.record.status, "pending");
+
+    let first =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_data_model_side_effect_receipt(
+            &store, &input,
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.id, claim.record.id);
+    assert_eq!(first.status, "succeeded");
+    let mut replay_input = input.clone();
+    replay_input.record_id = Some("record-2".to_string());
+    replay_input.output_payload = json!({
+        "record": {
+            "id": "record-2",
+            "title": "Order B"
+        }
+    });
+    let replay =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_data_model_side_effect_receipt(
+            &store,
+            &replay_input,
+        )
+        .await
+        .unwrap();
+    let loaded =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_data_model_side_effect_receipt(
+            &store,
+            seeded.workspace_id,
+            &idempotency_key,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(replay.id, first.id);
+    assert_eq!(loaded.id, first.id);
+    assert_eq!(loaded.record_id.as_deref(), Some("record-1"));
+    assert_eq!(loaded.output_payload["record"]["id"], json!("record-1"));
+    assert!(
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_data_model_side_effect_receipt(
+            &store,
+            Uuid::now_v7(),
+            &idempotency_key,
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+}
+
+async fn seed_file_storage(
+    store: &PgControlPlaneStore,
+    actor_user_id: Uuid,
+) -> domain::FileStorageRecord {
+    let storage_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        insert into file_storages (
+            id,
+            code,
+            title,
+            driver_type,
+            enabled,
+            is_default,
+            config_json,
+            rule_json,
+            created_by,
+            updated_by
+        )
+        values ($1, $2, 'Runtime Debug', 'local', true, false, $3, '{}'::jsonb, $4, $4)
+        "#,
+    )
+    .bind(storage_id)
+    .bind(format!("runtime_debug_{}", storage_id.simple()))
+    .bind(json!({ "root_path": "/tmp/1flowbase-runtime-debug-test" }))
+    .bind(actor_user_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as control_plane::ports::FileManagementRepository>::get_file_storage(
+        store, storage_id,
+    )
+    .await
+    .unwrap()
+    .unwrap()
+}
+
+#[tokio::test]
+async fn runtime_debug_artifacts_are_scoped_and_payload_previews_are_persisted() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-05-08 09:40:00 UTC);
+    let run = seed_flow_run(&store, &seeded, &compiled, started_at).await;
+    let node_run = seed_node_run(&store, &run, started_at).await;
+    let run_event = <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_run_event(
+        &store,
+        &AppendRunEventInput {
+            flow_run_id: run.id,
+            node_run_id: Some(node_run.id),
+            event_type: "text_delta".into(),
+            payload: json!({ "text": "x".repeat(128) }),
+        },
+    )
+    .await
+    .unwrap();
+    let storage = seed_file_storage(&store, seeded.actor_user_id).await;
+    let artifact_id = Uuid::now_v7();
+
+    let artifact =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_runtime_debug_artifact(
+            &store,
+            &CreateRuntimeDebugArtifactInput {
+                artifact_id,
+                workspace_id: seeded.workspace_id,
+                application_id: seeded.application_id,
+                flow_run_id: Some(run.id),
+                node_run_id: Some(node_run.id),
+                run_event_id: Some(run_event.id),
+                artifact_kind: "node_output_payload".into(),
+                content_type: "application/json".into(),
+                original_size_bytes: 4096,
+                preview_size_bytes: 512,
+                storage_id: storage.id,
+                storage_ref: "runtime-debug/test/artifact.json".into(),
+                retention_state: "active".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(artifact.id, artifact_id);
+    assert_eq!(artifact.workspace_id, seeded.workspace_id);
+    assert_eq!(artifact.application_id, seeded.application_id);
+    assert_eq!(artifact.flow_run_id, Some(run.id));
+    assert_eq!(artifact.node_run_id, Some(node_run.id));
+    assert_eq!(artifact.run_event_id, Some(run_event.id));
+
+    let loaded =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_runtime_debug_artifact(
+            &store,
+            &GetRuntimeDebugArtifactInput {
+                workspace_id: seeded.workspace_id,
+                application_id: seeded.application_id,
+                artifact_id,
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(loaded.storage_ref, "runtime-debug/test/artifact.json");
+    assert!(
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_runtime_debug_artifact(
+            &store,
+            &GetRuntimeDebugArtifactInput {
+                workspace_id: Uuid::now_v7(),
+                application_id: seeded.application_id,
+                artifact_id,
+            },
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    let pending_delete_artifact_id = Uuid::now_v7();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_runtime_debug_artifact(
+        &store,
+        &CreateRuntimeDebugArtifactInput {
+            artifact_id: pending_delete_artifact_id,
+            workspace_id: seeded.workspace_id,
+            application_id: seeded.application_id,
+            flow_run_id: Some(run.id),
+            node_run_id: Some(node_run.id),
+            run_event_id: Some(run_event.id),
+            artifact_kind: "node_output_payload".into(),
+            content_type: "application/json".into(),
+            original_size_bytes: 1024,
+            preview_size_bytes: 128,
+            storage_id: storage.id,
+            storage_ref: "runtime-debug/test/pending.json".into(),
+            retention_state: "pending_delete".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_runtime_debug_artifact(
+            &store,
+            &GetRuntimeDebugArtifactInput {
+                workspace_id: seeded.workspace_id,
+                application_id: seeded.application_id,
+                artifact_id: pending_delete_artifact_id,
+            },
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+    let deleted_artifact_id = Uuid::now_v7();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_runtime_debug_artifact(
+        &store,
+        &CreateRuntimeDebugArtifactInput {
+            artifact_id: deleted_artifact_id,
+            workspace_id: seeded.workspace_id,
+            application_id: seeded.application_id,
+            flow_run_id: Some(run.id),
+            node_run_id: Some(node_run.id),
+            run_event_id: Some(run_event.id),
+            artifact_kind: "node_output_payload".into(),
+            content_type: "application/json".into(),
+            original_size_bytes: 1024,
+            preview_size_bytes: 128,
+            storage_id: storage.id,
+            storage_ref: "runtime-debug/test/deleted.json".into(),
+            retention_state: "deleted".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_runtime_debug_artifact(
+            &store,
+            &GetRuntimeDebugArtifactInput {
+                workspace_id: seeded.workspace_id,
+                application_id: seeded.application_id,
+                artifact_id: deleted_artifact_id,
+            },
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
+
+    let flow_run =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run_payloads(
+            &store,
+            &UpdateFlowRunPayloadsInput {
+                flow_run_id: run.id,
+                input_payload: json!({
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": artifact_id.to_string(),
+                    "is_truncated": true
+                }),
+                output_payload: json!({}),
+                error_payload: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        flow_run.input_payload["artifact_ref"],
+        artifact_id.to_string()
+    );
+
+    let node_run =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_node_run_payloads(
+            &store,
+            &UpdateNodeRunPayloadsInput {
+                node_run_id: node_run.id,
+                input_payload: json!({}),
+                output_payload: json!({
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": artifact_id.to_string(),
+                    "is_truncated": true
+                }),
+                error_payload: None,
+                metrics_payload: json!({}),
+                debug_payload: json!({}),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        node_run.output_payload["artifact_ref"],
+        artifact_id.to_string()
+    );
+
+    let run_event =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_run_event_payload(
+            &store,
+            &UpdateRunEventPayloadInput {
+                run_event_id: run_event.id,
+                payload: json!({
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": artifact_id.to_string(),
+                    "is_truncated": true
+                }),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(run_event.payload["artifact_ref"], artifact_id.to_string());
 }
 
 #[tokio::test]
@@ -266,6 +635,9 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan() {
             application_id: seeded.application_id,
             flow_id: seeded.flow_id,
             flow_draft_id: seeded.draft_id,
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "test-document-hash".to_string(),
             run_mode: FlowRunMode::DebugFlowRun,
             target_node_id: None,
             status: FlowRunStatus::Queued,
@@ -285,7 +657,8 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan() {
             actor_user_id: seeded.actor_user_id,
             flow_id: seeded.flow_id,
             flow_draft_id: seeded.draft_id,
-            schema_version: "1flowbase.flow/v1".to_string(),
+            schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "test-document-hash".to_string(),
             document_updated_at: seeded.draft_updated_at,
             plan: json!({ "nodes": {}, "topological_order": [] }),
         },
@@ -299,6 +672,8 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan() {
             &AttachCompiledPlanToFlowRunInput {
                 flow_run_id: shell.id,
                 compiled_plan_id: compiled.id,
+                flow_schema_version: compiled.schema_version.clone(),
+                document_hash: "test-document-hash".to_string(),
                 status: FlowRunStatus::Running,
             },
         )
@@ -307,6 +682,91 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan() {
 
     assert_eq!(attached.compiled_plan_id, Some(compiled.id));
     assert_eq!(attached.status, FlowRunStatus::Running);
+}
+
+#[tokio::test]
+async fn compiled_plan_rows_are_immutable_per_compile_and_attach_checks_document_scope() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+
+    let first = <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_compiled_plan(
+        &store,
+        &UpsertCompiledPlanInput {
+            actor_user_id: seeded.actor_user_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "document-hash-a".to_string(),
+            document_updated_at: seeded.draft_updated_at,
+            plan: json!({ "marker": "a", "nodes": {}, "topological_order": [] }),
+        },
+    )
+    .await
+    .unwrap();
+    let second = <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_compiled_plan(
+        &store,
+        &UpsertCompiledPlanInput {
+            actor_user_id: seeded.actor_user_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "document-hash-b".to_string(),
+            document_updated_at: seeded.draft_updated_at + time::Duration::seconds(1),
+            plan: json!({ "marker": "b", "nodes": {}, "topological_order": [] }),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_ne!(first.id, second.id);
+    let stored_first = <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_compiled_plan(
+        &store, first.id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(stored_first.document_hash, "document-hash-a");
+    assert_eq!(stored_first.plan["marker"], "a");
+
+    let shell = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run_shell(
+        &store,
+        &CreateFlowRunShellInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "document-hash-a".to_string(),
+            run_mode: FlowRunMode::DebugFlowRun,
+            target_node_id: None,
+            status: FlowRunStatus::Queued,
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            started_at: OffsetDateTime::now_utc(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let err =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::attach_compiled_plan_to_flow_run(
+            &store,
+            &AttachCompiledPlanToFlowRunInput {
+                flow_run_id: shell.id,
+                compiled_plan_id: second.id,
+                flow_schema_version: second.schema_version.clone(),
+                document_hash: second.document_hash.clone(),
+                status: FlowRunStatus::Running,
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(err
+        .to_string()
+        .contains("flow run compiled plan cannot be attached"));
 }
 
 #[tokio::test]
@@ -323,6 +783,9 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan_rejects_already_attac
             application_id: seeded.application_id,
             flow_id: seeded.flow_id,
             flow_draft_id: seeded.draft_id,
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "test-document-hash".to_string(),
             run_mode: FlowRunMode::DebugFlowRun,
             target_node_id: None,
             status: FlowRunStatus::Queued,
@@ -339,6 +802,8 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan_rejects_already_attac
         &AttachCompiledPlanToFlowRunInput {
             flow_run_id: shell.id,
             compiled_plan_id: compiled.id,
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: "test-document-hash".to_string(),
             status: FlowRunStatus::Running,
         },
     )
@@ -351,6 +816,8 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan_rejects_already_attac
             &AttachCompiledPlanToFlowRunInput {
                 flow_run_id: shell.id,
                 compiled_plan_id: compiled.id,
+                flow_schema_version: compiled.schema_version.clone(),
+                document_hash: "test-document-hash".to_string(),
                 status: FlowRunStatus::Running,
             },
         )
@@ -387,6 +854,9 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan_rejects_mismatched_co
             application_id: seeded.application_id,
             flow_id: seeded.flow_id,
             flow_draft_id: seeded.draft_id,
+            debug_session_id: "test-debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "test-document-hash".to_string(),
             run_mode: FlowRunMode::DebugFlowRun,
             target_node_id: None,
             status: FlowRunStatus::Queued,
@@ -404,6 +874,8 @@ async fn creates_flow_run_shell_and_attaches_compiled_plan_rejects_mismatched_co
             &AttachCompiledPlanToFlowRunInput {
                 flow_run_id: shell.id,
                 compiled_plan_id: other_compiled.id,
+                flow_schema_version: other_compiled.schema_version.clone(),
+                document_hash: "test-document-hash".to_string(),
                 status: FlowRunStatus::Running,
             },
         )
@@ -722,6 +1194,7 @@ async fn orchestration_runtime_repository_persists_waiting_human_checkpoint() {
             output_payload: json!({}),
             error_payload: None,
             metrics_payload: json!({}),
+            debug_payload: json!({ "waiting_reason": "manual_review" }),
             finished_at: None,
         },
     )
@@ -753,6 +1226,10 @@ async fn orchestration_runtime_repository_persists_waiting_human_checkpoint() {
         .unwrap();
 
     assert_eq!(detail.flow_run.run_mode.as_str(), "debug_flow_run");
+    assert_eq!(
+        detail.node_runs[0].debug_payload,
+        json!({ "waiting_reason": "manual_review" })
+    );
     assert_eq!(detail.checkpoints[0].status, "waiting_human");
     assert_eq!(
         detail.checkpoints[0].external_ref_payload.as_ref().unwrap()["prompt"],
@@ -815,6 +1292,32 @@ async fn orchestration_runtime_repository_returns_callback_tasks_with_run_detail
     assert_eq!(detail.callback_tasks[0].callback_kind, "tool");
     assert_eq!(detail.callback_tasks[0].status, CallbackTaskStatus::Pending);
     assert_eq!(detail.callback_tasks[0].id, task.id);
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::complete_callback_task(
+        &store,
+        &control_plane::ports::CompleteCallbackTaskInput {
+            callback_task_id: task.id,
+            response_payload: json!({ "result": "ok" }),
+            completed_at: started_at + Duration::seconds(5),
+        },
+    )
+    .await
+    .unwrap();
+    let duplicate =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::complete_callback_task(
+            &store,
+            &control_plane::ports::CompleteCallbackTaskInput {
+                callback_task_id: task.id,
+                response_payload: json!({ "result": "again" }),
+                completed_at: started_at + Duration::seconds(6),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        duplicate.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("callback_task_not_pending"))
+    ));
 }
 
 #[tokio::test]

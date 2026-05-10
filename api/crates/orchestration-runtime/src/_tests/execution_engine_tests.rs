@@ -8,9 +8,9 @@ use async_trait::async_trait;
 use plugin_framework::{
     error::PluginFrameworkError,
     provider_contract::{
-        ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult,
+        ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderMcpCall,
         ProviderMessageRole, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent,
-        ProviderUsage,
+        ProviderToolCall, ProviderUsage,
     },
 };
 use serde_json::{json, Value};
@@ -110,6 +110,65 @@ impl CapabilityInvoker for StubProviderInvoker {
     }
 }
 
+struct UnknownCapabilityOutputInvoker;
+struct ReservedCapabilityOutputInvoker;
+
+#[async_trait]
+impl ProviderInvoker for UnknownCapabilityOutputInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        unreachable!("plugin output contract test does not execute llm nodes")
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for UnknownCapabilityOutputInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        Ok(CapabilityInvocationOutput {
+            output_payload: json!({
+                "answer": "ok",
+                "unexpected": true
+            }),
+        })
+    }
+}
+
+#[async_trait]
+impl ProviderInvoker for ReservedCapabilityOutputInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        unreachable!("plugin output contract test does not execute llm nodes")
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for ReservedCapabilityOutputInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        Ok(CapabilityInvocationOutput {
+            output_payload: json!({
+                "answer": "ok",
+                "metadata": { "secret": "x" }
+            }),
+        })
+    }
+}
+
 struct RuntimeContractErrorInvoker;
 
 #[async_trait]
@@ -130,6 +189,49 @@ impl ProviderInvoker for RuntimeContractErrorInvoker {
 
 #[async_trait]
 impl CapabilityInvoker for RuntimeContractErrorInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("base plan does not execute capability nodes")
+    }
+}
+
+struct FailsAfterFirstTokenInvoker;
+
+#[async_trait]
+impl ProviderInvoker for FailsAfterFirstTokenInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: "partial answer".to_string(),
+                },
+                ProviderStreamEvent::Error {
+                    error: ProviderRuntimeError {
+                        kind: ProviderRuntimeErrorKind::ProviderInvalidResponse,
+                        message: "stream failed".to_string(),
+                        provider_summary: None,
+                    },
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some("partial answer".to_string()),
+                finish_reason: Some(ProviderFinishReason::Error),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for FailsAfterFirstTokenInvoker {
     async fn invoke_capability_node(
         &self,
         _runtime: &CompiledPluginRuntime,
@@ -179,6 +281,57 @@ impl ProviderInvoker for InputCacheUsageSnapshotInvoker {
 
 #[async_trait]
 impl CapabilityInvoker for InputCacheUsageSnapshotInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("base plan does not execute capability nodes")
+    }
+}
+
+struct ToolMcpMetadataInvoker;
+
+#[async_trait]
+impl ProviderInvoker for ToolMcpMetadataInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: "tool-aware response".to_string(),
+                },
+                ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::ToolCall,
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some("tool-aware response".to_string()),
+                tool_calls: vec![ProviderToolCall {
+                    id: "tool-call-1".to_string(),
+                    name: "lookup_order".to_string(),
+                    arguments: json!({ "order_id": "order_123" }),
+                }],
+                mcp_calls: vec![ProviderMcpCall {
+                    id: "mcp-call-1".to_string(),
+                    server: "orders".to_string(),
+                    method: "get_order".to_string(),
+                    arguments: json!({ "id": "order_123" }),
+                }],
+                finish_reason: Some(ProviderFinishReason::ToolCall),
+                provider_metadata: json!({ "raw_id": "provider-response-1" }),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for ToolMcpMetadataInvoker {
     async fn invoke_capability_node(
         &self,
         _runtime: &CompiledPluginRuntime,
@@ -252,6 +405,52 @@ impl CapabilityInvoker for FailFirstFailoverInvoker {
     }
 }
 
+struct FailAfterTokenFinishErrorFailoverInvoker {
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+#[async_trait]
+impl ProviderInvoker for FailAfterTokenFinishErrorFailoverInvoker {
+    async fn invoke_llm(
+        &self,
+        runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        self.calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .push(runtime.provider_instance_id.clone());
+
+        Ok(ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::TextDelta {
+                    delta: "partial answer".to_string(),
+                },
+                ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Error,
+                },
+            ],
+            result: ProviderInvocationResult {
+                final_content: Some("partial answer".to_string()),
+                finish_reason: Some(ProviderFinishReason::Error),
+                ..ProviderInvocationResult::default()
+            },
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for FailAfterTokenFinishErrorFailoverInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("failover plan does not execute capability nodes")
+    }
+}
+
 fn successful_invoker() -> StubProviderInvoker {
     StubProviderInvoker {
         fail: false,
@@ -260,7 +459,7 @@ fn successful_invoker() -> StubProviderInvoker {
     }
 }
 
-async fn run_llm_node_with_fixture_provider() -> Value {
+async fn run_llm_trace_with_fixture_provider() -> crate::execution_state::NodeExecutionTrace {
     let outcome = start_flow_debug_run(
         &base_plan(),
         &json!({
@@ -278,7 +477,6 @@ async fn run_llm_node_with_fixture_provider() -> Value {
         .into_iter()
         .find(|trace| trace.node_id == "node-llm")
         .expect("llm trace should exist")
-        .output_payload
 }
 
 fn base_plan() -> CompiledPlan {
@@ -297,6 +495,7 @@ fn base_plan() -> CompiledPlan {
                 key: "query".to_string(),
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -313,17 +512,27 @@ fn base_plan() -> CompiledPlan {
             dependency_node_ids: vec!["node-start".to_string()],
             downstream_node_ids: vec!["node-human".to_string()],
             bindings: BTreeMap::from([(
-                "user_prompt".to_string(),
+                "prompt_messages".to_string(),
                 CompiledBinding {
-                    kind: "selector".to_string(),
+                    kind: "prompt_messages".to_string(),
                     selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
-                    raw_value: json!(["node-start", "query"]),
+                    raw_value: json!([
+                        {
+                            "id": "user-1",
+                            "role": "user",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": "{{node-start.query}}"
+                            }
+                        }
+                    ]),
                 },
             )]),
             outputs: vec![CompiledOutput {
                 key: "text".to_string(),
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -360,6 +569,7 @@ fn base_plan() -> CompiledPlan {
                 key: "input".to_string(),
                 title: "人工输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -387,6 +597,7 @@ fn base_plan() -> CompiledPlan {
                 key: "answer".to_string(),
                 title: "对话输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -397,7 +608,7 @@ fn base_plan() -> CompiledPlan {
     CompiledPlan {
         flow_id: Uuid::nil(),
         source_draft_id: "draft-1".to_string(),
-        schema_version: "1flowbase.flow/v1".to_string(),
+        schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec![
             "node-start".to_string(),
             "node-llm".to_string(),
@@ -410,19 +621,49 @@ fn base_plan() -> CompiledPlan {
 }
 
 #[tokio::test]
-async fn llm_node_outputs_include_hidden_route_projection_and_attempt_ids() {
-    let output = run_llm_node_with_fixture_provider().await;
+async fn llm_node_success_keeps_processed_result_fields_in_output_payload() {
+    let trace = run_llm_trace_with_fixture_provider().await;
 
-    assert_eq!(output["text"], json!("echo:gpt-5.4-mini"));
-    assert_eq!(output["message"]["role"], json!("assistant"));
-    assert!(output["route"]["provider_instance_id"].as_str().is_some());
-    assert!(output["__context_projection_id"].as_str().is_some());
-    assert!(output["__attempt_ids"].as_array().is_some());
-    assert!(output["__winner_attempt_id"].as_str().is_some());
+    assert_eq!(trace.output_payload["text"], json!("echo:gpt-5.4-mini"));
+    assert_eq!(
+        trace.output_payload["provider_route"]["provider_instance_id"],
+        "provider-ready"
+    );
+    assert_eq!(
+        trace.output_payload["provider_route"]["provider_code"],
+        "fixture_provider"
+    );
+    assert_eq!(
+        trace.output_payload["provider_route"]["protocol"],
+        "openai_compatible"
+    );
+    assert_eq!(
+        trace.output_payload["provider_route"]["model"],
+        "gpt-5.4-mini"
+    );
+    assert_eq!(trace.output_payload["finish_reason"], json!("stop"));
+    assert_eq!(trace.output_payload["usage"]["input_tokens"], json!(5));
+    assert_eq!(trace.output_payload["usage"]["output_tokens"], json!(7));
+    assert_eq!(trace.output_payload["usage"]["total_tokens"], json!(12));
+    assert!(trace.output_payload.get("route").is_none());
+    assert!(trace.output_payload.get("attempts").is_none());
+    assert!(trace.output_payload.get("assistant_message").is_none());
+    assert!(trace.output_payload.get("raw_response_ref").is_none());
+    assert!(trace.output_payload.get("context_projection_ref").is_none());
+    assert!(trace.output_payload.get("attempt_refs").is_none());
+    assert!(trace.output_payload.get("winner_attempt_ref").is_none());
+    assert_eq!(
+        trace.debug_payload["provider_events"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert!(trace.output_payload.get("provider_events").is_none());
 }
 
 #[tokio::test]
-async fn llm_node_final_usage_preserves_input_cache_snapshot_fields() {
+async fn llm_node_final_usage_preserves_input_cache_snapshot_fields_in_metrics_payload() {
     let outcome = start_flow_debug_run(
         &base_plan(),
         &json!({
@@ -434,19 +675,32 @@ async fn llm_node_final_usage_preserves_input_cache_snapshot_fields() {
     )
     .await
     .unwrap();
-    let output = outcome
+    let trace = outcome
         .node_traces
         .into_iter()
         .find(|trace| trace.node_id == "node-llm")
-        .expect("llm trace should exist")
-        .output_payload;
+        .expect("llm trace should exist");
 
-    assert_eq!(output["usage"]["input_tokens"], json!(100));
-    assert_eq!(output["usage"]["input_cache_hit_tokens"], json!(40));
-    assert_eq!(output["usage"]["input_cache_miss_tokens"], json!(60));
-    assert_eq!(output["usage"]["output_tokens"], json!(12));
-    assert_eq!(output["usage"]["total_tokens"], json!(112));
-    assert_eq!(output["usage"]["cache_write_tokens"], Value::Null);
+    assert_eq!(trace.output_payload["text"], json!("cache-aware response"));
+    assert_eq!(
+        trace.output_payload["usage"],
+        trace.metrics_payload["usage"]
+    );
+    assert_eq!(trace.metrics_payload["usage"]["input_tokens"], json!(100));
+    assert_eq!(
+        trace.metrics_payload["usage"]["input_cache_hit_tokens"],
+        json!(40)
+    );
+    assert_eq!(
+        trace.metrics_payload["usage"]["input_cache_miss_tokens"],
+        json!(60)
+    );
+    assert_eq!(trace.metrics_payload["usage"]["output_tokens"], json!(12));
+    assert_eq!(trace.metrics_payload["usage"]["total_tokens"], json!(112));
+    assert_eq!(
+        trace.metrics_payload["usage"]["cache_write_tokens"],
+        Value::Null
+    );
 }
 
 #[tokio::test]
@@ -467,19 +721,19 @@ async fn llm_output_payload_keeps_think_tags_in_standard_text_content() {
     )
     .await
     .unwrap();
-    let output = outcome
+    let trace = outcome
         .node_traces
         .into_iter()
         .find(|trace| trace.node_id == "node-llm")
-        .expect("llm trace should exist")
-        .output_payload;
+        .expect("llm trace should exist");
 
-    assert_eq!(output["text"], "<think>先分析用户问题</think>正式回答");
     assert_eq!(
-        output["message"]["content"],
-        "<think>先分析用户问题</think>正式回答"
+        trace.output_payload["text"],
+        json!("<think>先分析用户问题</think>正式回答")
     );
-    assert_eq!(output["reasoning_content"], "先分析用户问题");
+    assert!(trace.output_payload.get("reasoning_content").is_none());
+    assert!(trace.debug_payload.get("reasoning_content").is_none());
+    assert!(trace.output_payload.get("message").is_none());
 }
 
 struct ReasoningDeltaProviderInvoker;
@@ -537,19 +791,57 @@ async fn llm_output_payload_merges_reasoning_deltas_into_dify_style_text() {
     )
     .await
     .unwrap();
-    let output = outcome
+    let trace = outcome
         .node_traces
         .into_iter()
         .find(|trace| trace.node_id == "node-llm")
-        .expect("llm trace should exist")
-        .output_payload;
+        .expect("llm trace should exist");
 
-    assert_eq!(output["text"], "<think>先分析</think>正式回答");
     assert_eq!(
-        output["message"]["content"],
-        "<think>先分析</think>正式回答"
+        trace.output_payload["text"],
+        json!("<think>先分析</think>正式回答")
     );
-    assert_eq!(output["reasoning_content"], "先分析");
+    assert!(trace.output_payload.get("reasoning_content").is_none());
+    assert!(trace.debug_payload.get("reasoning_content").is_none());
+    assert!(trace.output_payload.get("message").is_none());
+}
+
+#[tokio::test]
+async fn llm_node_output_payload_keeps_provider_result_fields_out_of_debug_payload() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "node-start": {
+                "query": "hello"
+            }
+        }),
+        &ToolMcpMetadataInvoker,
+    )
+    .await
+    .unwrap();
+    let trace = outcome
+        .node_traces
+        .into_iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+
+    assert_eq!(trace.output_payload["text"], json!("tool-aware response"));
+    assert_eq!(
+        trace.output_payload["tool_calls"][0]["name"],
+        "lookup_order"
+    );
+    assert_eq!(trace.output_payload["mcp_calls"][0]["method"], "get_order");
+    assert_eq!(
+        trace.output_payload["provider_metadata"]["raw_id"],
+        "provider-response-1"
+    );
+    assert_eq!(
+        trace.output_payload["provider_route"]["provider_code"],
+        "fixture_provider"
+    );
+    assert_eq!(trace.output_payload["finish_reason"], json!("tool_call"));
+    assert!(trace.debug_payload.get("provider_metadata").is_none());
+    assert!(trace.debug_payload.get("provider_route").is_none());
 }
 
 #[tokio::test]
@@ -705,6 +997,76 @@ async fn failover_queue_retries_next_target_before_first_token() {
     );
 }
 
+#[tokio::test]
+async fn failover_queue_stops_when_primary_fails_after_finish_error_with_first_token() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.llm_runtime = Some(CompiledLlmRuntime {
+        provider_instance_id: "provider-primary".to_string(),
+        provider_code: "fixture_provider".to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "primary-model".to_string(),
+        routing: Some(CompiledLlmRouting {
+            routing_mode: LlmRoutingMode::FailoverQueue,
+            fixed_model_target: None,
+            queue_template_id: Some("queue-template-1".to_string()),
+            queue_snapshot_id: Some("queue-snapshot-1".to_string()),
+            queue_targets: vec![
+                CompiledLlmRouteTarget {
+                    provider_instance_id: "provider-primary".to_string(),
+                    provider_code: "fixture_provider".to_string(),
+                    protocol: "openai_compatible".to_string(),
+                    upstream_model_id: "primary-model".to_string(),
+                },
+                CompiledLlmRouteTarget {
+                    provider_instance_id: "provider-backup".to_string(),
+                    provider_code: "fixture_provider".to_string(),
+                    protocol: "openai_compatible".to_string(),
+                    upstream_model_id: "backup-model".to_string(),
+                },
+            ],
+            context_policy: json!({}),
+            stream_policy: json!({}),
+        }),
+    });
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let invoker = FailAfterTokenFinishErrorFailoverInvoker {
+        calls: calls.clone(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        calls.lock().expect("calls mutex poisoned").as_slice(),
+        ["provider-primary"]
+    );
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                json!("provider_invalid_response")
+            );
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
+            assert!(outcome.variable_pool.get("node-llm").is_none());
+            assert_eq!(
+                outcome.node_traces[1].metrics_payload["attempts"][0]["failed_after_first_token"],
+                json!(true)
+            );
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+}
+
 fn plugin_plan() -> CompiledPlan {
     let mut nodes = BTreeMap::new();
     nodes.insert(
@@ -721,6 +1083,7 @@ fn plugin_plan() -> CompiledPlan {
                 key: "query".to_string(),
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -748,17 +1111,29 @@ fn plugin_plan() -> CompiledPlan {
                 key: "answer".to_string(),
                 title: "回答".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({
                 "prompt": "Hello {{ node-start.query }}"
             }),
             plugin_runtime: Some(CompiledPluginRuntime {
                 installation_id: Uuid::nil(),
+                plugin_unique_identifier: "fixture_capability".to_string(),
+                package_id: "fixture_capability@0.1.0".to_string(),
                 plugin_id: "fixture_capability@0.1.0".to_string(),
                 plugin_version: "0.1.0".to_string(),
                 contribution_code: "fixture_action".to_string(),
                 node_shell: "action".to_string(),
-                schema_version: "1flowbase.node-contribution/v1".to_string(),
+                schema_version: "1flowbase.node-contribution/v2".to_string(),
+                contribution_checksum: "sha256:contribution".to_string(),
+                compiled_contribution_hash: "sha256:compiled".to_string(),
+                output_schema_snapshot: vec![CompiledOutput {
+                    key: "answer".to_string(),
+                    title: "回答".to_string(),
+                    value_type: "string".to_string(),
+                    selector: Vec::new(),
+                }],
+                side_effect_policy: "external_read".to_string(),
             }),
             llm_runtime: None,
         },
@@ -767,7 +1142,7 @@ fn plugin_plan() -> CompiledPlan {
     CompiledPlan {
         flow_id: Uuid::nil(),
         source_draft_id: "draft-plugin".to_string(),
-        schema_version: "1flowbase.flow/v1".to_string(),
+        schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec!["node-start".to_string(), "node-plugin".to_string()],
         nodes,
         compile_issues: Vec::new(),
@@ -817,7 +1192,8 @@ async fn resume_flow_debug_run_completes_answer_after_human_input() {
     let resumed = resume_flow_debug_run(
         &base_plan(),
         &checkpoint,
-        &json!({ "node-human": { "input": "已审核，可继续" } }),
+        "node-human",
+        &json!({ "input": "已审核，可继续" }),
         &successful_invoker(),
     )
     .await
@@ -831,6 +1207,35 @@ async fn resume_flow_debug_run_completes_answer_after_human_input() {
         resumed.variable_pool["node-answer"]["answer"],
         json!("已审核，可继续")
     );
+}
+
+#[tokio::test]
+async fn resume_flow_debug_run_rejects_non_public_resume_output_keys() {
+    let waiting = start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    let checkpoint = waiting.checkpoint_snapshot.clone().unwrap();
+    let error = resume_flow_debug_run(
+        &base_plan(),
+        &checkpoint,
+        "node-human",
+        &json!({
+            "input": "已审核，可继续",
+            "node-llm": { "text": "polluted" }
+        }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("resume payload key node-llm is not a public output for node-human"));
 }
 
 #[tokio::test]
@@ -854,6 +1259,7 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
                 key: "result".to_string(),
                 title: "工具输出".to_string(),
                 value_type: "json".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({ "tool_name": "lookup_order" }),
             plugin_runtime: None,
@@ -897,9 +1303,11 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
             assert_eq!(
-                outcome.node_traces[1].output_payload["error"]["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
                 json!("auth_failed")
             );
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
+            assert!(outcome.variable_pool.get("node-llm").is_none());
             assert!(failure.error_payload["provider_summary"]
                 .as_str()
                 .unwrap()
@@ -928,17 +1336,51 @@ async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
                 json!("401 401 Unauthorized: Incorrect API key provided")
             );
             assert_eq!(
-                outcome.node_traces[1].output_payload["error"]["error_kind"],
-                json!("auth_failed")
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["message"],
+                json!("401 401 Unauthorized: Incorrect API key provided")
             );
-            assert_eq!(outcome.node_traces[1].output_payload["text"], Value::Null);
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
+            assert!(outcome.variable_pool.get("node-llm").is_none());
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
 }
 
 #[tokio::test]
-async fn llm_runtime_sends_enabled_model_parameters_and_keeps_text_output_for_json_schema() {
+async fn llm_failure_after_first_token_does_not_write_public_output_to_variable_pool() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &FailsAfterFirstTokenInvoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_kind"],
+                json!("provider_invalid_response")
+            );
+            assert_eq!(
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                json!("provider_invalid_response")
+            );
+            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
+            assert!(outcome.variable_pool.get("node-llm").is_none());
+            assert_eq!(
+                outcome.node_traces[1].metrics_payload["attempts"][0]["failed_after_first_token"],
+                json!(true)
+            );
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn llm_runtime_sends_enabled_model_parameters_and_keeps_undeclared_structured_output_private()
+{
     let mut plan = base_plan();
     let llm = plan
         .nodes
@@ -996,9 +1438,59 @@ async fn llm_runtime_sends_enabled_model_parameters_and_keeps_text_output_for_js
         outcome.node_traces[1].output_payload["text"],
         json!("{\"ok\":true}")
     );
+    assert!(outcome.node_traces[1]
+        .output_payload
+        .get("structured_output")
+        .is_none());
+}
+
+#[tokio::test]
+async fn llm_json_schema_response_exposes_structured_output_only_when_declared() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config = json!({
+        "model_provider": {
+            "provider_instance_id": "provider-ready",
+            "model_id": "gpt-5.4-mini"
+        },
+        "response_format": {
+            "mode": "json_schema",
+            "schema": { "type": "object" }
+        }
+    });
+    llm.outputs.push(CompiledOutput {
+        key: "structured_output".to_string(),
+        title: "结构化输出".to_string(),
+        value_type: "json".to_string(),
+        selector: Vec::new(),
+    });
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "输出 JSON" } }),
+        &StubProviderInvoker {
+            fail: false,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: "{\"ok\":true}".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        outcome.node_traces[1].output_payload["text"],
+        json!("{\"ok\":true}")
+    );
     assert_eq!(
         outcome.node_traces[1].output_payload["structured_output"],
-        Value::Null
+        json!({ "ok": true })
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["usage"]["total_tokens"],
+        json!(12)
     );
 }
 
@@ -1020,4 +1512,43 @@ async fn plugin_node_routes_to_capability_runtime_and_preserves_output_payload()
     ));
     assert_eq!(outcome.node_traces[1].node_type, "plugin_node");
     assert_eq!(outcome.node_traces[1].output_payload["answer"], "world");
+}
+
+#[tokio::test]
+async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden_from_variable_pool(
+) {
+    let outcome = start_flow_debug_run(
+        &plugin_plan(),
+        &json!({ "node-start": { "query": "world" } }),
+        &UnknownCapabilityOutputInvoker,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        outcome.node_traces[1].output_payload["unexpected"],
+        json!(true)
+    );
+    assert!(outcome.variable_pool["node-plugin"]
+        .get("unexpected")
+        .is_none());
+}
+
+#[tokio::test]
+async fn plugin_node_keeps_runtime_named_executor_output_keys_hidden_from_variable_pool() {
+    let outcome = start_flow_debug_run(
+        &plugin_plan(),
+        &json!({ "node-start": { "query": "world" } }),
+        &ReservedCapabilityOutputInvoker,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        outcome.node_traces[1].output_payload["metadata"]["secret"],
+        json!("x")
+    );
+    assert!(outcome.variable_pool["node-plugin"]
+        .get("metadata")
+        .is_none());
 }

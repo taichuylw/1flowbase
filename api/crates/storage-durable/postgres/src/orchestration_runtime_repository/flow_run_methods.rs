@@ -10,22 +10,17 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 schema_version,
+                document_hash,
                 document_updated_at,
                 plan,
                 created_by
-            ) values ($1, $2, $3, $4, $5, $6, $7)
-            on conflict (flow_draft_id) do update
-            set flow_id = excluded.flow_id,
-                schema_version = excluded.schema_version,
-                document_updated_at = excluded.document_updated_at,
-                plan = excluded.plan,
-                created_by = excluded.created_by,
-                updated_at = now()
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
             returning
                 id,
                 flow_id,
                 flow_draft_id,
                 schema_version,
+                document_hash,
                 document_updated_at,
                 plan,
                 created_by,
@@ -37,6 +32,7 @@ impl PgControlPlaneStore {
         .bind(input.flow_id)
         .bind(input.flow_draft_id)
         .bind(&input.schema_version)
+        .bind(&input.document_hash)
         .bind(input.document_updated_at)
         .bind(&input.plan)
         .bind(input.actor_user_id)
@@ -57,6 +53,7 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 schema_version,
+                document_hash,
                 document_updated_at,
                 plan,
                 created_by,
@@ -82,19 +79,25 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
                 input_payload,
                 created_by,
                 started_at
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             returning
                 id,
                 application_id,
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
@@ -112,6 +115,9 @@ impl PgControlPlaneStore {
         .bind(input.flow_id)
         .bind(input.flow_draft_id)
         .bind(input.compiled_plan_id)
+        .bind(&input.debug_session_id)
+        .bind(&input.flow_schema_version)
+        .bind(&input.document_hash)
         .bind(input.run_mode.as_str())
         .bind(input.target_node_id.as_deref())
         .bind(input.status.as_str())
@@ -136,19 +142,25 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
                 input_payload,
                 created_by,
                 started_at
-            ) values ($1, $2, $3, $4, null, $5, $6, $7, $8, $9, $10)
+            ) values ($1, $2, $3, $4, null, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             returning
                 id,
                 application_id,
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
@@ -165,6 +177,9 @@ impl PgControlPlaneStore {
         .bind(input.application_id)
         .bind(input.flow_id)
         .bind(input.flow_draft_id)
+        .bind(&input.debug_session_id)
+        .bind(&input.flow_schema_version)
+        .bind(&input.document_hash)
         .bind(input.run_mode.as_str())
         .bind(input.target_node_id.as_deref())
         .bind(input.status.as_str())
@@ -191,14 +206,21 @@ impl PgControlPlaneStore {
               and compiled.id = $2
               and flow_runs.status = 'queued'
               and flow_runs.compiled_plan_id is null
+              and flow_runs.flow_schema_version = $4
+              and flow_runs.document_hash = $5
               and compiled.flow_id = flow_runs.flow_id
               and compiled.flow_draft_id = flow_runs.flow_draft_id
+              and compiled.schema_version = flow_runs.flow_schema_version
+              and compiled.document_hash = flow_runs.document_hash
             returning
                 flow_runs.id,
                 flow_runs.application_id,
                 flow_runs.flow_id,
                 flow_runs.flow_draft_id,
                 flow_runs.compiled_plan_id,
+                flow_runs.debug_session_id,
+                flow_runs.flow_schema_version,
+                flow_runs.document_hash,
                 flow_runs.run_mode,
                 flow_runs.target_node_id,
                 flow_runs.status,
@@ -214,6 +236,8 @@ impl PgControlPlaneStore {
         .bind(input.flow_run_id)
         .bind(input.compiled_plan_id)
         .bind(input.status.as_str())
+        .bind(&input.flow_schema_version)
+        .bind(&input.document_hash)
         .fetch_optional(self.pool())
         .await?
         .ok_or_else(|| anyhow!("flow run compiled plan cannot be attached"))?;
@@ -241,6 +265,9 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
@@ -282,8 +309,9 @@ impl PgControlPlaneStore {
                 node_alias,
                 status,
                 input_payload,
+                debug_payload,
                 started_at
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             returning
                 id,
                 flow_run_id,
@@ -295,6 +323,7 @@ impl PgControlPlaneStore {
                 output_payload,
                 error_payload,
                 metrics_payload,
+                debug_payload,
                 started_at,
                 finished_at
             "#,
@@ -306,6 +335,7 @@ impl PgControlPlaneStore {
         .bind(&input.node_alias)
         .bind(input.status.as_str())
         .bind(&input.input_payload)
+        .bind(&input.debug_payload)
         .bind(input.started_at)
         .fetch_one(self.pool())
         .await?;
@@ -321,7 +351,8 @@ impl PgControlPlaneStore {
                 output_payload = $3,
                 error_payload = $4,
                 metrics_payload = $5,
-                finished_at = $6
+                debug_payload = $6,
+                finished_at = $7
             where id = $1
             returning
                 id,
@@ -334,6 +365,7 @@ impl PgControlPlaneStore {
                 output_payload,
                 error_payload,
                 metrics_payload,
+                debug_payload,
                 started_at,
                 finished_at
             "#,
@@ -343,6 +375,7 @@ impl PgControlPlaneStore {
         .bind(&input.output_payload)
         .bind(&input.error_payload)
         .bind(&input.metrics_payload)
+        .bind(&input.debug_payload)
         .bind(input.finished_at)
         .fetch_one(self.pool())
         .await?;
@@ -360,6 +393,7 @@ impl PgControlPlaneStore {
             output_payload: input.output_payload.clone(),
             error_payload: input.error_payload.clone(),
             metrics_payload: input.metrics_payload.clone(),
+            debug_payload: input.debug_payload.clone(),
             finished_at: Some(input.finished_at),
         })
         .await
@@ -380,6 +414,9 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
@@ -423,6 +460,9 @@ impl PgControlPlaneStore {
                 flow_id,
                 flow_draft_id,
                 compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
                 run_mode,
                 target_node_id,
                 status,
@@ -589,6 +629,34 @@ impl PgControlPlaneStore {
         map_callback_task_record(row)
     }
 
+    async fn get_callback_task(
+        &self,
+        callback_task_id: Uuid,
+    ) -> Result<Option<domain::CallbackTaskRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            from flow_run_callback_tasks
+            where id = $1
+            "#,
+        )
+        .bind(callback_task_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_callback_task_record).transpose()
+    }
+
     async fn complete_callback_task(
         &self,
         input: &CompleteCallbackTaskInput,
@@ -599,7 +667,7 @@ impl PgControlPlaneStore {
             set status = 'completed',
                 response_payload = $2,
                 completed_at = $3
-            where id = $1
+            where id = $1 and status = 'pending'
             returning
                 id,
                 flow_run_id,
@@ -616,8 +684,15 @@ impl PgControlPlaneStore {
         .bind(input.callback_task_id)
         .bind(&input.response_payload)
         .bind(input.completed_at)
-        .fetch_one(self.pool())
+        .fetch_optional(self.pool())
         .await?;
+
+        let Some(row) = row else {
+            if self.get_callback_task(input.callback_task_id).await?.is_some() {
+                return Err(ControlPlaneError::Conflict("callback_task_not_pending").into());
+            }
+            return Err(ControlPlaneError::NotFound("callback_task").into());
+        };
 
         map_callback_task_record(row)
     }

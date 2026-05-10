@@ -338,6 +338,7 @@ async fn run_data_model_flow(
             application_id,
             input_payload: json!({}),
             document_snapshot: Some(data_model_flow_document(flow_id, nodes, edges)),
+            debug_session_id: None,
         })
         .await
         .expect("data model debug run should start");
@@ -378,12 +379,12 @@ fn data_model_flow_document(
         "configVersion": 1,
         "config": {},
         "bindings": {},
-        "outputs": [{ "key": "query", "title": "Input", "valueType": "string" }]
+        "outputs": []
     })];
     nodes.extend(data_model_nodes);
 
     json!({
-        "schemaVersion": "1flowbase.flow/v1",
+        "schemaVersion": "1flowbase.flow/v2",
         "meta": {
             "flowId": flow_id.to_string(),
             "name": "Data Model Agent",
@@ -423,6 +424,12 @@ fn create_order_node(id: &str, title: &str, status: &str) -> Value {
 
 fn data_model_node(id: &str, action: &str, config_patch: Value, bindings: Value) -> Value {
     let mut config = serde_json::Map::from_iter([("data_model_code".to_string(), json!("orders"))]);
+    if matches!(action, "create" | "update" | "delete") {
+        config.insert(
+            "side_effect_policy".to_string(),
+            json!("allow_with_idempotency"),
+        );
+    }
     if let Some(patch) = config_patch.as_object() {
         config.extend(patch.clone());
     }

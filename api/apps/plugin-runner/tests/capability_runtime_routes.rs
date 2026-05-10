@@ -176,8 +176,14 @@ node_contributions:
     description: Fixture capability node
     icon: puzzle
     schema_ui: {}
-    schema_version: 1flowbase.node-contribution/v1
-    output_schema: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: result
+          title: Result
+          valueType: json
+    side_effect_policy: external_read
+    infra_contracts: []
     required_auth:
       - provider_instance
     visibility: public

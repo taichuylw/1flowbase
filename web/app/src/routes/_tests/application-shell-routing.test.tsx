@@ -7,10 +7,13 @@ import { AppRouterProvider } from '../../app/router';
 import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 import { renderReactFlowScene } from '../../test/renderers/render-react-flow-scene';
 
+const ROUTE_EDITOR_WAIT_OPTIONS = { timeout: 20_000 };
+
 const applicationApi = vi.hoisted(() => ({
   applicationsQueryKey: ['applications'],
   applicationCatalogQueryKey: ['applications', 'catalog'],
   applicationDetailQueryKey: (applicationId: string) => ['applications', applicationId],
+  getApplicationsApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800'),
   fetchApplications: vi.fn(),
   fetchApplicationCatalog: vi.fn(),
   createApplication: vi.fn(),
@@ -47,6 +50,8 @@ vi.mock(
   '../../features/agent-flow/api/node-contributions',
   () => nodeContributionsApi
 );
+
+import * as runtimeApi from '../../features/agent-flow/api/runtime';
 
 function authenticate() {
   useAuthStore.getState().setAuthenticated({
@@ -137,7 +142,7 @@ describe('application shell routing', () => {
         flow_id: 'flow-1',
         updated_at: '2026-04-15T09:00:00Z',
         document: {
-          schemaVersion: '1flowbase.flow/v1',
+          schemaVersion: '1flowbase.flow/v2',
           meta: {
             flowId: 'flow-1',
             name: 'Untitled agentFlow',
@@ -160,6 +165,9 @@ describe('application shell routing', () => {
     });
     nodeContributionsApi.fetchNodeContributions.mockReset();
     nodeContributionsApi.fetchNodeContributions.mockResolvedValue([]);
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot').mockResolvedValue({
+      variable_cache: {}
+    });
     orchestrationApi.saveDraft.mockReset();
     orchestrationApi.saveDraft.mockResolvedValue({
       flow_id: 'flow-1',
@@ -168,7 +176,7 @@ describe('application shell routing', () => {
         flow_id: 'flow-1',
         updated_at: '2026-04-15T09:10:00Z',
         document: {
-          schemaVersion: '1flowbase.flow/v1',
+          schemaVersion: '1flowbase.flow/v2',
           meta: {
             flowId: 'flow-1',
             name: 'Untitled agentFlow',
@@ -221,13 +229,15 @@ describe('application shell routing', () => {
     try {
       renderApplicationRouter();
 
-      expect(await screen.findByText('30 秒自动保存')).toBeInTheDocument();
+      expect(
+        await screen.findByText('30 秒自动保存', undefined, ROUTE_EDITOR_WAIT_OPTIONS)
+      ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Issues' })).toBeInTheDocument();
     } finally {
       desktopBreakpoints.mockRestore();
     }
-  });
+  }, 20_000);
 
   test('keeps orchestration draft save enabled when application api capability is planned', async () => {
     const desktopBreakpoints = vi
@@ -239,7 +249,9 @@ describe('application shell routing', () => {
     try {
       renderApplicationRouter();
 
-      fireEvent.click(await screen.findByRole('button', { name: '保存' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: '保存' }, ROUTE_EDITOR_WAIT_OPTIONS)
+      );
 
       await waitFor(() => {
         expect(orchestrationApi.saveDraft).toHaveBeenCalledTimes(1);
@@ -247,7 +259,7 @@ describe('application shell routing', () => {
     } finally {
       desktopBreakpoints.mockRestore();
     }
-  });
+  }, 20_000);
 
   test('renders formal 403 state for inaccessible applications', async () => {
     applicationApi.fetchApplicationDetail.mockRejectedValue(

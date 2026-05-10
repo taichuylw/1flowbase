@@ -9,7 +9,7 @@ import {
 import { Collapse, Tag, Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
-import { NodeRunJsonBlock } from '../../detail/last-run/NodeRunIOCard';
+import { NodeRunPayloadSections } from '../../detail/last-run/NodeRunIOCard';
 import { getAgentFlowNodeTypeIcon } from '../../../lib/node-type-icons';
 
 function statusTone(status: string) {
@@ -62,8 +62,27 @@ function nodeDisplayName(item: AgentFlowTraceItem) {
   return item.nodeAlias;
 }
 
+function readOutputTotalTokens(outputPayload: unknown) {
+  if (
+    !outputPayload ||
+    typeof outputPayload !== 'object' ||
+    Array.isArray(outputPayload)
+  ) {
+    return null;
+  }
+
+  const usage = (outputPayload as Record<string, unknown>).usage;
+
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+    return null;
+  }
+
+  const totalTokens = (usage as Record<string, unknown>).total_tokens;
+  return typeof totalTokens === 'number' ? totalTokens : null;
+}
+
 function metricText(item: AgentFlowTraceItem) {
-  const tokens = item.metricsPayload.total_tokens;
+  const tokens = readOutputTotalTokens(item.outputPayload);
   const duration = item.durationMs == null ? null : `${item.durationMs} ms`;
 
   if (typeof tokens === 'number' && duration) {
@@ -123,18 +142,12 @@ function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   );
 }
 
-function buildNodeOutputPayload(item: AgentFlowTraceItem) {
-  return {
-    ...item.outputPayload,
-    error: item.errorPayload ?? null,
-    metrics: item.metricsPayload
-  };
-}
-
 export function DebugWorkflowProcess({
-  items
+  items,
+  onLoadArtifact
 }: {
   items: AgentFlowTraceItem[];
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -171,28 +184,41 @@ export function DebugWorkflowProcess({
           bordered={false}
           className="agent-flow-editor__debug-workflow-collapse-list"
           expandIconPosition="end"
-          items={items.map((item) => ({
-            key: item.nodeId,
-            label: (
-              <span className="agent-flow-editor__debug-workflow-row">
-                <NodeTypeIcon nodeType={item.nodeType} />
-                <span className="agent-flow-editor__debug-workflow-node-main">
-                  <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
-                  <Typography.Text className="agent-flow-editor__debug-workflow-metric" type="secondary">
-                    {metricText(item)}
-                  </Typography.Text>
+          items={items.map((item) => {
+            return {
+              key: item.nodeRunId ?? item.nodeId,
+              label: (
+                <span className="agent-flow-editor__debug-workflow-row">
+                  <NodeTypeIcon nodeType={item.nodeType} />
+                  <span className="agent-flow-editor__debug-workflow-node-main">
+                    <Typography.Text strong>
+                      {nodeDisplayName(item)}
+                    </Typography.Text>
+                    <Typography.Text
+                      className="agent-flow-editor__debug-workflow-metric"
+                      type="secondary"
+                    >
+                      {metricText(item)}
+                    </Typography.Text>
+                  </span>
+                  <Tag className="agent-flow-editor__debug-workflow-node-type">
+                    {item.nodeType}
+                  </Tag>
+                  <StatusIcon status={item.status} />
                 </span>
-                <Tag className="agent-flow-editor__debug-workflow-node-type">{item.nodeType}</Tag>
-                <StatusIcon status={item.status} />
-              </span>
-            ),
-            children: (
-              <div className="agent-flow-editor__debug-workflow-node-detail">
-                <NodeRunJsonBlock payload={item.inputPayload} title="输入" />
-                <NodeRunJsonBlock payload={buildNodeOutputPayload(item)} title="输出" />
-              </div>
-            )
-          }))}
+              ),
+              children: (
+                <div className="agent-flow-editor__debug-workflow-node-detail">
+                  <NodeRunPayloadSections
+                    inputPayload={item.inputPayload}
+                    debugPayload={item.debugPayload}
+                    outputPayload={item.outputPayload}
+                    onLoadArtifact={onLoadArtifact}
+                  />
+                </div>
+              )
+            };
+          })}
         />
       ) : null}
     </div>

@@ -259,8 +259,14 @@ node_contributions:
     description: Broken node description
     icon: globe
     schema_ui: {}
-    schema_version: 1flowbase.node.schema-ui/v1
-    output_schema: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: result
+          title: Result
+          valueType: json
+    side_effect_policy: none
+    infra_contracts: []
     required_auth:
       - provider_instance
     visibility: public
@@ -358,7 +364,13 @@ node_contributions:
     icon: globe
     schema_ui: {}
     schema_version: invalid-schema
-    output_schema: {}
+    output_schema:
+      outputs:
+        - key: result
+          title: Result
+          valueType: json
+    side_effect_policy: none
+    infra_contracts: []
     required_auth:
       - provider_instance
     visibility: internal
@@ -454,8 +466,14 @@ node_contributions:
     description: Valid node description
     icon: globe
     schema_ui: {}
-    schema_version: 1flowbase.node-contribution/v1
-    output_schema: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: result
+          title: Result
+          valueType: json
+    side_effect_policy: none
+    infra_contracts: []
     required_auth:
       - provider_instance
     visibility: public
@@ -470,6 +488,388 @@ node_contributions:
     assert!(error
         .to_string()
         .contains("contract_version must be 1flowbase.capability/v1 for capability_plugin"));
+}
+
+#[test]
+fn plugin_manifest_v1_accepts_node_contribution_v2_contract() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: prompt_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Prompt Pack
+description: Prompt capability plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/prompt-pack
+node_contributions:
+  - contribution_code: openai_prompt
+    node_shell: action
+    category: ai
+    title: OpenAI Prompt
+    description: Prompt node
+    icon: spark
+    schema_ui:
+      sections:
+        - blocks:
+            - kind: field
+              renderer: text
+              path: config.prompt
+              label: Prompt
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+          valueType: string
+    side_effect_policy: external_read
+    infra_contracts: []
+    required_auth:
+      - provider_instance
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap();
+
+    let contribution = &manifest.node_contributions[0];
+    assert_eq!(
+        contribution.schema_version,
+        "1flowbase.node-contribution/v2"
+    );
+    assert_eq!(contribution.side_effect_policy, "external_read");
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_node_contribution_v1_schema() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: prompt_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Prompt Pack
+description: Prompt capability plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/prompt-pack
+node_contributions:
+  - contribution_code: legacy_prompt
+    node_shell: action
+    category: ai
+    title: Legacy Prompt
+    description: Legacy node
+    icon: spark
+    schema_ui: {}
+    schema_version: 1flowbase.node-contribution/v1
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+          valueType: string
+    side_effect_policy: none
+    infra_contracts: []
+    required_auth: []
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains(
+        "node_contributions[].schema_version must be one of 1flowbase.node-contribution/v2"
+    ));
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_unknown_node_contribution_renderer() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: prompt_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Prompt Pack
+description: Prompt capability plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/prompt-pack
+node_contributions:
+  - contribution_code: openai_prompt
+    node_shell: action
+    category: ai
+    title: OpenAI Prompt
+    description: Prompt node
+    icon: spark
+    schema_ui:
+      sections:
+        - blocks:
+            - kind: field
+              renderer: plugin_react_panel
+              path: config.prompt
+              label: Prompt
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+          valueType: string
+    side_effect_policy: none
+    infra_contracts: []
+    required_auth: []
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("unknown node contribution renderer"));
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_reserved_output_and_host_infra_contracts() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: prompt_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Prompt Pack
+description: Prompt capability plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/prompt-pack
+node_contributions:
+  - contribution_code: openai_prompt
+    node_shell: action
+    category: ai
+    title: OpenAI Prompt
+    description: Prompt node
+    icon: spark
+    schema_ui: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: usage
+          title: Usage
+          valueType: json
+    side_effect_policy: none
+    infra_contracts:
+      - cache-store
+    required_auth: []
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("reserved public output key"));
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_storage_host_infra_contracts() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: prompt_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Prompt Pack
+description: Prompt capability plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/prompt-pack
+node_contributions:
+  - contribution_code: openai_prompt
+    node_shell: action
+    category: ai
+    title: OpenAI Prompt
+    description: Prompt node
+    icon: spark
+    schema_ui: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+          valueType: string
+    side_effect_policy: none
+    infra_contracts:
+      - storage-object
+      - rate_limit_store
+    required_auth: []
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("host infrastructure contract"));
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_node_contribution_output_without_title_or_value_type() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: prompt_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Prompt Pack
+description: Prompt capability plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/prompt-pack
+node_contributions:
+  - contribution_code: openai_prompt
+    node_shell: action
+    category: ai
+    title: OpenAI Prompt
+    description: Prompt node
+    icon: spark
+    schema_ui: {}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+        - key: raw
+          valueType: json
+    side_effect_policy: none
+    infra_contracts: []
+    required_auth: []
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("output_schema.outputs[].valueType cannot be empty"));
 }
 
 #[test]

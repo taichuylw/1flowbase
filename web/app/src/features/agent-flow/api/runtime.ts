@@ -1,20 +1,24 @@
 import type {
   FlowAuthoringDocument,
   FlowBinding,
-  FlowNodeDocument
+  FlowNodeDocument,
+  FlowNodeOutputDocument
 } from '@1flowbase/flow-schema';
 import {
   cancelConsoleFlowRun,
   getConsoleApplicationRunDetail,
   getConsoleDebugVariableSnapshot,
+  getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRun,
   startConsoleFlowDebugRunStream,
   getConsoleNodeLastRun,
   startConsoleNodeDebugPreview,
   type ConsoleApplicationRunDetail,
   type ConsoleFlowDebugStreamEvent,
+  type ConsoleFlowDebugStreamCursor,
   type ConsoleFlowDebugStreamHandlers,
-  type ConsoleNodeLastRun
+  type ConsoleNodeLastRun,
+  type ConsoleRuntimeDebugArtifactPreview
 } from '@1flowbase/api-client';
 
 import { getApplicationsApiBaseUrl } from '../../applications/api/applications';
@@ -29,6 +33,7 @@ import {
 
 export type NodeLastRun = ConsoleNodeLastRun;
 export type FlowDebugRunDetail = ConsoleApplicationRunDetail;
+export type RuntimeDebugArtifactPreview = ConsoleRuntimeDebugArtifactPreview;
 export type DebugVariableSnapshot = {
   variable_cache: NodeDebugPreviewVariableCache;
 };
@@ -44,6 +49,7 @@ export type AgentFlowDebugMessageStatus =
 
 export interface AgentFlowTraceItem {
   nodeId: string;
+  nodeRunId?: string;
   nodeAlias: string;
   nodeType: string;
   status: string;
@@ -54,6 +60,7 @@ export interface AgentFlowTraceItem {
   outputPayload: Record<string, unknown>;
   errorPayload: Record<string, unknown> | null;
   metricsPayload: Record<string, unknown>;
+  debugPayload?: Record<string, unknown>;
 }
 
 export interface AgentFlowVariableItem {
@@ -61,6 +68,9 @@ export interface AgentFlowVariableItem {
   label: string;
   value: unknown;
   isReadOnly?: boolean;
+  isTruncated?: boolean;
+  artifactRef?: string;
+  helperText?: string;
 }
 
 export interface AgentFlowVariableGroup {
@@ -130,9 +140,13 @@ export function fetchNodeLastRun(applicationId: string, nodeId: string) {
   );
 }
 
-export function fetchDebugVariableSnapshot(applicationId: string) {
+export function fetchDebugVariableSnapshot(
+  applicationId: string,
+  debugSessionId?: string
+) {
   return getConsoleDebugVariableSnapshot(
     applicationId,
+    debugSessionId,
     getApplicationsApiBaseUrl()
   );
 }
@@ -143,6 +157,7 @@ export function startNodeDebugPreview(
   input: {
     input_payload: Record<string, Record<string, unknown>>;
     document?: FlowAuthoringDocument;
+    debug_session_id?: string;
   },
   csrfToken: string
 ) {
@@ -160,15 +175,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function extractNodePreviewVariableOutput(
-  lastRun: ConsoleNodeLastRun
+  lastRun: ConsoleNodeLastRun,
+  outputs?: FlowNodeOutputDocument[]
 ): Record<string, unknown> {
   const outputPayload = lastRun.node_run.output_payload;
 
-  if (isRecord(outputPayload) && isRecord(outputPayload.node_output)) {
-    return outputPayload.node_output;
+  if (!isRecord(outputPayload)) {
+    return {};
   }
 
-  return isRecord(outputPayload) ? outputPayload : {};
+  if (!outputs?.length) {
+    return outputPayload;
+  }
+
+  return Object.fromEntries(
+    outputs.flatMap((output) => {
+      const selector = output.selector?.length ? output.selector : [output.key];
+      let current: unknown = outputPayload;
+
+      for (const segment of selector) {
+        if (
+          !isRecord(current) ||
+          !Object.prototype.hasOwnProperty.call(current, segment)
+        ) {
+          return [];
+        }
+
+        current = current[segment];
+      }
+
+      return [[output.key, current]];
+    })
+  );
 }
 
 export function buildFlowDebugRunInput(
@@ -211,6 +249,7 @@ export function startFlowDebugRun(
   input: {
     input_payload: Record<string, Record<string, unknown>>;
     document?: FlowAuthoringDocument;
+    debug_session_id?: string;
   },
   csrfToken: string
 ) {
@@ -227,16 +266,21 @@ export function startFlowDebugRunStream(
   input: {
     input_payload: Record<string, Record<string, unknown>>;
     document?: FlowAuthoringDocument;
+    debug_session_id?: string;
   },
   csrfToken: string,
-  handlers: FlowDebugRunStreamHandlers
+  handlers: FlowDebugRunStreamHandlers,
+  cursor?: ConsoleFlowDebugStreamCursor
 ) {
   return startConsoleFlowDebugRunStream(
     applicationId,
     input,
     csrfToken,
     handlers,
-    getApplicationsApiBaseUrl()
+    {
+      cursor,
+      baseUrl: getApplicationsApiBaseUrl()
+    }
   );
 }
 
@@ -247,6 +291,17 @@ export function fetchApplicationRunDetail(
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchRuntimeDebugArtifact(
+  applicationId: string,
+  artifactId: string
+) {
+  return getConsoleRuntimeDebugArtifact(
+    applicationId,
+    artifactId,
     getApplicationsApiBaseUrl()
   );
 }

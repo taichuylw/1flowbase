@@ -122,6 +122,57 @@ async fn insert_installation(
     .unwrap()
 }
 
+async fn insert_installation_with_plugin_id(
+    store: &PgControlPlaneStore,
+    actor_id: Uuid,
+    provider_code: &str,
+    plugin_id: &str,
+    version: &str,
+    enabled: bool,
+) -> domain::PluginInstallationRecord {
+    let desired_state = if enabled {
+        PluginDesiredState::ActiveRequested
+    } else {
+        PluginDesiredState::Disabled
+    };
+    let availability_status = if enabled {
+        PluginAvailabilityStatus::InstallIncomplete
+    } else {
+        PluginAvailabilityStatus::Disabled
+    };
+    PluginRepository::upsert_installation(
+        store,
+        &UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: provider_code.into(),
+            plugin_id: plugin_id.into(),
+            plugin_version: version.into(),
+            contract_version: "1flowbase.capability/v1".into(),
+            protocol: "stdio_json".into(),
+            display_name: format!("{plugin_id} {version}"),
+            source_kind: "uploaded".into(),
+            trust_level: "unverified".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status,
+            package_path: None,
+            installed_path: format!("/tmp/plugins/{plugin_id}/{version}"),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            actor_user_id: actor_id,
+        },
+    )
+    .await
+    .unwrap()
+}
+
 fn contribution_input(
     contribution_code: &str,
     version_range: &str,
@@ -132,6 +183,8 @@ fn contribution_input(
         plugin_id: String::new(),
         plugin_version: String::new(),
         entries: vec![NodeContributionRegistryInput {
+            plugin_unique_identifier: "prompt_pack".into(),
+            package_id: "prompt_pack@0.1.0".into(),
             contribution_code: contribution_code.into(),
             node_shell: "action".into(),
             category: "ai".into(),
@@ -139,8 +192,17 @@ fn contribution_input(
             description: format!("Description {contribution_code}"),
             icon: "spark".into(),
             schema_ui: json!({}),
-            schema_version: "1flowbase.node-contribution/v1".into(),
-            output_schema: json!({}),
+            schema_version: "1flowbase.node-contribution/v2".into(),
+            output_schema: json!({
+                "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+            }),
+            contribution_checksum: "sha256:contribution".into(),
+            compiled_contribution_hash: "sha256:compiled".into(),
+            output_schema_snapshot: json!({
+                "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+            }),
+            side_effect_policy: "external_read".into(),
+            infra_contracts: vec![],
             required_auth: vec!["provider_instance".into()],
             visibility: "public".into(),
             experimental: false,
@@ -150,47 +212,67 @@ fn contribution_input(
     }
 }
 
+fn bind_contribution_input_to_installation(
+    input: &mut ReplaceInstallationNodeContributionsInput,
+    installation: &domain::PluginInstallationRecord,
+) {
+    input.installation_id = installation.id;
+    input.provider_code = installation.provider_code.clone();
+    input.plugin_id = installation.plugin_id.clone();
+    input.plugin_version = installation.plugin_version.clone();
+
+    for entry in &mut input.entries {
+        entry.plugin_unique_identifier = installation.provider_code.clone();
+        entry.package_id = installation.plugin_id.clone();
+    }
+}
+
 #[tokio::test]
 async fn node_contribution_repository_resolves_workspace_dependency_statuses() {
     let (store, workspace, actor) = seed_store().await;
     let ready = insert_installation(&store, actor.id, "ready_plugin", "0.2.0", true).await;
     let disabled = insert_installation(&store, actor.id, "disabled_plugin", "0.1.0", false).await;
-    let mismatch = insert_installation(&store, actor.id, "mismatch_plugin", "0.1.0", true).await;
     let missing = insert_installation(&store, actor.id, "missing_plugin", "0.3.0", true).await;
+    let replaced_v1 = insert_installation_with_plugin_id(
+        &store,
+        actor.id,
+        "replaced_plugin",
+        "replaced_plugin_v1@0.1.0",
+        "0.1.0",
+        true,
+    )
+    .await;
+    let replaced_v2 = insert_installation_with_plugin_id(
+        &store,
+        actor.id,
+        "replaced_plugin",
+        "replaced_plugin_v2@0.2.0",
+        "0.2.0",
+        true,
+    )
+    .await;
 
     let mut ready_input = contribution_input("ready_node", ">=0.2.0");
-    ready_input.installation_id = ready.id;
-    ready_input.provider_code = ready.provider_code.clone();
-    ready_input.plugin_id = ready.plugin_id.clone();
-    ready_input.plugin_version = ready.plugin_version.clone();
+    bind_contribution_input_to_installation(&mut ready_input, &ready);
     NodeContributionRepository::replace_installation_node_contributions(&store, &ready_input)
         .await
         .unwrap();
 
     let mut disabled_input = contribution_input("disabled_node", ">=0.1.0");
-    disabled_input.installation_id = disabled.id;
-    disabled_input.provider_code = disabled.provider_code.clone();
-    disabled_input.plugin_id = disabled.plugin_id.clone();
-    disabled_input.plugin_version = disabled.plugin_version.clone();
+    bind_contribution_input_to_installation(&mut disabled_input, &disabled);
     NodeContributionRepository::replace_installation_node_contributions(&store, &disabled_input)
         .await
         .unwrap();
 
-    let mut mismatch_input = contribution_input("mismatch_node", ">=0.2.0");
-    mismatch_input.installation_id = mismatch.id;
-    mismatch_input.provider_code = mismatch.provider_code.clone();
-    mismatch_input.plugin_id = mismatch.plugin_id.clone();
-    mismatch_input.plugin_version = mismatch.plugin_version.clone();
-    NodeContributionRepository::replace_installation_node_contributions(&store, &mismatch_input)
+    let mut missing_input = contribution_input("missing_node", ">=0.3.0");
+    bind_contribution_input_to_installation(&mut missing_input, &missing);
+    NodeContributionRepository::replace_installation_node_contributions(&store, &missing_input)
         .await
         .unwrap();
 
-    let mut missing_input = contribution_input("missing_node", ">=0.3.0");
-    missing_input.installation_id = missing.id;
-    missing_input.provider_code = missing.provider_code.clone();
-    missing_input.plugin_id = missing.plugin_id.clone();
-    missing_input.plugin_version = missing.plugin_version.clone();
-    NodeContributionRepository::replace_installation_node_contributions(&store, &missing_input)
+    let mut replaced_input = contribution_input("replaced_node", ">=0.1.0");
+    bind_contribution_input_to_installation(&mut replaced_input, &replaced_v1);
+    NodeContributionRepository::replace_installation_node_contributions(&store, &replaced_input)
         .await
         .unwrap();
 
@@ -219,9 +301,9 @@ async fn node_contribution_repository_resolves_workspace_dependency_statuses() {
     PluginRepository::create_assignment(
         &store,
         &CreatePluginAssignmentInput {
-            installation_id: mismatch.id,
+            installation_id: replaced_v2.id,
             workspace_id: workspace.id,
-            provider_code: mismatch.provider_code.clone(),
+            provider_code: replaced_v2.provider_code.clone(),
             actor_user_id: actor.id,
         },
     )
@@ -246,11 +328,29 @@ async fn node_contribution_repository_resolves_workspace_dependency_statuses() {
         Some(&NodeContributionDependencyStatus::MissingPlugin)
     );
     assert_eq!(
-        statuses.get("mismatch_node"),
-        Some(&NodeContributionDependencyStatus::VersionMismatch)
+        statuses.get("replaced_node"),
+        Some(&NodeContributionDependencyStatus::MissingPlugin)
     );
     assert_eq!(
         statuses.get("ready_node"),
         Some(&NodeContributionDependencyStatus::Ready)
     );
+}
+
+#[tokio::test]
+async fn node_contribution_registry_rejects_legacy_v2_hash_rows() {
+    let (store, _workspace, actor) = seed_store().await;
+    let ready = insert_installation(&store, actor.id, "ready_plugin", "0.2.0", true).await;
+
+    let mut input = contribution_input("legacy_hash_node", ">=0.2.0");
+    bind_contribution_input_to_installation(&mut input, &ready);
+    input.entries[0].contribution_checksum = "sha256:legacy".into();
+
+    let error = NodeContributionRepository::replace_installation_node_contributions(&store, &input)
+        .await
+        .expect_err("legacy placeholder checksums must not be accepted as v2 rows");
+
+    assert!(error
+        .to_string()
+        .contains("node_contribution_registry_hash_not_legacy_check"));
 }

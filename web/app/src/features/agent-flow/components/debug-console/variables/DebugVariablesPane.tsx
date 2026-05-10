@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { Collapse, Empty, Input, Tooltip, Typography } from 'antd';
+import { Collapse, Empty, Input, Button, Space, Tag, Tooltip, Typography } from 'antd';
 
 import type { AgentFlowVariableGroup } from '../../../api/runtime';
 
@@ -39,10 +39,15 @@ export interface SelectedVariableInfo {
 const DEFAULT_SIDEBAR_WIDTH = 270;
 const MIN_SIDEBAR_WIDTH = 140;
 
+type SelectableVariableItem = AgentFlowVariableGroup['items'][number] & {
+  selectionKey: string;
+};
+
 export function DebugVariablesPane({
   groups,
   onSelectedChange,
   onSelectedValueChange,
+  onLoadFullValue,
   sidebarWidth,
   sidebarMinWidth,
   sidebarMaxWidth,
@@ -51,6 +56,7 @@ export function DebugVariablesPane({
   groups: AgentFlowVariableGroup[];
   onSelectedChange?: (info: SelectedVariableInfo | null) => void;
   onSelectedValueChange?: (key: string, value: unknown) => void;
+  onLoadFullValue?: (artifactRef: string) => Promise<unknown>;
   sidebarWidth?: number;
   sidebarMinWidth?: number;
   sidebarMaxWidth?: number;
@@ -65,14 +71,26 @@ export function DebugVariablesPane({
 
     return Math.max(minWidth, Math.min(baseWidth, maxWidth));
   }, [sidebarWidth, sidebarMaxWidth, sidebarMinWidth]);
-  const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  const allItems = useMemo<SelectableVariableItem[]>(
+    () =>
+      groups.flatMap((group, groupIndex) =>
+        group.items.map((item, itemIndex) => ({
+          ...item,
+          selectionKey: `${groupIndex}:${itemIndex}:${item.key}`
+        }))
+      ),
+    [groups]
+  );
   const selectedItem = useMemo(
-    () => (selectedKey ? allItems.find((i) => i.key === selectedKey) : null),
+    () =>
+      selectedKey
+        ? allItems.find((item) => item.selectionKey === selectedKey)
+        : null,
     [selectedKey, allItems]
   );
 
   useEffect(() => {
-    const nextKey = allItems.at(0)?.key ?? null;
+    const nextKey = allItems.at(0)?.selectionKey ?? null;
 
     if (allItems.length === 0) {
       if (selectedKey !== null) {
@@ -86,7 +104,7 @@ export function DebugVariablesPane({
       return;
     }
 
-    const exists = allItems.some((item) => item.key === selectedKey);
+    const exists = allItems.some((item) => item.selectionKey === selectedKey);
     if (!exists) {
       setSelectedKey(nextKey);
     }
@@ -123,6 +141,21 @@ export function DebugVariablesPane({
     const nextValue = parseEditableValue(selectedValueText);
 
     onSelectedValueChange?.(selectedItem.key, nextValue);
+  }
+
+  async function handleLoadFullValue() {
+    if (!selectedItem?.artifactRef || !onLoadFullValue) {
+      return;
+    }
+
+    const fullValue = await onLoadFullValue(selectedItem.artifactRef);
+    setSelectedValueText(formatValue(fullValue));
+    onSelectedChange?.({
+      label: selectedItem.label,
+      value: fullValue,
+      key: selectedItem.key,
+      isReadOnly: true
+    });
   }
 
   if (groups.length === 0) {
@@ -163,21 +196,36 @@ export function DebugVariablesPane({
               ),
               children: (
                 <div className="agent-flow-editor__debug-variables-group">
-                  {group.items.map((item) => (
-                    <div
-                      key={item.key}
-                      className={`agent-flow-editor__debug-variables-item ${
-                        selectedKey === item.key ? 'is-selected' : ''
-                      }`}
-                      onClick={() => setSelectedKey(item.key)}
-                    >
-                      <Tooltip title={item.label} placement="top">
-                        <Typography.Text ellipsis={{ tooltip: false }}>
-                          {item.label}
-                        </Typography.Text>
-                      </Tooltip>
-                    </div>
-                  ))}
+                  {group.items.map((item, itemIndex) => {
+                    const selectionKey = `${groupIndex}:${itemIndex}:${item.key}`;
+
+                    return (
+                      <div
+                        key={selectionKey}
+                        className={`agent-flow-editor__debug-variables-item ${
+                          selectedKey === selectionKey ? 'is-selected' : ''
+                        }`}
+                        onClick={() => setSelectedKey(selectionKey)}
+                      >
+                        <Tooltip title={item.label} placement="top">
+                          <span className="agent-flow-editor__debug-variables-item-text">
+                            <Typography.Text ellipsis={{ tooltip: false }}>
+                              {item.label}
+                            </Typography.Text>
+                            {item.helperText ? (
+                              <Typography.Text
+                                className="agent-flow-editor__debug-variables-item-helper"
+                                ellipsis={{ tooltip: false }}
+                                type="secondary"
+                              >
+                                {item.helperText}
+                              </Typography.Text>
+                            ) : null}
+                          </span>
+                        </Tooltip>
+                      </div>
+                    );
+                  })}
                 </div>
               )
             };
@@ -193,17 +241,31 @@ export function DebugVariablesPane({
       />
       <div className="agent-flow-editor__debug-variables-detail">
         {selectedItem ? (
-          <Input.TextArea
-            key={selectedItem.key}
-            style={{ height: '100%' }}
-            aria-label="变量值编辑框"
-            className="agent-flow-editor__debug-variables-detail-value"
-            disabled={selectedItem.isReadOnly}
-            onBlur={handleVariableValueBlur}
-            onChange={(event) => setSelectedValueText(event.target.value)}
-            value={selectedValueText}
-            placeholder={selectedItem.isReadOnly ? '系统变量不可编辑' : undefined}
-          />
+          <>
+            {selectedItem.isTruncated && selectedItem.artifactRef ? (
+              <Space
+                className="agent-flow-editor__debug-variables-artifact-toolbar"
+                size={8}
+                wrap
+              >
+                <Tag color="warning">已截断</Tag>
+                <Button size="small" onClick={handleLoadFullValue}>
+                  加载完整值
+                </Button>
+              </Space>
+            ) : null}
+            <Input.TextArea
+              key={selectedItem.selectionKey}
+              style={{ height: '100%' }}
+              aria-label="变量值编辑框"
+              className="agent-flow-editor__debug-variables-detail-value"
+              disabled={selectedItem.isReadOnly || selectedItem.isTruncated}
+              onBlur={handleVariableValueBlur}
+              onChange={(event) => setSelectedValueText(event.target.value)}
+              value={selectedValueText}
+              placeholder={selectedItem.isReadOnly ? '系统变量不可编辑' : undefined}
+            />
+          </>
         ) : (
           <div className="agent-flow-editor__debug-variables-detail-empty">
             <Empty description="选择左侧变量查看详情" image={Empty.PRESENTED_IMAGE_SIMPLE} />

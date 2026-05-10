@@ -48,11 +48,18 @@ function durationMs(startedAt: string, finishedAt: string | null) {
   return Math.max(0, finished - started);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 function upsertTraceItem(
   items: AgentFlowTraceItem[],
   nextItem: AgentFlowTraceItem
 ) {
-  const index = items.findIndex((item) => item.nodeId === nextItem.nodeId);
+  const nextItemKey = getTraceItemKey(nextItem);
+  const index = items.findIndex(
+    (item) => getTraceItemKey(item) === nextItemKey
+  );
 
   if (index === -1) {
     return [...items, nextItem];
@@ -61,6 +68,78 @@ function upsertTraceItem(
   return items.map((item, itemIndex) =>
     itemIndex === index ? { ...item, ...nextItem } : item
   );
+}
+
+function appendProcessEvent(
+  item: AgentFlowTraceItem,
+  processEvent: Record<string, unknown>
+): AgentFlowTraceItem {
+  const debugPayload = isRecord(item.debugPayload) ? item.debugPayload : {};
+  const providerEvents = Array.isArray(debugPayload.provider_events)
+    ? debugPayload.provider_events
+    : [];
+
+  return {
+    ...item,
+    debugPayload: {
+      ...debugPayload,
+      provider_events: [...providerEvents, processEvent]
+    }
+  };
+}
+
+function appendProcessEventToTrace(
+  items: AgentFlowTraceItem[],
+  event: {
+    node_run_id?: string | null;
+    node_id: string;
+  },
+  processEvent: Record<string, unknown>
+) {
+  const eventKey = event.node_run_id ?? event.node_id;
+
+  return items.map((item) => {
+    const itemKey = getTraceItemKey(item);
+    const matchesByKey = itemKey === eventKey;
+    const matchesByNodeId = !event.node_run_id && item.nodeId === event.node_id;
+
+    return matchesByKey || matchesByNodeId
+      ? appendProcessEvent(item, processEvent)
+      : item;
+  });
+}
+
+function appendUsageSnapshotToTrace(
+  items: AgentFlowTraceItem[],
+  event: {
+    node_run_id?: string | null;
+    node_id: string;
+    usage: Record<string, unknown>;
+  }
+) {
+  const eventKey = event.node_run_id ?? event.node_id;
+
+  return items.map((item) => {
+    const itemKey = getTraceItemKey(item);
+    const matchesByKey = itemKey === eventKey;
+    const matchesByNodeId = !event.node_run_id && item.nodeId === event.node_id;
+
+    if (!matchesByKey && !matchesByNodeId) {
+      return item;
+    }
+
+    const outputPayload = isRecord(item.outputPayload)
+      ? item.outputPayload
+      : {};
+
+    return {
+      ...item,
+      outputPayload: {
+        ...outputPayload,
+        usage: event.usage
+      }
+    };
+  });
 }
 
 function extractOutputText(output: Record<string, unknown>) {
@@ -75,6 +154,40 @@ function extractOutputText(output: Record<string, unknown>) {
   return '';
 }
 
+function chooseFinishedDebugPayload(
+  existingDebugPayload: Record<string, unknown> | undefined,
+  eventDebugPayload: Record<string, unknown> | undefined
+) {
+  if (!eventDebugPayload || Object.keys(eventDebugPayload).length === 0) {
+    return existingDebugPayload ?? {};
+  }
+
+  const existingProviderEvents = Array.isArray(
+    existingDebugPayload?.provider_events
+  )
+    ? existingDebugPayload.provider_events
+    : [];
+  const eventProviderEvents = Array.isArray(eventDebugPayload.provider_events)
+    ? eventDebugPayload.provider_events
+    : [];
+
+  if (eventProviderEvents.length > 0 || existingProviderEvents.length > 0) {
+    return {
+      ...(existingDebugPayload ?? {}),
+      ...eventDebugPayload,
+      provider_events:
+        eventProviderEvents.length > 0
+          ? eventProviderEvents
+          : existingProviderEvents
+    };
+  }
+
+  return {
+    ...(existingDebugPayload ?? {}),
+    ...eventDebugPayload
+  };
+}
+
 export function applyDebugStreamEventToTrace(
   items: AgentFlowTraceItem[],
   event: FlowDebugRunStreamEvent
@@ -83,6 +196,7 @@ export function applyDebugStreamEventToTrace(
     const startedAt = event.started_at ?? nowIso();
 
     return upsertTraceItem(items, {
+      nodeRunId: event.node_run_id,
       nodeId: event.node_id,
       nodeAlias: event.title,
       nodeType: event.node_type,
@@ -93,16 +207,20 @@ export function applyDebugStreamEventToTrace(
       inputPayload: event.input_payload ?? {},
       outputPayload: {},
       errorPayload: null,
-      metricsPayload: {}
+      metricsPayload: {},
+      debugPayload: {}
     });
   }
 
   if (event.type === 'node_finished') {
-    const existing = items.find((item) => item.nodeId === event.node_id);
+    const existing = items.find(
+      (item) => getTraceItemKey(item) === getTraceItemKeyFromFinished(event)
+    );
     const startedAt = event.started_at ?? existing?.startedAt ?? nowIso();
     const finishedAt = event.finished_at ?? nowIso();
 
     return upsertTraceItem(items, {
+      nodeRunId: event.node_run_id,
       nodeId: event.node_id,
       nodeAlias: existing?.nodeAlias ?? event.node_id,
       nodeType: existing?.nodeType ?? 'node',
@@ -113,11 +231,37 @@ export function applyDebugStreamEventToTrace(
       inputPayload: existing?.inputPayload ?? {},
       outputPayload: event.output_payload ?? {},
       errorPayload: event.error_payload ?? null,
-      metricsPayload: event.metrics_payload ?? {}
+      metricsPayload: event.metrics_payload ?? {},
+      debugPayload: chooseFinishedDebugPayload(
+        existing?.debugPayload,
+        event.debug_payload
+      )
     });
   }
 
+  if (event.type === 'text_delta' || event.type === 'reasoning_delta') {
+    return appendProcessEventToTrace(items, event, {
+      type: event.type,
+      text: event.text
+    });
+  }
+
+  if (event.type === 'usage_snapshot') {
+    return appendUsageSnapshotToTrace(items, event);
+  }
+
   return items;
+}
+
+function getTraceItemKey(item: AgentFlowTraceItem) {
+  return item.nodeRunId ?? item.nodeId;
+}
+
+function getTraceItemKeyFromFinished(event: {
+  node_run_id?: string | null;
+  node_id: string;
+}) {
+  return event.node_run_id ?? event.node_id;
 }
 
 export function applyDebugStreamEventToAssistantMessage(
@@ -190,6 +334,14 @@ export function applyDebugStreamEventToAssistantMessage(
         ...message,
         runId: event.run_id,
         status: 'cancelled',
+        traceSummary: traceItems
+      };
+    case 'waiting_human':
+    case 'waiting_callback':
+      return {
+        ...message,
+        runId: event.run_id,
+        status: mapFlowStatus(event.status),
         traceSummary: traceItems
       };
     case 'replay_expired':

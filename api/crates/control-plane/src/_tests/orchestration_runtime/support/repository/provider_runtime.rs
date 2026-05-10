@@ -190,9 +190,6 @@ impl CapabilityPluginRuntimePort for InMemoryProviderRuntime {
         Ok(CapabilityExecutionOutput {
             output_payload: json!({
                 "answer": answer,
-                "plugin_id": input.installation.plugin_id,
-                "installation_id": input.installation.id,
-                "contribution_code": input.contribution_code,
             }),
         })
     }

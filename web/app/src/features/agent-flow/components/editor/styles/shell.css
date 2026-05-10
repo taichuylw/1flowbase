@@ -546,11 +546,25 @@
   user-select: none;
 }
 
+.agent-flow-editor__debug-variables-item-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .agent-flow-editor__debug-variables-item .ant-typography {
   font-size: 13px;
   line-height: 1.5;
   color: #374151;
   transition: color 120ms ease;
+}
+
+.agent-flow-editor__debug-variables-item .agent-flow-editor__debug-variables-item-helper {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .agent-flow-editor__debug-variables-item:hover {
@@ -564,6 +578,11 @@
 .agent-flow-editor__debug-variables-item.is-selected .ant-typography {
   color: #047857;
   font-weight: 500;
+}
+
+.agent-flow-editor__debug-variables-item.is-selected .agent-flow-editor__debug-variables-item-helper {
+  color: #4b5563;
+  font-weight: 400;
 }
 
 /* ===== 右侧栏：变量详情 ===== */
@@ -594,6 +613,11 @@
 
 .agent-flow-editor__debug-variables-detail-copy:hover {
   background: rgba(4, 120, 87, 0.08);
+}
+
+.agent-flow-editor__debug-variables-artifact-toolbar {
+  flex-shrink: 0;
+  margin-bottom: 8px;
 }
 
 .agent-flow-editor__debug-variables-detail-value {

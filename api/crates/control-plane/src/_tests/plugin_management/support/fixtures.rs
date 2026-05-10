@@ -232,6 +232,73 @@ capabilities:
     fs::write(root.join("scripts/demo.sh"), "echo demo").unwrap();
 }
 
+pub(crate) fn create_capability_plugin_fixture(root: &Path) {
+    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::write(
+        root.join("manifest.yaml"),
+        r#"manifest_version: 1
+plugin_id: fixture_capability@0.1.0
+version: 0.1.0
+vendor: 1flowbase tests
+display_name: Fixture Capability
+description: Fixture capability plugin
+icon: icon.svg
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture-capability
+node_contributions:
+  - contribution_code: fixture_action
+    node_shell: action
+    category: automation
+    title: Fixture Action
+    description: Fixture capability node
+    icon: puzzle
+    schema_ui:
+      sections:
+        - blocks:
+            - kind: field
+              renderer: text
+              path: config.prompt
+              label: Prompt
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+          valueType: string
+    side_effect_policy: external_read
+    infra_contracts: []
+    required_auth:
+      - provider_instance
+    visibility: public
+    experimental: false
+    dependency:
+      installation_kind: required
+      plugin_version_range: ">=0.1.0"
+"#,
+    )
+    .unwrap();
+    fs::write(root.join("bin/fixture-capability"), "echo fixture").unwrap();
+}
+
 pub(crate) fn create_provider_fixture_with_node_contribution(root: &Path) {
     create_provider_fixture(root);
     let manifest_path = root.join("manifest.yaml");
@@ -247,8 +314,14 @@ pub(crate) fn create_provider_fixture_with_node_contribution(root: &Path) {
     description: Prompt node
     icon: spark
     schema_ui: {{}}
-    schema_version: 1flowbase.node-contribution/v1
-    output_schema: {{}}
+    schema_version: 1flowbase.node-contribution/v2
+    output_schema:
+      outputs:
+        - key: answer
+          title: Answer
+          valueType: string
+    side_effect_policy: external_read
+    infra_contracts: []
     required_auth:
       - provider_instance
     visibility: public

@@ -19,7 +19,6 @@ interface NodePickerGroup {
   key: string;
   title: string;
   description: string;
-  types: BuiltinNodePickerOption['type'][];
 }
 
 const BUILTIN_NODE_PICKER_GROUPS: NodePickerGroup[] = [
@@ -27,68 +26,28 @@ const BUILTIN_NODE_PICKER_GROUPS: NodePickerGroup[] = [
     key: 'io',
     title: '起止输出',
     description: '定义输入入口和最终响应。',
-    types: ['start', 'human_input', 'answer']
   },
   {
     key: 'generation',
     title: '模型与生成',
     description: '调用模型、检索知识并组织生成内容。',
-    types: ['llm', 'knowledge_retrieval', 'template_transform']
   },
   {
     key: 'control',
     title: '流程控制',
     description: '分支、分类、循环和批量处理。',
-    types: ['question_classifier', 'if_else', 'iteration', 'loop']
   },
   {
     key: 'data',
     title: '数据处理',
     description: '读写结构化数据并维护流程变量。',
-    types: [
-      'data_model_list',
-      'data_model_get',
-      'data_model_create',
-      'data_model_update',
-      'data_model_delete',
-      'variable_assigner',
-      'parameter_extractor',
-      'code'
-    ]
   },
   {
     key: 'external',
     title: '外部能力',
     description: '调用接口、工具和系统外能力。',
-    types: ['http_request', 'tool']
   }
 ];
-
-const BUILTIN_NODE_PICKER_SUMMARIES: Record<
-  BuiltinNodePickerOption['type'],
-  string
-> = {
-  start: '接收用户输入和系统变量。',
-  answer: '向用户返回最终内容。',
-  human_input: '等待人工补充或确认信息。',
-  llm: '调用大模型生成或理解文本。',
-  template_transform: '用模板拼装或转换变量。',
-  knowledge_retrieval: '从知识库检索相关内容。',
-  question_classifier: '按语义意图分类并分流。',
-  if_else: '按条件判断选择路径。',
-  http_request: '请求外部 HTTP 接口。',
-  tool: '调用已接入的工具能力。',
-  data_model_list: 'List Data Model records.',
-  data_model_get: 'Get one Data Model record.',
-  data_model_create: 'Create a Data Model record.',
-  data_model_update: 'Update a Data Model record.',
-  data_model_delete: 'Delete a Data Model record.',
-  variable_assigner: '设置或更新流程变量。',
-  parameter_extractor: '从文本中提取结构化参数。',
-  code: '执行脚本处理复杂转换。',
-  iteration: '遍历列表并处理每一项。',
-  loop: '按条件重复执行节点。'
-};
 
 interface NodePickerPopoverProps {
   ariaLabel: string;
@@ -132,15 +91,14 @@ export function NodePickerPopover({
         const groupMatchesSearch =
           normalizedSearchValue.length > 0 &&
           groupSearchText.includes(normalizedSearchValue);
-        const groupedOptions = group.types
-          .map((type) => builtinOptions.find((option) => option.type === type))
-          .filter((option): option is BuiltinNodePickerOption => Boolean(option))
+        const groupedOptions = builtinOptions
+          .filter((option) => option.category === group.key)
           .filter((option) =>
             groupMatchesSearch ||
             matchesNodePickerSearch(
               option,
               normalizedSearchValue,
-              BUILTIN_NODE_PICKER_SUMMARIES[option.type]
+              getNodePickerOptionDescription(option)
             )
           );
 
@@ -149,15 +107,15 @@ export function NodePickerPopover({
     [builtinOptions, normalizedSearchValue]
   );
   const groupedBuiltinOptionKeys = new Set(
-    BUILTIN_NODE_PICKER_GROUPS.flatMap((group) => group.types)
+    BUILTIN_NODE_PICKER_GROUPS.map((group) => group.key)
   );
   const uncategorizedBuiltinOptions = builtinOptions.filter(
     (option) =>
-      !groupedBuiltinOptionKeys.has(option.type) &&
+      !groupedBuiltinOptionKeys.has(option.category ?? '') &&
       matchesNodePickerSearch(
         option,
         normalizedSearchValue,
-        BUILTIN_NODE_PICKER_SUMMARIES[option.type]
+        getNodePickerOptionDescription(option)
       )
   );
   const filteredPluginOptions = pluginOptions.filter((option) =>
@@ -414,7 +372,9 @@ function matchesNodePickerSearch(
 
   const searchText = [
     option.label,
-    option.kind === 'builtin' ? option.type : option.contribution.category,
+    option.kind === 'builtin'
+      ? [option.type, option.category, ...option.inputKeys, ...option.outputKeys].join(' ')
+      : option.contribution.category,
     description
   ]
     .filter((value): value is string => Boolean(value))

@@ -4,50 +4,50 @@ import {
   DownOutlined,
   FullscreenOutlined
 } from '@ant-design/icons';
-import { App, Button, Card, Modal, Tooltip } from 'antd';
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { App, Button, Card, Modal, Space, Tag, Tooltip } from 'antd';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 
 import type { NodeLastRun } from '../../../api/runtime';
+import { fetchRuntimeDebugArtifact } from '../../../api/runtime';
 import { useClipboardCopy } from '../../../../../shared/ui/clipboard/use-clipboard-copy';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
-function formatJson(payload: Record<string, unknown>) {
+function formatJson(payload: unknown) {
   return JSON.stringify(payload, null, 2);
 }
 
-function getRuntimeMetadata(lastRun: NodeLastRun) {
-  const metrics = lastRun.node_run.metrics_payload ?? {};
-  const errorPayload =
-    lastRun.node_run.error_payload &&
-    typeof lastRun.node_run.error_payload === 'object'
-      ? lastRun.node_run.error_payload
-      : {};
+function findRuntimeDebugArtifactRef(value: unknown): string | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
 
-  return {
-    created_by: lastRun.flow_run.created_by,
-    compiled_plan_id: lastRun.flow_run.compiled_plan_id,
-    output_contract_count: metrics.output_contract_count,
-    provider_instance_id:
-      (metrics.provider_instance_id as unknown) ??
-      (errorPayload as Record<string, unknown>).provider_instance_id,
-    provider_code:
-      (metrics.provider_code as unknown) ??
-      (errorPayload as Record<string, unknown>).provider_code,
-    protocol:
-      (metrics.protocol as unknown) ??
-      (errorPayload as Record<string, unknown>).protocol,
-    finish_reason:
-      (metrics.finish_reason as unknown) ??
-      (errorPayload as Record<string, unknown>).finish_reason
-  };
-}
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nestedRef = findRuntimeDebugArtifactRef(item);
+      if (nestedRef) {
+        return nestedRef;
+      }
+    }
+    return null;
+  }
 
-function getOutputPayload(lastRun: NodeLastRun) {
-  return {
-    ...lastRun.node_run.output_payload,
-    run_metadata: getRuntimeMetadata(lastRun)
-  };
+  const record = value as Record<string, unknown>;
+  if (
+    record.__runtime_debug_artifact === true &&
+    typeof record.artifact_ref === 'string'
+  ) {
+    return record.artifact_ref;
+  }
+
+  for (const nestedValue of Object.values(record)) {
+    const nestedRef = findRuntimeDebugArtifactRef(nestedValue);
+    if (nestedRef) {
+      return nestedRef;
+    }
+  }
+
+  return null;
 }
 
 const EDITOR_OPTIONS = {
@@ -95,18 +95,101 @@ function JsonEditor({ height, value }: { height: string; value: string }) {
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+export function pickProcessPayload(debugPayload: unknown) {
+  return isRecord(debugPayload) ? debugPayload : {};
+}
+
+function isSameJsonValue(left: unknown, right: unknown) {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
+export function omitProcessPayloadFromOutput(
+  outputPayload: unknown,
+  processPayload: unknown
+) {
+  if (!isRecord(outputPayload) || !isRecord(processPayload)) {
+    return outputPayload;
+  }
+
+  const entries = Object.entries(outputPayload).filter(
+    ([key, value]) =>
+      !Object.prototype.hasOwnProperty.call(processPayload, key) ||
+      !isSameJsonValue(value, processPayload[key])
+  );
+
+  return Object.fromEntries(entries);
+}
+
+export function NodeRunPayloadSections({
+  inputPayload,
+  debugPayload,
+  outputPayload,
+  onLoadArtifact
+}: {
+  inputPayload: unknown;
+  debugPayload: unknown;
+  outputPayload: unknown;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+}) {
+  const processPayload = pickProcessPayload(debugPayload);
+  const visibleOutputPayload = omitProcessPayloadFromOutput(
+    outputPayload,
+    processPayload
+  );
+
+  return (
+    <>
+      <NodeRunJsonBlock
+        payload={inputPayload}
+        title="输入"
+        onLoadArtifact={onLoadArtifact}
+      />
+      <NodeRunJsonBlock
+        payload={processPayload}
+        title="数据处理"
+        onLoadArtifact={onLoadArtifact}
+      />
+      <NodeRunJsonBlock
+        payload={visibleOutputPayload}
+        title="输出"
+        onLoadArtifact={onLoadArtifact}
+      />
+    </>
+  );
+}
+
 export function NodeRunJsonBlock({
   title,
-  payload
+  payload,
+  onLoadArtifact
 }: {
   title: string;
-  payload: Record<string, unknown>;
+  payload: unknown;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const { message } = App.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [loadedPayload, setLoadedPayload] = useState<unknown>(null);
   const { copied, copy } = useClipboardCopy();
-  const value = useMemo(() => formatJson(payload), [payload]);
+  const artifactRef = useMemo(
+    () => findRuntimeDebugArtifactRef(payload),
+    [payload]
+  );
+  const displayPayload = loadedPayload ?? payload;
+  const value = useMemo(() => formatJson(displayPayload), [displayPayload]);
+
+  useEffect(() => {
+    setLoadedPayload(null);
+  }, [payload]);
 
   const handleCopy = async () => {
     try {
@@ -114,6 +197,19 @@ export function NodeRunJsonBlock({
       message.success('已复制');
     } catch {
       message.error('复制失败');
+    }
+  };
+
+  const handleLoadFullValue = async () => {
+    if (!artifactRef || !onLoadArtifact) {
+      return;
+    }
+
+    try {
+      setLoadedPayload(await onLoadArtifact(artifactRef));
+      message.success('已加载完整值');
+    } catch {
+      message.error('加载完整值失败');
     }
   };
 
@@ -139,6 +235,18 @@ export function NodeRunJsonBlock({
           </span>
         </button>
         <div className="agent-flow-node-run-json-viewer__actions">
+          {artifactRef ? (
+            <Space size={6} wrap>
+              <Tag color="warning">已截断</Tag>
+              <Button
+                disabled={!onLoadArtifact}
+                onClick={handleLoadFullValue}
+                size="small"
+              >
+                加载完整值
+              </Button>
+            </Space>
+          ) : null}
           <Tooltip title="复制 JSON">
             <Button
               aria-label={`复制${title} JSON`}
@@ -183,14 +291,19 @@ export function NodeRunJsonBlock({
 }
 
 export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
+  const applicationId = lastRun.flow_run.application_id;
+
   return (
     <Card title="节点输入输出">
       <div className="agent-flow-node-run-json-list">
-        <NodeRunJsonBlock
-          payload={lastRun.node_run.input_payload}
-          title="输入"
+        <NodeRunPayloadSections
+          inputPayload={lastRun.node_run.input_payload}
+          debugPayload={lastRun.node_run.debug_payload}
+          outputPayload={lastRun.node_run.output_payload}
+          onLoadArtifact={(artifactRef) =>
+            fetchRuntimeDebugArtifact(applicationId, artifactRef)
+          }
         />
-        <NodeRunJsonBlock payload={getOutputPayload(lastRun)} title="输出" />
       </div>
     </Card>
   );

@@ -24,6 +24,7 @@ use utoipa::OpenApi;
         crate::routes::application_runtime::get_application_run_detail,
         crate::routes::application_runtime::get_runtime_debug_stream,
         crate::routes::application_runtime::get_debug_variable_snapshot,
+        crate::routes::application_runtime::get_runtime_debug_artifact,
         crate::routes::application_runtime::get_node_last_run,
         crate::routes::api_keys::create_api_key,
         crate::routes::auth::list_providers,

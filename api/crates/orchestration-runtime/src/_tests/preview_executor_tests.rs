@@ -65,19 +65,28 @@ fn sample_compiled_plan() -> CompiledPlan {
     let flow_id = Uuid::now_v7();
     let mut bindings = BTreeMap::new();
     bindings.insert(
-        "user_prompt".to_string(),
+        "prompt_messages".to_string(),
         CompiledBinding {
-            kind: "selector".to_string(),
-            raw_value: json!(["node-start", "query"]),
+            kind: "prompt_messages".to_string(),
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "You are helpful."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "{{node-start.query}}"
+                    }
+                }
+            ]),
             selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
-        },
-    );
-    bindings.insert(
-        "system_prompt".to_string(),
-        CompiledBinding {
-            kind: "templated_text".to_string(),
-            raw_value: json!("You are helpful."),
-            selector_paths: Vec::new(),
         },
     );
 
@@ -96,6 +105,7 @@ fn sample_compiled_plan() -> CompiledPlan {
                 key: "text".to_string(),
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -115,7 +125,7 @@ fn sample_compiled_plan() -> CompiledPlan {
     CompiledPlan {
         flow_id,
         source_draft_id: "draft-1".to_string(),
-        schema_version: "1flowbase.flow/v1".to_string(),
+        schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec!["node-start".to_string(), "node-llm".to_string()],
         nodes,
         compile_issues: Vec::new(),
@@ -138,9 +148,12 @@ async fn preview_executor_resolves_bindings_renders_prompt_and_calls_provider() 
     .unwrap();
 
     assert_eq!(outcome.target_node_id, "node-llm");
-    assert_eq!(outcome.resolved_inputs["user_prompt"], "退款流程是什么？");
     assert_eq!(
-        outcome.rendered_templates["system_prompt"],
+        outcome.resolved_inputs["prompt_messages"][1]["content"],
+        "退款流程是什么？"
+    );
+    assert_eq!(
+        outcome.rendered_templates["prompt_messages"][0]["content"],
         "You are helpful."
     );
     assert_eq!(outcome.node_output["text"], "preview:gpt-5.4-mini");

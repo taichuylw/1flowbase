@@ -20,7 +20,26 @@ function formatDuration(startedAt: string, finishedAt: string | null) {
 }
 
 function summarizeTokenUsage(lastRun: NodeLastRun) {
-  const value = lastRun.node_run.metrics_payload.total_tokens;
+  const metricsPayload = lastRun.node_run.metrics_payload;
+  if (
+    !metricsPayload ||
+    typeof metricsPayload !== 'object' ||
+    Array.isArray(metricsPayload)
+  ) {
+    return '—';
+  }
+
+  const metricsRecord = metricsPayload as Record<string, unknown>;
+  const usage =
+    metricsRecord.usage &&
+    typeof metricsRecord.usage === 'object' &&
+    !Array.isArray(metricsRecord.usage)
+      ? (metricsRecord.usage as Record<string, unknown>)
+      : metricsRecord;
+  const value =
+    typeof usage.total_tokens === 'number' || typeof usage.total_tokens === 'string'
+      ? usage.total_tokens
+      : undefined;
 
   if (typeof value === 'number') {
     return `${value}`;

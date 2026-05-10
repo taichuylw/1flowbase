@@ -3,7 +3,7 @@ use serde_json::json;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-pub const FLOW_SCHEMA_VERSION: &str = "1flowbase.flow/v1";
+pub const FLOW_SCHEMA_VERSION: &str = "1flowbase.flow/v2";
 pub const FLOW_AUTOSAVE_INTERVAL_SECONDS: u16 = 30;
 pub const FLOW_HISTORY_LIMIT: usize = 30;
 
@@ -122,7 +122,24 @@ pub fn default_flow_document(flow_id: Uuid) -> serde_json::Value {
                         }
                     },
                     "bindings": {
-                        "user_prompt": { "kind": "selector", "value": ["node-start", "query"] },
+                        "prompt_messages": {
+                            "kind": "prompt_messages",
+                            "value": [
+                                {
+                                    "id": "system-1",
+                                    "role": "system",
+                                    "content": { "kind": "templated_text", "value": "" },
+                                },
+                                {
+                                    "id": "user-1",
+                                    "role": "user",
+                                    "content": {
+                                        "kind": "templated_text",
+                                        "value": "{{node-start.query}}",
+                                    },
+                                },
+                            ],
+                        },
                     },
                     "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }],
                 },

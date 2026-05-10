@@ -15,10 +15,11 @@ use crate::ports::{
     AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput, AppendRuntimeSpanInput,
     AppendUsageLedgerInput, CompleteFlowRunInput, CompleteNodeRunInput, CreateCallbackTaskInput,
     CreateCheckpointInput, CreateFlowRunInput, CreateModelDefinitionInput, CreateNodeRunInput,
-    CreateScopeDataModelGrantInput, LinkUsageLedgerToModelFailoverAttemptInput,
-    ModelDefinitionRepository, OrchestrationRuntimeRepository, UpdateFlowRunInput,
-    UpdateModelDefinitionInput, UpdateModelFieldInput, UpdateNodeRunInput,
-    UpdateScopeDataModelGrantInput, UpsertCompiledPlanInput,
+    CreateScopeDataModelGrantInput, DataModelSideEffectReceiptClaim,
+    LinkUsageLedgerToModelFailoverAttemptInput, ModelDefinitionRepository,
+    OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateModelDefinitionInput,
+    UpdateModelFieldInput, UpdateNodeRunInput, UpdateScopeDataModelGrantInput,
+    UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
 };
 use plugin_framework::provider_contract::ProviderStreamEvent;
 

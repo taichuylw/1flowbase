@@ -1,4 +1,8 @@
-import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
+import type {
+  FlowAuthoringDocument,
+  FlowNodeOutputDocument,
+  FlowNodeType
+} from '@1flowbase/flow-schema';
 
 import {
   buildFlowDebugRunInput,
@@ -10,58 +14,187 @@ import {
 } from '../../api/runtime';
 import { getNodeVariableOutputs } from '../start-node-variables';
 import { formatNodeVariablePathLabel } from '../variable-labels';
+import { getBuiltinNodeRuntimeContract } from '../node-definitions/contracts';
 
-function flattenValue(
-  keyPrefix: string,
-  labelPrefix: string,
-  value: unknown
-): AgentFlowVariableItem[] {
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return [{ key: keyPrefix, label: labelPrefix, value: [] }];
-    }
-
-    return value.flatMap((entry, index) =>
-      flattenValue(`${keyPrefix}[${index}]`, `${labelPrefix}[${index}]`, entry)
-    );
-  }
-
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-
-    if (entries.length === 0) {
-      return [{ key: keyPrefix, label: labelPrefix, value: {} }];
-    }
-
-    return entries.flatMap(([key, entryValue]) =>
-      flattenValue(`${keyPrefix}.${key}`, `${labelPrefix}.${key}`, entryValue)
-    );
-  }
-
-  return [{ key: keyPrefix, label: labelPrefix, value }];
+export interface NodeVariableDisplayMeta {
+  label: string;
+  nodeType?: string;
+  outputs?: FlowNodeOutputDocument[];
 }
 
-function flattenNodeVariables(
+function normalizeNodeVariableDisplayMeta(
+  value: string | NodeVariableDisplayMeta | undefined,
+  fallbackNodeId: string
+): NodeVariableDisplayMeta {
+  if (typeof value === 'string') {
+    return { label: value };
+  }
+
+  return value ?? { label: fallbackNodeId };
+}
+
+function getOutputHelperText(
+  nodeType: string | undefined,
+  key: string,
+  outputs?: FlowNodeOutputDocument[]
+) {
+  const documentOutput = outputs?.find((candidate) => candidate.key === key);
+
+  if (documentOutput?.title && documentOutput.title !== key) {
+    return documentOutput.title;
+  }
+
+  if (!nodeType) {
+    return undefined;
+  }
+
+  const contract = getBuiltinNodeRuntimeContract(nodeType as FlowNodeType);
+  const output =
+    contract?.runtime.outputs.find((candidate) => candidate.key === key) ??
+    contract?.defaults.outputs.find((candidate) => candidate.key === key);
+
+  if (!output?.title || output.title === key) {
+    return undefined;
+  }
+
+  return output.title;
+}
+
+function mapNodeOutputVariables(
   nodeId: string,
-  value: unknown
+  nodeLabel: string,
+  nodeType: string | undefined,
+  value: unknown,
+  outputs?: FlowNodeOutputDocument[]
 ): AgentFlowVariableItem[] {
+  if (isRuntimeDebugArtifactPreview(value)) {
+    return [
+      toRuntimeArtifactVariableItem(
+        nodeId,
+        nodeLabel,
+        value,
+        getOutputHelperText(nodeType, nodeId, outputs)
+      )
+    ];
+  }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return flattenValue(nodeId, nodeId, value);
+    return [{ key: nodeId, label: nodeLabel, value }];
   }
 
-  const entries = Object.entries(value as Record<string, unknown>);
+  const valueRecord = value as Record<string, unknown>;
+  const entries = outputs?.length
+    ? outputs.flatMap((output) => {
+        const selectorValue = readOutputSelector(valueRecord, output);
+        return selectorValue.found ? [[output.key, selectorValue.value] as const] : [];
+      })
+    : Object.entries(valueRecord);
 
-  if (entries.length === 0) {
-    return [{ key: nodeId, label: nodeId, value: {} }];
+  return entries.map(([key, entryValue]) => ({
+    key: `${nodeId}.${key}`,
+    label: formatNodeVariablePathLabel(nodeLabel, key),
+    helperText: getOutputHelperText(nodeType, key, outputs),
+    value: entryValue,
+    ...(isRuntimeDebugArtifactPreview(entryValue)
+      ? {
+          isTruncated: true,
+          artifactRef: entryValue.artifact_ref
+        }
+      : {})
+  }));
+}
+
+function readOutputSelector(
+  value: Record<string, unknown>,
+  output: FlowNodeOutputDocument
+): { found: true; value: unknown } | { found: false } {
+  const selector = output.selector?.length ? output.selector : [output.key];
+  let current: unknown = value;
+
+  for (const segment of selector) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return { found: false };
+    }
+
+    const record = current as Record<string, unknown>;
+
+    if (!Object.prototype.hasOwnProperty.call(record, segment)) {
+      return { found: false };
+    }
+
+    current = record[segment];
   }
 
-  return entries.flatMap(([key, entryValue]) =>
-    flattenValue(
-      `${nodeId}.${key}`,
-      formatNodeVariablePathLabel(nodeId, key),
-      entryValue
-    )
+  return { found: true, value: current };
+}
+
+function isRuntimeDebugArtifactPreview(
+  value: unknown
+): value is {
+  __runtime_debug_artifact: true;
+  is_truncated: boolean;
+  artifact_ref: string;
+  preview: string;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    record.__runtime_debug_artifact === true &&
+    typeof record.artifact_ref === 'string'
   );
+}
+
+function toRuntimeArtifactVariableItem(
+  key: string,
+  label: string,
+  value: {
+    artifact_ref: string;
+  },
+  helperText?: string
+): AgentFlowVariableItem {
+  return {
+    key,
+    label,
+    value,
+    helperText,
+    isTruncated: true,
+    artifactRef: value.artifact_ref
+  };
+}
+
+function readRunDetailInputValue(
+  detail: FlowDebugRunDetail,
+  nodeId: string,
+  key: string
+) {
+  const inputPayload = detail.flow_run.input_payload;
+
+  if (
+    !inputPayload ||
+    typeof inputPayload !== 'object' ||
+    Array.isArray(inputPayload)
+  ) {
+    return undefined;
+  }
+
+  const nodePayload = (inputPayload as Record<string, unknown>)[nodeId];
+
+  if (
+    !nodePayload ||
+    typeof nodePayload !== 'object' ||
+    Array.isArray(nodePayload)
+  ) {
+    return undefined;
+  }
+
+  const nodeInputPayload = nodePayload as Record<string, unknown>;
+
+  return Object.prototype.hasOwnProperty.call(nodeInputPayload, key)
+    ? nodeInputPayload[key]
+    : undefined;
 }
 
 export function getRunContextValues(
@@ -152,11 +285,22 @@ export function mapRunContextToVariableGroups(
 
 export function mapVariableCacheToVariableGroup(
   variableCache: NodeDebugPreviewVariableCache,
-  nodeLabels: Record<string, string> = {}
+  nodeMetadata: Record<string, string | NodeVariableDisplayMeta> = {}
 ): AgentFlowVariableGroup | null {
-  const items = Object.entries(variableCache).flatMap(([nodeId, value]) =>
-    flattenNodeVariables(nodeLabels[nodeId] ?? nodeId, value)
-  );
+  const items = Object.entries(variableCache).flatMap(([nodeId, value]) => {
+    const metadata = normalizeNodeVariableDisplayMeta(
+      nodeMetadata[nodeId],
+      nodeId
+    );
+
+    return mapNodeOutputVariables(
+      nodeId,
+      metadata.label,
+      metadata.nodeType,
+      value,
+      metadata.outputs
+    );
+  });
 
   if (items.length === 0) {
     return null;
@@ -174,17 +318,33 @@ export function mapRunDetailToVariableGroups(
     applicationId: string;
     draftId: string;
     runContext: AgentFlowRunContext;
+    nodeMetadata?: Record<string, string | NodeVariableDisplayMeta>;
   }
 ): AgentFlowVariableGroup[] {
-  const runContextNodeLabels = Object.fromEntries(
-    options.runContext.fields.map((field) => [field.nodeId, field.nodeLabel])
-  );
-  const inputItems = Object.entries(detail.flow_run.input_payload).flatMap(
-    ([nodeId, value]) =>
-      flattenNodeVariables(runContextNodeLabels[nodeId] ?? nodeId, value)
-  );
+  const inputItems = options.runContext.fields.map((field) => {
+    const detailValue = readRunDetailInputValue(detail, field.nodeId, field.key);
+
+    return {
+      key: `${field.nodeId}.${field.key}`,
+      label: formatNodeVariablePathLabel(field.nodeLabel, field.key),
+      value: detailValue === undefined ? field.value : detailValue
+    };
+  });
   const nodeOutputItems = detail.node_runs.flatMap((nodeRun) =>
-    flattenNodeVariables(nodeRun.node_alias, nodeRun.output_payload)
+    {
+      const metadata = normalizeNodeVariableDisplayMeta(
+        options.nodeMetadata?.[nodeRun.node_id],
+        nodeRun.node_id
+      );
+
+      return mapNodeOutputVariables(
+        nodeRun.node_id,
+        metadata.label,
+        metadata.nodeType ?? nodeRun.node_type,
+        nodeRun.output_payload,
+        metadata.outputs
+      );
+    }
   );
   const sessionItems: AgentFlowVariableItem[] = [
     {

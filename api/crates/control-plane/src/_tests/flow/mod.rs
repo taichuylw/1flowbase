@@ -77,8 +77,8 @@ async fn save_draft_only_appends_history_for_logical_changes() {
     assert_eq!(layout_state.versions.len(), 1);
 
     let mut logical_change = layout_state.draft.document.clone();
-    logical_change["graph"]["nodes"][1]["bindings"]["system_prompt"] =
-        json!({ "kind": "templated_text", "value": "You are a support agent." });
+    logical_change["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]
+        ["value"] = json!("You are a support agent.");
 
     let logical_state = service
         .save_draft(SaveFlowDraftCommand {

@@ -86,6 +86,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
                 key: "query".to_string(),
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -140,6 +141,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
                 key: "text".to_string(),
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
+                selector: Vec::new(),
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -156,7 +158,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
     CompiledPlan {
         flow_id: Uuid::nil(),
         source_draft_id: "draft-1".to_string(),
-        schema_version: "1flowbase.flow/v1".to_string(),
+        schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec!["node-start".to_string(), "node-llm".to_string()],
         nodes,
         compile_issues: Vec::new(),
@@ -191,10 +193,9 @@ async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
                 failure.error_payload["error_kind"],
                 json!("prompt_messages_empty")
             );
-            assert_eq!(
-                outcome.node_traces[1].output_payload["error"]["error_kind"],
-                json!("prompt_messages_empty")
-            );
+            assert_eq!(outcome.node_traces[1].output_payload, json!({}));
+            assert!(outcome.node_traces[1].output_payload.get("error").is_none());
+            assert!(outcome.variable_pool.get("node-llm").is_none());
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }

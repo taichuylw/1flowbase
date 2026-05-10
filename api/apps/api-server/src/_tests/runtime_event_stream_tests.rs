@@ -49,6 +49,45 @@ async fn local_runtime_event_stream_assigns_monotonic_sequence() {
 }
 
 #[tokio::test]
+async fn local_runtime_event_stream_envelope_exposes_delta_metadata() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    let event = stream
+        .append(
+            run_id,
+            RuntimeEventPayload {
+                event_type: "reasoning_delta".to_string(),
+                source: RuntimeEventSource::Provider,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: false,
+                payload: json!({
+                    "type": "reasoning_delta",
+                    "node_run_id": node_run_id,
+                    "node_id": "node-llm",
+                    "text": "thinking"
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(event.event_id, format!("{run_id}:1"));
+    assert_eq!(event.run_id, run_id);
+    assert_eq!(event.node_run_id, Some(node_run_id));
+    assert_eq!(event.sequence, 1);
+    assert_eq!(event.delta_index, Some(1));
+    assert_eq!(event.content_type.as_deref(), Some("reasoning"));
+    assert_eq!(event.text.as_deref(), Some("thinking"));
+}
+
+#[tokio::test]
 async fn local_runtime_event_stream_replays_then_subscribes_live() {
     let stream = LocalRuntimeEventStream::new();
     let run_id = Uuid::now_v7();
@@ -200,4 +239,24 @@ async fn local_runtime_event_stream_rejects_append_after_close() {
 
     let err = stream.append(run_id, heartbeat()).await.unwrap_err();
     assert!(err.to_string().contains("runtime event stream is closed"));
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_subscribe_after_closed_cursor_finishes() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream
+        .close_run(run_id, RuntimeEventCloseReason::Finished)
+        .await
+        .unwrap();
+
+    let mut subscription = stream.subscribe(run_id, Some(1)).await.unwrap();
+    assert!(subscription.replay.is_empty());
+    assert!(subscription.live_events.recv().await.is_none());
 }

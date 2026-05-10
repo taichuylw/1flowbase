@@ -19,20 +19,22 @@ use crate::{
     model_provider::failover_queue::{freeze_queue_items, FailoverQueueSnapshotItem},
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
+        AppendRunEventInput, ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
         ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
         OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
-        RuntimeEventEnvelope, RuntimeEventStream,
+        RuntimeEventEnvelope, RuntimeEventStream, UpdateFlowRunInput, UpdateNodeRunInput,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
 mod compile_context;
 mod data_model_runtime;
+pub mod debug_artifacts;
 mod debug_event_persister;
 pub mod debug_stream_events;
 mod inputs;
 mod live_debug_run;
+mod payloads;
 mod persistence;
 
 use self::{
@@ -41,6 +43,7 @@ use self::{
         build_compiled_plan_input, build_complete_flow_run_input, build_complete_node_run_input,
         build_flow_run_input, build_node_run_input,
     },
+    payloads::persisted_node_output_payload,
     persistence::{
         checkpoint_node_id, checkpoint_snapshot_from_record, next_node_started_at,
         persist_flow_debug_outcome, persist_preview_events, PersistFlowDebugOutcomeInput,
@@ -54,6 +57,7 @@ pub struct StartNodeDebugPreviewCommand {
     pub node_id: String,
     pub input_payload: serde_json::Value,
     pub document_snapshot: Option<serde_json::Value>,
+    pub debug_session_id: Option<String>,
 }
 
 pub struct StartFlowDebugRunCommand {
@@ -61,6 +65,7 @@ pub struct StartFlowDebugRunCommand {
     pub application_id: Uuid,
     pub input_payload: serde_json::Value,
     pub document_snapshot: Option<serde_json::Value>,
+    pub debug_session_id: Option<String>,
 }
 
 pub struct PrepareFlowDebugRunCommand {
@@ -69,6 +74,7 @@ pub struct PrepareFlowDebugRunCommand {
     pub flow_run_id: Uuid,
     pub input_payload: serde_json::Value,
     pub document_snapshot: Option<serde_json::Value>,
+    pub debug_session_id: String,
 }
 
 pub struct ContinueFlowDebugRunCommand {
@@ -105,6 +111,51 @@ pub struct CompleteCallbackTaskCommand {
     pub application_id: Uuid,
     pub callback_task_id: Uuid,
     pub response_payload: serde_json::Value,
+}
+
+fn ensure_data_model_side_effect_confirmation_approved(response_payload: &Value) -> Result<()> {
+    let approved = response_payload
+        .get("approved")
+        .or_else(|| response_payload.get("confirmed"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if approved {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "DATA_MODEL_SIDE_EFFECT_CONFIRMATION_REJECTED: data_model write requires approved confirmation"
+        ))
+    }
+}
+
+fn ensure_data_model_side_effect_confirmation_metadata(
+    actor: &domain::ActorContext,
+    confirmation_payload: &Value,
+) -> Result<()> {
+    let expected_actor_user_id = confirmation_payload
+        .get("actor_user_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("data_model side-effect confirmation actor is required"))
+        .and_then(|value| Uuid::parse_str(value).map_err(Into::into))?;
+    if expected_actor_user_id != actor.user_id {
+        return Err(ControlPlaneError::PermissionDenied(
+            "data_model_side_effect_confirmation_actor",
+        )
+        .into());
+    }
+
+    let expires_at = confirmation_payload
+        .get("expires_at")
+        .cloned()
+        .ok_or_else(|| anyhow!("data_model side-effect confirmation expiry is required"))
+        .and_then(|value| serde_json::from_value::<OffsetDateTime>(value).map_err(Into::into))?;
+    if OffsetDateTime::now_utc() > expires_at {
+        return Err(anyhow!(
+            "DATA_MODEL_SIDE_EFFECT_CONFIRMATION_EXPIRED: data_model write confirmation expired"
+        ));
+    }
+
+    Ok(())
 }
 
 pub async fn persist_debug_stream_events<R>(
@@ -262,6 +313,7 @@ where
                 command.actor_user_id,
                 &editor_state,
                 &compiled_plan,
+                preview_document,
             )?)
             .await?;
         let flow_run = self
@@ -272,6 +324,7 @@ where
                 &editor_state,
                 &compiled_record,
                 &command,
+                preview_document,
                 started_at,
             ))
             .await?;
@@ -429,7 +482,8 @@ where
         let outcome = orchestration_runtime::execution_engine::resume_flow_debug_run(
             &compiled_plan,
             &snapshot,
-            &command.input_payload,
+            &waiting_node_id,
+            &resume_patch,
             &self.runtime_invoker(application.workspace_id),
         )
         .await?;
@@ -443,6 +497,8 @@ where
                 node_run_id,
                 from_status: waiting_node.status,
                 output_payload: resume_patch,
+                metrics_payload: json!({ "resumed": true }),
+                debug_payload: json!({}),
             })
         } else {
             None
@@ -472,6 +528,19 @@ where
             command.actor_user_id,
         )
         .await?;
+        let pending_callback_task = self
+            .repository
+            .get_callback_task(command.callback_task_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("callback_task"))?;
+        if pending_callback_task.callback_kind == "data_model_side_effect_confirmation" {
+            let confirmation_payload = pending_callback_task
+                .external_ref_payload
+                .as_ref()
+                .unwrap_or(&pending_callback_task.request_payload);
+            ensure_data_model_side_effect_confirmation_approved(&command.response_payload)?;
+            ensure_data_model_side_effect_confirmation_metadata(&actor, confirmation_payload)?;
+        }
         let callback_task = self
             .repository
             .complete_callback_task(&CompleteCallbackTaskInput {
@@ -508,15 +577,27 @@ where
             .ok_or_else(|| anyhow!("compiled plan not found"))?;
         let compiled_plan: orchestration_runtime::compiled_plan::CompiledPlan =
             serde_json::from_value(compiled_record.plan.clone())?;
+        if callback_task.callback_kind == "data_model_side_effect_confirmation" {
+            return self
+                .complete_data_model_side_effect_callback(
+                    command,
+                    &actor,
+                    &callback_task,
+                    &detail,
+                    &application,
+                    &checkpoint,
+                    &flow_run,
+                    &compiled_plan,
+                )
+                .await;
+        }
         let snapshot = checkpoint_snapshot_from_record(&checkpoint)?;
         let waiting_node_id = checkpoint_node_id(&checkpoint)?;
-        let resume_payload = json!({
-            waiting_node_id.clone(): command.response_payload.clone()
-        });
         let outcome = orchestration_runtime::execution_engine::resume_flow_debug_run(
             &compiled_plan,
             &snapshot,
-            &resume_payload,
+            &waiting_node_id,
+            &command.response_payload,
             &self.runtime_invoker(application.workspace_id),
         )
         .await?;
@@ -543,6 +624,148 @@ where
                 output_payload: callback_task.response_payload.clone().ok_or_else(|| {
                     anyhow!("completed callback task is missing response payload")
                 })?,
+                metrics_payload: json!({ "resumed": true }),
+                debug_payload: json!({}),
+            }),
+        })
+        .await
+    }
+
+    async fn complete_data_model_side_effect_callback(
+        &self,
+        command: CompleteCallbackTaskCommand,
+        actor: &domain::ActorContext,
+        callback_task: &domain::CallbackTaskRecord,
+        detail: &domain::ApplicationRunDetail,
+        application: &domain::ApplicationRecord,
+        checkpoint: &domain::CheckpointRecord,
+        flow_run: &domain::FlowRunRecord,
+        compiled_plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+    ) -> Result<domain::ApplicationRunDetail> {
+        let waiting_node_id = checkpoint_node_id(checkpoint)?;
+        let node = compiled_plan
+            .nodes
+            .get(&waiting_node_id)
+            .ok_or_else(|| anyhow!("waiting data_model node not found in compiled plan"))?;
+        let waiting_node = detail
+            .node_runs
+            .iter()
+            .find(|record| record.id == callback_task.node_run_id)
+            .ok_or_else(|| anyhow!("waiting node run not found for callback task"))?;
+        let confirmation_payload = callback_task
+            .external_ref_payload
+            .as_ref()
+            .unwrap_or(&callback_task.request_payload);
+        let execution = data_model_runtime::execute_confirmed_data_model_side_effect(
+            self.repository.clone(),
+            self.runtime_engine.clone(),
+            actor,
+            node,
+            &data_model_runtime::DataModelRunContext {
+                workspace_id: application.workspace_id,
+                application_id: command.application_id,
+                draft_id: flow_run.draft_id,
+                flow_run_id: flow_run.id,
+                node_run_id: callback_task.node_run_id,
+            },
+            confirmation_payload,
+        )
+        .await;
+
+        if let Some(error_payload) = execution.error_payload.clone() {
+            ensure_node_run_transition(
+                waiting_node.status,
+                domain::NodeRunStatus::Failed,
+                "complete_data_model_side_effect_callback",
+            )?;
+            self.repository
+                .update_node_run(&UpdateNodeRunInput {
+                    node_run_id: callback_task.node_run_id,
+                    status: domain::NodeRunStatus::Failed,
+                    output_payload: json!({}),
+                    error_payload: Some(error_payload.clone()),
+                    metrics_payload: execution.metrics_payload,
+                    debug_payload: json!({
+                        "callback_task_id": callback_task.id,
+                        "callback_kind": callback_task.callback_kind,
+                    }),
+                    finished_at: Some(OffsetDateTime::now_utc()),
+                })
+                .await?;
+            ensure_flow_run_transition(
+                flow_run.status,
+                domain::FlowRunStatus::Failed,
+                "complete_data_model_side_effect_callback",
+            )?;
+            self.repository
+                .update_flow_run(&UpdateFlowRunInput {
+                    flow_run_id: flow_run.id,
+                    status: domain::FlowRunStatus::Failed,
+                    output_payload: flow_run.output_payload.clone(),
+                    error_payload: Some(error_payload.clone()),
+                    finished_at: Some(OffsetDateTime::now_utc()),
+                })
+                .await?;
+            self.repository
+                .append_run_event(&AppendRunEventInput {
+                    flow_run_id: flow_run.id,
+                    node_run_id: Some(callback_task.node_run_id),
+                    event_type: "flow_run_failed".to_string(),
+                    payload: error_payload,
+                })
+                .await?;
+            return self
+                .repository
+                .get_application_run_detail(command.application_id, flow_run.id)
+                .await?
+                .ok_or_else(|| anyhow!("flow run detail not found"));
+        }
+
+        let snapshot = checkpoint_snapshot_from_record(checkpoint)?;
+        let outcome = orchestration_runtime::execution_engine::resume_flow_debug_run(
+            compiled_plan,
+            &snapshot,
+            &waiting_node_id,
+            &execution.output_payload,
+            &self.runtime_invoker(application.workspace_id),
+        )
+        .await?;
+        let side_effect_receipt = execution
+            .metrics_payload
+            .get("side_effect_receipt")
+            .cloned()
+            .unwrap_or(Value::Null);
+
+        self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
+            application_id: command.application_id,
+            flow_run,
+            outcome: &outcome,
+            trigger_event_type: "data_model_side_effect_confirmed",
+            trigger_event_payload: json!({
+                "callback_task_id": callback_task.id,
+                "response_payload": command.response_payload,
+                "side_effect_receipt": side_effect_receipt,
+            }),
+            base_started_at: next_node_started_at(detail),
+            waiting_node_resume: Some(WaitingNodeResumeUpdate {
+                node_run_id: callback_task.node_run_id,
+                from_status: waiting_node.status,
+                output_payload: persisted_node_output_payload(
+                    &execution.output_payload,
+                    &execution.metrics_payload,
+                    None,
+                    &json!({
+                        "callback_task_id": callback_task.id,
+                        "callback_kind": callback_task.callback_kind,
+                        "confirmed": true,
+                    }),
+                ),
+                metrics_payload: execution.metrics_payload,
+                debug_payload: json!({
+                    "callback_task_id": callback_task.id,
+                    "callback_kind": callback_task.callback_kind,
+                    "confirmed": true,
+                }),
             }),
         })
         .await

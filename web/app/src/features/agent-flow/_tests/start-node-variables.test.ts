@@ -93,24 +93,59 @@ describe('start node variables', () => {
     );
   });
 
-  test('exposes LLM runtime output variables to downstream selectors', () => {
+  test('exposes only public LLM runtime output variables to downstream selectors', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
 
-    expect(
-      listVisibleSelectorOptions(document, 'node-answer').map((option) => ({
-        value: option.value,
-        label: option.displayLabel
-      }))
-    ).toEqual(
+    if (!llmNode) {
+      throw new Error('expected llm node');
+    }
+
+    llmNode.outputs = [
+      { key: 'text', title: '模型输出', valueType: 'string' },
+      { key: 'reasoning_content', title: '思考', valueType: 'string' },
+      { key: 'usage', title: 'Token 使用', valueType: 'json' }
+    ];
+
+    const selectorLabels = listVisibleSelectorOptions(document, 'node-answer').map(
+      (option) => option.displayLabel
+    );
+
+    const options = listVisibleSelectorOptions(document, 'node-answer');
+    const textOutput = options.find(
+      (option) => option.value[0] === 'node-llm' && option.outputKey === 'text'
+    );
+
+    expect(selectorLabels).toEqual(
       expect.arrayContaining([
-        { value: ['node-llm', 'text'], label: 'LLM/text' },
-        {
-          value: ['node-llm', 'reasoning_content'],
-          label: 'LLM/reasoning_content'
-        },
-        { value: ['node-llm', 'usage'], label: 'LLM/usage' }
+        'Start/query',
+        'Start/files',
+        'LLM/text',
+        'LLM/usage'
       ])
     );
+    expect(textOutput?.outputLabel).toBe('text');
+    expect(textOutput?.value).toEqual(['node-llm', 'text']);
+
+    expect(options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          outputKey: 'text',
+          outputLabel: 'text',
+          value: ['node-llm', 'text'],
+          displayLabel: 'LLM/text'
+        }),
+        expect.objectContaining({
+          outputKey: 'usage',
+          outputLabel: 'usage',
+          value: ['node-llm', 'usage'],
+          displayLabel: 'LLM/usage'
+        })
+      ])
+    );
+
+    expect(selectorLabels).not.toContain('模型输出');
+    expect(selectorLabels).not.toContain('LLM/reasoning_content');
   });
 
   test('fails fast when a start node carries unexpected outputs', () => {

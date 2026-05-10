@@ -9,11 +9,7 @@ const { loadVerifyRuntimeConfig } = require('./testing/verify-runtime.js');
 const VALID_MODES = new Set(['run', 'coverage']);
 
 function normalizePassThroughArgs(args) {
-  if (args[0] === '--') {
-    return args.slice(1);
-  }
-
-  return args;
+  return args.filter((arg) => arg !== '--');
 }
 
 function parseCliArgs(argv) {

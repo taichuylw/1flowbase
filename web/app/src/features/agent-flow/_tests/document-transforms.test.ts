@@ -19,6 +19,7 @@ import {
   updateNodeField
 } from '../lib/document/transforms/node';
 import { setViewport } from '../lib/document/transforms/viewport';
+import { BUILTIN_NODE_PICKER_OPTIONS } from '../lib/plugin-node-definitions';
 
 function createNestedContainerDocument() {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -123,6 +124,66 @@ describe('agent flow document transforms', () => {
     expect(classifyDocumentChange(document, moved)).toBe('layout');
     expect(classifyDocumentChange(document, viewport)).toBe('layout');
     expect(classifyDocumentChange(document, logical)).toBe('logical');
+  });
+
+  test('updates LLM public outputs when response format explicitly enables structured output', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-llm'
+        ? {
+            ...node,
+            outputs: [
+              {
+                key: 'text',
+                title: 'Final answer',
+                valueType: 'string',
+                description: 'User-facing model text'
+              }
+            ]
+          }
+        : node
+    );
+
+    const structured = updateNodeField(document, {
+      nodeId: 'node-llm',
+      fieldKey: 'config.response_format',
+      value: { mode: 'json_object' }
+    });
+    const structuredNode = structured.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    expect(structuredNode?.outputs).toEqual([
+      {
+        key: 'text',
+        title: 'Final answer',
+        valueType: 'string',
+        description: 'User-facing model text'
+      },
+      {
+        key: 'structured_output',
+        title: '结构化输出',
+        valueType: 'json'
+      }
+    ]);
+
+    const textOnly = updateNodeField(structured, {
+      nodeId: 'node-llm',
+      fieldKey: 'config.response_format',
+      value: { mode: 'text' }
+    });
+    const textOnlyNode = textOnly.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    expect(textOnlyNode?.outputs).toEqual([
+      {
+        key: 'text',
+        title: 'Final answer',
+        valueType: 'string',
+        description: 'User-facing model text'
+      }
+    ]);
   });
 
   test('resolves nested container path from document structure', () => {
@@ -373,11 +434,7 @@ describe('agent flow document transforms', () => {
 
     const next = replaceNodeWithOption(document, {
       nodeId: 'node-llm',
-      option: {
-        kind: 'builtin',
-        type: 'tool',
-        label: 'Tool'
-      }
+      option: BUILTIN_NODE_PICKER_OPTIONS.find((option) => option.type === 'tool')!
     });
     const replacedNode = next.graph.nodes.find(
       (node) => node.id === 'node-llm'
