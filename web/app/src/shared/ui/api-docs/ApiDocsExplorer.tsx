@@ -206,7 +206,6 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
       <section className="api-docs-panel__toolbar" aria-label="文档筛选">
         <div className="api-docs-panel__header-control">
           <div className="api-docs-panel__header-control-copy">
-            <Typography.Text strong>接口分类</Typography.Text>
             <Typography.Text type="secondary">
               已收录 {categories.length} 个分类，切换分类后再浏览接口详情
             </Typography.Text>

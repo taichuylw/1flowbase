@@ -71,7 +71,6 @@ export function ApplicationApiPage({
       children: (
         <ApplicationApiDocsPanel
           applicationId={application.id}
-          applicationName={application.name}
           defaultCategoryId="application-native-api"
         />
       )

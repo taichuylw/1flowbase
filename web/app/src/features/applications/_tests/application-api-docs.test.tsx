@@ -41,13 +41,12 @@ describe('ApplicationApiDocsPanel', () => {
       <AppProviders>
         <ApplicationApiDocsPanel
           applicationId="app-1"
-          applicationName="Support Agent"
           defaultCategoryId="openai-compatible-api"
         />
       </AppProviders>
     );
 
-    expect(screen.getByText('Support Agent API 文档')).toBeInTheDocument();
+    expect(screen.queryByText('Support Agent API 文档')).not.toBeInTheDocument();
     expect(screen.queryByText('active publication v3')).not.toBeInTheDocument();
     expect(explorerState.lastProps?.queryState).toEqual({
       categoryId: 'openai-compatible-api',

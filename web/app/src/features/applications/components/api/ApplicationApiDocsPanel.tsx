@@ -1,7 +1,5 @@
 import { useCallback, useState } from 'react';
 
-import { Space, Typography } from 'antd';
-
 import { ApiDocsExplorer } from '../../../../shared/ui/api-docs/ApiDocsExplorer';
 import { getApplicationsApiBaseUrl } from '../../api/applications';
 import {
@@ -15,11 +13,9 @@ import {
 
 export function ApplicationApiDocsPanel({
   applicationId,
-  applicationName,
   defaultCategoryId
 }: {
   applicationId: string;
-  applicationName: string;
   defaultCategoryId: string;
 }) {
   const [queryState, setQueryState] = useState<{
@@ -34,9 +30,6 @@ export function ApplicationApiDocsPanel({
 
   return (
     <section className="application-api-panel">
-      <Space direction="vertical" size={12} className="application-api-docs-head">
-        <Typography.Title level={4}>{applicationName} API 文档</Typography.Title>
-      </Space>
       <ApiDocsExplorer
         queryState={queryState}
         onQueryStateChange={handleQueryStateChange}
