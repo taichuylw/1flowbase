@@ -4,15 +4,15 @@ use std::{
 };
 
 use axum::{
-    Json, Router,
     body::Body,
     extract::{Path, Query, State},
     http::{
-        HeaderMap, StatusCode,
         header::{ACCEPT_LANGUAGE, CONTENT_TYPE},
+        HeaderMap, StatusCode,
     },
     response::Response,
     routing::{get, patch, post},
+    Json, Router,
 };
 use control_plane::model_provider::{
     CreateModelProviderInstanceCommand, DeleteModelProviderInstanceCommand,
