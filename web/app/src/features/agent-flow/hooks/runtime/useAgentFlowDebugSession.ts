@@ -32,7 +32,6 @@ import {
   buildRunContextFromDocument,
   getRunContextValues,
   mapRunContextToVariableGroups,
-  mapRunDetailToVariableGroups,
   mapVariableCacheToVariableGroups,
   type NodePreviewDisplayVariableCache,
   type NodeVariableDisplayMeta
@@ -266,15 +265,6 @@ function removeVariableCacheKeys(
   return changed ? nextCache : currentCache;
 }
 
-function variableCacheKeys(cache: NodeDebugPreviewVariableCache) {
-  return Object.entries(cache).flatMap(([nodeId, payload]) =>
-    Object.keys(payload).map((variableKey) => ({
-      node_id: nodeId,
-      variable_key: variableKey
-    }))
-  );
-}
-
 function parseVariableCacheItemKey(
   key: string
 ): { nodeId: string; variableKey: string } | null {
@@ -325,6 +315,19 @@ function applyVariableOverridesToGroups(
       return override.found ? { ...item, value: override.value } : item;
     })
   }));
+}
+
+function removeCachedVariableItemsFromGroups(
+  groups: AgentFlowVariableGroup[],
+  variableCache: NodeDebugPreviewVariableCache
+): AgentFlowVariableGroup[] {
+  return groups.flatMap((group) => {
+    const items = group.items.filter(
+      (item) => !readVariableCacheValue(variableCache, item.key).found
+    );
+
+    return items.length > 0 ? [{ ...group, items }] : [];
+  });
 }
 
 function readOutputSelectorValue(
@@ -398,52 +401,6 @@ function projectVariableCache(
       if (Object.keys(projectedPayload).length > 0) {
         cache = mergeVariablePayload(cache, nodeId, projectedPayload);
       }
-    }
-  }
-
-  return cache;
-}
-
-function buildVariableCacheFromTraceItems(
-  document: FlowAuthoringDocument,
-  traceItems: AgentFlowTraceItem[]
-): NodeDebugPreviewVariableCache {
-  let cache: NodeDebugPreviewVariableCache = {};
-
-  for (const item of traceItems) {
-    if (isRecord(item.outputPayload)) {
-      const projectedPayload = projectNodeVariablePayload(
-        document,
-        item.nodeId,
-        item.outputPayload
-      );
-      if (Object.keys(projectedPayload).length === 0) {
-        continue;
-      }
-      cache = mergeVariablePayload(cache, item.nodeId, projectedPayload);
-    }
-  }
-
-  return cache;
-}
-
-function buildOutputVariableCacheFromRunDetail(
-  document: FlowAuthoringDocument,
-  detail: FlowDebugRunDetail
-): NodeDebugPreviewVariableCache {
-  let cache: NodeDebugPreviewVariableCache = {};
-
-  for (const nodeRun of detail.node_runs) {
-    if (isRecord(nodeRun.output_payload)) {
-      const projectedPayload = projectNodeVariablePayload(
-        document,
-        nodeRun.node_id,
-        nodeRun.output_payload
-      );
-      if (Object.keys(projectedPayload).length === 0) {
-        continue;
-      }
-      cache = mergeVariablePayload(cache, nodeRun.node_id, projectedPayload);
     }
   }
 
@@ -620,10 +577,7 @@ export function useAgentFlowDebugSession({
 
     setNodePreviewInputCache({});
     setNodePreviewOutputCache({});
-    fetchDebugVariableSnapshot(
-      applicationId,
-      activeRunId ? { runId: activeRunId } : undefined
-    )
+    fetchDebugVariableSnapshot(applicationId, undefined)
       .then((snapshot) => {
         if (
           disposed ||
@@ -632,11 +586,8 @@ export function useAgentFlowDebugSession({
           return;
         }
 
-        setNodePreviewOutputCache((currentCache) =>
-          mergeVariableCache(
-            projectVariableCache(document, snapshot.variable_cache),
-            currentCache
-          )
+        setNodePreviewOutputCache(
+          projectVariableCache(document, snapshot.variable_cache)
         );
       })
       .catch(() => {
@@ -669,21 +620,6 @@ export function useAgentFlowDebugSession({
     [document]
   );
   const variableGroups = useMemo<AgentFlowVariableGroup[]>(() => {
-    if (lastDetail) {
-      return applyVariableOverridesToGroups(
-        mapRunDetailToVariableGroups(lastDetail, {
-          applicationId,
-          draftId,
-          runContext,
-          nodeMetadata: nodeVariableDisplayMetadata,
-          debugSessionId: debugSessionState.id,
-          actorUserId,
-          environmentVariables
-        }),
-        variableOverrides
-      );
-    }
-
     const groups = mapRunContextToVariableGroups(runContext, {
       applicationId,
       draftId,
@@ -696,9 +632,13 @@ export function useAgentFlowDebugSession({
       buildDisplayVariableCache(nodePreviewOutputCache),
       nodeVariableDisplayMetadata
     );
+    const uncachedGroups = removeCachedVariableItemsFromGroups(
+      groups,
+      nodePreviewOutputCache
+    );
 
     return applyVariableOverridesToGroups(
-      cacheGroups.length > 0 ? [...cacheGroups, ...groups] : groups,
+      cacheGroups.length > 0 ? [...cacheGroups, ...uncachedGroups] : groups,
       variableOverrides
     );
   }, [
@@ -708,7 +648,6 @@ export function useAgentFlowDebugSession({
     draftId,
     document.meta.flowId,
     environmentVariables,
-    lastDetail,
     nodeVariableDisplayMetadata,
     nodePreviewOutputCache,
     runContext,
@@ -793,19 +732,6 @@ export function useAgentFlowDebugSession({
     );
   }
 
-  function deletePersistedVariableCacheKeys(cache: NodeDebugPreviewVariableCache) {
-    if (!csrfToken) {
-      return;
-    }
-    const keys = variableCacheKeys(cache);
-    if (keys.length === 0) {
-      return;
-    }
-    void deleteDebugVariableCacheEntries(applicationId, { keys }, csrfToken).catch(
-      () => {}
-    );
-  }
-
   async function applyRunDetail(
     detail: FlowDebugRunDetail,
     options?: {
@@ -815,26 +741,14 @@ export function useAgentFlowDebugSession({
   ) {
     const assistantMessage = mapRunDetailToConversation(detail);
     const inputVariableCache = buildInputVariableCacheFromRunDetail(detail);
-    const outputVariableCache = buildOutputVariableCacheFromRunDetail(
-      document,
-      detail
-    );
-    const consumedVariableCache = mergeVariableCache(
-      inputVariableCache,
-      outputVariableCache
-    );
 
     setActiveRunId(detail.flow_run.id);
     setLastDetail(detail);
     setVariableOverrides((currentOverrides) => {
-      return removeVariableCacheKeys(currentOverrides, consumedVariableCache);
+      return removeVariableCacheKeys(currentOverrides, inputVariableCache);
     });
-    deletePersistedVariableCacheKeys(consumedVariableCache);
     setNodePreviewInputCache((currentCache) =>
       mergeVariableCache(currentCache, inputVariableCache)
-    );
-    setNodePreviewOutputCache((currentCache) =>
-      mergeVariableCache(currentCache, outputVariableCache)
     );
     setStatus(assistantMessage.status);
     setMessages((currentMessages) =>
@@ -992,8 +906,6 @@ export function useAgentFlowDebugSession({
             event.type === 'text_delta' ||
             event.type === 'reasoning_delta' ||
             event.type === 'usage_snapshot';
-          const isNodeStateEvent =
-            event.type === 'node_started' || event.type === 'node_finished';
           const isTerminalEvent =
             event.type === 'flow_finished' ||
             event.type === 'flow_failed' ||
@@ -1026,17 +938,6 @@ export function useAgentFlowDebugSession({
 
           if (isTraceEvent) {
             setStreamTraceItems(streamTraceItemsSnapshot);
-            if (isNodeStateEvent) {
-              setNodePreviewOutputCache((currentCache) =>
-                mergeVariableCache(
-                  currentCache,
-                  buildVariableCacheFromTraceItems(
-                    document,
-                    streamTraceItemsSnapshot
-                  )
-                )
-              );
-            }
           }
 
           if (event.type === 'text_delta' || event.type === 'reasoning_delta') {
@@ -1225,25 +1126,6 @@ export function useAgentFlowDebugSession({
       cache[field.nodeId][field.key] = field.value;
     }
 
-    if (lastDetail) {
-      for (const nodeRun of lastDetail.node_runs) {
-        const outputPayload = isRecord(nodeRun.output_payload)
-          ? projectNodeVariablePayload(
-              document,
-              nodeRun.node_id,
-              nodeRun.output_payload
-            )
-          : {};
-        if (Object.keys(outputPayload).length === 0) {
-          continue;
-        }
-        cache[nodeRun.node_id] = {
-          ...(cache[nodeRun.node_id] ?? {}),
-          ...outputPayload
-        };
-      }
-    }
-
     for (const [nodeId, payload] of Object.entries(nodePreviewOutputCache)) {
       cache[nodeId] = {
         ...(cache[nodeId] ?? {}),
@@ -1328,36 +1210,16 @@ export function useAgentFlowDebugSession({
     });
   }
 
-  function rememberNodePreviewOutputs(
-    outputPayload: NodeDebugPreviewVariableCache
-  ) {
-    setNodePreviewOutputCache((currentCache) => {
-      return mergeVariableCache(currentCache, outputPayload);
-    });
-  }
-
   function rememberExternalRunDetail(detail: FlowDebugRunDetail) {
     const inputVariableCache = buildInputVariableCacheFromRunDetail(detail);
-    const outputVariableCache = buildOutputVariableCacheFromRunDetail(
-      document,
-      detail
-    );
-    const consumedVariableCache = mergeVariableCache(
-      inputVariableCache,
-      outputVariableCache
-    );
 
     setActiveRunId(detail.flow_run.id);
     setLastDetail(detail);
     setVariableOverrides((currentOverrides) => {
-      return removeVariableCacheKeys(currentOverrides, consumedVariableCache);
+      return removeVariableCacheKeys(currentOverrides, inputVariableCache);
     });
-    deletePersistedVariableCacheKeys(consumedVariableCache);
     setNodePreviewInputCache((currentCache) =>
       mergeVariableCache(currentCache, inputVariableCache)
-    );
-    setNodePreviewOutputCache((currentCache) =>
-      mergeVariableCache(currentCache, outputVariableCache)
     );
   }
 
@@ -1412,7 +1274,6 @@ export function useAgentFlowDebugSession({
     getNodePreviewVariableCache,
     setVariableCacheValue,
     rememberNodePreviewInputs,
-    rememberNodePreviewOutputs,
     rememberExternalRunDetail,
     selectRunScope,
     resetVariableCache

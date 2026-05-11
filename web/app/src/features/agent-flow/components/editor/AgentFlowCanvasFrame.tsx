@@ -28,7 +28,6 @@ import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugS
 import {
   applicationRunNodeLastRunQueryKey,
   buildNodeDebugPreviewPlan,
-  extractNodePreviewVariableOutput,
   fetchRuntimeDebugArtifact,
   nodeLastRunToFlowDebugRunDetail,
   nodeLastRunQueryKey,
@@ -306,9 +305,6 @@ export function AgentFlowCanvasFrame({
       );
     },
     onSuccess: async (lastRun, variables) => {
-      debugSession.rememberNodePreviewOutputs({
-        [variables.nodeId]: extractNodePreviewVariableOutput(lastRun)
-      });
       queryClient.setQueryData(
         nodeLastRunQueryKey(applicationId, variables.nodeId),
         lastRun

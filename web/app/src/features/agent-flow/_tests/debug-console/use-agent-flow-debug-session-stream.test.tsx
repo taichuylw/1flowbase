@@ -929,6 +929,18 @@ describe('useAgentFlowDebugSession streaming', () => {
     const fetchApplicationRunDetailSpy = vi
       .spyOn(runtimeApi, 'fetchApplicationRunDetail')
       .mockResolvedValue(createStreamRunDetail('flow-run-stream'));
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({ variable_cache: {} })
+      .mockResolvedValue({
+        variable_cache: {
+          'node-start': {
+            query: '请总结退款政策'
+          },
+          'node-llm': {
+            text: '退款政策摘要'
+          }
+        }
+      });
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     const { result } = renderHook(

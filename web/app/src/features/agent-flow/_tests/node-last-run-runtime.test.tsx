@@ -173,13 +173,24 @@ describe('node last run runtime', () => {
   });
 
   test('runs node preview from cached variables and refreshes last-run cards', async () => {
-    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot').mockResolvedValue({
-      variable_cache: {
-        'node-start': {
-          query: '总结退款政策'
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({
+        variable_cache: {
+          'node-start': {
+            query: '总结退款政策'
+          }
         }
-      }
-    });
+      })
+      .mockResolvedValue({
+        variable_cache: {
+          'node-start': {
+            query: '总结退款政策'
+          },
+          'node-llm': {
+            text: '退款政策摘要'
+          }
+        }
+      });
 
     renderReactFlowScene(
       <AgentFlowEditorShell

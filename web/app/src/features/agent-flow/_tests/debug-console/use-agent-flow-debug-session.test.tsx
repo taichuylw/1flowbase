@@ -422,6 +422,19 @@ describe('useAgentFlowDebugSession', () => {
     const startFlowDebugRunSpy = vi
       .spyOn(runtimeApi, 'startFlowDebugRun')
       .mockResolvedValue(createSucceededRunDetail());
+    const fetchSnapshotSpy = vi
+      .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({ variable_cache: {} })
+      .mockResolvedValue({
+        variable_cache: {
+          'node-start': {
+            query: '请总结退款政策'
+          },
+          'node-llm': {
+            text: '持久化表里的退款政策摘要'
+          }
+        }
+      });
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     const { result } = renderHook(
@@ -480,30 +493,10 @@ describe('useAgentFlowDebugSession', () => {
         })
       ])
     );
+    expect(fetchSnapshotSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', undefined);
     expect(result.current.variableGroups.map((group) => group.title)).toEqual(
-      expect.arrayContaining([
-        'Input Variables',
-        'Node Outputs',
-        'System Variables',
-        'Conversation / Session',
-        'Environment'
-      ])
-    );
-    const systemVariablesGroup = result.current.variableGroups.find(
-      (group) => group.title === 'System Variables'
-    );
-
-    expect(systemVariablesGroup?.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          key: 'sys.user_id',
-          value: 'user-1'
-        }),
-        expect.objectContaining({
-          key: 'sys.workflow_run_id',
-          value: 'flow-run-1'
-        })
-      ])
+      expect.arrayContaining(['LLM', 'Input Variables'])
     );
     const inputVariablesGroup = result.current.variableGroups.find(
       (group) => group.title === 'Input Variables'
@@ -511,8 +504,13 @@ describe('useAgentFlowDebugSession', () => {
     const inputVariablesKeys = (inputVariablesGroup?.items ?? []).map(
       (item) => item.key
     );
+    const startGroup = result.current.variableGroups.find(
+      (group) => group.title === 'Start'
+    );
+    const startKeys = (startGroup?.items ?? []).map((item) => item.key);
 
-    expect(inputVariablesKeys).toContain('node-start.query');
+    expect(startKeys).toContain('node-start.query');
+    expect(inputVariablesKeys).not.toContain('node-start.query');
     expect(inputVariablesKeys).not.toContain('node-llm.user_prompt');
     expect(inputVariablesKeys).not.toContain('node-answer.answer_template');
     expect(result.current.getNodePreviewVariableCache()).toEqual(
@@ -521,20 +519,20 @@ describe('useAgentFlowDebugSession', () => {
           query: '请总结退款政策'
         }),
         'node-llm': expect.objectContaining({
-          text: '退款政策摘要',
-          usage: { total_tokens: 128 }
+          text: '持久化表里的退款政策摘要'
         })
       })
     );
+    expect(
+      result.current.getNodePreviewVariableCache()['node-llm']
+    ).not.toHaveProperty('usage');
     expect(
       result.current.getNodePreviewVariableCache()['node-llm']
     ).not.toHaveProperty('raw_response');
     expect(
       result.current.getNodePreviewVariableCache()['node-llm']
     ).not.toHaveProperty('user_prompt');
-    expect(
-      result.current.getNodePreviewVariableCache()['node-answer']
-    ).not.toHaveProperty('answer_template');
+    expect(result.current.getNodePreviewVariableCache()['node-answer']).toBeUndefined();
     expect(window.localStorage.length).toBe(0);
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['applications', 'app-1', 'runtime']
