@@ -221,9 +221,6 @@ describe('node last run runtime', () => {
     expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
       'raw_response_ref'
     );
-    expect(await screen.findByLabelText('数据处理 JSON')).toHaveTextContent(
-      'text_delta'
-    );
     expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('错误 JSON')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();

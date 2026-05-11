@@ -6,6 +6,7 @@ import { SchemaRenderer } from '../../../../../shared/schema-ui/runtime/SchemaRe
 import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 
 import {
+  applicationRunNodeLastRunQueryKey,
   fetchApplicationRunNodeLastRun,
   fetchNodeLastRun,
   nodeLastRunQueryKey
@@ -50,16 +51,11 @@ export function NodeLastRunTab({
 }) {
   const lastRunQuery = useQuery({
     queryKey: activeRunId
-      ? ([
-          'applications',
+      ? applicationRunNodeLastRunQueryKey(
           applicationId ?? 'unknown',
-          'runtime',
-          'runs',
           activeRunId,
-          'nodes',
-          nodeId ?? 'unknown',
-          'last-run'
-        ] as const)
+          nodeId ?? 'unknown'
+        )
       : nodeLastRunQueryKey(applicationId ?? 'unknown', nodeId ?? 'unknown'),
     queryFn: async () => {
       if (activeRunId) {

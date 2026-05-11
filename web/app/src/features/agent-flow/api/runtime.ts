@@ -134,6 +134,22 @@ export const nodeLastRunQueryKey = (applicationId: string, nodeId: string) =>
     'last-run'
   ] as const;
 
+export const applicationRunNodeLastRunQueryKey = (
+  applicationId: string,
+  runId: string,
+  nodeId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'nodes',
+    nodeId,
+    'last-run'
+  ] as const;
+
 export function fetchNodeLastRun(applicationId: string, nodeId: string) {
   return getConsoleNodeLastRun(
     applicationId,

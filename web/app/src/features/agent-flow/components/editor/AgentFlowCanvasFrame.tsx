@@ -26,6 +26,7 @@ import { useEditorShortcuts } from '../../hooks/interactions/use-editor-shortcut
 import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-actions';
 import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugSession';
 import {
+  applicationRunNodeLastRunQueryKey,
   buildNodeDebugPreviewPlan,
   extractNodePreviewVariableOutput,
   fetchRuntimeDebugArtifact,
@@ -310,6 +311,14 @@ export function AgentFlowCanvasFrame({
       });
       queryClient.setQueryData(
         nodeLastRunQueryKey(applicationId, variables.nodeId),
+        lastRun
+      );
+      queryClient.setQueryData(
+        applicationRunNodeLastRunQueryKey(
+          applicationId,
+          lastRun.flow_run.id,
+          variables.nodeId
+        ),
         lastRun
       );
       debugSession.rememberExternalRunDetail(
