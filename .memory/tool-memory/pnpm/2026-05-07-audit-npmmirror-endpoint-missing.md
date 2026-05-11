@@ -14,8 +14,8 @@ match_when:
   - verifying npm vulnerability fixes
   - pnpm audit reports missing audit endpoint
 created_at: 2026-05-07 01
-updated_at: 2026-05-07 01
-last_verified_at: 2026-05-07 01
+updated_at: 2026-05-11 18
+last_verified_at: 2026-05-11 18
 decision_policy: reference_on_failure
 scope:
   - web
@@ -43,3 +43,5 @@ pnpm --dir tmp/demo audit --audit-level moderate --registry=https://registry.npm
 ```
 
 Both commands returned `No known vulnerabilities found` after the dependency lockfile fixes on `2026-05-07 01`.
+
+Reverified on `2026-05-11 18`: `pnpm audit --json` still fails against `npmmirror`, and `pnpm audit --json --registry=https://registry.npmjs.org` reaches the official audit endpoint successfully.
