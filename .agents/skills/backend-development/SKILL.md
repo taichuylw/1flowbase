@@ -37,11 +37,13 @@ description: Use when building or changing backend APIs, state transitions, modu
 - API 输入保持短、平、单动作
 - 状态必须写清：状态集合、流转规则、动作约束
 - 多个模块都能改同一关键状态：立即收口
+- Rust 后端实现要用类型表达核心不变量、显式传播错误、封装状态转换，并把阻塞 IO、锁、事务和外部副作用放在清晰边界内
 
 ## Implementation
 
 - AI-friendly API rules: `references/api-design.md`
 - State and consistency review: `references/state-and-consistency.md`
+- Rust backend practice rules: `references/rust-backend-practices.md`
 - Stable core vs adapter rules: `references/boundary-design.md`
 - Local implementation rules: `references/implementation-rules.md`
 - Anti-decay patterns: `references/anti-patterns.md`
