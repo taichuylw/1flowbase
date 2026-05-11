@@ -371,22 +371,14 @@ async fn debug_variable_snapshot_uses_latest_node_run_output_in_selected_run() {
         snapshot["data"]["variable_cache"]["node-llm"]["text"],
         "reply:newest policy"
     );
-    assert_eq!(
-        snapshot["data"]["variable_cache"]["node-llm"]["usage"]["total_tokens"],
-        128
-    );
-    assert_eq!(
-        snapshot["data"]["variable_cache"]["node-llm"]["provider_route"]["provider_code"],
-        "openai_compatible"
-    );
+    assert!(snapshot["data"]["variable_cache"]["node-llm"]["usage"].is_null());
+    assert!(snapshot["data"]["variable_cache"]["node-llm"]["provider_route"].is_null());
     assert_eq!(
         snapshot["data"]["source_node_run_ids"]["node-llm"]["text"],
         replacement_node_run_id.to_string()
     );
-    assert_eq!(
-        snapshot["data"]["source_node_run_ids"]["node-llm"]["usage"],
-        replacement_node_run_id.to_string()
-    );
+    assert!(snapshot["data"]["source_node_run_ids"]["node-llm"]["usage"].is_null());
+    assert!(snapshot["data"]["source_node_run_ids"]["node-llm"]["provider_route"].is_null());
 }
 
 #[tokio::test]

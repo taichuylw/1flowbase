@@ -490,11 +490,13 @@ describe('useAgentFlowDebugSession', () => {
         }),
         'node-llm': expect.objectContaining({
           text: '退款政策摘要',
-          usage: { total_tokens: 128 },
-          raw_response: { id: 'chatcmpl-1' }
+          usage: { total_tokens: 128 }
         })
       })
     );
+    expect(
+      result.current.getNodePreviewVariableCache()['node-llm']
+    ).not.toHaveProperty('raw_response');
     expect(
       result.current.getNodePreviewVariableCache()['node-llm']
     ).not.toHaveProperty('user_prompt');

@@ -317,14 +317,100 @@ function mergeVariableCache(
   return mergedCache;
 }
 
+function readOutputSelectorValue(
+  payload: Record<string, unknown>,
+  selector: string[]
+): { found: true; value: unknown } | { found: false } {
+  let current: unknown = payload;
+
+  for (const segment of selector) {
+    if (
+      !isRecord(current) ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
+      return { found: false };
+    }
+
+    current = current[segment];
+  }
+
+  return { found: true, value: current };
+}
+
+function projectNodeVariablePayload(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  payload: Record<string, unknown>
+) {
+  const node = document.graph.nodes.find((entry) => entry.id === nodeId);
+
+  if (!node) {
+    return {};
+  }
+
+  return getNodeVariableOutputs(node).reduce<Record<string, unknown>>(
+    (projected, output) => {
+      if (Object.prototype.hasOwnProperty.call(payload, output.key)) {
+        projected[output.key] = payload[output.key];
+        return projected;
+      }
+
+      const selector = output.selector?.length ? output.selector : undefined;
+      if (!selector) {
+        return projected;
+      }
+
+      const selected = readOutputSelectorValue(payload, selector);
+      if (selected.found) {
+        projected[output.key] = selected.value;
+      }
+
+      return projected;
+    },
+    {}
+  );
+}
+
+function projectVariableCache(
+  document: FlowAuthoringDocument,
+  variableCache: NodeDebugPreviewVariableCache
+): NodeDebugPreviewVariableCache {
+  let cache: NodeDebugPreviewVariableCache = {};
+
+  for (const [nodeId, payload] of Object.entries(variableCache)) {
+    if (isRecord(payload)) {
+      const projectedPayload = projectNodeVariablePayload(
+        document,
+        nodeId,
+        payload
+      );
+
+      if (Object.keys(projectedPayload).length > 0) {
+        cache = mergeVariablePayload(cache, nodeId, projectedPayload);
+      }
+    }
+  }
+
+  return cache;
+}
+
 function buildVariableCacheFromTraceItems(
+  document: FlowAuthoringDocument,
   traceItems: AgentFlowTraceItem[]
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
   for (const item of traceItems) {
     if (isRecord(item.outputPayload)) {
-      cache = mergeVariablePayload(cache, item.nodeId, item.outputPayload);
+      const projectedPayload = projectNodeVariablePayload(
+        document,
+        item.nodeId,
+        item.outputPayload
+      );
+      if (Object.keys(projectedPayload).length === 0) {
+        continue;
+      }
+      cache = mergeVariablePayload(cache, item.nodeId, projectedPayload);
     }
   }
 
@@ -332,16 +418,25 @@ function buildVariableCacheFromTraceItems(
 }
 
 function buildOutputVariableCacheFromRunDetail(
+  document: FlowAuthoringDocument,
   detail: FlowDebugRunDetail
 ): NodeDebugPreviewVariableCache {
   let cache: NodeDebugPreviewVariableCache = {};
 
   for (const nodeRun of detail.node_runs) {
     if (isRecord(nodeRun.output_payload)) {
+      const projectedPayload = projectNodeVariablePayload(
+        document,
+        nodeRun.node_id,
+        nodeRun.output_payload
+      );
+      if (Object.keys(projectedPayload).length === 0) {
+        continue;
+      }
       cache = mergeVariablePayload(
         cache,
         nodeRun.node_id,
-        nodeRun.output_payload
+        projectedPayload
       );
     }
   }
@@ -555,7 +650,10 @@ export function useAgentFlowDebugSession({
         }
 
         setNodePreviewOutputCache((currentCache) =>
-          mergeVariableCache(snapshot.variable_cache, currentCache)
+          mergeVariableCache(
+            projectVariableCache(document, snapshot.variable_cache),
+            currentCache
+          )
         );
       })
       .catch(() => {
@@ -725,7 +823,7 @@ export function useAgentFlowDebugSession({
     setNodePreviewOutputCache((currentCache) =>
       mergeVariableCache(
         currentCache,
-        buildOutputVariableCacheFromRunDetail(detail)
+        buildOutputVariableCacheFromRunDetail(document, detail)
       )
     );
     setStatus(assistantMessage.status);
@@ -922,7 +1020,10 @@ export function useAgentFlowDebugSession({
               setNodePreviewOutputCache((currentCache) =>
                 mergeVariableCache(
                   currentCache,
-                  buildVariableCacheFromTraceItems(streamTraceItemsSnapshot)
+                  buildVariableCacheFromTraceItems(
+                    document,
+                    streamTraceItemsSnapshot
+                  )
                 )
               );
             }
@@ -1108,9 +1209,19 @@ export function useAgentFlowDebugSession({
 
     if (lastDetail) {
       for (const nodeRun of lastDetail.node_runs) {
+        const outputPayload = isRecord(nodeRun.output_payload)
+          ? projectNodeVariablePayload(
+              document,
+              nodeRun.node_id,
+              nodeRun.output_payload
+            )
+          : {};
+        if (Object.keys(outputPayload).length === 0) {
+          continue;
+        }
         cache[nodeRun.node_id] = {
           ...(cache[nodeRun.node_id] ?? {}),
-          ...nodeRun.output_payload
+          ...outputPayload
         };
       }
     }
@@ -1159,7 +1270,10 @@ export function useAgentFlowDebugSession({
       mergeVariableCache(currentCache, buildInputVariableCacheFromRunDetail(detail))
     );
     setNodePreviewOutputCache((currentCache) =>
-      mergeVariableCache(currentCache, buildOutputVariableCacheFromRunDetail(detail))
+      mergeVariableCache(
+        currentCache,
+        buildOutputVariableCacheFromRunDetail(document, detail)
+      )
     );
   }
 

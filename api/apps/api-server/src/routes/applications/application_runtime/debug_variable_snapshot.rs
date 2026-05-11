@@ -45,6 +45,77 @@ fn preview_output_cache_payload(output_payload: &serde_json::Value) -> Option<se
     }
 }
 
+type NodeOutputSelectors = HashMap<String, Vec<(String, Vec<String>)>>;
+
+fn read_output_selector<'a>(
+    output_payload: &'a serde_json::Map<String, serde_json::Value>,
+    selector: &[String],
+) -> Option<&'a serde_json::Value> {
+    let (first, rest) = selector.split_first()?;
+    let mut current = output_payload.get(first)?;
+
+    for segment in rest {
+        current = current.as_object()?.get(segment)?;
+    }
+
+    Some(current)
+}
+
+fn output_selector(output: &serde_json::Value, key: &str) -> Vec<String> {
+    let selector = output
+        .get("selector")
+        .and_then(|value| value.as_array())
+        .map(|segments| {
+            segments
+                .iter()
+                .filter_map(|segment| segment.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .filter(|segments| !segments.is_empty());
+
+    selector.unwrap_or_else(|| vec![key.to_string()])
+}
+
+fn collect_node_public_output_selectors(document: &serde_json::Value) -> NodeOutputSelectors {
+    let mut selectors = HashMap::new();
+    let Some(nodes) = document
+        .get("graph")
+        .and_then(|graph| graph.get("nodes"))
+        .and_then(|nodes| nodes.as_array())
+    else {
+        return selectors;
+    };
+
+    for node in nodes {
+        if node.get("type").and_then(|value| value.as_str()) == Some("start") {
+            continue;
+        }
+        let Some(node_id) = node.get("id").and_then(|value| value.as_str()) else {
+            continue;
+        };
+        let Some(outputs) = node.get("outputs").and_then(|value| value.as_array()) else {
+            continue;
+        };
+
+        let node_selectors = outputs
+            .iter()
+            .filter_map(|output| {
+                let key = output.get("key").and_then(|value| value.as_str())?;
+                if key.is_empty() || key.starts_with("__") {
+                    return None;
+                }
+                Some((key.to_string(), output_selector(output, key)))
+            })
+            .collect::<Vec<_>>();
+
+        if !node_selectors.is_empty() {
+            selectors.insert(node_id.to_string(), node_selectors);
+        }
+    }
+
+    selectors
+}
+
 fn collect_start_public_input_keys(
     document: &serde_json::Value,
 ) -> HashMap<String, HashSet<String>> {
@@ -158,6 +229,7 @@ fn merge_node_output_payload(
     variable_cache: &mut serde_json::Map<String, serde_json::Value>,
     source_node_run_ids: &mut serde_json::Map<String, serde_json::Value>,
     node_run: &domain::NodeRunRecord,
+    public_output_selectors: &NodeOutputSelectors,
 ) {
     if !is_snapshot_public_node_status(node_run.status) {
         return;
@@ -168,10 +240,15 @@ fn merge_node_output_payload(
     let Some(output_payload) = output_payload.as_object() else {
         return;
     };
+    let Some(node_selectors) = public_output_selectors.get(&node_run.node_id) else {
+        return;
+    };
 
-    for (key, value) in output_payload {
-        insert_variable_value(variable_cache, &node_run.node_id, key, value);
-        insert_source_id(source_node_run_ids, &node_run.node_id, key, node_run.id);
+    for (key, selector) in node_selectors {
+        if let Some(value) = read_output_selector(output_payload, selector) {
+            insert_variable_value(variable_cache, &node_run.node_id, key, value);
+            insert_source_id(source_node_run_ids, &node_run.node_id, key, node_run.id);
+        }
     }
 }
 
@@ -245,6 +322,8 @@ pub(super) async fn build_debug_variable_snapshot(
     editor_state: &domain::FlowEditorState,
 ) -> Result<DebugVariableSnapshotResponse, ApiError> {
     let public_start_keys = collect_start_public_input_keys(&editor_state.draft.document);
+    let public_output_selectors =
+        collect_node_public_output_selectors(&editor_state.draft.document);
     let document_hash = debug_snapshot_document_hash(&editor_state.draft.document);
     let flow_schema_version = debug_snapshot_flow_schema_version(editor_state);
     if let Some(run_id) = run_id {
@@ -270,7 +349,12 @@ pub(super) async fn build_debug_variable_snapshot(
             detail.flow_run.id,
         );
         for node_run in &detail.node_runs {
-            merge_node_output_payload(&mut variable_cache, &mut source_node_run_ids, node_run);
+            merge_node_output_payload(
+                &mut variable_cache,
+                &mut source_node_run_ids,
+                node_run,
+                &public_output_selectors,
+            );
         }
 
         return Ok(DebugVariableSnapshotResponse {
@@ -348,7 +432,12 @@ pub(super) async fn build_debug_variable_snapshot(
             detail.flow_run.id,
         );
         for node_run in &detail.node_runs {
-            merge_node_output_payload(&mut variable_cache, &mut source_node_run_ids, node_run);
+            merge_node_output_payload(
+                &mut variable_cache,
+                &mut source_node_run_ids,
+                node_run,
+                &public_output_selectors,
+            );
         }
         break;
     }
