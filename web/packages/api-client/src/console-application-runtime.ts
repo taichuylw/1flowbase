@@ -968,22 +968,10 @@ export function getConsoleRuntimeDebugStream(
 
 export function getConsoleDebugVariableSnapshot(
   applicationId: string,
-  options?: {
-    debugSessionId?: string;
-    runId?: string;
-  },
   baseUrl?: string
 ) {
-  const params = new URLSearchParams();
-  if (options?.debugSessionId) {
-    params.set('debug_session_id', options.debugSessionId);
-  }
-  if (options?.runId) {
-    params.set('run_id', options.runId);
-  }
-  const query = params.size > 0 ? `?${params.toString()}` : '';
   return apiFetch<ConsoleDebugVariableSnapshot>({
-    path: `/api/console/applications/${applicationId}/orchestration/debug-variable-snapshot${query}`,
+    path: `/api/console/applications/${applicationId}/orchestration/debug-variable-snapshot`,
     baseUrl
   });
 }

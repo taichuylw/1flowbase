@@ -595,7 +595,7 @@ export function useAgentFlowDebugSession({
 
     setNodePreviewInputCache({});
     setNodePreviewOutputCache({});
-    fetchDebugVariableSnapshot(applicationId, undefined)
+    fetchDebugVariableSnapshot(applicationId)
       .then((snapshot) => {
         if (
           disposed ||

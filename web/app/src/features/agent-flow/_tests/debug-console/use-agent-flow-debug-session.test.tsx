@@ -281,7 +281,7 @@ describe('useAgentFlowDebugSession', () => {
         ])
       })
     );
-    expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1', undefined);
+    expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1');
   });
 
   test('restores durable variable cache from backend after remount without localStorage', async () => {
@@ -328,7 +328,7 @@ describe('useAgentFlowDebugSession', () => {
     });
 
     await waitFor(() => {
-      expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', undefined);
+      expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1');
       expect(utils.result.current.getNodePreviewVariableCache()).toEqual(
         expect.objectContaining({
           'node-llm': expect.objectContaining({
@@ -363,7 +363,7 @@ describe('useAgentFlowDebugSession', () => {
     );
 
     await waitFor(() => {
-      expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1', undefined);
+      expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1');
       expect(result.current.getNodePreviewVariableCache()).toEqual(
         expect.objectContaining({
           'node-llm': expect.objectContaining({
@@ -494,7 +494,7 @@ describe('useAgentFlowDebugSession', () => {
       ])
     );
     expect(fetchSnapshotSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', undefined);
+    expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1');
     expect(result.current.variableGroups.map((group) => group.title)).toEqual(
       expect.arrayContaining(['LLM', 'Start'])
     );

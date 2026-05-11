@@ -175,22 +175,28 @@ async fn wait_for_cache_value(
     panic!("timed out waiting for debug variable cache value {node_id}.{variable_key}");
 }
 
-async fn get_snapshot(
-    app: &axum::Router,
-    cookie: &str,
-    application_id: &str,
-    debug_session_id: &str,
-) -> Value {
-    get_snapshot_by_query(
-        app,
-        cookie,
-        application_id,
-        &format!("debug_session_id={debug_session_id}"),
-    )
-    .await
+async fn get_snapshot(app: &axum::Router, cookie: &str, application_id: &str) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    serde_json::from_slice(&body).unwrap()
 }
 
-async fn get_snapshot_by_query(
+async fn get_snapshot_by_legacy_query(
     app: &axum::Router,
     cookie: &str,
     application_id: &str,
@@ -256,7 +262,7 @@ async fn debug_variable_snapshot_keeps_actor_run_scope_isolated() {
     let root_run_id = root_preview["data"]["flow_run"]["id"].as_str().unwrap();
     let member_run_id = member_preview["data"]["flow_run"]["id"].as_str().unwrap();
 
-    let snapshot = get_snapshot(&app, &root_cookie, &application_id, "root-session").await;
+    let snapshot = get_snapshot(&app, &root_cookie, &application_id).await;
     assert_eq!(
         snapshot["data"]["latest_run_scope"]["flow_run_id"],
         root_run_id
@@ -274,7 +280,7 @@ async fn debug_variable_snapshot_keeps_actor_run_scope_isolated() {
 }
 
 #[tokio::test]
-async fn debug_variable_snapshot_requires_matching_debug_session() {
+async fn debug_variable_snapshot_ignores_legacy_query_parameters() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -290,10 +296,12 @@ async fn debug_variable_snapshot_requires_matching_debug_session() {
     )
     .await;
 
-    let mismatched = get_snapshot(&app, &cookie, &application_id, "session-b").await;
-    assert_eq!(mismatched["data"]["debug_session_id"], "session-b");
-    assert_eq!(mismatched["data"]["snapshot_completeness"], "empty");
-    assert!(mismatched["data"]["latest_run_scope"].is_null());
+    let mismatched =
+        get_snapshot_by_legacy_query(&app, &cookie, &application_id, "debug_session_id=session-b")
+            .await;
+    assert_eq!(mismatched["data"]["debug_session_id"], "");
+    assert_eq!(mismatched["data"]["snapshot_completeness"], "complete");
+    assert!(mismatched["data"]["latest_run_scope"].is_object());
     assert_eq!(
         mismatched["data"]["variable_cache"]["node-llm"]["text"],
         "reply:session policy"
@@ -454,7 +462,7 @@ async fn debug_node_preview_persists_variable_cache_as_snapshot_source() {
         .await
         .unwrap();
 
-    let snapshot = get_snapshot_by_query(&app, &cookie, &application_id, "").await;
+    let snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(
         snapshot["data"]["variable_cache"]["node-llm"]["text"],
         "reply:durable preview cache"
@@ -499,7 +507,7 @@ async fn debug_flow_run_persists_variable_cache_as_snapshot_source() {
         .await
         .unwrap();
 
-    let snapshot = get_snapshot_by_query(&app, &cookie, &application_id, "").await;
+    let snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(
         snapshot["data"]["variable_cache"]["node-llm"]["text"],
         "reply:durable flow cache"
@@ -507,7 +515,7 @@ async fn debug_flow_run_persists_variable_cache_as_snapshot_source() {
 }
 
 #[tokio::test]
-async fn debug_variable_snapshot_restores_session_run_after_current_draft_document_changes() {
+async fn debug_variable_snapshot_restores_current_cache_after_current_draft_document_changes() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -539,7 +547,7 @@ async fn debug_variable_snapshot_restores_session_run_after_current_draft_docume
     .await
     .unwrap();
 
-    let snapshot = get_snapshot(&app, &cookie, &application_id, "doc-session").await;
+    let snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(snapshot["data"]["snapshot_completeness"], "complete");
     assert_eq!(
         snapshot["data"]["latest_run_scope"]["flow_run_id"],
@@ -600,14 +608,14 @@ async fn debug_variable_snapshot_uses_flow_run_document_scope_after_compiled_pla
     )
     .await;
 
-    let old_snapshot = get_snapshot(&app, &cookie, &application_id, "session-a").await;
+    let old_snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(old_snapshot["data"]["snapshot_completeness"], "complete");
     assert_eq!(
         old_snapshot["data"]["variable_cache"]["node-llm"]["text"],
         "reply:new policy"
     );
 
-    let new_snapshot = get_snapshot(&app, &cookie, &application_id, "session-b").await;
+    let new_snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert!(new_snapshot["data"]["variable_cache"]["node-start"].is_null());
     assert_eq!(new_snapshot["data"]["source_flow_run_ids"], json!({}));
     assert_eq!(
@@ -617,7 +625,7 @@ async fn debug_variable_snapshot_uses_flow_run_document_scope_after_compiled_pla
 }
 
 #[tokio::test]
-async fn debug_variable_snapshot_restores_latest_session_run_after_saved_draft_changes() {
+async fn debug_variable_snapshot_reports_latest_current_user_run_after_saved_draft_changes() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -659,7 +667,7 @@ async fn debug_variable_snapshot_restores_latest_session_run_after_saved_draft_c
     .await
     .unwrap();
 
-    let snapshot = get_snapshot(&app, &cookie, &application_id, "session-draft-independent").await;
+    let snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(
         snapshot["data"]["latest_run_scope"]["flow_run_id"],
         flow_run_id
@@ -671,7 +679,7 @@ async fn debug_variable_snapshot_restores_latest_session_run_after_saved_draft_c
 }
 
 #[tokio::test]
-async fn debug_variable_snapshot_uses_latest_node_run_output_in_selected_run() {
+async fn debug_variable_snapshot_uses_durable_cache_instead_of_recomputing_node_runs() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -732,7 +740,7 @@ async fn debug_variable_snapshot_uses_latest_node_run_output_in_selected_run() {
     .await
     .unwrap();
 
-    let snapshot = get_snapshot(&app, &cookie, &application_id, "latest-node-session").await;
+    let snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(
         snapshot["data"]["variable_cache"]["node-llm"]["text"],
         "reply:first policy"
@@ -745,7 +753,7 @@ async fn debug_variable_snapshot_uses_latest_node_run_output_in_selected_run() {
 }
 
 #[tokio::test]
-async fn debug_variable_snapshot_can_pin_to_explicit_run_id() {
+async fn debug_variable_snapshot_ignores_legacy_run_id_query() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -774,15 +782,17 @@ async fn debug_variable_snapshot_can_pin_to_explicit_run_id() {
     let run_b = preview_b["data"]["flow_run"]["id"].as_str().unwrap();
 
     let snapshot =
-        get_snapshot_by_query(&app, &cookie, &application_id, &format!("run_id={run_a}")).await;
+        get_snapshot_by_legacy_query(&app, &cookie, &application_id, &format!("run_id={run_a}"))
+            .await;
 
-    assert_eq!(snapshot["data"]["latest_run_scope"]["flow_run_id"], run_a);
-    assert_ne!(snapshot["data"]["latest_run_scope"]["flow_run_id"], run_b);
+    assert_eq!(snapshot["data"]["debug_session_id"], "");
+    assert_eq!(snapshot["data"]["latest_run_scope"]["flow_run_id"], run_b);
+    assert_ne!(snapshot["data"]["latest_run_scope"]["flow_run_id"], run_a);
     assert!(snapshot["data"]["variable_cache"]["node-start"].is_null());
     assert_eq!(snapshot["data"]["source_flow_run_ids"], json!({}));
     assert_eq!(
         snapshot["data"]["variable_cache"]["node-llm"]["text"],
-        "reply:policy A"
+        "reply:policy B"
     );
 }
 
@@ -849,7 +859,7 @@ async fn debug_variable_snapshot_ignores_waiting_and_non_output_payload_buckets(
     .await
     .unwrap();
 
-    let snapshot = get_snapshot(&app, &cookie, &application_id, "bucket-session").await;
+    let snapshot = get_snapshot(&app, &cookie, &application_id).await;
     assert_eq!(
         snapshot["data"]["variable_cache"]["node-llm"]["text"],
         "reply:bucket policy"

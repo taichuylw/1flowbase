@@ -771,7 +771,6 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
     let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
     let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
     let flow_run_id = preview_payload["data"]["flow_run"]["id"].as_str().unwrap();
-    let node_run_id = preview_payload["data"]["node_run"]["id"].as_str().unwrap();
     let draft_id = preview_payload["data"]["flow_run"]["draft_id"]
         .as_str()
         .unwrap();
@@ -782,7 +781,7 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot?debug_session_id={DEBUG_SESSION_ID}"
+                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot"
                 ))
                 .header("cookie", &cookie)
                 .body(Body::empty())
@@ -805,7 +804,7 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
     let document_hash = payload["data"]["document_hash"].as_str().unwrap();
     assert!(document_hash.starts_with("sha256:"));
     let debug_session_id = payload["data"]["debug_session_id"].as_str().unwrap();
-    assert_eq!(debug_session_id, DEBUG_SESSION_ID);
+    assert_eq!(debug_session_id, "");
     assert!(payload["data"]["document_hash"]
         .as_str()
         .unwrap()
@@ -827,10 +826,7 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
         payload["data"]["variable_cache"]["node-llm"]["text"],
         "reply:总结退款政策"
     );
-    assert_eq!(
-        payload["data"]["source_node_run_ids"]["node-llm"]["text"],
-        node_run_id
-    );
+    assert!(payload["data"]["source_node_run_ids"]["node-llm"]["text"].is_null());
 }
 
 #[tokio::test]
@@ -1528,7 +1524,7 @@ async fn application_runtime_routes_runtime_debug_artifact_full_load_returns_ori
         .oneshot(
             Request::builder()
                 .uri(format!(
-                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot?debug_session_id={debug_session_id}"
+                    "/api/console/applications/{application_id}/orchestration/debug-variable-snapshot"
                 ))
                 .header("cookie", &cookie)
                 .body(Body::empty())

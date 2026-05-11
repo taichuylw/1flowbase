@@ -160,16 +160,9 @@ export function fetchNodeLastRun(applicationId: string, nodeId: string) {
   );
 }
 
-export function fetchDebugVariableSnapshot(
-  applicationId: string,
-  options?: {
-    debugSessionId?: string;
-    runId?: string;
-  }
-) {
+export function fetchDebugVariableSnapshot(applicationId: string) {
   return getConsoleDebugVariableSnapshot(
     applicationId,
-    options,
     getApplicationsApiBaseUrl()
   );
 }
