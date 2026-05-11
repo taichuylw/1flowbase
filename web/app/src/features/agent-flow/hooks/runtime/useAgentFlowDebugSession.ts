@@ -6,10 +6,12 @@ import { useAuthStore } from '../../../../state/auth-store';
 import {
   buildFlowDebugRunInput,
   cancelFlowDebugRun,
+  deleteDebugVariableCacheEntries,
   fetchApplicationRunDetail,
   fetchDebugVariableSnapshot,
   startFlowDebugRun,
   startFlowDebugRunStream,
+  upsertDebugVariableCacheEntry,
   type AgentFlowDebugMessage,
   type AgentFlowRunContext,
   type AgentFlowTraceItem,
@@ -37,22 +39,9 @@ import {
 } from '../../lib/debug-console/variable-groups';
 import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
 import { getNodeVariableOutputs } from '../../lib/start-node-variables';
-import {
-  buildAgentFlowDebugSessionStorageKey,
-  readPersistedDebugSessionId,
-  readPersistedInputValues,
-  readPersistedLatestRunId,
-  readPersistedVariableOverrides,
-  writePersistedDebugSessionId,
-  writePersistedInputValues,
-  writePersistedLatestRunId,
-  writePersistedVariableOverrides
-} from './debug-session-storage';
 
 const RUN_DETAIL_POLL_INTERVAL_MS = 200;
 let debugMessageIdSequence = 0;
-
-export { buildAgentFlowDebugSessionStorageKey };
 
 export type AgentFlowDebugSessionStatus =
   | 'idle'
@@ -125,12 +114,6 @@ function clearRunContextQuery(
   runContext: AgentFlowRunContext
 ): AgentFlowRunContext {
   return updateRunContextQuery(runContext, '');
-}
-
-function clearPersistedQueryValue(
-  inputValues: Record<string, unknown>
-): Record<string, unknown> {
-  return { ...inputValues, query: '' };
 }
 
 function buildStreamEventDedupKeys(event: FlowDebugRunStreamEvent) {
@@ -281,6 +264,15 @@ function removeVariableCacheKeys(
   }
 
   return changed ? nextCache : currentCache;
+}
+
+function variableCacheKeys(cache: NodeDebugPreviewVariableCache) {
+  return Object.entries(cache).flatMap(([nodeId, payload]) =>
+    Object.keys(payload).map((variableKey) => ({
+      node_id: nodeId,
+      variable_key: variableKey
+    }))
+  );
 }
 
 function parseVariableCacheItemKey(
@@ -558,14 +550,6 @@ export function useAgentFlowDebugSession({
   const actorUserId = useAuthStore(
     (state) => state.actor?.id ?? state.me?.id ?? null
   );
-  const storageKey = useMemo(
-    () => buildAgentFlowDebugSessionStorageKey(applicationId, draftId),
-    [applicationId, draftId]
-  );
-  const rememberedInputValues = useMemo(
-    () => readPersistedInputValues(storageKey),
-    [storageKey]
-  );
   const [status, setStatus] = useState<AgentFlowDebugSessionStatus>('idle');
   const [stopping, setStopping] = useState(false);
   const [messages, setMessages] = useState<AgentFlowDebugMessage[]>([]);
@@ -578,23 +562,15 @@ export function useAgentFlowDebugSession({
   const [nodePreviewOutputCache, setNodePreviewOutputCache] =
     useState<NodeDebugPreviewVariableCache>({});
   const [variableOverrides, setVariableOverrides] =
-    useState<NodeDebugPreviewVariableCache>(() =>
-      readPersistedVariableOverrides(storageKey)
-    );
-  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
-    readPersistedLatestRunId(storageKey)
-  );
+    useState<NodeDebugPreviewVariableCache>({});
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [runContext, setRunContext] = useState(() =>
-    buildRunContextFromDocument(document, rememberedInputValues)
+    buildRunContextFromDocument(document, null)
   );
-  const previousStorageKeyRef = useRef(storageKey);
+  const previousDraftScopeRef = useRef(`${applicationId}:${draftId}`);
   const debugSessionScope = `${applicationId}:${draftId}`;
   const [debugSessionState, setDebugSessionState] = useState(() =>
-    createDebugSessionState(
-      applicationId,
-      draftId,
-      readPersistedDebugSessionId(storageKey)
-    )
+    createDebugSessionState(applicationId, draftId)
   );
   const lastSubmittedPromptRef = useRef<string | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
@@ -610,33 +586,20 @@ export function useAgentFlowDebugSession({
     setDebugSessionState((current) =>
       current.scope === debugSessionScope
         ? current
-        : createDebugSessionState(
-            applicationId,
-            draftId,
-            readPersistedDebugSessionId(storageKey)
-          )
+        : createDebugSessionState(applicationId, draftId)
     );
-    setActiveRunId(readPersistedLatestRunId(storageKey));
-    setVariableOverrides(readPersistedVariableOverrides(storageKey));
-  }, [applicationId, debugSessionScope, draftId, storageKey]);
-
-  useEffect(() => {
-    if (debugSessionState.scope !== debugSessionScope) {
-      return;
-    }
-
-    writePersistedDebugSessionId(storageKey, debugSessionState.id);
-  }, [debugSessionScope, debugSessionState, storageKey]);
+    setActiveRunId(null);
+    setVariableOverrides({});
+  }, [applicationId, debugSessionScope, draftId]);
 
   useEffect(() => {
     setRunContext((currentRunContext) => {
-      // 文档更新时尽量保留用户正在编辑的输入值；仅在 draft 切换时回落到本地记忆。
-      const isSameDraft = previousStorageKeyRef.current === storageKey;
+      const isSameDraft = previousDraftScopeRef.current === debugSessionScope;
       const nextValues = isSameDraft
         ? getRunContextValues(currentRunContext)
-        : rememberedInputValues;
+        : null;
 
-      previousStorageKeyRef.current = storageKey;
+      previousDraftScopeRef.current = debugSessionScope;
 
       const nextRunContext = buildRunContextFromDocument(document, nextValues);
 
@@ -644,7 +607,7 @@ export function useAgentFlowDebugSession({
         ? { ...nextRunContext, remembered: currentRunContext.remembered }
         : nextRunContext;
     });
-  }, [document, rememberedInputValues, storageKey]);
+  }, [debugSessionScope, document]);
 
   useEffect(() => {
     if (debugSessionState.scope !== debugSessionScope) {
@@ -659,9 +622,7 @@ export function useAgentFlowDebugSession({
     setNodePreviewOutputCache({});
     fetchDebugVariableSnapshot(
       applicationId,
-      activeRunId
-        ? { runId: activeRunId }
-        : { debugSessionId: debugSessionState.id }
+      activeRunId ? { runId: activeRunId } : undefined
     )
       .then((snapshot) => {
         if (
@@ -832,6 +793,19 @@ export function useAgentFlowDebugSession({
     );
   }
 
+  function deletePersistedVariableCacheKeys(cache: NodeDebugPreviewVariableCache) {
+    if (!csrfToken) {
+      return;
+    }
+    const keys = variableCacheKeys(cache);
+    if (keys.length === 0) {
+      return;
+    }
+    void deleteDebugVariableCacheEntries(applicationId, { keys }, csrfToken).catch(
+      () => {}
+    );
+  }
+
   async function applyRunDetail(
     detail: FlowDebugRunDetail,
     options?: {
@@ -851,16 +825,11 @@ export function useAgentFlowDebugSession({
     );
 
     setActiveRunId(detail.flow_run.id);
-    writePersistedLatestRunId(storageKey, detail.flow_run.id);
     setLastDetail(detail);
     setVariableOverrides((currentOverrides) => {
-      const nextOverrides = removeVariableCacheKeys(
-        currentOverrides,
-        consumedVariableCache
-      );
-      writePersistedVariableOverrides(storageKey, nextOverrides);
-      return nextOverrides;
+      return removeVariableCacheKeys(currentOverrides, consumedVariableCache);
     });
+    deletePersistedVariableCacheKeys(consumedVariableCache);
     setNodePreviewInputCache((currentCache) =>
       mergeVariableCache(currentCache, inputVariableCache)
     );
@@ -1105,10 +1074,6 @@ export function useAgentFlowDebugSession({
       streamAbortControllerRef.current = null;
 
       lastSubmittedPromptRef.current = resolvedPrompt;
-      writePersistedInputValues(
-        storageKey,
-        clearPersistedQueryValue(inputValues)
-      );
       const completedRunId =
         activeRunIdRef.current ?? streamAssistantMessage.runId;
       if (completedRunId) {
@@ -1123,7 +1088,6 @@ export function useAgentFlowDebugSession({
           });
         } catch {
           setActiveRunId(completedRunId);
-          writePersistedLatestRunId(storageKey, completedRunId);
         }
       }
       stopPolling();
@@ -1164,10 +1128,6 @@ export function useAgentFlowDebugSession({
       );
 
       lastSubmittedPromptRef.current = resolvedPrompt;
-      writePersistedInputValues(
-        storageKey,
-        clearPersistedQueryValue(inputValues)
-      );
       const assistantMessage = await applyRunDetail(detail, {
         fallbackMessageId: runningMessage.id,
         invalidateRuntime: !shouldPollRun(detail)
@@ -1318,13 +1278,19 @@ export function useAgentFlowDebugSession({
     };
 
     setVariableOverrides((currentOverrides) => {
-      const nextOverrides = mergeVariableCache(
-        currentOverrides,
-        nextOverridePayload
-      );
-      writePersistedVariableOverrides(storageKey, nextOverrides);
-      return nextOverrides;
+      return mergeVariableCache(currentOverrides, nextOverridePayload);
     });
+    if (csrfToken) {
+      void upsertDebugVariableCacheEntry(
+        applicationId,
+        {
+          node_id: parsed.nodeId,
+          variable_key: parsed.variableKey,
+          value
+        },
+        csrfToken
+      ).catch(() => {});
+    }
     setNodePreviewOutputCache((currentCache) =>
       mergeVariableCache(currentCache, nextOverridePayload)
     );
@@ -1350,10 +1316,6 @@ export function useAgentFlowDebugSession({
         remembered: false,
         fields: nextFields
       };
-      writePersistedInputValues(
-        storageKey,
-        getRunContextValues(nextRunContext)
-      );
       return nextRunContext;
     });
   }
@@ -1386,16 +1348,11 @@ export function useAgentFlowDebugSession({
     );
 
     setActiveRunId(detail.flow_run.id);
-    writePersistedLatestRunId(storageKey, detail.flow_run.id);
     setLastDetail(detail);
     setVariableOverrides((currentOverrides) => {
-      const nextOverrides = removeVariableCacheKeys(
-        currentOverrides,
-        consumedVariableCache
-      );
-      writePersistedVariableOverrides(storageKey, nextOverrides);
-      return nextOverrides;
+      return removeVariableCacheKeys(currentOverrides, consumedVariableCache);
     });
+    deletePersistedVariableCacheKeys(consumedVariableCache);
     setNodePreviewInputCache((currentCache) =>
       mergeVariableCache(currentCache, inputVariableCache)
     );
@@ -1406,7 +1363,6 @@ export function useAgentFlowDebugSession({
 
   function selectRunScope(runId: string | null) {
     setActiveRunId((current) => (current === runId ? current : runId));
-    writePersistedLatestRunId(storageKey, runId);
     setLastDetail((current) =>
       current && current.flow_run.id !== runId ? null : current
     );
@@ -1420,20 +1376,22 @@ export function useAgentFlowDebugSession({
     );
     stoppingRef.current = false;
     setStopping(false);
-    writePersistedDebugSessionId(storageKey, nextDebugSessionState.id);
     setDebugSessionState(nextDebugSessionState);
     cancelActiveDebugStream();
     stopPolling();
     clearScheduledAssistantMessageFlush();
     setStatus('idle');
     setActiveRunId(null);
-    writePersistedLatestRunId(storageKey, null);
     setLastDetail(null);
     setStreamTraceItems([]);
     setNodePreviewInputCache({});
     setNodePreviewOutputCache({});
     setVariableOverrides({});
-    writePersistedVariableOverrides(storageKey, {});
+    if (csrfToken) {
+      void deleteDebugVariableCacheEntries(applicationId, {}, csrfToken).catch(
+        () => {}
+      );
+    }
     setRunContext(buildRunContextFromDocument(document, null));
   }
 

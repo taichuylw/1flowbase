@@ -92,6 +92,20 @@ export interface ConsoleApplicationRunDetail {
   events: ConsoleRunEvent[];
 }
 
+export interface ConsoleDebugVariableCacheKey {
+  node_id: string;
+  variable_key: string;
+}
+
+export interface UpsertConsoleDebugVariableCacheEntryInput
+  extends ConsoleDebugVariableCacheKey {
+  value: unknown;
+}
+
+export interface DeleteConsoleDebugVariableCacheEntriesInput {
+  keys?: ConsoleDebugVariableCacheKey[];
+}
+
 export interface RuntimeDebugStreamPart {
   id: string;
   flow_run_id: string;
@@ -970,6 +984,36 @@ export function getConsoleDebugVariableSnapshot(
   const query = params.size > 0 ? `?${params.toString()}` : '';
   return apiFetch<ConsoleDebugVariableSnapshot>({
     path: `/api/console/applications/${applicationId}/orchestration/debug-variable-snapshot${query}`,
+    baseUrl
+  });
+}
+
+export function upsertConsoleDebugVariableCacheEntry(
+  applicationId: string,
+  input: UpsertConsoleDebugVariableCacheEntryInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<{ ok: boolean }>({
+    path: `/api/console/applications/${applicationId}/orchestration/debug-variable-cache`,
+    method: 'PUT',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsoleDebugVariableCacheEntries(
+  applicationId: string,
+  input: DeleteConsoleDebugVariableCacheEntriesInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<{ ok: boolean }>({
+    path: `/api/console/applications/${applicationId}/orchestration/debug-variable-cache`,
+    method: 'DELETE',
+    body: input,
+    csrfToken,
     baseUrl
   });
 }

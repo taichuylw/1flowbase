@@ -1,13 +1,27 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use control_plane::ports::OrchestrationRuntimeRepository;
-use serde::Serialize;
+use axum::{
+    extract::{Path, Query, State},
+    http::HeaderMap,
+    Json,
+};
+use control_plane::flow::FlowService;
+use control_plane::ports::{DebugVariableCacheEntry, OrchestrationRuntimeRepository};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use storage_durable::MainDurableStore;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::error_response::ApiError;
+use crate::{
+    app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
+    response::ApiSuccess,
+};
+
+use super::{
+    ensure_application_visible, runtime_debug_artifacts::offload_debug_variable_snapshot_artifacts,
+};
 
 const DEBUG_VARIABLE_SNAPSHOT_SCHEMA_VERSION: &str = "1flowbase.debug-variable-snapshot/v1";
 
@@ -33,6 +47,56 @@ pub struct DebugVariableSnapshotRunScopeResponse {
     pub run_mode: String,
     pub status: String,
     pub target_node_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DebugVariableSnapshotQuery {
+    pub debug_session_id: Option<String>,
+    pub run_id: Option<Uuid>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/orchestration/debug-variable-snapshot",
+    params(("id" = String, Path, description = "Application id")),
+    responses(
+        (status = 200, body = DebugVariableSnapshotResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_debug_variable_snapshot(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Query(query): Query<DebugVariableSnapshotQuery>,
+) -> Result<Json<ApiSuccess<DebugVariableSnapshotResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let editor_state = FlowService::new(state.store.clone())
+        .get_or_create_editor_state(context.user.id, id)
+        .await?;
+
+    let snapshot = build_debug_variable_snapshot(
+        &state.store,
+        id,
+        context.actor.current_workspace_id,
+        context.actor.user_id,
+        query.debug_session_id,
+        query.run_id,
+        &editor_state,
+    )
+    .await?;
+    let snapshot = offload_debug_variable_snapshot_artifacts(
+        state,
+        context.actor.current_workspace_id,
+        id,
+        snapshot,
+    )
+    .await?;
+
+    Ok(Json(ApiSuccess::new(snapshot)))
 }
 
 fn preview_output_cache_payload(output_payload: &serde_json::Value) -> Option<serde_json::Value> {
@@ -187,6 +251,37 @@ fn insert_variable_value(
     node_entry.insert(key.to_string(), value.clone());
 }
 
+fn merge_debug_variable_cache_entries(
+    variable_cache: &mut serde_json::Map<String, serde_json::Value>,
+    entries: Vec<DebugVariableCacheEntry>,
+) {
+    for entry in entries {
+        insert_variable_value(
+            variable_cache,
+            &entry.node_id,
+            &entry.variable_key,
+            &entry.value,
+        );
+    }
+}
+
+async fn load_debug_variable_cache_entries(
+    store: &MainDurableStore,
+    application_id: Uuid,
+    draft_id: Uuid,
+    actor_user_id: Uuid,
+) -> Result<Vec<DebugVariableCacheEntry>, ApiError> {
+    Ok(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_debug_variable_cache_entries(
+            store,
+            application_id,
+            draft_id,
+            actor_user_id,
+        )
+        .await?,
+    )
+}
+
 fn insert_node_run_source_id(
     source_map: &mut serde_json::Map<String, serde_json::Value>,
     node_id: &str,
@@ -284,12 +379,17 @@ fn debug_snapshot_flow_schema_version(editor_state: &domain::FlowEditorState) ->
 fn run_matches_snapshot_key(
     run: &domain::FlowRunRecord,
     actor_user_id: Uuid,
-    debug_session_id: &str,
+    debug_session_id: Option<&str>,
     editor_state: &domain::FlowEditorState,
 ) -> bool {
-    run.created_by == actor_user_id
-        && run.debug_session_id == debug_session_id
-        && run.draft_id == editor_state.draft.id
+    if run.created_by != actor_user_id || run.draft_id != editor_state.draft.id {
+        return false;
+    }
+
+    match debug_session_id {
+        Some(id) => run.debug_session_id == id,
+        None => true,
+    }
 }
 
 pub(super) async fn build_debug_variable_snapshot(
@@ -329,6 +429,16 @@ pub(super) async fn build_debug_variable_snapshot(
                 &public_output_selectors,
             );
         }
+        merge_debug_variable_cache_entries(
+            &mut variable_cache,
+            load_debug_variable_cache_entries(
+                store,
+                application_id,
+                editor_state.draft.id,
+                actor_user_id,
+            )
+            .await?,
+        );
 
         return Ok(DebugVariableSnapshotResponse {
             snapshot_schema_version: DEBUG_VARIABLE_SNAPSHOT_SCHEMA_VERSION.to_string(),
@@ -345,22 +455,7 @@ pub(super) async fn build_debug_variable_snapshot(
             variable_cache: serde_json::Value::Object(variable_cache),
         });
     }
-    let Some(debug_session_id) = normalize_debug_session_id(debug_session_id) else {
-        return Ok(DebugVariableSnapshotResponse {
-            snapshot_schema_version: DEBUG_VARIABLE_SNAPSHOT_SCHEMA_VERSION.to_string(),
-            workspace_id: workspace_id.to_string(),
-            actor_user_id: actor_user_id.to_string(),
-            draft_id: editor_state.draft.id.to_string(),
-            flow_schema_version,
-            document_hash,
-            debug_session_id: String::new(),
-            latest_run_scope: None,
-            snapshot_completeness: "empty".to_string(),
-            source_flow_run_ids: serde_json::Value::Object(serde_json::Map::new()),
-            source_node_run_ids: serde_json::Value::Object(serde_json::Map::new()),
-            variable_cache: serde_json::Value::Object(serde_json::Map::new()),
-        });
-    };
+    let debug_session_id = normalize_debug_session_id(debug_session_id);
     let runs = <MainDurableStore as OrchestrationRuntimeRepository>::list_application_runs(
         store,
         application_id,
@@ -390,7 +485,7 @@ pub(super) async fn build_debug_variable_snapshot(
         if !run_matches_snapshot_key(
             &detail.flow_run,
             actor_user_id,
-            &debug_session_id,
+            debug_session_id.as_deref(),
             editor_state,
         ) {
             continue;
@@ -414,6 +509,16 @@ pub(super) async fn build_debug_variable_snapshot(
         }
         break;
     }
+    merge_debug_variable_cache_entries(
+        &mut variable_cache,
+        load_debug_variable_cache_entries(
+            store,
+            application_id,
+            editor_state.draft.id,
+            actor_user_id,
+        )
+        .await?,
+    );
 
     Ok(DebugVariableSnapshotResponse {
         snapshot_schema_version: DEBUG_VARIABLE_SNAPSHOT_SCHEMA_VERSION.to_string(),
@@ -422,7 +527,7 @@ pub(super) async fn build_debug_variable_snapshot(
         draft_id: snapshot_draft_id,
         flow_schema_version: snapshot_flow_schema_version,
         document_hash: snapshot_document_hash,
-        debug_session_id,
+        debug_session_id: debug_session_id.unwrap_or_default(),
         latest_run_scope,
         snapshot_completeness: snapshot_completeness.to_string(),
         source_flow_run_ids: serde_json::Value::Object(source_flow_run_ids),

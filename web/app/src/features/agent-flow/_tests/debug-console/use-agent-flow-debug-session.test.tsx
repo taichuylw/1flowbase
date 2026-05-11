@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import * as runtimeApi from '../../api/runtime';
-import {
-  buildAgentFlowDebugSessionStorageKey,
-  useAgentFlowDebugSession
-} from '../../hooks/runtime/useAgentFlowDebugSession';
+import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugSession';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 
 function createQueryClient() {
@@ -284,17 +281,22 @@ describe('useAgentFlowDebugSession', () => {
         ])
       })
     );
-    expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1', {
-      debugSessionId: expect.stringMatching(/^app-1:draft-1:/)
-    });
+    expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1', undefined);
   });
 
-  test('reuses persisted debug session id when the editor remounts', async () => {
+  test('restores durable variable cache from backend after remount without localStorage', async () => {
     const queryClient = createQueryClient();
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const fetchSnapshotSpy = vi
       .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
-      .mockResolvedValue({ variable_cache: {} });
+      .mockResolvedValueOnce({ variable_cache: {} })
+      .mockResolvedValueOnce({
+        variable_cache: {
+          'node-llm': {
+            text: '后端持久化缓存'
+          }
+        }
+      });
 
     const view = renderHook(
       () =>
@@ -309,8 +311,6 @@ describe('useAgentFlowDebugSession', () => {
     await waitFor(() => {
       expect(fetchSnapshotSpy).toHaveBeenCalledTimes(1);
     });
-    const firstSessionId = view.result.current.debugSessionId;
-
     view.unmount();
 
     const utils = renderHook(
@@ -327,25 +327,21 @@ describe('useAgentFlowDebugSession', () => {
       expect(fetchSnapshotSpy).toHaveBeenCalledTimes(2);
     });
 
-    expect(utils.result.current.debugSessionId).toBe(firstSessionId);
-    expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', {
-      debugSessionId: firstSessionId
+    await waitFor(() => {
+      expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', undefined);
+      expect(utils.result.current.getNodePreviewVariableCache()).toEqual(
+        expect.objectContaining({
+          'node-llm': expect.objectContaining({
+            text: '后端持久化缓存'
+          })
+        })
+      );
     });
   });
 
-  test('restores durable variable cache by latest persisted run id after remount', async () => {
+  test('restores durable variable cache from backend latest snapshot', async () => {
     const queryClient = createQueryClient();
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const storageKey = buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1');
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        version: 1,
-        debugSessionId: 'app-1:draft-1:session-1',
-        latestRunId: 'flow-run-latest',
-        inputValues: {}
-      })
-    );
     const fetchSnapshotSpy = vi
       .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
       .mockResolvedValue({
@@ -367,17 +363,15 @@ describe('useAgentFlowDebugSession', () => {
     );
 
     await waitFor(() => {
-      expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1', {
-        runId: 'flow-run-latest'
-      });
-    });
-    expect(result.current.getNodePreviewVariableCache()).toEqual(
-      expect.objectContaining({
-        'node-llm': expect.objectContaining({
-          text: '刷新后沿用最新 run 输出'
+      expect(fetchSnapshotSpy).toHaveBeenCalledWith('app-1', undefined);
+      expect(result.current.getNodePreviewVariableCache()).toEqual(
+        expect.objectContaining({
+          'node-llm': expect.objectContaining({
+            text: '刷新后沿用最新 run 输出'
+          })
         })
-      })
-    );
+      );
+    });
   });
 
   test('ignores a delayed durable snapshot after resetting variable cache', async () => {
@@ -541,20 +535,7 @@ describe('useAgentFlowDebugSession', () => {
     expect(
       result.current.getNodePreviewVariableCache()['node-answer']
     ).not.toHaveProperty('answer_template');
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(
-          buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1')
-        ) ?? '{}'
-      ).inputValues.query
-    ).toBe('');
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(
-          buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1')
-        ) ?? '{}'
-      ).latestRunId
-    ).toBe('flow-run-1');
+    expect(window.localStorage.length).toBe(0);
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['applications', 'app-1', 'runtime']
     });
@@ -569,13 +550,18 @@ describe('useAgentFlowDebugSession', () => {
     vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockRejectedValue(
       new Error('stream unavailable')
     );
-    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot').mockResolvedValue({
-      variable_cache: {
-        'node-llm': {
-          text: '后端持久化输出'
+    const upsertCacheSpy = vi
+      .spyOn(runtimeApi, 'upsertDebugVariableCacheEntry')
+      .mockResolvedValue({ ok: true });
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({ variable_cache: {} })
+      .mockResolvedValue({
+        variable_cache: {
+          'node-llm': {
+            text: '手动调试缓存'
+          }
         }
-      }
-    });
+      });
 
     const view = renderHook(
       () =>
@@ -610,17 +596,16 @@ describe('useAgentFlowDebugSession', () => {
         .flatMap((group) => group.items)
         .find((item) => item.key === 'node-llm.text')?.value
     ).toBe('手动调试缓存');
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(
-          buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1')
-        ) ?? '{}'
-      ).variableOverrides
-    ).toEqual({
-      'node-llm': {
-        text: '手动调试缓存'
-      }
-    });
+    expect(upsertCacheSpy).toHaveBeenCalledWith(
+      'app-1',
+      {
+        node_id: 'node-llm',
+        variable_key: 'text',
+        value: '手动调试缓存'
+      },
+      'csrf-123'
+    );
+    expect(window.localStorage.length).toBe(0);
 
     view.unmount();
 
@@ -692,7 +677,7 @@ describe('useAgentFlowDebugSession', () => {
     );
   });
 
-  test('reuses last run context from local draft storage', () => {
+  test('does not hydrate run context from local draft storage', () => {
     const queryClient = createQueryClient();
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes = document.graph.nodes.map((node) =>
@@ -721,18 +706,6 @@ describe('useAgentFlowDebugSession', () => {
         : node
     );
 
-    window.localStorage.setItem(
-      buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1'),
-      JSON.stringify({
-        version: 1,
-        inputValues: {
-          query: '沿用上次输入',
-          language: '中文',
-          enable_search: false
-        }
-      })
-    );
-
     const { result } = renderHook(
       () =>
         useAgentFlowDebugSession({
@@ -743,21 +716,21 @@ describe('useAgentFlowDebugSession', () => {
       { wrapper: createWrapper(queryClient) }
     );
 
-    expect(result.current.runContext.remembered).toBe(true);
+    expect(result.current.runContext.remembered).toBe(false);
     expect(result.current.runContext.environmentLabel).toBe('draft');
     expect(result.current.runContext.fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           key: 'query',
-          value: '沿用上次输入'
+          value: ''
         }),
         expect.objectContaining({
           key: 'language',
-          value: '中文'
+          value: 'Start language 调试值'
         }),
         expect.objectContaining({
           key: 'enable_search',
-          value: false
+          value: true
         })
       ])
     );

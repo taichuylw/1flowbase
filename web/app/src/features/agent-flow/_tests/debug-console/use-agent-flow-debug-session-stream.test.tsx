@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import * as runtimeApi from '../../api/runtime';
-import {
-  buildAgentFlowDebugSessionStorageKey,
-  useAgentFlowDebugSession
-} from '../../hooks/runtime/useAgentFlowDebugSession';
+import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugSession';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 
 function createQueryClient() {
@@ -1022,13 +1019,7 @@ describe('useAgentFlowDebugSession streaming', () => {
         })
       })
     );
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(
-          buildAgentFlowDebugSessionStorageKey('app-1', 'draft-1')
-        ) ?? '{}'
-      ).latestRunId
-    ).toBe('flow-run-stream');
+    expect(window.localStorage.length).toBe(0);
     expect(
       result.current.getNodePreviewVariableCache()['node-llm']
     ).not.toHaveProperty('user_prompt');
