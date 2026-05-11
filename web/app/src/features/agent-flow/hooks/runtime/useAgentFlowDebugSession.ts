@@ -1094,6 +1094,23 @@ export function useAgentFlowDebugSession({
         storageKey,
         clearPersistedQueryValue(inputValues)
       );
+      const completedRunId =
+        activeRunIdRef.current ?? streamAssistantMessage.runId;
+      if (completedRunId) {
+        try {
+          const detail = await fetchApplicationRunDetail(
+            applicationId,
+            completedRunId
+          );
+          await applyRunDetail(detail, {
+            fallbackMessageId: runningMessage.id,
+            invalidateRuntime: true
+          });
+        } catch {
+          setActiveRunId(completedRunId);
+          writePersistedLatestRunId(storageKey, completedRunId);
+        }
+      }
       stopPolling();
       await queryClient.invalidateQueries({
         queryKey: ['applications', applicationId, 'runtime']
