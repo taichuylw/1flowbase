@@ -1,10 +1,10 @@
 use crate::_tests::support::{login_and_capture_cookie, test_app};
 use api_server::app;
 use axum::{
-    body::{to_bytes, Body},
+    body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use tower::ServiceExt;
 
 async fn openapi_paths() -> Map<String, Value> {
@@ -69,6 +69,7 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
 
     for route in [
         "/api/console/models/{id}",
+        "/api/console/models/agent-flow-options",
         "/api/console/models/{id}/fields",
         "/api/console/models/{id}/advisor-findings",
         "/api/console/models/{id}/scope-grants",
@@ -288,6 +289,7 @@ async fn openapi_contains_application_console_routes() {
         "/api/console/applications/{id}/orchestration/nodes/{node_id}/last-run",
         "/api/console/applications/{id}/logs/runs",
         "/api/console/applications/{id}/logs/runs/{run_id}",
+        "/api/console/applications/{id}/logs/runs/{run_id}/nodes/{node_id}",
     ] {
         assert!(paths.contains_key(route), "missing path {route}");
     }

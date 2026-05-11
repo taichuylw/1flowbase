@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::sse::{KeepAlive, Sse},
     routing::{get, post},
-    Json, Router,
 };
 use control_plane::{
     application::ApplicationService,
     errors::ControlPlaneError,
     flow::FlowService,
     orchestration_runtime::{
-        debug_stream_events, CancelFlowRunCommand, CompleteCallbackTaskCommand,
-        ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
-        ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
+        CancelFlowRunCommand, CompleteCallbackTaskCommand, ContinueFlowDebugRunCommand,
+        OrchestrationRuntimeService, PrepareFlowDebugRunCommand, ResumeFlowRunCommand,
+        StartFlowDebugRunCommand, StartNodeDebugPreviewCommand, debug_stream_events,
     },
     ports::{
         OrchestrationRuntimeRepository, RuntimeEventCloseReason, RuntimeEventStream,
@@ -41,8 +41,8 @@ use super::debug_run_stream;
 mod debug_variable_snapshot;
 mod runtime_debug_artifacts;
 
-use debug_variable_snapshot::build_debug_variable_snapshot;
 pub use debug_variable_snapshot::DebugVariableSnapshotResponse;
+use debug_variable_snapshot::build_debug_variable_snapshot;
 use runtime_debug_artifacts::{
     load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
     offload_debug_variable_snapshot_artifacts,
@@ -418,6 +418,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(get_runtime_debug_artifact),
         )
         .route("/applications/:id/logs/runs", get(list_application_runs))
+        .route(
+            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
+            get(get_application_run_node_last_run),
+        )
         .route(
             "/applications/:id/logs/runs/:run_id",
             get(get_application_run_detail),
@@ -1257,6 +1261,75 @@ pub async fn get_application_run_detail(
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
         detail,
     ))))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/nodes/{node_id}",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("node_id" = String, Path, description = "Flow node id")
+    ),
+    responses(
+        (status = 200, body = NodeLastRunResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_node_last_run(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id, node_id)): Path<(Uuid, Uuid, String)>,
+) -> Result<Json<ApiSuccess<Option<NodeLastRunResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+
+    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+        &state.store,
+        id,
+        run_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    let detail = offload_application_run_detail_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        detail,
+    )
+    .await?;
+
+    let Some(node_run) = detail
+        .node_runs
+        .into_iter()
+        .rev()
+        .find(|candidate| candidate.node_id == node_id)
+    else {
+        return Ok(Json(ApiSuccess::new(None)));
+    };
+
+    let node_run_id = node_run.id;
+    let checkpoints = detail
+        .checkpoints
+        .into_iter()
+        .filter(|checkpoint| checkpoint.node_run_id == Some(node_run_id))
+        .collect();
+    let events = detail
+        .events
+        .into_iter()
+        .filter(|event| event.node_run_id == Some(node_run_id))
+        .collect();
+
+    Ok(Json(ApiSuccess::new(Some(to_node_last_run_response(
+        domain::NodeLastRun {
+            flow_run: detail.flow_run,
+            node_run,
+            checkpoints,
+            events,
+        },
+    )))))
 }
 
 #[utoipa::path(

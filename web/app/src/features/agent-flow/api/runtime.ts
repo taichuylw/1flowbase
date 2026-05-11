@@ -7,6 +7,7 @@ import type {
 import {
   cancelConsoleFlowRun,
   getConsoleApplicationRunDetail,
+  getConsoleApplicationRunNodeLastRun,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRun,
@@ -272,6 +273,19 @@ export function fetchApplicationRunDetail(
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunNodeLastRun(
+  applicationId: string,
+  runId: string,
+  nodeId: string
+) {
+  return getConsoleApplicationRunNodeLastRun(
+    applicationId,
+    runId,
+    nodeId,
     getApplicationsApiBaseUrl()
   );
 }

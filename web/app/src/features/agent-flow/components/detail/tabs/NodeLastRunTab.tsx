@@ -6,7 +6,7 @@ import { SchemaRenderer } from '../../../../../shared/schema-ui/runtime/SchemaRe
 import type { SchemaAdapter } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 
 import {
-  fetchApplicationRunDetail,
+  fetchApplicationRunNodeLastRun,
   fetchNodeLastRun,
   nodeLastRunQueryKey
 } from '../../../api/runtime';
@@ -31,26 +31,6 @@ function isNodeLastRun(value: unknown): value is NonNullable<
       typeof candidate.node_run === 'object' &&
       Array.isArray(candidate.events)
   );
-}
-
-function toNodeLastRunFromRunDetail(
-  detail: NonNullable<Awaited<ReturnType<typeof fetchApplicationRunDetail>>>,
-  nodeId: string
-): NonNullable<Awaited<ReturnType<typeof fetchNodeLastRun>>> | null {
-  const nodeRun =
-    [...detail.node_runs].reverse().find((candidate) => candidate.node_id === nodeId) ??
-    null;
-
-  if (!nodeRun) {
-    return null;
-  }
-
-  return {
-    flow_run: detail.flow_run,
-    node_run: nodeRun,
-    checkpoints: detail.checkpoints,
-    events: detail.events
-  };
 }
 
 export function NodeLastRunTab({
@@ -83,8 +63,11 @@ export function NodeLastRunTab({
       : nodeLastRunQueryKey(applicationId ?? 'unknown', nodeId ?? 'unknown'),
     queryFn: async () => {
       if (activeRunId) {
-        const detail = await fetchApplicationRunDetail(applicationId!, activeRunId);
-        return toNodeLastRunFromRunDetail(detail, nodeId!);
+        return fetchApplicationRunNodeLastRun(
+          applicationId!,
+          activeRunId,
+          nodeId!
+        );
       }
 
       const lastRun = await fetchNodeLastRun(applicationId!, nodeId!);

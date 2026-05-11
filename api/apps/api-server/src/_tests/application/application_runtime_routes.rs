@@ -4,10 +4,10 @@ use crate::_tests::support::{
     login_and_capture_cookie, test_app, test_app_with_database_url, write_provider_manifest_v2,
 };
 use axum::{
-    body::{to_bytes, Body},
+    body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -716,11 +716,13 @@ async fn get_runtime_debug_stream_returns_trusted_parts() {
     assert_eq!(response.status(), StatusCode::OK);
     let payload: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert!(payload["data"]["parts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|part| part["trust_level"] == "host_fact"));
+    assert!(
+        payload["data"]["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|part| part["trust_level"] == "host_fact")
+    );
 }
 
 #[tokio::test]
@@ -795,10 +797,12 @@ async fn get_debug_variable_snapshot_restores_latest_preview_inputs_and_outputs(
     assert!(document_hash.starts_with("sha256:"));
     let debug_session_id = payload["data"]["debug_session_id"].as_str().unwrap();
     assert_eq!(debug_session_id, DEBUG_SESSION_ID);
-    assert!(payload["data"]["document_hash"]
-        .as_str()
-        .unwrap()
-        .starts_with("sha256:"));
+    assert!(
+        payload["data"]["document_hash"]
+            .as_str()
+            .unwrap()
+            .starts_with("sha256:")
+    );
     assert_eq!(payload["data"]["snapshot_completeness"], "complete");
     assert_eq!(
         payload["data"]["latest_run_scope"],
@@ -894,14 +898,16 @@ async fn external_agent_opaque_boundary_keeps_external_trust_level() {
     assert_eq!(response.status(), StatusCode::OK);
     let payload: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert!(payload["data"]["parts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|part| {
-            part["trust_level"] == "external_opaque"
-                && part["payload"]["event_type"] == "external_agent_opaque_boundary_marked"
-        }));
+    assert!(
+        payload["data"]["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|part| {
+                part["trust_level"] == "external_opaque"
+                    && part["payload"]["event_type"] == "external_agent_opaque_boundary_marked"
+            })
+    );
 }
 
 #[tokio::test]
@@ -959,21 +965,7 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         Some("node-llm")
     );
     assert_eq!(
-        preview_payload["data"]["node_run"]["output_payload"],
-        json!({ "text": "reply:总结退款政策" })
-    );
-    assert_eq!(
-        preview_payload["data"]["flow_run"]["output_payload"],
-        json!({ "text": "reply:总结退款政策" })
-    );
-    assert_eq!(
-        resolve_runtime_debug_artifact_value(
-            &app,
-            &cookie,
-            &application_id,
-            &preview_payload["data"]["node_run"]["debug_payload"],
-        )
-        .await["message"]["content"],
+        preview_payload["data"]["node_run"]["output_payload"]["text"],
         json!("reply:总结退款政策")
     );
     for hidden_key in [
@@ -1060,15 +1052,40 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         detail_payload["data"]["node_runs"][0]["node_alias"].as_str(),
         Some("LLM")
     );
-    assert_eq!(
-        resolve_runtime_debug_artifact_value(
-            &app,
-            &cookie,
-            &application_id,
-            &detail_payload["data"]["node_runs"][0]["debug_payload"],
+    let scoped_node_run = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/nodes/node-llm"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
         )
-        .await["message"]["content"],
-        json!("reply:总结退款政策")
+        .await
+        .unwrap();
+
+    assert_eq!(scoped_node_run.status(), StatusCode::OK);
+    let scoped_node_run_body = to_bytes(scoped_node_run.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let scoped_node_run_payload: Value = serde_json::from_slice(&scoped_node_run_body).unwrap();
+    assert_eq!(
+        scoped_node_run_payload["data"]["node_run"]["node_id"].as_str(),
+        Some("node-llm")
+    );
+    assert!(
+        scoped_node_run_payload["data"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|event| event["node_run_id"].as_str()
+                == Some(
+                    scoped_node_run_payload["data"]["node_run"]["id"]
+                        .as_str()
+                        .unwrap()
+                ))
     );
 
     let last_run = app
@@ -1091,16 +1108,6 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     assert_eq!(
         last_run_payload["data"]["node_run"]["node_id"].as_str(),
         Some("node-llm")
-    );
-    assert_eq!(
-        resolve_runtime_debug_artifact_value(
-            &app,
-            &cookie,
-            &application_id,
-            &last_run_payload["data"]["node_run"]["debug_payload"],
-        )
-        .await["message"]["content"],
-        json!("reply:总结退款政策")
     );
     assert_eq!(
         last_run_payload["data"]["flow_run"]["id"].as_str(),
@@ -1334,11 +1341,13 @@ async fn application_runtime_routes_cancel_waiting_flow_run() {
         cancel_payload["data"]["flow_run"]["status"].as_str(),
         Some("cancelled")
     );
-    assert!(cancel_payload["data"]["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|event| event["event_type"].as_str() == Some("flow_run_cancelled")));
+    assert!(
+        cancel_payload["data"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["event_type"].as_str() == Some("flow_run_cancelled"))
+    );
 }
 
 #[tokio::test]

@@ -112,6 +112,44 @@ async fn model_definition_routes_manage_models_and_fields_without_publish() {
     .unwrap();
     let field_id = created_field["data"]["id"].as_str().unwrap().to_string();
 
+    let agent_flow_options_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/models/agent-flow-options")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(agent_flow_options_response.status(), StatusCode::OK);
+    let agent_flow_options_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(agent_flow_options_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let agent_flow_options = agent_flow_options_payload["data"].as_array().unwrap();
+    let orders_option = agent_flow_options
+        .iter()
+        .find(|option| option["modelId"].as_str() == Some(&model_id))
+        .unwrap();
+    assert_eq!(orders_option["value"], json!("orders"));
+    assert_eq!(orders_option["label"], json!("Orders"));
+    assert_eq!(orders_option["state"], json!("enabled"));
+    assert_eq!(orders_option["disabled"], json!(false));
+    assert!(orders_option["disabledReason"].is_null());
+    let status_field = orders_option["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["code"] == json!("status"))
+        .unwrap();
+    assert_eq!(status_field["valueType"], json!("enum"));
+    assert_eq!(status_field["required"], json!(true));
+    assert_eq!(status_field["writable"], json!(true));
+
     let create_runtime_record = app
         .clone()
         .oneshot(
