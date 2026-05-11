@@ -26,7 +26,7 @@ function createWrapper(queryClient: QueryClient) {
   };
 }
 
-function createSucceededRunDetail() {
+function createSucceededRunDetail(): runtimeApi.FlowDebugRunDetail {
   return {
     flow_run: {
       id: 'flow-run-1',
@@ -531,6 +531,92 @@ describe('useAgentFlowDebugSession', () => {
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['applications', 'app-1', 'runtime']
     });
+  });
+
+  test('hydrates truncated output artifacts before rendering run results', async () => {
+    const queryClient = createQueryClient();
+    const detail = createSucceededRunDetail();
+    detail.flow_run.output_payload = {
+      answer: {
+        __runtime_debug_artifact: true,
+        is_truncated: true,
+        original_size_bytes: 8192,
+        preview_size_bytes: 256,
+        content_type: 'text/plain',
+        artifact_ref: 'artifact-answer',
+        preview: '完整回答的预览'
+      }
+    };
+    detail.node_runs[1]!.output_payload = {
+      text: {
+        __runtime_debug_artifact: true,
+        is_truncated: true,
+        original_size_bytes: 8192,
+        preview_size_bytes: 256,
+        content_type: 'text/plain',
+        artifact_ref: 'artifact-llm-text',
+        preview: '模型输出预览'
+      },
+      usage: { total_tokens: 128 }
+    };
+    vi.spyOn(runtimeApi, 'startFlowDebugRun').mockResolvedValue(detail);
+    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockImplementation(
+      async (_applicationId, artifactRef) => {
+        if (artifactRef === 'artifact-answer') {
+          return '完整回答内容，不应该显示 artifact_ref 或预览截断值';
+        }
+
+        if (artifactRef === 'artifact-llm-text') {
+          return '完整模型输出内容';
+        }
+
+        throw new Error(`unexpected artifact: ${artifactRef}`);
+      }
+    );
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({ variable_cache: {} })
+      .mockResolvedValue({ variable_cache: {} });
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await act(async () => {
+      await result.current.submitPrompt('介绍一下你自己');
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages[1]).toEqual(
+        expect.objectContaining({
+          content: '完整回答内容，不应该显示 artifact_ref 或预览截断值'
+        })
+      );
+    });
+    expect(result.current.traceItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          outputPayload: expect.objectContaining({
+            text: '完整模型输出内容'
+          })
+        })
+      ])
+    );
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-answer'
+    );
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-llm-text'
+    );
   });
 
   test('persists edited variable cache values across editor remounts', async () => {

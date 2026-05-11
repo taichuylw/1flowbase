@@ -9,6 +9,7 @@ import {
   deleteDebugVariableCacheEntries,
   fetchApplicationRunDetail,
   fetchDebugVariableSnapshot,
+  fetchRuntimeDebugArtifact,
   startFlowDebugRun,
   startFlowDebugRunStream,
   upsertDebugVariableCacheEntry,
@@ -206,6 +207,94 @@ function shouldPollRun(detail: FlowDebugRunDetail) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isRuntimeDebugArtifactPreview(value: unknown): value is {
+  __runtime_debug_artifact: true;
+  artifact_ref: string;
+} {
+  return (
+    isRecord(value) &&
+    value.__runtime_debug_artifact === true &&
+    typeof value.artifact_ref === 'string'
+  );
+}
+
+async function hydrateRuntimeDebugArtifacts(
+  value: unknown,
+  loadArtifact: (artifactRef: string) => Promise<unknown>
+): Promise<unknown> {
+  if (isRuntimeDebugArtifactPreview(value)) {
+    try {
+      return await loadArtifact(value.artifact_ref);
+    } catch {
+      return value;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return Promise.all(
+      value.map((entry) => hydrateRuntimeDebugArtifacts(entry, loadArtifact))
+    );
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const entries = await Promise.all(
+    Object.entries(value).map(async ([key, entryValue]) => [
+      key,
+      await hydrateRuntimeDebugArtifacts(entryValue, loadArtifact)
+    ])
+  );
+
+  return Object.fromEntries(entries);
+}
+
+async function hydrateRunDetailOutputArtifacts(
+  applicationId: string,
+  detail: FlowDebugRunDetail
+): Promise<FlowDebugRunDetail> {
+  const artifactRequests = new Map<string, Promise<unknown>>();
+  const loadArtifact = (artifactRef: string) => {
+    const existingRequest = artifactRequests.get(artifactRef);
+
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    const request = fetchRuntimeDebugArtifact(applicationId, artifactRef);
+    artifactRequests.set(artifactRef, request);
+    return request;
+  };
+
+  const [flowOutputPayload, nodeRuns] = await Promise.all([
+    hydrateRuntimeDebugArtifacts(detail.flow_run.output_payload, loadArtifact),
+    Promise.all(
+      detail.node_runs.map(async (nodeRun) => ({
+        ...nodeRun,
+        output_payload: await hydrateRuntimeDebugArtifacts(
+          nodeRun.output_payload,
+          loadArtifact
+        )
+      }))
+    )
+  ]);
+
+  return {
+    ...detail,
+    flow_run: {
+      ...detail.flow_run,
+      output_payload: isRecord(flowOutputPayload) ? flowOutputPayload : {}
+    },
+    node_runs: nodeRuns.map((nodeRun) => ({
+      ...nodeRun,
+      output_payload: isRecord(nodeRun.output_payload)
+        ? nodeRun.output_payload
+        : {}
+    }))
+  };
 }
 
 function mergeVariablePayload(
@@ -759,11 +848,17 @@ export function useAgentFlowDebugSession({
       invalidateRuntime?: boolean;
     }
   ) {
-    const assistantMessage = mapRunDetailToConversation(detail);
-    const inputVariableCache = buildInputVariableCacheFromRunDetail(detail);
+    const hydratedDetail = await hydrateRunDetailOutputArtifacts(
+      applicationId,
+      detail
+    );
+    const assistantMessage = mapRunDetailToConversation(hydratedDetail);
+    const inputVariableCache = buildInputVariableCacheFromRunDetail(
+      hydratedDetail
+    );
 
-    setActiveRunId(detail.flow_run.id);
-    setLastDetail(detail);
+    setActiveRunId(hydratedDetail.flow_run.id);
+    setLastDetail(hydratedDetail);
     setVariableOverrides((currentOverrides) => {
       return removeVariableCacheKeys(currentOverrides, inputVariableCache);
     });

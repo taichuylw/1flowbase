@@ -29,6 +29,10 @@ function findFirstString(value: unknown): string | null {
   }
 
   if (value && typeof value === 'object') {
+    if (isRuntimeDebugArtifactPreview(value)) {
+      return value.preview.trim().length > 0 ? value.preview : null;
+    }
+
     for (const entry of Object.values(value as Record<string, unknown>)) {
       const nextValue = findFirstString(entry);
 
@@ -51,6 +55,17 @@ function summarizePayload(payload: Record<string, unknown> | null | undefined) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isRuntimeDebugArtifactPreview(value: unknown): value is {
+  __runtime_debug_artifact: true;
+  preview: string;
+} {
+  return (
+    isRecord(value) &&
+    value.__runtime_debug_artifact === true &&
+    typeof value.preview === 'string'
+  );
 }
 
 function extractDeltaText(payload: unknown): string {
@@ -119,6 +134,10 @@ function findPreferredOutputText(payload: unknown): string | null {
 
     if (typeof value === 'string' && value.trim().length > 0) {
       return value;
+    }
+
+    if (isRuntimeDebugArtifactPreview(value)) {
+      return value.preview.trim().length > 0 ? value.preview : null;
     }
   }
 
