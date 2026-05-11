@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     routing::{get, patch, post},
+    Json, Router,
 };
 use control_plane::model_definition::{
     AddModelFieldCommand, CreateModelDefinitionCommand, CreateScopeDataModelGrantCommand,

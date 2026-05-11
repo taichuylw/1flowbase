@@ -418,19 +418,20 @@ async fn debug_variable_snapshot_can_pin_to_explicit_run_id() {
     let run_a = preview_a["data"]["flow_run"]["id"].as_str().unwrap();
     let run_b = preview_b["data"]["flow_run"]["id"].as_str().unwrap();
 
-    let snapshot = get_snapshot_by_query(
-        &app,
-        &cookie,
-        &application_id,
-        &format!("run_id={run_a}"),
-    )
-    .await;
+    let snapshot =
+        get_snapshot_by_query(&app, &cookie, &application_id, &format!("run_id={run_a}")).await;
 
     assert_eq!(snapshot["data"]["latest_run_scope"]["flow_run_id"], run_a);
     assert_ne!(snapshot["data"]["latest_run_scope"]["flow_run_id"], run_b);
-    assert_eq!(snapshot["data"]["variable_cache"]["node-start"]["query"], "policy A");
-    assert_eq!(snapshot["data"]["variable_cache"]["node-llm"]["text"], "reply:policy A");
-  }
+    assert_eq!(
+        snapshot["data"]["variable_cache"]["node-start"]["query"],
+        "policy A"
+    );
+    assert_eq!(
+        snapshot["data"]["variable_cache"]["node-llm"]["text"],
+        "reply:policy A"
+    );
+}
 
 #[tokio::test]
 async fn debug_variable_snapshot_ignores_waiting_and_non_output_payload_buckets() {
