@@ -12,6 +12,7 @@
 
 - `git log`：确认时间窗口、提交主题和提交数量
 - `git log --name-only` 或 `git numstat`：找出高频文件和高 churn 模块
+- 优先运行 `node scripts/node/hotspot-review.js --since "2 days ago"`，报告产物固定写入 `tmp/test-governance/hotspot-review.json`
 - 当前源码：抽样确认热点是否仍存在结构压力
 - 相关 `.memory` 与现有 `.agents/skills`：判断是新规则缺失，还是已有规则未触发
 
@@ -29,6 +30,7 @@
 必须包含：
 
 - 热点事实：哪些文件、几次、哪些提交主题
+- 自动报告：`tmp/test-governance/hotspot-review.json` 的核心发现；如果未运行必须说明原因
 - 归因：缺少哪类前置判断，而不是只说“代码复杂”
 - Skill 更新建议：具体到 skill 文件或 reference 文件
 - 环境更新建议：具体到 AGENTS、脚本、质量门禁或检查命令
