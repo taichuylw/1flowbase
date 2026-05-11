@@ -49,6 +49,12 @@
 node scripts/node/verify-backend.js
 ```
 
+如果只需要先确认 Rust 静态门禁：
+
+```bash
+node scripts/node/tooling.js check-rust-backend
+```
+
 最小验证：
 
 ```bash

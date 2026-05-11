@@ -1,0 +1,238 @@
+{
+  "allowedFindings": [
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/official_plugin_registry.rs",
+      "line": 74,
+      "snippet": "RuntimeTarget::from_rust_target_triple(\"x86_64-unknown-linux-musl\").unwrap()"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/application_api.rs",
+      "line": 193,
+      "snippet": "value.map(|value| value.format(&Rfc3339).unwrap())"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/application_api.rs",
+      "line": 197,
+      "snippet": "value.format(&Rfc3339).unwrap()"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/application_orchestration.rs",
+      "line": 88,
+      "snippet": "updated_at: state.draft.updated_at.format(&Rfc3339).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/application_orchestration.rs",
+      "line": 101,
+      "snippet": "created_at: version.created_at.format(&Rfc3339).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/application_runtime/runtime_debug_artifacts.rs",
+      "line": 374,
+      "snippet": ".unwrap())"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/application_runtime.rs",
+      "line": 436,
+      "snippet": "value.format(&Rfc3339).unwrap()"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/applications.rs",
+      "line": 218,
+      "snippet": "updated_at: variable.updated_at.format(&Rfc3339).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/applications.rs",
+      "line": 245,
+      "snippet": "updated_at: application.updated_at.format(&Rfc3339).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/applications/applications.rs",
+      "line": 302,
+      "snippet": "updated_at: application.updated_at.format(&Rfc3339).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/files.rs",
+      "line": 326,
+      "snippet": ".unwrap())"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/identity/api_keys.rs",
+      "line": 88,
+      "snippet": "value.map(|value| value.format(&Rfc3339).unwrap())"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/data_sources.rs",
+      "line": 175,
+      "snippet": "value.format(&Rfc3339).unwrap()"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/model_providers.rs",
+      "line": 374,
+      "snippet": "value.format(&Rfc3339).unwrap()"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/model_providers.rs",
+      "line": 623,
+      "snippet": "i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/model_providers.rs",
+      "line": 787,
+      "snippet": "i18n_catalog: serde_json::to_value(options.i18n_catalog).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/plugins.rs",
+      "line": 285,
+      "snippet": "value.format(&Rfc3339).unwrap()"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/plugins.rs",
+      "line": 431,
+      "snippet": "i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/plugins.rs",
+      "line": 561,
+      "snippet": "i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/api-server/src/routes/plugins_and_models/plugins.rs",
+      "line": 597,
+      "snippet": "i18n_catalog: serde_json::to_value(families.i18n_catalog).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 94,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 110,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 126,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 149,
+      "snippet": ".unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 167,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 183,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 199,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 215,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 231,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 247,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/data_source_host.rs",
+      "line": 263,
+      "snippet": "serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/lib.rs",
+      "line": 492,
+      "snippet": ".unwrap_or_else(|| default_addr.parse().unwrap())"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/main.rs",
+      "line": 15,
+      "snippet": "let listener = TcpListener::bind(addr).await.unwrap();"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/main.rs",
+      "line": 16,
+      "snippet": "axum::serve(listener, app()).await.unwrap();"
+    },
+    {
+      "rule": "no-production-escape",
+      "file": "api/apps/plugin-runner/src/provider_host.rs",
+      "line": 250,
+      "snippet": "input: serde_json::to_value(input).unwrap(),"
+    },
+    {
+      "rule": "no-sensitive-serialize",
+      "file": "api/crates/domain/src/auth.rs",
+      "line": 33,
+      "snippet": "pub password_hash: String,"
+    },
+    {
+      "rule": "no-sensitive-serialize",
+      "file": "api/crates/domain/src/auth.rs",
+      "line": 236,
+      "snippet": "pub token_hash: String,"
+    },
+    {
+      "rule": "no-sensitive-serialize",
+      "file": "api/crates/domain/src/data_source.rs",
+      "line": 82,
+      "snippet": "pub encrypted_secret_json: serde_json::Value,"
+    },
+    {
+      "rule": "no-sensitive-serialize",
+      "file": "api/crates/domain/src/model_provider.rs",
+      "line": 457,
+      "snippet": "pub encrypted_secret_json: serde_json::Value,"
+    }
+  ]
+}

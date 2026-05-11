@@ -162,8 +162,18 @@ function resolveScriptsNodeCliEntry(repoRoot, entryName) {
   return `${resolveScriptsNodeEntry(repoRoot, entryName)}.js`;
 }
 
-function buildBackendCommands({ cargoJobs, cargoTestThreads }) {
+function buildRustBackendStaticGateCommand({ repoRoot, env = process.env }) {
+  return {
+    label: 'rust-backend-static-gate',
+    command: resolveNodeBinaryFromPath(env),
+    args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'check-rust-backend'],
+    cwd: repoRoot,
+  };
+}
+
+function buildBackendCommands({ cargoJobs, cargoTestThreads, repoRoot = getRepoRoot(), env = process.env }) {
   return [
+    buildRustBackendStaticGateCommand({ repoRoot, env }),
     {
       label: 'cargo-fmt',
       command: 'cargo',
@@ -211,6 +221,8 @@ async function runBackend(_argv = [], deps = {}) {
     commands: buildBackendCommands({
       cargoJobs: runtimeConfig.backend.cargoJobs,
       cargoTestThreads: runtimeConfig.backend.cargoTestThreads,
+      repoRoot,
+      env,
     }),
     spawnSyncImpl: deps.spawnSyncImpl,
     writeStdout: deps.writeStdout,

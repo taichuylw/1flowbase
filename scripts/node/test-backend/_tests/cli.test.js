@@ -7,7 +7,13 @@ const path = require('node:path');
 const { buildCommands, main } = require('../../test-backend.js');
 
 test('buildCommands uses independent cargo jobs and cargo test threads', () => {
-  assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2 }), [
+  assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2, repoRoot: '/repo-root', env: {} }), [
+    {
+      label: 'rust-backend-static-gate',
+      command: process.execPath,
+      args: ['/repo-root/scripts/node/tooling.js', 'check-rust-backend'],
+      cwd: '/repo-root',
+    },
     {
       label: 'cargo-test',
       command: 'cargo',
@@ -69,7 +75,12 @@ test('main routes backend test execution through the heavy managed gate', async 
   assert.equal(capturedOptions.lockMode, 'heavy');
   assert.equal(capturedOptions.scope, 'test-backend');
   assert.equal(capturedOptions.commandDisplay, 'node scripts/node/test-backend.js');
-  assert.deepEqual(capturedOptions.commands, buildCommands({ cargoJobs: 5, cargoTestThreads: 2 }));
+  assert.deepEqual(capturedOptions.commands, buildCommands({
+    cargoJobs: 5,
+    cargoTestThreads: 2,
+    repoRoot: '/repo-root',
+    env: {},
+  }));
 });
 
 test('main writes advisory warning output under tmp/test-governance', async () => {
@@ -104,8 +115,8 @@ test('main writes advisory warning output under tmp/test-governance', async () =
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].args, ['test', '--workspace', '--jobs', '1', '--', '--test-threads=1']);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1].args, ['test', '--workspace', '--jobs', '1', '--', '--test-threads=1']);
 
   const warningLogPath = path.join(repoRoot, 'tmp', 'test-governance', 'test-backend.warnings.log');
   assert.equal(fs.existsSync(warningLogPath), true);

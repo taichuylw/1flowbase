@@ -29,6 +29,14 @@
 node scripts/node/test-backend.js
 ```
 
+`test-backend` 和 `verify-backend` 会先运行：
+
+```bash
+node scripts/node/tooling.js check-rust-backend
+```
+
+该静态门禁会硬拦新增的生产路径 `unwrap` / `panic` / `dbg` / `todo` / `unimplemented`、敏感字段序列化和敏感日志；阻塞 IO 等高误伤项先作为 warning 写入 `tmp/test-governance/rust-backend-static-gate.json`。历史债由 `scripts/node/check-rust-backend/baseline.json` 兜住；新增命中不应追加 baseline，除非明确登记为阶段性技术债。
+
 如果需要直接落到 Cargo，串行运行：
 
 ```bash

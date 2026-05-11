@@ -15,7 +15,13 @@ function getExpectedParallelism() {
 }
 
 test('buildCommands uses independent cargo jobs and cargo test threads', () => {
-  assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2 }), [
+  assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2, repoRoot: '/repo-root', env: {} }), [
+    {
+      label: 'rust-backend-static-gate',
+      command: process.execPath,
+      args: ['/repo-root/scripts/node/tooling.js', 'check-rust-backend'],
+      cwd: '/repo-root',
+    },
     {
       label: 'cargo-fmt',
       command: 'cargo',
@@ -87,7 +93,12 @@ test('main routes backend verification through the heavy managed gate', async ()
   assert.equal(capturedOptions.lockMode, 'heavy');
   assert.equal(capturedOptions.scope, 'verify-backend');
   assert.equal(capturedOptions.commandDisplay, 'node scripts/node/verify-backend.js');
-  assert.deepEqual(capturedOptions.commands, buildCommands({ cargoJobs: 3, cargoTestThreads: 1 }));
+  assert.deepEqual(capturedOptions.commands, buildCommands({
+    cargoJobs: 3,
+    cargoTestThreads: 1,
+    repoRoot: '/repo-root',
+    env: {},
+  }));
 });
 
 test('verify-backend limits cargo jobs to half of available CPU and serializes tests', async () => {

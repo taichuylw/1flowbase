@@ -3,6 +3,7 @@
 const path = require('node:path');
 
 const { main: runCheckStyleBoundary } = require('../check-style-boundary/core.js');
+const { main: runCheckRustBackend } = require('../check-rust-backend/core.js');
 const { main: runPageDebug } = require('../page-debug/core.js');
 const { main: runMockUiSync } = require('../mock-ui-sync/core.js');
 const { main: runClaudeSkillSync } = require('../claude-skill-sync/core.js');
@@ -14,6 +15,7 @@ const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
 
 const TOOLING_COMMANDS = new Set([
   'check-style-boundary',
+  'check-rust-backend',
   'claude-skill-sync',
   'mock-ui-sync',
   'page-debug',
@@ -79,7 +81,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <check-style-boundary|claude-skill-sync|mock-ui-sync|page-debug|runtime-gate> [args]\n'
+    'Usage: node scripts/node/tooling <check-rust-backend|check-style-boundary|claude-skill-sync|mock-ui-sync|page-debug|runtime-gate> [args]\n'
   );
 }
 
@@ -97,6 +99,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'check-style-boundary') {
     return (deps.runCheckStyleBoundaryImpl || runCheckStyleBoundary)(options.rest);
+  }
+
+  if (options.command === 'check-rust-backend') {
+    return (deps.runCheckRustBackendImpl || runCheckRustBackend)(options.rest, deps);
   }
 
   if (options.command === 'claude-skill-sync') {

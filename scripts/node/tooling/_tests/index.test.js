@@ -31,6 +31,20 @@ test('tooling index dispatches check-style-boundary subcommand', async () => {
   assert.deepEqual(capturedArgv, ['all-pages']);
 });
 
+test('tooling index dispatches check-rust-backend subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['check-rust-backend'], {
+    runCheckRustBackendImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, []);
+});
+
 test('tooling index rejects unknown subcommands', async () => {
   await assert.rejects(
     () => main(['unknown']),
