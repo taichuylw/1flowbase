@@ -10,7 +10,6 @@ import {
   InputNumber,
   Select,
   Segmented,
-  Space,
   Typography
 } from 'antd';
 import { useEffect, useRef, useState } from 'react';

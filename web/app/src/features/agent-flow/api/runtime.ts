@@ -192,8 +192,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function extractNodePreviewVariableOutput(
-  lastRun: ConsoleNodeLastRun,
-  _outputs?: FlowNodeOutputDocument[]
+  lastRun: ConsoleNodeLastRun
 ): Record<string, unknown> {
   const outputPayload = lastRun.node_run.output_payload;
 

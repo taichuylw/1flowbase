@@ -15,6 +15,8 @@ type ScalarAuthenticationConfiguration =
   ScalarReferenceConfiguration['authentication'];
 type ScalarDocumentContent = ScalarReferenceConfiguration['content'];
 
+const emptyCategories: ApiDocsCatalogCategory[] = [];
+
 export interface ApiDocsCatalogOperation {
   id: string;
   method: string;
@@ -126,7 +128,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     queryKey: catalogQueryKey,
     queryFn: fetchCatalog
   });
-  const categories = catalogQuery.data?.categories ?? [];
+  const categories = catalogQuery.data?.categories ?? emptyCategories;
   const selectedCategoryId =
     categories.find((category) => category.id === queryState.categoryId)?.id ??
     null;

@@ -47,7 +47,11 @@ export function AgentFlowOverlay({
   }[autosaveStatus];
 
   return (
-    <div className="agent-flow-editor__overlay">
+    <div
+      aria-label="Agent Flow 操作栏"
+      className="agent-flow-editor__overlay"
+      role="region"
+    >
       <Space className="agent-flow-editor__overlay-status" size="small">
         <Typography.Text strong>{applicationName}</Typography.Text>
         <Tag color={statusTag.color} bordered={false}>

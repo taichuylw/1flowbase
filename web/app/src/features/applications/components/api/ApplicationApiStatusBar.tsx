@@ -17,7 +17,7 @@ export function ApplicationApiStatusBar({
 }) {
   if (!publication) {
     return (
-      <section className="application-api-status">
+      <section aria-label="公开 API 状态" className="application-api-status">
         <div className="application-api-status__header">
           <Alert
             type="warning"
@@ -32,7 +32,7 @@ export function ApplicationApiStatusBar({
   }
 
   return (
-    <section className="application-api-status">
+    <section aria-label="公开 API 状态" className="application-api-status">
       <div className="application-api-status__header">
         <Space align="center" wrap>
           <Typography.Text strong>公开 API</Typography.Text>

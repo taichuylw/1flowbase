@@ -185,14 +185,10 @@ describe('ApplicationApiPage', () => {
       updated_at: '2026-05-09T00:00:00Z'
     });
 
-    const { container } = renderWithProviders(
-      <ApplicationApiPage application={application} />
-    );
+    renderWithProviders(<ApplicationApiPage application={application} />);
 
-    const statusCard = await waitFor(() => {
-      const node = container.querySelector('.application-api-status');
-      expect(node).toBeTruthy();
-      return node as HTMLElement;
+    const statusCard = await screen.findByRole('region', {
+      name: '公开 API 状态'
     });
 
     expect(within(statusCard).queryByText('Native')).not.toBeInTheDocument();
@@ -235,14 +231,10 @@ describe('ApplicationApiPage', () => {
       }
     ]);
 
-    const { container } = renderWithProviders(
-      <ApplicationApiPage application={application} />
-    );
+    renderWithProviders(<ApplicationApiPage application={application} />);
 
-    const statusCard = await waitFor(() => {
-      const node = container.querySelector('.application-api-status');
-      expect(node).toBeTruthy();
-      return node as HTMLElement;
+    const statusCard = await screen.findByRole('region', {
+      name: '公开 API 状态'
     });
 
     expect(

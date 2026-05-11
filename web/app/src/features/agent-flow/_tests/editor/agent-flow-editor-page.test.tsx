@@ -290,7 +290,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '发布' })).toBeInTheDocument();
     expect(
-      within(document.querySelector('.agent-flow-editor__overlay')!)
+      within(screen.getByRole('region', { name: 'Agent Flow 操作栏' }))
         .getAllByRole('button')
         .map(
           (button) => button.getAttribute('aria-label') ?? button.textContent

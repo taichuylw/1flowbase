@@ -100,6 +100,8 @@ describe('ApiDocsExplorer', () => {
     expect(await screen.findByRole('combobox', { name: '接口分类' })).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchCategoryOperations).toHaveBeenCalledWith('application-native-api');
+    });
+    await waitFor(() => {
       expect(fetchCategoryOperations).toHaveBeenCalledWith('openai-compatible-api');
     });
     expect(await screen.findByText('全部分类 共 3 个接口')).toBeInTheDocument();
