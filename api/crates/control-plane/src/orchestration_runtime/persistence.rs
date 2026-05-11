@@ -277,6 +277,19 @@ where
         })
         .await?;
     events.push(started);
+    append_host_event(
+        repository,
+        flow_run.id,
+        Some(node_run.id),
+        None,
+        "node_preview_started",
+        domain::RuntimeEventLayer::Diagnostic,
+        json!({
+            "target_node_id": preview.target_node_id,
+            "input_payload": flow_run.input_payload,
+        }),
+    )
+    .await?;
     events.extend(
         append_provider_stream_events(
             repository,
@@ -300,6 +313,20 @@ where
         })
         .await?;
     events.push(completed);
+    append_host_event(
+        repository,
+        flow_run.id,
+        Some(node_run.id),
+        None,
+        if preview.is_failed() {
+            "node_preview_failed"
+        } else {
+            "node_preview_completed"
+        },
+        domain::RuntimeEventLayer::Diagnostic,
+        preview.as_payload(),
+    )
+    .await?;
 
     Ok(events)
 }

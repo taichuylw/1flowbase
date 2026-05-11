@@ -610,7 +610,7 @@ async fn wait_for_persisted_text_delta_events(
             .oneshot(
                 Request::builder()
                     .uri(format!(
-                        "/api/console/applications/{application_id}/logs/runs/{run_id}"
+                        "/api/console/applications/{application_id}/logs/runs/{run_id}/debug-stream"
                     ))
                     .header("cookie", cookie)
                     .body(Body::empty())
@@ -621,22 +621,33 @@ async fn wait_for_persisted_text_delta_events(
         assert_eq!(detail.status(), StatusCode::OK);
         let body = to_bytes(detail.into_body(), usize::MAX).await.unwrap();
         let payload: Value = serde_json::from_slice(&body).unwrap();
-        let detail = payload["data"].clone();
-        let events = detail["events"].as_array().unwrap();
-        last_event_types = events
+        let parts = payload["data"]["parts"].as_array().unwrap();
+        last_event_types = parts
             .iter()
-            .filter_map(|event| event["event_type"].as_str().map(ToString::to_string))
+            .filter_map(|part| {
+                part["payload"]["event_type"]
+                    .as_str()
+                    .map(ToString::to_string)
+            })
             .collect();
-        let has_terminal_stream_event = events.iter().any(|event| {
+        let has_terminal_stream_event = parts.iter().any(|part| {
             matches!(
-                event["event_type"].as_str(),
-                Some("flow_finished" | "flow_failed" | "flow_cancelled")
+                part["payload"]["event_type"].as_str(),
+                Some(
+                    "flow_finished"
+                        | "flow_failed"
+                        | "flow_cancelled"
+                        | "finish"
+                        | "flow_run_completed"
+                        | "flow_run_failed"
+                        | "flow_run_cancelled"
+                )
             )
         });
         if has_terminal_stream_event {
-            let text_delta_events = events
+            let text_delta_events = parts
                 .iter()
-                .filter(|event| event["event_type"].as_str() == Some("text_delta"))
+                .filter(|part| part["payload"]["event_type"].as_str() == Some("text_delta"))
                 .cloned()
                 .collect::<Vec<_>>();
             if !text_delta_events.is_empty() {
@@ -1467,7 +1478,7 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
         &app,
         &cookie,
         &application_id,
-        &text_delta["payload"],
+        &text_delta["payload"]["payload"],
     )
     .await;
     assert!(!text_delta_payload["text"].as_str().unwrap().is_empty());
