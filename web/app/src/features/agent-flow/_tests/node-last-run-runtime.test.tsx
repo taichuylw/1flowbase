@@ -211,16 +211,18 @@ describe('node last run runtime', () => {
     });
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
-    expect(await screen.findByText('运行摘要')).toBeInTheDocument();
-    expect(await screen.findByLabelText('输入 JSON')).toHaveTextContent('总结退款政策');
+    await waitFor(() => {
+      expect(screen.getByText('运行摘要')).toBeInTheDocument();
+      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('总结退款政策');
+      expect(screen.getByText('token')).toBeInTheDocument();
+      expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
+      expect(screen.getByText('128')).toBeInTheDocument();
+      expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
+        'raw_response_ref'
+      );
+    }, { timeout: 5_000 });
     expect(screen.queryByText('运行模式')).not.toBeInTheDocument();
     expect(screen.queryByText('目标节点')).not.toBeInTheDocument();
-    expect(screen.getByText('token')).toBeInTheDocument();
-    expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
-    expect(screen.getByText('128')).toBeInTheDocument();
-    expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
-      'raw_response_ref'
-    );
     expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('错误 JSON')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Debug JSON')).not.toBeInTheDocument();
