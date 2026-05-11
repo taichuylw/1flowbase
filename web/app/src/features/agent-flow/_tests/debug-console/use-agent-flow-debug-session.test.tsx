@@ -305,7 +305,7 @@ describe('useAgentFlowDebugSession', () => {
       .spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
       .mockResolvedValue({ variable_cache: {} });
 
-    const firstRender = renderHook(
+    const view = renderHook(
       () =>
         useAgentFlowDebugSession({
           applicationId: 'app-1',
@@ -318,11 +318,11 @@ describe('useAgentFlowDebugSession', () => {
     await waitFor(() => {
       expect(fetchSnapshotSpy).toHaveBeenCalledTimes(1);
     });
-    const firstSessionId = firstRender.result.current.debugSessionId;
+    const firstSessionId = view.result.current.debugSessionId;
 
-    firstRender.unmount();
+    view.unmount();
 
-    const secondRender = renderHook(
+    const utils = renderHook(
       () =>
         useAgentFlowDebugSession({
           applicationId: 'app-1',
@@ -336,7 +336,7 @@ describe('useAgentFlowDebugSession', () => {
       expect(fetchSnapshotSpy).toHaveBeenCalledTimes(2);
     });
 
-    expect(secondRender.result.current.debugSessionId).toBe(firstSessionId);
+    expect(utils.result.current.debugSessionId).toBe(firstSessionId);
     expect(fetchSnapshotSpy).toHaveBeenLastCalledWith('app-1', {
       debugSessionId: firstSessionId
     });

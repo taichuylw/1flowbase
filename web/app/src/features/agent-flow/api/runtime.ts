@@ -7,6 +7,7 @@ import type {
 import {
   cancelConsoleFlowRun,
   getConsoleApplicationRunDetail,
+  getConsoleApplicationRunNodeLastRun,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRun,
@@ -133,6 +134,22 @@ export const nodeLastRunQueryKey = (applicationId: string, nodeId: string) =>
     'last-run'
   ] as const;
 
+export const applicationRunNodeLastRunQueryKey = (
+  applicationId: string,
+  runId: string,
+  nodeId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'nodes',
+    nodeId,
+    'last-run'
+  ] as const;
+
 export function fetchNodeLastRun(applicationId: string, nodeId: string) {
   return getConsoleNodeLastRun(
     applicationId,
@@ -191,8 +208,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function extractNodePreviewVariableOutput(
-  lastRun: ConsoleNodeLastRun,
-  _outputs?: FlowNodeOutputDocument[]
+  lastRun: ConsoleNodeLastRun
 ): Record<string, unknown> {
   const outputPayload = lastRun.node_run.output_payload;
 
@@ -272,6 +288,19 @@ export function fetchApplicationRunDetail(
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunNodeLastRun(
+  applicationId: string,
+  runId: string,
+  nodeId: string
+) {
+  return getConsoleApplicationRunNodeLastRun(
+    applicationId,
+    runId,
+    nodeId,
     getApplicationsApiBaseUrl()
   );
 }

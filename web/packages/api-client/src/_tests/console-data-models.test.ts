@@ -11,6 +11,7 @@ import {
   fetchConsoleDataModelOpenApiDocument,
   fetchConsoleDataModelRecordPreview,
   fetchConsoleDataModelScopeGrants,
+  fetchConsoleAgentFlowDataModelOptions,
   fetchConsoleDataModels,
   fetchConsoleDataSourceInstances,
   updateConsoleDataModel,
@@ -57,6 +58,12 @@ describe('console-data-models client', () => {
       fetchConsoleDataModels({ data_source_instance_id: 'main_source' })
     ).resolves.toMatchObject({
       path: '/api/console/models?data_source_instance_id=main_source'
+    });
+  });
+
+  test('fetchConsoleAgentFlowDataModelOptions reads the backend scene read model', async () => {
+    await expect(fetchConsoleAgentFlowDataModelOptions()).resolves.toMatchObject({
+      path: '/api/console/models/agent-flow-options'
     });
   });
 

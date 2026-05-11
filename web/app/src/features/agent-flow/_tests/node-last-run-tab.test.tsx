@@ -145,9 +145,9 @@ describe('NodeLastRunTab', () => {
     ).toBeDisabled();
   });
 
-  test('uses the active run scope detail instead of latest node run fallback', async () => {
-    const fetchRunDetailSpy = vi
-      .spyOn(runtimeApi, 'fetchApplicationRunDetail')
+  test('uses the active run scoped node endpoint instead of latest node run fallback', async () => {
+    const fetchScopedNodeRunSpy = vi
+      .spyOn(runtimeApi, 'fetchApplicationRunNodeLastRun')
       .mockResolvedValue({
         flow_run: {
           id: 'run-active',
@@ -170,31 +170,28 @@ describe('NodeLastRunTab', () => {
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z'
         },
-        node_runs: [
-          {
-            id: 'node-run-1',
-            flow_run_id: 'run-active',
-            node_id: 'node-llm',
-            node_type: 'llm',
-            node_alias: 'LLM',
-            status: 'succeeded',
-            input_payload: {
-              user_prompt: '统一 run scope'
-            },
-            output_payload: {
-              text: '统一结果'
-            },
-            error_payload: null,
-            metrics_payload: {
-              total_tokens: 16
-            },
-            debug_payload: {},
-            started_at: '2026-04-17T09:00:00Z',
-            finished_at: '2026-04-17T09:00:01Z'
-          }
-        ],
+        node_run: {
+          id: 'node-run-1',
+          flow_run_id: 'run-active',
+          node_id: 'node-llm',
+          node_type: 'llm',
+          node_alias: 'LLM',
+          status: 'succeeded',
+          input_payload: {
+            user_prompt: '统一 run scope'
+          },
+          output_payload: {
+            text: '统一结果'
+          },
+          error_payload: null,
+          metrics_payload: {
+            total_tokens: 16
+          },
+          debug_payload: {},
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z'
+        },
         checkpoints: [],
-        callback_tasks: [],
         events: []
       });
     const fetchNodeLastRunSpy = vi.spyOn(runtimeApi, 'fetchNodeLastRun');
@@ -210,7 +207,11 @@ describe('NodeLastRunTab', () => {
     );
 
     expect(await screen.findByText('运行摘要')).toBeInTheDocument();
-    expect(fetchRunDetailSpy).toHaveBeenCalledWith('app-1', 'run-active');
+    expect(fetchScopedNodeRunSpy).toHaveBeenCalledWith(
+      'app-1',
+      'run-active',
+      'node-llm'
+    );
     expect(fetchNodeLastRunSpy).not.toHaveBeenCalled();
     expect(screen.getByLabelText('输出 JSON')).toHaveTextContent('统一结果');
   });

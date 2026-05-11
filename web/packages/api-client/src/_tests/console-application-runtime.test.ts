@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  getConsoleApplicationRunNodeLastRun,
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRunStream,
   subscribeConsoleFlowDebugRunStream
@@ -130,6 +131,32 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     ).resolves.toEqual({ hello: 'world' });
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/debug-artifacts/artifact-1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches node run detail inside an explicit flow run', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: null }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationRunNodeLastRun(
+        'app-1',
+        'run-1',
+        'node-llm',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual(null);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/nodes/node-llm',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'

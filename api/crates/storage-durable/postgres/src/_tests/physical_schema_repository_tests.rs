@@ -253,42 +253,18 @@ async fn delete_model_field_drops_dynamic_columns_but_rejects_platform_columns()
     assert!(!columns_after_dynamic_delete.contains(&dynamic_field.physical_column_name));
     assert!(columns_after_dynamic_delete.contains(&"created_at".to_string()));
 
-    let platform_field_id = Uuid::now_v7();
-    sqlx::query(
-        r#"
-        insert into model_fields (
-            id,
-            data_model_id,
-            code,
-            title,
-            physical_column_name,
-            field_kind,
-            is_required,
-            is_unique,
-            default_value,
-            display_interface,
-            display_options,
-            relation_options,
-            sort_order,
-            availability_status,
-            created_by,
-            updated_by
-        )
-        values ($1, $2, 'danger_created_at', 'Danger Created At', 'created_at', 'string',
-                false, false, null, null, '{}'::jsonb, '{}'::jsonb, 50, 'available', null, null)
-        "#,
-    )
-    .bind(platform_field_id)
-    .bind(model.id)
-    .execute(store.pool())
-    .await
-    .unwrap();
+    let platform_field = model
+        .fields
+        .iter()
+        .find(|field| field.physical_column_name == "created_at")
+        .expect("main source model should expose created_at platform field metadata");
+    assert!(platform_field.is_system);
 
     let delete_result = ModelDefinitionRepository::delete_model_field(
         &store,
         Uuid::nil(),
         model.id,
-        platform_field_id,
+        platform_field.id,
     )
     .await;
 

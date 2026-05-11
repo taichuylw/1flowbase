@@ -255,7 +255,9 @@ pub(super) async fn build_debug_variable_snapshot(
                 run_id,
             )
             .await?
-            .ok_or(control_plane::errors::ControlPlaneError::NotFound("flow_run"))?;
+            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+                "flow_run",
+            ))?;
         let mut variable_cache = serde_json::Map::new();
         let mut source_flow_run_ids = serde_json::Map::new();
         let mut source_node_run_ids = serde_json::Map::new();

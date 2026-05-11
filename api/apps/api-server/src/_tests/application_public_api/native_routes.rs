@@ -218,14 +218,14 @@ async fn native_run_route_accepts_any_string_model_and_preserves_metadata_withou
         json!("provider/model:any-public-string")
     );
     assert_eq!(
-        payload["data"]["node_input_payload"]["start"]["query"],
+        payload["data"]["node_input_payload"]["node-start"]["query"],
         json!("Summarize the incident")
     );
     assert_eq!(
-        payload["data"]["node_input_payload"]["start"]["inputs"]["priority"],
+        payload["data"]["node_input_payload"]["node-start"]["priority"],
         json!("high")
     );
-    assert!(payload["data"]["node_input_payload"]["start"]
+    assert!(payload["data"]["node_input_payload"]["node-start"]
         .get("model")
         .is_none());
 }

@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Result, Tabs } from 'antd';
 
@@ -28,7 +26,6 @@ export function ApplicationApiPage({
 }) {
   const csrfToken = useAuthStore((state) => state.csrfToken) ?? '';
   const queryClient = useQueryClient();
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
   const publicationQuery = useQuery({
     queryKey: applicationApiPublicationQueryKey(application.id),
     queryFn: () => fetchApplicationApiPublication(application.id),
@@ -61,8 +58,6 @@ export function ApplicationApiPage({
     onSuccess: invalidatePublication
   });
 
-  useEffect(() => () => setCreatedToken(null), []);
-
   if (!publication && publicationQuery.isLoading) {
     return <Result status="info" title="正在加载公开 API 状态" />;
   }
@@ -85,7 +80,7 @@ export function ApplicationApiPage({
         <ApplicationApiKeysPanel
           applicationId={application.id}
           csrfToken={csrfToken}
-          onCreatedToken={setCreatedToken}
+          onCreatedToken={() => undefined}
           variant="embedded"
         />
       </ApplicationApiStatusBar>

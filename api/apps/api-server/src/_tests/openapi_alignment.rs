@@ -69,6 +69,7 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
 
     for route in [
         "/api/console/models/{id}",
+        "/api/console/models/agent-flow-options",
         "/api/console/models/{id}/fields",
         "/api/console/models/{id}/advisor-findings",
         "/api/console/models/{id}/scope-grants",
@@ -288,6 +289,7 @@ async fn openapi_contains_application_console_routes() {
         "/api/console/applications/{id}/orchestration/nodes/{node_id}/last-run",
         "/api/console/applications/{id}/logs/runs",
         "/api/console/applications/{id}/logs/runs/{run_id}",
+        "/api/console/applications/{id}/logs/runs/{run_id}/nodes/{node_id}",
     ] {
         assert!(paths.contains_key(route), "missing path {route}");
     }

@@ -152,6 +152,29 @@ pub struct ModelDefinitionResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentFlowDataModelFieldOptionResponse {
+    pub code: String,
+    pub title: String,
+    pub value_type: String,
+    pub required: bool,
+    pub writable: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentFlowDataModelOptionResponse {
+    pub value: String,
+    pub label: String,
+    pub state: String,
+    pub disabled: bool,
+    pub disabled_reason: Option<String>,
+    pub model_id: String,
+    pub model_code: String,
+    pub fields: Vec<AgentFlowDataModelFieldOptionResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DeletedResponse {
     pub deleted: bool,
 }
@@ -180,6 +203,7 @@ pub struct DataModelAdvisorFindingResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/models", get(list_models).post(create_model))
+        .route("/models/agent-flow-options", get(list_agent_flow_options))
         .route(
             "/models/:id",
             get(get_model).patch(update_model).delete(delete_model),
@@ -252,6 +276,62 @@ pub(super) fn to_model_definition_response(
             .fields
             .into_iter()
             .map(to_model_field_response)
+            .collect(),
+    }
+}
+
+fn agent_flow_option_state(
+    status: domain::DataModelStatus,
+) -> (&'static str, Option<&'static str>) {
+    match runtime_core::runtime_model_registry::RuntimeDataModelAvailability::from_status(status) {
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::Available => {
+            ("enabled", None)
+        }
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::NotPublished => {
+            ("unpublished", Some("Data Model is not published"))
+        }
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::Disabled => {
+            ("disabled", Some("Data Model is disabled"))
+        }
+        runtime_core::runtime_model_registry::RuntimeDataModelAvailability::Broken => {
+            ("broken", Some("Data Model is broken"))
+        }
+    }
+}
+
+fn to_agent_flow_data_model_option_response(
+    model: domain::ModelDefinitionRecord,
+) -> AgentFlowDataModelOptionResponse {
+    let (state, disabled_reason) = agent_flow_option_state(model.status);
+    let mut fields = model.fields;
+    fields.sort_by_key(|field| field.sort_order);
+    let label = if model.title.is_empty() {
+        model.code.clone()
+    } else {
+        model.title
+    };
+
+    AgentFlowDataModelOptionResponse {
+        value: model.code.clone(),
+        label,
+        state: state.to_string(),
+        disabled: state != "enabled",
+        disabled_reason: disabled_reason.map(str::to_string),
+        model_id: model.id.to_string(),
+        model_code: model.code,
+        fields: fields
+            .into_iter()
+            .map(|field| AgentFlowDataModelFieldOptionResponse {
+                title: if field.title.is_empty() {
+                    field.code.clone()
+                } else {
+                    field.title
+                },
+                code: field.code,
+                value_type: field.field_kind.as_str().to_string(),
+                required: field.is_required,
+                writable: field.is_writable,
+            })
             .collect(),
     }
 }
@@ -389,6 +469,28 @@ pub async fn list_models(
         models
             .into_iter()
             .map(to_model_definition_response)
+            .collect(),
+    )))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/models/agent-flow-options",
+    responses((status = 200, body = [AgentFlowDataModelOptionResponse]), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_agent_flow_options(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<Vec<AgentFlowDataModelOptionResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let models = ModelDefinitionService::new(state.store.clone())
+        .list_models(context.user.id)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        models
+            .into_iter()
+            .map(to_agent_flow_data_model_option_response)
             .collect(),
     )))
 }

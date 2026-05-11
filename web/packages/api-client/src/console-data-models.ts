@@ -76,6 +76,31 @@ export interface ConsoleDataModel {
   fields: ConsoleDataModelField[];
 }
 
+export type ConsoleAgentFlowDataModelOptionState =
+  | 'enabled'
+  | 'unpublished'
+  | 'disabled'
+  | 'broken';
+
+export interface ConsoleAgentFlowDataModelFieldOption {
+  code: string;
+  title: string;
+  valueType: string;
+  required: boolean;
+  writable: boolean;
+}
+
+export interface ConsoleAgentFlowDataModelOption {
+  value: string;
+  label: string;
+  state: ConsoleAgentFlowDataModelOptionState;
+  disabled: boolean;
+  disabledReason: string | null;
+  modelId: string;
+  modelCode: string;
+  fields: ConsoleAgentFlowDataModelFieldOption[];
+}
+
 export interface ConsoleDataModelScopeGrant {
   id: string;
   scope_kind: ConsoleDataModelScopeKind;
@@ -221,6 +246,13 @@ export function fetchConsoleDataModels(
     path: appendQuery('/api/console/models', {
       data_source_instance_id: input.data_source_instance_id
     }),
+    baseUrl
+  });
+}
+
+export function fetchConsoleAgentFlowDataModelOptions(baseUrl?: string) {
+  return apiFetch<ConsoleAgentFlowDataModelOption[]>({
+    path: '/api/console/models/agent-flow-options',
     baseUrl
   });
 }

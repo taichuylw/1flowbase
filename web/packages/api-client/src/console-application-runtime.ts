@@ -929,6 +929,18 @@ export function getConsoleApplicationRunDetail(
   });
 }
 
+export function getConsoleApplicationRunNodeLastRun(
+  applicationId: string,
+  runId: string,
+  nodeId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleNodeLastRun | null>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/nodes/${nodeId}`,
+    baseUrl
+  });
+}
+
 export function getConsoleRuntimeDebugStream(
   applicationId: string,
   runId: string,

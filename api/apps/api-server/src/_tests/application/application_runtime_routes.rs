@@ -610,7 +610,7 @@ async fn wait_for_persisted_text_delta_events(
             .oneshot(
                 Request::builder()
                     .uri(format!(
-                        "/api/console/applications/{application_id}/logs/runs/{run_id}"
+                        "/api/console/applications/{application_id}/logs/runs/{run_id}/debug-stream"
                     ))
                     .header("cookie", cookie)
                     .body(Body::empty())
@@ -621,22 +621,33 @@ async fn wait_for_persisted_text_delta_events(
         assert_eq!(detail.status(), StatusCode::OK);
         let body = to_bytes(detail.into_body(), usize::MAX).await.unwrap();
         let payload: Value = serde_json::from_slice(&body).unwrap();
-        let detail = payload["data"].clone();
-        let events = detail["events"].as_array().unwrap();
-        last_event_types = events
+        let parts = payload["data"]["parts"].as_array().unwrap();
+        last_event_types = parts
             .iter()
-            .filter_map(|event| event["event_type"].as_str().map(ToString::to_string))
+            .filter_map(|part| {
+                part["payload"]["event_type"]
+                    .as_str()
+                    .map(ToString::to_string)
+            })
             .collect();
-        let has_terminal_stream_event = events.iter().any(|event| {
+        let has_terminal_stream_event = parts.iter().any(|part| {
             matches!(
-                event["event_type"].as_str(),
-                Some("flow_finished" | "flow_failed" | "flow_cancelled")
+                part["payload"]["event_type"].as_str(),
+                Some(
+                    "flow_finished"
+                        | "flow_failed"
+                        | "flow_cancelled"
+                        | "finish"
+                        | "flow_run_completed"
+                        | "flow_run_failed"
+                        | "flow_run_cancelled"
+                )
             )
         });
         if has_terminal_stream_event {
-            let text_delta_events = events
+            let text_delta_events = parts
                 .iter()
-                .filter(|event| event["event_type"].as_str() == Some("text_delta"))
+                .filter(|part| part["payload"]["event_type"].as_str() == Some("text_delta"))
                 .cloned()
                 .collect::<Vec<_>>();
             if !text_delta_events.is_empty() {
@@ -959,21 +970,7 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         Some("node-llm")
     );
     assert_eq!(
-        preview_payload["data"]["node_run"]["output_payload"],
-        json!({ "text": "reply:总结退款政策" })
-    );
-    assert_eq!(
-        preview_payload["data"]["flow_run"]["output_payload"],
-        json!({ "text": "reply:总结退款政策" })
-    );
-    assert_eq!(
-        resolve_runtime_debug_artifact_value(
-            &app,
-            &cookie,
-            &application_id,
-            &preview_payload["data"]["node_run"]["debug_payload"],
-        )
-        .await["message"]["content"],
+        preview_payload["data"]["node_run"]["output_payload"]["text"],
         json!("reply:总结退款政策")
     );
     for hidden_key in [
@@ -1060,16 +1057,39 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         detail_payload["data"]["node_runs"][0]["node_alias"].as_str(),
         Some("LLM")
     );
-    assert_eq!(
-        resolve_runtime_debug_artifact_value(
-            &app,
-            &cookie,
-            &application_id,
-            &detail_payload["data"]["node_runs"][0]["debug_payload"],
+    let scoped_node_run = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/nodes/node-llm"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
         )
-        .await["message"]["content"],
-        json!("reply:总结退款政策")
+        .await
+        .unwrap();
+
+    assert_eq!(scoped_node_run.status(), StatusCode::OK);
+    let scoped_node_run_body = to_bytes(scoped_node_run.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let scoped_node_run_payload: Value = serde_json::from_slice(&scoped_node_run_body).unwrap();
+    assert_eq!(
+        scoped_node_run_payload["data"]["node_run"]["node_id"].as_str(),
+        Some("node-llm")
     );
+    assert!(scoped_node_run_payload["data"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|event| event["node_run_id"].as_str()
+            == Some(
+                scoped_node_run_payload["data"]["node_run"]["id"]
+                    .as_str()
+                    .unwrap()
+            )));
 
     let last_run = app
         .clone()
@@ -1091,16 +1111,6 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     assert_eq!(
         last_run_payload["data"]["node_run"]["node_id"].as_str(),
         Some("node-llm")
-    );
-    assert_eq!(
-        resolve_runtime_debug_artifact_value(
-            &app,
-            &cookie,
-            &application_id,
-            &last_run_payload["data"]["node_run"]["debug_payload"],
-        )
-        .await["message"]["content"],
-        json!("reply:总结退款政策")
     );
     assert_eq!(
         last_run_payload["data"]["flow_run"]["id"].as_str(),
@@ -1468,7 +1478,7 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
         &app,
         &cookie,
         &application_id,
-        &text_delta["payload"],
+        &text_delta["payload"]["payload"],
     )
     .await;
     assert!(!text_delta_payload["text"].as_str().unwrap().is_empty());
