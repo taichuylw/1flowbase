@@ -292,6 +292,33 @@ async fn anthropic_messages_accepts_x_api_key_and_preserves_model() {
 }
 
 #[tokio::test]
+async fn anthropic_messages_accepts_agent_tool_definitions() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "Anthropic Tool Compatible Route App").await;
+    let mut body = anthropic_body(false);
+    body["tools"] = json!([
+        {
+            "name": "lookup_order",
+            "description": "Find an order",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "order_id": {"type": "string"}
+                }
+            }
+        }
+    ]);
+    body["tool_choice"] = json!({"type": "auto"});
+
+    let response = post_json(&app, "/v1/messages", ("x-api-key", token), body).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["type"], json!("message"));
+    assert_eq!(payload["model"], json!("anthropic/custom-model:latest"));
+}
+
+#[tokio::test]
 async fn compatible_streaming_routes_return_protocol_sse() {
     let app = test_app().await;
     let token = setup_published_app(&app, "Compatible Streaming Route App").await;

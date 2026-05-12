@@ -25,7 +25,6 @@ impl AnthropicCompatError {
 }
 
 pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, AnthropicCompatError> {
-    reject_unsupported(&request)?;
     let object = request
         .as_object()
         .ok_or_else(|| AnthropicCompatError::invalid("request body must be an object"))?;
@@ -103,15 +102,6 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
 
     serde_json::from_value(native)
         .map_err(|_| AnthropicCompatError::invalid("failed to build Native request"))
-}
-
-fn reject_unsupported(request: &Value) -> Result<(), AnthropicCompatError> {
-    for field in ["tools", "tool_choice"] {
-        if request.get(field).is_some() {
-            return Err(AnthropicCompatError::unsupported(field));
-        }
-    }
-    Ok(())
 }
 
 fn anthropic_text_content(content: &Value) -> Result<String, AnthropicCompatError> {

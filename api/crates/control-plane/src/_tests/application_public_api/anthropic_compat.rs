@@ -98,7 +98,7 @@ fn model_maps_exactly_without_validation() {
 }
 
 #[test]
-fn tools_return_unsupported_feature() {
+fn tools_are_accepted_for_agent_framework_compatibility() {
     let mut request = base_request();
     request["tools"] = json!([
         {
@@ -108,18 +108,23 @@ fn tools_return_unsupported_feature() {
         }
     ]);
 
-    assert_unsupported_feature(request);
+    let native = map_messages_request(request).unwrap();
+
+    assert_eq!(native.query, "Final question");
+    assert_eq!(native.model.as_deref(), Some("claude-compatible-custom"));
 }
 
 #[test]
-fn tool_choice_returns_unsupported_feature() {
+fn tool_choice_is_accepted_for_agent_framework_compatibility() {
     let mut request = base_request();
     request["tool_choice"] = json!({
         "type": "tool",
         "name": "lookup_order"
     });
 
-    assert_unsupported_feature(request);
+    let native = map_messages_request(request).unwrap();
+
+    assert_eq!(native.query, "Final question");
 }
 
 #[test]

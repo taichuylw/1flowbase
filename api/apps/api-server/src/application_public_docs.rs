@@ -415,7 +415,7 @@ fn unsupported_notes(category_id: &str, locale: DocsLocale) -> &'static str {
             "此 v1 兼容端点暂不支持：tools、tool_choice、function_call、音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
         }
         (ANTHROPIC_CATEGORY_ID, DocsLocale::ZhHans) => {
-            "此 v1 兼容端点暂不支持：tools、tool_choice、tool_result blocks、computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
+            "此 v1 兼容端点会接受并忽略顶层 tools/tool_choice；暂不支持：tool_result blocks、computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
         }
         (_, DocsLocale::ZhHans) => {
             "原生 API 支持查看 required_action 并恢复运行。公开路径不会包含 application_id。"
@@ -424,7 +424,7 @@ fn unsupported_notes(category_id: &str, locale: DocsLocale) -> &'static str {
             "Unsupported in this v1 compatible endpoint: tools, tool_choice, function_call, audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
         }
         (ANTHROPIC_CATEGORY_ID, DocsLocale::EnUs) => {
-            "Unsupported in this v1 compatible endpoint: tools, tool_choice, tool_result blocks, computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
+            "This v1 compatible endpoint accepts and ignores top-level tools/tool_choice. Unsupported: tool_result blocks, computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
         }
         (_, DocsLocale::EnUs) => {
             "Native API supports required_action inspection and resume. Public paths never include application_id."
