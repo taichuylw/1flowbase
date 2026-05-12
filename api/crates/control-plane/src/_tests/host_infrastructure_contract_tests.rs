@@ -30,6 +30,15 @@ impl CacheStore for FakeInfrastructure {
         Ok(())
     }
 
+    async fn set_if_absent_json(
+        &self,
+        _key: &str,
+        _value: serde_json::Value,
+        _ttl: Option<Duration>,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+
     async fn delete(&self, _key: &str) -> anyhow::Result<()> {
         Ok(())
     }

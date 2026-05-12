@@ -301,6 +301,7 @@ pub(crate) async fn execute_blocking_native_run(
                 "blocking native published run reached failed runtime result"
             );
             ApplicationNativeRunService::new(state.store.clone())
+                .with_last_used_cache(state.infrastructure.cache_store())
                 .get_native_run(GetNativeRunCommand {
                     bearer_token,
                     run_id: run.id,
@@ -333,6 +334,7 @@ pub async fn create_native_run(
     let response_mode = request.response_mode.clone();
     let include_workflow_events = include_workflow_events(&request);
     let run = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .create_native_run(CreateNativeRunCommand {
             bearer_token: bearer_token.clone(),
             request,
@@ -458,6 +460,7 @@ pub async fn get_native_run(
 ) -> Result<Json<ApiSuccess<NativeRunResponse>>, NativeApiError> {
     let bearer_token = bearer_token(&headers)?;
     let run = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .get_native_run(GetNativeRunCommand {
             bearer_token,
             run_id,
@@ -487,6 +490,7 @@ pub async fn cancel_native_run(
 ) -> Result<Json<ApiSuccess<NativeRunResponse>>, NativeApiError> {
     let bearer_token = bearer_token(&headers)?;
     let run = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .cancel_native_run(CancelNativeRunCommand {
             bearer_token,
             run_id,
@@ -520,7 +524,8 @@ pub async fn resume_native_run(
     let bearer_token = bearer_token(&headers)?;
     let response_payload = body.response_payload.clone();
     let response_mode = body.response_mode.clone();
-    let native_service = ApplicationNativeRunService::new(state.store.clone());
+    let native_service = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store());
     let run_result = native_service
         .resume_native_run(ResumeNativeRunCommand {
             bearer_token: bearer_token.clone(),
@@ -534,6 +539,7 @@ pub async fn resume_native_run(
         Ok(run) => run,
         Err(NativeRunValidationError::ResumeContinuationNotImplemented) => {
             let api_actor = ApplicationApiKeyService::new(state.store.clone())
+                .with_last_used_cache(state.infrastructure.cache_store())
                 .authenticate_bearer_token(&bearer_token)
                 .await
                 .map_err(|_| NativeRunValidationError::NotAuthenticated)
@@ -750,6 +756,7 @@ pub async fn upload_native_file(
 ) -> Result<(StatusCode, Json<ApiSuccess<UploadedFileResponse>>), NativeApiError> {
     let bearer_token = bearer_token(&headers)?;
     let api_actor = ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .authenticate_bearer_token(&bearer_token)
         .await
         .map_err(|_| {

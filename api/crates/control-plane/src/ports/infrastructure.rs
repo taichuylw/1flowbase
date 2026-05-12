@@ -14,6 +14,13 @@ pub trait CacheStore: Send + Sync {
         ttl: Option<time::Duration>,
     ) -> anyhow::Result<()>;
 
+    async fn set_if_absent_json(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+        ttl: Option<time::Duration>,
+    ) -> anyhow::Result<bool>;
+
     async fn delete(&self, key: &str) -> anyhow::Result<()>;
 
     async fn touch(&self, key: &str, ttl: time::Duration) -> anyhow::Result<bool>;

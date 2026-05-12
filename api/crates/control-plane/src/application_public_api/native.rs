@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -16,7 +18,7 @@ use super::{
 };
 use crate::ports::{
     ApiKeyRepository, ApplicationCompiledPlanRepository, ApplicationPublicationRepository,
-    ApplicationRepository, AuthRepository,
+    ApplicationRepository, AuthRepository, CacheStore,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -265,6 +267,7 @@ pub enum NativeRunValidationError {
 
 pub struct ApplicationNativeRunService<R> {
     repository: R,
+    last_used_cache: Option<Arc<dyn CacheStore>>,
 }
 
 impl<R> ApplicationNativeRunService<R>
@@ -280,14 +283,23 @@ where
         + Clone,
 {
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            last_used_cache: None,
+        }
+    }
+
+    pub fn with_last_used_cache(mut self, cache: Arc<dyn CacheStore>) -> Self {
+        self.last_used_cache = Some(cache);
+        self
     }
 
     pub async fn create_native_run(
         &self,
         command: CreateNativeRunCommand,
     ) -> std::result::Result<NativeRunResult, NativeRunValidationError> {
-        let run = ApplicationPublishedRunService::new(self.repository.clone())
+        let run = self
+            .published_run_service()
             .start_native_run(command)
             .await?;
 
@@ -298,7 +310,8 @@ where
         &self,
         command: GetNativeRunCommand,
     ) -> std::result::Result<NativeRunResult, NativeRunValidationError> {
-        let actor = ApplicationApiKeyService::new(self.repository.clone())
+        let actor = self
+            .api_key_service()
             .authenticate_bearer_token(&command.bearer_token)
             .await
             .map_err(|_| NativeRunValidationError::NotAuthenticated)?;
@@ -323,7 +336,8 @@ where
         &self,
         command: CancelNativeRunCommand,
     ) -> std::result::Result<NativeRunResult, NativeRunValidationError> {
-        let actor = ApplicationApiKeyService::new(self.repository.clone())
+        let actor = self
+            .api_key_service()
             .authenticate_bearer_token(&command.bearer_token)
             .await
             .map_err(|_| NativeRunValidationError::NotAuthenticated)?;
@@ -338,7 +352,8 @@ where
             return Err(NativeRunValidationError::Forbidden);
         }
 
-        let cancelled = ApplicationPublishedRunService::new(self.repository.clone())
+        let cancelled = self
+            .published_run_service()
             .cancel_published_run(&actor, &flow_run)
             .await?;
 
@@ -352,7 +367,8 @@ where
         &self,
         command: ResumeNativeRunCommand,
     ) -> std::result::Result<NativeRunResult, NativeRunValidationError> {
-        let actor = ApplicationApiKeyService::new(self.repository.clone())
+        let actor = self
+            .api_key_service()
             .authenticate_bearer_token(&command.bearer_token)
             .await
             .map_err(|_| NativeRunValidationError::NotAuthenticated)?;
@@ -395,6 +411,22 @@ where
             .map_err(|_| NativeRunValidationError::InvalidMapping)?;
 
         Err(NativeRunValidationError::ResumeContinuationNotImplemented)
+    }
+
+    fn api_key_service(&self) -> ApplicationApiKeyService<R> {
+        let service = ApplicationApiKeyService::new(self.repository.clone());
+        match &self.last_used_cache {
+            Some(cache) => service.with_last_used_cache(cache.clone()),
+            None => service,
+        }
+    }
+
+    fn published_run_service(&self) -> ApplicationPublishedRunService<R> {
+        let service = ApplicationPublishedRunService::new(self.repository.clone());
+        match &self.last_used_cache {
+            Some(cache) => service.with_last_used_cache(cache.clone()),
+            None => service,
+        }
     }
 }
 

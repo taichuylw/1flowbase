@@ -17,6 +17,8 @@ use control_plane::{
     },
     auth::{ApiKeyService, CreateApiKeyCommand},
 };
+use std::sync::Arc;
+use time::Duration;
 use uuid::Uuid;
 
 mod anthropic_compat;
@@ -243,6 +245,64 @@ async fn application_public_api_authentication_records_last_used_time_for_key_li
         .unwrap();
     assert_eq!(after_use[0].id, created.api_key.id);
     assert!(after_use[0].last_used_at.is_some());
+}
+
+#[tokio::test]
+async fn application_public_api_last_used_write_is_throttled_for_sixty_seconds() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Support Bot");
+    let cache = Arc::new(harness.last_used_cache());
+    let service =
+        ApplicationApiKeyService::new(harness.repository()).with_last_used_cache(cache.clone());
+    let created = service
+        .create_api_key(CreateApplicationApiKeyCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            name: "Runtime client".into(),
+            expires_at: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .authenticate_bearer_token(&created.token)
+        .await
+        .unwrap();
+    service
+        .authenticate_bearer_token(&created.token)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness
+            .repository()
+            .api_key_last_used_write_count(created.api_key.id),
+        1
+    );
+    assert_eq!(cache.last_ttl(), Some(Duration::seconds(60)));
+}
+
+#[tokio::test]
+async fn application_public_api_last_used_write_failure_does_not_fail_authentication() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Support Bot");
+    let repository = harness.repository();
+    repository.fail_mark_api_key_used(true);
+    let service = ApplicationApiKeyService::new(repository);
+    let created = service
+        .create_api_key(CreateApplicationApiKeyCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            name: "Runtime client".into(),
+            expires_at: None,
+        })
+        .await
+        .unwrap();
+
+    service
+        .authenticate_bearer_token(&created.token)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

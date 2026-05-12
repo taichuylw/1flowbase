@@ -1,6 +1,10 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use rand_core::{OsRng, RngCore};
-use time::OffsetDateTime;
+use serde_json::json;
+use time::{Duration, OffsetDateTime};
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
@@ -9,7 +13,9 @@ use crate::{
     },
     auth::hash_api_key_token,
     errors::ControlPlaneError,
-    ports::{ApiKeyRepository, ApplicationRepository, AuthRepository, CreateApiKeyInput},
+    ports::{
+        ApiKeyRepository, ApplicationRepository, AuthRepository, CacheStore, CreateApiKeyInput,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -51,6 +57,7 @@ pub struct ApplicationApiKeyActor {
 
 pub struct ApplicationApiKeyService<R> {
     repository: R,
+    last_used_cache: Option<Arc<dyn CacheStore>>,
 }
 
 const API_KEY_SECRET_ALPHABET: &[u8] =
@@ -58,6 +65,7 @@ const API_KEY_SECRET_ALPHABET: &[u8] =
 const API_KEY_SHORT_ID_LEN: usize = 12;
 const API_KEY_SECRET_LEN: usize = 40;
 const API_KEY_SECRET_ALPHABET_LEN: u8 = 62;
+const LAST_USED_CACHE_TTL: Duration = Duration::seconds(60);
 
 fn generate_application_api_key_token(key_id: Uuid) -> (String, String) {
     let key_id_hex = key_id.simple().to_string();
@@ -83,7 +91,15 @@ where
     R: AuthRepository + ApiKeyRepository + ApplicationRepository,
 {
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            last_used_cache: None,
+        }
+    }
+
+    pub fn with_last_used_cache(mut self, cache: Arc<dyn CacheStore>) -> Self {
+        self.last_used_cache = Some(cache);
+        self
     }
 
     pub async fn create_api_key(
@@ -184,7 +200,7 @@ where
         {
             return Err(anyhow!("not_authenticated"));
         }
-        self.repository.mark_api_key_used(api_key.id).await?;
+        self.record_api_key_used(&api_key).await;
 
         let application_id = api_key
             .application_id
@@ -210,5 +226,34 @@ where
             workspace_id: application.workspace_id,
             actor,
         })
+    }
+
+    async fn record_api_key_used(&self, api_key: &domain::ApiKeyRecord) {
+        if let Some(cache) = &self.last_used_cache {
+            let cache_key = format!("application-api-key-last-used:{}", api_key.id);
+            match cache
+                .set_if_absent_json(&cache_key, json!(true), Some(LAST_USED_CACHE_TTL))
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(error) => {
+                    warn!(
+                        api_key_id = %api_key.id,
+                        error = %error,
+                        "application api key last_used_at cache throttle failed"
+                    );
+                    return;
+                }
+            }
+        }
+
+        if let Err(error) = self.repository.mark_api_key_used(api_key.id).await {
+            warn!(
+                api_key_id = %api_key.id,
+                error = %error,
+                "application api key last_used_at update failed"
+            );
+        }
     }
 }

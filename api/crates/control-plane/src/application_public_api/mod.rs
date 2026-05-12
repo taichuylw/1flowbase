@@ -58,11 +58,12 @@ use crate::ports::{
     ApiKeyRepository, AppendRunEventInput, ApplicationApiMappingRepository,
     ApplicationCompileContextRepository, ApplicationCompiledPlanRepository,
     ApplicationPublicationRepository, ApplicationRepository, ApplicationVisibility, AuthRepository,
-    CreateApiKeyInput, CreateApplicationInput, CreateApplicationPublicationVersionInput,
-    CreateApplicationTagInput, CreateFlowRunInput, DeleteApplicationInput, FlowRepository,
-    ReplaceApplicationApiMappingInput, ReplaceApplicationEnvironmentVariablesInput,
-    SetApplicationApiEnabledInput, UpdateApplicationInput, UpdateProfileInput,
-    UpsertApiKeyDataModelPermissionInput, UpsertCompiledPlanInput,
+    CacheStore, CreateApiKeyInput, CreateApplicationInput,
+    CreateApplicationPublicationVersionInput, CreateApplicationTagInput, CreateFlowRunInput,
+    DeleteApplicationInput, FlowRepository, ReplaceApplicationApiMappingInput,
+    ReplaceApplicationEnvironmentVariablesInput, SetApplicationApiEnabledInput,
+    UpdateApplicationInput, UpdateProfileInput, UpsertApiKeyDataModelPermissionInput,
+    UpsertCompiledPlanInput,
 };
 
 #[cfg(test)]
@@ -96,6 +97,8 @@ struct ApplicationPublicApiTestRepositoryInner {
     next_flow_version_sequence: i64,
     next_compiled_plan_ordinal: u128,
     next_publication_ordinal: u128,
+    api_key_last_used_write_counts: HashMap<Uuid, usize>,
+    fail_mark_api_key_used: bool,
 }
 
 #[cfg(test)]
@@ -174,6 +177,23 @@ impl ApplicationPublicApiTestRepository {
             .api_keys
             .contains_key(&api_key_id)
     }
+
+    pub fn api_key_last_used_write_count(&self, api_key_id: Uuid) -> usize {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .api_key_last_used_write_counts
+            .get(&api_key_id)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn fail_mark_api_key_used(&self, fail: bool) {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .fail_mark_api_key_used = fail;
+    }
 }
 
 #[cfg(test)]
@@ -203,8 +223,100 @@ impl ApplicationPublicApiTestHarness {
         self.repository.clone()
     }
 
+    pub fn last_used_cache(&self) -> ApplicationPublicApiTestCache {
+        ApplicationPublicApiTestCache::default()
+    }
+
     pub fn seed_application(&self, actor_user_id: Uuid, name: &str) -> domain::ApplicationRecord {
         self.repository.seed_application(actor_user_id, name)
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub struct ApplicationPublicApiTestCache {
+    inner: Arc<Mutex<ApplicationPublicApiTestCacheInner>>,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct ApplicationPublicApiTestCacheInner {
+    keys: HashMap<String, serde_json::Value>,
+    last_ttl: Option<time::Duration>,
+}
+
+#[cfg(test)]
+impl ApplicationPublicApiTestCache {
+    pub fn last_ttl(&self) -> Option<time::Duration> {
+        self.inner
+            .lock()
+            .expect("application public api test cache mutex poisoned")
+            .last_ttl
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl CacheStore for ApplicationPublicApiTestCache {
+    async fn get_json(&self, key: &str) -> Result<Option<serde_json::Value>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("application public api test cache mutex poisoned")
+            .keys
+            .get(key)
+            .cloned())
+    }
+
+    async fn set_json(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+        ttl: Option<time::Duration>,
+    ) -> Result<()> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test cache mutex poisoned");
+        inner.last_ttl = ttl;
+        inner.keys.insert(key.to_string(), value);
+        Ok(())
+    }
+
+    async fn set_if_absent_json(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+        ttl: Option<time::Duration>,
+    ) -> Result<bool> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test cache mutex poisoned");
+        inner.last_ttl = ttl;
+        if inner.keys.contains_key(key) {
+            return Ok(false);
+        }
+        inner.keys.insert(key.to_string(), value);
+        Ok(true)
+    }
+
+    async fn delete(&self, key: &str) -> Result<()> {
+        self.inner
+            .lock()
+            .expect("application public api test cache mutex poisoned")
+            .keys
+            .remove(key);
+        Ok(())
+    }
+
+    async fn touch(&self, key: &str, ttl: time::Duration) -> Result<bool> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test cache mutex poisoned");
+        inner.last_ttl = Some(ttl);
+        Ok(inner.keys.contains_key(key))
     }
 }
 
@@ -548,11 +660,18 @@ impl ApiKeyRepository for ApplicationPublicApiTestRepository {
             .inner
             .lock()
             .expect("application public api test repo mutex poisoned");
+        if inner.fail_mark_api_key_used {
+            anyhow::bail!("mark_api_key_used failed for test");
+        }
         let api_key = inner
             .api_keys
             .get_mut(&api_key_id)
             .ok_or(ControlPlaneError::NotFound("api_key"))?;
         api_key.last_used_at = Some(OffsetDateTime::now_utc());
+        *inner
+            .api_key_last_used_write_counts
+            .entry(api_key_id)
+            .or_default() += 1;
         Ok(())
     }
 

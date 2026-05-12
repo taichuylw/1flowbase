@@ -115,6 +115,15 @@ impl CacheStore for MokaCacheStore {
         Ok(())
     }
 
+    async fn set_if_absent_json(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+        ttl: Option<time::Duration>,
+    ) -> anyhow::Result<bool> {
+        EphemeralKvStore::set_if_absent_json(self, key, value, ttl).await
+    }
+
     async fn delete(&self, key: &str) -> anyhow::Result<()> {
         self.cache.invalidate(&self.namespaced_key(key)).await;
         Ok(())

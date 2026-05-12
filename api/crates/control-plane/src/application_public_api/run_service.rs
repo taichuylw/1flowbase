@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -19,13 +21,14 @@ use crate::{
     audit::audit_log,
     ports::{
         ApiKeyRepository, ApplicationCompiledPlanRepository, ApplicationPublicationRepository,
-        ApplicationRepository, AuthRepository, CreateFlowRunInput,
+        ApplicationRepository, AuthRepository, CacheStore, CreateFlowRunInput,
     },
     state_transition::ensure_flow_run_transition,
 };
 
 pub struct ApplicationPublishedRunService<R> {
     repository: R,
+    last_used_cache: Option<Arc<dyn CacheStore>>,
 }
 
 impl<R> ApplicationPublishedRunService<R>
@@ -41,14 +44,26 @@ where
         + Clone,
 {
     pub fn new(repository: R) -> Self {
-        Self { repository }
+        Self {
+            repository,
+            last_used_cache: None,
+        }
+    }
+
+    pub fn with_last_used_cache(mut self, cache: Arc<dyn CacheStore>) -> Self {
+        self.last_used_cache = Some(cache);
+        self
     }
 
     pub async fn start_native_run(
         &self,
         command: CreateNativeRunCommand,
     ) -> std::result::Result<NativeRunResult, NativeRunValidationError> {
-        let actor = ApplicationApiKeyService::new(self.repository.clone())
+        let mut api_key_service = ApplicationApiKeyService::new(self.repository.clone());
+        if let Some(cache) = &self.last_used_cache {
+            api_key_service = api_key_service.with_last_used_cache(cache.clone());
+        }
+        let actor = api_key_service
             .authenticate_bearer_token(&command.bearer_token)
             .await
             .map_err(|_| NativeRunValidationError::NotAuthenticated)?;
