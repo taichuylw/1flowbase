@@ -182,7 +182,7 @@ fn openapi_spec(context: &ApplicationPublicDocsContext, operations: Vec<PublicOp
                     "401": {"description": response_description("invalid_application_api_key", locale)},
                     "409": {"description": response_description("application_not_published_or_run_state_not_supported", locale)}
                 },
-                "security": [{"applicationApiKey": []}]
+                "security": operation_security(operation.category_id)
             }),
         );
     }
@@ -202,6 +202,12 @@ fn openapi_spec(context: &ApplicationPublicDocsContext, operations: Vec<PublicOp
                     "type": "http",
                     "scheme": "bearer",
                     "bearerFormat": "Application API Key",
+                    "description": security_scheme_description(locale)
+                },
+                "anthropicApplicationApiKey": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "x-api-key",
                     "description": security_scheme_description(locale)
                 }
             }
@@ -225,6 +231,17 @@ fn openapi_spec(context: &ApplicationPublicDocsContext, operations: Vec<PublicOp
                 .unwrap_or_else(|| json!({"status": "not_published"}))
         }
     })
+}
+
+fn operation_security(category_id: &str) -> Value {
+    if category_id == ANTHROPIC_CATEGORY_ID {
+        return json!([
+            {"applicationApiKey": []},
+            {"anthropicApplicationApiKey": []}
+        ]);
+    }
+
+    json!([{"applicationApiKey": []}])
 }
 
 fn application_description(context: &ApplicationPublicDocsContext) -> String {

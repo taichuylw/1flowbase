@@ -186,6 +186,45 @@ async fn application_api_docs_category_and_operation_specs_use_public_paths_only
 }
 
 #[tokio::test]
+async fn application_api_docs_anthropic_operation_advertises_x_api_key_auth() {
+    let app = test_app().await;
+    let (cookie, application_id) = setup_published_app(&app).await;
+
+    let spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationAnthropicCreateMessage/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(spec.status(), StatusCode::OK);
+    let spec_payload = response_json(spec).await;
+
+    assert_eq!(
+        spec_payload["paths"]["/v1/messages"]["post"]["security"],
+        json!([
+            {"applicationApiKey": []},
+            {"anthropicApplicationApiKey": []}
+        ])
+    );
+    assert_eq!(
+        spec_payload["components"]["securitySchemes"]["anthropicApplicationApiKey"],
+        json!({
+            "type": "apiKey",
+            "in": "header",
+            "name": "x-api-key",
+            "description": "Use an application API key created from this application API tab."
+        })
+    );
+}
+
+#[tokio::test]
 async fn application_api_docs_specs_follow_requested_locale() {
     let app = test_app().await;
     let (cookie, application_id) = setup_published_app(&app).await;
