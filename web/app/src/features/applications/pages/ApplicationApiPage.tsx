@@ -14,7 +14,6 @@ import {
   publishApplicationApiVersion,
   setApplicationApiEnabled
 } from '../api/public-api';
-import { ApplicationCompatibleApiConnectPanel } from '../components/api/ApplicationCompatibleApiConnectPanel';
 import { ApplicationApiDocsPanel } from '../components/api/ApplicationApiDocsPanel';
 import { ApplicationApiKeysPanel } from '../components/api/ApplicationApiKeysPanel';
 import { ApplicationApiStatusBar } from '../components/api/ApplicationApiStatusBar';
@@ -101,9 +100,7 @@ export function ApplicationApiPage({
             </Button>
           }
         />
-      ) : (
-        <ApplicationCompatibleApiConnectPanel />
-      )}
+      ) : null}
       <Tabs items={tabs} destroyOnHidden={false} />
     </div>
   );

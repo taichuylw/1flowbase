@@ -17,60 +17,6 @@
   overflow-wrap: anywhere;
 }
 
-.application-api-connect {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 20px;
-  overflow-wrap: anywhere;
-}
-
-.application-api-connect__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  width: 100%;
-  min-width: 0;
-}
-
-.application-api-connect__endpoint {
-  min-width: 0;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 8px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.application-api-connect__endpoint-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.application-api-connect__facts {
-  display: grid;
-  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
-  gap: 10px 12px;
-  margin: 0;
-}
-
-.application-api-connect__facts div {
-  display: contents;
-}
-
-.application-api-connect__facts dt {
-  color: var(--text-secondary);
-}
-
-.application-api-connect__facts dd {
-  min-width: 0;
-  margin: 0;
-}
-
 .application-api-status {
   width: 100%;
   max-width: 100%;
@@ -188,14 +134,6 @@
   .application-api-status__header {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .application-api-connect__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .application-api-connect__facts {
-    grid-template-columns: 1fr;
   }
 
   .application-api-mapping-grid {

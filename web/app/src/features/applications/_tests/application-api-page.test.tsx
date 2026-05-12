@@ -215,7 +215,7 @@ describe('ApplicationApiPage', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('shows OpenAI and Anthropic compatible connection settings', async () => {
+  test('keeps compatible connection settings inside API docs only', async () => {
     publicApi.fetchApplicationApiPublication.mockResolvedValue({
       id: 'publication-1',
       version_sequence: 1,
@@ -227,34 +227,17 @@ describe('ApplicationApiPage', () => {
 
     renderWithProviders(<ApplicationApiPage application={application} />);
 
-    const connectPanel = await screen.findByRole('region', {
-      name: '外部 Agent 接入'
+    await screen.findByRole('region', {
+      name: '公开 API 状态'
     });
 
     expect(
-      within(connectPanel).getByText('OpenAI 兼容')
-    ).toBeInTheDocument();
-    expect(
-      within(connectPanel).getByText('Anthropic 兼容')
-    ).toBeInTheDocument();
-    expect(
-      within(connectPanel).getByText('/v1/chat/completions')
-    ).toBeInTheDocument();
-    expect(within(connectPanel).getByText('/v1/messages')).toBeInTheDocument();
-    expect(
-      within(connectPanel).getByText(
-        'Authorization: Bearer <Application API Key>'
-      )
-    ).toBeInTheDocument();
-    expect(
-      within(connectPanel).getByText('x-api-key: <Application API Key>')
-    ).toBeInTheDocument();
-    expect(
-      within(connectPanel).getByText('http://localhost:7800/v1')
-    ).toBeInTheDocument();
-    expect(
-      within(connectPanel).getByText('http://localhost:7800')
-    ).toBeInTheDocument();
+      screen.queryByRole('region', { name: '外部 Agent 接入' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('OpenAI 兼容')).not.toBeInTheDocument();
+    expect(screen.queryByText('Anthropic 兼容')).not.toBeInTheDocument();
+    expect(screen.queryByText('/v1/chat/completions')).not.toBeInTheDocument();
+    expect(screen.queryByText('/v1/messages')).not.toBeInTheDocument();
   });
 
   test('opens API key list from the public API header action', async () => {
