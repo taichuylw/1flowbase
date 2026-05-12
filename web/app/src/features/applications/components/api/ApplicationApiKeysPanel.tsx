@@ -1,8 +1,10 @@
 import { useState } from 'react';
 
+import { DeleteOutlined, KeyOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Space, Table, Typography, message } from 'antd';
+import { App, Button, Form, Input, Modal, Space, Table, Typography } from 'antd';
 
+import { copyTextToClipboard } from '../../../../shared/ui/clipboard/copy-text';
 import { applicationDetailQueryKey } from '../../api/applications';
 import {
   applicationApiKeysQueryKey,
@@ -25,6 +27,7 @@ export function ApplicationApiKeysPanel({
   variant?: 'panel' | 'embedded';
 }) {
   const queryClient = useQueryClient();
+  const { message } = App.useApp();
   const [createOpen, setCreateOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedApplicationApiKey | null>(null);
@@ -60,6 +63,23 @@ export function ApplicationApiKeysPanel({
   });
 
   const keys = keysQuery.data ?? [];
+  const maskTokenPreview = (value: string) => {
+    if (value.length <= 8) {
+      return '****';
+    }
+
+    return `${value.slice(0, 4)}****${value.slice(-4)}`;
+  };
+  const copyCreatedToken = () => {
+    const token = createdKey?.token;
+    if (!token) {
+      return;
+    }
+    copyTextToClipboard(token).then(
+      () => message.success('API Key 已复制'),
+      () => message.error('复制失败')
+    );
+  };
   const keyTable = (
     <Table<ApplicationApiKey>
       rowKey="id"
@@ -68,7 +88,13 @@ export function ApplicationApiKeysPanel({
       pagination={false}
       columns={[
         { title: '名称', dataIndex: 'name' },
-        { title: '前缀', dataIndex: 'token_prefix' },
+        {
+          title: '密钥',
+          dataIndex: 'token_prefix',
+          render: (value: string) => (
+            <Typography.Text code>{maskTokenPreview(value)}</Typography.Text>
+          )
+        },
         { title: '创建时间', dataIndex: 'created_at' },
         {
           title: '操作',
@@ -76,13 +102,13 @@ export function ApplicationApiKeysPanel({
           render: (_, record) => (
             <Button
               danger
+              icon={<DeleteOutlined />}
               size="small"
+              type="text"
               aria-label="删除"
               loading={revokeMutation.isPending}
               onClick={() => revokeMutation.mutate(record.id)}
-            >
-              删除
-            </Button>
+            />
           )
         }
       ]}
@@ -92,7 +118,14 @@ export function ApplicationApiKeysPanel({
   if (variant === 'embedded') {
     return (
       <>
-        <Button onClick={() => setListOpen(true)}>API 密钥</Button>
+        <Button
+          aria-label="API 密钥"
+          className="application-api-key-trigger"
+          icon={<KeyOutlined />}
+          onClick={() => setListOpen(true)}
+        >
+          API 密钥
+        </Button>
         <Modal
           title="API Keys"
           open={listOpen}
@@ -139,18 +172,29 @@ export function ApplicationApiKeysPanel({
         <Modal
           title="保存这次创建的 API Key"
           open={Boolean(createdKey)}
+          className="application-api-created-key-modal"
           destroyOnHidden
-          okText="关闭"
-          cancelButtonProps={{ style: { display: 'none' } }}
-          onOk={() => setCreatedKey(null)}
           onCancel={() => setCreatedKey(null)}
+          footer={[
+            <Button key="close" type="text" onClick={() => setCreatedKey(null)}>
+              关闭
+            </Button>,
+            <Button
+              key="copy"
+              aria-label="复制"
+              className="application-api-created-token-copy"
+              onClick={copyCreatedToken}
+            >
+              复制
+            </Button>
+          ]}
         >
           <Space direction="vertical" className="application-api-token-modal">
             <Typography.Text>完整 token 只在创建后显示一次。</Typography.Text>
             <Typography.Text type="secondary">
               关闭后页面不再显示完整 token。
             </Typography.Text>
-            <Typography.Text code copyable>
+            <Typography.Text className="application-api-created-token">
               {createdKey?.token}
             </Typography.Text>
           </Space>
@@ -197,18 +241,29 @@ export function ApplicationApiKeysPanel({
       <Modal
         title="保存这次创建的 API Key"
         open={Boolean(createdKey)}
+        className="application-api-created-key-modal"
         destroyOnHidden
-        okText="关闭"
-        cancelButtonProps={{ style: { display: 'none' } }}
-        onOk={() => setCreatedKey(null)}
         onCancel={() => setCreatedKey(null)}
+        footer={[
+          <Button key="close" type="text" onClick={() => setCreatedKey(null)}>
+            关闭
+          </Button>,
+          <Button
+            key="copy"
+            aria-label="复制"
+            className="application-api-created-token-copy"
+            onClick={copyCreatedToken}
+          >
+            复制
+          </Button>
+        ]}
       >
         <Space direction="vertical" className="application-api-token-modal">
           <Typography.Text>完整 token 只在创建后显示一次。</Typography.Text>
           <Typography.Text type="secondary">
             关闭后页面不再显示完整 token。
           </Typography.Text>
-          <Typography.Text code copyable>
+          <Typography.Text className="application-api-created-token">
             {createdKey?.token}
           </Typography.Text>
         </Space>
