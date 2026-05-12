@@ -165,6 +165,32 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
     }
 }
 
+fn plan_with_templated_prompt_message() -> CompiledPlan {
+    let mut plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
+    let node = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    node.bindings.insert(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "{{node-start.query}}"
+                    }
+                }
+            ]),
+        },
+    );
+    plan
+}
+
 #[tokio::test]
 async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
     let plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
@@ -196,6 +222,43 @@ async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
             assert_eq!(outcome.node_traces[1].output_payload, json!({}));
             assert!(outcome.node_traces[1].output_payload.get("error").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn llm_runtime_fails_before_provider_when_prompt_template_selector_is_missing() {
+    let plan = plan_with_templated_prompt_message();
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = CapturingProviderInvoker {
+        captured_input: captured_input.clone(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "different-start": { "query": "hello" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .is_none());
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_kind"],
+                json!("prompt_template_unresolved")
+            );
+            assert!(failure.error_payload["message"]
+                .as_str()
+                .expect("message should be a string")
+                .contains("node-start.query"));
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }

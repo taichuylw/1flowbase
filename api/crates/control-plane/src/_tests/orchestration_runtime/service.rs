@@ -641,6 +641,43 @@ async fn flow_debug_run_resolves_application_environment_variables() {
 }
 
 #[tokio::test]
+async fn flow_debug_run_fails_before_provider_when_prompt_template_selector_is_missing() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({ "different-start": { "query": "hello" } }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let failed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(failed.flow_run.status, domain::FlowRunStatus::Failed);
+    let message = failed
+        .flow_run
+        .error_payload
+        .as_ref()
+        .expect("flow error payload should be persisted")["message"]
+        .as_str()
+        .expect("error message should be persisted");
+    assert!(message.contains("unresolved template selector node-start.query"));
+    assert!(failed.node_runs.iter().all(|run| run.node_id != "node-llm"));
+}
+
+#[tokio::test]
 async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::ReasoningDelta {

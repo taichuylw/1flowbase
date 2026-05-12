@@ -92,7 +92,8 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
         "templated_text" => binding
             .raw_value
             .as_str()
-            .map(|value| Value::String(render_template(value, variable_pool)))
+            .map(|value| render_template(value, variable_pool).map(Value::String))
+            .transpose()?
             .ok_or_else(|| anyhow!("templated_text raw_value must be a string")),
         "prompt_messages" => {
             let entries = binding
@@ -119,7 +120,7 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
                 message.insert("role".to_string(), Value::String(role.to_string()));
                 message.insert(
                     "content".to_string(),
-                    Value::String(render_template(content, variable_pool)),
+                    Value::String(render_template(content, variable_pool)?),
                 );
                 messages.push(Value::Object(message));
             }
@@ -351,7 +352,7 @@ pub fn lookup_selector_value(
     Ok(cursor.clone())
 }
 
-fn render_template(template: &str, variable_pool: &Map<String, Value>) -> String {
+fn render_template(template: &str, variable_pool: &Map<String, Value>) -> Result<String> {
     let mut rendered = String::new();
     let mut cursor = 0;
 
@@ -361,7 +362,7 @@ fn render_template(template: &str, variable_pool: &Map<String, Value>) -> String
         let token_start = start + 2;
         let Some(end_offset) = template[token_start..].find("}}") else {
             rendered.push_str(&template[start..]);
-            return rendered;
+            return Ok(rendered);
         };
         let token_end = token_start + end_offset;
         let token = template[token_start..token_end].trim();
@@ -372,15 +373,18 @@ fn render_template(template: &str, variable_pool: &Map<String, Value>) -> String
                 Ok(Value::String(text)) => rendered.push_str(&text),
                 Ok(Value::Null) => rendered.push_str("null"),
                 Ok(value) => rendered.push_str(&value.to_string()),
-                Err(_) => rendered.push_str(&template[start..token_end + 2]),
+                Err(error) => bail!(
+                    "unresolved template selector {}: {error}",
+                    replacement.join(".")
+                ),
             }
         } else {
-            rendered.push_str(&template[start..token_end + 2]);
+            bail!("unresolved template selector {token}: selector path must include a source");
         }
 
         cursor = token_end + 2;
     }
 
     rendered.push_str(&template[cursor..]);
-    rendered
+    Ok(rendered)
 }

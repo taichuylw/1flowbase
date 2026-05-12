@@ -146,7 +146,33 @@ where
             .nodes
             .get(node_id)
             .ok_or_else(|| anyhow!("compiled node missing: {node_id}"))?;
-        let resolved_inputs = resolve_node_inputs(node, &variable_pool)?;
+        let resolved_inputs = match resolve_node_inputs(node, &variable_pool) {
+            Ok(inputs) => inputs,
+            Err(error) => {
+                let error_payload = build_binding_resolution_error_payload(&error);
+                node_traces.push(NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: json!({}),
+                    output_payload: json!({}),
+                    error_payload: Some(error_payload.clone()),
+                    metrics_payload: json!({ "preview_mode": true }),
+                    debug_payload: json!({}),
+                    provider_events: Vec::new(),
+                });
+                return Ok(FlowDebugExecutionOutcome {
+                    stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                        node_id: node.node_id.clone(),
+                        node_alias: node.alias.clone(),
+                        error_payload,
+                    }),
+                    variable_pool,
+                    checkpoint_snapshot: None,
+                    node_traces,
+                });
+            }
+        };
         let rendered_templates = render_templated_bindings(node, &resolved_inputs);
 
         match node.node_type.as_str() {
@@ -784,6 +810,20 @@ fn build_empty_prompt_messages_error_payload(runtime: &CompiledLlmRuntime) -> Va
         "protocol": runtime.protocol,
         "error_kind": "prompt_messages_empty",
         "message": "LLM node requires at least one non-empty user or assistant prompt message",
+    })
+}
+
+fn build_binding_resolution_error_payload(error: &anyhow::Error) -> Value {
+    let message = error.to_string();
+    let error_kind = if message.contains("unresolved template selector") {
+        "prompt_template_unresolved"
+    } else {
+        "binding_resolution_failed"
+    };
+
+    json!({
+        "error_kind": error_kind,
+        "message": message,
     })
 }
 
