@@ -20,6 +20,7 @@ export function DebugConversationPane({
   messages,
   onChangeQuery,
   onLoadArtifact,
+  onOpenMessageLog,
   onStopRun,
   onSubmitPrompt
 }: {
@@ -29,6 +30,7 @@ export function DebugConversationPane({
   messages: AgentFlowDebugMessage[];
   onChangeQuery: (value: string) => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
 }) {
@@ -69,7 +71,12 @@ export function DebugConversationPane({
     }
 
     scrollToBottom();
-  }, [activeAssistantContent, activeAssistantMessageId, messages.length, scrollToBottom]);
+  }, [
+    activeAssistantContent,
+    activeAssistantMessageId,
+    messages.length,
+    scrollToBottom
+  ]);
 
   useLayoutEffect(() => {
     if (typeof ResizeObserver === 'undefined') {
@@ -122,6 +129,7 @@ export function DebugConversationPane({
                   key={message.id}
                   message={message}
                   onLoadArtifact={onLoadArtifact}
+                  onOpenLog={onOpenMessageLog}
                 />
               ) : (
                 <article

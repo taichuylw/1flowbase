@@ -50,11 +50,13 @@ export function NodeRunPayloadSections({
   inputPayload,
   debugPayload,
   outputPayload,
+  includeDebugPayload = true,
   onLoadArtifact
 }: {
   inputPayload: unknown;
   debugPayload: unknown;
   outputPayload: unknown;
+  includeDebugPayload?: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const processPayload = pickProcessPayload(debugPayload);
@@ -66,11 +68,13 @@ export function NodeRunPayloadSections({
         title="输入"
         onLoadArtifact={onLoadArtifact}
       />
-      <NodeRunJsonBlock
-        payload={processPayload}
-        title="数据处理"
-        onLoadArtifact={onLoadArtifact}
-      />
+      {includeDebugPayload ? (
+        <NodeRunJsonBlock
+          payload={processPayload}
+          title="数据处理"
+          onLoadArtifact={onLoadArtifact}
+        />
+      ) : null}
       <NodeRunJsonBlock
         payload={outputPayload}
         title="输出"

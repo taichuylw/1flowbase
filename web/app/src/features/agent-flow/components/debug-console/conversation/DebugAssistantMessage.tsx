@@ -1,4 +1,9 @@
-import { CopyOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
+import {
+  CopyOutlined,
+  DownOutlined,
+  FileTextOutlined,
+  RightOutlined
+} from '@ant-design/icons';
 import { App, Button, Space, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 
@@ -87,10 +92,12 @@ function useProgressiveText(target: string, enabled: boolean) {
 
 export function DebugAssistantMessage({
   message,
-  onLoadArtifact
+  onLoadArtifact,
+  onOpenLog
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onOpenLog?: (message: AgentFlowDebugMessage) => void;
 }) {
   const { message: messageApi } = App.useApp();
   const [isReasoningExpanded, setIsReasoningExpanded] = useState(true);
@@ -177,6 +184,16 @@ export function DebugAssistantMessage({
               }}
             />
           </Tooltip>
+          {onOpenLog ? (
+            <Tooltip title="查看对话日志">
+              <Button
+                aria-label="查看对话日志"
+                icon={<FileTextOutlined />}
+                size="small"
+                onClick={() => onOpenLog(message)}
+              />
+            </Tooltip>
+          ) : null}
         </Space>
       </div>
     </article>

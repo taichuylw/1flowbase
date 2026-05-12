@@ -1,0 +1,127 @@
+.agent-flow-editor__conversation-log-panel {
+  flex: 1 1 48%;
+  min-width: min(100%, 360px);
+  margin-right: 12px;
+}
+
+.agent-flow-editor__conversation-log-body,
+.agent-flow-editor__conversation-log-tabs,
+.agent-flow-editor__conversation-log-tabs .ant-tabs-content-holder,
+.agent-flow-editor__conversation-log-tabs .ant-tabs-content,
+.agent-flow-editor__conversation-log-tabs .ant-tabs-tabpane-active {
+  min-height: 0;
+  height: 100%;
+}
+
+.agent-flow-editor__conversation-log-body {
+  background: #f5f7fb;
+}
+
+.agent-flow-editor__conversation-log-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  background: #f5f7fb;
+}
+
+.agent-flow-editor__conversation-log-tabs > .ant-tabs-nav {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid #edf0f5;
+  background: #ffffff;
+}
+
+.agent-flow-editor__conversation-log-tabs > .ant-tabs-nav .ant-tabs-tab {
+  padding: 12px 0;
+}
+
+.agent-flow-editor__conversation-log-tabs
+  > .ant-tabs-nav
+  .ant-tabs-tab
+  + .ant-tabs-tab {
+  margin-left: 28px;
+}
+
+.agent-flow-editor__conversation-log-tabs .ant-tabs-tabpane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.agent-flow-editor__conversation-log-tab,
+.agent-flow-editor__conversation-log-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+  padding: 12px;
+}
+
+.agent-flow-editor__conversation-log-json-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-flow-editor__conversation-log-metadata,
+.agent-flow-editor__conversation-log-node-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e6eaf1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.agent-flow-editor__conversation-log-node-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-flow-editor__conversation-log-node.ant-btn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.agent-flow-editor__conversation-log-node-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.agent-flow-editor__conversation-log-node-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-flow-editor__conversation-log-node-main .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-flow-editor__conversation-log-node-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-flow-editor__conversation-log-empty {
+  padding: 24px 12px;
+}
