@@ -6,27 +6,31 @@ import { SchemaDockPanel } from '../../../../shared/schema-ui/overlay-shell/Sche
 
 interface AgentFlowDockPanelProps {
   actions?: ReactNode;
+  ariaLabel?: string;
   bodyClassName?: string;
   children: ReactNode;
   className?: string;
   closeLabel?: string;
+  subtitle?: ReactNode;
   title: string;
   onClose: () => void;
 }
 
 export function AgentFlowDockPanel({
   actions,
+  ariaLabel,
   bodyClassName,
   children,
   className,
   closeLabel,
+  subtitle,
   title,
   onClose
 }: AgentFlowDockPanelProps) {
   const shellSchema = {
     schemaVersion: '1.0.0',
     shellType: 'dock_panel',
-    title
+    title: ariaLabel ?? title
   } as const;
 
   return (
@@ -42,7 +46,12 @@ export function AgentFlowDockPanel({
     >
       <div className="agent-flow-editor__dock-panel-header">
         <div className="agent-flow-editor__dock-panel-title">
-          <Typography.Text strong>{title}</Typography.Text>
+          <div className="agent-flow-editor__dock-panel-title-stack">
+            <Typography.Text strong>{title}</Typography.Text>
+            {subtitle ? (
+              <Typography.Text type="secondary">{subtitle}</Typography.Text>
+            ) : null}
+          </div>
         </div>
         <Space size={4} wrap>
           {actions}

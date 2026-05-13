@@ -442,6 +442,17 @@
   margin: 0;
 }
 
+.agent-flow-editor__dock-panel-title-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.agent-flow-editor__dock-panel-title-stack .ant-typography {
+  overflow-wrap: anywhere;
+}
+
 .agent-flow-editor__history-panel-body {
   overflow: auto;
   padding: 12px;

@@ -1,9 +1,9 @@
 import { CloseOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Result, Space, Typography } from 'antd';
+import { Button, Result, Typography } from 'antd';
 
 import { useAuthStore } from '../../../../state/auth-store';
-import { DebugConversationPane } from '../../../agent-flow/components/debug-console/conversation/DebugConversationPane';
+import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
 import type {
   AgentFlowDebugMessage,
   AgentFlowDebugMessageStatus,
@@ -239,32 +239,57 @@ function buildConversationMessages(
   ];
 }
 
-function RunConversation({ detail }: { detail: ApplicationRunDetail }) {
+function RunConversation({
+  detail,
+  onClose,
+  onOpenMessageLog
+}: {
+  detail: ApplicationRunDetail;
+  onClose: () => void;
+  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+}) {
+  const runContext = buildRunContext(detail);
+
   return (
-    <section aria-label="AI 对话" className="application-run-detail__section">
-      <div className="application-run-detail__section-header">
-        <Typography.Title level={5}>AI 对话</Typography.Title>
-      </div>
-      <div className="application-run-detail__conversation-pane">
-        <DebugConversationPane
-          messages={buildConversationMessages(detail)}
-          runContext={buildRunContext(detail)}
-          showComposer={false}
-          status={mapRunStatusToSessionStatus(detail.flow_run.status)}
-          stopping={false}
-          onChangeQuery={() => {}}
-          onStopRun={() => {}}
-          onSubmitPrompt={() => {}}
-        />
-      </div>
-    </section>
+    <div className="application-run-detail__conversation-pane">
+      <AgentFlowDebugConsole
+        ariaLabel="运行详情预览"
+        closeLabel="关闭运行详情"
+        messages={buildConversationMessages(detail)}
+        runContext={runContext}
+        showClearAction={false}
+        showComposer={false}
+        status={mapRunStatusToSessionStatus(detail.flow_run.status)}
+        stopping={false}
+        subtitle={detail.flow_run.id}
+        title="运行详情"
+        onChangeRunContextValue={() => {}}
+        onClearSession={() => {}}
+        onClose={onClose}
+        onOpenMessageLog={onOpenMessageLog}
+        onStopRun={() => {}}
+        onSubmitPrompt={() => {}}
+      />
+    </div>
   );
 }
 
-function renderDetail(detail: ApplicationRunDetail) {
+function renderDetail({
+  detail,
+  onClose,
+  onOpenMessageLog
+}: {
+  detail: ApplicationRunDetail;
+  onClose: () => void;
+  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+}) {
   return (
     <div className="application-run-detail__content">
-      <RunConversation detail={detail} />
+      <RunConversation
+        detail={detail}
+        onClose={onClose}
+        onOpenMessageLog={onOpenMessageLog}
+      />
     </div>
   );
 }
@@ -272,10 +297,12 @@ function renderDetail(detail: ApplicationRunDetail) {
 export function ApplicationRunDetailPanel({
   applicationId,
   onClose,
+  onOpenMessageLog,
   runId
 }: {
   applicationId: string;
   onClose: () => void;
+  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   runId: string | null;
 }) {
   const queryClient = useQueryClient();
@@ -365,8 +392,12 @@ export function ApplicationRunDetailPanel({
     content = <Result status="error" title="运行详情加载失败" />;
   } else if (runId && detailQuery.data) {
     content = (
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        {renderDetail(detailQuery.data)}
+      <div className="application-run-detail__body">
+        {renderDetail({
+          detail: detailQuery.data,
+          onClose,
+          onOpenMessageLog
+        })}
         <ApplicationRunResumeCard
           detail={detailQuery.data}
           onCompleteCallback={(callbackTaskId, responsePayload) =>
@@ -376,24 +407,34 @@ export function ApplicationRunDetailPanel({
             resumeMutation.mutateAsync({ checkpointId, inputPayload })
           }
         />
-      </Space>
+      </div>
     );
   }
 
   return (
-    <aside aria-label="运行详情" className="application-run-detail">
-      <div className="application-run-detail__header">
-        <div>
-          <Typography.Title level={4}>运行详情</Typography.Title>
-          <Typography.Text type="secondary">{runId}</Typography.Text>
+    <aside
+      aria-label="运行详情"
+      className={[
+        'application-run-detail',
+        detailQuery.data ? 'application-run-detail--loaded' : null
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {detailQuery.data ? null : (
+        <div className="application-run-detail__header">
+          <div>
+            <Typography.Title level={4}>运行详情</Typography.Title>
+            <Typography.Text type="secondary">{runId}</Typography.Text>
+          </div>
+          <Button
+            aria-label="关闭运行详情"
+            icon={<CloseOutlined />}
+            onClick={onClose}
+            type="text"
+          />
         </div>
-        <Button
-          aria-label="关闭运行详情"
-          icon={<CloseOutlined />}
-          onClick={onClose}
-          type="text"
-        />
-      </div>
+      )}
       {content}
     </aside>
   );

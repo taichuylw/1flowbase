@@ -179,6 +179,35 @@ describe('ApplicationLogsPage', () => {
       '退款政策摘要'
     );
 
+    const openLogButton = screen.getByRole('button', {
+      name: '查看对话日志'
+    });
+    fireEvent.click(openLogButton);
+
+    const logPanel = screen.getByRole('complementary', { name: '对话日志' });
+    expect(logPanel).toBeInTheDocument();
+    expect(detailPane).not.toContainElement(logPanel);
+    expect(detailPane).toContainElement(conversation);
+    expect(screen.getByTestId('application-logs-conversation-log-panel')).toBeInTheDocument();
+    expect(within(logPanel).getByRole('tab', { name: '详情' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(within(logPanel).getByLabelText('输入 JSON')).toHaveTextContent(
+      'user_prompt'
+    );
+    expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
+      '退款政策摘要'
+    );
+
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+    const logTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
+    fireEvent.click(logTraceNode);
+    expect(logTraceNode).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(logPanel).getByRole('region', { name: 'LLM 节点详情' })
+    ).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: '关闭运行详情' }));
 
     expect(

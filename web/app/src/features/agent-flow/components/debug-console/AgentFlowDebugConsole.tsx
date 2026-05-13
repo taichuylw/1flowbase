@@ -1,5 +1,6 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
+import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
 import type {
@@ -12,10 +13,16 @@ import { ConversationLogPanel } from './ConversationLogPanel';
 import { DebugConversationPane } from './conversation/DebugConversationPane';
 
 export function AgentFlowDebugConsole({
+  ariaLabel,
+  closeLabel,
   messages,
   runContext,
+  showClearAction = true,
+  showComposer = true,
   status,
   stopping,
+  subtitle,
+  title = '预览',
   onChangeRunContextValue,
   onClearSession,
   onClose,
@@ -24,10 +31,16 @@ export function AgentFlowDebugConsole({
   onStopRun,
   onSubmitPrompt
 }: {
+  ariaLabel?: string;
+  closeLabel?: string;
   messages: AgentFlowDebugMessage[];
   runContext: AgentFlowRunContext;
+  showClearAction?: boolean;
+  showComposer?: boolean;
   status: AgentFlowDebugSessionStatus;
   stopping: boolean;
+  subtitle?: ReactNode;
+  title?: string;
   onChangeRunContextValue: (
     nodeId: string,
     key: string,
@@ -61,22 +74,26 @@ export function AgentFlowDebugConsole({
       ) : null}
       <AgentFlowDockPanel
         actions={
-          <Button
-            aria-label="清空预览"
-            disabled={messages.length === 0}
-            icon={<ReloadOutlined />}
-            size="small"
-            type="text"
-            onClick={() => {
-              setOpenLogMessageId(null);
-              onClearSession();
-            }}
-          />
+          showClearAction ? (
+            <Button
+              aria-label="清空预览"
+              disabled={messages.length === 0}
+              icon={<ReloadOutlined />}
+              size="small"
+              type="text"
+              onClick={() => {
+                setOpenLogMessageId(null);
+                onClearSession();
+              }}
+            />
+          ) : null
         }
+        ariaLabel={ariaLabel}
         bodyClassName="agent-flow-editor__debug-console-body"
         className="agent-flow-editor__debug-console"
-        closeLabel="关闭预览"
-        title="预览"
+        closeLabel={closeLabel ?? `关闭${title}`}
+        subtitle={subtitle}
+        title={title}
         onClose={onClose}
       >
         <DebugConversationPane
@@ -103,6 +120,7 @@ export function AgentFlowDebugConsole({
 
             onChangeRunContextValue(queryField.nodeId, queryField.key, value);
           }}
+          showComposer={showComposer}
           onStopRun={onStopRun}
           onSubmitPrompt={onSubmitPrompt}
         />

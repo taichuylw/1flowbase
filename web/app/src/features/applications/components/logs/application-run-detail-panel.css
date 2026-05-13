@@ -2,13 +2,23 @@
   position: relative;
   display: flex;
   width: 100%;
+  height: 100%;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
   background: var(--ant-color-bg-container);
   padding: 16px;
+}
+
+.application-run-detail--loaded {
+  gap: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .application-run-detail__header {
@@ -23,7 +33,22 @@
 }
 
 .application-run-detail__content {
+  flex: 1 1 auto;
   min-height: 0;
+}
+
+.application-run-detail__body {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.application-run-detail__body > :not(.application-run-detail__content) {
+  flex: 0 0 auto;
 }
 
 .application-run-detail__section {
@@ -43,19 +68,86 @@
 }
 
 .application-run-detail__conversation-pane {
-  height: calc(100vh - 202px);
-  min-height: 420px;
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
   background: #f8fafd;
 }
 
+.application-run-detail__conversation-pane .agent-flow-editor__dock-panel {
+  display: flex;
+  container-type: inline-size;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f8fafd;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__conversation-log-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 0;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__debug-console {
+  border: 0;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__dock-panel-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: #f8fafd;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__dock-panel-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  background: #f8fafd;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__dock-panel-title {
+  min-width: 0;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__dock-panel-title-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__dock-panel-title-stack
+  .ant-typography {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .application-run-detail__conversation-pane
   .agent-flow-editor__debug-console-pane {
   display: flex;
   height: 100%;
-  min-height: 420px;
+  min-height: 0;
   flex-direction: column;
 }
 

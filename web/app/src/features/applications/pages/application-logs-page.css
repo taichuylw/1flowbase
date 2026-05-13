@@ -1,25 +1,54 @@
 .application-logs-page {
+  max-width: 100%;
   width: 100%;
+  min-width: 0;
+}
+
+.application-logs-page--detail-open {
+  display: flex;
+  height: calc(100vh - 120px);
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.application-logs-page__header {
+  flex: 0 0 auto;
+}
+
+.application-logs-page__header .ant-typography {
+  margin-top: 0;
+}
+
+.application-logs-page__header .ant-typography:last-child {
+  margin-bottom: 18px;
 }
 
 .application-logs-page__list {
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
 }
 
 .application-logs-page__splitter {
-  min-height: calc(100vh - 128px);
+  flex: 1;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .application-logs-page__splitter-control {
-  min-height: inherit;
+  height: 100%;
+  min-height: 0;
 }
 
-.application-logs-page__splitter-control .ant-splitter-panel {
+.application-logs-page__splitter-panel {
+  height: 100%;
   min-width: 0;
-}
-
-.application-logs-page__list .ant-typography {
-  margin-top: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .application-logs-page__list .ant-table-wrapper {
@@ -28,6 +57,55 @@
 
 .application-logs-page__list .application-runs-table__row--active > td {
   background: rgba(0, 217, 146, 0.08);
+}
+
+.application-logs-page__conversation-log-panel {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel {
+  display: flex;
+  container-type: inline-size;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  background: #f8fafd;
+}
+
+.application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: #f8fafd;
+}
+
+.application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  background: #f8fafd;
+}
+
+.application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel-title-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
 @media (max-width: 720px) {
