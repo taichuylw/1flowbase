@@ -1,4 +1,8 @@
-import type { ReactNode, MouseEvent as ReactMouseEvent } from 'react';
+import type {
+  CSSProperties,
+  ReactNode,
+  MouseEvent as ReactMouseEvent
+} from 'react';
 
 interface AgentFlowSideDockProps {
   children: ReactNode;
@@ -6,6 +10,7 @@ interface AgentFlowSideDockProps {
   'data-testid'?: string;
   isResizing?: boolean;
   resizeLabel: string;
+  style?: CSSProperties;
   width: number;
   onResizeStart: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
@@ -16,6 +21,7 @@ export function AgentFlowSideDock({
   'data-testid': dataTestId,
   isResizing = false,
   resizeLabel,
+  style,
   width,
   onResizeStart
 }: AgentFlowSideDockProps) {
@@ -24,7 +30,7 @@ export function AgentFlowSideDock({
       className={className ?? 'agent-flow-editor__side-dock'}
       data-resizing={isResizing ? 'true' : 'false'}
       data-testid={dataTestId}
-      style={{ width: `${width}px` }}
+      style={{ ...style, width: `${width}px` }}
     >
       <div
         aria-label={resizeLabel}

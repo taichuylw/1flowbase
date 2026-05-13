@@ -78,10 +78,14 @@ describe('debug preview responsive layout CSS', () => {
     );
   });
 
-  test('opens the conversation log beside preview without shrinking the preview dock', () => {
+  test('opens the conversation log through the shared side dock shell', () => {
     const debugConsoleDock = cssBlock(
       shellCss,
       '.agent-flow-editor__debug-console-dock'
+    );
+    const conversationLogDock = cssBlock(
+      shellCss,
+      '.agent-flow-editor__conversation-log-dock'
     );
     const conversationLogPanel = cssBlock(
       conversationLogCss,
@@ -89,8 +93,9 @@ describe('debug preview responsive layout CSS', () => {
     );
 
     expect(debugConsoleDock).toMatch(/overflow:\s*visible/);
-    expect(conversationLogPanel).toMatch(/position:\s*absolute/);
-    expect(conversationLogPanel).toMatch(/right:\s*calc\(100% \+ 12px\)/);
+    expect(conversationLogDock).toMatch(/position:\s*absolute/);
+    expect(conversationLogDock).toMatch(/overflow:\s*hidden/);
+    expect(conversationLogPanel).not.toMatch(/position:\s*absolute/);
     expect(conversationLogPanel).not.toMatch(/flex:\s*1 1 48%/);
   });
 

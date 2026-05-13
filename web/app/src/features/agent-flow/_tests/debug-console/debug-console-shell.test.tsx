@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -25,6 +25,63 @@ function createInitialState() {
 
 function renderShell(ui: ReactElement) {
   return renderReactFlowScene(ui);
+}
+
+function createCompletedRunDetail() {
+  return {
+    flow_run: {
+      id: 'flow-run-1',
+      application_id: 'app-1',
+      flow_id: 'flow-1',
+      draft_id: 'draft-1',
+      compiled_plan_id: 'plan-1',
+      run_mode: 'debug_flow_run' as const,
+      status: 'succeeded' as const,
+      target_node_id: null,
+      input_payload: {
+        'node-start': { query: '请总结退款政策' }
+      },
+      output_payload: { answer: '退款政策摘要' },
+      error_payload: null,
+      created_by: 'user-1',
+      started_at: '2026-04-25T09:00:00Z',
+      finished_at: '2026-04-25T09:00:03Z',
+      created_at: '2026-04-25T09:00:00Z'
+    },
+    node_runs: [
+      {
+        id: 'node-run-start',
+        flow_run_id: 'flow-run-1',
+        node_id: 'node-start',
+        node_type: 'start',
+        node_alias: '用户输入',
+        status: 'succeeded' as const,
+        input_payload: {},
+        output_payload: { query: '请总结退款政策' },
+        error_payload: null,
+        metrics_payload: {},
+        started_at: '2026-04-25T09:00:00Z',
+        finished_at: '2026-04-25T09:00:00Z'
+      },
+      {
+        id: 'node-run-answer',
+        flow_run_id: 'flow-run-1',
+        node_id: 'node-answer',
+        node_type: 'answer',
+        node_alias: '直接回复',
+        status: 'succeeded' as const,
+        input_payload: { answer_template: '退款政策摘要' },
+        output_payload: { answer: '退款政策摘要' },
+        error_payload: null,
+        metrics_payload: {},
+        started_at: '2026-04-25T09:00:01Z',
+        finished_at: '2026-04-25T09:00:03Z'
+      }
+    ],
+    checkpoints: [],
+    callback_tasks: [],
+    events: []
+  };
 }
 
 describe('debug console shell', () => {
@@ -124,9 +181,70 @@ describe('debug console shell', () => {
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText('和 Bot 聊天')).toBeInTheDocument();
     expect(screen.getByText('功能已开启')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '管理功能' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Input' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Trace' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '管理功能' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'Input' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'Trace' })
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: '设置' })).not.toBeInTheDocument();
+  }, 20_000);
+
+  test('opens conversation log in the shared resizable side dock', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () =>
+        ({
+          x: 0,
+          y: 0,
+          width: 1440,
+          height: 720,
+          top: 0,
+          right: 1440,
+          bottom: 720,
+          left: 0,
+          toJSON: () => ({})
+        }) as DOMRect
+    );
+    vi.mocked(runtimeApi.startFlowDebugRun).mockResolvedValue(
+      createCompletedRunDetail()
+    );
+
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '预览' }));
+    fireEvent.change(screen.getByPlaceholderText('和 Bot 聊天'), {
+      target: { value: '请总结退款政策' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送调试消息' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '查看对话日志' })
+    );
+
+    const logDock = screen.getByTestId(
+      'agent-flow-editor-conversation-log-dock'
+    );
+    expect(within(logDock).getByLabelText('对话日志')).toBeInTheDocument();
+    expect(
+      within(logDock).getByRole('separator', { name: '调整对话日志宽度' })
+    ).toBeInTheDocument();
+    expect(logDock).toHaveStyle('width: 560px');
+
+    fireEvent.mouseDown(
+      within(logDock).getByRole('separator', { name: '调整对话日志宽度' }),
+      { clientX: 700 }
+    );
+    fireEvent.mouseMove(window, { clientX: 640 });
+    fireEvent.mouseUp(window);
+
+    await waitFor(() => expect(logDock).toHaveStyle('width: 620px'));
   }, 20_000);
 });

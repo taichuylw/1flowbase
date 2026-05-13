@@ -306,6 +306,7 @@
 
 .agent-flow-editor__side-dock,
 .agent-flow-editor__debug-console-dock,
+.agent-flow-editor__conversation-log-dock,
 .agent-flow-editor__variables-dock,
 .agent-flow-editor__history-dock {
   position: absolute;
@@ -320,6 +321,16 @@
 
 .agent-flow-editor__debug-console-dock {
   overflow: visible;
+}
+
+.agent-flow-editor__conversation-log-dock {
+  position: absolute;
+  top: var(--agent-flow-secondary-top);
+  z-index: 11;
+  display: flex;
+  height: min(85vh, calc(100% - var(--agent-flow-secondary-top) - 24px));
+  min-height: 0;
+  overflow: hidden;
 }
 
 .agent-flow-editor__detail-resize-handle {
@@ -376,6 +387,8 @@
 .agent-flow-editor__side-dock[data-resizing='true']
   .agent-flow-editor__side-dock-resize-handle::before,
 .agent-flow-editor__debug-console-dock[data-resizing='true']
+  .agent-flow-editor__side-dock-resize-handle::before,
+.agent-flow-editor__conversation-log-dock[data-resizing='true']
   .agent-flow-editor__side-dock-resize-handle::before,
 .agent-flow-editor__variables-dock[data-resizing='true']
   .agent-flow-editor__side-dock-resize-handle::before,

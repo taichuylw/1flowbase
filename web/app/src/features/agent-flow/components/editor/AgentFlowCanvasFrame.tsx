@@ -64,6 +64,7 @@ import {
   selectWorkingDocument
 } from '../../store/editor/selectors';
 import { AgentFlowDebugConsole } from '../debug-console/AgentFlowDebugConsole';
+import { ConversationLogPanel } from '../debug-console/ConversationLogPanel';
 import {
   DebugVariablesPane,
   type SelectedVariableInfo
@@ -81,6 +82,8 @@ import { SystemVariablesPanel } from './SystemVariablesPanel';
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
 const DEBUG_CONSOLE_MIN_WIDTH = 320;
 const DEBUG_CONSOLE_GAP = 12;
+const CONVERSATION_LOG_DEFAULT_WIDTH = 560;
+const CONVERSATION_LOG_MIN_WIDTH = 360;
 const SYSTEM_VARIABLES_DOCK_WIDTH = 420;
 const ENVIRONMENT_VARIABLES_DOCK_WIDTH = 520;
 const VARIABLES_DOCK_MIN_WIDTH = 360;
@@ -155,6 +158,7 @@ export function AgentFlowCanvasFrame({
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const stopNodeDetailResizeRef = useRef<(() => void) | null>(null);
   const stopDebugConsoleResizeRef = useRef<(() => void) | null>(null);
+  const stopConversationLogResizeRef = useRef<(() => void) | null>(null);
   const stopVariablesDockResizeRef = useRef<(() => void) | null>(null);
   const stopHistoryDockResizeRef = useRef<(() => void) | null>(null);
   const stopVariableCacheResizeRef = useRef<(() => void) | null>(null);
@@ -163,6 +167,14 @@ export function AgentFlowCanvasFrame({
   const [bodyHeight, setBodyHeight] = useState(0);
   const [isResizingNodeDetail, setIsResizingNodeDetail] = useState(false);
   const [isResizingDebugConsole, setIsResizingDebugConsole] = useState(false);
+  const [conversationLogMessageId, setConversationLogMessageId] = useState<
+    string | null
+  >(null);
+  const [conversationLogWidth, setConversationLogWidth] = useState(
+    CONVERSATION_LOG_DEFAULT_WIDTH
+  );
+  const [isResizingConversationLog, setIsResizingConversationLog] =
+    useState(false);
   const [isResizingVariablesDock, setIsResizingVariablesDock] = useState(false);
   const [isResizingHistoryDock, setIsResizingHistoryDock] = useState(false);
   const [pendingNodePreview, setPendingNodePreview] = useState<{
@@ -263,6 +275,15 @@ export function AgentFlowCanvasFrame({
     document: workingDocument,
     environmentVariables
   });
+  const conversationLogMessage = useMemo(
+    () =>
+      debugSession.messages.find(
+        (debugMessage) =>
+          debugMessage.id === conversationLogMessageId &&
+          debugMessage.role === 'assistant'
+      ) ?? null,
+    [conversationLogMessageId, debugSession.messages]
+  );
   const issues = useMemo(
     () =>
       validateDocument(
@@ -386,6 +407,7 @@ export function AgentFlowCanvasFrame({
     return () => {
       stopNodeDetailResizeRef.current?.();
       stopDebugConsoleResizeRef.current?.();
+      stopConversationLogResizeRef.current?.();
       stopVariablesDockResizeRef.current?.();
       stopHistoryDockResizeRef.current?.();
       stopVariableCacheResizeRef.current?.();
@@ -407,7 +429,25 @@ export function AgentFlowCanvasFrame({
     }
 
     stopDebugConsoleResizeRef.current?.();
+    stopConversationLogResizeRef.current?.();
+    setConversationLogMessageId(null);
   }, [debugConsoleOpen]);
+
+  useEffect(() => {
+    if (!conversationLogMessageId || conversationLogMessage) {
+      return;
+    }
+
+    setConversationLogMessageId(null);
+  }, [conversationLogMessage, conversationLogMessageId]);
+
+  useEffect(() => {
+    if (conversationLogMessage) {
+      return;
+    }
+
+    stopConversationLogResizeRef.current?.();
+  }, [conversationLogMessage]);
 
   useEffect(() => {
     if (systemVariablesOpen || environmentVariablesOpen) {
@@ -455,6 +495,20 @@ export function AgentFlowCanvasFrame({
     Math.max(debugConsoleWidth, DEBUG_CONSOLE_MIN_WIDTH),
     maxDebugConsoleWidth
   );
+  const conversationLogOpen =
+    debugConsoleOpen && conversationLogMessage !== null;
+  const maxConversationLogWidth = Math.max(
+    canvasFrameWidth -
+      boundedDebugConsoleWidth -
+      DEBUG_CONSOLE_GAP -
+      (selectedNodeId ? nodeDetailWidth + DEBUG_CONSOLE_GAP : 0) -
+      NODE_DETAIL_MIN_CANVAS_WIDTH,
+    CONVERSATION_LOG_MIN_WIDTH
+  );
+  const boundedConversationLogWidth = Math.min(
+    Math.max(conversationLogWidth, CONVERSATION_LOG_MIN_WIDTH),
+    maxConversationLogWidth
+  );
   const variablesDockOpen = systemVariablesOpen || environmentVariablesOpen;
   const maxVariablesDockWidth = Math.max(
     canvasFrameWidth -
@@ -480,7 +534,11 @@ export function AgentFlowCanvasFrame({
     maxHistoryDockWidth
   );
   const sideDockOccupiedWidth = debugConsoleOpen
-    ? boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP
+    ? boundedDebugConsoleWidth +
+      DEBUG_CONSOLE_GAP +
+      (conversationLogOpen
+        ? boundedConversationLogWidth + DEBUG_CONSOLE_GAP
+        : 0)
     : variablesDockOpen
       ? boundedVariablesDockWidth + DEBUG_CONSOLE_GAP
       : historyOpen
@@ -604,6 +662,55 @@ export function AgentFlowCanvasFrame({
     };
 
     stopDebugConsoleResizeRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', cleanup);
+  }
+
+  function handleConversationLogResizeStart(
+    event: ReactMouseEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = boundedConversationLogWidth;
+    const containerWidth = canvasFrameWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    stopConversationLogResizeRef.current?.();
+    setIsResizingConversationLog(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setIsResizingConversationLog(false);
+      stopConversationLogResizeRef.current = null;
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.min(
+        Math.max(
+          startWidth - (moveEvent.clientX - startX),
+          CONVERSATION_LOG_MIN_WIDTH
+        ),
+        Math.max(
+          containerWidth -
+            boundedDebugConsoleWidth -
+            DEBUG_CONSOLE_GAP -
+            (selectedNodeId ? boundedNodeDetailWidth + DEBUG_CONSOLE_GAP : 0) -
+            NODE_DETAIL_MIN_CANVAS_WIDTH,
+          CONVERSATION_LOG_MIN_WIDTH
+        )
+      );
+
+      setConversationLogWidth(nextWidth);
+    };
+
+    stopConversationLogResizeRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', cleanup);
   }
@@ -899,12 +1006,14 @@ export function AgentFlowCanvasFrame({
   }
 
   function openEnvironmentVariables() {
+    setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: false });
     setSystemVariablesOpen(false);
     setEnvironmentVariablesOpen(true);
   }
 
   function openSystemVariables() {
+    setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: false });
     setEnvironmentVariablesOpen(false);
     setSystemVariablesOpen(true);
@@ -913,6 +1022,7 @@ export function AgentFlowCanvasFrame({
   function openHistory() {
     setEnvironmentVariablesOpen(false);
     setSystemVariablesOpen(false);
+    setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: true });
   }
 
@@ -1123,6 +1233,27 @@ export function AgentFlowCanvasFrame({
             </div>
           </section>
         ) : null}
+        {conversationLogOpen && conversationLogMessage ? (
+          <AgentFlowSideDock
+            className="agent-flow-editor__conversation-log-dock"
+            data-testid="agent-flow-editor-conversation-log-dock"
+            isResizing={isResizingConversationLog}
+            resizeLabel="调整对话日志宽度"
+            style={{
+              right: `${16 + boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP}px`
+            }}
+            width={boundedConversationLogWidth}
+            onResizeStart={handleConversationLogResizeStart}
+          >
+            <ConversationLogPanel
+              message={conversationLogMessage}
+              onClose={() => setConversationLogMessageId(null)}
+              onLoadArtifact={(artifactRef) =>
+                fetchRuntimeDebugArtifact(applicationId, artifactRef)
+              }
+            />
+          </AgentFlowSideDock>
+        ) : null}
         {debugConsoleOpen ? (
           <AgentFlowSideDock
             className="agent-flow-editor__debug-console-dock"
@@ -1138,10 +1269,19 @@ export function AgentFlowCanvasFrame({
               status={debugSession.status}
               stopping={debugSession.stopping}
               onChangeRunContextValue={debugSession.setRunContextValue}
-              onClearSession={debugSession.clearSession}
-              onClose={() => setPanelState({ debugConsoleOpen: false })}
+              onClearSession={() => {
+                setConversationLogMessageId(null);
+                debugSession.clearSession();
+              }}
+              onClose={() => {
+                setConversationLogMessageId(null);
+                setPanelState({ debugConsoleOpen: false });
+              }}
               onLoadArtifact={(artifactRef) =>
                 fetchRuntimeDebugArtifact(applicationId, artifactRef)
+              }
+              onOpenMessageLog={(debugMessage) =>
+                setConversationLogMessageId(debugMessage.id)
               }
               onStopRun={() => {
                 void debugSession.stopRun();

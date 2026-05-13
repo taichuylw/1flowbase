@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
 import type {
@@ -77,7 +78,9 @@ const assistantMessage: AgentFlowDebugMessage = {
   ]
 };
 
-function renderConsole() {
+function renderConsole(
+  props: Partial<ComponentProps<typeof AgentFlowDebugConsole>> = {}
+) {
   return render(
     <AgentFlowDebugConsole
       messages={[
@@ -100,6 +103,7 @@ function renderConsole() {
       onClose={vi.fn()}
       onStopRun={vi.fn()}
       onSubmitPrompt={vi.fn()}
+      {...props}
     />
   );
 }
@@ -169,5 +173,18 @@ describe('debug conversation log panel', () => {
     expect(
       within(panel).getAllByTestId('debug-workflow-node-row')
     ).toHaveLength(2);
+  });
+
+  test('delegates log opening when the canvas shell controls the log panel', () => {
+    const onOpenMessageLog = vi.fn();
+
+    renderConsole({ onOpenMessageLog });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+
+    expect(onOpenMessageLog).toHaveBeenCalledWith(assistantMessage);
+    expect(
+      screen.queryByRole('complementary', { name: '对话日志' })
+    ).not.toBeInTheDocument();
   });
 });

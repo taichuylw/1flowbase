@@ -20,6 +20,7 @@ export function AgentFlowDebugConsole({
   onClearSession,
   onClose,
   onLoadArtifact,
+  onOpenMessageLog,
   onStopRun,
   onSubmitPrompt
 }: {
@@ -35,6 +36,7 @@ export function AgentFlowDebugConsole({
   onClearSession: () => void;
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
 }) {
@@ -50,7 +52,7 @@ export function AgentFlowDebugConsole({
 
   return (
     <>
-      {openLogMessage ? (
+      {!onOpenMessageLog && openLogMessage ? (
         <ConversationLogPanel
           message={openLogMessage}
           onClose={() => setOpenLogMessageId(null)}
@@ -83,7 +85,14 @@ export function AgentFlowDebugConsole({
           status={status}
           stopping={stopping}
           onLoadArtifact={onLoadArtifact}
-          onOpenMessageLog={(message) => setOpenLogMessageId(message.id)}
+          onOpenMessageLog={(message) => {
+            if (onOpenMessageLog) {
+              onOpenMessageLog(message);
+              return;
+            }
+
+            setOpenLogMessageId(message.id);
+          }}
           onChangeQuery={(value) => {
             const queryField =
               runContext.fields.find((field) => field.key === 'query') ?? null;
