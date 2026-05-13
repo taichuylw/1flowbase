@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const runtimeApi = vi.hoisted(() => ({
@@ -30,6 +36,7 @@ function sampleRunDetail() {
       target_node_id: 'node-llm',
       input_payload: { 'node-start.query': '总结退款政策' },
       output_payload: {
+        answer: '退款政策摘要',
         resolved_inputs: {
           user_prompt: '总结退款政策'
         }
@@ -52,6 +59,7 @@ function sampleRunDetail() {
           user_prompt: '总结退款政策'
         },
         output_payload: {
+          answer: '退款政策摘要',
           rendered_templates: {}
         },
         error_payload: null,
@@ -109,7 +117,7 @@ describe('ApplicationLogsPage', () => {
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
   });
 
-  test('renders run table and opens detail drawer for selected run', async () => {
+  test('opens selected run as an inline detail workspace with conversation and node IO', async () => {
     render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
@@ -126,6 +134,31 @@ describe('ApplicationLogsPage', () => {
         'run-1'
       );
     });
-    expect(await screen.findByText('node_preview_completed')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: '运行详情' })
+    ).not.toBeInTheDocument();
+
+    expect(
+      await screen.findByRole('heading', { name: '运行详情' })
+    ).toBeInTheDocument();
+    const conversation = screen.getByRole('region', { name: 'AI 对话' });
+    expect(within(conversation).getByText('User')).toBeInTheDocument();
+    expect(within(conversation).getByText('总结退款政策')).toBeInTheDocument();
+    expect(within(conversation).getByText('AI')).toBeInTheDocument();
+    expect(within(conversation).getByText('退款政策摘要')).toBeInTheDocument();
+
+    const nodeButton = screen.getByRole('button', { name: /LLM.*llm/ });
+    expect(nodeButton).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(nodeButton);
+
+    expect(nodeButton).toHaveAttribute('aria-expanded', 'true');
+    const nodeDetail = screen.getByRole('region', { name: 'LLM 节点输入输出' });
+    expect(within(nodeDetail).getByLabelText('输入 JSON')).toHaveTextContent(
+      'user_prompt'
+    );
+    expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
+      '退款政策摘要'
+    );
   }, 20_000);
 });
