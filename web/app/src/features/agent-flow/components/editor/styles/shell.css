@@ -318,6 +318,10 @@
   overflow: hidden;
 }
 
+.agent-flow-editor__debug-console-dock {
+  overflow: visible;
+}
+
 .agent-flow-editor__detail-resize-handle {
   position: relative;
   flex: 0 0 12px;

@@ -1,7 +1,11 @@
 .agent-flow-editor__conversation-log-panel {
-  flex: 1 1 48%;
-  min-width: min(100%, 360px);
-  margin-right: 12px;
+  position: absolute;
+  top: 0;
+  right: calc(100% + 12px);
+  bottom: 0;
+  z-index: 1;
+  width: clamp(320px, 44vw, 560px);
+  max-width: calc(100vw - 100% - 44px);
 }
 
 .agent-flow-editor__conversation-log-body,

@@ -17,6 +17,13 @@ const shellCss = readFileSync(
   ),
   'utf8'
 );
+const conversationLogCss = readFileSync(
+  join(
+    process.cwd(),
+    'src/features/agent-flow/components/debug-console/conversation-log-panel.css'
+  ),
+  'utf8'
+);
 
 function cssBlock(css: string, selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -66,9 +73,25 @@ describe('debug preview responsive layout CSS', () => {
   });
 
   test('lets the preview shell expand inside the shared dock container', () => {
-    expect(
-      cssBlock(shellCss, '.agent-flow-editor__dock-panel')
-    ).toMatch(/flex:\s*1\b/);
+    expect(cssBlock(shellCss, '.agent-flow-editor__dock-panel')).toMatch(
+      /flex:\s*1\b/
+    );
+  });
+
+  test('opens the conversation log beside preview without shrinking the preview dock', () => {
+    const debugConsoleDock = cssBlock(
+      shellCss,
+      '.agent-flow-editor__debug-console-dock'
+    );
+    const conversationLogPanel = cssBlock(
+      conversationLogCss,
+      '.agent-flow-editor__conversation-log-panel'
+    );
+
+    expect(debugConsoleDock).toMatch(/overflow:\s*visible/);
+    expect(conversationLogPanel).toMatch(/position:\s*absolute/);
+    expect(conversationLogPanel).toMatch(/right:\s*calc\(100% \+ 12px\)/);
+    expect(conversationLogPanel).not.toMatch(/flex:\s*1 1 48%/);
   });
 
   test('does not lock preview rows or composer controls to fixed pixel columns', () => {
