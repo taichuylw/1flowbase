@@ -150,7 +150,6 @@ function ConversationTrace({
               key={itemKey}
               expanded={nodeExpanded}
               item={item}
-              selected={nodeExpanded}
               onToggle={() =>
                 setExpandedNodeKey((current) =>
                   current === itemKey ? null : itemKey

@@ -147,6 +147,9 @@ describe('debug conversation log panel', () => {
     fireEvent.click(llmTraceNode);
 
     expect(llmTraceNode).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(panel).getAllByTestId('debug-workflow-node-item')[1]
+    ).toHaveAttribute('data-selected', 'false');
 
     const nodeDetail = within(panel).getByRole('region', {
       name: 'LLM 节点详情'
