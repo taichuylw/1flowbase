@@ -1,6 +1,6 @@
 # Backend Regression Steps
 
-只要评估范围涉及后端 API、状态入口、插件边界、runtime、`resource kernel` 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；不要跳过前置验证直接下 QA 结论。
+只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；不要跳过前置验证直接下 QA 结论。
 
 ## Fixed Order
 
@@ -24,13 +24,19 @@
 如果涉及插件、runtime 或动态建模，必须额外确认：
 
 - `public / control / runtime` 三平面归属
-- `host-extension / runtime extension / capability plugin` 边界
-- `resource kernel` 是否仍由宿主托管
+- `HostExtension / RuntimeExtension / CapabilityPlugin` 边界
+- `Resource Action Kernel` 是否仍由宿主托管
+- HostExtension 是否只通过 manifest contribution 注册 resource、action、hook、route、worker、migration 和 infrastructure provider
+- pre-state infrastructure provider 是否在 `ApiState`、session store、control-plane service、runtime engine 和 HTTP router 构造前完成
+- RuntimeExtension / CapabilityPlugin 是否没有直接持有 Redis、NATS、RabbitMQ 等基础设施连接
+- native HostExtension 是否保持 in-process、restart-scoped，不设计 Rust native 热卸载
 - `dynamic modeling` 是否仍是元数据系统，而不是 runtime 数据本身
 - `scope_kind` 是否只保留 `workspace/system`
 - `system` 是否固定使用 `SYSTEM_SCOPE_ID`
 - runtime 物理 scope 列是否统一为 `scope_id`
-- 活跃后端代码是否已清掉 `team/app` alias
+- 活跃后端代码是否不再使用 `team/app` alias、`team_id/app_id` 表示 scope
+- Application 领域新增命名是否使用 `application_id`，而不是 `app_id` 缩写
+- 如果涉及文件管理，`file_storages` 是否仍归 `root/system` 管理，文件记录是否仍保存实际 `storage_id` 快照
 
 ## Step 2: Run Backend Verification
 
@@ -41,6 +47,12 @@
 
 ```bash
 node scripts/node/verify-backend.js
+```
+
+如果只需要先确认 Rust 静态门禁：
+
+```bash
+node scripts/node/tooling.js check-rust-backend
 ```
 
 最小验证：
@@ -77,6 +89,7 @@ cargo test -p <crate-name>
 
 - 状态修改是否仍通过命名明确的 service action / command
 - route 没有绕过 service 直接改状态
+- HostExtension route / worker 没有绕过 `Resource Action Kernel` 直接改 Core 真值
 - repository 没有偷偷承担事务意图、权限判定或状态流转
 - 关键副作用、审计、幂等仍由 service 编排
 - `workspace`、`system` 与 session scope 语义没有在写入口被重新混用
@@ -87,7 +100,8 @@ cargo test -p <crate-name>
 
 - `repository` 只做持久化与查询投影，不偷带业务逻辑
 - `mapper` 只做转换，不藏权限、状态或额外查询语义
-- `storage-pg` 的 repository / mapper 拆分仍然成立
+- `storage-durable/postgres` 内的 `storage-postgres` repository / mapper 拆分仍然成立
+- `storage-durable` 没有吸收额外 durable backend 细节，`storage-object` 没有混入插件产物存储或业务 service 规则
 - 复杂 SQL、JSON 字段、枚举转换等易错点有对应 targeted tests
 - runtime metadata、物理表列名与 `scope_id` 语义保持一致
 
@@ -96,8 +110,10 @@ cargo test -p <crate-name>
 出 QA 结论前，至少补一轮后端 blast radius 审查：
 
 - 公共 API、session 或 auth 契约变化后，调用方是否同步成立
-- `storage-pg` 或持久化层调整后，service、route、tests 是否仍成立
+- `storage-durable/postgres`、`storage-durable`、`storage-object` 或持久化层调整后，service、route、tests 是否仍成立
 - runtime 或插件相关改动后，白名单槽位与消费方式是否仍成立
+- HostExtension 相关改动后，manifest contribution、load plan、route / worker / migration namespace 和 infrastructure provider 是否仍成立
+- `storage-durable/postgres/migrations` 是否仍是顺序追加历史迁移链；修改历史 migration 时是否使用独立 schema 避免 checksum 污染
 - `workspace/system`、`SYSTEM_SCOPE_ID` 与 runtime `scope_id` 约束是否贯穿 route / service / repository / tests
 - `_tests`、文件大小、目录收纳和最小验证命令是否仍遵守质量门禁
 
