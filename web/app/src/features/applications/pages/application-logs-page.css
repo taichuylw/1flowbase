@@ -2,14 +2,19 @@
   width: 100%;
 }
 
-.application-logs-page--detail-open {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
+.application-logs-page__list {
+  min-width: 0;
 }
 
-.application-logs-page__list {
+.application-logs-page__splitter {
+  min-height: calc(100vh - 128px);
+}
+
+.application-logs-page__splitter-control {
+  min-height: inherit;
+}
+
+.application-logs-page__splitter-control .ant-splitter-panel {
   min-width: 0;
 }
 
@@ -25,8 +30,8 @@
   background: rgba(0, 217, 146, 0.08);
 }
 
-@media (max-width: 1180px) {
-  .application-logs-page--detail-open {
-    grid-template-columns: 1fr;
+@media (max-width: 720px) {
+  .application-logs-page__splitter {
+    display: block;
   }
 }

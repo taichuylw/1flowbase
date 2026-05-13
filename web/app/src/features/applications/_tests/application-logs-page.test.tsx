@@ -117,7 +117,7 @@ describe('ApplicationLogsPage', () => {
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
   });
 
-  test('expands selected run as a resizable sibling detail pane without reserving empty space', async () => {
+  test('expands selected run with Ant Splitter without reserving empty space', async () => {
     render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
@@ -128,6 +128,7 @@ describe('ApplicationLogsPage', () => {
     expect(
       screen.queryByRole('complementary', { name: '运行详情' })
     ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('application-logs-splitter')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
@@ -148,16 +149,11 @@ describe('ApplicationLogsPage', () => {
     expect(
       screen.queryByRole('button', { name: '返回日志' })
     ).not.toBeInTheDocument();
-    const resizeHandle = screen.getByRole('separator', {
-      name: '调整运行详情宽度'
-    });
-    expect(detailPane).toHaveStyle({ width: '480px' });
-
-    fireEvent.mouseDown(resizeHandle, { clientX: 900 });
-    fireEvent.mouseMove(window, { clientX: 760 });
-    fireEvent.mouseUp(window);
-
-    expect(detailPane).toHaveStyle({ width: '620px' });
+    expect(screen.getByTestId('application-logs-splitter')).toBeInTheDocument();
+    expect(screen.getByRole('separator')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('separator', { name: '调整运行详情宽度' })
+    ).not.toBeInTheDocument();
 
     const conversation = await screen.findByTestId('debug-conversation-messages');
     expect(within(conversation).getByText('User')).toBeInTheDocument();

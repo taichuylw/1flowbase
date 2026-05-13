@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Empty, Result, Space, Typography } from 'antd';
+import { Empty, Result, Space, Splitter, Typography } from 'antd';
 import { useState } from 'react';
 
 import {
@@ -29,44 +29,53 @@ export function ApplicationLogsPage({
     return <Result status="error" title="运行日志加载失败" />;
   }
 
-  return (
-    <div
-      className={
-        selectedRunId
-          ? 'application-logs-page application-logs-page--detail-open'
-          : 'application-logs-page'
-      }
-    >
-      <section className="application-logs-page__list">
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div>
-            <Typography.Title level={4}>运行日志</Typography.Title>
-            <Typography.Paragraph type="secondary">
-              这里展示应用运行记录，点击后可在右侧直接查看对话和节点输入输出。
-            </Typography.Paragraph>
-          </div>
+  const logsList = (
+    <section className="application-logs-page__list">
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <div>
+          <Typography.Title level={4}>运行日志</Typography.Title>
+          <Typography.Paragraph type="secondary">
+            这里展示应用运行记录，点击后可在右侧直接查看对话和节点输入输出。
+          </Typography.Paragraph>
+        </div>
 
-          {runsQuery.data.length === 0 ? (
-            <Empty
-              description="当前应用还没有运行记录"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+        {runsQuery.data.length === 0 ? (
+          <Empty
+            description="当前应用还没有运行记录"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        ) : (
+          <ApplicationRunsTable
+            runs={runsQuery.data}
+            selectedRunId={selectedRunId}
+            onSelectRun={setSelectedRunId}
+          />
+        )}
+      </Space>
+    </section>
+  );
+
+  if (!selectedRunId) {
+    return <div className="application-logs-page">{logsList}</div>;
+  }
+
+  return (
+    <div className="application-logs-page application-logs-page--detail-open">
+      <div
+        className="application-logs-page__splitter"
+        data-testid="application-logs-splitter"
+      >
+        <Splitter className="application-logs-page__splitter-control">
+          <Splitter.Panel min={480}>{logsList}</Splitter.Panel>
+          <Splitter.Panel defaultSize={480} max="60%" min={360}>
+            <ApplicationRunDetailPanel
+              applicationId={applicationId}
+              onClose={() => setSelectedRunId(null)}
+              runId={selectedRunId}
             />
-          ) : (
-            <ApplicationRunsTable
-              runs={runsQuery.data}
-              selectedRunId={selectedRunId}
-              onSelectRun={setSelectedRunId}
-            />
-          )}
-        </Space>
-      </section>
-      {selectedRunId ? (
-        <ApplicationRunDetailPanel
-          applicationId={applicationId}
-          onClose={() => setSelectedRunId(null)}
-          runId={selectedRunId}
-        />
-      ) : null}
+          </Splitter.Panel>
+        </Splitter>
+      </div>
     </div>
   );
 }

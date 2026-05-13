@@ -1,7 +1,6 @@
 import { CloseOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Result, Space, Typography } from 'antd';
-import { type MouseEvent as ReactMouseEvent, useCallback, useState } from 'react';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import { DebugConversationPane } from '../../../agent-flow/components/debug-console/conversation/DebugConversationPane';
@@ -24,19 +23,6 @@ import {
 } from '../../api/runtime';
 import { ApplicationRunResumeCard } from './ApplicationRunResumeCard';
 import './application-run-detail-panel.css';
-
-const DEFAULT_DRAWER_WIDTH = 480;
-const MIN_DRAWER_WIDTH = 360;
-const DRAWER_VIEWPORT_GUTTER = 96;
-
-function clampDrawerWidth(width: number): number {
-  const maxWidth =
-    typeof window === 'undefined'
-      ? 860
-      : Math.max(MIN_DRAWER_WIDTH, window.innerWidth - DRAWER_VIEWPORT_GUTTER);
-
-  return Math.min(Math.max(width, MIN_DRAWER_WIDTH), maxWidth);
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -294,41 +280,11 @@ export function ApplicationRunDetailPanel({
 }) {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
-  const [drawerWidth, setDrawerWidth] = useState(DEFAULT_DRAWER_WIDTH);
   const detailQuery = useQuery({
     queryKey: applicationRunDetailQueryKey(applicationId, runId ?? 'pending'),
     queryFn: () => fetchApplicationRunDetail(applicationId, runId!),
     enabled: Boolean(runId)
   });
-  const handleResizeStart = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      event.preventDefault();
-
-      const startX = event.clientX;
-      const startWidth = drawerWidth;
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        setDrawerWidth(
-          clampDrawerWidth(startWidth + startX - moveEvent.clientX)
-        );
-      };
-      const handleMouseUp = () => {
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    },
-    [drawerWidth]
-  );
   const resumeMutation = useMutation({
     mutationFn: async ({
       checkpointId,
@@ -425,24 +381,7 @@ export function ApplicationRunDetailPanel({
   }
 
   return (
-    <aside
-      aria-label="运行详情"
-      className="application-run-detail"
-      style={{ width: `${drawerWidth}px` }}
-    >
-      <div
-        aria-label="调整运行详情宽度"
-        aria-valuemax={
-          typeof window === 'undefined'
-            ? undefined
-            : window.innerWidth - DRAWER_VIEWPORT_GUTTER
-        }
-        aria-valuemin={MIN_DRAWER_WIDTH}
-        aria-valuenow={drawerWidth}
-        className="application-run-detail__resize-handle"
-        onMouseDown={handleResizeStart}
-        role="separator"
-      />
+    <aside aria-label="运行详情" className="application-run-detail">
       <div className="application-run-detail__header">
         <div>
           <Typography.Title level={4}>运行详情</Typography.Title>
