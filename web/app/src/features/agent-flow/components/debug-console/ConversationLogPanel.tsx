@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Descriptions, Empty, Space, Tabs, Typography } from 'antd';
+import { Descriptions, Empty, Tabs, Typography } from 'antd';
 
 import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { NodeRunPayloadSections } from '../detail/last-run/NodeRunIOCard';
-import {
-  DebugWorkflowNodeItem,
-  NodeTypeIcon
-} from './conversation/DebugWorkflowNodeRow';
+import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
 import {
   getTraceItemKey,
   nodeDisplayName
@@ -164,17 +161,6 @@ function ConversationTrace({
                 aria-label={`${nodeDisplayName(item)} 节点详情`}
                 className="agent-flow-editor__conversation-log-node-detail"
               >
-                <div className="agent-flow-editor__conversation-log-node-detail-header">
-                  <Space size={8}>
-                    <NodeTypeIcon nodeType={item.nodeType} />
-                    <Typography.Text strong>
-                      {nodeDisplayName(item)}
-                    </Typography.Text>
-                  </Space>
-                  <Typography.Text type="secondary">
-                    {item.nodeType}
-                  </Typography.Text>
-                </div>
                 <div className="agent-flow-editor__conversation-log-json-list">
                   <NodeRunPayloadSections
                     debugPayload={item.debugPayload ?? {}}

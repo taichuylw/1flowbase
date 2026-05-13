@@ -150,6 +150,8 @@ describe('debug conversation log panel', () => {
       name: 'LLM 节点详情'
     });
     expect(nodeDetail).toBeInTheDocument();
+    expect(within(nodeDetail).queryByText('LLM')).not.toBeInTheDocument();
+    expect(within(nodeDetail).queryByText('llm')).not.toBeInTheDocument();
     expect(within(nodeDetail).getByLabelText('输入 JSON')).toHaveTextContent(
       'prompt'
     );
