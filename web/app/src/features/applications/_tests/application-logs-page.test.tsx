@@ -5,6 +5,8 @@ import {
   waitFor,
   within
 } from '@testing-library/react';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const runtimeApi = vi.hoisted(() => ({
@@ -214,4 +216,21 @@ describe('ApplicationLogsPage', () => {
       screen.queryByRole('complementary', { name: '运行详情' })
     ).not.toBeInTheDocument();
   }, 20_000);
+
+  test('sizes the docked detail layout to the section viewport bottom', async () => {
+    const cssSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/features/applications/pages/application-logs-page.css'
+      ),
+      'utf8'
+    );
+
+    expect(cssSource).toContain(
+      '.application-logs-page--detail-open {\n' +
+        '  display: flex;\n' +
+        '  height: calc(100vh - 32px);'
+    );
+    expect(cssSource).not.toContain('height: calc(100vh - 120px);');
+  });
 });

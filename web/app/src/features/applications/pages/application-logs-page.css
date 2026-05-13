@@ -6,7 +6,7 @@
 
 .application-logs-page--detail-open {
   display: flex;
-  height: calc(100vh - 120px);
+  height: calc(100vh - 32px);
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
