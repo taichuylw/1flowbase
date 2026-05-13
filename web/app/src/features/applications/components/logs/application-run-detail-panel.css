@@ -2,13 +2,12 @@
   display: flex;
   width: 100%;
   flex-direction: column;
-  gap: 24px;
-}
-
-.application-run-detail__header {
-  display: flex;
-  align-items: flex-start;
   gap: 16px;
+  min-width: 0;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  background: var(--ant-color-bg-container);
+  padding: 16px;
 }
 
 .application-run-detail__header .ant-typography {
@@ -21,10 +20,6 @@
 
 .application-run-detail__section {
   min-width: 0;
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 8px;
-  background: var(--ant-color-bg-container);
-  padding: 16px;
 }
 
 .application-run-detail__section-header {
@@ -40,7 +35,7 @@
 }
 
 .application-run-detail__conversation-pane {
-  min-height: 380px;
+  min-height: 560px;
   overflow: hidden;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
@@ -51,7 +46,7 @@
   .agent-flow-editor__debug-console-pane {
   display: flex;
   height: 100%;
-  min-height: 380px;
+  min-height: 560px;
   flex-direction: column;
 }
 
@@ -163,12 +158,9 @@
   padding: 0 8px;
 }
 
-@media (max-width: 720px) {
-  .application-run-detail__header {
-    align-items: flex-start;
-  }
-
-  .application-run-detail__header {
-    flex-direction: column;
-  }
+.application-run-detail__empty {
+  display: flex;
+  min-height: 560px;
+  align-items: center;
+  justify-content: center;
 }

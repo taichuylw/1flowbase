@@ -117,7 +117,7 @@ describe('ApplicationLogsPage', () => {
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
   });
 
-  test('opens selected run as an inline detail workspace with conversation and node IO', async () => {
+  test('opens selected run in the side detail chat while keeping the run list visible', async () => {
     render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
@@ -125,6 +125,9 @@ describe('ApplicationLogsPage', () => {
     );
 
     expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect(
+      screen.getByRole('complementary', { name: '运行详情' })
+    ).toHaveTextContent('请选择一条运行记录');
 
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
@@ -137,11 +140,11 @@ describe('ApplicationLogsPage', () => {
     expect(
       screen.queryByRole('dialog', { name: '运行详情' })
     ).not.toBeInTheDocument();
-
+    expect(screen.getByRole('table')).toBeInTheDocument();
     expect(
-      await screen.findByRole('heading', { name: '运行详情' })
-    ).toBeInTheDocument();
-    const conversation = screen.getByTestId('debug-conversation-messages');
+      screen.queryByRole('button', { name: '返回日志' })
+    ).not.toBeInTheDocument();
+    const conversation = await screen.findByTestId('debug-conversation-messages');
     expect(within(conversation).getByText('User')).toBeInTheDocument();
     expect(within(conversation).getByText('总结退款政策')).toBeInTheDocument();
     expect(within(conversation).getByText('退款政策摘要')).toBeInTheDocument();

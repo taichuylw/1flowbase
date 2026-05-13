@@ -1,11 +1,5 @@
-import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Result,
-  Space,
-  Typography
-} from 'antd';
+import { Empty, Result, Space, Typography } from 'antd';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import { DebugConversationPane } from '../../../agent-flow/components/debug-console/conversation/DebugConversationPane';
@@ -276,18 +270,17 @@ function renderDetail(detail: ApplicationRunDetail) {
 
 export function ApplicationRunDetailPanel({
   applicationId,
-  runId,
-  onBack
+  runId
 }: {
   applicationId: string;
-  runId: string;
-  onBack: () => void;
+  runId: string | null;
 }) {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const detailQuery = useQuery({
-    queryKey: applicationRunDetailQueryKey(applicationId, runId),
-    queryFn: () => fetchApplicationRunDetail(applicationId, runId)
+    queryKey: applicationRunDetailQueryKey(applicationId, runId ?? 'pending'),
+    queryFn: () => fetchApplicationRunDetail(applicationId, runId!),
+    enabled: Boolean(runId)
   });
   const resumeMutation = useMutation({
     mutationFn: async ({
@@ -297,7 +290,7 @@ export function ApplicationRunDetailPanel({
       checkpointId: string;
       inputPayload: Record<string, unknown>;
     }) => {
-      if (!csrfToken) {
+      if (!runId || !csrfToken) {
         throw new Error('missing runtime resume context');
       }
 
@@ -310,6 +303,10 @@ export function ApplicationRunDetailPanel({
       );
     },
     onSuccess: async (detail) => {
+      if (!runId) {
+        return;
+      }
+
       queryClient.setQueryData(
         applicationRunDetailQueryKey(applicationId, runId),
         detail
@@ -339,6 +336,10 @@ export function ApplicationRunDetailPanel({
       );
     },
     onSuccess: async (detail) => {
+      if (!runId) {
+        return;
+      }
+
       queryClient.setQueryData(
         applicationRunDetailQueryKey(applicationId, runId),
         detail
@@ -349,11 +350,20 @@ export function ApplicationRunDetailPanel({
     }
   });
 
-  let content = <Result status="info" title="正在加载运行详情" />;
+  let content = (
+    <div className="application-run-detail__empty">
+      <Empty
+        description="请选择一条运行记录"
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+      />
+    </div>
+  );
 
-  if (detailQuery.isError) {
+  if (runId && detailQuery.isPending) {
+    content = <Result status="info" title="正在加载运行详情" />;
+  } else if (runId && detailQuery.isError) {
     content = <Result status="error" title="运行详情加载失败" />;
-  } else if (detailQuery.data) {
+  } else if (runId && detailQuery.data) {
     content = (
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {renderDetail(detailQuery.data)}
@@ -371,17 +381,16 @@ export function ApplicationRunDetailPanel({
   }
 
   return (
-    <div className="application-run-detail">
+    <aside aria-label="运行详情" className="application-run-detail">
       <div className="application-run-detail__header">
-        <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
-          返回日志
-        </Button>
         <div>
           <Typography.Title level={4}>运行详情</Typography.Title>
-          <Typography.Text type="secondary">{runId}</Typography.Text>
+          <Typography.Text type="secondary">
+            {runId ?? '点击左侧记录查看详情'}
+          </Typography.Text>
         </div>
       </div>
       {content}
-    </div>
+    </aside>
   );
 }
