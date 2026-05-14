@@ -484,6 +484,10 @@ describe('ApplicationLogsPage', () => {
     expect(screen.getByText('过去 7 天')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '排序字段' })).toBeInTheDocument();
     expect(screen.getByText('创建时间')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('更新时间'))
+      .toBeInTheDocument();
+    expect(screen.getByText('2026/4/17 18:05:00')).toBeInTheDocument();
+    expect(screen.getByText('2026/4/17 20:00:00')).toBeInTheDocument();
 
     const searchInput = screen.getByPlaceholderText('搜索对话和回答');
     fireEvent.change(searchInput, { target: { value: '退款' } });
@@ -504,7 +508,8 @@ describe('ApplicationLogsPage', () => {
     expect(await screen.findByText('run-old')).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '排序字段' }));
-    fireEvent.click(await screen.findByText('更新时间'));
+    const updatedAtOptions = await screen.findAllByText('更新时间');
+    fireEvent.click(updatedAtOptions[updatedAtOptions.length - 1]);
 
     await waitFor(() => {
       const tableText = screen.getByRole('table').textContent ?? '';
