@@ -40,6 +40,27 @@ export function ApplicationRunsTable({
       }
       columns={[
         {
+          title: '标题',
+          dataIndex: 'title',
+          width: 220,
+          ellipsis: true,
+          render: (value: string | null | undefined) => value ?? '-'
+        },
+        {
+          title: 'user_id',
+          dataIndex: 'user_id',
+          width: 180,
+          ellipsis: true,
+          render: (value: string | null) => value ?? '-'
+        },
+        {
+          title: '授权人',
+          dataIndex: 'authorized_account',
+          width: 160,
+          ellipsis: true,
+          render: (value: string | null) => value ?? '-'
+        },
+        {
           title: '运行 ID',
           dataIndex: 'id',
           ellipsis: true

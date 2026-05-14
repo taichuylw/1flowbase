@@ -276,6 +276,12 @@ impl PgControlPlaneStore {
                 target_node_id,
                 title,
                 input_payload,
+                external_user,
+                (
+                    select users.account
+                    from users
+                    where users.id = flow_runs.created_by
+                ) as authorized_account,
                 started_at,
                 finished_at,
                 created_at,

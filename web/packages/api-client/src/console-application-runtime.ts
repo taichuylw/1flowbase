@@ -3,13 +3,19 @@ import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { ApiClientError } from './errors';
 import { apiFetch } from './transport';
 
-export type ConsoleFlowRunMode = 'debug_node_preview' | 'debug_flow_run';
+export type ConsoleFlowRunMode =
+  | 'debug_node_preview'
+  | 'debug_flow_run'
+  | 'published_api_run';
 
 export interface ConsoleApplicationRunSummary {
   id: string;
   run_mode: ConsoleFlowRunMode;
   status: string;
   target_node_id: string | null;
+  title?: string;
+  user_id?: string | null;
+  authorized_account?: string | null;
   started_at: string;
   finished_at: string | null;
   created_at: string;
@@ -26,6 +32,9 @@ export interface ConsoleFlowRunDetail {
   run_mode: ConsoleFlowRunMode;
   status: string;
   target_node_id: string | null;
+  title?: string;
+  user_id?: string | null;
+  authorized_account?: string | null;
   input_payload: Record<string, unknown>;
   output_payload: Record<string, unknown>;
   error_payload: Record<string, unknown> | null;

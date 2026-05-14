@@ -166,6 +166,9 @@ function getRunSummarySearchText(run: ApplicationRunSummary) {
 
   return [
     run.id,
+    run.title,
+    run.user_id,
+    run.authorized_account,
     run.run_mode,
     run.status,
     run.target_node_id,

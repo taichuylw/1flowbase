@@ -239,6 +239,15 @@ function buildConversationMessages(
   ];
 }
 
+function renderMetaValue(value: string | null | undefined): string {
+  if (!value) {
+    return '-';
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : '-';
+}
+
 function RunConversation({
   detail,
   onClose,
@@ -252,6 +261,22 @@ function RunConversation({
 
   return (
     <div className="application-run-detail__conversation-pane">
+      <div className="application-run-detail__meta" data-testid="application-run-detail-meta">
+        <div className="application-run-detail__meta-item">
+          <Typography.Text type="secondary">标题</Typography.Text>
+          <Typography.Text>{renderMetaValue(detail.flow_run.title)}</Typography.Text>
+        </div>
+        <div className="application-run-detail__meta-item">
+          <Typography.Text type="secondary">user_id</Typography.Text>
+          <Typography.Text>{renderMetaValue(detail.flow_run.user_id)}</Typography.Text>
+        </div>
+        <div className="application-run-detail__meta-item">
+          <Typography.Text type="secondary">授权人</Typography.Text>
+          <Typography.Text>
+            {renderMetaValue(detail.flow_run.authorized_account)}
+          </Typography.Text>
+        </div>
+      </div>
       <AgentFlowDebugConsole
         ariaLabel="运行详情预览"
         closeLabel="关闭运行详情"

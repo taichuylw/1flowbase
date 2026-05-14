@@ -382,6 +382,87 @@ pub(super) async fn seed_agent_flow_application(
     application_id
 }
 
+async fn create_application_public_api_key(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-keys"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "Support Agent public key",
+                        "expires_at": null
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    payload["data"]["token"].as_str().unwrap().to_string()
+}
+
+async fn publish_application_public_api(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-publications"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "mapping": {
+                            "input": {
+                                "query_target": "node-start.query",
+                                "model_target": null,
+                                "inputs_target": "node-start",
+                                "history_target": "node-start.history",
+                                "attachments_target": "node-start.files"
+                            },
+                            "output": {
+                                "answer_selector": null,
+                                "usage_selector": null,
+                                "files_selector": null,
+                                "error_selector": null
+                            }
+                        },
+                        "api_enabled": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+}
+
 fn build_human_input_document(flow_id: &str, provider_instance_id: &str) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v2",
@@ -1118,6 +1199,114 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     assert_eq!(
         last_run_payload["data"]["flow_run"]["id"].as_str(),
         Some(flow_run_id.as_str())
+    );
+}
+
+#[tokio::test]
+async fn application_runtime_routes_logs_include_public_run_identity_fields() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    publish_application_public_api(&app, &cookie, &csrf, &application_id).await;
+    let token = create_application_public_api_key(&app, &cookie, &csrf, &application_id).await;
+
+    let create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/1flowbase/runs")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "query": "请总结退款政策",
+                        "title": "公开 API 退款总结",
+                        "user_id": "customer-42",
+                        "response_mode": "queued"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create.status(), StatusCode::CREATED);
+    let create_body = to_bytes(create.into_body(), usize::MAX).await.unwrap();
+    let create_payload: Value = serde_json::from_slice(&create_body).unwrap();
+    let flow_run_id = create_payload["data"]["id"].as_str().unwrap().to_string();
+
+    let list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(list.status(), StatusCode::OK);
+    let list_body = to_bytes(list.into_body(), usize::MAX).await.unwrap();
+    let list_payload: Value = serde_json::from_slice(&list_body).unwrap();
+    assert_eq!(list_payload["data"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        list_payload["data"][0]["id"].as_str(),
+        Some(flow_run_id.as_str())
+    );
+    assert_eq!(
+        list_payload["data"][0]["run_mode"].as_str(),
+        Some("published_api_run")
+    );
+    assert_eq!(
+        list_payload["data"][0]["title"].as_str(),
+        Some("公开 API 退款总结")
+    );
+    assert_eq!(
+        list_payload["data"][0]["user_id"].as_str(),
+        Some("customer-42")
+    );
+    assert_eq!(
+        list_payload["data"][0]["authorized_account"].as_str(),
+        Some("root")
+    );
+
+    let detail = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(detail.status(), StatusCode::OK);
+    let detail_body = to_bytes(detail.into_body(), usize::MAX).await.unwrap();
+    let detail_payload: Value = serde_json::from_slice(&detail_body).unwrap();
+    assert_eq!(
+        detail_payload["data"]["flow_run"]["title"].as_str(),
+        Some("公开 API 退款总结")
+    );
+    assert_eq!(
+        detail_payload["data"]["flow_run"]["user_id"].as_str(),
+        Some("customer-42")
+    );
+    assert_eq!(
+        detail_payload["data"]["flow_run"]["authorized_account"]
+            .as_str(),
+        Some("root")
     );
 }
 

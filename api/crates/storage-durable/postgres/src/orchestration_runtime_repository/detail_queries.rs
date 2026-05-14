@@ -32,6 +32,11 @@ pub(super) async fn fetch_flow_run_for_application(
             output_payload,
             error_payload,
             created_by,
+            (
+                select users.account
+                from users
+                where users.id = flow_runs.created_by
+            ) as authorized_account,
             api_key_id,
             publication_version_id,
             external_user,

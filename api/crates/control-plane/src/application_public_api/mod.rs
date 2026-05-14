@@ -1230,6 +1230,7 @@ impl run_service::ApplicationPublishedFlowRunRepository for ApplicationPublicApi
             output_payload: serde_json::json!({}),
             error_payload: None,
             created_by: input.actor_user_id,
+            authorized_account: None,
             api_key_id: input.api_key_id,
             publication_version_id: input.publication_version_id,
             external_user: input.external_user.clone(),

@@ -33,9 +33,12 @@ function sampleRunDetail() {
       flow_id: 'flow-1',
       draft_id: 'draft-1',
       compiled_plan_id: 'plan-1',
-      run_mode: 'debug_node_preview' as const,
+      run_mode: 'published_api_run' as const,
       status: 'succeeded',
       target_node_id: 'node-llm',
+      title: '公开 API 退款总结',
+      user_id: 'customer-42',
+      authorized_account: 'root',
       input_payload: { 'node-start.query': '总结退款政策' },
       output_payload: {
         answer: '退款政策摘要',
@@ -119,9 +122,12 @@ describe('ApplicationLogsPage', () => {
     runtimeApi.fetchApplicationRuns.mockResolvedValue([
       {
         id: 'run-1',
-        run_mode: 'debug_node_preview' as const,
+        run_mode: 'published_api_run' as const,
         status: 'succeeded',
         target_node_id: 'node-llm',
+        title: '公开 API 退款总结',
+        user_id: 'customer-42',
+        authorized_account: 'root',
         started_at: '2026-04-17T09:00:00Z',
         finished_at: '2026-04-17T09:00:01Z',
         created_at: '2026-04-17T09:00:00Z',
@@ -150,6 +156,9 @@ describe('ApplicationLogsPage', () => {
     );
 
     expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('公开 API 退款总结')).toBeInTheDocument();
+    expect(screen.getByText('customer-42')).toBeInTheDocument();
+    expect(screen.getByText('root')).toBeInTheDocument();
     expect(
       screen.queryByRole('complementary', { name: '运行详情' })
     ).not.toBeInTheDocument();
@@ -179,6 +188,13 @@ describe('ApplicationLogsPage', () => {
       name: '运行详情'
     });
     expect(detailPane).toBeInTheDocument();
+    const meta = screen.getByTestId('application-run-detail-meta');
+    expect(within(meta).getByText('标题')).toBeInTheDocument();
+    expect(within(meta).getByText('公开 API 退款总结')).toBeInTheDocument();
+    expect(within(meta).getByText('user_id')).toBeInTheDocument();
+    expect(within(meta).getByText('customer-42')).toBeInTheDocument();
+    expect(within(meta).getByText('授权人')).toBeInTheDocument();
+    expect(within(meta).getByText('root')).toBeInTheDocument();
     expect(
       screen.getByRole('dialog', { name: '运行详情' })
     ).toBeInTheDocument();
