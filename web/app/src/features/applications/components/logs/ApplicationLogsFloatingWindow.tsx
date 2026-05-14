@@ -29,6 +29,8 @@ type ApplicationLogsFloatingWindowProps = {
 const FLOATING_WINDOW_MARGIN = 8;
 const DEFAULT_MIN_WIDTH = 360;
 const DEFAULT_MIN_HEIGHT = 320;
+const FLOATING_WINDOW_WIDTH_STORAGE_PREFIX =
+  'applicationLogsFloatingWindowWidth';
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -78,6 +80,51 @@ function clampRect(
   };
 }
 
+function getWidthStorageKey(testId: string) {
+  return `${FLOATING_WINDOW_WIDTH_STORAGE_PREFIX}:${testId}`;
+}
+
+function readStoredWidth(testId: string) {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const rawWidth = window.localStorage.getItem(getWidthStorageKey(testId));
+  const width = rawWidth ? Number(rawWidth) : Number.NaN;
+
+  return Number.isFinite(width) && width > 0 ? width : null;
+}
+
+function writeStoredWidth(testId: string, width: number) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(
+    getWidthStorageKey(testId),
+    String(Math.round(width))
+  );
+}
+
+function applyStoredWidth(
+  rect: FloatingWindowRect,
+  testId: string
+): FloatingWindowRect {
+  const storedWidth = readStoredWidth(testId);
+
+  if (!storedWidth) {
+    return rect;
+  }
+
+  const right = rect.left + rect.width;
+
+  return {
+    ...rect,
+    left: right - storedWidth,
+    width: storedWidth
+  };
+}
+
 function isInteractiveElement(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -118,7 +165,7 @@ export function ApplicationLogsFloatingWindow({
   onActivate
 }: ApplicationLogsFloatingWindowProps) {
   const [rect, setRect] = useState(() =>
-    clampRect(initialRect(), minWidth, minHeight)
+    clampRect(applyStoredWidth(initialRect(), testId), minWidth, minHeight)
   );
   const cleanupInteractionRef = useRef<(() => void) | null>(null);
 
@@ -204,6 +251,7 @@ export function ApplicationLogsFloatingWindow({
     const startRight = startLeft + startWidth;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
+    let latestWidth = startWidth;
 
     cleanupInteractionRef.current?.();
     document.body.style.cursor = 'ew-resize';
@@ -220,8 +268,8 @@ export function ApplicationLogsFloatingWindow({
             )
           : startLeft;
 
-      setRect((current) =>
-        clampRect(
+      setRect((current) => {
+        const nextRect = clampRect(
           edge === 'left'
             ? {
                 ...current,
@@ -234,13 +282,18 @@ export function ApplicationLogsFloatingWindow({
               },
           minWidth,
           minHeight
-        )
-      );
+        );
+
+        latestWidth = nextRect.width;
+
+        return nextRect;
+      });
     };
 
     const cleanup = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', cleanup);
+      writeStoredWidth(testId, latestWidth);
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       cleanupInteractionRef.current = null;

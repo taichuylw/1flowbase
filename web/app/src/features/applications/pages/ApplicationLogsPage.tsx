@@ -16,8 +16,7 @@ import './application-logs-page.css';
 const FLOATING_WINDOW_TOP = 112;
 const FLOATING_WINDOW_GAP = 16;
 const FLOATING_WINDOW_RIGHT = 32;
-const RUN_DETAIL_WINDOW_WIDTH = 504;
-const CONVERSATION_LOG_WINDOW_WIDTH = 520;
+const FLOATING_WINDOW_MIN_WIDTH = 360;
 const FLOATING_WINDOW_MAX_HEIGHT = 720;
 
 function getViewportSize() {
@@ -47,9 +46,9 @@ function getRunDetailInitialRect() {
   const viewport = getViewportSize();
 
   return {
-    left: viewport.width - RUN_DETAIL_WINDOW_WIDTH - FLOATING_WINDOW_RIGHT,
+    left: viewport.width - FLOATING_WINDOW_MIN_WIDTH - FLOATING_WINDOW_RIGHT,
     top: FLOATING_WINDOW_TOP,
-    width: RUN_DETAIL_WINDOW_WIDTH,
+    width: FLOATING_WINDOW_MIN_WIDTH,
     height: getFloatingWindowHeight()
   };
 }
@@ -60,10 +59,10 @@ function getConversationLogInitialRect() {
   return {
     left:
       runDetailRect.left -
-      CONVERSATION_LOG_WINDOW_WIDTH -
+      FLOATING_WINDOW_MIN_WIDTH -
       FLOATING_WINDOW_GAP,
     top: FLOATING_WINDOW_TOP,
-    width: CONVERSATION_LOG_WINDOW_WIDTH,
+    width: FLOATING_WINDOW_MIN_WIDTH,
     height: getFloatingWindowHeight()
   };
 }

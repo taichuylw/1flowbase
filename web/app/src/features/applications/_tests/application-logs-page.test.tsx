@@ -107,6 +107,7 @@ describe('ApplicationLogsPage', () => {
   let innerWidthSpy: { mockRestore: () => void } | undefined;
 
   beforeEach(() => {
+    window.localStorage.clear();
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
 
@@ -287,9 +288,9 @@ describe('ApplicationLogsPage', () => {
       'application-logs-floating-run-detail'
     );
     expect(detailWindow).toHaveStyle({
-      left: '744px',
+      left: '888px',
       top: '112px',
-      width: '504px',
+      width: '360px',
       height: '720px'
     });
 
@@ -305,7 +306,7 @@ describe('ApplicationLogsPage', () => {
     fireEvent.mouseUp(window);
 
     expect(detailWindow).toHaveStyle({
-      left: '644px',
+      left: '788px',
       top: '172px'
     });
 
@@ -325,7 +326,12 @@ describe('ApplicationLogsPage', () => {
     });
     fireEvent.mouseUp(window);
 
-    expect(detailWindow).toHaveStyle({ width: '574px' });
+    expect(detailWindow).toHaveStyle({ width: '430px' });
+    expect(
+      window.localStorage.getItem(
+        'applicationLogsFloatingWindowWidth:application-logs-floating-run-detail'
+      )
+    ).toBe('430');
 
     fireEvent.mouseDown(
       within(detailWindow).getByRole('separator', {
@@ -333,20 +339,25 @@ describe('ApplicationLogsPage', () => {
       }),
       {
         button: 0,
-        clientX: 644,
+        clientX: 788,
         clientY: 240
       }
     );
     fireEvent.mouseMove(window, {
-      clientX: 584,
+      clientX: 728,
       clientY: 240
     });
     fireEvent.mouseUp(window);
 
     expect(detailWindow).toHaveStyle({
-      left: '584px',
-      width: '634px'
+      left: '728px',
+      width: '490px'
     });
+    expect(
+      window.localStorage.getItem(
+        'applicationLogsFloatingWindowWidth:application-logs-floating-run-detail'
+      )
+    ).toBe('490');
 
     fireEvent.mouseDown(
       within(detailWindow).getByRole('separator', {
@@ -367,6 +378,16 @@ describe('ApplicationLogsPage', () => {
     expect(detailWindow).toHaveStyle({ height: '648px' });
     expect(await screen.findByTestId('debug-conversation-messages'))
       .toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭运行详情' }));
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    expect(
+      await screen.findByTestId('application-logs-floating-run-detail')
+    ).toHaveStyle({
+      left: '758px',
+      width: '490px'
+    });
   }, 20_000);
 
   test('uses floating window CSS instead of a docked splitter override', async () => {
