@@ -103,6 +103,7 @@ function sampleRunDetail() {
 
 describe('ApplicationLogsPage', () => {
   let getBoundingClientRectSpy: { mockRestore: () => void } | undefined;
+  let innerHeightSpy: { mockRestore: () => void } | undefined;
 
   beforeEach(() => {
     runtimeApi.fetchApplicationRuns.mockReset();
@@ -124,6 +125,8 @@ describe('ApplicationLogsPage', () => {
   afterEach(() => {
     getBoundingClientRectSpy?.mockRestore();
     getBoundingClientRectSpy = undefined;
+    innerHeightSpy?.mockRestore();
+    innerHeightSpy = undefined;
   });
 
   test('expands selected run with Ant Splitter without reserving empty space', async () => {
@@ -224,7 +227,7 @@ describe('ApplicationLogsPage', () => {
     ).not.toBeInTheDocument();
   }, 20_000);
 
-  test('does not pin the docked detail layout to viewport height', async () => {
+  test('uses viewport remaining height for the docked detail layout', async () => {
     const cssSource = await readFile(
       path.resolve(
         process.cwd(),
@@ -233,11 +236,12 @@ describe('ApplicationLogsPage', () => {
       'utf8'
     );
 
-    expect(cssSource).not.toContain('height: calc(100vh - 32px);');
-    expect(cssSource).not.toContain('height: calc(100vh - 120px);');
+    expect(cssSource).toContain('flex: 1 1 auto;');
+    expect(cssSource).not.toContain('height: auto;');
   });
 
-  test('matches the docked detail height to the runs table height', async () => {
+  test('matches the docked detail height to viewport remaining height', async () => {
+    innerHeightSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(920);
     getBoundingClientRectSpy = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockImplementation(function getBoundingClientRect(this: HTMLElement) {
@@ -294,7 +298,7 @@ describe('ApplicationLogsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('application-logs-splitter')).toHaveStyle({
-        height: '640px'
+        height: '800px'
       });
     });
   });

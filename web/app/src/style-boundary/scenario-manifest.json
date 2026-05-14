@@ -364,6 +364,30 @@
     ]
   },
   {
+    "id": "page.application-logs",
+    "kind": "page",
+    "title": "Application Logs Page",
+    "impactFiles": [
+      "web/app/src/features/applications/pages/ApplicationLogsPage.tsx",
+      "web/app/src/features/applications/pages/application-logs-page.css",
+      "web/app/src/features/applications/components/logs/ApplicationRunsTable.tsx",
+      "web/app/src/features/applications/components/logs/ApplicationRunDetailPanel.tsx",
+      "web/app/src/features/applications/components/logs/application-run-detail-panel.css"
+    ],
+    "boundaryNodes": [
+      {
+        "id": "application-logs-page",
+        "selector": ".application-logs-page",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "block"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "page.embedded-apps",
     "kind": "page",
     "title": "Subsystem Page",

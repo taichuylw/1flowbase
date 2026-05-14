@@ -21,7 +21,6 @@ export function ApplicationLogsPage({
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
   const [splitterHeight, setSplitterHeight] = useState<number | null>(null);
-  const listRef = useRef<HTMLElement | null>(null);
   const splitterRef = useRef<HTMLDivElement | null>(null);
   const runsQuery = useQuery({
     queryKey: applicationRunsQueryKey(applicationId),
@@ -35,34 +34,22 @@ export function ApplicationLogsPage({
     }
 
     function updateSplitterHeight() {
-      const listElement = listRef.current;
       const splitterElement = splitterRef.current;
 
-      if (!listElement || !splitterElement) {
-        return;
-      }
-
-      const tableElement =
-        listElement.querySelector<HTMLElement>('.ant-table-wrapper') ??
-        listElement;
-      const tableHeight = Math.round(
-        tableElement.getBoundingClientRect().height
-      );
-
-      if (tableHeight <= 0) {
+      if (!splitterElement) {
         return;
       }
 
       const availableHeight = Math.floor(
         window.innerHeight - splitterElement.getBoundingClientRect().top
       );
-      const nextHeight =
-        availableHeight > 0
-          ? Math.min(tableHeight, availableHeight)
-          : tableHeight;
+
+      if (availableHeight <= 0) {
+        return;
+      }
 
       setSplitterHeight((currentHeight) =>
-        currentHeight === nextHeight ? currentHeight : nextHeight
+        currentHeight === availableHeight ? currentHeight : availableHeight
       );
     }
 
@@ -73,15 +60,8 @@ export function ApplicationLogsPage({
         ? null
         : new ResizeObserver(updateSplitterHeight);
 
-    if (resizeObserver && listRef.current) {
-      resizeObserver.observe(listRef.current);
-
-      const tableElement =
-        listRef.current.querySelector<HTMLElement>('.ant-table-wrapper');
-
-      if (tableElement) {
-        resizeObserver.observe(tableElement);
-      }
+    if (resizeObserver && splitterRef.current) {
+      resizeObserver.observe(splitterRef.current);
     }
 
     window.addEventListener('resize', updateSplitterHeight);
@@ -90,7 +70,7 @@ export function ApplicationLogsPage({
       resizeObserver?.disconnect();
       window.removeEventListener('resize', updateSplitterHeight);
     };
-  }, [runsQuery.data, selectedRunId]);
+  }, [selectedRunId]);
 
   function selectRun(runId: string | null) {
     setSelectedRunId(runId);
@@ -114,7 +94,7 @@ export function ApplicationLogsPage({
     </div>
   );
   const logsList = (
-    <section className="application-logs-page__list" ref={listRef}>
+    <section className="application-logs-page__list">
       {runsQuery.data.length === 0 ? (
         <Empty
           description="当前应用还没有运行记录"

@@ -870,6 +870,31 @@ function seedStyleBoundaryApplicationFetch() {
       );
     }
 
+    if (
+      method.toUpperCase() === 'GET' &&
+      requestUrl.pathname === '/api/console/applications/app-1/logs/runs'
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'run-1',
+              run_mode: 'debug_flow_run',
+              status: 'succeeded',
+              target_node_id: null,
+              started_at: '2026-05-10T09:00:00Z',
+              finished_at: '2026-05-10T09:00:03Z'
+            }
+          ],
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
     if (url.endsWith('/api/console/applications/catalog')) {
       return new Response(
         JSON.stringify({
@@ -1018,6 +1043,10 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.application-api': () => {
     seedStyleBoundaryApplicationFetch();
     return renderRouterScene('/applications/app-1/api');
+  },
+  'page.application-logs': () => {
+    seedStyleBoundaryApplicationFetch();
+    return renderRouterScene('/applications/app-1/logs');
   },
   'page.embedded-apps': () =>
     renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
