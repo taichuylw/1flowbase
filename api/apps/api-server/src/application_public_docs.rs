@@ -23,7 +23,6 @@ struct PublicOperation {
     method: &'static str,
     path: &'static str,
     category_id: &'static str,
-    request_example: Value,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,32 +158,10 @@ fn openapi_spec(context: &ApplicationPublicDocsContext, operations: Vec<PublicOp
         let path_item = paths
             .entry(operation.path.to_string())
             .or_insert_with(|| json!({}));
-        path_item.as_object_mut().expect("path item object").insert(
-            method,
-            json!({
-                "operationId": operation.id,
-                "summary": operation_summary(operation.id, locale),
-                "description": format!("{}\n\n{}", operation_description(operation.id, locale), unsupported_notes(operation.category_id, locale)),
-                "tags": [category_label(operation.category_id, locale).unwrap_or(operation.category_id)],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {"type": "object"},
-                            "example": operation.request_example,
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {"description": response_description("compatible_response", locale)},
-                    "201": {"description": response_description("native_run_created", locale)},
-                    "400": {"description": response_description("invalid_request", locale)},
-                    "401": {"description": response_description("invalid_application_api_key", locale)},
-                    "409": {"description": response_description("application_not_published_or_run_state_not_supported", locale)}
-                },
-                "security": operation_security(operation.category_id)
-            }),
-        );
+        path_item
+            .as_object_mut()
+            .expect("path item object")
+            .insert(method, operation_openapi_spec(&operation, locale));
     }
 
     json!({
@@ -229,6 +206,314 @@ fn openapi_spec(context: &ApplicationPublicDocsContext, operations: Vec<PublicOp
                 .as_ref()
                 .map(mapping_summary)
                 .unwrap_or_else(|| json!({"status": "not_published"}))
+        }
+    })
+}
+
+fn operation_openapi_spec(operation: &PublicOperation, locale: DocsLocale) -> Value {
+    let mut spec = json!({
+        "operationId": operation.id,
+        "summary": operation_summary(operation.id, locale),
+        "description": format!("{}\n\n{}", operation_description(operation.id, locale), unsupported_notes(operation.category_id, locale)),
+        "tags": [category_label(operation.category_id, locale).unwrap_or(operation.category_id)],
+        "responses": {
+            "200": {"description": response_description("compatible_response", locale)},
+            "201": {"description": response_description("native_run_created", locale)},
+            "400": {"description": response_description("invalid_request", locale)},
+            "401": {"description": response_description("invalid_application_api_key", locale)},
+            "409": {"description": response_description("application_not_published_or_run_state_not_supported", locale)}
+        },
+        "security": operation_security(operation.category_id)
+    });
+    let spec_object = spec.as_object_mut().expect("operation spec object");
+    let parameters = operation_parameters(operation);
+    if !parameters.is_empty() {
+        spec_object.insert("parameters".to_string(), Value::Array(parameters));
+    }
+    if let Some(request_body) = operation_request_body(operation) {
+        spec_object.insert("requestBody".to_string(), request_body);
+    }
+    spec
+}
+
+fn operation_parameters(operation: &PublicOperation) -> Vec<Value> {
+    let mut parameters = Vec::new();
+    if operation.path.contains("{run_id}") {
+        parameters.push(json!({
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "description": "Published run id",
+            "schema": {
+                "type": "string",
+                "format": "uuid"
+            }
+        }));
+    }
+    parameters
+}
+
+fn operation_request_body(operation: &PublicOperation) -> Option<Value> {
+    match operation.id {
+        "applicationNativeCreateRun" => Some(json_request_body(
+            native_create_run_schema(),
+            json!({
+                "query": "Summarize the incident",
+                "response_mode": "blocking",
+                "inputs": {"priority": "high"},
+                "conversation": {"user": "external-user-1"},
+                "attachments": [{"source": "upload_file_id", "value": "00000000-0000-0000-0000-000000000000"}]
+            }),
+        )),
+        "applicationNativeResumeRun" => Some(json_request_body(
+            native_resume_run_schema(),
+            json!({
+                "callback_task_id": "00000000-0000-0000-0000-000000000000",
+                "response_payload": {},
+                "response_mode": "blocking"
+            }),
+        )),
+        "applicationNativeUploadFile" => Some(json!({
+            "required": true,
+            "content": {
+                "multipart/form-data": {
+                    "schema": native_file_upload_schema()
+                }
+            }
+        })),
+        "applicationOpenAiCreateChatCompletion" => Some(json_request_body(
+            openai_chat_completion_schema(),
+            json!({
+                "model": "provider/model",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": false
+            }),
+        )),
+        "applicationAnthropicCreateMessage" => Some(json_request_body(
+            anthropic_message_schema(),
+            json!({
+                "model": "provider/model",
+                "max_tokens": 512,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": false
+            }),
+        )),
+        _ => None,
+    }
+}
+
+fn json_request_body(schema: Value, example: Value) -> Value {
+    json!({
+        "required": true,
+        "content": {
+            "application/json": {
+                "schema": schema,
+                "example": example
+            }
+        }
+    })
+}
+
+fn native_create_run_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "User input mapped to the published application's query target."
+            },
+            "model": {
+                "type": "string",
+                "description": "Optional model identifier passed through application mapping."
+            },
+            "inputs": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Additional input values mapped by the application API mapping."
+            },
+            "history": {
+                "type": "array",
+                "items": {"type": "object", "additionalProperties": true},
+                "description": "Conversation history entries available to the published run."
+            },
+            "attachments": {
+                "type": "array",
+                "items": native_attachment_schema(),
+                "description": "Files or external assets available to the published run."
+            },
+            "conversation": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "External conversation metadata such as user or conversation id."
+            },
+            "response_mode": {
+                "type": "string",
+                "enum": ["blocking", "streaming"],
+                "default": "blocking"
+            },
+            "stream_options": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Streaming options. include_workflow_events=public enables public workflow events."
+            },
+            "execution": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Execution options for the published run."
+            },
+            "metadata": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Caller metadata persisted with the public run."
+            }
+        }
+    })
+}
+
+fn native_attachment_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "source": {
+                "type": "string",
+                "enum": ["upload_file_id", "url", "base64"]
+            },
+            "value": {
+                "type": "string",
+                "description": "Attachment value for the selected source."
+            },
+            "name": {"type": "string"},
+            "mime_type": {"type": "string"},
+            "metadata": {"type": "object", "additionalProperties": true}
+        }
+    })
+}
+
+fn native_resume_run_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["callback_task_id"],
+        "properties": {
+            "callback_task_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Callback task id returned in required_action."
+            },
+            "response_payload": {
+                "type": "object",
+                "additionalProperties": true,
+                "default": {}
+            },
+            "response_mode": {
+                "type": "string",
+                "enum": ["blocking", "streaming"],
+                "default": "blocking"
+            }
+        }
+    })
+}
+
+fn native_file_upload_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["file_table_id", "file"],
+        "properties": {
+            "file_table_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Target file table id."
+            },
+            "file": {
+                "type": "string",
+                "format": "binary",
+                "description": "File binary content."
+            }
+        }
+    })
+}
+
+fn openai_chat_completion_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+            "model": {"type": "string"},
+            "messages": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": ["role", "content"],
+                    "properties": {
+                        "role": {"type": "string", "enum": ["system", "user", "assistant"]},
+                        "content": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "type": {"type": "string", "enum": ["text"]},
+                                            "text": {"type": "string"}
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "stream": {
+                "type": "boolean",
+                "description": "true maps the request to streaming response mode."
+            },
+            "user": {"type": "string"},
+            "metadata": {"type": "object", "additionalProperties": true}
+        }
+    })
+}
+
+fn anthropic_message_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+            "model": {"type": "string"},
+            "max_tokens": {"type": "integer", "minimum": 1},
+            "system": {"type": "string"},
+            "messages": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": ["role", "content"],
+                    "properties": {
+                        "role": {"type": "string", "enum": ["user", "assistant"]},
+                        "content": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "type": {"type": "string", "enum": ["text"]},
+                                            "text": {"type": "string"}
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "stream": {
+                "type": "boolean",
+                "description": "true maps the request to streaming response mode."
+            },
+            "metadata": {"type": "object", "additionalProperties": true}
         }
     })
 }
@@ -439,49 +724,42 @@ fn public_operations() -> Vec<PublicOperation> {
             method: "POST",
             path: "/api/1flowbase/runs",
             category_id: NATIVE_CATEGORY_ID,
-            request_example: json!({"query": "Summarize the incident", "response_mode": "blocking"}),
         },
         PublicOperation {
             id: "applicationNativeGetRun",
             method: "GET",
             path: "/api/1flowbase/runs/{run_id}",
             category_id: NATIVE_CATEGORY_ID,
-            request_example: json!({}),
         },
         PublicOperation {
             id: "applicationNativeCancelRun",
             method: "POST",
             path: "/api/1flowbase/runs/{run_id}/cancel",
             category_id: NATIVE_CATEGORY_ID,
-            request_example: json!({}),
         },
         PublicOperation {
             id: "applicationNativeResumeRun",
             method: "POST",
             path: "/api/1flowbase/runs/{run_id}/resume",
             category_id: NATIVE_CATEGORY_ID,
-            request_example: json!({"callback_task_id": "00000000-0000-0000-0000-000000000000", "response_payload": {}}),
         },
         PublicOperation {
             id: "applicationNativeUploadFile",
             method: "POST",
             path: "/api/1flowbase/files",
             category_id: NATIVE_CATEGORY_ID,
-            request_example: json!({}),
         },
         PublicOperation {
             id: "applicationOpenAiCreateChatCompletion",
             method: "POST",
             path: "/v1/chat/completions",
             category_id: OPENAI_CATEGORY_ID,
-            request_example: json!({"model": "provider/model", "messages": [{"role": "user", "content": "Hello"}]}),
         },
         PublicOperation {
             id: "applicationAnthropicCreateMessage",
             method: "POST",
             path: "/v1/messages",
             category_id: ANTHROPIC_CATEGORY_ID,
-            request_example: json!({"model": "provider/model", "max_tokens": 512, "messages": [{"role": "user", "content": "Hello"}]}),
         },
     ]
 }

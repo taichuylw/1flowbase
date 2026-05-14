@@ -225,6 +225,137 @@ async fn application_api_docs_anthropic_operation_advertises_x_api_key_auth() {
 }
 
 #[tokio::test]
+async fn application_api_docs_operation_specs_include_request_parameters() {
+    let app = test_app().await;
+    let (cookie, application_id) = setup_published_app(&app).await;
+
+    let create_run_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationNativeCreateRun/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_run_spec.status(), StatusCode::OK);
+    let create_run_payload = response_json(create_run_spec).await;
+    let create_run_body = &create_run_payload["paths"]["/api/1flowbase/runs"]["post"]
+        ["requestBody"]["content"]["application/json"]["schema"];
+    assert_eq!(create_run_body["required"], json!(["query"]));
+    assert_eq!(
+        create_run_body["properties"]["query"]["type"],
+        json!("string")
+    );
+    assert_eq!(
+        create_run_body["properties"]["response_mode"]["enum"],
+        json!(["blocking", "streaming"])
+    );
+    assert_eq!(
+        create_run_body["properties"]["attachments"]["items"]["properties"]["value"]["type"],
+        json!("string")
+    );
+
+    let openai_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationOpenAiCreateChatCompletion/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(openai_spec.status(), StatusCode::OK);
+    let openai_payload = response_json(openai_spec).await;
+    let openai_body = &openai_payload["paths"]["/v1/chat/completions"]["post"]["requestBody"]
+        ["content"]["application/json"]["schema"];
+    assert_eq!(openai_body["required"], json!(["model", "messages"]));
+    assert_eq!(
+        openai_body["properties"]["messages"]["items"]["required"],
+        json!(["role", "content"])
+    );
+
+    let anthropic_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationAnthropicCreateMessage/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(anthropic_spec.status(), StatusCode::OK);
+    let anthropic_payload = response_json(anthropic_spec).await;
+    let anthropic_body = &anthropic_payload["paths"]["/v1/messages"]["post"]["requestBody"]
+        ["content"]["application/json"]["schema"];
+    assert_eq!(anthropic_body["required"], json!(["model", "messages"]));
+    assert_eq!(
+        anthropic_body["properties"]["max_tokens"]["type"],
+        json!("integer")
+    );
+
+    let get_run_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationNativeGetRun/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_run_spec.status(), StatusCode::OK);
+    let get_run_payload = response_json(get_run_spec).await;
+    let get_run_operation = &get_run_payload["paths"]["/api/1flowbase/runs/{run_id}"]["get"];
+    assert_eq!(get_run_operation["requestBody"], Value::Null);
+    assert_eq!(get_run_operation["parameters"][0]["name"], json!("run_id"));
+    assert_eq!(get_run_operation["parameters"][0]["in"], json!("path"));
+    assert_eq!(
+        get_run_operation["parameters"][0]["schema"]["format"],
+        json!("uuid")
+    );
+
+    let upload_file_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationNativeUploadFile/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(upload_file_spec.status(), StatusCode::OK);
+    let upload_file_payload = response_json(upload_file_spec).await;
+    let upload_body = &upload_file_payload["paths"]["/api/1flowbase/files"]["post"]["requestBody"]
+        ["content"]["multipart/form-data"]["schema"];
+    assert_eq!(upload_body["required"], json!(["file_table_id", "file"]));
+    assert_eq!(
+        upload_body["properties"]["file_table_id"]["format"],
+        json!("uuid")
+    );
+    assert_eq!(upload_body["properties"]["file"]["format"], json!("binary"));
+}
+
+#[tokio::test]
 async fn application_api_docs_specs_follow_requested_locale() {
     let app = test_app().await;
     let (cookie, application_id) = setup_published_app(&app).await;
