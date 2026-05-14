@@ -55,6 +55,7 @@ pub(super) fn map_flow_run_record(row: PgRow) -> Result<domain::FlowRunRecord> {
         started_at: row.get("started_at"),
         finished_at: row.get("finished_at"),
         created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
     })
 }
 
@@ -374,5 +375,7 @@ pub(super) fn map_application_run_summary(row: PgRow) -> Result<domain::Applicat
         target_node_id: row.get("target_node_id"),
         started_at: row.get("started_at"),
         finished_at: row.get("finished_at"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
     })
 }

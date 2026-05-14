@@ -264,6 +264,8 @@ pub struct FlowRunSummaryResponse {
     pub target_node_id: Option<String>,
     pub started_at: String,
     pub finished_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -283,6 +285,7 @@ pub struct FlowRunResponse {
     pub started_at: String,
     pub finished_at: Option<String>,
     pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -451,6 +454,8 @@ fn to_flow_run_summary_response(summary: domain::ApplicationRunSummary) -> FlowR
         target_node_id: summary.target_node_id,
         started_at: format_time(summary.started_at),
         finished_at: format_optional_time(summary.finished_at),
+        created_at: format_time(summary.created_at),
+        updated_at: format_time(summary.updated_at),
     }
 }
 
@@ -471,6 +476,7 @@ fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
         created_at: format_time(run.created_at),
+        updated_at: format_time(run.updated_at),
     }
 }
 

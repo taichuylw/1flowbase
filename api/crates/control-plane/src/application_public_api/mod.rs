@@ -1239,6 +1239,7 @@ impl run_service::ApplicationPublishedFlowRunRepository for ApplicationPublicApi
             started_at: input.started_at,
             finished_at: None,
             created_at: input.started_at,
+            updated_at: input.started_at,
         };
         let mut inner = self
             .inner

@@ -12,6 +12,8 @@ export interface ConsoleApplicationRunSummary {
   target_node_id: string | null;
   started_at: string;
   finished_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ConsoleFlowRunDetail {
@@ -31,6 +33,7 @@ export interface ConsoleFlowRunDetail {
   started_at: string;
   finished_at: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ConsoleNodeRunDetail {

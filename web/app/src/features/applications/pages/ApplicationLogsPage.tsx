@@ -29,13 +29,11 @@ type ApplicationLogTimeRange = '1' | '7' | '28' | '90' | '365' | 'all';
 type ApplicationLogSortField = 'created_at' | 'updated_at';
 type SearchableRunSummary = ApplicationRunSummary & {
   answer?: unknown;
-  created_at?: string;
   input_payload?: unknown;
   input_summary?: unknown;
   output_payload?: unknown;
   output_summary?: unknown;
   query?: unknown;
-  updated_at?: string;
 };
 
 const TIME_RANGE_OPTIONS: Array<{
@@ -107,13 +105,11 @@ function getConversationLogInitialRect() {
 }
 
 function getRunCreatedAt(run: ApplicationRunSummary) {
-  return (run as SearchableRunSummary).created_at ?? run.started_at;
+  return run.created_at;
 }
 
 function getRunUpdatedAt(run: ApplicationRunSummary) {
-  return (
-    (run as SearchableRunSummary).updated_at ?? run.finished_at ?? run.started_at
-  );
+  return run.updated_at;
 }
 
 function toTime(value: string | null | undefined) {

@@ -103,7 +103,8 @@ impl PgControlPlaneStore {
             update flow_runs
             set input_payload = $2,
                 output_payload = $3,
-                error_payload = $4
+                error_payload = $4,
+                updated_at = now()
             where id = $1
             returning
                 id,
@@ -130,7 +131,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             "#,
         )
         .bind(input.flow_run_id)

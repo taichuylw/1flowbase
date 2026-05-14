@@ -94,11 +94,12 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 created_by,
-                started_at
+                started_at,
+                updated_at
             ) values (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19,
-                $20, $21
+                $20, $21, $22
             )
             returning
                 id,
@@ -125,7 +126,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             "#,
         )
         .bind(Uuid::now_v7())
@@ -148,6 +150,7 @@ impl PgControlPlaneStore {
         .bind(input.compatibility_mode.as_deref())
         .bind(input.idempotency_key.as_deref())
         .bind(input.actor_user_id)
+        .bind(input.started_at)
         .bind(input.started_at)
         .fetch_one(self.pool())
         .await?;
@@ -182,11 +185,12 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 created_by,
-                started_at
+                started_at,
+                updated_at
             ) values (
                 $1, $2, $3, $4, null, $5, $6, $7, $8, $9,
                 $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                $19, $20
+                $19, $20, $21
             )
             returning
                 id,
@@ -213,7 +217,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             "#,
         )
         .bind(Uuid::now_v7())
@@ -236,6 +241,7 @@ impl PgControlPlaneStore {
         .bind(input.idempotency_key.as_deref())
         .bind(input.actor_user_id)
         .bind(input.started_at)
+        .bind(input.started_at)
         .fetch_one(self.pool())
         .await?;
 
@@ -250,7 +256,8 @@ impl PgControlPlaneStore {
             r#"
             update flow_runs
             set compiled_plan_id = $2,
-                status = $3
+                status = $3,
+                updated_at = now()
             from flow_compiled_plans compiled
             where flow_runs.id = $1
               and compiled.id = $2
@@ -287,7 +294,8 @@ impl PgControlPlaneStore {
                 flow_runs.idempotency_key,
                 flow_runs.started_at,
                 flow_runs.finished_at,
-                flow_runs.created_at
+                flow_runs.created_at,
+                flow_runs.updated_at
             "#,
         )
         .bind(input.flow_run_id)
@@ -312,7 +320,8 @@ impl PgControlPlaneStore {
             set status = 'failed',
                 output_payload = $2,
                 error_payload = $3,
-                finished_at = $4
+                finished_at = $4,
+                updated_at = $4
             where id = $1
               and status = 'queued'
               and compiled_plan_id is null
@@ -341,7 +350,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             "#,
         )
         .bind(input.flow_run_id)
@@ -395,7 +405,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             from flow_runs
             where application_id = $1
               and api_key_id = $2
@@ -522,7 +533,8 @@ impl PgControlPlaneStore {
             set status = $2,
                 output_payload = $3,
                 error_payload = $4,
-                finished_at = $5
+                finished_at = $5,
+                updated_at = coalesce($5, now())
             where id = $1
             returning
                 id,
@@ -549,7 +561,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             "#,
         )
         .bind(input.flow_run_id)
@@ -574,7 +587,8 @@ impl PgControlPlaneStore {
             set status = $2,
                 output_payload = $3,
                 error_payload = $4,
-                finished_at = $5
+                finished_at = $5,
+                updated_at = coalesce($5, now())
             where id = $1
               and status = $6
             returning
@@ -602,7 +616,8 @@ impl PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             "#,
         )
         .bind(input.flow_run_id)

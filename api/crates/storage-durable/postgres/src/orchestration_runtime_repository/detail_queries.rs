@@ -40,7 +40,8 @@ pub(super) async fn fetch_flow_run_for_application(
             idempotency_key,
             started_at,
             finished_at,
-            created_at
+            created_at,
+            updated_at
         from flow_runs
         where application_id = $1
           and id = $2

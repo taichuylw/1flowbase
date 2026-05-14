@@ -199,6 +199,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             started_at: input.started_at,
             finished_at: None,
             created_at: input.started_at,
+            updated_at: input.started_at,
         };
         inner.flow_runs_by_id.insert(record.id, record.clone());
         Ok(record)
@@ -235,6 +236,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             started_at: input.started_at,
             finished_at: None,
             created_at: input.started_at,
+            updated_at: input.started_at,
         };
         inner.flow_runs_by_id.insert(record.id, record.clone());
         Ok(record)
@@ -268,6 +270,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         }
         record.compiled_plan_id = Some(input.compiled_plan_id);
         record.status = input.status;
+        record.updated_at = OffsetDateTime::now_utc();
         Ok(record.clone())
     }
 
@@ -286,6 +289,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         record.output_payload = input.output_payload.clone();
         record.error_payload = Some(input.error_payload.clone());
         record.finished_at = Some(input.finished_at);
+        record.updated_at = input.finished_at;
         Ok(Some(record.clone()))
     }
 
@@ -372,6 +376,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         record.output_payload = input.output_payload.clone();
         record.error_payload = input.error_payload.clone();
         record.finished_at = input.finished_at;
+        record.updated_at = input.finished_at.unwrap_or_else(OffsetDateTime::now_utc);
         Ok(record.clone())
     }
 
@@ -391,6 +396,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         record.output_payload = input.output_payload.clone();
         record.error_payload = input.error_payload.clone();
         record.finished_at = input.finished_at;
+        record.updated_at = input.finished_at.unwrap_or_else(OffsetDateTime::now_utc);
         Ok(Some(record.clone()))
     }
 
@@ -1170,6 +1176,8 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
                 target_node_id: record.target_node_id.clone(),
                 started_at: record.started_at,
                 finished_at: record.finished_at,
+                created_at: record.created_at,
+                updated_at: record.updated_at,
             })
             .collect::<Vec<_>>();
         runs.sort_by(|left, right| {

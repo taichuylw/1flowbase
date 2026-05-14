@@ -47,7 +47,8 @@ function sampleRunDetail() {
       created_by: 'user-1',
       started_at: '2026-04-17T09:00:00Z',
       finished_at: '2026-04-17T09:00:01Z',
-      created_at: '2026-04-17T09:00:00Z'
+      created_at: '2026-04-17T09:00:00Z',
+      updated_at: '2026-04-17T09:00:01Z'
     },
     node_runs: [
       {
@@ -122,7 +123,9 @@ describe('ApplicationLogsPage', () => {
         status: 'succeeded',
         target_node_id: 'node-llm',
         started_at: '2026-04-17T09:00:00Z',
-        finished_at: '2026-04-17T09:00:01Z'
+        finished_at: '2026-04-17T09:00:01Z',
+        created_at: '2026-04-17T09:00:00Z',
+        updated_at: '2026-04-17T09:00:01Z'
       }
     ]);
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
@@ -415,7 +418,9 @@ describe('ApplicationLogsPage', () => {
         status: 'succeeded',
         target_node_id: null,
         started_at: '2026-04-17T10:00:00Z',
-        finished_at: '2026-04-17T10:05:00Z'
+        finished_at: '2026-04-17T10:05:00Z',
+        created_at: '2026-04-17T10:00:00Z',
+        updated_at: '2026-04-17T10:05:00Z'
       },
       {
         id: 'run-weather',
@@ -423,7 +428,9 @@ describe('ApplicationLogsPage', () => {
         status: 'succeeded',
         target_node_id: null,
         started_at: '2026-04-17T09:00:00Z',
-        finished_at: '2026-04-17T12:00:00Z'
+        finished_at: '2026-04-17T12:00:00Z',
+        created_at: '2026-04-17T09:00:00Z',
+        updated_at: '2026-04-17T12:00:00Z'
       },
       {
         id: 'run-old',
@@ -431,7 +438,9 @@ describe('ApplicationLogsPage', () => {
         status: 'succeeded',
         target_node_id: null,
         started_at: '2026-03-01T09:00:00Z',
-        finished_at: '2026-03-01T09:02:00Z'
+        finished_at: '2026-03-01T09:02:00Z',
+        created_at: '2026-03-01T09:00:00Z',
+        updated_at: '2026-03-01T09:02:00Z'
       }
     ]);
     runtimeApi.fetchApplicationRunDetail.mockImplementation(

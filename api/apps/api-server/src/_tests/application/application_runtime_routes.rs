@@ -1024,6 +1024,8 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         list_payload["data"][0]["id"].as_str(),
         Some(flow_run_id.as_str())
     );
+    assert!(list_payload["data"][0]["created_at"].is_string());
+    assert!(list_payload["data"][0]["updated_at"].is_string());
 
     let detail = app
         .clone()

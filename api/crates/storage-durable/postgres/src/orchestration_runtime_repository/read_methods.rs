@@ -275,10 +275,12 @@ impl PgControlPlaneStore {
                 status,
                 target_node_id,
                 started_at,
-                finished_at
+                finished_at,
+                created_at,
+                updated_at
             from flow_runs
             where application_id = $1
-            order by started_at desc, id desc
+            order by created_at desc, id desc
             "#,
         )
         .bind(application_id)

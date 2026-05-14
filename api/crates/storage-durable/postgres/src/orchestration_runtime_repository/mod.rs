@@ -502,7 +502,8 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
                 idempotency_key,
                 started_at,
                 finished_at,
-                created_at
+                created_at,
+                updated_at
             from flow_runs
             where id = $1
               and run_mode = 'published_api_run'

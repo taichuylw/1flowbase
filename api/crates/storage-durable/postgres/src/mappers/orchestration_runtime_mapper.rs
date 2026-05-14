@@ -43,6 +43,7 @@ pub struct StoredFlowRunRow {
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone)]
@@ -328,6 +329,8 @@ pub struct StoredApplicationRunSummaryRow {
     pub target_node_id: Option<String>,
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }
 
 pub struct PgOrchestrationRuntimeMapper;
@@ -375,6 +378,7 @@ impl PgOrchestrationRuntimeMapper {
             started_at: row.started_at,
             finished_at: row.finished_at,
             created_at: row.created_at,
+            updated_at: row.updated_at,
         })
     }
 
@@ -690,6 +694,8 @@ impl PgOrchestrationRuntimeMapper {
             target_node_id: row.target_node_id,
             started_at: row.started_at,
             finished_at: row.finished_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
         })
     }
 }

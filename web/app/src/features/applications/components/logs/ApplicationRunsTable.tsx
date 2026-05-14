@@ -10,22 +10,12 @@ const STATUS_COLOR: Record<string, string> = {
   waiting_callback: 'orange'
 };
 
-type ApplicationRunSummaryWithUpdate = ApplicationRunSummary & {
-  updated_at?: string | null;
-};
-
 function formatTimestamp(value: string | null | undefined) {
   if (!value) {
     return '-';
   }
 
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
-}
-
-function getRunUpdatedAt(run: ApplicationRunSummary) {
-  const runWithUpdate = run as ApplicationRunSummaryWithUpdate;
-
-  return runWithUpdate.updated_at ?? run.finished_at ?? run.started_at;
 }
 
 export function ApplicationRunsTable({
@@ -81,9 +71,9 @@ export function ApplicationRunsTable({
         },
         {
           title: '更新时间',
-          key: 'updated_at',
+          dataIndex: 'updated_at',
           width: 200,
-          render: (_: unknown, run) => formatTimestamp(getRunUpdatedAt(run))
+          render: (value: string) => formatTimestamp(value)
         },
         {
           title: '操作',

@@ -141,6 +141,7 @@ pub struct FlowRunRecord {
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -247,6 +248,8 @@ pub struct ApplicationRunSummary {
     pub target_node_id: Option<String>,
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

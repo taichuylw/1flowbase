@@ -428,6 +428,7 @@ async fn migration_smoke_creates_application_public_run_state() {
     assert!(flow_run_columns.contains(&"external_trace_id".to_string()));
     assert!(flow_run_columns.contains(&"compatibility_mode".to_string()));
     assert!(flow_run_columns.contains(&"idempotency_key".to_string()));
+    assert!(flow_run_columns.contains(&"updated_at".to_string()));
     assert!(run_mode_check.contains("published_api_run"));
     assert!(tables.contains(&"application_public_conversations".to_string()));
     assert!(conversation_columns.contains(&"id".to_string()));
