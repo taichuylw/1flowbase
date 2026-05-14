@@ -10,6 +10,7 @@ import { useState } from 'react';
 export function DebugComposer({
   value,
   disabled,
+  showFeatureBar = true,
   submitting,
   stopping,
   onChange,
@@ -18,6 +19,7 @@ export function DebugComposer({
 }: {
   value: string;
   disabled: boolean;
+  showFeatureBar?: boolean;
   submitting: boolean;
   stopping: boolean;
   onChange: (value: string) => void;
@@ -87,22 +89,24 @@ export function DebugComposer({
           )}
         </div>
       </div>
-      <div className="agent-flow-editor__debug-feature-bar">
-        <span className="agent-flow-editor__debug-feature-icon">
-          <MessageOutlined />
-        </span>
-        <Typography.Text>功能已开启</Typography.Text>
-        <Button
-          aria-label="管理功能"
-          className="agent-flow-editor__debug-feature-manage"
-          icon={<ArrowRightOutlined />}
-          iconPosition="end"
-          size="small"
-          type="link"
-        >
-          管理
-        </Button>
-      </div>
+      {showFeatureBar ? (
+        <div className="agent-flow-editor__debug-feature-bar">
+          <span className="agent-flow-editor__debug-feature-icon">
+            <MessageOutlined />
+          </span>
+          <Typography.Text>功能已开启</Typography.Text>
+          <Button
+            aria-label="管理功能"
+            className="agent-flow-editor__debug-feature-manage"
+            icon={<ArrowRightOutlined />}
+            iconPosition="end"
+            size="small"
+            type="link"
+          >
+            管理
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

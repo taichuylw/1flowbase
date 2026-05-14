@@ -220,6 +220,10 @@ describe('ApplicationLogsPage', () => {
     expect(composerInput).toHaveValue('');
     expect(runtimeApi.resumeFlowRun).not.toHaveBeenCalled();
     expect(runtimeApi.completeCallbackTask).not.toHaveBeenCalled();
+    expect(screen.queryByText('功能已开启')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '管理功能' })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('运行摘要')).not.toBeInTheDocument();
     expect(screen.queryByText('运行输入输出')).not.toBeInTheDocument();
     expect(screen.queryByText('事件时间线')).not.toBeInTheDocument();
