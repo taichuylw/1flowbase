@@ -42,6 +42,7 @@ export function ApplicationRunsTable({
       rowKey="id"
       dataSource={runs}
       loading={loading}
+      scroll={{ x: 'max-content' }}
       pagination={{
         current: page,
         pageSize,
