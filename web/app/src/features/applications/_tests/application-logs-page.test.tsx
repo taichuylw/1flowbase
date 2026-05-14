@@ -241,6 +241,7 @@ describe('ApplicationLogsPage', () => {
     expect(cssSource).toContain(
       'height: var(--application-runs-table-body-height);'
     );
+    expect(cssSource).toContain('position: static;');
   });
 
   test('matches the docked detail height to viewport remaining height', async () => {

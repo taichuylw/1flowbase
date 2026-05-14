@@ -79,6 +79,13 @@
 }
 
 .application-logs-page__conversation-log-panel
+  .agent-flow-editor__conversation-log-panel {
+  position: static;
+  inset: auto;
+  z-index: auto;
+}
+
+.application-logs-page__conversation-log-panel
   .agent-flow-editor__dock-panel {
   display: flex;
   container-type: inline-size;
