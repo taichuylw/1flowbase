@@ -356,19 +356,19 @@ impl DocTextResolver {
     fn unsupported_notes(&self, category_id: &str) -> &'static str {
         match (category_id, self.locale) {
             (OPENAI_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持 tools、tool_choice、function_call 字段透传，支持返回 tool_calls；暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持 tools、tool_choice、function_call 字段进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持顶层 tools/tool_choice 透传，支持 tool_use / tool_result 文本块；暂不支持 computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持顶层 tools/tool_choice 进入模型供应商调用，支持 tool_use / tool_result 文本块历史回传；暂不支持 computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (_, DocsLocale::ZhHans) => {
                 "原生 API 支持查看 required_action 并恢复运行。公开路径不会包含 application_id。"
             }
             (OPENAI_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint passes through tools, tool_choice, and function_call fields and can return tool_calls. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint forwards tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint passes through top-level tools/tool_choice and supports text tool_use/tool_result blocks. Unsupported: computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint forwards top-level tools/tool_choice into the model-provider invocation and supports tool_use/tool_result text block history. Unsupported: computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
             }
             (_, DocsLocale::EnUs) => {
                 "Native API supports required_action inspection and resume. Public paths never include application_id."

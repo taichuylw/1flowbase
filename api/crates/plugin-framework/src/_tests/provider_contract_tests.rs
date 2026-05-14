@@ -1,10 +1,10 @@
 use plugin_framework::{
     installation::PluginTaskStatus,
     provider_contract::{
-        ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult, ProviderInvocationResult,
-        ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod,
-        ProviderStdioRequest, ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall,
-        ProviderUsage,
+        ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult, ProviderInvocationInput,
+        ProviderInvocationResult, ProviderMessage, ProviderMessageRole, ProviderRuntimeError,
+        ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod, ProviderStdioRequest,
+        ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
     },
 };
 use serde_json::json;
@@ -138,6 +138,51 @@ fn provider_balance_stdio_method_serializes_balance() {
             "input": { "api_key": "secret" }
         })
     );
+}
+
+#[test]
+fn provider_invocation_input_preserves_tool_message_metadata() {
+    let input = ProviderInvocationInput {
+        messages: vec![
+            ProviderMessage {
+                role: ProviderMessageRole::Assistant,
+                content: String::new(),
+                name: None,
+                tool_call_id: None,
+                tool_calls: Some(json!([
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "lookup_order",
+                            "arguments": "{\"order_id\":\"A-1\"}"
+                        }
+                    }
+                ])),
+                content_blocks: None,
+            },
+            ProviderMessage {
+                role: ProviderMessageRole::Tool,
+                content: "{\"status\":\"shipped\"}".to_string(),
+                name: None,
+                tool_call_id: Some("call-1".to_string()),
+                tool_calls: None,
+                content_blocks: None,
+            },
+        ],
+        tools: vec![json!({
+            "type": "function",
+            "function": { "name": "lookup_order" }
+        })],
+        ..ProviderInvocationInput::default()
+    };
+
+    let payload = serde_json::to_value(input).unwrap();
+
+    assert_eq!(payload["tools"][0]["function"]["name"], "lookup_order");
+    assert_eq!(payload["messages"][0]["tool_calls"][0]["id"], "call-1");
+    assert_eq!(payload["messages"][1]["role"], "tool");
+    assert_eq!(payload["messages"][1]["tool_call_id"], "call-1");
 }
 
 #[test]

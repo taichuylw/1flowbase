@@ -194,8 +194,14 @@ where
                 });
             }
             "llm" => {
-                let execution =
-                    execute_llm_node(node, &resolved_inputs, &rendered_templates, invoker).await?;
+                let execution = execute_llm_node(
+                    node,
+                    &resolved_inputs,
+                    &rendered_templates,
+                    &variable_pool,
+                    invoker,
+                )
+                .await?;
                 let trace = NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
@@ -371,6 +377,7 @@ pub async fn execute_llm_node<I>(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
     invoker: &I,
 ) -> Result<LlmNodeExecution>
 where
@@ -396,6 +403,7 @@ where
             attempt_runtime,
             resolved_inputs,
             rendered_templates,
+            variable_pool,
         );
         if invocation_input.messages.is_empty() {
             let error_payload = build_empty_prompt_messages_error_payload(attempt_runtime);
@@ -772,10 +780,13 @@ fn build_provider_invocation_input(
     runtime: &CompiledLlmRuntime,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
 ) -> ProviderInvocationInput {
     let (system, messages) = provider_messages_from_prompt_messages(binding_prompt_messages(
+        node,
         rendered_templates,
         resolved_inputs,
+        variable_pool,
     ));
 
     let trace_context = BTreeMap::from([
@@ -791,7 +802,7 @@ fn build_provider_invocation_input(
         provider_config: Value::Null,
         messages,
         system,
-        tools: Vec::new(),
+        tools: provider_tools(node, resolved_inputs, rendered_templates, variable_pool),
         mcp_bindings: Vec::new(),
         response_format: build_response_format(&node.config),
         model_parameters: build_model_parameters(&node.config),
@@ -842,30 +853,38 @@ fn build_response_format(config: &Value) -> Option<Value> {
 }
 
 fn binding_prompt_messages<'a>(
+    node: &'a CompiledNode,
     rendered_templates: &'a Map<String, Value>,
     resolved_inputs: &'a Map<String, Value>,
-) -> &'a [Value] {
-    rendered_templates
+    variable_pool: &'a Map<String, Value>,
+) -> Vec<Value> {
+    let mut messages = compatible_history_messages(node, resolved_inputs, variable_pool);
+    let prompt_messages = rendered_templates
         .get("prompt_messages")
         .or_else(|| resolved_inputs.get("prompt_messages"))
         .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
+        .cloned()
+        .unwrap_or_default();
+    messages.extend(prompt_messages);
+    messages
 }
 
 fn provider_messages_from_prompt_messages(
-    prompt_messages: &[Value],
+    prompt_messages: Vec<Value>,
 ) -> (Option<String>, Vec<ProviderMessage>) {
     let mut system_parts = Vec::new();
     let mut messages = Vec::new();
 
-    for message in prompt_messages {
+    for message in &prompt_messages {
         let content = message
             .get("content")
             .and_then(value_to_text)
             .unwrap_or_default();
 
-        if content.trim().is_empty() {
+        let carries_tool_payload = message.get("tool_calls").is_some()
+            || message.get("tool_call_id").is_some()
+            || message.get("content_blocks").is_some();
+        if content.trim().is_empty() && !carries_tool_payload {
             continue;
         }
 
@@ -878,7 +897,20 @@ fn provider_messages_from_prompt_messages(
         if role == ProviderMessageRole::System {
             system_parts.push(content);
         } else {
-            messages.push(ProviderMessage { role, content });
+            messages.push(ProviderMessage {
+                role,
+                content,
+                name: message
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned),
+                tool_call_id: message
+                    .get("tool_call_id")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned),
+                tool_calls: message.get("tool_calls").cloned(),
+                content_blocks: message.get("content_blocks").cloned(),
+            });
         }
     }
 
@@ -891,8 +923,83 @@ fn provider_message_role(role: &str) -> ProviderMessageRole {
     match role {
         "system" => ProviderMessageRole::System,
         "assistant" => ProviderMessageRole::Assistant,
+        "tool" => ProviderMessageRole::Tool,
         _ => ProviderMessageRole::User,
     }
+}
+
+fn compatible_history_messages(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    let direct_history = resolved_inputs
+        .get("history")
+        .and_then(Value::as_array)
+        .cloned();
+    if let Some(history) = direct_history {
+        return history;
+    }
+
+    node.dependency_node_ids
+        .iter()
+        .filter_map(|node_id| variable_pool.get(node_id))
+        .find_map(|payload| {
+            payload
+                .get("history")
+                .and_then(Value::as_array)
+                .cloned()
+                .filter(|history| !history.is_empty())
+        })
+        .unwrap_or_default()
+}
+
+fn provider_tools(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    for candidate in [
+        rendered_templates.get("tools"),
+        resolved_inputs.get("tools"),
+        resolved_inputs
+            .get("compatibility")
+            .and_then(|value| value.get("tools")),
+        node.config.get("tools"),
+        node.config
+            .get("compatibility")
+            .and_then(|value| value.get("tools")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(tools) = candidate.as_array() {
+            if !tools.is_empty() {
+                return tools.clone();
+            }
+        }
+    }
+
+    node.dependency_node_ids
+        .iter()
+        .filter_map(|node_id| variable_pool.get(node_id))
+        .find_map(|payload| {
+            payload
+                .get("compatibility")
+                .and_then(|compatibility| compatibility.get("tools"))
+                .and_then(Value::as_array)
+                .cloned()
+                .filter(|tools| !tools.is_empty())
+                .or_else(|| {
+                    payload
+                        .get("tools")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .filter(|tools| !tools.is_empty())
+                })
+        })
+        .unwrap_or_default()
 }
 
 fn value_to_text(value: &Value) -> Option<String> {

@@ -182,7 +182,7 @@ async fn application_api_docs_category_and_operation_specs_use_public_paths_only
     let description = spec_payload["paths"]["/v1/chat/completions"]["post"]["description"]
         .as_str()
         .unwrap();
-    assert!(description.contains("passes through tools, tool_choice, and function_call"));
+    assert!(description.contains("forwards tools, tool_choice, and function_call"));
 }
 
 #[tokio::test]

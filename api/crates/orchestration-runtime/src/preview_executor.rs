@@ -107,8 +107,14 @@ where
                 Vec::new(),
             )
         } else if node.node_type == "llm" {
-            let execution =
-                execute_llm_node(node, &resolved_inputs, &rendered_templates, invoker).await?;
+            let execution = execute_llm_node(
+                node,
+                &resolved_inputs,
+                &rendered_templates,
+                &variable_pool,
+                invoker,
+            )
+            .await?;
             (
                 execution.output_payload,
                 execution.error_payload,

@@ -281,6 +281,14 @@ pub enum ProviderMessageRole {
 pub struct ProviderMessage {
     pub role: ProviderMessageRole,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_blocks: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

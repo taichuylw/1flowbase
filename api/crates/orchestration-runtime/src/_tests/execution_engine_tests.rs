@@ -923,6 +923,80 @@ async fn llm_runtime_sends_rendered_prompt_messages_to_provider() {
 }
 
 #[tokio::test]
+async fn llm_runtime_forwards_compatible_tools_and_tool_history_to_provider() {
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "final answer".to_string(),
+    };
+
+    start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "node-start": {
+                "query": "Final question",
+                "history": [
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_123",
+                                "type": "function",
+                                "function": {
+                                    "name": "lookup_order",
+                                    "arguments": "{\"order_id\":\"A-1\"}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_123",
+                        "content": "{\"status\":\"shipped\"}"
+                    }
+                ],
+                "compatibility": {
+                    "tools": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "lookup_order",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "order_id": { "type": "string" }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(captured.tools[0]["function"]["name"], json!("lookup_order"));
+
+    let messages = serde_json::to_value(&captured.messages).expect("messages serialize");
+    assert_eq!(messages[0]["role"], json!("assistant"));
+    assert_eq!(messages[0]["tool_calls"][0]["id"], json!("call_123"));
+    assert_eq!(messages[1]["role"], json!("tool"));
+    assert_eq!(messages[1]["tool_call_id"], json!("call_123"));
+    assert_eq!(messages[2]["role"], json!("user"));
+    assert_eq!(messages[2]["content"], json!("Final question"));
+}
+
+#[tokio::test]
 async fn failover_queue_retries_next_target_before_first_token() {
     let mut plan = base_plan();
     let llm = plan

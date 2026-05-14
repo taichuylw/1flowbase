@@ -375,6 +375,7 @@ where
                     node,
                     &resolved_inputs,
                     &rendered_templates,
+                    &variable_pool,
                     &llm_invoker,
                 )
                 .await;
