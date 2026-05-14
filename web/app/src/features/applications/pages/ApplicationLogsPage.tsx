@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Empty, Result, Space, Splitter, Typography } from 'antd';
+import { Empty, Result, Space, Typography } from 'antd';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
@@ -9,8 +9,64 @@ import {
   fetchApplicationRuns
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
+import { ApplicationLogsFloatingWindow } from '../components/logs/ApplicationLogsFloatingWindow';
 import { ApplicationRunsTable } from '../components/logs/ApplicationRunsTable';
 import './application-logs-page.css';
+
+const FLOATING_WINDOW_TOP = 112;
+const FLOATING_WINDOW_GAP = 16;
+const FLOATING_WINDOW_RIGHT = 32;
+const RUN_DETAIL_WINDOW_WIDTH = 504;
+const CONVERSATION_LOG_WINDOW_WIDTH = 520;
+const FLOATING_WINDOW_MAX_HEIGHT = 720;
+
+function getViewportSize() {
+  if (typeof window === 'undefined') {
+    return { width: 1280, height: 720 };
+  }
+
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+}
+
+function getFloatingWindowHeight() {
+  const viewport = getViewportSize();
+
+  return Math.max(
+    320,
+    Math.min(
+      FLOATING_WINDOW_MAX_HEIGHT,
+      viewport.height - FLOATING_WINDOW_TOP - FLOATING_WINDOW_RIGHT
+    )
+  );
+}
+
+function getRunDetailInitialRect() {
+  const viewport = getViewportSize();
+
+  return {
+    left: viewport.width - RUN_DETAIL_WINDOW_WIDTH - FLOATING_WINDOW_RIGHT,
+    top: FLOATING_WINDOW_TOP,
+    width: RUN_DETAIL_WINDOW_WIDTH,
+    height: getFloatingWindowHeight()
+  };
+}
+
+function getConversationLogInitialRect() {
+  const runDetailRect = getRunDetailInitialRect();
+
+  return {
+    left:
+      runDetailRect.left -
+      CONVERSATION_LOG_WINDOW_WIDTH -
+      FLOATING_WINDOW_GAP,
+    top: FLOATING_WINDOW_TOP,
+    width: CONVERSATION_LOG_WINDOW_WIDTH,
+    height: getFloatingWindowHeight()
+  };
+}
 
 export function ApplicationLogsPage({
   applicationId
@@ -20,12 +76,13 @@ export function ApplicationLogsPage({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
-  const [splitterHeight, setSplitterHeight] = useState<number | null>(null);
   const [runsTableBodyHeight, setRunsTableBodyHeight] = useState<number | null>(
     null
   );
+  const [activeFloatingWindow, setActiveFloatingWindow] = useState<
+    'conversation-log' | 'run-detail'
+  >('run-detail');
   const listRef = useRef<HTMLElement | null>(null);
-  const splitterRef = useRef<HTMLDivElement | null>(null);
   const runsQuery = useQuery({
     queryKey: applicationRunsQueryKey(applicationId),
     queryFn: () => fetchApplicationRuns(applicationId)
@@ -33,31 +90,26 @@ export function ApplicationLogsPage({
 
   useEffect(() => {
     if (!selectedRunId) {
-      setSplitterHeight(null);
       setRunsTableBodyHeight(null);
       return;
     }
 
     function updateWorkspaceMeasurements() {
-      const splitterElement = splitterRef.current;
+      const listElement = listRef.current;
 
-      if (!splitterElement) {
+      if (!listElement) {
         return;
       }
 
       const availableHeight = Math.floor(
-        window.innerHeight - splitterElement.getBoundingClientRect().top
+        window.innerHeight - listElement.getBoundingClientRect().top
       );
 
       if (availableHeight <= 0) {
         return;
       }
 
-      setSplitterHeight((currentHeight) =>
-        currentHeight === availableHeight ? currentHeight : availableHeight
-      );
-
-      const tableHeaderElement = splitterElement.querySelector<HTMLElement>(
+      const tableHeaderElement = listElement.querySelector<HTMLElement>(
         '.application-logs-page__list .ant-table-thead'
       );
       const tableHeaderHeight =
@@ -82,10 +134,6 @@ export function ApplicationLogsPage({
         ? null
         : new ResizeObserver(updateWorkspaceMeasurements);
 
-    if (resizeObserver && splitterRef.current) {
-      resizeObserver.observe(splitterRef.current);
-    }
-
     if (resizeObserver && listRef.current) {
       resizeObserver.observe(listRef.current);
     }
@@ -101,6 +149,7 @@ export function ApplicationLogsPage({
   function selectRun(runId: string | null) {
     setSelectedRunId(runId);
     setOpenConversationLogMessage(null);
+    setActiveFloatingWindow('run-detail');
   }
 
   if (runsQuery.isPending) {
@@ -115,7 +164,7 @@ export function ApplicationLogsPage({
     <div className="application-logs-page__header">
       <Typography.Title level={4}>运行日志</Typography.Title>
       <Typography.Paragraph type="secondary">
-        这里展示应用运行记录，点击后可在右侧直接查看对话和节点输入输出。
+        这里展示应用运行记录，点击后可用浮窗查看对话和节点输入输出。
       </Typography.Paragraph>
     </div>
   );
@@ -129,6 +178,7 @@ export function ApplicationLogsPage({
   const logsList = (
     <section
       className="application-logs-page__list"
+      data-testid="application-logs-list"
       ref={listRef}
       style={logsListStyle}
     >
@@ -164,52 +214,40 @@ export function ApplicationLogsPage({
   return (
     <div className="application-logs-page application-logs-page--detail-open">
       {logsHeader}
-      <div
-        className="application-logs-page__splitter"
-        data-testid="application-logs-splitter"
-        ref={splitterRef}
-        style={splitterHeight ? { height: splitterHeight } : undefined}
-      >
-        <Splitter className="application-logs-page__splitter-control">
-          <Splitter.Panel
-            className="application-logs-page__splitter-panel"
-            min={openConversationLogMessage ? 360 : 480}
-          >
-            {logsList}
-          </Splitter.Panel>
-          {openConversationLogMessage ? (
-            <Splitter.Panel
-              className="application-logs-page__splitter-panel"
-              defaultSize={480}
-              max="50%"
-              min={360}
-            >
-              <div
-                className="application-logs-page__conversation-log-panel"
-                data-testid="application-logs-conversation-log-panel"
-              >
-                <ConversationLogPanel
-                  message={openConversationLogMessage}
-                  onClose={() => setOpenConversationLogMessage(null)}
-                />
-              </div>
-            </Splitter.Panel>
-          ) : null}
-          <Splitter.Panel
-            className="application-logs-page__splitter-panel"
-            defaultSize={480}
-            max={openConversationLogMessage ? '45%' : '60%'}
-            min={360}
-          >
-            <ApplicationRunDetailPanel
-              applicationId={applicationId}
-              onClose={() => selectRun(null)}
-              onOpenMessageLog={setOpenConversationLogMessage}
-              runId={selectedRunId}
+      {logsList}
+      {openConversationLogMessage ? (
+        <ApplicationLogsFloatingWindow
+          active={activeFloatingWindow === 'conversation-log'}
+          initialRect={getConversationLogInitialRect}
+          testId="application-logs-floating-conversation-log"
+          title="对话日志"
+          onActivate={() => setActiveFloatingWindow('conversation-log')}
+        >
+          <div className="application-logs-page__conversation-log-panel">
+            <ConversationLogPanel
+              message={openConversationLogMessage}
+              onClose={() => setOpenConversationLogMessage(null)}
             />
-          </Splitter.Panel>
-        </Splitter>
-      </div>
+          </div>
+        </ApplicationLogsFloatingWindow>
+      ) : null}
+      <ApplicationLogsFloatingWindow
+        active={activeFloatingWindow === 'run-detail'}
+        initialRect={getRunDetailInitialRect}
+        testId="application-logs-floating-run-detail"
+        title="运行详情"
+        onActivate={() => setActiveFloatingWindow('run-detail')}
+      >
+        <ApplicationRunDetailPanel
+          applicationId={applicationId}
+          onClose={() => selectRun(null)}
+          onOpenMessageLog={(message) => {
+            setOpenConversationLogMessage(message);
+            setActiveFloatingWindow('conversation-log');
+          }}
+          runId={selectedRunId}
+        />
+      </ApplicationLogsFloatingWindow>
     </div>
   );
 }

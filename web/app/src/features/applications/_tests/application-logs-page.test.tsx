@@ -104,6 +104,7 @@ function sampleRunDetail() {
 describe('ApplicationLogsPage', () => {
   let getBoundingClientRectSpy: { mockRestore: () => void } | undefined;
   let innerHeightSpy: { mockRestore: () => void } | undefined;
+  let innerWidthSpy: { mockRestore: () => void } | undefined;
 
   beforeEach(() => {
     runtimeApi.fetchApplicationRuns.mockReset();
@@ -127,9 +128,11 @@ describe('ApplicationLogsPage', () => {
     getBoundingClientRectSpy = undefined;
     innerHeightSpy?.mockRestore();
     innerHeightSpy = undefined;
+    innerWidthSpy?.mockRestore();
+    innerWidthSpy = undefined;
   });
 
-  test('expands selected run with Ant Splitter without reserving empty space', async () => {
+  test('opens run detail and conversation log as floating windows', async () => {
     render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
@@ -155,17 +158,28 @@ describe('ApplicationLogsPage', () => {
     });
     expect(detailPane).toBeInTheDocument();
     expect(
-      screen.queryByRole('dialog', { name: '运行详情' })
-    ).not.toBeInTheDocument();
+      screen.getByRole('dialog', { name: '运行详情' })
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('table').length).toBeGreaterThan(0);
     expect(
       screen.queryByRole('button', { name: '返回日志' })
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId('application-logs-splitter')).toBeInTheDocument();
-    expect(screen.getByRole('separator')).toBeInTheDocument();
+    expect(screen.queryByTestId('application-logs-splitter')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('separator', { name: '调整运行详情宽度' })
-    ).not.toBeInTheDocument();
+      screen.getByTestId('application-logs-floating-run-detail')
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('application-logs-floating-run-detail')).getByRole(
+        'separator',
+        { name: '从右侧调整运行详情宽度' }
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('application-logs-floating-run-detail')).getByRole(
+        'separator',
+        { name: '向下调整运行详情高度' }
+      )
+    ).toBeInTheDocument();
 
     const conversation = await screen.findByTestId('debug-conversation-messages');
     expect(within(conversation).getByText('User')).toBeInTheDocument();
@@ -198,9 +212,14 @@ describe('ApplicationLogsPage', () => {
 
     const logPanel = screen.getByRole('complementary', { name: '对话日志' });
     expect(logPanel).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: '对话日志' })
+    ).toBeInTheDocument();
     expect(detailPane).not.toContainElement(logPanel);
     expect(detailPane).toContainElement(conversation);
-    expect(screen.getByTestId('application-logs-conversation-log-panel')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('application-logs-floating-conversation-log')
+    ).toBeInTheDocument();
     expect(within(logPanel).getByRole('tab', { name: '详情' })).toHaveAttribute(
       'aria-selected',
       'true'
@@ -227,7 +246,83 @@ describe('ApplicationLogsPage', () => {
     ).not.toBeInTheDocument();
   }, 20_000);
 
-  test('uses viewport remaining height for the docked detail layout', async () => {
+  test('drags and resizes floating run detail window', async () => {
+    innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    innerHeightSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(900);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByRole('table')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const detailWindow = await screen.findByTestId(
+      'application-logs-floating-run-detail'
+    );
+    expect(detailWindow).toHaveStyle({
+      left: '744px',
+      top: '112px',
+      width: '504px',
+      height: '720px'
+    });
+
+    fireEvent.mouseDown(within(detailWindow).getByText('运行详情'), {
+      button: 0,
+      clientX: 980,
+      clientY: 130
+    });
+    fireEvent.mouseMove(window, {
+      clientX: 880,
+      clientY: 190
+    });
+    fireEvent.mouseUp(window);
+
+    expect(detailWindow).toHaveStyle({
+      left: '644px',
+      top: '172px'
+    });
+
+    fireEvent.mouseDown(
+      within(detailWindow).getByRole('separator', {
+        name: '从右侧调整运行详情宽度'
+      }),
+      {
+        button: 0,
+        clientX: 1148,
+        clientY: 240
+      }
+    );
+    fireEvent.mouseMove(window, {
+      clientX: 1218,
+      clientY: 240
+    });
+    fireEvent.mouseUp(window);
+
+    expect(detailWindow).toHaveStyle({ width: '574px' });
+
+    fireEvent.mouseDown(
+      within(detailWindow).getByRole('separator', {
+        name: '向下调整运行详情高度'
+      }),
+      {
+        button: 0,
+        clientX: 840,
+        clientY: 892
+      }
+    );
+    fireEvent.mouseMove(window, {
+      clientX: 840,
+      clientY: 820
+    });
+    fireEvent.mouseUp(window);
+
+    expect(detailWindow).toHaveStyle({ height: '648px' });
+  }, 20_000);
+
+  test('uses floating window CSS instead of a docked splitter override', async () => {
     const cssSource = await readFile(
       path.resolve(
         process.cwd(),
@@ -236,20 +331,23 @@ describe('ApplicationLogsPage', () => {
       'utf8'
     );
 
-    expect(cssSource).toContain('flex: 1 1 auto;');
-    expect(cssSource).not.toContain('height: auto;');
     expect(cssSource).toContain(
       'height: var(--application-runs-table-body-height);'
     );
-    expect(cssSource).toContain('position: static;');
+    expect(cssSource).toContain('flex: 1 1 auto;');
+    expect(cssSource).toContain('width: 100%;');
+    expect(cssSource).toContain('.application-logs-floating-window');
+    expect(cssSource).toContain('position: fixed;');
+    expect(cssSource).toContain('cursor: move;');
+    expect(cssSource).not.toContain('position: static;');
   });
 
-  test('matches the docked detail height to viewport remaining height', async () => {
+  test('matches the logs table height to viewport remaining height while floating windows are open', async () => {
     innerHeightSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(920);
     getBoundingClientRectSpy = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockImplementation(function getBoundingClientRect(this: HTMLElement) {
-        if (this.classList.contains('application-logs-page__splitter')) {
+        if (this.classList.contains('application-logs-page__list')) {
           return {
             bottom: 120,
             height: 0,
@@ -315,11 +413,8 @@ describe('ApplicationLogsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('application-logs-splitter')).toHaveStyle({
-        height: '800px'
-      });
-      expect(document.querySelector('.ant-table-body')).toHaveStyle({
-        maxHeight: '744px'
+      expect(screen.getByTestId('application-logs-list')).toHaveStyle({
+        '--application-runs-table-body-height': '744px'
       });
     });
   });
