@@ -105,9 +105,13 @@ describe('ApplicationLogsPage', () => {
   let getBoundingClientRectSpy: { mockRestore: () => void } | undefined;
   let innerHeightSpy: { mockRestore: () => void } | undefined;
   let innerWidthSpy: { mockRestore: () => void } | undefined;
+  let dateNowSpy: { mockRestore: () => void } | undefined;
 
   beforeEach(() => {
     window.localStorage.clear();
+    dateNowSpy = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
 
@@ -131,6 +135,8 @@ describe('ApplicationLogsPage', () => {
     innerHeightSpy = undefined;
     innerWidthSpy?.mockRestore();
     innerWidthSpy = undefined;
+    dateNowSpy?.mockRestore();
+    dateNowSpy = undefined;
   });
 
   test('opens run detail and conversation log as floating windows', async () => {
@@ -400,6 +406,113 @@ describe('ApplicationLogsPage', () => {
       width: '490px'
     });
   }, 20_000);
+
+  test('filters application logs by time range, keyword, and sort field', async () => {
+    runtimeApi.fetchApplicationRuns.mockResolvedValue([
+      {
+        id: 'run-refund',
+        run_mode: 'debug_flow_run' as const,
+        status: 'succeeded',
+        target_node_id: null,
+        started_at: '2026-04-17T10:00:00Z',
+        finished_at: '2026-04-17T10:05:00Z'
+      },
+      {
+        id: 'run-weather',
+        run_mode: 'debug_flow_run' as const,
+        status: 'succeeded',
+        target_node_id: null,
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T12:00:00Z'
+      },
+      {
+        id: 'run-old',
+        run_mode: 'debug_flow_run' as const,
+        status: 'succeeded',
+        target_node_id: null,
+        started_at: '2026-03-01T09:00:00Z',
+        finished_at: '2026-03-01T09:02:00Z'
+      }
+    ]);
+    runtimeApi.fetchApplicationRunDetail.mockImplementation(
+      async (_applicationId: string, runId: string) => {
+        const detail = sampleRunDetail();
+
+        if (runId === 'run-refund') {
+          detail.flow_run.id = runId;
+          detail.flow_run.input_payload = {
+            'node-start.query': '我想查退款规则'
+          };
+          detail.flow_run.output_payload = {
+            answer: '可以在 7 天内退款',
+            resolved_inputs: {
+              user_prompt: '我想查退款规则'
+            }
+          };
+          return detail;
+        }
+
+        detail.flow_run.id = runId;
+        detail.flow_run.input_payload = {
+          'node-start.query': '今天天气怎么样'
+        };
+        detail.flow_run.output_payload = {
+          answer: '天气晴朗',
+          resolved_inputs: {
+            user_prompt: '今天天气怎么样'
+          }
+        };
+        detail.node_runs = detail.node_runs.map((nodeRun) => ({
+          ...nodeRun,
+          input_payload: { user_prompt: '今天天气怎么样' },
+          output_payload: { answer: '天气晴朗', rendered_templates: {} }
+        }));
+        return detail;
+      }
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-refund')).toBeInTheDocument();
+    expect(screen.getByText('run-weather')).toBeInTheDocument();
+    expect(screen.queryByText('run-old')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '时间间隔' })).toBeInTheDocument();
+    expect(screen.getByText('过去 7 天')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '排序字段' })).toBeInTheDocument();
+    expect(screen.getByText('创建时间')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('搜索对话和回答');
+    fireEvent.change(searchInput, { target: { value: '退款' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('run-refund')).toBeInTheDocument();
+      expect(screen.queryByText('run-weather')).not.toBeInTheDocument();
+    });
+    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+      'app-1',
+      'run-refund'
+    );
+
+    fireEvent.change(searchInput, { target: { value: '' } });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '时间间隔' }));
+    fireEvent.click(await screen.findByText('所有时间'));
+
+    expect(await screen.findByText('run-old')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '排序字段' }));
+    fireEvent.click(await screen.findByText('更新时间'));
+
+    await waitFor(() => {
+      const tableText = screen.getByRole('table').textContent ?? '';
+      expect(tableText.indexOf('run-weather')).toBeLessThan(
+        tableText.indexOf('run-refund')
+      );
+    });
+  });
 
   test('uses floating window CSS instead of a docked splitter override', async () => {
     const cssSource = await readFile(

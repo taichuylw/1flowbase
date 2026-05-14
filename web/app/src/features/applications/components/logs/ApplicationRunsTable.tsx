@@ -15,10 +15,12 @@ function formatTimestamp(value: string) {
 }
 
 export function ApplicationRunsTable({
+  loading = false,
   runs,
   selectedRunId,
   onSelectRun
 }: {
+  loading?: boolean;
   runs: ApplicationRunSummary[];
   selectedRunId?: string | null;
   onSelectRun: (runId: string) => void;
@@ -27,6 +29,7 @@ export function ApplicationRunsTable({
     <Table<ApplicationRunSummary>
       rowKey="id"
       dataSource={runs}
+      loading={loading}
       pagination={false}
       rowClassName={(record) =>
         record.id === selectedRunId ? 'application-runs-table__row--active' : ''
