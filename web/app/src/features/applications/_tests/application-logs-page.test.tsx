@@ -143,7 +143,19 @@ describe('ApplicationLogsPage', () => {
     expect(
       screen.queryByRole('complementary', { name: '运行详情' })
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: '运行详情' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('application-logs-floating-run-detail')
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId('application-logs-splitter')).not.toBeInTheDocument();
+    expect(screen.getByTestId('application-logs-page')).not.toHaveClass(
+      'application-logs-page--detail-open'
+    );
+    expect(screen.getByTestId('application-logs-list')).not.toHaveAttribute(
+      'style'
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
@@ -165,6 +177,12 @@ describe('ApplicationLogsPage', () => {
       screen.queryByRole('button', { name: '返回日志' })
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId('application-logs-splitter')).not.toBeInTheDocument();
+    expect(screen.getByTestId('application-logs-page')).not.toHaveClass(
+      'application-logs-page--detail-open'
+    );
+    expect(screen.getByTestId('application-logs-list')).not.toHaveAttribute(
+      'style'
+    );
     expect(
       screen.getByTestId('application-logs-floating-run-detail')
     ).toBeInTheDocument();
@@ -331,8 +349,9 @@ describe('ApplicationLogsPage', () => {
       'utf8'
     );
 
-    expect(cssSource).toContain(
-      'height: var(--application-runs-table-body-height);'
+    expect(cssSource).not.toContain('application-logs-page--detail-open');
+    expect(cssSource).not.toContain(
+      '--application-runs-table-body-height'
     );
     expect(cssSource).toContain('flex: 1 1 auto;');
     expect(cssSource).toContain('width: 100%;');
@@ -342,7 +361,7 @@ describe('ApplicationLogsPage', () => {
     expect(cssSource).not.toContain('position: static;');
   });
 
-  test('matches the logs table height to viewport remaining height while floating windows are open', async () => {
+  test('keeps the runs table layout unchanged while floating windows are open', async () => {
     innerHeightSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(920);
     getBoundingClientRectSpy = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
@@ -412,10 +431,13 @@ describe('ApplicationLogsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId('application-logs-list')).toHaveStyle({
-        '--application-runs-table-body-height': '744px'
-      });
-    });
+    expect(await screen.findByRole('complementary', { name: '运行详情' }))
+      .toBeInTheDocument();
+    expect(screen.getByTestId('application-logs-page')).not.toHaveClass(
+      'application-logs-page--detail-open'
+    );
+    expect(screen.getByTestId('application-logs-list')).not.toHaveAttribute(
+      'style'
+    );
   });
 });

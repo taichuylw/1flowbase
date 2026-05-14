@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Empty, Result, Space, Typography } from 'antd';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
 import { ConversationLogPanel } from '../../agent-flow/components/debug-console/ConversationLogPanel';
@@ -76,75 +76,13 @@ export function ApplicationLogsPage({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
-  const [runsTableBodyHeight, setRunsTableBodyHeight] = useState<number | null>(
-    null
-  );
   const [activeFloatingWindow, setActiveFloatingWindow] = useState<
     'conversation-log' | 'run-detail'
   >('run-detail');
-  const listRef = useRef<HTMLElement | null>(null);
   const runsQuery = useQuery({
     queryKey: applicationRunsQueryKey(applicationId),
     queryFn: () => fetchApplicationRuns(applicationId)
   });
-
-  useEffect(() => {
-    if (!selectedRunId) {
-      setRunsTableBodyHeight(null);
-      return;
-    }
-
-    function updateWorkspaceMeasurements() {
-      const listElement = listRef.current;
-
-      if (!listElement) {
-        return;
-      }
-
-      const availableHeight = Math.floor(
-        window.innerHeight - listElement.getBoundingClientRect().top
-      );
-
-      if (availableHeight <= 0) {
-        return;
-      }
-
-      const tableHeaderElement = listElement.querySelector<HTMLElement>(
-        '.application-logs-page__list .ant-table-thead'
-      );
-      const tableHeaderHeight =
-        Math.ceil(tableHeaderElement?.getBoundingClientRect().height ?? 0) ||
-        56;
-      const nextRunsTableBodyHeight = Math.max(
-        160,
-        availableHeight - tableHeaderHeight
-      );
-
-      setRunsTableBodyHeight((currentHeight) =>
-        currentHeight === nextRunsTableBodyHeight
-          ? currentHeight
-          : nextRunsTableBodyHeight
-      );
-    }
-
-    updateWorkspaceMeasurements();
-
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(updateWorkspaceMeasurements);
-
-    if (resizeObserver && listRef.current) {
-      resizeObserver.observe(listRef.current);
-    }
-
-    window.addEventListener('resize', updateWorkspaceMeasurements);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', updateWorkspaceMeasurements);
-    };
-  }, [selectedRunId]);
 
   function selectRun(runId: string | null) {
     setSelectedRunId(runId);
@@ -168,19 +106,10 @@ export function ApplicationLogsPage({
       </Typography.Paragraph>
     </div>
   );
-  const isDetailOpen = Boolean(selectedRunId);
-  const logsListStyle =
-    isDetailOpen && runsTableBodyHeight
-      ? ({
-          '--application-runs-table-body-height': `${runsTableBodyHeight}px`
-        } as CSSProperties)
-      : undefined;
   const logsList = (
     <section
       className="application-logs-page__list"
       data-testid="application-logs-list"
-      ref={listRef}
-      style={logsListStyle}
     >
       {runsQuery.data.length === 0 ? (
         <Empty
@@ -191,30 +120,18 @@ export function ApplicationLogsPage({
         <ApplicationRunsTable
           runs={runsQuery.data}
           selectedRunId={selectedRunId}
-          scrollY={
-            isDetailOpen ? (runsTableBodyHeight ?? undefined) : undefined
-          }
           onSelectRun={selectRun}
         />
       )}
     </section>
   );
 
-  if (!selectedRunId) {
-    return (
-      <div className="application-logs-page">
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          {logsHeader}
-          {logsList}
-        </Space>
-      </div>
-    );
-  }
-
   return (
-    <div className="application-logs-page application-logs-page--detail-open">
-      {logsHeader}
-      {logsList}
+    <div className="application-logs-page" data-testid="application-logs-page">
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        {logsHeader}
+        {logsList}
+      </Space>
       {openConversationLogMessage ? (
         <ApplicationLogsFloatingWindow
           active={activeFloatingWindow === 'conversation-log'}
@@ -231,23 +148,25 @@ export function ApplicationLogsPage({
           </div>
         </ApplicationLogsFloatingWindow>
       ) : null}
-      <ApplicationLogsFloatingWindow
-        active={activeFloatingWindow === 'run-detail'}
-        initialRect={getRunDetailInitialRect}
-        testId="application-logs-floating-run-detail"
-        title="运行详情"
-        onActivate={() => setActiveFloatingWindow('run-detail')}
-      >
-        <ApplicationRunDetailPanel
-          applicationId={applicationId}
-          onClose={() => selectRun(null)}
-          onOpenMessageLog={(message) => {
-            setOpenConversationLogMessage(message);
-            setActiveFloatingWindow('conversation-log');
-          }}
-          runId={selectedRunId}
-        />
-      </ApplicationLogsFloatingWindow>
+      {selectedRunId ? (
+        <ApplicationLogsFloatingWindow
+          active={activeFloatingWindow === 'run-detail'}
+          initialRect={getRunDetailInitialRect}
+          testId="application-logs-floating-run-detail"
+          title="运行详情"
+          onActivate={() => setActiveFloatingWindow('run-detail')}
+        >
+          <ApplicationRunDetailPanel
+            applicationId={applicationId}
+            onClose={() => selectRun(null)}
+            onOpenMessageLog={(message) => {
+              setOpenConversationLogMessage(message);
+              setActiveFloatingWindow('conversation-log');
+            }}
+            runId={selectedRunId}
+          />
+        </ApplicationLogsFloatingWindow>
+      ) : null}
     </div>
   );
 }

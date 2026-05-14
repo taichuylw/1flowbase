@@ -4,13 +4,6 @@
   min-width: 0;
 }
 
-.application-logs-page--detail-open {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  overflow: visible;
-}
-
 .application-logs-page__header {
   flex: 0 0 auto;
 }
@@ -30,10 +23,6 @@
   overflow: auto;
 }
 
-.application-logs-page--detail-open .application-logs-page__list {
-  flex: 1 1 auto;
-}
-
 .application-logs-page__list .ant-table-wrapper {
   height: 100%;
   min-width: 0;
@@ -46,10 +35,6 @@
 .application-logs-page__list .ant-table-container {
   height: 100%;
   min-height: 0;
-}
-
-.application-logs-page__list .ant-table-body {
-  height: var(--application-runs-table-body-height);
 }
 
 .application-logs-page__list .application-runs-table__row--active > td {
