@@ -361,6 +361,34 @@ where
                     node_traces,
                 });
             }
+            "code" => {
+                let error_payload = json!({
+                    "error_code": "node_type_not_implemented",
+                    "node_type": node.node_type.clone(),
+                    "message": "code nodes are not implemented in preview runtime",
+                });
+                node_traces.push(NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: Value::Object(resolved_inputs),
+                    output_payload: json!({}),
+                    error_payload: Some(error_payload.clone()),
+                    metrics_payload: json!({ "preview_mode": true, "waiting": "code" }),
+                    debug_payload: json!({}),
+                    provider_events: Vec::new(),
+                });
+                return Ok(FlowDebugExecutionOutcome {
+                    stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                        node_id: node.node_id.clone(),
+                        node_alias: node.alias.clone(),
+                        error_payload,
+                    }),
+                    variable_pool,
+                    checkpoint_snapshot: None,
+                    node_traces,
+                });
+            }
             other => return Err(anyhow!("unsupported debug node type: {other}")),
         }
     }
