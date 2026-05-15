@@ -8,6 +8,8 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
+import { listFrontstagePages } from '@1flowbase/api-client';
+import { useQuery } from '@tanstack/react-query';
 import { Result } from 'antd';
 import { Suspense, lazy, useState, type ReactNode } from 'react';
 
@@ -226,6 +228,12 @@ function renderFrontStageRoute({
   pageId?: string;
 }) {
   const navigate = useNavigate();
+  const pageTreeQuery = useQuery({
+    queryKey: ['frontstage-page-tree', workspaceId],
+    queryFn: () => listFrontstagePages(workspaceId),
+    retry: false
+  });
+  const pageTreeFromApi = pageTreeQuery.data ?? (pageTreeQuery.isError ? [] : undefined);
 
   return (
     <RouteGuard routeId="frontstage">
@@ -233,6 +241,7 @@ function renderFrontStageRoute({
         <FrontStagePage
           workspaceId={workspaceId}
           pageId={pageId}
+          initialPageTree={pageTreeFromApi}
           onNavigatePage={(nextPageId) => {
             if (nextPageId) {
               void navigate({
