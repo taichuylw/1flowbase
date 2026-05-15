@@ -78,6 +78,23 @@ function removeNodeFromTree(nodes: FrontStageTreeNode[], targetNodeId: string): 
   return nextNodes;
 }
 
+function renameNodeInTree(
+  nodes: FrontStageTreeNode[],
+  targetNodeId: string,
+  title: string
+): FrontStageTreeNode[] {
+  return nodes.map((node) => {
+    if (node.id === targetNodeId) {
+      return { ...node, title };
+    }
+
+    return {
+      ...node,
+      children: node.children ? renameNodeInTree(node.children, targetNodeId, title) : node.children
+    };
+  });
+}
+
 export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, onNavigatePage }) => {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
@@ -157,6 +174,15 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
     });
   };
 
+  const handleRenameNode = (nodeId: string) => {
+    const nextTitle = window.prompt('重命名节点', node.title);
+    if (!nextTitle?.trim()) {
+      return;
+    }
+
+    setPageTree((prev) => renameNodeInTree(prev, nodeId, nextTitle.trim()));
+  };
+
   const handleSelectPage = (nodeId: string) => {
     setSelectedPageId((current) => {
       if (current === nodeId) {
@@ -225,18 +251,29 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
             {node.kind === 'group' ? '分组节点' : '页面节点'}
           </Typography.Text>
         </div>
-        {canEnterDesignMode && isDesignMode && isPageNode ? (
-          <Button
-            style={buttonStyle}
-            size="small"
-            danger
-            onClick={(event) => {
-            event.stopPropagation();
-            handleDeleteNode(node.id);
-          }}
-          >
-            删除
-          </Button>
+        {canEnterDesignMode && isDesignMode ? (
+          <>
+            <Button
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleRenameNode(node.id);
+              }}
+            >
+              重命名
+            </Button>
+            <Button
+              style={buttonStyle}
+              size="small"
+              danger
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDeleteNode(node.id);
+              }}
+            >
+              删除
+            </Button>
+          </>
         ) : null}
       </li>
     );
