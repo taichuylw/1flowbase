@@ -678,6 +678,59 @@ async fn flow_debug_run_fails_before_provider_when_prompt_template_selector_is_m
 }
 
 #[tokio::test]
+async fn live_debug_run_returns_code_not_implemented_error() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Code Node Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(code_flow_document(seeded.flow_id)),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let failed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(failed.flow_run.status, domain::FlowRunStatus::Failed);
+    let message = failed
+        .flow_run
+        .error_payload
+        .as_ref()
+        .expect("flow error payload should be persisted")["message"]
+        .as_str()
+        .expect("error message should be persisted");
+    assert!(message.contains("code nodes are not implemented in debug runtime"));
+
+    let code_node = failed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-code")
+        .expect("code node should be persisted");
+    assert_eq!(code_node.status, domain::NodeRunStatus::Failed);
+    assert_eq!(
+        code_node.error_payload.as_ref().unwrap()["error_code"],
+        json!("node_type_not_implemented")
+    );
+    assert_eq!(code_node.error_payload.as_ref().unwrap()["node_type"], json!("code"));
+    assert_eq!(
+        code_node.error_payload.as_ref().unwrap()["message"],
+        json!("code nodes are not implemented in debug runtime")
+    );
+    assert_eq!(failed.node_runs.len(), 2);
+}
+
+#[tokio::test]
 async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::ReasoningDelta {
@@ -2112,6 +2165,64 @@ fn data_model_node_type(action: &str) -> &'static str {
         "delete" => "data_model_delete",
         _ => panic!("unsupported data model action in test: {action}"),
     }
+}
+
+fn code_flow_document(flow_id: Uuid) -> Value {
+    let mut nodes = vec![json!({
+        "id": "node-start",
+        "type": "start",
+        "alias": "Start",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 0, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {},
+        "outputs": []
+    })];
+    nodes.push(code_node("node-code"));
+
+    json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": {
+            "flowId": flow_id.to_string(),
+            "name": "Code Agent",
+            "description": "",
+            "tags": []
+        },
+        "graph": {
+            "nodes": nodes,
+            "edges": [{
+                "id": "edge-start-code",
+                "source": "node-start",
+                "target": "node-code",
+                "sourceHandle": null,
+                "targetHandle": null,
+                "containerId": null,
+                "points": []
+            }]
+        },
+        "editor": {
+            "viewport": { "x": 0, "y": 0, "zoom": 1 },
+            "annotations": [],
+            "activeContainerPath": []
+        }
+    })
+}
+
+fn code_node(id: &str) -> Value {
+    json!({
+        "id": id,
+        "type": "code",
+        "alias": "Code",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {},
+        "outputs": [{ "key": "result", "title": "结果", "valueType": "json" }]
+    })
 }
 
 fn selector_binding<const N: usize>(path: [&str; N]) -> Value {

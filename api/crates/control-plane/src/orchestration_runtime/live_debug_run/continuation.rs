@@ -948,6 +948,35 @@ where
                 return load_run_detail(&service.repository, command.application_id, flow_run.id)
                     .await;
             }
+            "code" => {
+                let error_payload = json!({
+                    "error_code": "node_type_not_implemented",
+                    "node_type": node.node_type.clone(),
+                    "message": "code nodes are not implemented in debug runtime",
+                });
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
+                        node_run_id: node_run.id,
+                        status: domain::NodeRunStatus::Failed,
+                        output_payload: json!({}),
+                        error_payload: Some(error_payload.clone()),
+                        metrics_payload: json!({ "preview_mode": true, "waiting": "code" }),
+                        debug_payload: json!({}),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    },
+                )
+                .await?;
+
+                return Err(anyhow!(
+                    "{}",
+                    error_payload
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("code node is not implemented in debug runtime")
+                ));
+            }
             other => return Err(anyhow!("unsupported debug node type: {other}")),
         }
     }
