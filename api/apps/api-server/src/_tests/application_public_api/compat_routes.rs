@@ -185,7 +185,7 @@ fn anthropic_body(stream: bool) -> Value {
             {"role": "user", "content": [{"type": "text", "text": "Final question"}]}
         ],
         "metadata": {
-            "user_id": "external-user-123"
+            "expand_id": "external-user-123"
         }
     })
 }

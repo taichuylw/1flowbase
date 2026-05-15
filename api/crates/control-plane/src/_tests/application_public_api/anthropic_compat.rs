@@ -70,10 +70,10 @@ fn stream_true_maps_to_native_streaming_response_mode() {
 }
 
 #[test]
-fn metadata_user_id_maps_to_native_conversation_user() {
+fn metadata_expand_id_maps_to_native_conversation_user() {
     let mut request = base_request();
     request["metadata"] = json!({
-        "user_id": "external-user-123"
+        "expand_id": "external-user-123"
     });
 
     let native = map_messages_request(request).unwrap();

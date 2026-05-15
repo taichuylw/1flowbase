@@ -232,7 +232,10 @@ fn invalid_native_field(value: &Value) -> Option<&'static str> {
     if field("conversation").is_some_and(|value| !value.is_object()) {
         return Some("conversation");
     }
-    if field("user_id").is_some_and(|value| !value.is_string()) {
+    if field("expand_id").is_some_and(|value| !value.is_string()) {
+        return Some("expand_id");
+    }
+    if field("user_id").is_some() {
         return Some("user_id");
     }
     if field("response_mode").is_some_and(|value| !value.is_string()) {

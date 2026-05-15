@@ -256,9 +256,10 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         json!(["blocking", "streaming"])
     );
     assert_eq!(
-        create_run_body["properties"]["user_id"]["type"],
+        create_run_body["properties"]["expand_id"]["type"],
         json!("string")
     );
+    assert!(create_run_body["properties"].get("user_id").is_none());
     assert_eq!(
         create_run_body["properties"]["title"]["maxLength"],
         json!(255)
@@ -334,9 +335,12 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         json!(["text", "tool_use", "tool_result"])
     );
     assert_eq!(
-        anthropic_body["properties"]["metadata"]["properties"]["user_id"]["type"],
+        anthropic_body["properties"]["metadata"]["properties"]["expand_id"]["type"],
         json!("string")
     );
+    assert!(anthropic_body["properties"]["metadata"]["properties"]
+        .get("user_id")
+        .is_none());
 
     let get_run_spec = app
         .clone()

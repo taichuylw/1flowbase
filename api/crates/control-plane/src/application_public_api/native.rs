@@ -35,8 +35,12 @@ pub struct NativeRunRequest {
     pub attachments: Vec<Value>,
     #[serde(default, deserialize_with = "deserialize_native_object")]
     pub conversation: NativeObject,
-    #[serde(default, deserialize_with = "deserialize_optional_string_reject_null")]
-    pub user_id: Option<String>,
+    #[serde(
+        rename = "expand_id",
+        default,
+        deserialize_with = "deserialize_optional_string_reject_null"
+    )]
+    pub expand_id: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string_reject_null")]
     pub response_mode: Option<String>,
     #[serde(default, deserialize_with = "deserialize_native_object")]
@@ -472,7 +476,7 @@ fn build_run_metadata(request: &NativeRunRequest) -> Value {
         .or_else(|| string_field(&request.metadata, "compatibility_mode"));
     let idempotency_key = string_field(&request.execution, "idempotency_key");
     let external_user = request
-        .user_id
+        .expand_id
         .clone()
         .or_else(|| string_field(&request.conversation, "user"));
     let external_conversation_id = string_field(&request.conversation, "id");
@@ -484,7 +488,7 @@ fn build_run_metadata(request: &NativeRunRequest) -> Value {
         "execution": request.execution.as_value(),
         "metadata": request.metadata.as_value(),
         "title": title,
-        "user_id": external_user,
+        "expand_id": external_user,
         "compatibility_mode": compatibility_mode,
         "idempotency_key": idempotency_key,
         "external_user": external_user,
@@ -501,7 +505,7 @@ fn build_run_metadata(request: &NativeRunRequest) -> Value {
 fn durable_metadata_from_flow_run(flow_run: &domain::FlowRunRecord) -> Value {
     json!({
         "title": flow_run.title,
-        "user_id": flow_run.external_user,
+        "expand_id": flow_run.external_user,
         "external_user": flow_run.external_user,
         "external_conversation_id": flow_run.external_conversation_id,
         "external_trace_id": flow_run.external_trace_id,

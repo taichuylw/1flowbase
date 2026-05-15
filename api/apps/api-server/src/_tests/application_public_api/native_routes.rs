@@ -231,16 +231,21 @@ async fn native_run_route_accepts_any_string_model_and_preserves_metadata_withou
 }
 
 #[tokio::test]
-async fn native_run_route_accepts_user_id_alias_and_returns_default_title_metadata() {
+async fn native_run_route_accepts_expand_id_and_returns_default_title_metadata() {
     let app = test_app().await;
-    let token = setup_published_native_app(&app, "Native Route User Alias App").await;
+    let token = setup_published_native_app(&app, "Native Route Expand Id App").await;
     let mut body = native_run_body(json!("provider/model:any-public-string"));
-    body["user_id"] = json!("external-user-123");
+    body["expand_id"] = json!("external-user-123");
 
     let response = post_native_run(&app, &token, body).await;
 
     assert_eq!(response.status(), StatusCode::CREATED);
     let payload = response_json(response).await;
+    assert_eq!(
+        payload["data"]["metadata"]["expand_id"],
+        json!("external-user-123")
+    );
+    assert!(payload["data"]["metadata"].get("user_id").is_none());
     assert_eq!(
         payload["data"]["metadata"]["external_user"],
         json!("external-user-123")
@@ -249,6 +254,20 @@ async fn native_run_route_accepts_user_id_alias_and_returns_default_title_metada
         payload["data"]["metadata"]["title"],
         json!("Summarize the incident")
     );
+}
+
+#[tokio::test]
+async fn native_run_route_rejects_legacy_user_id_field() {
+    let app = test_app().await;
+    let token = setup_published_native_app(&app, "Native Route Legacy User Id App").await;
+    let mut body = native_run_body(json!("provider/model:any-public-string"));
+    body["user_id"] = json!("external-user-123");
+
+    let response = post_native_run(&app, &token, body).await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let payload = response_json(response).await;
+    assert_eq!(payload["code"], json!("user_id"));
 }
 
 #[tokio::test]
@@ -282,7 +301,7 @@ async fn native_run_route_validates_public_native_request_fields() {
         ("history", json!({ "role": "user" })),
         ("attachments", json!({ "id": "file-1" })),
         ("conversation", json!("not-object")),
-        ("user_id", json!({ "id": "external-user-123" })),
+        ("expand_id", json!({ "id": "external-user-123" })),
         ("response_mode", json!(["blocking"])),
         ("stream_options", json!("not-object")),
         ("execution", json!("not-object")),

@@ -77,7 +77,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .map(|_| "streaming".to_string());
     let conversation = object
         .get("metadata")
-        .and_then(|metadata| metadata.get("user_id"))
+        .and_then(|metadata| metadata.get("expand_id"))
         .and_then(Value::as_str)
         .map(|user| serde_json::json!({ "user": user }))
         .unwrap_or_else(|| serde_json::json!({}));

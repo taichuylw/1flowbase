@@ -130,10 +130,10 @@ async fn start_native_run_creates_published_api_flow_run_from_frozen_publication
 }
 
 #[tokio::test]
-async fn start_native_run_uses_user_id_alias_and_truncates_title() {
+async fn start_native_run_uses_expand_id_and_truncates_title() {
     let harness = ApplicationPublicApiTestHarness::new();
     let repository = harness.repository();
-    let application = harness.seed_application(actor_user_id(), "Aliased Native User App");
+    let application = harness.seed_application(actor_user_id(), "Expanded Native User App");
     let token = issue_key(&harness, application.id).await;
     ApplicationPublicationService::new(repository.clone())
         .publish_active_version(PublishApplicationCommand {
@@ -157,7 +157,7 @@ async fn start_native_run_uses_user_id_alias_and_truncates_title() {
                 "inputs": {
                     "priority": "high"
                 },
-                "user_id": "customer-alias-1",
+                "expand_id": "customer-alias-1",
                 "response_mode": "blocking",
                 "execution": {},
                 "metadata": {
@@ -180,6 +180,8 @@ async fn start_native_run_uses_user_id_alias_and_truncates_title() {
         .as_deref()
         .is_some_and(|value| value.starts_with("conv_")));
     assert_eq!(flow_run.title, expected_title);
+    assert_eq!(result.metadata["expand_id"], json!("customer-alias-1"));
+    assert!(result.metadata.get("user_id").is_none());
 }
 
 #[tokio::test]

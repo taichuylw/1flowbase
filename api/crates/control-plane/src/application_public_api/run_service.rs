@@ -322,7 +322,7 @@ where
         mut request: NativeRunRequest,
     ) -> std::result::Result<NativeRunRequest, NativeRunValidationError> {
         let Some(external_user) = request
-            .user_id
+            .expand_id
             .clone()
             .or_else(|| request.conversation.string("user"))
         else {
