@@ -71,6 +71,11 @@ pub fn permission_catalog() -> Vec<PermissionDefinition> {
     );
     push_permissions(
         &mut permissions,
+        "frontstage",
+        &[("page", &["design"])],
+    );
+    push_permissions(
+        &mut permissions,
         "state_model",
         &[
             ("view", &["own", "all"]),

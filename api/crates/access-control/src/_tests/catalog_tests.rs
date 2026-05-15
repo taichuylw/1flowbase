@@ -7,6 +7,7 @@ fn permission_catalog_seeds_expected_codes() {
         .map(|permission| permission.code)
         .collect();
 
+    assert!(codes.contains(&"frontstage.page.design".to_string()));
     assert!(codes.contains(&"user.manage.all".to_string()));
     assert!(codes.contains(&"workspace.configure.all".to_string()));
     assert!(!codes.iter().any(|code| code.starts_with("team.")));
