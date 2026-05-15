@@ -1,4 +1,4 @@
-use std::{convert::Infallible, sync::Arc};
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use axum::response::{
     sse::{Event, KeepAlive, Sse},
@@ -13,6 +13,7 @@ use control_plane::{
 };
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
+use tracing::{debug, info, warn};
 
 use crate::{
     app_state::ApiState,
@@ -55,14 +56,22 @@ where
         + Send
         + 'static,
 {
-    state
+    if let Err(error) = state
         .runtime_event_stream
         .open_run(
             run.id,
             control_plane::ports::RuntimeEventStreamPolicy::debug_default(),
         )
         .await
-        .map_err(service_error)?;
+    {
+        warn!(
+            flow_run_id = %run.id,
+            application_id = %run.application_id,
+            error = %error,
+            "failed to open compatible public API runtime event stream"
+        );
+        return Err(service_error(error));
+    }
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(send_compatible_runtime_event_stream(
@@ -88,6 +97,12 @@ where
             })
             .await
         {
+            warn!(
+                flow_run_id = %run.id,
+                application_id = %run.application_id,
+                error = %runtime_error,
+                "compatible public API streamed run failed"
+            );
             let _ = background_state
                 .runtime_event_stream
                 .append(
@@ -108,8 +123,20 @@ where
         }
     });
 
+    info!(
+        flow_run_id = %run.id,
+        application_id = %run.application_id,
+        heartbeat_interval_secs = 10_u64,
+        heartbeat_text = "heartbeat",
+        "compatible public API stream opened"
+    );
+
     Ok(Sse::new(CompatRunSseStream::new(receiver))
-        .keep_alive(KeepAlive::default())
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(10))
+                .text("heartbeat"),
+        )
         .into_response())
 }
 
@@ -122,6 +149,11 @@ async fn send_compatible_runtime_event_stream<F>(
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
     let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
+        warn!(
+            flow_run_id = %initial_run.id,
+            application_id = %initial_run.application_id,
+            "failed to subscribe compatible public API runtime event stream"
+        );
         return;
     };
 
@@ -129,22 +161,44 @@ async fn send_compatible_runtime_event_stream<F>(
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
         for sse in mapper(&initial_run, event) {
             if sender.send(sse).await.is_err() {
+                debug!(
+                    flow_run_id = %initial_run.id,
+                    application_id = %initial_run.application_id,
+                    "compatible public API stream client disconnected during replay"
+                );
                 return;
             }
         }
         if is_terminal {
+            debug!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                "compatible public API stream replay reached terminal event"
+            );
             return;
         }
     }
 
     while let Some(event) = subscription.live_events.recv().await {
-        let is_terminal = is_public_terminal_runtime_event(&event.event_type);
+        let event_type = event.event_type.clone();
+        let is_terminal = is_public_terminal_runtime_event(&event_type);
         for sse in mapper(&initial_run, event) {
             if sender.send(sse).await.is_err() {
+                debug!(
+                    flow_run_id = %initial_run.id,
+                    application_id = %initial_run.application_id,
+                    "compatible public API stream client disconnected"
+                );
                 return;
             }
         }
         if is_terminal {
+            debug!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                event_type = %event_type,
+                "compatible public API stream reached terminal event"
+            );
             return;
         }
     }
@@ -163,6 +217,17 @@ fn openai_runtime_event_to_sse(
     envelope: RuntimeEventEnvelope,
 ) -> Vec<Result<Event, Infallible>> {
     match envelope.event_type.as_str() {
+        "flow_started" => vec![json_sse(json!({
+            "id": format!("chatcmpl-{}", initial_run.id),
+            "object": "chat.completion.chunk",
+            "created": initial_run.created_at.unix_timestamp(),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": { "role": "assistant" },
+                "finish_reason": null
+            }]
+        }))],
         "text_delta" => vec![json_sse(json!({
             "id": format!("chatcmpl-{}", initial_run.id),
             "object": "chat.completion.chunk",

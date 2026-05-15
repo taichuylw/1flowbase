@@ -6,7 +6,10 @@ pub mod sse;
 
 use std::sync::Arc;
 
-use axum::{routing::post, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 use crate::app_state::ApiState;
 
@@ -21,6 +24,14 @@ pub fn router() -> Router<Arc<ApiState>> {
 
 pub fn compatible_router() -> Router<Arc<ApiState>> {
     Router::new()
+        .route("/models", get(openai::list_models))
+        .route("/v1/models", get(openai::list_models))
         .route("/v1/chat/completions", post(openai::create_chat_completion))
+        .route("/v1/chat/completions/models", get(openai::list_models))
+        .route("/v1/chat/completions/v1/models", get(openai::list_models))
+        .route(
+            "/v1/chat/completions/v1/chat/completions",
+            post(openai::create_chat_completion),
+        )
         .route("/v1/messages", post(anthropic::create_message))
 }

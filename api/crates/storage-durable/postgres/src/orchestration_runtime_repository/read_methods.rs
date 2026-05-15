@@ -277,6 +277,12 @@ impl PgControlPlaneStore {
                 title,
                 input_payload,
                 external_user,
+                api_key_id,
+                publication_version_id,
+                external_conversation_id,
+                external_trace_id,
+                compatibility_mode,
+                idempotency_key,
                 (
                     select users.account
                     from users
@@ -335,6 +341,12 @@ impl PgControlPlaneStore {
                 title,
                 input_payload,
                 external_user,
+                api_key_id,
+                publication_version_id,
+                external_conversation_id,
+                external_trace_id,
+                compatibility_mode,
+                idempotency_key,
                 (
                     select users.account
                     from users
@@ -370,30 +382,23 @@ impl PgControlPlaneStore {
         })
     }
 
-fn application_runs_page_order_by(
-    sort_by: Option<&str>,
-    sort_order: Option<&str>,
-) -> String {
-    let sort_by = sort_by
-        .unwrap_or("created_at")
-        .to_ascii_lowercase();
-    let sort_order = sort_order
-        .unwrap_or("desc")
-        .to_ascii_lowercase();
-    let field = match sort_by.as_str() {
-        "started_at" => "started_at",
-        "finished_at" => "finished_at",
-        "updated_at" => "updated_at",
-        "created_at" => "created_at",
-        _ => "created_at",
-    };
-    let direction = match sort_order.as_str() {
-        "asc" => "asc",
-        _ => "desc",
-    };
+    fn application_runs_page_order_by(sort_by: Option<&str>, sort_order: Option<&str>) -> String {
+        let sort_by = sort_by.unwrap_or("created_at").to_ascii_lowercase();
+        let sort_order = sort_order.unwrap_or("desc").to_ascii_lowercase();
+        let field = match sort_by.as_str() {
+            "started_at" => "started_at",
+            "finished_at" => "finished_at",
+            "updated_at" => "updated_at",
+            "created_at" => "created_at",
+            _ => "created_at",
+        };
+        let direction = match sort_order.as_str() {
+            "asc" => "asc",
+            _ => "desc",
+        };
 
-    format!("{field} {direction}, id {direction}")
-}
+        format!("{field} {direction}, id {direction}")
+    }
 
     async fn get_application_run_detail(
         &self,
@@ -457,5 +462,4 @@ fn application_runs_page_order_by(
             node_run,
         }))
     }
-
 }

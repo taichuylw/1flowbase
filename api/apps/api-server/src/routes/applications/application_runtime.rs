@@ -37,6 +37,7 @@ use crate::{
 };
 
 use super::debug_run_stream;
+mod application_logs;
 pub(crate) mod debug_variable_cache;
 pub(crate) mod debug_variable_snapshot;
 mod runtime_debug_artifacts;
@@ -268,12 +269,21 @@ pub struct CompleteCallbackTaskBody {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct FlowRunSummaryResponse {
     pub id: String,
+    pub application_id: String,
+    pub application_type: String,
+    pub run_object_kind: String,
+    pub run_kind: String,
     pub run_mode: String,
     pub status: String,
     pub target_node_id: Option<String>,
     pub title: String,
     pub expand_id: Option<String>,
     pub authorized_account: Option<String>,
+    pub source: String,
+    pub protocol: Option<String>,
+    pub subject: application_logs::ApplicationRunSubjectResponse,
+    pub actor: application_logs::ApplicationRunActorResponse,
+    pub correlation: application_logs::ApplicationRunCorrelationResponse,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub created_at: String,
@@ -288,7 +298,7 @@ pub struct FlowRunSummaryPageResponse {
     pub page_size: i64,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct FlowRunResponse {
     pub id: String,
     pub application_id: String,
@@ -311,7 +321,7 @@ pub struct FlowRunResponse {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct NodeRunResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -328,7 +338,7 @@ pub struct NodeRunResponse {
     pub finished_at: Option<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct CheckpointResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -341,7 +351,7 @@ pub struct CheckpointResponse {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct CallbackTaskResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -355,7 +365,7 @@ pub struct CallbackTaskResponse {
     pub completed_at: Option<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct RunEventResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -368,6 +378,8 @@ pub struct RunEventResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApplicationRunDetailResponse {
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub detail: application_logs::ApplicationRunTypedDetailResponse,
     pub flow_run: FlowRunResponse,
     pub node_runs: Vec<NodeRunResponse>,
     pub checkpoints: Vec<CheckpointResponse>,
@@ -469,15 +481,51 @@ fn format_optional_time(value: Option<time::OffsetDateTime>) -> Option<String> {
     value.map(format_time)
 }
 
-fn to_flow_run_summary_response(summary: domain::ApplicationRunSummary) -> FlowRunSummaryResponse {
+fn to_flow_run_summary_response(
+    application: &domain::ApplicationRecord,
+    summary: domain::ApplicationRunSummary,
+) -> FlowRunSummaryResponse {
+    let application_type = application.application_type.as_str().to_string();
+    let run_object_kind = application.sections.logs.run_object_kind.clone();
+    let subject = application_logs::ApplicationRunSubjectResponse {
+        kind: application_type.clone(),
+        id: Some(application.id.to_string()),
+        draft_id: None,
+        target_node_id: summary.target_node_id.clone(),
+    };
+    let actor = application_logs::actor_from_console_user(
+        summary.user_id.clone(),
+        summary.authorized_account.clone(),
+    );
+    let correlation = application_logs::ApplicationRunCorrelationResponse {
+        api_key_id: summary.api_key_id.map(|value| value.to_string()),
+        publication_version_id: summary
+            .publication_version_id
+            .map(|value| value.to_string()),
+        external_user: summary.user_id.clone(),
+        external_conversation_id: summary.external_conversation_id.clone(),
+        external_trace_id: summary.external_trace_id.clone(),
+        compatibility_mode: summary.compatibility_mode.clone(),
+        idempotency_key: summary.idempotency_key.clone(),
+    };
+
     FlowRunSummaryResponse {
         id: summary.id.to_string(),
+        application_id: application.id.to_string(),
+        application_type,
+        run_object_kind,
+        run_kind: summary.run_mode.as_str().to_string(),
         run_mode: summary.run_mode.as_str().to_string(),
         status: summary.status.as_str().to_string(),
         target_node_id: summary.target_node_id,
         title: summary.title,
         expand_id: summary.user_id,
         authorized_account: summary.authorized_account,
+        source: application_logs::source_for_run(summary.api_key_id),
+        protocol: summary.compatibility_mode,
+        subject,
+        actor,
+        correlation,
         started_at: format_time(summary.started_at),
         finished_at: format_optional_time(summary.finished_at),
         created_at: format_time(summary.created_at),
@@ -596,30 +644,89 @@ fn to_run_event_response(event: domain::RunEventRecord) -> RunEventResponse {
 }
 
 fn to_application_run_detail_response(
+    application: &domain::ApplicationRecord,
     detail: domain::ApplicationRunDetail,
 ) -> ApplicationRunDetailResponse {
+    let flow_run = to_flow_run_response(detail.flow_run.clone());
+    let node_runs = detail
+        .node_runs
+        .clone()
+        .into_iter()
+        .map(to_node_run_response)
+        .collect::<Vec<_>>();
+    let checkpoints = detail
+        .checkpoints
+        .clone()
+        .into_iter()
+        .map(to_checkpoint_response)
+        .collect::<Vec<_>>();
+    let callback_tasks = detail
+        .callback_tasks
+        .clone()
+        .into_iter()
+        .map(to_callback_task_response)
+        .collect::<Vec<_>>();
+    let events = detail
+        .events
+        .clone()
+        .into_iter()
+        .map(to_run_event_response)
+        .collect::<Vec<_>>();
+    let application_type = application.application_type.as_str().to_string();
+    let run = application_logs::ApplicationRunLogResponse {
+        id: detail.flow_run.id.to_string(),
+        application_id: application.id.to_string(),
+        application_type: application_type.clone(),
+        run_object_kind: application.sections.logs.run_object_kind.clone(),
+        run_kind: detail.flow_run.run_mode.as_str().to_string(),
+        status: detail.flow_run.status.as_str().to_string(),
+        title: detail.flow_run.title.clone(),
+        source: application_logs::source_for_run(detail.flow_run.api_key_id),
+        protocol: detail.flow_run.compatibility_mode.clone(),
+        subject: application_logs::ApplicationRunSubjectResponse {
+            kind: application_type,
+            id: Some(detail.flow_run.flow_id.to_string()),
+            draft_id: Some(detail.flow_run.draft_id.to_string()),
+            target_node_id: detail.flow_run.target_node_id.clone(),
+        },
+        actor: application_logs::actor_from_console_user(
+            Some(detail.flow_run.created_by.to_string()),
+            detail.flow_run.authorized_account.clone(),
+        ),
+        correlation: application_logs::ApplicationRunCorrelationResponse {
+            api_key_id: detail.flow_run.api_key_id.map(|value| value.to_string()),
+            publication_version_id: detail
+                .flow_run
+                .publication_version_id
+                .map(|value| value.to_string()),
+            external_user: detail.flow_run.external_user.clone(),
+            external_conversation_id: detail.flow_run.external_conversation_id.clone(),
+            external_trace_id: detail.flow_run.external_trace_id.clone(),
+            compatibility_mode: detail.flow_run.compatibility_mode.clone(),
+            idempotency_key: detail.flow_run.idempotency_key.clone(),
+        },
+        started_at: application_logs::format_time(detail.flow_run.started_at),
+        finished_at: application_logs::format_optional_time(detail.flow_run.finished_at),
+        created_at: application_logs::format_time(detail.flow_run.created_at),
+        updated_at: application_logs::format_time(detail.flow_run.updated_at),
+    };
+    let typed_detail = application_logs::ApplicationRunTypedDetailResponse {
+        kind: application.application_type.as_str().to_string(),
+        flow_run: flow_run.clone(),
+        node_runs: node_runs.clone(),
+        checkpoints: checkpoints.clone(),
+        callback_tasks: callback_tasks.clone(),
+        events: events.clone(),
+    };
+
     ApplicationRunDetailResponse {
-        flow_run: to_flow_run_response(detail.flow_run),
-        node_runs: detail
-            .node_runs
-            .into_iter()
-            .map(to_node_run_response)
-            .collect(),
-        checkpoints: detail
-            .checkpoints
-            .into_iter()
-            .map(to_checkpoint_response)
-            .collect(),
-        callback_tasks: detail
-            .callback_tasks
-            .into_iter()
-            .map(to_callback_task_response)
-            .collect(),
-        events: detail
-            .events
-            .into_iter()
-            .map(to_run_event_response)
-            .collect(),
+        run,
+        detail: typed_detail,
+        flow_run,
+        node_runs,
+        checkpoints,
+        callback_tasks,
+        events,
     }
 }
 
@@ -659,11 +766,10 @@ async fn ensure_application_visible(
     state: &Arc<ApiState>,
     actor_user_id: Uuid,
     application_id: Uuid,
-) -> Result<(), ApiError> {
-    ApplicationService::new(state.store.clone())
+) -> Result<domain::ApplicationRecord, ApiError> {
+    Ok(ApplicationService::new(state.store.clone())
         .get_application(actor_user_id, application_id)
-        .await?;
-    Ok(())
+        .await?)
 }
 
 fn parse_runtime_event_cursor(run_id: Uuid, event_id: &str) -> Option<i64> {
@@ -721,6 +827,7 @@ pub async fn start_flow_debug_run(
 ) -> Result<(StatusCode, Json<ApiSuccess<ApplicationRunDetailResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
@@ -786,7 +893,10 @@ pub async fn start_flow_debug_run(
 
     Ok((
         StatusCode::CREATED,
-        Json(ApiSuccess::new(to_application_run_detail_response(detail))),
+        Json(ApiSuccess::new(to_application_run_detail_response(
+            &application,
+            detail,
+        ))),
     ))
 }
 
@@ -976,6 +1086,7 @@ pub async fn cancel_flow_run(
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
@@ -1001,6 +1112,7 @@ pub async fn cancel_flow_run(
     .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        &application,
         detail,
     ))))
 }
@@ -1029,6 +1141,7 @@ pub async fn resume_flow_run(
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let checkpoint_id = Uuid::parse_str(&body.checkpoint_id)
         .map_err(|_| ControlPlaneError::InvalidInput("checkpoint_id"))?;
@@ -1055,6 +1168,7 @@ pub async fn resume_flow_run(
     .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        &application,
         detail,
     ))))
 }
@@ -1083,6 +1197,7 @@ pub async fn complete_callback_task(
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let detail = OrchestrationRuntimeService::new(
         state.store.clone(),
@@ -1106,6 +1221,7 @@ pub async fn complete_callback_task(
     .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        &application,
         detail,
     ))))
 }
@@ -1230,7 +1346,7 @@ pub async fn list_application_runs(
     Query(query): Query<ApplicationRunsQuery>,
 ) -> Result<Json<ApiSuccess<FlowRunSummaryPageResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    ensure_application_visible(&state, context.user.id, id).await?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runs_page =
         <MainDurableStore as OrchestrationRuntimeRepository>::list_application_runs_page(
@@ -1241,10 +1357,10 @@ pub async fn list_application_runs(
                 page_size: query.page_size.unwrap_or(20),
                 created_after: application_runs_created_after(&query),
                 sort_by: Some(
-                    normalize_application_run_sort_by(query.sort_by.as_deref()).to_string()
+                    normalize_application_run_sort_by(query.sort_by.as_deref()).to_string(),
                 ),
                 sort_order: Some(
-                    normalize_application_run_sort_order(query.sort_order.as_deref()).to_string()
+                    normalize_application_run_sort_order(query.sort_order.as_deref()).to_string(),
                 ),
             },
         )
@@ -1254,7 +1370,7 @@ pub async fn list_application_runs(
         items: runs_page
             .items
             .into_iter()
-            .map(to_flow_run_summary_response)
+            .map(|summary| to_flow_run_summary_response(&application, summary))
             .collect(),
         total: runs_page.total,
         page: runs_page.page,
@@ -1282,7 +1398,7 @@ pub async fn get_application_run_detail(
     Path((id, run_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    ensure_application_visible(&state, context.user.id, id).await?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
         &state.store,
@@ -1300,6 +1416,7 @@ pub async fn get_application_run_detail(
     .await?;
 
     Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        &application,
         detail,
     ))))
 }

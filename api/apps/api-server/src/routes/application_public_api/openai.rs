@@ -8,13 +8,20 @@ use axum::{
     Json,
 };
 use control_plane::application_public_api::{
-    compat::openai::{map_chat_completion_request, OpenAiCompatError},
+    api_keys::ApplicationApiKeyService,
+    compat::openai::{
+        extract_model_list_from_start_node, map_chat_completion_request, OpenAiCompatError,
+        OpenAiCompatibleModel,
+    },
     native::{
         ApplicationNativeRunService, CreateNativeRunCommand, NativeRunRequest, NativeRunResult,
+        NativeRunValidationError,
     },
+    publications::{ApplicationPublicationService, LoadActiveApplicationPublicationCommand},
 };
 use serde::Serialize;
 use serde_json::{json, Value};
+use tracing::{info, warn};
 use utoipa::ToSchema;
 
 use crate::{
@@ -136,6 +143,27 @@ pub struct OpenAiUsage {
     pub total_tokens: u64,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OpenAiModelListResponse {
+    pub object: &'static str,
+    pub data: Vec<OpenAiModelObject>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OpenAiModelObject {
+    pub id: String,
+    pub object: &'static str,
+    pub created: i64,
+    pub owned_by: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+struct OpenAiCredential {
+    token: String,
+    source: &'static str,
+}
+
 #[utoipa::path(
     post,
     path = "/v1/chat/completions",
@@ -153,11 +181,54 @@ pub async fn create_chat_completion(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, OpenAiRouteError> {
-    let bearer_token = native::bearer_token(&headers)?;
-    let request = parse_openai_request(body)?;
+    let credential = match openai_credential(&headers) {
+        Ok(credential) => credential,
+        Err(error) => {
+            warn!(
+                route = "chat_completions",
+                status = error.status.as_u16(),
+                code = error.code,
+                "openai compatible authentication failed"
+            );
+            return Err(error.into());
+        }
+    };
+    let request = match parse_openai_request(body) {
+        Ok(request) => request,
+        Err(error) => {
+            warn_openai_route_error(
+                "chat_completions",
+                &error,
+                "openai compatible request validation failed",
+            );
+            return Err(error);
+        }
+    };
     let model = request.model.clone().unwrap_or_default();
     let response_mode = request.response_mode.clone();
-    let run = create_native_run(state.clone(), bearer_token.clone(), request).await?;
+    let run = match create_native_run(state.clone(), credential.token.clone(), request).await {
+        Ok(run) => run,
+        Err(error) => {
+            warn!(
+                route = "chat_completions",
+                auth_source = credential.source,
+                status = error.status.as_u16(),
+                code = error.code,
+                "openai compatible native run validation failed"
+            );
+            return Err(error.into());
+        }
+    };
+
+    info!(
+        route = "chat_completions",
+        auth_source = credential.source,
+        application_id = %run.application_id,
+        flow_run_id = %run.id,
+        response_mode = response_mode.as_deref().unwrap_or("blocking"),
+        model = %model,
+        "openai compatible chat completion accepted"
+    );
 
     if response_mode.as_deref() == Some("streaming") {
         return compat_sse::start_openai_run_stream(state, run, model)
@@ -165,11 +236,123 @@ pub async fn create_chat_completion(
             .map_err(Into::into);
     }
 
-    let run = native::execute_blocking_native_run(state, bearer_token, run).await?;
+    let run = native::execute_blocking_native_run(state, credential.token, run).await?;
     if run.required_action.is_some() {
+        warn!(
+            route = "chat_completions",
+            application_id = %run.application_id,
+            flow_run_id = %run.id,
+            "openai compatible blocking run reached unsupported required_action state"
+        );
         return Err(OpenAiRouteError::RequiredAction);
     }
     Ok(Json(to_openai_response(run, model)).into_response())
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/models",
+    operation_id = "list_openai_compatible_models",
+    responses(
+        (status = 200, body = OpenAiModelListResponse),
+        (status = 401, body = OpenAiErrorBody),
+        (status = 403, body = OpenAiErrorBody),
+        (status = 409, body = OpenAiErrorBody)
+    )
+)]
+pub async fn list_models(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<OpenAiModelListResponse>, OpenAiRouteError> {
+    let credential = match openai_credential(&headers) {
+        Ok(credential) => credential,
+        Err(error) => {
+            warn!(
+                route = "models",
+                status = error.status.as_u16(),
+                code = error.code,
+                "openai compatible model list authentication failed"
+            );
+            return Err(error.into());
+        }
+    };
+    let actor = match ApplicationApiKeyService::new(state.store.clone())
+        .authenticate_bearer_token(&credential.token)
+        .await
+    {
+        Ok(actor) => actor,
+        Err(_) => {
+            warn!(
+                route = "models",
+                auth_source = credential.source,
+                code = "not_authenticated",
+                "openai compatible model list rejected invalid application API key"
+            );
+            return Err(native::native_error(NativeRunValidationError::NotAuthenticated).into());
+        }
+    };
+    let publication = match ApplicationPublicationService::new(state.store.clone())
+        .load_active_publication(LoadActiveApplicationPublicationCommand {
+            application_id: actor.application_id,
+        })
+        .await
+    {
+        Ok(publication) => publication,
+        Err(_) => {
+            warn!(
+                route = "models",
+                auth_source = credential.source,
+                application_id = %actor.application_id,
+                api_key_id = %actor.api_key_id,
+                code = "application_not_published",
+                "openai compatible model list has no active publication"
+            );
+            return Err(
+                native::native_error(NativeRunValidationError::ApplicationNotPublished).into(),
+            );
+        }
+    };
+    let models = extract_model_list_from_start_node(&publication.document_snapshot);
+    let model_count = models.len();
+
+    info!(
+        route = "models",
+        auth_source = credential.source,
+        application_id = %actor.application_id,
+        api_key_id = %actor.api_key_id,
+        model_count,
+        "openai compatible model list returned"
+    );
+
+    Ok(Json(to_openai_model_list_response(
+        models,
+        publication.created_at.unix_timestamp(),
+    )))
+}
+
+fn openai_credential(headers: &HeaderMap) -> Result<OpenAiCredential, native::NativeApiError> {
+    if let Ok(token) = native::bearer_token(headers) {
+        return Ok(OpenAiCredential {
+            token,
+            source: "authorization_bearer",
+        });
+    }
+    headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(|token| OpenAiCredential {
+            token: token.to_owned(),
+            source: "x_api_key",
+        })
+        .ok_or_else(|| {
+            native::NativeApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "not_authenticated",
+                "missing Authorization bearer token or x-api-key",
+            )
+        })
 }
 
 fn parse_openai_request(body: Bytes) -> Result<NativeRunRequest, OpenAiRouteError> {
@@ -180,6 +363,46 @@ fn parse_openai_request(body: Bytes) -> Result<NativeRunRequest, OpenAiRouteErro
         code: "invalid_request".to_string(),
     })?;
     map_chat_completion_request(value).map_err(Into::into)
+}
+
+fn warn_openai_route_error(route: &'static str, error: &OpenAiRouteError, message: &'static str) {
+    match error {
+        OpenAiRouteError::Compat(error) => warn!(
+            route,
+            code = %error.code,
+            param = error.param.as_deref().unwrap_or(""),
+            error_type = %error.error_type,
+            "{message}"
+        ),
+        OpenAiRouteError::Native(error) => warn!(
+            route,
+            status = error.status.as_u16(),
+            code = error.code,
+            "{message}"
+        ),
+        OpenAiRouteError::RequiredAction => {
+            warn!(route, code = "required_action_not_supported", "{message}")
+        }
+    }
+}
+
+fn to_openai_model_list_response(
+    models: Vec<OpenAiCompatibleModel>,
+    created: i64,
+) -> OpenAiModelListResponse {
+    OpenAiModelListResponse {
+        object: "list",
+        data: models
+            .into_iter()
+            .map(|model| OpenAiModelObject {
+                id: model.id,
+                object: "model",
+                created,
+                owned_by: "1flowbase",
+                name: model.name,
+            })
+            .collect(),
+    }
 }
 
 async fn create_native_run(

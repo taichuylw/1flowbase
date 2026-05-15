@@ -32,7 +32,8 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   condition_group: 'condition_group',
   state_write: 'state_write',
   output_contract_definition: 'output_contract_definition',
-  start_input_fields: 'start_input_fields'
+  start_input_fields: 'start_input_fields',
+  start_model_list: 'start_model_list'
 };
 
 const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set(

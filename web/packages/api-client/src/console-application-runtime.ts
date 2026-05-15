@@ -8,14 +8,65 @@ export type ConsoleFlowRunMode =
   | 'debug_flow_run'
   | 'published_api_run';
 
+export interface ConsoleApplicationRunSubject {
+  kind: string;
+  id?: string | null;
+  draft_id?: string | null;
+  target_node_id?: string | null;
+}
+
+export interface ConsoleApplicationRunActor {
+  kind: string;
+  id?: string | null;
+  display_name?: string | null;
+}
+
+export interface ConsoleApplicationRunCorrelation {
+  api_key_id?: string | null;
+  publication_version_id?: string | null;
+  external_user?: string | null;
+  external_conversation_id?: string | null;
+  external_trace_id?: string | null;
+  compatibility_mode?: string | null;
+  idempotency_key?: string | null;
+}
+
+export interface ConsoleApplicationRunLog {
+  id: string;
+  application_id: string;
+  application_type: string;
+  run_object_kind: string;
+  run_kind: string;
+  status: string;
+  title: string;
+  source: string;
+  protocol?: string | null;
+  subject: ConsoleApplicationRunSubject;
+  actor: ConsoleApplicationRunActor;
+  correlation: ConsoleApplicationRunCorrelation;
+  started_at: string;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ConsoleApplicationRunSummary {
   id: string;
+  application_id?: string;
+  application_type?: string;
+  run_object_kind?: string;
+  run_kind?: string;
   run_mode: ConsoleFlowRunMode;
   status: string;
   target_node_id: string | null;
   title?: string;
   expand_id?: string | null;
   authorized_account?: string | null;
+  source?: string;
+  protocol?: string | null;
+  subject?: ConsoleApplicationRunSubject;
+  actor?: ConsoleApplicationRunActor;
+  correlation?: ConsoleApplicationRunCorrelation;
   started_at: string;
   finished_at: string | null;
   created_at: string;
@@ -112,6 +163,17 @@ export interface ConsoleCallbackTask {
 }
 
 export interface ConsoleApplicationRunDetail {
+  run?: ConsoleApplicationRunLog;
+  detail?: ConsoleApplicationRunTypedDetail;
+  flow_run: ConsoleFlowRunDetail;
+  node_runs: ConsoleNodeRunDetail[];
+  checkpoints: ConsoleRunCheckpoint[];
+  callback_tasks: ConsoleCallbackTask[];
+  events: ConsoleRunEvent[];
+}
+
+export interface ConsoleApplicationRunTypedDetail {
+  kind: string;
   flow_run: ConsoleFlowRunDetail;
   node_runs: ConsoleNodeRunDetail[];
   checkpoints: ConsoleRunCheckpoint[];

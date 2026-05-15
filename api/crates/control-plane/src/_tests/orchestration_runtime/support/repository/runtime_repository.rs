@@ -1183,6 +1183,12 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
                 title: record.title.clone(),
                 user_id: record.external_user.clone(),
                 authorized_account: record.authorized_account.clone(),
+                api_key_id: record.api_key_id,
+                publication_version_id: record.publication_version_id,
+                external_conversation_id: record.external_conversation_id.clone(),
+                external_trace_id: record.external_trace_id.clone(),
+                compatibility_mode: record.compatibility_mode.clone(),
+                idempotency_key: record.idempotency_key.clone(),
                 started_at: record.started_at,
                 finished_at: record.finished_at,
                 created_at: record.created_at,
@@ -1231,33 +1237,23 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
             };
             let field_order = match sort_by {
                 "started_at" => match order {
-                    std::cmp::Ordering::Less => {
-                        left.started_at.cmp(&right.started_at)
-                    }
-                    std::cmp::Ordering::Greater => {
-                        right.started_at.cmp(&left.started_at)
-                    }
+                    std::cmp::Ordering::Less => left.started_at.cmp(&right.started_at),
+                    std::cmp::Ordering::Greater => right.started_at.cmp(&left.started_at),
                     _ => std::cmp::Ordering::Equal,
                 },
                 "finished_at" => match order {
                     std::cmp::Ordering::Less => left.finished_at.cmp(&right.finished_at),
-                    std::cmp::Ordering::Greater => {
-                        right.finished_at.cmp(&left.finished_at)
-                    }
+                    std::cmp::Ordering::Greater => right.finished_at.cmp(&left.finished_at),
                     _ => std::cmp::Ordering::Equal,
                 },
                 "updated_at" => match order {
                     std::cmp::Ordering::Less => left.updated_at.cmp(&right.updated_at),
-                    std::cmp::Ordering::Greater => {
-                        right.updated_at.cmp(&left.updated_at)
-                    }
+                    std::cmp::Ordering::Greater => right.updated_at.cmp(&left.updated_at),
                     _ => std::cmp::Ordering::Equal,
                 },
                 _ => match order {
                     std::cmp::Ordering::Less => left.created_at.cmp(&right.created_at),
-                    std::cmp::Ordering::Greater => {
-                        right.created_at.cmp(&left.created_at)
-                    }
+                    std::cmp::Ordering::Greater => right.created_at.cmp(&left.created_at),
                     _ => std::cmp::Ordering::Equal,
                 },
             };

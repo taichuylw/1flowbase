@@ -3,6 +3,12 @@ use serde_json::Value;
 use crate::application_public_api::native::NativeRunRequest;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenAiCompatibleModel {
+    pub id: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenAiCompatError {
     pub message: String,
     pub error_type: String,
@@ -111,6 +117,69 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
         .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))
 }
 
+pub fn extract_model_list_from_start_node(document: &Value) -> Vec<OpenAiCompatibleModel> {
+    let Some(nodes) = document
+        .get("graph")
+        .and_then(|graph| graph.get("nodes"))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+    let Some(start_node) = nodes
+        .iter()
+        .find(|node| node.get("type").and_then(Value::as_str) == Some("start"))
+    else {
+        return Vec::new();
+    };
+    let Some(model_list) = start_node
+        .get("config")
+        .and_then(|config| config.get("model_list"))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+
+    let mut models = Vec::new();
+    for value in model_list {
+        if let Some(model) = normalize_model_descriptor(value) {
+            if !models
+                .iter()
+                .any(|existing: &OpenAiCompatibleModel| existing.id == model.id)
+            {
+                models.push(model);
+            }
+        }
+    }
+    models
+}
+
+fn normalize_model_descriptor(value: &Value) -> Option<OpenAiCompatibleModel> {
+    if let Some(id) = value.as_str().map(str::trim).filter(|id| !id.is_empty()) {
+        return Some(OpenAiCompatibleModel {
+            id: id.to_string(),
+            name: None,
+        });
+    }
+
+    let object = value.as_object()?;
+    let id = ["id", "model", "value"]
+        .iter()
+        .find_map(|key| object.get(*key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|id| !id.is_empty())?;
+    let name = ["name", "label", "display_name"]
+        .iter()
+        .find_map(|key| object.get(*key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned);
+
+    Some(OpenAiCompatibleModel {
+        id: id.to_string(),
+        name,
+    })
+}
+
 fn reject_unsupported(request: &Value) -> Result<(), OpenAiCompatError> {
     for field in ["audio", "modalities"] {
         if request.get(field).is_some() {
@@ -186,4 +255,46 @@ fn openai_text_content(content: &Value) -> Result<String, OpenAiCompatError> {
         }
     }
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn extracts_start_node_model_list_from_strings_and_objects() {
+        let document = json!({
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "node-start",
+                        "type": "start",
+                        "config": {
+                            "model_list": [
+                                {"id": "qwen3.6-35b-a3b", "name": "Qwen 3.6 35B"},
+                                "deepseek-v4-flash",
+                                {"value": "deepseek-v4-flash", "label": "Duplicate"}
+                            ]
+                        }
+                    }
+                ]
+            }
+        });
+
+        assert_eq!(
+            extract_model_list_from_start_node(&document),
+            vec![
+                OpenAiCompatibleModel {
+                    id: "qwen3.6-35b-a3b".into(),
+                    name: Some("Qwen 3.6 35B".into()),
+                },
+                OpenAiCompatibleModel {
+                    id: "deepseek-v4-flash".into(),
+                    name: None,
+                },
+            ]
+        );
+    }
 }

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  getConsoleApplicationRunDetail,
   getConsoleApplicationRunNodeLastRun,
+  getConsoleApplicationRuns,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRunStream,
@@ -180,5 +182,115 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         credentials: 'include'
       })
     );
+  });
+
+  test('keeps application run log envelope fields from the logs routes', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            items: [
+              {
+                id: 'run-1',
+                application_id: 'app-1',
+                application_type: 'agent_flow',
+                run_object_kind: 'application_run',
+                run_kind: 'debug_flow_run',
+                run_mode: 'debug_flow_run',
+                status: 'succeeded',
+                target_node_id: null,
+                title: '退款总结',
+                source: 'console',
+                protocol: null,
+                subject: { kind: 'agent_flow', id: 'app-1' },
+                actor: { kind: 'user', id: 'user-1', display_name: 'root' },
+                correlation: {},
+                started_at: '2026-05-08T00:00:00Z',
+                finished_at: null,
+                created_at: '2026-05-08T00:00:00Z',
+                updated_at: '2026-05-08T00:00:00Z'
+              }
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRuns('app-1', {}, 'http://127.0.0.1:7800')
+    ).resolves.toMatchObject({
+      items: [
+        {
+          application_type: 'agent_flow',
+          run_object_kind: 'application_run',
+          subject: { kind: 'agent_flow' }
+        }
+      ]
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs?page=1&page_size=20',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  test('keeps typed application run detail beside legacy flow fields', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            run: {
+              id: 'run-1',
+              application_id: 'app-1',
+              application_type: 'agent_flow',
+              run_object_kind: 'application_run',
+              run_kind: 'debug_flow_run',
+              status: 'succeeded',
+              title: '退款总结',
+              source: 'console',
+              subject: { kind: 'agent_flow', id: 'flow-1' },
+              actor: { kind: 'user', id: 'user-1' },
+              correlation: {},
+              started_at: '2026-05-08T00:00:00Z',
+              finished_at: null,
+              created_at: '2026-05-08T00:00:00Z',
+              updated_at: '2026-05-08T00:00:00Z'
+            },
+            detail: {
+              kind: 'agent_flow',
+              flow_run: { id: 'run-1' },
+              node_runs: [],
+              checkpoints: [],
+              callback_tasks: [],
+              events: []
+            },
+            flow_run: { id: 'run-1' },
+            node_runs: [],
+            checkpoints: [],
+            callback_tasks: [],
+            events: []
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunDetail(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      run: {
+        application_type: 'agent_flow',
+        run_object_kind: 'application_run'
+      },
+      detail: { kind: 'agent_flow' },
+      flow_run: { id: 'run-1' }
+    });
   });
 });

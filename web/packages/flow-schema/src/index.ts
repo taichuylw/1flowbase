@@ -49,6 +49,11 @@ export interface FlowStartInputField {
   options?: string[];
 }
 
+export interface FlowStartModelDescriptor {
+  id: string;
+  name?: string;
+}
+
 export interface FlowNodeOutputDocument {
   key: string;
   title: string;
@@ -377,7 +382,7 @@ export function createDefaultAgentFlowDocument({
           containerId: null,
           position: { x: 80, y: 220 },
           configVersion: 1,
-          config: { input_fields: [] },
+          config: { input_fields: [], model_list: [] },
           bindings: {},
           outputs: []
         },

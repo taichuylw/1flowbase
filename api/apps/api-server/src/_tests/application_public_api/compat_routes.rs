@@ -83,6 +83,58 @@ async fn create_application_key(
 }
 
 async fn publish_application(app: &Router, cookie: &str, csrf: &str, application_id: &str) {
+    let state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(state.status(), StatusCode::OK);
+    let mut document = response_json(state).await["data"]["draft"]["document"].clone();
+    let start_node = document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("nodes array")
+        .iter_mut()
+        .find(|node| node["type"] == "start")
+        .expect("default draft should include a start node");
+    start_node["config"]["model_list"] = json!([
+        { "id": "qwen3.6-35b-a3b", "name": "Qwen 3.6 35B" },
+        "deepseek-v4-flash"
+    ]);
+
+    let save = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/draft"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "document": document,
+                        "change_kind": "logical",
+                        "summary": "Configure compatible model list"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(save.status(), StatusCode::OK);
+
     let response = app
         .clone()
         .oneshot(
@@ -151,6 +203,20 @@ async fn post_json(
                 .header(token_header.0, token_header.1)
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn get_models(app: &Router, uri: &str, token: &str) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(uri)
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
                 .unwrap(),
         )
         .await
@@ -248,6 +314,34 @@ async fn openai_chat_completions_accepts_bearer_and_preserves_model() {
     assert_eq!(payload["object"], json!("chat.completion"));
     assert_eq!(payload["model"], json!("provider/custom-model:latest"));
     assert_eq!(payload["choices"][0]["message"]["role"], json!("assistant"));
+}
+
+#[tokio::test]
+async fn openai_models_lists_start_node_configured_models() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "OpenAI Compatible Models App").await;
+
+    let response = get_models(&app, "/v1/models", &token).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["object"], json!("list"));
+    assert_eq!(payload["data"][0]["id"], json!("qwen3.6-35b-a3b"));
+    assert_eq!(payload["data"][0]["name"], json!("Qwen 3.6 35B"));
+    assert_eq!(payload["data"][0]["object"], json!("model"));
+    assert_eq!(payload["data"][1]["id"], json!("deepseek-v4-flash"));
+}
+
+#[tokio::test]
+async fn openai_models_accepts_full_chat_completions_base_url_alias() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "OpenAI Full Endpoint Base URL App").await;
+
+    let response = get_models(&app, "/v1/chat/completions/models", &token).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["data"][0]["id"], json!("qwen3.6-35b-a3b"));
 }
 
 #[tokio::test]

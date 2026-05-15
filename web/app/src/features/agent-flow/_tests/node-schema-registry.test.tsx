@@ -93,6 +93,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.start_input_fields).toBeTypeOf(
       'function'
     );
+    expect(agentFlowRendererRegistry.fields.start_model_list).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.fields.data_model_query).toBeTypeOf(
       'function'
     );
@@ -116,6 +119,17 @@ describe('agent-flow node schema registry', () => {
               kind: 'field',
               path: 'config.input_fields',
               renderer: 'start_input_fields'
+            })
+          ]
+        }),
+        expect.objectContaining({
+          kind: 'section',
+          title: '模型列表',
+          blocks: [
+            expect.objectContaining({
+              kind: 'field',
+              path: 'config.model_list',
+              renderer: 'start_model_list'
             })
           ]
         }),
@@ -202,6 +216,7 @@ describe('agent-flow node schema registry', () => {
     );
 
     expect(serializedConfigBlocks).toContain('"path":"config.input_fields"');
+    expect(serializedConfigBlocks).toContain('"path":"config.model_list"');
     expect(serializedConfigBlocks).not.toContain(
       '"path":"config.output_contract"'
     );
@@ -398,7 +413,10 @@ describe('agent-flow node schema registry', () => {
 
     expect(contract).not.toBeNull();
     expect(contract?.defaults.outputs).toEqual([]);
-    expect(contract?.defaults.config).toEqual({ input_fields: [] });
+    expect(contract?.defaults.config).toEqual({
+      input_fields: [],
+      model_list: []
+    });
     expect(contract?.defaults.bindings).toEqual({});
   });
 

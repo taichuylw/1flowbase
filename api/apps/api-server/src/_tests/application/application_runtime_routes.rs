@@ -1109,6 +1109,22 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         Some(flow_run_id.as_str())
     );
     assert_eq!(
+        list_payload["data"]["items"][0]["application_id"].as_str(),
+        Some(application_id.as_str())
+    );
+    assert_eq!(
+        list_payload["data"]["items"][0]["application_type"].as_str(),
+        Some("agent_flow")
+    );
+    assert_eq!(
+        list_payload["data"]["items"][0]["run_object_kind"].as_str(),
+        Some("application_run")
+    );
+    assert_eq!(
+        list_payload["data"]["items"][0]["subject"]["kind"].as_str(),
+        Some("agent_flow")
+    );
+    assert_eq!(
         list_payload["data"]["items"][0]["title"].as_str(),
         Some("总结退款政策")
     );
@@ -1134,6 +1150,26 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     let detail_payload: Value = serde_json::from_slice(&detail_body).unwrap();
     assert_eq!(
         detail_payload["data"]["flow_run"]["id"].as_str(),
+        Some(flow_run_id.as_str())
+    );
+    assert_eq!(
+        detail_payload["data"]["run"]["id"].as_str(),
+        Some(flow_run_id.as_str())
+    );
+    assert_eq!(
+        detail_payload["data"]["run"]["application_type"].as_str(),
+        Some("agent_flow")
+    );
+    assert_eq!(
+        detail_payload["data"]["run"]["run_object_kind"].as_str(),
+        Some("application_run")
+    );
+    assert_eq!(
+        detail_payload["data"]["detail"]["kind"].as_str(),
+        Some("agent_flow")
+    );
+    assert_eq!(
+        detail_payload["data"]["detail"]["flow_run"]["id"].as_str(),
         Some(flow_run_id.as_str())
     );
     assert_eq!(
@@ -1283,6 +1319,16 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
         list_payload["data"]["items"][0]["authorized_account"].as_str(),
         Some("root")
     );
+    assert_eq!(
+        list_payload["data"]["items"][0]["source"].as_str(),
+        Some("public_api")
+    );
+    assert_eq!(
+        list_payload["data"]["items"][0]["correlation"]["external_user"].as_str(),
+        Some("customer-42")
+    );
+    assert!(list_payload["data"]["items"][0]["correlation"]["api_key_id"].is_string());
+    assert!(list_payload["data"]["items"][0]["correlation"]["publication_version_id"].is_string());
 
     let detail = app
         .clone()
@@ -1310,10 +1356,19 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
         Some("customer-42")
     );
     assert_eq!(
-        detail_payload["data"]["flow_run"]["authorized_account"]
-            .as_str(),
+        detail_payload["data"]["flow_run"]["authorized_account"].as_str(),
         Some("root")
     );
+    assert_eq!(
+        detail_payload["data"]["run"]["source"].as_str(),
+        Some("public_api")
+    );
+    assert_eq!(
+        detail_payload["data"]["run"]["correlation"]["external_user"].as_str(),
+        Some("customer-42")
+    );
+    assert!(detail_payload["data"]["run"]["correlation"]["api_key_id"].is_string());
+    assert!(detail_payload["data"]["run"]["correlation"]["publication_version_id"].is_string());
 }
 
 #[tokio::test]

@@ -123,6 +123,7 @@ impl PgControlPlaneStore {
                 output_payload,
                 error_payload,
                 created_by,
+                null::text as authorized_account,
                 api_key_id,
                 publication_version_id,
                 external_user,
@@ -215,7 +216,9 @@ impl PgControlPlaneStore {
     }
 }
 
-fn map_runtime_debug_artifact_record(row: sqlx::postgres::PgRow) -> domain::RuntimeDebugArtifactRecord {
+fn map_runtime_debug_artifact_record(
+    row: sqlx::postgres::PgRow,
+) -> domain::RuntimeDebugArtifactRecord {
     domain::RuntimeDebugArtifactRecord {
         id: row.get("id"),
         workspace_id: row.get("workspace_id"),

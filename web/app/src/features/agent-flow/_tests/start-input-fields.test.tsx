@@ -345,4 +345,43 @@ describe('start input fields', () => {
       expect.objectContaining({ key: 'first_name' })
     ]);
   });
+
+  test('edits OpenAI compatible model list on the start node', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-start" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByText('模型列表')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '新增模型' }));
+    fireEvent.change(screen.getByLabelText('模型 ID 1'), {
+      target: { value: 'qwen3.6-35b-a3b' }
+    });
+    fireEvent.change(screen.getByLabelText('模型显示名 1'), {
+      target: { value: 'Qwen 3.6 35B' }
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '新增模型' }));
+    fireEvent.change(screen.getByLabelText('模型 ID 2'), {
+      target: { value: 'deepseek-v4-flash' }
+    });
+
+    const startNode = latestDocument.graph.nodes.find(
+      (node) => node.id === 'node-start'
+    );
+
+    expect(startNode?.config.model_list).toEqual([
+      { id: 'qwen3.6-35b-a3b', name: 'Qwen 3.6 35B' },
+      { id: 'deepseek-v4-flash' }
+    ]);
+  });
 });

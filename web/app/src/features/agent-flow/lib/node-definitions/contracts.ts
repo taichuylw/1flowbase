@@ -219,7 +219,7 @@ function createStartContract(): NodeRuntimeUiContract {
     title: 'Start',
     description: '工作流入口。',
     category: 'io',
-    config: { input_fields: [] },
+    config: { input_fields: [], model_list: [] },
     outputs: [],
     panelSections: [
       basicsPanelSection,
@@ -228,6 +228,14 @@ function createStartContract(): NodeRuntimeUiContract {
           key: 'config.input_fields',
           title: '输入字段',
           renderer: 'start_input_fields',
+          valueType: 'array'
+        })
+      ]),
+      panelSection('advanced', '模型列表', [
+        panelField({
+          key: 'config.model_list',
+          title: '模型列表',
+          renderer: 'start_model_list',
           valueType: 'array'
         })
       ])

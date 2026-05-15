@@ -502,6 +502,7 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
                 output_payload,
                 error_payload,
                 created_by,
+                null::text as authorized_account,
                 api_key_id,
                 publication_version_id,
                 external_user,

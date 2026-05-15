@@ -19,6 +19,7 @@ import { LlmModelField } from '../components/detail/fields/LlmModelField';
 import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMessagesField';
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
 import { StartInputFieldsField } from '../components/detail/fields/StartInputFieldsField';
+import { StartModelListField } from '../components/detail/fields/StartModelListField';
 import {
   DATA_MODEL_QUERY_DEFAULT_VALUE,
   normalizeDataModelQueryBindingValue
@@ -309,6 +310,18 @@ function renderStartInputFieldsField({
   );
 }
 
+function renderStartModelListField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  return (
+    <StartModelListField
+      value={adapter.getValue(block.path)}
+      onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+    />
+  );
+}
+
 function renderDataModelQueryField({
   adapter,
   block
@@ -368,6 +381,7 @@ export const agentFlowFieldRenderers = {
   state_write: renderStateWriteField,
   output_contract_definition: renderOutputContractDefinitionField,
   start_input_fields: renderStartInputFieldsField,
+  start_model_list: renderStartModelListField,
   header_alias: ({ adapter, block }) => {
     const value = adapter.getValue(block.path);
 

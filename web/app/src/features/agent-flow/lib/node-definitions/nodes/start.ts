@@ -19,6 +19,17 @@ export const startNodeDefinition: NodeDefinition = {
           editor: 'start_input_fields'
         }
       ]
+    },
+    {
+      key: 'advanced',
+      title: '模型列表',
+      fields: [
+        {
+          key: 'config.model_list',
+          label: '模型列表',
+          editor: 'start_model_list'
+        }
+      ]
     }
   ]
 };

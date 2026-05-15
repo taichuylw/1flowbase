@@ -333,6 +333,12 @@ pub struct StoredApplicationRunSummaryRow {
     pub input_payload: serde_json::Value,
     pub external_user: Option<String>,
     pub authorized_account: Option<String>,
+    pub api_key_id: Option<Uuid>,
+    pub publication_version_id: Option<Uuid>,
+    pub external_conversation_id: Option<String>,
+    pub external_trace_id: Option<String>,
+    pub compatibility_mode: Option<String>,
+    pub idempotency_key: Option<String>,
     pub started_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
     pub created_at: OffsetDateTime,
@@ -358,10 +364,8 @@ impl PgOrchestrationRuntimeMapper {
     }
 
     pub fn to_flow_run_record(row: StoredFlowRunRow) -> Result<domain::FlowRunRecord> {
-        let title = control_plane::flow_run_title::display_flow_run_title(
-            &row.title,
-            &row.input_payload,
-        );
+        let title =
+            control_plane::flow_run_title::display_flow_run_title(&row.title, &row.input_payload);
         Ok(domain::FlowRunRecord {
             id: row.id,
             application_id: row.application_id,
@@ -710,6 +714,12 @@ impl PgOrchestrationRuntimeMapper {
             ),
             user_id: row.external_user,
             authorized_account: row.authorized_account,
+            api_key_id: row.api_key_id,
+            publication_version_id: row.publication_version_id,
+            external_conversation_id: row.external_conversation_id,
+            external_trace_id: row.external_trace_id,
+            compatibility_mode: row.compatibility_mode,
+            idempotency_key: row.idempotency_key,
             started_at: row.started_at,
             finished_at: row.finished_at,
             created_at: row.created_at,
