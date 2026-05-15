@@ -572,7 +572,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               type={isDesignMode ? 'default' : 'primary'}
               onClick={() => {
                 setIsDesignMode((current) => !current);
-                setHasUnsavedChanges(false);
               }}
             >
               {isDesignMode ? '退出设计模式' : '进入设计模式'}

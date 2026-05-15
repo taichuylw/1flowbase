@@ -135,6 +135,31 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('当前无未保存改动。')).toBeInTheDocument();
   });
 
+  test('preserves unsaved changes when switching design mode on and off', () => {
+    authenticate(['frontstage.page.design']);
+    renderPage();
+
+    const designButton = screen.getByRole('button', { name: '进入设计模式' });
+    fireEvent.click(designButton);
+
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    const saveButton = screen.getByRole('button', { name: '保存设计' });
+
+    expect(saveButton).toBeEnabled();
+    expect(
+      screen.getByText('当前有未保存改动，点击“保存设计”后同步到 schema storage。')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+
+    const restoredSaveButton = screen.getByRole('button', { name: '保存设计' });
+    expect(restoredSaveButton).toBeEnabled();
+    expect(
+      screen.getByText('当前有未保存改动，点击“保存设计”后同步到 schema storage。')
+    ).toBeInTheDocument();
+  });
+
   test('supports adding and deleting page tree nodes in design mode', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
