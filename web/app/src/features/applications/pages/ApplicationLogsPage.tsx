@@ -290,6 +290,7 @@ export function ApplicationLogsPage({
           page={page}
           pageSize={PAGE_SIZE}
           total={total}
+          applicationId={applicationId}
           runs={visibleRuns}
           selectedRunId={selectedRunId}
           onPageChange={setPage}

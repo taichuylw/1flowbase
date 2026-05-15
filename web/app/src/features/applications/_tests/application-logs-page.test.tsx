@@ -181,12 +181,12 @@ describe('ApplicationLogsPage', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
     expect(screen.getByText('公开 API 退款总结')).toBeInTheDocument();
     expect(screen.getByText('customer-42')).toBeInTheDocument();
     expect(screen.getByText('root')).toBeInTheDocument();
     expect(
-      within(screen.getByRole('table')).getByRole('columnheader', {
+      screen.getByRole('columnheader', {
         name: 'expand_id'
       })
     ).toBeInTheDocument();
@@ -343,6 +343,44 @@ describe('ApplicationLogsPage', () => {
     ).not.toBeInTheDocument();
   }, 20_000);
 
+  test('persists table column visibility in localStorage', async () => {
+    const { rerender } = render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findAllByRole('table')).toHaveLength(1);
+    expect(
+      screen.getByRole('columnheader', {
+        name: 'expand_id'
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '字段配置' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'expand_id' }));
+
+    await waitFor(() => {
+      const stored = window.localStorage.getItem(
+        'applicationLogsRunsTableState:app-1'
+      );
+      expect(stored).toContain('"visibleColumnKeys":[');
+      expect(stored).not.toContain('"expand_id"');
+    });
+
+    rerender(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(
+      screen.queryByRole('columnheader', {
+        name: 'expand_id'
+      })
+    ).not.toBeInTheDocument();
+  });
+
   test('drags and resizes floating run detail window', async () => {
     innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
     innerHeightSpy = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(900);
@@ -353,7 +391,7 @@ describe('ApplicationLogsPage', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
     const detailWindow = await screen.findByTestId(
@@ -571,7 +609,7 @@ describe('ApplicationLogsPage', () => {
     expect(screen.getByRole('combobox', { name: '时间间隔' })).toBeInTheDocument();
     expect(screen.getByText('过去 7 天')).toBeInTheDocument();
     expect(
-      within(screen.getByRole('table')).getByRole('columnheader', {
+      screen.getByRole('columnheader', {
         name: '更新时间'
       })
     ).toBeInTheDocument();
@@ -707,11 +745,48 @@ describe('ApplicationLogsPage', () => {
       /\.application-logs-page\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*box-sizing:\s*border-box;/s
     );
     expect(cssSource).toMatch(
+      /\.application-logs-page\s*\{[^}]*padding:\s*32px 0;/s
+    );
+    expect(cssSource).toMatch(
       /\.application-logs-page__stack\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100%;/s
     );
     expect(cssSource).toMatch(
       /\.application-logs-page__list\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s
     );
+  });
+
+  test('keeps the table body scrollable while pagination stays outside the row area', async () => {
+    const cssSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/features/applications/pages/application-logs-page.css'
+      ),
+      'utf8'
+    );
+    const tableWrapperBlock = cssSource.match(
+      /\.application-logs-page__list \.ant-table-wrapper\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const spinContainerBlock = cssSource.match(
+      /\.application-logs-page__list \.ant-spin-container\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const tableInternalsBlock = cssSource.match(
+      /\.application-logs-page__list \.ant-spin-nested-loading,[\s\S]*?\.application-logs-page__list \.ant-table\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const tableSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/features/applications/components/logs/ApplicationRunsTable.tsx'
+      ),
+      'utf8'
+    );
+
+    expect(tableWrapperBlock).toContain('display: flex;');
+    expect(spinContainerBlock).toContain('display: flex;');
+    expect(tableInternalsBlock).toContain('display: flex;');
+    expect(cssSource).toMatch(
+      /\.application-logs-page__list \.ant-table-body\s*\{[^}]*min-height:\s*0;[^}]*\}/s
+    );
+    expect(tableSource).toContain("y: '100%'");
   });
 
   test('renders logs inside the full section layout height chain', async () => {
@@ -794,7 +869,7 @@ describe('ApplicationLogsPage', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 

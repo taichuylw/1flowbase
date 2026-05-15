@@ -52,7 +52,7 @@
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .application-logs-page__list .ant-table-wrapper {
@@ -65,18 +65,103 @@
 
 .application-logs-page__list .ant-spin-nested-loading,
 .application-logs-page__list .ant-spin-container,
-.application-logs-page__list .ant-table {
+.application-logs-page__list .ant-table,
+.application-logs-page__list .ant-table-container {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
-.application-logs-page__list .ant-spin-nested-loading,
-.application-logs-page__list .ant-spin-container,
-.application-logs-page__list .ant-table-container {
+.application-logs-page__list .ant-table-body {
+  min-height: 0;
+}
+
+.application-runs-table {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 0;
+}
+
+.application-runs-table__scroll-area {
+  min-width: 0;
   flex: 1 1 auto;
   min-height: 0;
+  max-width: 100%;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+
+.application-runs-table__pagination {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.application-runs-table__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.application-runs-table__toolbar .ant-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.application-runs-table__header-cell {
+  position: relative;
+}
+
+.application-runs-table__header-title {
+  position: relative;
+  display: inline-block;
+  padding-right: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.application-runs-table__header-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.application-runs-table__header-resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ant-color-border-secondary);
+}
+
+.application-runs-table__column-selector {
+  min-width: 220px;
+}
+
+.application-runs-table__column-selector-list {
+  display: flex;
+  max-height: 280px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.application-runs-table__column-selector-footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .application-logs-page__list .ant-table-pagination.ant-pagination {

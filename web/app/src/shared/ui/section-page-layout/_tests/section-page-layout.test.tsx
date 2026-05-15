@@ -56,7 +56,7 @@ describe('SectionPageLayout', () => {
   });
 
   test('renders desktop rail navigation and sidebar footer', async () => {
-    renderInRouter(
+    const view = renderInRouter(
       <SectionPageLayout
         pageTitle="个人资料"
         pageDescription="管理个人资料与安全设置"
@@ -71,6 +71,13 @@ describe('SectionPageLayout', () => {
     expect(await screen.findByRole('navigation')).toBeInTheDocument();
     expect(screen.getByText('个人资料内容')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toHaveClass('ant-layout');
+    expect(view.container.querySelector('.section-page-layout__rail')).toHaveClass(
+      'ant-layout-sider'
+    );
+    expect(
+      view.container.querySelector('.section-page-layout__content')
+    ).toHaveClass('ant-layout-content');
   });
 
   test('uses wide content width by default for management pages', async () => {
@@ -134,6 +141,74 @@ describe('SectionPageLayout', () => {
 
     expect(desktopRailBlock).toBeTruthy();
     expect(desktopRailBlock).not.toContain('min-height: calc(100vh - 56px);');
+  });
+
+  test('does not use negative margins to align section layout with the app shell', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+
+    expect(sectionLayoutCss).not.toContain('margin: -28px');
+    expect(sectionLayoutCss).not.toContain('margin: -20px');
+    expect(sectionLayoutCss).toContain('--section-page-header-height: 56px;');
+  });
+
+  test('keeps the desktop section rail width compact and synchronized', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+    const sectionLayoutSource = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../SectionPageLayout.tsx'),
+      'utf8'
+    );
+
+    expect(sectionLayoutCss).toContain('--section-page-rail-width: 180px;');
+    expect(sectionLayoutSource).toContain('width={180}');
+  });
+
+  test('bounds full section layouts to the app shell viewport', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+    const fullLayoutBlock = sectionLayoutCss.match(
+      /\.section-page-layout--full\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const fullShellBlock = sectionLayoutCss.match(
+      /\.section-page-layout--full \.section-page-layout__shell\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const fullContentBlock = sectionLayoutCss.match(
+      /\.section-page-layout--full \.section-page-layout__content\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const fullRailBlock = sectionLayoutCss.match(
+      /\.section-page-layout--full \.section-page-layout__rail\s*\{[\s\S]*?\n\}/
+    )?.[0];
+
+    expect(fullLayoutBlock).toContain(
+      'height: calc(100vh - var(--section-page-header-height));'
+    );
+    expect(fullLayoutBlock).toContain('overflow: hidden;');
+    expect(fullShellBlock).toContain('height: 100%;');
+    expect(fullShellBlock).toContain('min-height: 0;');
+    expect(fullRailBlock).toContain('top: 0;');
+    expect(fullContentBlock).toContain('min-height: 0;');
+    expect(fullContentBlock).toContain('overflow: hidden;');
+  });
+
+  test('lets full section layouts return to natural height on mobile', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+    const mobileBlock = sectionLayoutCss.slice(
+      sectionLayoutCss.indexOf('@media (max-width: 991px)')
+    );
+
+    expect(mobileBlock).toContain('.section-page-layout--full');
+    expect(mobileBlock).toContain('height: auto;');
+    expect(mobileBlock).toContain('overflow: visible;');
   });
 
   test('renders empty state instead of broken navigation when navItems is empty', async () => {

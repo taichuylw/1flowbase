@@ -267,8 +267,8 @@ function RunConversation({
           <Typography.Text>{renderMetaValue(detail.flow_run.title)}</Typography.Text>
         </div>
         <div className="application-run-detail__meta-item">
-          <Typography.Text type="secondary">user_id</Typography.Text>
-          <Typography.Text>{renderMetaValue(detail.flow_run.user_id)}</Typography.Text>
+          <Typography.Text type="secondary">expand_id</Typography.Text>
+          <Typography.Text>{renderMetaValue(detail.flow_run.expand_id)}</Typography.Text>
         </div>
         <div className="application-run-detail__meta-item">
           <Typography.Text type="secondary">授权人</Typography.Text>

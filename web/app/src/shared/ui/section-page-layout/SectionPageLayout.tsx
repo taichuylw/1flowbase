@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Grid, Typography } from 'antd';
+import { Grid, Layout, Typography } from 'antd';
 
 import { SectionSidebarNav } from './SectionSidebarNav';
 import './section-page-layout.css';
@@ -41,15 +41,24 @@ export function SectionPageLayout({
   const layoutClassName = `section-page-layout section-page-layout--${contentWidth}`;
 
   return (
-    <section className={layoutClassName} data-testid="section-page-layout">
+    <Layout className={layoutClassName} data-testid="section-page-layout">
       {visibleItems.length === 0 ? (
-        <div className="section-page-layout__content">{emptyState ?? null}</div>
+        <Layout.Content className="section-page-layout__content">
+          {emptyState ?? null}
+        </Layout.Content>
       ) : (
-        <div className="section-page-layout__shell">
+        <Layout className="section-page-layout__shell">
           {!compactMode ? (
-            <aside className="section-page-layout__rail">
+            <Layout.Sider
+              className="section-page-layout__rail"
+              theme="light"
+              width={180}
+            >
               {pageTitle ? (
-                <Typography.Title level={4} style={{ padding: '0 24px', marginBottom: 24, marginTop: 0 }}>
+                <Typography.Title
+                  className="section-page-layout__title"
+                  level={4}
+                >
                   {pageTitle}
                 </Typography.Title>
               ) : null}
@@ -62,10 +71,10 @@ export function SectionPageLayout({
               {sidebarFooter ? (
                 <div className="section-page-layout__footer">{sidebarFooter}</div>
               ) : null}
-            </aside>
+            </Layout.Sider>
           ) : null}
 
-          <div className="section-page-layout__content">
+          <Layout.Content className="section-page-layout__content">
             {compactMode ? (
               <>
                 {pageTitle ? (
@@ -82,9 +91,9 @@ export function SectionPageLayout({
               </>
             ) : null}
             {children}
-          </div>
-        </div>
+          </Layout.Content>
+        </Layout>
       )}
-    </section>
+    </Layout>
   );
 }

@@ -33,4 +33,8 @@
   --glow-soft:
     0 0 0 3px rgba(0, 217, 146, 0.12),
     0 18px 36px rgba(0, 217, 146, 0.12);
+
+  --scrollbar-size: 8px;
+  --scrollbar-thumb: rgba(22, 33, 29, 0.25);
+  --scrollbar-thumb-hover: rgba(22, 33, 29, 0.35);
 }
