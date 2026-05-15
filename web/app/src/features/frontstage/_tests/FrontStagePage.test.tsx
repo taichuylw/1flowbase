@@ -109,6 +109,44 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('页面 新建 1')).toBeInTheDocument();
   });
 
+  test('supports page order move controls in design mode', () => {
+    authenticate(['frontstage.page.design']);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+
+    const initialTreeRows = screen.getAllByRole('listitem');
+    expect(initialTreeRows[0]).toHaveTextContent('页面 新建 1');
+    expect(initialTreeRows[1]).toHaveTextContent('页面 新建 2');
+
+    const secondRowUpButton = within(initialTreeRows[1]).getByRole('button', { name: '上移' });
+    const firstRowDownButton = within(initialTreeRows[0]).getByRole('button', { name: '下移' });
+
+    expect(secondRowUpButton).toBeEnabled();
+    expect(firstRowDownButton).toBeEnabled();
+
+    fireEvent.click(secondRowUpButton);
+
+    const movedUpRows = screen.getAllByRole('listitem');
+    expect(movedUpRows[0]).toHaveTextContent('页面 新建 2');
+    expect(movedUpRows[1]).toHaveTextContent('页面 新建 1');
+
+    const firstRowUpButton = within(movedUpRows[0]).getByRole('button', { name: '上移' });
+    const secondRowDownButton = within(movedUpRows[1]).getByRole('button', { name: '下移' });
+
+    expect(firstRowUpButton).toBeDisabled();
+    expect(secondRowDownButton).toBeDisabled();
+
+    const movedDownButton = within(movedUpRows[0]).getByRole('button', { name: '下移' });
+    fireEvent.click(movedDownButton);
+
+    const movedDownRows = screen.getAllByRole('listitem');
+    expect(movedDownRows[0]).toHaveTextContent('页面 新建 1');
+    expect(movedDownRows[1]).toHaveTextContent('页面 新建 2');
+  });
+
   test('deletes group and cascades child pages', () => {
     authenticate(['frontstage.page.design']);
     renderPage();

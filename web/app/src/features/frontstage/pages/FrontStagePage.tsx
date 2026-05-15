@@ -61,6 +61,42 @@ function getFirstPageId(nodes: FrontStageTreeNode[]): string | null {
   return null;
 }
 
+function moveNodeInTree(
+  nodes: FrontStageTreeNode[],
+  targetNodeId: string,
+  direction: -1 | 1
+): FrontStageTreeNode[] {
+  const index = nodes.findIndex((node) => node.id === targetNodeId);
+  if (index >= 0) {
+    const targetIndex = index + direction;
+
+    if (targetIndex >= 0 && targetIndex < nodes.length) {
+      const nextNodes = [...nodes];
+      [nextNodes[index], nextNodes[targetIndex]] = [nextNodes[targetIndex], nextNodes[index]];
+
+      return nextNodes;
+    }
+
+    return nodes;
+  }
+
+  return nodes.map((node) => {
+    if (!node.children) {
+      return node;
+    }
+
+    const nextChildren = moveNodeInTree(node.children, targetNodeId, direction);
+    if (nextChildren === node.children) {
+      return node;
+    }
+
+    return {
+      ...node,
+      children: nextChildren
+    };
+  });
+}
+
 function removeNodeFromTree(nodes: FrontStageTreeNode[], targetNodeId: string): FrontStageTreeNode[] {
   const nextNodes = [];
 
@@ -113,6 +149,21 @@ function insertPageIntoGroup(
       children: node.children ? insertPageIntoGroup(node.children, parentNodeId, pageNode) : node.children
     };
   });
+}
+
+function canMoveNode(
+  nodes: FrontStageTreeNode[],
+  targetNodeId: string
+): { canMoveUp: boolean; canMoveDown: boolean } {
+  const index = nodes.findIndex((node) => node.id === targetNodeId);
+  if (index < 0) {
+    return { canMoveUp: false, canMoveDown: false };
+  }
+
+  return {
+    canMoveUp: index > 0,
+    canMoveDown: index < nodes.length - 1
+  };
 }
 
 export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, onNavigatePage }) => {
@@ -216,6 +267,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
     setPageTree((prev) => renameNodeInTree(prev, nodeId, nextTitle.trim()));
   };
 
+  const handleMoveNode = (nodeId: string, direction: -1 | 1) => {
+    setPageTree((prev) => moveNodeInTree(prev, nodeId, direction));
+  };
+
   const handleSelectPage = (nodeId: string) => {
     setSelectedPageId((current) => {
       if (current === nodeId) {
@@ -227,10 +282,15 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
     });
   };
 
-  const renderTreeNode = (node: FrontStageTreeNode, level: number = 0) => {
+  const renderTreeNode = (
+    node: FrontStageTreeNode,
+    level: number = 0,
+    parentNodes: FrontStageTreeNode[] = pageTree
+  ) => {
     const nodes: ReactNode[] = [];
     const isPageNode = node.kind === 'page';
     const isSelected = selectedPageId === node.id;
+    const { canMoveUp, canMoveDown } = canMoveNode(parentNodes, node.id);
     const rowStyle = {
       padding: '8px',
       borderRadius: 6,
@@ -304,6 +364,26 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
               </Button>
             ) : null}
             <Button
+              size="small"
+              disabled={!canMoveUp}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleMoveNode(node.id, -1);
+              }}
+            >
+              上移
+            </Button>
+            <Button
+              size="small"
+              disabled={!canMoveDown}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleMoveNode(node.id, 1);
+              }}
+            >
+              下移
+            </Button>
+            <Button
               style={buttonStyle}
               size="small"
               danger
@@ -320,8 +400,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
     );
 
     if (node.children && node.children.length > 0) {
-      for (const child of node.children) {
-        nodes.push(...renderTreeNode(child, level + 1));
+      for (const childIndex of node.children.keys()) {
+        nodes.push(
+          ...renderTreeNode(
+            node.children[childIndex],
+            level + 1,
+            node.children
+          )
+        );
       }
     }
 
@@ -387,7 +473,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
           ) : null}
           {pageTree.length > 0 ? (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {pageTree.flatMap((node) => renderTreeNode(node))}
+              {pageTree.map((node) => renderTreeNode(node, 0, pageTree))}
             </ul>
           ) : (
             <Empty
