@@ -239,6 +239,7 @@ describe('FrontStagePage', () => {
       }
 
       fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+      expect(screen.getByText('未命名页面')).toBeInTheDocument();
       expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
     } finally {
       promptSpy.mockRestore();
@@ -273,6 +274,39 @@ describe('FrontStagePage', () => {
     }
 
     fireEvent.click(within(secondPageItem).getByRole('button', { name: '删除' }));
+    expect(screen.getByText('当前页面：page-1')).toBeInTheDocument();
+    expect(onNavigatePage).toHaveBeenCalledWith('page-1');
+  });
+
+  test('falls back to first page when route pageId is missing from current tree', () => {
+    authenticate(['frontstage.page.design']);
+    const onNavigatePage = vi.fn();
+
+    const renderResult = render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          onNavigatePage={onNavigatePage}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    expect(onNavigatePage).toHaveBeenLastCalledWith('page-1');
+
+    onNavigatePage.mockReset();
+    renderResult.rerender(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="non-existent-page"
+          onNavigatePage={onNavigatePage}
+        />
+      </AppProviders>
+    );
+
     expect(screen.getByText('当前页面：page-1')).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith('page-1');
   });

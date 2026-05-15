@@ -184,7 +184,18 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
 
   useEffect(() => {
     if (pageId) {
-      setSelectedPageId(pageId);
+      if (isPageInTree(pageTree, pageId)) {
+        setSelectedPageId(pageId);
+        return;
+      }
+
+      const fallbackPageId = getFirstPageId(pageTree);
+
+      setSelectedPageId(fallbackPageId);
+      if (fallbackPageId) {
+        onNavigatePage?.(fallbackPageId);
+      }
+
       return;
     }
 
@@ -258,8 +269,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
     });
   };
 
-  const handleRenameNode = (nodeId: string) => {
-    const nextTitle = window.prompt('重命名节点', node.title);
+  const handleRenameNode = (nodeId: string, currentTitle: string) => {
+    const nextTitle = window.prompt('重命名节点', currentTitle);
     if (nextTitle === null) {
       return;
     }
@@ -339,7 +350,9 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
             justifyContent: 'space-between'
           }}
         >
-          <Typography.Text style={{ fontSize: 12 }}>{node.title}</Typography.Text>
+          <Typography.Text style={{ fontSize: 12 }}>
+            {node.title ? node.title : node.kind === 'group' ? '未命名分组' : '未命名页面'}
+          </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
             {node.kind === 'group' ? '分组节点' : '页面节点'}
           </Typography.Text>
@@ -350,7 +363,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
               size="small"
               onClick={(event) => {
                 event.stopPropagation();
-                handleRenameNode(node.id);
+                handleRenameNode(node.id, node.title);
               }}
             >
               重命名
