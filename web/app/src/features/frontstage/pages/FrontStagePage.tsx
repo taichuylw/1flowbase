@@ -244,11 +244,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
   const handleDeleteNode = (nodeId: string) => {
     setPageTree((prev) => {
       const next = removeNodeFromTree(prev, nodeId);
-      if (selectedPageId !== nodeId) {
-        return next;
-      }
+      const nextSelectedPageId =
+        selectedPageId && isPageInTree(next, selectedPageId)
+          ? selectedPageId
+          : getFirstPageId(next);
 
-      const nextSelectedPageId = getFirstPageId(next);
       setSelectedPageId(nextSelectedPageId);
       if (nextSelectedPageId) {
         onNavigatePage?.(nextSelectedPageId);

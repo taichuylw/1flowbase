@@ -168,6 +168,35 @@ describe('FrontStagePage', () => {
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
   });
 
+  test('falls back to first available page when selected page is deleted by parent group', () => {
+    authenticate(['frontstage.page.design']);
+    const onNavigatePage = vi.fn();
+
+    renderPage(undefined, onNavigatePage);
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
+
+    const groupItem = screen.getByText('分组 1').closest('li');
+    if (!groupItem) {
+      throw new Error('expected group list item to exist');
+    }
+
+    fireEvent.click(within(groupItem).getByRole('button', { name: '组内新增页面' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+
+    const groupItemForDelete = screen.getByText('分组 1').closest('li');
+    if (!groupItemForDelete) {
+      throw new Error('expected group list item to exist');
+    }
+
+    fireEvent.click(within(groupItemForDelete).getByRole('button', { name: '删除' }));
+
+    expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
+    expect(screen.getByText('当前页面：page-2')).toBeInTheDocument();
+    expect(onNavigatePage).toHaveBeenLastCalledWith('page-2');
+  });
+
   test('renames node title in design mode', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
