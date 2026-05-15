@@ -97,6 +97,10 @@ function getFirstPageId(nodes: FrontStageTreeNode[]): string | null {
   return null;
 }
 
+function toPageNavigationTarget(pageId: string | null): string | undefined {
+  return pageId || undefined;
+}
+
 function moveNodeInTree(
   nodes: FrontStageTreeNode[],
   targetNodeId: string,
@@ -235,7 +239,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       const fallbackPageId = getFirstPageId(pageTree);
 
       setSelectedPageId(fallbackPageId);
-      onNavigatePage?.(fallbackPageId);
+      onNavigatePage?.(toPageNavigationTarget(fallbackPageId));
 
       return;
     }

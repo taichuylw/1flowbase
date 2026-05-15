@@ -424,6 +424,16 @@ describe('FrontStagePage', () => {
     expect(onNavigatePage).toHaveBeenCalledWith('page-1');
   });
 
+  test('navigates to workspace-level route when initial tree is empty and pageId is invalid', () => {
+    authenticate(['frontstage.page.design']);
+    const onNavigatePage = vi.fn();
+
+    renderPageWithInitialTree([], 'invalid-page-id', onNavigatePage);
+
+    expect(screen.getByText('当前未选中页面')).toBeInTheDocument();
+    expect(onNavigatePage).toHaveBeenCalledWith(undefined);
+  });
+
   test('shows manager shell and canvas placeholders', () => {
     authenticate(['frontstage.page.design']);
     renderPage('page-1');
