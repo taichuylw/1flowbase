@@ -356,6 +356,32 @@ describe('FrontStagePage', () => {
     }
   });
 
+  test('renaming a node passes current title into the prompt default value', () => {
+    authenticate(['frontstage.page.design']);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+
+    const promptSpy = vi.spyOn(window, 'prompt').mockImplementation((title, defaultValue) => {
+      expect(title).toBe('重命名节点');
+      expect(defaultValue).toBe('页面 新建 1');
+      return '页面 新建 1';
+    });
+
+    try {
+      const pageItem = screen.getByText('页面 新建 1').closest('li');
+      if (!pageItem) {
+        throw new Error('expected page list item to exist');
+      }
+
+      fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+      expect(promptSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      promptSpy.mockRestore();
+    }
+  });
+
   test('navigates to created page when entering pageId-less frontstage route', () => {
     authenticate(['frontstage.page.design']);
     const onNavigatePage = vi.fn();
