@@ -4,6 +4,7 @@ use serde_json::{json, Map, Value};
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
+    node_errors::build_node_type_not_implemented_error_payload,
     execution_engine::{execute_llm_node, ProviderInvoker},
 };
 
@@ -125,11 +126,10 @@ where
         } else if node.node_type == "code" {
             (
                 json!({}),
-                Some(json!({
-                    "error_code": "node_type_not_implemented",
-                    "node_type": node.node_type,
-                    "message": "code nodes are not implemented in preview runtime",
-                })),
+                Some(build_node_type_not_implemented_error_payload(
+                    &node.node_type,
+                    "preview",
+                )),
                 json!({ "preview_mode": true, "waiting": "code" }),
                 json!({}),
                 Vec::new(),

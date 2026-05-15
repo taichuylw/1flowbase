@@ -949,11 +949,10 @@ where
                     .await;
             }
             "code" => {
-                let error_payload = json!({
-                    "error_code": "node_type_not_implemented",
-                    "node_type": node.node_type.clone(),
-                    "message": "code nodes are not implemented in debug runtime",
-                });
+                let error_payload = orchestration_runtime::build_node_type_not_implemented_error_payload(
+                    &node.node_type,
+                    "debug",
+                );
                 update_node_run_and_emit(
                     service,
                     flow_run.id,

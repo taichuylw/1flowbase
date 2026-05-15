@@ -17,6 +17,7 @@ use crate::{
     compiled_plan::{
         CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
     },
+    node_errors::build_node_type_not_implemented_error_payload,
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
@@ -362,11 +363,10 @@ where
                 });
             }
             "code" => {
-                let error_payload = json!({
-                    "error_code": "node_type_not_implemented",
-                    "node_type": node.node_type.clone(),
-                    "message": "code nodes are not implemented in preview runtime",
-                });
+                let error_payload = build_node_type_not_implemented_error_payload(
+                    &node.node_type,
+                    "preview",
+                );
                 node_traces.push(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
