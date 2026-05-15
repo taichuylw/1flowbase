@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use serde_json::json;
+use serde_json::{json, Value};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -67,7 +67,7 @@ where
         domain::FlowRunStatus::Failed,
         "fail_flow_run",
     )?;
-    let error_payload = json!({ "message": error.to_string() });
+    let error_payload = serde_error_payload(error);
     service
         .repository
         .update_flow_run(&UpdateFlowRunInput {
@@ -90,6 +90,27 @@ where
         .await?;
 
     load_run_detail(&service.repository, application_id, flow_run_id).await
+}
+
+fn serde_error_payload(error: &anyhow::Error) -> Value {
+    let text = error.to_string();
+    let Ok(payload) = serde_json::from_str::<Value>(&text) else {
+        return json!({ "message": text });
+    };
+
+    if !payload.is_object() {
+        return json!({ "message": text });
+    }
+
+    let Some(message) = payload.get("message") else {
+        return payload;
+    };
+
+    if message.is_null() {
+        return payload;
+    }
+
+    payload
 }
 
 pub(super) async fn is_run_cancelled<R>(

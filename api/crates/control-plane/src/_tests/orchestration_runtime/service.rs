@@ -703,14 +703,17 @@ async fn live_debug_run_returns_code_not_implemented_error() {
         .unwrap();
 
     assert_eq!(failed.flow_run.status, domain::FlowRunStatus::Failed);
-    let message = failed
+    let flow_error_payload = failed
         .flow_run
         .error_payload
         .as_ref()
-        .expect("flow error payload should be persisted")["message"]
-        .as_str()
-        .expect("error message should be persisted");
-    assert!(message.contains("code nodes are not implemented in debug runtime"));
+        .expect("flow error payload should be persisted");
+    assert_eq!(flow_error_payload["error_code"], json!("node_type_not_implemented"));
+    assert_eq!(flow_error_payload["node_type"], json!("code"));
+    assert_eq!(
+        flow_error_payload["message"].as_str(),
+        Some("code nodes are not implemented in debug runtime")
+    );
 
     let code_node = failed
         .node_runs
