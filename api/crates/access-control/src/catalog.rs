@@ -181,12 +181,13 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         "flow",
         "publish_endpoint",
         "route_page",
+        "frontstage",
         "state_model",
         "state_data",
         "external_data_source",
         "embedded_app",
     ];
-    let manager_permissions = all_codes
+    let mut manager_permissions = all_codes
         .iter()
         .filter(|code| {
             let matches_resource = manager_resources
