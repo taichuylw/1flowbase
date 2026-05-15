@@ -1,6 +1,6 @@
-import { Button, Divider, Empty, Flex, Layout, Space, Typography } from 'antd';
+import { Button, Divider, Empty, Flex, Layout, List, Space, Typography } from 'antd';
 import type { FC } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
 
@@ -11,18 +11,127 @@ type FrontStagePageProps = {
   pageId?: string;
 };
 
+type FrontStageTreeNode = {
+  id: string;
+  title: string;
+  kind: 'group' | 'page';
+  children?: FrontStageTreeNode[];
+};
+
+function isPageInTree(nodes: FrontStageTreeNode[], targetPageId: string): boolean {
+  return nodes.some((node) => {
+    if (node.kind === 'page' && node.id === targetPageId) {
+      return true;
+    }
+
+    return Boolean(node.children && isPageInTree(node.children, targetPageId));
+  });
+}
+
+function removeNodeFromTree(nodes: FrontStageTreeNode[], targetNodeId: string): FrontStageTreeNode[] {
+  const nextNodes = [];
+
+  for (const node of nodes) {
+    if (node.id === targetNodeId) {
+      continue;
+    }
+
+    nextNodes.push({
+      ...node,
+      children: node.children ? removeNodeFromTree(node.children, targetNodeId) : node.children
+    });
+  }
+
+  return nextNodes;
+}
+
 export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId }) => {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const [isDesignMode, setIsDesignMode] = useState(false);
+  const [pageTree, setPageTree] = useState<FrontStageTreeNode[]>(() => {
+    return pageId ? [{ id: pageId, title: `页面 ${pageId}`, kind: 'page' }] : [];
+  });
   const { Sider, Content } = Layout;
+  const nextGroupNumber = useRef(1);
+  const nextPageNumber = useRef(1);
 
   const canEnterDesignMode = useMemo(() => {
     return actor?.effective_display_role === 'root' || Boolean(me?.permissions.includes(DESIGN_MODE_PERMISSION));
   }, [actor, me]);
 
-  const pageLabel = pageId ? `页面 ${pageId}` : '未选择 pageId（将使用默认首页）';
-  const pageNodeTitle = pageId ? `当前页面：${pageId}` : '当前工作区暂无页面';
+  useEffect(() => {
+    if (!pageId) {
+      return;
+    }
+
+    setPageTree((prev) => {
+      if (isPageInTree(prev, pageId)) {
+        return prev;
+      }
+
+      return [...prev, { id: pageId, title: `页面 ${pageId}`, kind: 'page' }];
+    });
+  }, [pageId]);
+
+  const selectedPageLabel = pageId && isPageInTree(pageTree, pageId) ? pageId : null;
+  const pageLabel = selectedPageLabel
+    ? `页面 ${selectedPageLabel}`
+    : '未选择 pageId（将使用默认首页）';
+  const pageNodeTitle = selectedPageLabel ? `当前页面：${selectedPageLabel}` : '当前未选中页面';
+
+  const handleAddGroup = () => {
+    const next = nextGroupNumber.current;
+
+    setPageTree((prev) => [
+      ...prev,
+      {
+        id: `group-${next}`,
+        title: `分组 ${next}`,
+        kind: 'group',
+        children: []
+      }
+    ]);
+
+    nextGroupNumber.current = next + 1;
+  };
+
+  const handleAddPage = () => {
+    const next = nextPageNumber.current;
+
+    setPageTree((prev) => [
+      ...prev,
+      {
+        id: `page-${next}`,
+        title: `页面 新建 ${next}`,
+        kind: 'page'
+      }
+    ]);
+
+    nextPageNumber.current = next + 1;
+  };
+
+  const handleDeleteNode = (nodeId: string) => {
+    setPageTree((prev) => removeNodeFromTree(prev, nodeId));
+  };
+
+  const renderTreeNode = (node: FrontStageTreeNode) => {
+    return (
+      <List.Item key={node.id} style={{ padding: '8px 0', borderBlockStart: 'none' }}>
+        <List.Item.Meta
+          title={<Typography.Text>{node.title}</Typography.Text>}
+          description={
+            <Typography.Text type="secondary">{node.kind === 'group' ? '分组节点' : '页面节点'}</Typography.Text>
+          }
+        />
+        {canEnterDesignMode && isDesignMode ? (
+          <Button size="small" danger onClick={() => handleDeleteNode(node.id)}>
+            删除
+          </Button>
+        ) : null}
+      </List.Item>
+    );
+  };
 
   return (
     <div style={{ width: '100%', padding: '24px 0', maxWidth: 1240, margin: '0 auto' }}>
@@ -68,10 +177,31 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId })
             页面管理
           </Typography.Title>
           <Divider style={{ margin: '12px 0' }} />
-          {pageId ? (
-            <Typography.Text>{pageNodeTitle}</Typography.Text>
+          <Typography.Text type="secondary" style={{ marginBottom: 8, display: 'block' }}>
+            {pageNodeTitle}
+          </Typography.Text>
+          {canEnterDesignMode && isDesignMode ? (
+            <Space size={8} wrap style={{ marginBottom: 12 }}>
+              <Button size="small" onClick={handleAddGroup}>
+                新建分组
+              </Button>
+              <Button size="small" onClick={handleAddPage}>
+                新建页面
+              </Button>
+            </Space>
+          ) : null}
+          {pageTree.length > 0 ? (
+            <List size="small" dataSource={pageTree} renderItem={renderTreeNode} />
           ) : (
-            <Typography.Text type="secondary">当前工作区暂未创建页面，请在设计态中创建</Typography.Text>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              imageStyle={{ height: 48 }}
+              description={
+                <Typography.Text type="secondary">
+                  当前工作区页面树为空。请在设计态创建页面后将显示树结构。
+                </Typography.Text>
+              }
+            />
           )}
         </Sider>
         <Content style={{ padding: 16, background: 'white' }}>
@@ -79,7 +209,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId })
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <div style={{ marginTop: 8 }}>
-                {pageId ? (
+                {selectedPageLabel ? (
                   <Typography.Text>
                     当前页面尚未接入区块内容，浏览态仅展示空状态。请在设计态添加页面区块与内容。
                   </Typography.Text>
