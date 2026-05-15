@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: frontstage-issues-150-155-acceptance-status
-summary: 2026-05-16 01 对 #149 前端子任务继续验收后确认：#152 复核仍可判验收通过；#150、#151、#154、#155 仍不能签收，主因是 `FrontStagePage` 测试套件仍有失败且 frontstage 页面 style-boundary 场景映射缺失；#149 整体状态应统一记为 `1.开发中`。
+summary: 2026-05-16 02 对 #149 前端子任务继续验收后确认：#152 复核仍可判验收通过；最新 frontstage 提交已补到页面树本地增删和 pageId 同步，但 #150、#151、#154、#155 仍不能签收，阻塞点收敛为 `FrontStagePage` 目标测试仍有 2 个红灯、frontstage 页面 style-boundary 场景映射缺失，以及页面管理真值仍停留在本地 state；#149 整体状态仍应记为 `1.开发中`。
 keywords:
   - frontstage
   - acceptance
@@ -18,8 +18,8 @@ match_when:
   - 验收前台路由、设计模式入口骨架或登录态权限切换时
   - 判断 #149 / #150 / #151 / #152 / #154 / #155 是否已通过验收时
 created_at: 2026-05-16 01
-updated_at: 2026-05-16 01
-last_verified_at: 2026-05-16 01
+updated_at: 2026-05-16 02
+last_verified_at: 2026-05-16 02
 decision_policy: verify_before_decision
 scope:
   - web/app/src/app/router.tsx
@@ -33,11 +33,11 @@ scope:
 
 ## 时间
 
-`2026-05-16 01`
+`2026-05-16 02`
 
 ## 谁在做什么
 
-用户安排对 JS 扩展平台中 #149「前台路由、页面设计模式与区块编排管理」的前端子任务做继续验收，只允许输出纠正建议，不改业务代码。本轮在已有 #150、#151、#152 结论基础上，继续核对 #154、#155，并重新执行最小测试与 style-boundary 检查，把仍然有效的结论和新增失败点合并进同一条项目记忆。
+用户安排对 JS 扩展平台中 #149「前台路由、页面设计模式与区块编排管理」的前端子任务做继续验收，只允许输出纠正建议，不改业务代码。本轮在已有 #150、#151、#152、#154、#155 结论基础上，继续核对最新 frontstage 提交 `9c1e6bed`、`ea9f4790`，重新执行最小测试、style-boundary 和 page-debug，把仍然有效的结论与新增证据合并进同一条项目记忆。
 
 ## 为什么这样做
 
@@ -57,19 +57,20 @@ scope:
 
 - `#152` 建议状态改为 `4.验收通过`。
   证据：
-  - `pnpm --dir web/app test -- src/routes/_tests/route-config.test.ts src/app-shell/_tests/navigation.test.tsx src/features/frontstage/_tests/FrontStagePage.test.tsx` 中 `route-config` 与 `navigation` 用例通过。
-  - `node scripts/node/check-style-boundary.js file web/app/src/app/router.tsx` 通过。
+  - `pnpm --dir web/app test -- src/routes/_tests/route-config.test.ts src/app-shell/_tests/navigation.test.tsx src/features/frontstage/_tests/FrontStagePage.test.tsx` 中 `route-config` 与 `navigation` 用例继续通过。
+  - `node scripts/node/page-debug.js snapshot /frontstage/workspace-1/page-1 --wait-for-selector "text=页面管理" --wait-for-url "http://127.0.0.1:3100/frontstage/workspace-1/page-1"` 返回 `ready_with_selector`，最终 URL 正确落在登录态前台页面。
   - 本轮复核时 `web/app/src/routes/route-config.ts` 仍保持 `permissionKey: null` + `guard: 'session-required'`，与“内部登录用户可浏览前台”的规则一致。
 
 - `#151` 建议状态改为 `5.验收不通过`。
   证据：
-  - 同一条前端测试命令下，`web/app/src/features/frontstage/_tests/FrontStagePage.test.tsx` 失败。
-  - 失败点在第 `50` 行：`screen.getByText('页面 page-1')` 无法命中当前渲染结构。
-  - 当前仓库不能把这项标成 `3.测试完成` 或 `4.验收通过`。
+  - `FrontStagePage` 的空态与设计模式入口行为本身已具备，`src/features/frontstage/_tests/FrontStagePage.test.tsx` 第 `45-70` 行断言可以通过。
+  - 但同一测试文件仍有 2 个失败用例，失败点已经变成第 `85` 行和第 `121` 行，都是测试选择器仍按旧 DOM 结构寻找 `li` 或错误层级 `div`，导致当前 feature 目标测试套件整体为红灯。
+  - `node scripts/node/check-style-boundary.js file web/app/src/features/frontstage/pages/FrontStagePage.tsx` 仍返回“未声明页面/组件场景映射”，页面级验收门禁未闭合。
 
 - `#150` 暂不签收，建议状态改为 `5.验收不通过`，原因不是路由行为错误，而是缺少仓库要求的页面样式门禁映射。
   证据：
-  - `/frontstage/workspace-1/page-1` 的桌面和移动端快照可正常打开，页面与导航骨架工作正常。
+  - `/frontstage/workspace-1/page-1` 与 `/frontstage/workspace-1` 的 `page-debug` 桌面快照都可正常打开，页面与导航骨架工作正常。
+  - 移动端 `390px` Playwright 复核中，`/frontstage/workspace-1/page-1` 的 `scrollWidth === innerWidth === 390`，没有立即出现横向溢出。
   - 但 `node scripts/node/check-style-boundary.js file web/app/src/features/frontstage/pages/FrontStagePage.tsx` 返回“未声明页面/组件场景映射”。
   - `node scripts/node/check-style-boundary.js file web/app/src/routes/route-config.ts` 也没有场景映射。
   - 在本仓库规则下，导航/路由/页面改动缺少 style-boundary 场景，不能直接签收为验收通过。
@@ -82,15 +83,15 @@ scope:
 
 - `#155` 建议状态改为 `5.验收不通过`。
   证据：
-  - `FrontStagePage.tsx` 已出现左右布局骨架与“JS Block 试运行”入口，`src/features/frontstage/_tests/FrontStagePage.test.tsx` 第 `70-79` 行布局骨架断言可以通过。
-  - 但当前 `web/app/src/features/frontstage/` 目录下仍只有页面组件和测试两个文件，没有页面树 API、默认首页真值、codeRef 或后端 DTO 接入，离 #149 定义的后端真值优先仍有明显距离。
-  - 同样受限于前述测试红灯与 style-boundary 缺失，不能签收。
+  - 最新提交已经把页面树补到本地交互：`FrontStagePage.tsx` 通过 `useState` 维护 `pageTree`、`selectedPageId`，并补了 `handleAddPage`、`handleDeleteNode` 与 pageId-less 路由同步。
+  - 但当前页面管理真值仍完全停留在前端内存态，没有页面树 API、默认首页后端解析、`frontstage_pages` / `frontstage_block_codes` / `codeRef` 对应 DTO 或控制面接入，离 #149 定义的后端真值优先仍有明显距离。
+  - 同样受限于前述目标测试红灯与 style-boundary 缺失，不能签收。
 
 - `#149` 整体仍保持 `1.开发中`。
   原因：
   - 先前记忆里把编号写成了 `2.开发中`，与用户本轮固定的 `1-5` 状态枚举不一致；当前已统一修正为 `1.开发中`。
-  - 当前只完成了路由骨架、空态、权限切换和静态布局壳层的前置子任务。
-  - 页面树、后端真值、布局持久化、schema storage 编排、block initializer、codeRef/code storage 等主体范围都未完成。
+  - 当前前台已从静态壳层推进到“本地状态页面树 + pageId 路由同步”的前端骨架阶段。
+  - 但页面树真值、后端默认首页解析、布局持久化、schema storage 编排、block initializer、codeRef/code storage 等主体范围仍未开始闭环。
 
 ## 关联文档
 
@@ -98,6 +99,6 @@ scope:
 - `web/AGENTS.md`
 - `web/app/src/features/frontstage/pages/FrontStagePage.tsx`
 - `web/app/src/features/frontstage/_tests/FrontStagePage.test.tsx`
-- `tmp/page-debug/2026-05-15T17-19-55-554Z/`
-- `tmp/page-debug/2026-05-15T17-19-55-602Z/`
-- `tmp/page-debug/frontstage-mobile-2026-05-15.png`
+- `tmp/page-debug/2026-05-15T18-04-34-202Z/`
+- `tmp/page-debug/2026-05-15T18-04-43-556Z/`
+- `tmp/page-debug/frontstage-mobile-2026-05-16-page-1.png`
