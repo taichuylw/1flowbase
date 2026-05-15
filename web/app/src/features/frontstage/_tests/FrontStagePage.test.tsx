@@ -115,6 +115,23 @@ describe('FrontStagePage', () => {
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
   });
 
+  test('generates unique page id when existing page ids conflict', () => {
+    authenticate(['frontstage.page.design']);
+
+    renderPageWithInitialTree([
+      {
+        id: 'page-1',
+        title: '页面 page-1',
+        kind: 'page'
+      }
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+
+    expect(screen.getByText('页面 新建 2')).toBeInTheDocument();
+  });
+
   test('adds page under group in design mode', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
@@ -131,6 +148,24 @@ describe('FrontStagePage', () => {
     fireEvent.click(within(groupContainer).getByRole('button', { name: '组内新增页面' }));
 
     expect(screen.getByText('页面 新建 1')).toBeInTheDocument();
+  });
+
+  test('generates unique group id when existing group ids conflict', () => {
+    authenticate(['frontstage.page.design']);
+
+    renderPageWithInitialTree([
+      {
+        id: 'group-1',
+        title: '分组 1',
+        kind: 'group',
+        children: []
+      }
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
+
+    expect(screen.getByText('分组 2')).toBeInTheDocument();
   });
 
   test('only allows adding a page into top-level groups', () => {

@@ -1,6 +1,6 @@
 import { Button, Divider, Empty, Flex, Layout, Space, Typography } from 'antd';
 import type { FC, ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
 
@@ -20,6 +20,41 @@ type FrontStageTreeNode = {
   children?: FrontStageTreeNode[];
 };
 
+function collectTreeNodeIds(nodes: FrontStageTreeNode[]): Set<string> {
+  const nodeIds = new Set<string>();
+
+  const visit = (items: FrontStageTreeNode[]) => {
+    for (const node of items) {
+      nodeIds.add(node.id);
+
+      if (node.children && node.children.length > 0) {
+        visit(node.children);
+      }
+    }
+  };
+
+  visit(nodes);
+
+  return nodeIds;
+}
+
+function getNextNodeId(
+  nodes: FrontStageTreeNode[],
+  prefix: 'page' | 'group'
+): { id: string; index: number } {
+  const existingIds = collectTreeNodeIds(nodes);
+
+  let index = 1;
+  while (existingIds.has(`${prefix}-${index}`)) {
+    index += 1;
+  }
+
+  return {
+    id: `${prefix}-${index}`,
+    index
+  };
+}
+
 function createPageNode(id: string, numberHint?: number): FrontStageTreeNode {
   return {
     id,
@@ -28,9 +63,9 @@ function createPageNode(id: string, numberHint?: number): FrontStageTreeNode {
   };
 }
 
-function createGroupNode(index: number): FrontStageTreeNode {
+function createGroupNode(id: string, index: number): FrontStageTreeNode {
   return {
-    id: `group-${index}`,
+    id,
     title: `分组 ${index}`,
     kind: 'group',
     children: []
@@ -185,8 +220,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   });
   const [selectedPageId, setSelectedPageId] = useState<string | null>(() => pageId ?? null);
   const { Sider, Content } = Layout;
-  const nextGroupNumber = useRef(1);
-  const nextPageNumber = useRef(1);
 
   const canEnterDesignMode = useMemo(() => {
     return actor?.effective_display_role === 'root' || Boolean(me?.permissions.includes(DESIGN_MODE_PERMISSION));
@@ -227,37 +260,27 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const pageNodeTitle = selectedPageLabel ? `当前页面：${selectedPageLabel}` : '当前未选中页面';
 
   const handleAddGroup = () => {
-    const next = nextGroupNumber.current;
+    const next = getNextNodeId(pageTree, 'group');
 
-    setPageTree((prev) => [...prev, createGroupNode(next)]);
-
-    nextGroupNumber.current = next + 1;
+    setPageTree((prev) => [...prev, createGroupNode(next.id, next.index)]);
   };
 
   const handleAddPage = () => {
-    const next = nextPageNumber.current;
-
-    const pageId = `page-${next}`;
-    const pageNode = createPageNode(pageId, next);
+    const next = getNextNodeId(pageTree, 'page');
+    const pageNode = createPageNode(next.id, next.index);
 
     setPageTree((prev) => [...prev, pageNode]);
-    setSelectedPageId(pageId);
-    onNavigatePage?.(pageId);
-
-    nextPageNumber.current = next + 1;
+    setSelectedPageId(pageNode.id);
+    onNavigatePage?.(pageNode.id);
   };
 
   const handleAddPageInGroup = (groupId: string) => {
-    const next = nextPageNumber.current;
-
-    const pageId = `page-${next}`;
-    const pageNode = createPageNode(pageId, next);
+    const next = getNextNodeId(pageTree, 'page');
+    const pageNode = createPageNode(next.id, next.index);
 
     setPageTree((prev) => insertPageIntoGroup(prev, groupId, pageNode));
-    setSelectedPageId(pageId);
-    onNavigatePage?.(pageId);
-
-    nextPageNumber.current = next + 1;
+    setSelectedPageId(pageNode.id);
+    onNavigatePage?.(pageNode.id);
   };
 
   const handleDeleteNode = (nodeId: string) => {
