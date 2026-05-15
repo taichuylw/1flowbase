@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-router';
 import { listFrontstagePages } from '@1flowbase/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Result } from 'antd';
+import { Result } from 'antd';
 import { Suspense, lazy, useState, type ReactNode } from 'react';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
@@ -234,28 +234,6 @@ function renderFrontStageRoute({
     retry: false
   });
   const pageTreeFromApi = pageTreeQuery.data;
-  const shouldRenderErrorState = pageTreeQuery.isError && pageTreeFromApi === undefined;
-
-  if (shouldRenderErrorState) {
-    return (
-      <RouteGuard routeId="frontstage">
-        <Result
-          status="error"
-          title="前台页面树加载失败"
-          subTitle="请稍后重试。"
-          extra={
-            <Button
-              onClick={() => {
-                void pageTreeQuery.refetch();
-              }}
-            >
-              重试
-            </Button>
-          }
-        />
-      </RouteGuard>
-    );
-  }
 
   return (
     <RouteGuard routeId="frontstage">
