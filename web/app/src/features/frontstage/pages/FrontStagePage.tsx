@@ -15,7 +15,7 @@ type FrontStagePageProps = {
 
 type FrontStageTreeNode = {
   id: string;
-  title: string;
+  title: string | null;
   kind: 'group' | 'page';
   children?: FrontStageTreeNode[];
 };
@@ -388,8 +388,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setHasUnsavedChanges(true);
   };
 
-  const handleRenameNode = (nodeId: string, currentTitle: string) => {
-    const nextTitle = window.prompt('重命名节点', currentTitle);
+  const handleRenameNode = (nodeId: string, currentTitle: string | null) => {
+    const nextTitle = window.prompt('重命名节点', currentTitle ?? '');
     if (nextTitle === null) {
       return;
     }

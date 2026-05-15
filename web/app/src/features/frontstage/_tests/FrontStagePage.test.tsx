@@ -7,7 +7,7 @@ import { FrontStagePage } from '../pages/FrontStagePage';
 
 type TestFrontStageTreeNode = {
   id: string;
-  title: string;
+  title: string | null;
   kind: 'group' | 'page';
   children?: TestFrontStageTreeNode[];
 };
@@ -636,5 +636,19 @@ describe('FrontStagePage', () => {
       screen.getByText('当前工作区页面树为空。请在设计态创建页面后将显示树结构。')
     ).toBeInTheDocument();
     expect(screen.getByText('Workspace：workspace-1')).toBeInTheDocument();
+  });
+
+  test('supports nullable page title from initial tree', () => {
+    authenticate(['frontstage.page.design']);
+
+    renderPageWithInitialTree([
+      {
+        id: 'page-null-title',
+        title: null,
+        kind: 'page'
+      }
+    ]);
+
+    expect(screen.getByText('未命名页面')).toBeInTheDocument();
   });
 });
