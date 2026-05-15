@@ -38,16 +38,27 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId })
         </Space>
 
         {canEnterDesignMode ? (
-          <Button
-            type={isDesignMode ? 'default' : 'primary'}
-            onClick={() => setIsDesignMode((current) => !current)}
-          >
-            {isDesignMode ? '退出设计模式' : '进入设计模式'}
-          </Button>
+          <Space align="center" size={8} direction="vertical">
+            <Button
+              type={isDesignMode ? 'default' : 'primary'}
+              onClick={() => setIsDesignMode((current) => !current)}
+            >
+              {isDesignMode ? '退出设计模式' : '进入设计模式'}
+            </Button>
+          </Space>
         ) : null}
       </Flex>
 
       <Divider style={{ margin: '0 0 16px' }} />
+
+      {canEnterDesignMode && isDesignMode ? (
+        <Space wrap size={8} style={{ marginBottom: 12 }}>
+          <Button size="small">新增区块</Button>
+          <Button size="small">页面管理</Button>
+          <Button size="small">当前页面设置</Button>
+          <Button size="small">保存设计</Button>
+        </Space>
+      ) : null}
 
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}

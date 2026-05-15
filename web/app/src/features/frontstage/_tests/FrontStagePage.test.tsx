@@ -58,6 +58,10 @@ describe('FrontStagePage', () => {
     const designButton = screen.getByRole('button', { name: '进入设计模式' });
     fireEvent.click(designButton);
     expect(screen.getByRole('button', { name: '退出设计模式' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新增区块' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '页面管理' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '当前页面设置' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存设计' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
     expect(screen.getByRole('button', { name: '进入设计模式' })).toBeInTheDocument();
   });
