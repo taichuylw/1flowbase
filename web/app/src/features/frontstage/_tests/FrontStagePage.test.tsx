@@ -91,6 +91,24 @@ describe('FrontStagePage', () => {
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
   });
 
+  test('adds page under group in design mode', () => {
+    authenticate(['frontstage.page.design']);
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
+
+    const groupItem = screen.getByText('分组 1');
+    const groupContainer = groupItem.closest('li');
+    if (!groupContainer) {
+      throw new Error('expected group list item to exist');
+    }
+
+    fireEvent.click(within(groupContainer).getByRole('button', { name: '组内新增页面' }));
+
+    expect(screen.getByText('页面 新建 1')).toBeInTheDocument();
+  });
+
   test('renames node title in design mode', () => {
     authenticate(['frontstage.page.design']);
     renderPage();

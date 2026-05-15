@@ -95,6 +95,26 @@ function renameNodeInTree(
   });
 }
 
+function insertPageIntoGroup(
+  nodes: FrontStageTreeNode[],
+  parentNodeId: string,
+  pageNode: FrontStageTreeNode
+): FrontStageTreeNode[] {
+  return nodes.map((node) => {
+    if (node.id === parentNodeId && node.kind === 'group') {
+      return {
+        ...node,
+        children: [...(node.children ?? []), pageNode]
+      };
+    }
+
+    return {
+      ...node,
+      children: node.children ? insertPageIntoGroup(node.children, parentNodeId, pageNode) : node.children
+    };
+  });
+}
+
 export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, onNavigatePage }) => {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
@@ -151,6 +171,19 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
     const pageNode = createPageNode(pageId, next);
 
     setPageTree((prev) => [...prev, pageNode]);
+    setSelectedPageId(pageId);
+    onNavigatePage?.(pageId);
+
+    nextPageNumber.current = next + 1;
+  };
+
+  const handleAddPageInGroup = (groupId: string) => {
+    const next = nextPageNumber.current;
+
+    const pageId = `page-${next}`;
+    const pageNode = createPageNode(pageId, next);
+
+    setPageTree((prev) => insertPageIntoGroup(prev, groupId, pageNode));
     setSelectedPageId(pageId);
     onNavigatePage?.(pageId);
 
@@ -262,6 +295,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({ workspaceId, pageId, o
             >
               重命名
             </Button>
+            {node.kind === 'group' ? (
+              <Button size="small" onClick={(event) => {
+                event.stopPropagation();
+                handleAddPageInGroup(node.id);
+              }}>
+                组内新增页面
+              </Button>
+            ) : null}
             <Button
               style={buttonStyle}
               size="small"
