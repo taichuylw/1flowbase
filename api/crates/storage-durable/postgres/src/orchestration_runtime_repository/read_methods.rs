@@ -307,7 +307,7 @@ impl PgControlPlaneStore {
         let page_size = input.page_size.clamp(1, 100);
         let offset = (page - 1) * page_size;
         let created_after = input.created_after;
-        let order_by = application_runs_page_order_by(
+        let order_by = Self::application_runs_page_order_by(
             input.sort_by.as_deref(),
             input.sort_order.as_deref(),
         );

@@ -234,13 +234,9 @@ describe('ApplicationLogsPage', () => {
       name: '运行详情'
     });
     expect(detailPane).toBeInTheDocument();
-    const meta = screen.getByTestId('application-run-detail-meta');
-    expect(within(meta).getByText('标题')).toBeInTheDocument();
-    expect(within(meta).getByText('公开 API 退款总结')).toBeInTheDocument();
-    expect(within(meta).getByText('expand_id')).toBeInTheDocument();
-    expect(within(meta).getByText('customer-42')).toBeInTheDocument();
-    expect(within(meta).getByText('授权人')).toBeInTheDocument();
-    expect(within(meta).getByText('root')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('application-run-detail-meta')
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('dialog', { name: '运行详情' })
     ).toBeInTheDocument();
@@ -413,6 +409,125 @@ describe('ApplicationLogsPage', () => {
     ).toBeInTheDocument();
   });
 
+  test('sizes log filter selects from their longest option label', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+
+    const expectedMeasuredLabels = [
+      ['时间间隔', ['今天', '过去 7 天', '过去 4 周', '过去 3 月', '过去 12 月', '所有时间']],
+      ['排序字段', ['排序：开始时间', '排序：更新时间']]
+    ] as const;
+
+    expectedMeasuredLabels.forEach(([ariaLabel, measuredLabels]) => {
+      const trigger = screen.getByRole('combobox', { name: ariaLabel });
+      const shell = trigger.closest('.autosize-select');
+      const measureItems = Array.from(
+        shell?.querySelectorAll('.autosize-select__measure-item') ?? []
+      ).map((item) => item.getAttribute('data-measure-label'));
+
+      expect(shell).not.toBeNull();
+      expect(measureItems).toEqual([...measuredLabels]);
+    });
+
+    const cssSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/shared/ui/autosize-select/autosize-select.css'
+      ),
+      'utf8'
+    );
+
+    expect(cssSource).toContain('.autosize-select {');
+    expect(cssSource).toContain('grid-template-columns: max-content;');
+    expect(cssSource).toContain('.autosize-select__control {');
+    expect(cssSource).toContain('width: 100%;');
+  });
+
+  test('combines run sort field and direction into one sort control', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+
+    const filters = screen.getByRole('search');
+    const sortControl = within(filters).getByTestId('application-logs-sort-control');
+
+    expect(
+      within(sortControl).getByRole('combobox', { name: '排序字段' })
+    ).toBeInTheDocument();
+    expect(within(sortControl).getByText('排序：')).toBeInTheDocument();
+    expect(
+      within(sortControl).getByRole('button', {
+        name: '当前降序，切换为升序'
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(filters).queryByRole('combobox', { name: '排序方向' })
+    ).not.toBeInTheDocument();
+  });
+
+  test('toggles run sort direction from the merged sort control', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '当前降序，切换为升序' })
+    );
+
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith('app-1', {
+        page: 1,
+        pageSize: 20,
+        timeRangeDays: 7,
+        sortBy: 'started_at',
+        sortOrder: 'asc'
+      });
+    });
+    expect(
+      await screen.findByRole('button', { name: '当前升序，切换为降序' })
+    ).toBeInTheDocument();
+  });
+
+  test('refetches runs when selecting a different sort field', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: '排序字段' }));
+    fireEvent.click(
+      await screen.findByText('更新时间', {
+        selector: '.ant-select-item-option-content'
+      })
+    );
+
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith('app-1', {
+        page: 1,
+        pageSize: 20,
+        timeRangeDays: 7,
+        sortBy: 'updated_at',
+        sortOrder: 'desc'
+      });
+    });
+  });
+
   test('renders table field configuration with Ant Design multiple select', async () => {
     render(
       <AppProviders>
@@ -431,7 +546,23 @@ describe('ApplicationLogsPage', () => {
       wrapper?.querySelector(
         '.application-runs-table__column-selector-trigger-caret'
       )
-    ).not.toBeNull();
+    ).toBeNull();
+  });
+
+  test('keeps table field configuration as a native responsive multiple select', async () => {
+    const tableSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/features/applications/components/logs/ApplicationRunsTable.tsx'
+      ),
+      'utf8'
+    );
+
+    expect(tableSource).toContain('mode="multiple"');
+    expect(tableSource).toContain('maxTagCount="responsive"');
+    expect(tableSource).toContain('popupMatchSelectWidth');
+    expect(tableSource).not.toContain('maxTagCount={0}');
+    expect(tableSource).not.toContain("maxTagPlaceholder={() => '字段配置'}");
   });
 
   test('opens table field configuration as a dropdown menu', async () => {
@@ -684,7 +815,11 @@ describe('ApplicationLogsPage', () => {
     expect(screen.getByText('run-weather')).toBeInTheDocument();
     expect(screen.queryByText('run-old')).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '时间间隔' })).toBeInTheDocument();
-    expect(screen.getByText('过去 7 天')).toBeInTheDocument();
+    expect(
+      screen.getByText('过去 7 天', {
+        selector: '.ant-select-selection-item'
+      })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('columnheader', {
         name: '更新时间'
@@ -707,7 +842,11 @@ describe('ApplicationLogsPage', () => {
 
     fireEvent.change(searchInput, { target: { value: '' } });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '时间间隔' }));
-    fireEvent.click(await screen.findByText('所有时间'));
+    fireEvent.click(
+      await screen.findByText('所有时间', {
+        selector: '.ant-select-item-option-content'
+      })
+    );
 
     await waitFor(() => {
       expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith('app-1', {

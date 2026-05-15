@@ -1,8 +1,13 @@
-import { SearchOutlined } from '@ant-design/icons';
+import {
+  SearchOutlined,
+  SortAscendingOutlined,
+  SortDescendingOutlined
+} from '@ant-design/icons';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { Empty, Input, Select } from 'antd';
+import { Button, Empty, Input } from 'antd';
 import { useEffect, useState } from 'react';
 
+import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelect';
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
 import { ConversationLogPanel } from '../../agent-flow/components/debug-console/ConversationLogPanel';
 import {
@@ -69,6 +74,14 @@ const RUN_SORT_ORDER_OPTIONS: Array<{
 ];
 const DEFAULT_SORT_BY: ApplicationRunSortField = 'started_at';
 const DEFAULT_SORT_ORDER: ApplicationRunSortOrder = 'desc';
+
+const RUN_SORT_FIELD_MEASURE_LABELS = RUN_SORT_FIELD_OPTIONS.map(
+  (option) => `排序：${option.label}`
+);
+
+function getSortOrderToggleLabel(sortOrder: ApplicationRunSortOrder) {
+  return sortOrder === 'desc' ? '当前降序，切换为升序' : '当前升序，切换为降序';
+}
 
 function getViewportSize() {
   if (typeof window === 'undefined') {
@@ -264,6 +277,10 @@ export function ApplicationLogsPage({
     setActiveFloatingWindow('run-detail');
   }
 
+  function toggleSortOrder() {
+    setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'));
+  }
+
   if (runsQuery.isPending) {
     return null;
   }
@@ -275,27 +292,42 @@ export function ApplicationLogsPage({
   const logsHeader = (
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
-        <Select<ApplicationLogTimeRange>
+        <AutosizeSelect<ApplicationLogTimeRange>
           aria-label="时间间隔"
-          className="application-logs-page__filter-select"
           options={TIME_RANGE_OPTIONS}
           value={timeRange}
           onChange={setTimeRange}
         />
-        <Select<ApplicationRunSortField>
-          aria-label="排序字段"
-          className="application-logs-page__filter-select"
-          options={RUN_SORT_FIELD_OPTIONS}
-          value={sortBy}
-          onChange={setSortBy}
-        />
-        <Select<ApplicationRunSortOrder>
-          aria-label="排序方向"
-          className="application-logs-page__filter-select"
-          options={RUN_SORT_ORDER_OPTIONS}
-          value={sortOrder}
-          onChange={setSortOrder}
-        />
+        <span
+          className="application-logs-page__sort-control"
+          data-testid="application-logs-sort-control"
+        >
+          <AutosizeSelect<ApplicationRunSortField>
+            aria-label="排序字段"
+            autosizeLabels={RUN_SORT_FIELD_MEASURE_LABELS}
+            className="application-logs-page__sort-select"
+            options={RUN_SORT_FIELD_OPTIONS}
+            prefix={
+              <span className="application-logs-page__sort-select-prefix">
+                排序：
+              </span>
+            }
+            value={sortBy}
+            onChange={setSortBy}
+          />
+          <Button
+            aria-label={getSortOrderToggleLabel(sortOrder)}
+            className="application-logs-page__sort-direction-button"
+            icon={
+              sortOrder === 'desc' ? (
+                <SortDescendingOutlined aria-hidden="true" />
+              ) : (
+                <SortAscendingOutlined aria-hidden="true" />
+              )
+            }
+            onClick={toggleSortOrder}
+          />
+        </span>
         <Input
           allowClear
           aria-label="关键字搜索"

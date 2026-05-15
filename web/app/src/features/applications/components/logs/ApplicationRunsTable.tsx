@@ -1,8 +1,4 @@
-import {
-  CheckOutlined,
-  DownOutlined,
-  SettingOutlined
-} from '@ant-design/icons';
+import { CheckOutlined } from '@ant-design/icons';
 import { Button, Pagination, Select, Table, Tag } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import type {
@@ -308,25 +304,18 @@ export function ApplicationRunsTableColumnSettings({
           root: 'application-runs-table__column-selector-popup'
         }
       }}
-      maxTagCount={0}
-      maxTagPlaceholder={() => '字段配置'}
+      listHeight={260}
+      maxTagCount="responsive"
       mode="multiple"
       optionFilterProp="label"
       options={columnSelectOptions}
       placement="bottomRight"
-      popupMatchSelectWidth={220}
-      prefix={<SettingOutlined aria-hidden="true" />}
-      size="small"
-      suffixIcon={
-        <DownOutlined
-          aria-hidden="true"
-          className="application-runs-table__column-selector-trigger-caret"
-        />
-      }
+      placeholder="字段配置"
+      popupMatchSelectWidth
       value={visibleColumnKeys}
       virtual={false}
       popupRender={(originNode) => (
-        <div>
+        <div className="application-runs-table__column-selector-popup-inner">
           {originNode}
           <div className="application-runs-table__column-selector-footer">
             <Button

@@ -1,0 +1,39 @@
+.autosize-select {
+  display: inline-grid;
+  grid-template-columns: max-content;
+  flex: 0 0 auto;
+}
+
+.autosize-select__measure,
+.autosize-select__control {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.autosize-select__measure {
+  display: grid;
+  grid-template-columns: max-content;
+  grid-template-rows: 32px;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.autosize-select__measure-item {
+  box-sizing: border-box;
+  grid-column: 1;
+  grid-row: 1;
+  height: 32px;
+  padding: 0 42px 0 12px;
+  font: inherit;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.autosize-select__measure-item::before {
+  content: attr(data-measure-label);
+}
+
+.autosize-select__control {
+  width: 100%;
+  min-width: 0;
+}
