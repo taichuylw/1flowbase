@@ -30,7 +30,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
         pathname === '/frontstage' ||
         /^\/frontstage\/[^/]+(\/[^/]+)?$/.test(pathname)
     ],
-    permissionKey: 'route_page.view.all',
+    permissionKey: null,
     guard: 'session-required'
   },
   {

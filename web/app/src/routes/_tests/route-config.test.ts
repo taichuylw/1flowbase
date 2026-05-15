@@ -34,6 +34,7 @@ describe('route truth layer', () => {
     expect(APP_ROUTES.find((route) => route.id === 'home')?.permissionKey).toBe(
       'route_page.view.all'
     );
+    expect(APP_ROUTES.find((route) => route.id === 'frontstage')?.permissionKey).toBeNull();
     expect(APP_ROUTES.find((route) => route.id === 'embedded-apps')?.permissionKey).toBe(
       'embedded_app.view.all'
     );
