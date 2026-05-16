@@ -1,0 +1,205 @@
+import { describe, expect, test } from 'vitest';
+
+import {
+  createJsBlockWorkerHost,
+  type JsBlockRunRequest,
+  type JsBlockWorkerLike
+} from '../index';
+
+const validSource = `
+import { defineBlock } from '@1flowbase/block-sdk';
+import { Text } from '@1flowbase/antd-facade';
+
+export default defineBlock({
+  render() {
+    return Text({ children: 'Ready' });
+  }
+});
+`;
+
+class FakeWorker implements JsBlockWorkerLike {
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+  onerror: ((event: { message?: string }) => void) | null = null;
+  onmessageerror: ((event: { message?: string }) => void) | null = null;
+  readonly messages: unknown[] = [];
+  terminateCount = 0;
+
+  postMessage(message: unknown): void {
+    this.messages.push(message);
+  }
+
+  terminate(): void {
+    this.terminateCount += 1;
+  }
+
+  emitMessage(data: unknown): void {
+    this.onmessage?.({ data });
+  }
+
+  emitError(message = 'worker failed'): void {
+    this.onerror?.({ message });
+  }
+}
+
+function createRunRequest(
+  overrides: Partial<JsBlockRunRequest> = {}
+): JsBlockRunRequest {
+  return {
+    requestId: 'request-1',
+    blockId: 'block-1',
+    source: validSource,
+    props: {},
+    state: {},
+    contextSnapshot: { pageId: 'page-1' },
+    limits: { timeoutMs: 1000, maxRenderDepth: 8, maxRenderNodes: 250 },
+    ...overrides
+  };
+}
+
+function createManualTimers() {
+  const callbacks = new Map<number, () => void>();
+  let nextHandle = 1;
+
+  return {
+    schedule(callback: () => void): number {
+      const handle = nextHandle;
+      nextHandle += 1;
+      callbacks.set(handle, callback);
+      return handle;
+    },
+    clear(handle: number): void {
+      callbacks.delete(handle);
+    },
+    fire(handle: number): void {
+      callbacks.get(handle)?.();
+    },
+    get size(): number {
+      return callbacks.size;
+    }
+  };
+}
+
+describe('JS block worker host adapter', () => {
+  test('sends init and run messages, then applies rendered messages through the runtime reducer', () => {
+    const worker = new FakeWorker();
+    const host = createJsBlockWorkerHost({
+      workerFactory: () => worker
+    });
+
+    host.init();
+    host.run(createRunRequest());
+    worker.emitMessage({
+      direction: 'worker_to_host',
+      type: 'rendered',
+      requestId: 'request-1',
+      schema: { primitive: 'Text', props: { children: 'Ready' } }
+    });
+
+    expect(worker.messages).toEqual([
+      { direction: 'host_to_worker', type: 'init' },
+      {
+        direction: 'host_to_worker',
+        type: 'run',
+        request: createRunRequest()
+      }
+    ]);
+    expect(host.getState().requests['request-1']).toMatchObject({
+      status: 'ready',
+      result: { ok: true, requestId: 'request-1' }
+    });
+  });
+
+  test('does not send a worker run when source policy fails', () => {
+    const worker = new FakeWorker();
+    const host = createJsBlockWorkerHost({
+      workerFactory: () => worker
+    });
+
+    host.run(createRunRequest({ source: 'window.location.href;' }));
+
+    expect(worker.messages).toEqual([]);
+    expect(host.getState().requests['request-1']).toMatchObject({
+      status: 'failed',
+      result: {
+        ok: false,
+        error: { kind: 'source_policy_failed' }
+      }
+    });
+  });
+
+  test('times out pending requests, clears timers, and terminates the worker once', () => {
+    const worker = new FakeWorker();
+    const timers = createManualTimers();
+    const host = createJsBlockWorkerHost({
+      workerFactory: () => worker,
+      scheduleTimeout: (callback) => timers.schedule(callback),
+      clearScheduledTimeout: (handle) => timers.clear(handle as number)
+    });
+
+    host.run(createRunRequest());
+    expect(timers.size).toBe(1);
+
+    timers.fire(1);
+    timers.fire(1);
+
+    expect(host.getState().requests['request-1']).toMatchObject({
+      status: 'timed_out',
+      result: {
+        ok: false,
+        error: { kind: 'runtime_timeout' }
+      }
+    });
+    expect(timers.size).toBe(0);
+    expect(worker.terminateCount).toBe(1);
+  });
+
+  test('maps worker errors into runtime_error and clears the pending timeout', () => {
+    const worker = new FakeWorker();
+    const timers = createManualTimers();
+    const host = createJsBlockWorkerHost({
+      workerFactory: () => worker,
+      scheduleTimeout: (callback) => timers.schedule(callback),
+      clearScheduledTimeout: (handle) => timers.clear(handle as number)
+    });
+
+    host.run(createRunRequest());
+    worker.emitError('boom');
+
+    expect(host.getState().requests['request-1']).toMatchObject({
+      status: 'failed',
+      result: {
+        ok: false,
+        error: { kind: 'runtime_error' }
+      }
+    });
+    expect(timers.size).toBe(0);
+  });
+
+  test('dispose cleans up handlers, timers, and ignores late worker messages', () => {
+    const worker = new FakeWorker();
+    const timers = createManualTimers();
+    const host = createJsBlockWorkerHost({
+      workerFactory: () => worker,
+      scheduleTimeout: (callback) => timers.schedule(callback),
+      clearScheduledTimeout: (handle) => timers.clear(handle as number)
+    });
+
+    host.run(createRunRequest());
+    host.dispose('request-1');
+    worker.emitMessage({
+      direction: 'worker_to_host',
+      type: 'rendered',
+      requestId: 'request-1',
+      schema: { primitive: 'Text' }
+    });
+
+    expect(host.getState().requests['request-1']).toMatchObject({
+      status: 'disposed'
+    });
+    expect(timers.size).toBe(0);
+    expect(worker.terminateCount).toBe(1);
+
+    host.dispose();
+    expect(worker.terminateCount).toBe(1);
+  });
+});
