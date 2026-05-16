@@ -192,16 +192,73 @@ js_dependencies:
     .unwrap();
 
     assert_eq!(manifest.slot_codes, vec!["js_dependency_pack"]);
-    assert_eq!(manifest.consumption_kind, PluginConsumptionKind::CapabilityPlugin);
+    assert_eq!(
+        manifest.consumption_kind,
+        PluginConsumptionKind::CapabilityPlugin
+    );
     assert_eq!(manifest.js_dependencies.len(), 1);
     let dep = &manifest.js_dependencies[0];
     assert_eq!(dep.alias, "zod");
     assert_eq!(dep.package, "zod");
     assert_eq!(dep.version, "3.24.0");
     assert_eq!(dep.targets, vec!["backend_code"]);
-    assert_eq!(dep.artifacts.get("backend_code"), Some(&"artifacts/zod.backend.mjs".to_string()));
+    assert_eq!(
+        dep.artifacts.get("backend_code"),
+        Some(&"artifacts/zod.backend.mjs".to_string())
+    );
     assert_eq!(dep.permissions.network, "deny");
     assert_eq!(dep.permissions.filesystem, "deny");
+}
+
+#[test]
+fn plugin_manifest_v1_defaults_js_dependency_permissions_to_none() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: js_default_permissions_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: JS Default Permissions Pack
+description: Example JS dependency pack plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - js_dependency_pack
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/js-default-permissions-pack
+js_dependencies:
+  - alias: zod
+    package: zod
+    version: 3.24.0
+    targets:
+      - backend_code
+    artifacts:
+      backend_code: artifacts/zod.backend.mjs
+    integrity: sha256-example
+    native_addon: false
+    lifecycle_scripts: false
+"#,
+    )
+    .unwrap();
+
+    let permissions = &manifest.js_dependencies[0].permissions;
+    assert_eq!(permissions.network, "none");
+    assert_eq!(permissions.filesystem, "none");
+    assert_eq!(permissions.env, "none");
 }
 
 #[test]
@@ -253,7 +310,9 @@ js_dependencies:
     )
     .unwrap_err();
 
-    assert!(error.to_string().contains("js_dependencies[].targets[] must be one of backend_code"));
+    assert!(error
+        .to_string()
+        .contains("js_dependencies[].targets[] must be one of backend_code"));
 }
 
 #[test]

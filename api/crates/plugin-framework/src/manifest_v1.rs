@@ -75,6 +75,16 @@ fn default_dependency_permission() -> String {
     "none".to_string()
 }
 
+impl Default for JsDependencyPermissionsManifest {
+    fn default() -> Self {
+        Self {
+            network: default_dependency_permission(),
+            filesystem: default_dependency_permission(),
+            env: default_dependency_permission(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JsDependencyManifest {
@@ -241,15 +251,31 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
     }
 
     if manifest.consumption_kind == PluginConsumptionKind::CapabilityPlugin
-        && !manifest.slot_codes.iter().any(|slot| slot == "node_contribution")
-        && !manifest.slot_codes.iter().any(|slot| slot == "js_dependency_pack")
+        && !manifest
+            .slot_codes
+            .iter()
+            .any(|slot| slot == "node_contribution")
+        && !manifest
+            .slot_codes
+            .iter()
+            .any(|slot| slot == "js_dependency_pack")
     {
         return Err(PluginFrameworkError::invalid_provider_package(
             "capability_plugin must declare node_contributions or js_dependency_pack",
         ));
     }
 
-    if manifest.slot_codes.iter().any(|slot| slot == "node_contribution") {
+    if manifest
+        .slot_codes
+        .iter()
+        .any(|slot| slot == "node_contribution")
+    {
+        if manifest.node_contributions.is_empty() {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "capability_plugin must declare node_contributions",
+            ));
+        }
+
         for node_contribution in &manifest.node_contributions {
             validate_non_empty(
                 &node_contribution.contribution_code,
@@ -320,7 +346,11 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
         }
     }
 
-    if manifest.slot_codes.iter().any(|slot| slot == "js_dependency_pack") {
+    if manifest
+        .slot_codes
+        .iter()
+        .any(|slot| slot == "js_dependency_pack")
+    {
         validate_js_dependencies(&manifest.js_dependencies)?;
     }
 
@@ -653,20 +683,13 @@ fn validate_js_dependencies(dependencies: &[JsDependencyManifest]) -> FrameworkR
         }
 
         for target in &dependency.targets {
-            validate_allowed(
-                target,
-                "js_dependencies[].targets[]",
-                &["backend_code"],
-            )?;
+            validate_allowed(target, "js_dependencies[].targets[]", &["backend_code"])?;
 
-            let artifact = dependency
-                .artifacts
-                .get(target)
-                .ok_or_else(|| {
-                    PluginFrameworkError::invalid_provider_package(
-                        "js_dependencies[].artifacts must include each declared target",
-                    )
-                })?;
+            let artifact = dependency.artifacts.get(target).ok_or_else(|| {
+                PluginFrameworkError::invalid_provider_package(
+                    "js_dependencies[].artifacts must include each declared target",
+                )
+            })?;
             validate_non_empty(artifact, "js_dependencies[].artifacts[target]")?;
         }
     }
