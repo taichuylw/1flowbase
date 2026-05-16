@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
 import type { FrontstagePageContent } from '../api/page-content';
+import { BlockCodeEditorDrawer } from '../components/BlockCodeEditorDrawer';
 import { PageCanvas } from '../components/PageCanvas';
 import { useFrontstagePageContentSave } from '../hooks/use-frontstage-page-content-save';
 import {
@@ -241,6 +242,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const [operationStatus, setOperationStatus] =
     useState<PageTreeOperationStatus>('idle');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [isBlockCodeEditorOpen, setIsBlockCodeEditorOpen] = useState(false);
   const [savedPageContent, setSavedPageContent] =
     useState<FrontstagePageContent | null>(null);
   const [isBlockSavePending, setIsBlockSavePending] = useState(false);
@@ -376,6 +378,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   useEffect(() => {
     setSavedPageContent(null);
     setSelectedBlockId(null);
+    setIsBlockCodeEditorOpen(false);
     setBlockSaveError(null);
   }, [selectedPageId]);
 
@@ -383,15 +386,27 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setSavedPageContent(null);
     setSelectedBlockId((currentBlockId) => {
       if (!currentBlockId || !pageContent) {
+        setIsBlockCodeEditorOpen(false);
         return null;
       }
 
       const document = createFrontstagePageDocument(pageContent);
-      return document.blocks.some((block) => block.id === currentBlockId)
-        ? currentBlockId
-        : null;
+      const hasCurrentBlock = document.blocks.some(
+        (block) => block.id === currentBlockId
+      );
+      if (!hasCurrentBlock) {
+        setIsBlockCodeEditorOpen(false);
+      }
+
+      return hasCurrentBlock ? currentBlockId : null;
     });
   }, [pageContent]);
+
+  useEffect(() => {
+    if (!canShowSelectedBlockActions) {
+      setIsBlockCodeEditorOpen(false);
+    }
+  }, [canShowSelectedBlockActions]);
 
   const selectedPageDisplayTitle = getPageDisplayTitle(
     pageTree,
@@ -929,6 +944,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               onClick={() => {
                 if (isDesignMode) {
                   setSelectedBlockId(null);
+                  setIsBlockCodeEditorOpen(false);
                 }
 
                 setIsDesignMode((current) => !current);
@@ -1128,6 +1144,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   </Button>
                   <Button
                     size="small"
+                    disabled={!canRunSelectedBlockAction}
+                    onClick={() => setIsBlockCodeEditorOpen(true)}
+                  >
+                    编辑代码
+                  </Button>
+                  <Button
+                    size="small"
                     danger
                     disabled={!canRunSelectedBlockAction}
                     onClick={handleDeleteSelectedBlock}
@@ -1148,6 +1171,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           ) : null}
         </Content>
       </Layout>
+      <BlockCodeEditorDrawer
+        open={isBlockCodeEditorOpen && canShowSelectedBlockActions}
+        onClose={() => setIsBlockCodeEditorOpen(false)}
+        workspaceId={workspaceId}
+        pageId={selectedPageId}
+        block={canShowSelectedBlockActions ? selectedBlock : null}
+      />
     </div>
   );
 };
