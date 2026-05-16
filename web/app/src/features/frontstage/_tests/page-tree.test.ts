@@ -3,7 +3,6 @@ import { describe, expect, test } from 'vitest';
 import {
   createGroupNode,
   createPageNode,
-  getDraftStatus,
   getFirstPageId,
   normalizePageTree,
   removeNodeFromTree,
@@ -93,8 +92,12 @@ describe('frontstage page tree logic', () => {
       }
     ];
 
-    expect(resolveSelectedPageId({ pageTree: tree }).selectedPageId).toBe('page-first');
-    expect(resolveSelectedPageId({ pageTree: tree }).navigationTarget).toBe('page-first');
+    expect(resolveSelectedPageId({ pageTree: tree }).selectedPageId).toBe(
+      'page-first'
+    );
+    expect(resolveSelectedPageId({ pageTree: tree }).navigationTarget).toBe(
+      'page-first'
+    );
     expect(resolveSelectedPageId({ pageTree: tree }).shouldNavigate).toBe(true);
   });
 
@@ -107,7 +110,9 @@ describe('frontstage page tree logic', () => {
       }
     ];
 
-    expect(resolveSelectedPageId({ pageTree: tree, pageId: 'missing-page' })).toEqual({
+    expect(
+      resolveSelectedPageId({ pageTree: tree, pageId: 'missing-page' })
+    ).toEqual({
       selectedPageId: 'page-first',
       navigationTarget: 'page-first',
       shouldNavigate: true
@@ -115,7 +120,9 @@ describe('frontstage page tree logic', () => {
   });
 
   test('resolves empty backend tree to workspace-level route', () => {
-    expect(resolveSelectedPageId({ pageTree: [], pageId: 'missing-page' })).toEqual({
+    expect(
+      resolveSelectedPageId({ pageTree: [], pageId: 'missing-page' })
+    ).toEqual({
       selectedPageId: null,
       navigationTarget: undefined,
       shouldNavigate: true
@@ -131,23 +138,12 @@ describe('frontstage page tree logic', () => {
 
     const nextTree = removeNodeFromTree(tree, 'page-selected');
 
-    expect(resolveSelectedPageId({ pageTree: nextTree, pageId: 'page-selected' })).toEqual({
+    expect(
+      resolveSelectedPageId({ pageTree: nextTree, pageId: 'page-selected' })
+    ).toEqual({
       selectedPageId: 'page-fallback',
       navigationTarget: 'page-fallback',
       shouldNavigate: true
-    });
-  });
-
-  test('draft status labels local pending changes without persistence wording', () => {
-    expect(getDraftStatus(false)).toEqual({
-      hasPendingDraft: false,
-      buttonLabel: '清除本地草稿',
-      statusText: '当前无本地草稿变更。'
-    });
-    expect(getDraftStatus(true)).toEqual({
-      hasPendingDraft: true,
-      buttonLabel: '清除本地草稿',
-      statusText: '当前有本地草稿变更，后端写入接口开放前不会持久化。'
     });
   });
 

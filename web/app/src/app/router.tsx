@@ -8,7 +8,6 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
-import { listFrontstagePages } from '@1flowbase/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { Result } from 'antd';
 import { Suspense, lazy, useState, type ReactNode } from 'react';
@@ -17,6 +16,11 @@ import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { SignInPage } from '../features/auth/pages/SignInPage';
 import type { ApplicationSectionKey } from '../features/applications/lib/application-sections';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
+import {
+  fetchFrontstagePageTree,
+  frontstagePageTreeQueryKey
+} from '../features/frontstage/api/page-tree';
+import { useFrontstagePageTreeMutations } from '../features/frontstage/hooks/use-frontstage-page-tree-mutations';
 import { HomePage } from '../features/home/pages/HomePage';
 import { FrontStagePage } from '../features/frontstage/pages/FrontStagePage';
 import type { MeSectionKey } from '../features/me/lib/me-sections';
@@ -229,10 +233,11 @@ function renderFrontStageRoute({
 }) {
   const navigate = useNavigate();
   const pageTreeQuery = useQuery({
-    queryKey: ['frontstage-page-tree', workspaceId],
-    queryFn: () => listFrontstagePages(workspaceId),
+    queryKey: frontstagePageTreeQueryKey(workspaceId),
+    queryFn: () => fetchFrontstagePageTree(workspaceId),
     retry: false
   });
+  const pageTreeMutations = useFrontstagePageTreeMutations(workspaceId);
   const pageTreeFromApi = pageTreeQuery.data;
 
   return (
@@ -244,6 +249,13 @@ function renderFrontStageRoute({
           initialPageTree={pageTreeFromApi}
           isPageTreeLoading={pageTreeQuery.isLoading}
           hasPageTreeLoadError={pageTreeQuery.isError}
+          isPageTreeMutating={pageTreeMutations.isPending}
+          pageTreeMutationError={pageTreeMutations.error}
+          onCreateGroupNode={pageTreeMutations.createGroup}
+          onCreatePageNode={pageTreeMutations.createPage}
+          onRenamePageNode={pageTreeMutations.renameNode}
+          onMovePageNode={pageTreeMutations.moveNode}
+          onDeletePageNode={pageTreeMutations.deleteNode}
           onRetryLoadPageTree={() => {
             void pageTreeQuery.refetch();
           }}

@@ -11,12 +11,6 @@ export type PageSelectionResolution = {
   shouldNavigate: boolean;
 };
 
-export type FrontStageDraftStatus = {
-  hasPendingDraft: boolean;
-  buttonLabel: string;
-  statusText: string;
-};
-
 export function collectTreeNodeIds(nodes: FrontStageTreeNode[]): Set<string> {
   const nodeIds = new Set<string>();
 
@@ -35,7 +29,9 @@ export function collectTreeNodeIds(nodes: FrontStageTreeNode[]): Set<string> {
   return nodeIds;
 }
 
-function flattenNestedGroups(nodes: FrontStageTreeNode[]): FrontStageTreeNode[] {
+function flattenNestedGroups(
+  nodes: FrontStageTreeNode[]
+): FrontStageTreeNode[] {
   const flattened: FrontStageTreeNode[] = [];
 
   for (const node of nodes) {
@@ -52,7 +48,9 @@ function flattenNestedGroups(nodes: FrontStageTreeNode[]): FrontStageTreeNode[] 
   return flattened;
 }
 
-export function normalizePageTree(nodes: FrontStageTreeNode[]): FrontStageTreeNode[] {
+export function normalizePageTree(
+  nodes: FrontStageTreeNode[]
+): FrontStageTreeNode[] {
   return nodes.map((node) => {
     if (node.kind !== 'group') {
       return node;
@@ -66,7 +64,10 @@ export function normalizePageTree(nodes: FrontStageTreeNode[]): FrontStageTreeNo
 }
 
 function generateNodeId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
     return crypto.randomUUID();
   }
 
@@ -123,7 +124,10 @@ export function getNextGroupTitleIndex(nodes: FrontStageTreeNode[]): number {
   return getNextNodeTitleIndex(nodes, 'group', '分组 ');
 }
 
-export function createPageNode(id: string, numberHint: number): FrontStageTreeNode {
+export function createPageNode(
+  id: string,
+  numberHint: number
+): FrontStageTreeNode {
   return {
     id,
     title: `页面 新建 ${numberHint}`,
@@ -160,7 +164,10 @@ export function findNodeById(
   return null;
 }
 
-export function isPageInTree(nodes: FrontStageTreeNode[], targetPageId: string): boolean {
+export function isPageInTree(
+  nodes: FrontStageTreeNode[],
+  targetPageId: string
+): boolean {
   return nodes.some((node) => {
     if (node.kind === 'page' && node.id === targetPageId) {
       return true;
@@ -264,7 +271,10 @@ export function moveNodeInTree(
 
     if (targetIndex >= 0 && targetIndex < nodes.length) {
       const nextNodes = [...nodes];
-      [nextNodes[index], nextNodes[targetIndex]] = [nextNodes[targetIndex], nextNodes[index]];
+      [nextNodes[index], nextNodes[targetIndex]] = [
+        nextNodes[targetIndex],
+        nextNodes[index]
+      ];
 
       return nextNodes;
     }
@@ -302,7 +312,9 @@ export function removeNodeFromTree(
 
     nextNodes.push({
       ...node,
-      children: node.children ? removeNodeFromTree(node.children, targetNodeId) : node.children
+      children: node.children
+        ? removeNodeFromTree(node.children, targetNodeId)
+        : node.children
     });
   }
 
@@ -321,7 +333,9 @@ export function renameNodeInTree(
 
     return {
       ...node,
-      children: node.children ? renameNodeInTree(node.children, targetNodeId, title) : node.children
+      children: node.children
+        ? renameNodeInTree(node.children, targetNodeId, title)
+        : node.children
     };
   });
 }
@@ -341,7 +355,9 @@ export function insertPageIntoGroup(
 
     return {
       ...node,
-      children: node.children ? insertPageIntoGroup(node.children, parentNodeId, pageNode) : node.children
+      children: node.children
+        ? insertPageIntoGroup(node.children, parentNodeId, pageNode)
+        : node.children
     };
   });
 }
@@ -358,15 +374,5 @@ export function canMoveNode(
   return {
     canMoveUp: index > 0,
     canMoveDown: index < nodes.length - 1
-  };
-}
-
-export function getDraftStatus(hasPendingDraft: boolean): FrontStageDraftStatus {
-  return {
-    hasPendingDraft,
-    buttonLabel: '清除本地草稿',
-    statusText: hasPendingDraft
-      ? '当前有本地草稿变更，后端写入接口开放前不会持久化。'
-      : '当前无本地草稿变更。'
   };
 }

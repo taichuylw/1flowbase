@@ -1,24 +1,26 @@
-import { Alert, Button, Divider, Empty, Flex, Layout, Space, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Divider,
+  Empty,
+  Flex,
+  Layout,
+  Space,
+  Typography
+} from 'antd';
 import type { FC } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
 import {
   canMoveNode,
-  createGroupNode,
-  createPageNode,
   findNodeById,
   getDeleteConfirmMessage,
-  getDraftStatus,
   getNextGroupTitleIndex,
-  getNextNodeId,
   getNextPageTitleIndex,
   getPageDisplayTitle,
-  insertPageIntoGroup,
-  moveNodeInTree,
   normalizePageTree,
   removeNodeFromTree,
-  renameNodeInTree,
   resolveSelectedPageId
 } from '../lib/page-tree';
 import type { FrontStageTreeNode } from '../lib/page-tree';
@@ -33,7 +35,106 @@ type FrontStagePageProps = {
   isPageTreeLoading?: boolean;
   hasPageTreeLoadError?: boolean;
   onRetryLoadPageTree?: () => void;
+  isPageTreeMutating?: boolean;
+  pageTreeMutationError?: Error | null;
+  onCreateGroupNode?: (
+    input: CreatePageTreeNodeInput
+  ) => Promise<PageTreeMutationResult | void>;
+  onCreatePageNode?: (
+    input: CreatePageTreeNodeInput
+  ) => Promise<PageTreeMutationResult | void>;
+  onRenamePageNode?: (
+    nodeId: string,
+    input: RenamePageTreeNodeInput
+  ) => Promise<PageTreeMutationResult | void>;
+  onMovePageNode?: (
+    nodeId: string,
+    input: MovePageTreeNodeInput
+  ) => Promise<PageTreeMutationResult | void>;
+  onDeletePageNode?: (nodeId: string) => Promise<void>;
 };
+
+type CreatePageTreeNodeInput = {
+  title: string | null;
+  parentId: string | null;
+  rank: string;
+};
+
+type RenamePageTreeNodeInput = {
+  title: string | null;
+};
+
+type MovePageTreeNodeInput = {
+  parentId: string | null;
+  rank: string;
+};
+
+type PageTreeMutationResult = {
+  id: string;
+  kind: 'group' | 'page';
+};
+
+type PageTreeOperationStatus = 'idle' | 'pending' | 'error';
+
+function rankForAppendIndex(index: number): string {
+  return String((index + 1) * 1000).padStart(6, '0');
+}
+
+function rankForMoveTarget(index: number, direction: -1 | 1): string {
+  if (direction < 0) {
+    return index === 0 ? '000000' : String(index * 1000 + 500).padStart(6, '0');
+  }
+
+  return String((index + 1) * 1000 + 500).padStart(6, '0');
+}
+
+function findSiblingContext(
+  nodes: FrontStageTreeNode[],
+  targetNodeId: string,
+  parentId: string | null = null
+): {
+  parentId: string | null;
+  siblings: FrontStageTreeNode[];
+  index: number;
+} | null {
+  const index = nodes.findIndex((node) => node.id === targetNodeId);
+  if (index >= 0) {
+    return {
+      parentId,
+      siblings: nodes,
+      index
+    };
+  }
+
+  for (const node of nodes) {
+    if (!node.children) {
+      continue;
+    }
+
+    const childContext = findSiblingContext(
+      node.children,
+      targetNodeId,
+      node.id
+    );
+    if (childContext) {
+      return childContext;
+    }
+  }
+
+  return null;
+}
+
+function getNodeAppendRank(
+  nodes: FrontStageTreeNode[],
+  parentId: string | null
+): string {
+  if (!parentId) {
+    return rankForAppendIndex(nodes.length);
+  }
+
+  const parentNode = findNodeById(nodes, parentId);
+  return rankForAppendIndex(parentNode?.children?.length ?? 0);
+}
 
 export const FrontStagePage: FC<FrontStagePageProps> = ({
   workspaceId,
@@ -42,26 +143,46 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   initialPageTree,
   isPageTreeLoading,
   hasPageTreeLoadError,
-  onRetryLoadPageTree
+  onRetryLoadPageTree,
+  isPageTreeMutating,
+  pageTreeMutationError,
+  onCreateGroupNode,
+  onCreatePageNode,
+  onRenamePageNode,
+  onMovePageNode,
+  onDeletePageNode
 }) => {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const [isDesignMode, setIsDesignMode] = useState(false);
-  const [hasPendingDraftChanges, setHasPendingDraftChanges] = useState(false);
+  const [operationStatus, setOperationStatus] =
+    useState<PageTreeOperationStatus>('idle');
   const [pageTree, setPageTree] = useState<FrontStageTreeNode[]>(() =>
     normalizePageTree(initialPageTree ?? [])
   );
-  const [selectedPageId, setSelectedPageId] = useState<string | null>(() =>
-    resolveSelectedPageId({
-      pageId,
-      pageTree: normalizePageTree(initialPageTree ?? [])
-    }).selectedPageId
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(
+    () =>
+      resolveSelectedPageId({
+        pageId,
+        pageTree: normalizePageTree(initialPageTree ?? [])
+      }).selectedPageId
   );
   const { Sider, Content } = Layout;
-  const draftStatus = getDraftStatus(hasPendingDraftChanges);
+  const isOperationPending =
+    operationStatus === 'pending' || Boolean(isPageTreeMutating);
+  const hasOperationError =
+    operationStatus === 'error' || Boolean(pageTreeMutationError);
+  const operationStatusText = isOperationPending
+    ? '保存中'
+    : hasOperationError
+      ? '操作失败'
+      : '页面树已同步';
 
   const canEnterDesignMode = useMemo(() => {
-    return actor?.effective_display_role === 'root' || Boolean(me?.permissions.includes(DESIGN_MODE_PERMISSION));
+    return (
+      actor?.effective_display_role === 'root' ||
+      Boolean(me?.permissions.includes(DESIGN_MODE_PERMISSION))
+    );
   }, [actor, me]);
 
   useEffect(() => {
@@ -70,7 +191,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     }
 
     setPageTree(normalizePageTree(initialPageTree));
-    setHasPendingDraftChanges(false);
+    setOperationStatus('idle');
   }, [initialPageTree]);
 
   useEffect(() => {
@@ -89,19 +210,37 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     }
   }, [onNavigatePage, pageId, pageTree, selectedPageId]);
 
-  const selectedPageDisplayTitle = getPageDisplayTitle(pageTree, selectedPageId);
+  const selectedPageDisplayTitle = getPageDisplayTitle(
+    pageTree,
+    selectedPageId
+  );
   const selectedPageLabel = selectedPageDisplayTitle
     ? selectedPageDisplayTitle
     : selectedPageId
       ? `页面 ${selectedPageId}`
       : null;
-  const pageLabel = selectedPageLabel ? selectedPageLabel : '未选择 pageId（将使用默认首页）';
-  const pageNodeTitle = selectedPageLabel ? `当前页面：${selectedPageLabel}` : '当前未选中页面';
+  const pageLabel = selectedPageLabel
+    ? selectedPageLabel
+    : '未选择 pageId（将使用默认首页）';
+  const pageNodeTitle = selectedPageLabel
+    ? `当前页面：${selectedPageLabel}`
+    : '当前未选中页面';
 
   if (initialPageTree === undefined && isPageTreeLoading) {
     return (
-      <div style={{ width: '100%', padding: '24px 0', maxWidth: 1240, margin: '0 auto' }}>
-        <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+      <div
+        style={{
+          width: '100%',
+          padding: '24px 0',
+          maxWidth: 1240,
+          margin: '0 auto'
+        }}
+      >
+        <Flex
+          justify="space-between"
+          align="center"
+          style={{ marginBottom: 12 }}
+        >
           <Space direction="vertical" size={0}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               前台
@@ -112,15 +251,30 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           </Space>
         </Flex>
         <Divider style={{ margin: '0 0 16px' }} />
-        <Empty description={<Typography.Text>正在加载页面树，请稍后...</Typography.Text>} />
+        <Empty
+          description={
+            <Typography.Text>正在加载页面树，请稍后...</Typography.Text>
+          }
+        />
       </div>
     );
   }
 
   if (initialPageTree === undefined && hasPageTreeLoadError) {
     return (
-      <div style={{ width: '100%', padding: '24px 0', maxWidth: 1240, margin: '0 auto' }}>
-        <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+      <div
+        style={{
+          width: '100%',
+          padding: '24px 0',
+          maxWidth: 1240,
+          margin: '0 auto'
+        }}
+      >
+        <Flex
+          justify="space-between"
+          align="center"
+          style={{ marginBottom: 12 }}
+        >
           <Space direction="vertical" size={0}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               前台
@@ -164,50 +318,63 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     />
   ) : null;
 
+  const runPageTreeOperation = async <T,>(
+    operation: () => Promise<T | void>
+  ): Promise<T | null> => {
+    setOperationStatus('pending');
+
+    try {
+      const result = await operation();
+      setOperationStatus('idle');
+      return result ?? null;
+    } catch {
+      setOperationStatus('error');
+      return null;
+    }
+  };
+
   const handleAddGroup = () => {
-    setPageTree((prev) => [
-      ...prev,
-      createGroupNode(getNextNodeId(prev), getNextGroupTitleIndex(prev))
-    ]);
-    setHasPendingDraftChanges(true);
+    const input = {
+      title: `分组 ${getNextGroupTitleIndex(pageTree)}`,
+      parentId: null,
+      rank: getNodeAppendRank(pageTree, null)
+    };
+
+    void runPageTreeOperation(async () => {
+      await onCreateGroupNode?.(input);
+    });
   };
 
   const handleAddPage = () => {
-    let nextPageNodeId: string | null = null;
+    const input = {
+      title: `页面 新建 ${getNextPageTitleIndex(pageTree)}`,
+      parentId: null,
+      rank: getNodeAppendRank(pageTree, null)
+    };
 
-    setPageTree((prev) => {
-      const pageNode = createPageNode(
-        getNextNodeId(prev),
-        getNextPageTitleIndex(prev)
-      );
-      nextPageNodeId = pageNode.id;
-      return [...prev, pageNode];
+    void runPageTreeOperation(async () => {
+      const createdNode = await onCreatePageNode?.(input);
+      if (createdNode?.kind === 'page') {
+        setSelectedPageId(createdNode.id);
+        onNavigatePage?.(createdNode.id);
+      }
     });
-
-    if (nextPageNodeId) {
-      setSelectedPageId(nextPageNodeId);
-      onNavigatePage?.(nextPageNodeId);
-    }
-    setHasPendingDraftChanges(true);
   };
 
   const handleAddPageInGroup = (groupId: string) => {
-    let nextPageNodeId: string | null = null;
+    const input = {
+      title: `页面 新建 ${getNextPageTitleIndex(pageTree)}`,
+      parentId: groupId,
+      rank: getNodeAppendRank(pageTree, groupId)
+    };
 
-    setPageTree((prev) => {
-      const pageNode = createPageNode(
-        getNextNodeId(prev),
-        getNextPageTitleIndex(prev)
-      );
-      nextPageNodeId = pageNode.id;
-      return insertPageIntoGroup(prev, groupId, pageNode);
+    void runPageTreeOperation(async () => {
+      const createdNode = await onCreatePageNode?.(input);
+      if (createdNode?.kind === 'page') {
+        setSelectedPageId(createdNode.id);
+        onNavigatePage?.(createdNode.id);
+      }
     });
-
-    if (nextPageNodeId) {
-      setSelectedPageId(nextPageNodeId);
-      onNavigatePage?.(nextPageNodeId);
-    }
-    setHasPendingDraftChanges(true);
   };
 
   const handleDeleteNode = (nodeId: string) => {
@@ -221,8 +388,9 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
-    setPageTree((prev) => {
-      const next = removeNodeFromTree(prev, nodeId);
+    void runPageTreeOperation(async () => {
+      await onDeletePageNode?.(nodeId);
+      const next = removeNodeFromTree(pageTree, nodeId);
       const nextResolution = resolveSelectedPageId({
         pageId: selectedPageId ?? undefined,
         pageTree: next
@@ -233,11 +401,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       if (nextResolution.shouldNavigate) {
         onNavigatePage?.(nextResolution.navigationTarget);
       }
-
-      return next;
     });
-
-    setHasPendingDraftChanges(true);
   };
 
   const handleRenameNode = (nodeId: string, currentTitle: string | null) => {
@@ -246,18 +410,27 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
-    setPageTree((prev) => renameNodeInTree(prev, nodeId, nextTitle));
-    setHasPendingDraftChanges(true);
+    void runPageTreeOperation(async () => {
+      await onRenamePageNode?.(nodeId, { title: nextTitle });
+    });
   };
 
   const handleMoveNode = (nodeId: string, direction: -1 | 1) => {
-    setPageTree((prev) => {
-      const next = moveNodeInTree(prev, nodeId, direction);
-      if (next !== prev) {
-        setHasPendingDraftChanges(true);
-      }
+    const siblingContext = findSiblingContext(pageTree, nodeId);
+    if (!siblingContext) {
+      return;
+    }
 
-      return next;
+    const targetIndex = siblingContext.index + direction;
+    if (targetIndex < 0 || targetIndex >= siblingContext.siblings.length) {
+      return;
+    }
+
+    void runPageTreeOperation(async () => {
+      await onMovePageNode?.(nodeId, {
+        parentId: siblingContext.parentId,
+        rank: rankForMoveTarget(targetIndex, direction)
+      });
     });
   };
 
@@ -333,9 +506,16 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           }}
         >
           <Typography.Text style={{ fontSize: 12 }}>
-            {node.title ? node.title : node.kind === 'group' ? '未命名分组' : '未命名页面'}
+            {node.title
+              ? node.title
+              : node.kind === 'group'
+                ? '未命名分组'
+                : '未命名页面'}
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+          <Typography.Text
+            type="secondary"
+            style={{ fontSize: 11, display: 'block' }}
+          >
             {node.kind === 'group' ? '分组节点' : '页面节点'}
           </Typography.Text>
         </div>
@@ -343,6 +523,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           <>
             <Button
               size="small"
+              disabled={isOperationPending}
               onClick={(event) => {
                 event.stopPropagation();
                 handleRenameNode(node.id, node.title);
@@ -351,16 +532,20 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               重命名
             </Button>
             {canAddPageToGroup ? (
-              <Button size="small" onClick={(event) => {
-                event.stopPropagation();
-                handleAddPageInGroup(node.id);
-              }}>
+              <Button
+                size="small"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleAddPageInGroup(node.id);
+                }}
+                disabled={isOperationPending}
+              >
                 组内新增页面
               </Button>
             ) : null}
             <Button
               size="small"
-              disabled={!canMoveUp}
+              disabled={!canMoveUp || isOperationPending}
               style={buttonStyle}
               onClick={(event) => {
                 event.stopPropagation();
@@ -371,7 +556,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             </Button>
             <Button
               size="small"
-              disabled={!canMoveDown}
+              disabled={!canMoveDown || isOperationPending}
               style={buttonStyle}
               onClick={(event) => {
                 event.stopPropagation();
@@ -384,6 +569,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               style={buttonStyle}
               size="small"
               danger
+              disabled={isOperationPending}
               onClick={(event) => {
                 event.stopPropagation();
                 handleDeleteNode(node.id);
@@ -405,8 +591,21 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   };
 
   return (
-    <div style={{ width: '100%', padding: '24px 0', maxWidth: 1240, margin: '0 auto' }}>
-      <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 12 }}>
+    <div
+      style={{
+        width: '100%',
+        padding: '24px 0',
+        maxWidth: 1240,
+        margin: '0 auto'
+      }}
+    >
+      <Flex
+        justify="space-between"
+        align="center"
+        wrap
+        gap={12}
+        style={{ marginBottom: 12 }}
+      >
         <Space direction="vertical" size={0}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             前台
@@ -442,35 +641,50 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           <Button size="small">页面管理</Button>
           <Button size="small">当前页面设置</Button>
           <Button size="small">JS Block 试运行</Button>
-          <Button
-            size="small"
-            onClick={() => setHasPendingDraftChanges(false)}
-            disabled={!draftStatus.hasPendingDraft}
-          >
-            {draftStatus.buttonLabel}
-          </Button>
         </Space>
       ) : null}
       {canEnterDesignMode && isDesignMode ? (
-        <Typography.Text type="secondary" style={{ marginBottom: 12, display: 'block' }}>
-          {draftStatus.statusText}
+        <Typography.Text
+          type={hasOperationError ? 'danger' : 'secondary'}
+          style={{ marginBottom: 12, display: 'block' }}
+        >
+          {operationStatusText}
         </Typography.Text>
       ) : null}
       <Layout style={{ background: 'transparent' }}>
-        <Sider width={280} theme="light" style={{ background: 'white', borderRight: '1px solid #f0f0f0', padding: 12 }}>
+        <Sider
+          width={280}
+          theme="light"
+          style={{
+            background: 'white',
+            borderRight: '1px solid #f0f0f0',
+            padding: 12
+          }}
+        >
           <Typography.Title level={5} style={{ margin: 0 }}>
             页面管理
           </Typography.Title>
           <Divider style={{ margin: '12px 0' }} />
-          <Typography.Text type="secondary" style={{ marginBottom: 8, display: 'block' }}>
+          <Typography.Text
+            type="secondary"
+            style={{ marginBottom: 8, display: 'block' }}
+          >
             {pageNodeTitle}
           </Typography.Text>
           {canEnterDesignMode && isDesignMode ? (
             <Space size={8} wrap style={{ marginBottom: 12 }}>
-              <Button size="small" onClick={handleAddGroup}>
+              <Button
+                size="small"
+                onClick={handleAddGroup}
+                disabled={isOperationPending}
+              >
                 新建分组
               </Button>
-              <Button size="small" onClick={handleAddPage}>
+              <Button
+                size="small"
+                onClick={handleAddPage}
+                disabled={isOperationPending}
+              >
                 新建页面
               </Button>
             </Space>
@@ -502,11 +716,15 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   </Typography.Text>
                 ) : (
                   <Typography.Text>
-                    当前前台未指定 pageId，后续将默认加载该工作区页面树里的首页。
+                    当前前台未指定
+                    pageId，后续将默认加载该工作区页面树里的首页。
                   </Typography.Text>
                 )}
                 {canEnterDesignMode && isDesignMode ? (
-                  <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <Typography.Paragraph
+                    type="secondary"
+                    style={{ marginTop: 8, marginBottom: 0 }}
+                  >
                     设计模式已开启，后续在此承载区块编排与页面树管理能力。
                   </Typography.Paragraph>
                 ) : null}
