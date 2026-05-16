@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
 import type { FrontstagePageContent } from '../api/page-content';
+import { PageCanvas } from '../components/PageCanvas';
 import {
   canMoveNode,
   findNodeById,
@@ -166,6 +167,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const [isDesignMode, setIsDesignMode] = useState(false);
   const [operationStatus, setOperationStatus] =
     useState<PageTreeOperationStatus>('idle');
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [pageTree, setPageTree] = useState<FrontStageTreeNode[]>(() =>
     normalizePageTree(initialPageTree ?? [])
   );
@@ -218,6 +220,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onNavigatePage?.(resolution.navigationTarget);
     }
   }, [onNavigatePage, pageId, pageTree, selectedPageId]);
+
+  useEffect(() => {
+    setSelectedBlockId(null);
+  }, [selectedPageId, pageContent]);
 
   const selectedPageDisplayTitle = getPageDisplayTitle(
     pageTree,
@@ -326,56 +332,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }
     />
   ) : null;
-
-  const renderPageContentPlaceholder = () => {
-    if (!selectedPageLabel) {
-      return (
-        <Typography.Text>
-          当前前台未指定 pageId，后续将默认加载该工作区页面树里的首页。
-        </Typography.Text>
-      );
-    }
-
-    if (isPageContentLoading) {
-      return <Typography.Text>页面内容加载中</Typography.Text>;
-    }
-
-    if (hasPageContentLoadError) {
-      return (
-        <Space direction="vertical" size={8}>
-          <Typography.Text type="danger">页面内容加载失败</Typography.Text>
-          <Typography.Text type="secondary">
-            页面内容加载失败，请检查网络后重试。
-          </Typography.Text>
-          {onRetryLoadPageContent ? (
-            <Button size="small" onClick={onRetryLoadPageContent}>
-              重试
-            </Button>
-          ) : null}
-        </Space>
-      );
-    }
-
-    if (pageContent) {
-      return (
-        <Space direction="vertical" size={4}>
-          <Typography.Text>页面内容已加载</Typography.Text>
-          <Typography.Text type="secondary">
-            Schema Root：{pageContent.schema.rootUid}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            Content Root：{pageContent.root.uid}
-          </Typography.Text>
-        </Space>
-      );
-    }
-
-    return (
-      <Typography.Text>
-        当前页面尚未接入区块内容，浏览态仅展示空状态。请在设计态添加页面区块与内容。
-      </Typography.Text>
-    );
-  };
 
   const runPageTreeOperation = async <T,>(
     operation: () => Promise<T | void>
@@ -765,22 +721,22 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           )}
         </Sider>
         <Content style={{ padding: 16, background: 'white' }}>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <div style={{ marginTop: 8 }}>
-                {renderPageContentPlaceholder()}
-                {canEnterDesignMode && isDesignMode ? (
-                  <Typography.Paragraph
-                    type="secondary"
-                    style={{ marginTop: 8, marginBottom: 0 }}
-                  >
-                    设计模式已开启，后续在此承载区块编排与页面树管理能力。
-                  </Typography.Paragraph>
-                ) : null}
-              </div>
-            }
+          <PageCanvas
+            content={selectedPageLabel ? pageContent : undefined}
+            isLoading={Boolean(selectedPageLabel && isPageContentLoading)}
+            hasError={Boolean(selectedPageLabel && hasPageContentLoadError)}
+            selectedBlockId={selectedBlockId}
+            onSelectBlock={setSelectedBlockId}
+            onRetry={onRetryLoadPageContent}
           />
+          {canEnterDesignMode && isDesignMode ? (
+            <Typography.Paragraph
+              type="secondary"
+              style={{ marginTop: 12, marginBottom: 0 }}
+            >
+              设计模式已开启，后续在此承载区块编排与页面树管理能力。
+            </Typography.Paragraph>
+          ) : null}
         </Content>
       </Layout>
     </div>
