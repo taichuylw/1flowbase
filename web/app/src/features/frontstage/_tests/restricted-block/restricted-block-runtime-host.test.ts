@@ -8,8 +8,8 @@ import type {
 import {
   createRestrictedBlockRuntimeHost,
   type RestrictedBlockRuntimeHostSnapshot
-} from '../lib/restricted-block-runtime-host';
-import type { RestrictedBlockRunPlan } from '../lib/restricted-block-loader';
+} from '../../lib/restricted-block-runtime-host';
+import type { RestrictedBlockRunPlan } from '../../lib/restricted-block-loader';
 
 const validSource = `
 import { defineBlock } from '@1flowbase/block-sdk';
@@ -401,5 +401,95 @@ describe('restricted block runtime host controller', () => {
     expect(snapshot.schema).toBeUndefined();
     expect(snapshot.error).toBeUndefined();
     expect(worker.terminateCount).toBe(1);
+  });
+
+  test('returns snapshots and host state without exposing mutable runtime references', () => {
+    const { worker, host } = createSubject();
+
+    host.run();
+    worker.emitMessage({
+      direction: 'worker_to_host',
+      type: 'log',
+      requestId: 'restricted-block:block-1:code-1',
+      level: 'info',
+      message: 'rendering',
+      data: { phase: 'start' }
+    });
+    worker.emitMessage({
+      direction: 'worker_to_host',
+      type: 'event',
+      requestId: 'restricted-block:block-1:code-1',
+      name: 'record.saved',
+      payload: { id: 'record-1' }
+    });
+    worker.emitMessage({
+      direction: 'worker_to_host',
+      type: 'rendered',
+      requestId: 'restricted-block:block-1:code-1',
+      schema: {
+        primitive: 'Stack',
+        children: [{ primitive: 'Text', props: { children: 'Ready' } }]
+      }
+    });
+
+    const snapshot = host.getSnapshot();
+    const schema = snapshot.schema as {
+      children: Array<{ props: { children: string } }>;
+    };
+    schema.children[0].props.children = 'Mutated';
+    snapshot.logs[0].message = 'mutated log';
+    (snapshot.logs[0].data as { phase: string }).phase = 'mutated';
+    snapshot.effects[0].payload = { id: 'mutated-record' };
+    snapshot.rejections.push({
+      code: 'invalid_message',
+      path: 'test',
+      message: 'mutated rejection'
+    });
+    (
+      snapshot.schemaValidationOptions.allowedActions as string[] | undefined
+    )?.push('record.delete');
+    snapshot.mediatorState!.eventChains.mutated = 99;
+
+    const hostState = host.getHostState();
+    hostState.requests['restricted-block:block-1:code-1']!.status = 'failed';
+
+    expect(host.getSnapshot()).toEqual({
+      status: 'ready',
+      requestId: 'restricted-block:block-1:code-1',
+      blockId: 'block-1',
+      schema: {
+        primitive: 'Stack',
+        children: [{ primitive: 'Text', props: { children: 'Ready' } }]
+      },
+      schemaValidationOptions: {
+        maxDepth: 8,
+        maxNodes: 250,
+        allowedDataPermissions: ['query'],
+        allowedActions: ['record.save'],
+        allowedEvents: ['record.saved']
+      },
+      logs: [
+        {
+          requestId: 'restricted-block:block-1:code-1',
+          level: 'info',
+          message: 'rendering',
+          data: { phase: 'start' }
+        }
+      ],
+      effects: [
+        {
+          type: 'event',
+          requestId: 'restricted-block:block-1:code-1',
+          name: 'record.saved',
+          payload: { id: 'record-1' }
+        }
+      ],
+      rejections: [],
+      mediatorState: {
+        eventChains: {
+          'restricted-block:block-1:code-1::restricted-block:block-1:code-1': 1
+        }
+      }
+    });
   });
 });

@@ -81,12 +81,16 @@ export function createRestrictedBlockRuntimeHost(
       schemaValidationOptions: cloneSchemaValidationOptions(
         runPlan.schemaValidationOptions
       ),
-      ...(result?.ok === true ? { schema: result.schema } : {}),
-      ...(result?.ok === false ? { error: result.error } : {}),
-      logs: [...(requestState?.logs ?? [])],
-      effects: [...(requestState?.effects ?? [])],
-      rejections: [...state.rejections],
-      mediatorState: cloneMediatorState(workerHost.getEffectMediatorState())
+      ...(result?.ok === true
+        ? { schema: cloneSnapshotValue(result.schema) }
+        : {}),
+      ...(result?.ok === false
+        ? { error: cloneSnapshotValue(result.error) }
+        : {}),
+      logs: cloneSnapshotValue(requestState?.logs ?? []),
+      effects: cloneSnapshotValue(requestState?.effects ?? []),
+      rejections: cloneSnapshotValue(state.rejections),
+      mediatorState: cloneSnapshotValue(workerHost.getEffectMediatorState())
     };
   };
 
@@ -110,7 +114,7 @@ export function createRestrictedBlockRuntimeHost(
       return createSnapshot();
     },
     getHostState() {
-      return workerHost.getState();
+      return cloneSnapshotValue(workerHost.getState());
     }
   };
 }
@@ -149,14 +153,36 @@ function cloneSchemaValidationOptions(
   };
 }
 
-function cloneMediatorState(
-  state: BlockContextMediatorState | undefined
-): BlockContextMediatorState | undefined {
-  if (!state) {
-    return undefined;
+function cloneSnapshotValue<T>(value: T): T {
+  return cloneUnknown(value, new WeakMap<object, unknown>()) as T;
+}
+
+function cloneUnknown(
+  value: unknown,
+  seen: WeakMap<object, unknown>
+): unknown {
+  if (value === null || typeof value !== 'object') {
+    return value;
   }
 
-  return {
-    eventChains: { ...state.eventChains }
-  };
+  const cached = seen.get(value);
+  if (cached) {
+    return cached;
+  }
+
+  if (Array.isArray(value)) {
+    const output: unknown[] = [];
+    seen.set(value, output);
+    for (const item of value) {
+      output.push(cloneUnknown(item, seen));
+    }
+    return output;
+  }
+
+  const output: Record<string, unknown> = {};
+  seen.set(value, output);
+  for (const [key, item] of Object.entries(value)) {
+    output[key] = cloneUnknown(item, seen);
+  }
+  return output;
 }
