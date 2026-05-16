@@ -29,6 +29,16 @@ interface SourceToken {
   end: number;
 }
 
+interface StringLiteralValue {
+  value: string;
+  end: number;
+}
+
+interface PropertyAccess {
+  property: string;
+  end: number;
+}
+
 interface ScanResult {
   tokens: SourceToken[];
   error?: BlockProtocolError;
@@ -60,6 +70,8 @@ const deniedConstructorIdentifiers = new Set([
   'XMLHttpRequest',
   'WebSocket'
 ]);
+
+const deniedCallForwarders = new Set(['call', 'apply', 'bind']);
 
 export function validateJsBlockSource(
   source: unknown
@@ -440,10 +452,18 @@ function validateDeniedIdentifiers(
   tokens: SourceToken[]
 ): BlockProtocolError[] {
   const errors: BlockProtocolError[] = [];
+  const addError = (error: BlockProtocolError): void => {
+    const alreadyAdded = errors.some(
+      (current) => current.code === error.code && current.path === error.path
+    );
+    if (!alreadyAdded) {
+      errors.push(error);
+    }
+  };
 
   tokens.forEach((token, tokenIndex) => {
     if (deniedGlobalIdentifiers.has(token.value)) {
-      errors.push(
+      addError(
         failureError(
           'transform_failed',
           `source.identifiers.${token.value}`,
@@ -453,11 +473,23 @@ function validateDeniedIdentifiers(
       return;
     }
 
+    const deniedPropertyAccess = readDeniedPropertyAccess(source, token);
+    if (deniedPropertyAccess) {
+      addError(
+        failureError(
+          deniedPropertyAccess.code,
+          `source.identifiers.${deniedPropertyAccess.identifier}`,
+          deniedPropertyAccess.message
+        )
+      );
+      return;
+    }
+
     if (
       deniedCallIdentifiers.has(token.value) &&
-      isCallExpression(source, token)
+      isDeniedInvocation(source, token)
     ) {
-      errors.push(
+      addError(
         failureError(
           token.value === 'require' ? 'import_denied' : 'transform_failed',
           `source.identifiers.${token.value}`,
@@ -469,10 +501,10 @@ function validateDeniedIdentifiers(
 
     if (
       deniedConstructorIdentifiers.has(token.value) &&
-      (isCallExpression(source, token) ||
+      (isDeniedInvocation(source, token) ||
         previousToken(tokens, tokenIndex)?.value === 'new')
     ) {
-      errors.push(
+      addError(
         failureError(
           'transform_failed',
           `source.identifiers.${token.value}`,
@@ -492,14 +524,142 @@ function previousToken(
   return tokenIndex > 0 ? tokens[tokenIndex - 1] : undefined;
 }
 
-function isCallExpression(source: string, token: SourceToken): boolean {
-  return source[skipWhitespace(source, token.end)] === '(';
+function readDeniedPropertyAccess(
+  source: string,
+  token: SourceToken
+):
+  | {
+      identifier: string;
+      code: BlockProtocolError['code'];
+      message: string;
+    }
+  | undefined {
+  const access = readPropertyAccess(source, token.end);
+  if (!access || !isDeniedPropertyInvocation(source, access.end)) {
+    return undefined;
+  }
+
+  if (deniedCallIdentifiers.has(access.property)) {
+    return {
+      identifier: access.property,
+      code: access.property === 'require' ? 'import_denied' : 'transform_failed',
+      message: `Call '${access.property}' is not allowed in JS block source.`
+    };
+  }
+
+  if (deniedConstructorIdentifiers.has(access.property)) {
+    return {
+      identifier: access.property,
+      code: 'transform_failed',
+      message: `Constructor '${access.property}' is not allowed in JS block source.`
+    };
+  }
+
+  return undefined;
+}
+
+function isDeniedInvocation(source: string, token: SourceToken): boolean {
+  return (
+    isCallExpressionAt(source, token.end) ||
+    isForwardedCallExpression(source, token.end)
+  );
+}
+
+function isDeniedPropertyInvocation(source: string, start: number): boolean {
+  return isCallExpressionAt(source, start) || isForwardedCallExpression(source, start);
+}
+
+function isForwardedCallExpression(source: string, start: number): boolean {
+  const access = readPropertyAccess(source, start);
+  return (
+    !!access &&
+    deniedCallForwarders.has(access.property) &&
+    isCallExpressionAt(source, access.end)
+  );
+}
+
+function isCallExpressionAt(source: string, start: number): boolean {
+  const index = skipWhitespace(source, start);
+  if (source[index] === '(') {
+    return true;
+  }
+
+  if (source[index] === '?' && source[index + 1] === '.') {
+    return source[skipWhitespace(source, index + 2)] === '(';
+  }
+
+  return false;
+}
+
+function readPropertyAccess(
+  source: string,
+  start: number
+): PropertyAccess | undefined {
+  const index = skipWhitespace(source, start);
+  if (source[index] === '.') {
+    return readDotPropertyAccess(source, index + 1);
+  }
+
+  if (source[index] === '?' && source[index + 1] === '.') {
+    const optionalAccessIndex = skipWhitespace(source, index + 2);
+    if (source[optionalAccessIndex] === '[') {
+      return readComputedPropertyAccess(source, optionalAccessIndex);
+    }
+    return readDotPropertyAccess(source, optionalAccessIndex);
+  }
+
+  if (source[index] === '[') {
+    return readComputedPropertyAccess(source, index);
+  }
+
+  return undefined;
+}
+
+function readDotPropertyAccess(
+  source: string,
+  start: number
+): PropertyAccess | undefined {
+  const propertyStart = skipWhitespace(source, start);
+  if (!isIdentifierStart(source[propertyStart])) {
+    return undefined;
+  }
+
+  let propertyEnd = propertyStart + 1;
+  while (propertyEnd < source.length && isIdentifierPart(source[propertyEnd])) {
+    propertyEnd += 1;
+  }
+
+  return {
+    property: source.slice(propertyStart, propertyEnd),
+    end: propertyEnd
+  };
+}
+
+function readComputedPropertyAccess(
+  source: string,
+  start: number
+): PropertyAccess | undefined {
+  const literalStart = skipWhitespace(source, start + 1);
+  const literal = readStringLiteral(source, literalStart);
+  if (!literal) {
+    return undefined;
+  }
+
+  const closeBracketIndex = skipWhitespace(source, literal.end);
+  if (source[closeBracketIndex] !== ']') {
+    return undefined;
+  }
+
+  return {
+    property: literal.value,
+    end: closeBracketIndex + 1
+  };
 }
 
 function readStringLiteral(
   source: string,
   start: number
-): { value: string } | undefined {
+): StringLiteralValue | undefined {
   const quote = source[start];
   if (quote !== '"' && quote !== "'") {
     return undefined;
@@ -518,7 +678,7 @@ function readStringLiteral(
     }
 
     if (char === quote) {
-      return { value };
+      return { value, end: index + 1 };
     }
 
     value += char;

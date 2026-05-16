@@ -74,10 +74,53 @@ describe('JS block source static policy', () => {
   });
 
   test.each([
+    [
+      'optional require',
+      "const sdk = require?.('@1flowbase/block-sdk');",
+      'import_denied'
+    ],
+    [
+      'require.call',
+      "require.call(null, '@1flowbase/block-sdk');",
+      'import_denied'
+    ],
+    ['optional eval', "eval?.('2 + 2');", 'transform_failed'],
+    ['eval.call', "eval.call(null, '2 + 2');", 'transform_failed'],
+    [
+      'optional Function',
+      "const fn = Function?.('return 1');",
+      'transform_failed'
+    ],
+    [
+      'Function.apply',
+      "const fn = Function.apply(null, ['return 1']);",
+      'transform_failed'
+    ]
+  ] as const)(
+    'rejects equivalent executable escape hatch: %s',
+    (_label, source, code) => {
+      const result = validateJsBlockSource(source);
+
+      expect(result.ok).toBe(false);
+      expect(result.errors[0]).toMatchObject({
+        code
+      });
+    }
+  );
+
+  test.each([
     ['fetch', "await fetch('/api/private');"],
+    ['optional fetch', "await fetch?.('/api/private');"],
+    ['fetch.call', "fetch.call(null, '/api/private');"],
+    ['fetch.apply', "fetch.apply(null, ['/api/private']);"],
+    ['fetch.bind', "const boundFetch = fetch.bind(null);"],
     ['XMLHttpRequest', 'const xhr = new XMLHttpRequest();'],
+    ['optional XMLHttpRequest', "const xhr = XMLHttpRequest?.('/api/private');"],
     ['WebSocket', "const socket = new WebSocket('wss://example.com');"],
-    ['sendBeacon', "navigator.sendBeacon('/track');"]
+    ['WebSocket.call', "WebSocket.call(null, 'wss://example.com');"],
+    ['sendBeacon', "navigator.sendBeacon('/track');"],
+    ['optional sendBeacon', "navigator.sendBeacon?.('/track');"],
+    ['computed sendBeacon', "navigator['sendBeacon']('/track');"]
   ])('rejects network capability: %s', (_label, source) => {
     const result = validateJsBlockSource(source);
 
@@ -101,6 +144,24 @@ describe('JS block source static policy', () => {
     expect(result.ok).toBe(false);
     expect(result.errors[0]).toMatchObject({
       code: 'transform_failed'
+    });
+  });
+
+  test('does not reject dangerous words inside comments and strings', () => {
+    const source = `
+const label = 'fetch eval Function require XMLHttpRequest WebSocket sendBeacon';
+const description = "navigator['sendBeacon']('/track')";
+// fetch?.('/api/private')
+/* eval?.('2 + 2') */
+`;
+
+    const result = validateJsBlockSource(source);
+
+    expect(result).toEqual({
+      ok: true,
+      source,
+      normalizedSource: source.trim(),
+      errors: []
     });
   });
 
