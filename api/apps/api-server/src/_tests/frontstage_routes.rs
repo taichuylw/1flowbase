@@ -153,6 +153,33 @@ async fn get_json(app: &axum::Router, path: &str, cookie: &str) -> (StatusCode, 
     (status, payload)
 }
 
+async fn save_page_content(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    workspace_id: &str,
+    page_id: &str,
+    schema_payload: Value,
+    root_payload: Value,
+) -> (StatusCode, Value) {
+    send_json(
+        app,
+        "PUT",
+        &format!("/api/console/frontstage/{workspace_id}/pages/{page_id}/content"),
+        cookie,
+        csrf,
+        json!({
+            "schema": {
+                "payload": schema_payload
+            },
+            "root": {
+                "payload": root_payload
+            }
+        }),
+    )
+    .await
+}
+
 #[tokio::test]
 async fn list_frontstage_pages_route_returns_empty_tree_for_accessible_workspace() {
     let app = test_app().await;
@@ -651,6 +678,149 @@ async fn page_detail_and_block_code_round_trip_are_persisted_by_page_scope() {
 }
 
 #[tokio::test]
+async fn page_content_save_round_trip_is_persisted_by_page_scope() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let other_workspace_id = seed_workspace(&database_url, "Other Content Workspace").await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &cookie).await;
+    let (_, page_payload) = create_page(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        Some("Editable"),
+        None,
+        "a",
+    )
+    .await;
+    let page_id = page_payload["data"]["id"].as_str().unwrap();
+    let schema_root_uid = page_payload["data"]["schema_root_uid"].as_str().unwrap();
+
+    let schema_payload = json!({
+        "version": 1,
+        "root_uid": schema_root_uid,
+        "nodes": [
+            {
+                "uid": "hero-1",
+                "type": "official.hero"
+            }
+        ]
+    });
+    let root_payload = json!({
+        "uid": schema_root_uid,
+        "kind": "frontstage.page.root",
+        "children": ["hero-1"],
+        "x-layout": {
+            "columns": 12
+        }
+    });
+
+    let (save_status, save_payload) = save_page_content(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        page_id,
+        schema_payload.clone(),
+        root_payload.clone(),
+    )
+    .await;
+    assert_eq!(save_status, StatusCode::OK);
+    assert_eq!(save_payload["data"]["page"]["id"], json!(page_id));
+    assert_eq!(
+        save_payload["data"]["schema"]["payload"],
+        schema_payload.clone()
+    );
+    assert_eq!(save_payload["data"]["root"]["payload"], root_payload.clone());
+
+    let (detail_status, detail_payload) = get_json(
+        &app,
+        &format!("/api/console/frontstage/{workspace_id}/pages/{page_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(detail_status, StatusCode::OK);
+    assert_eq!(
+        detail_payload["data"]["schema"]["payload"],
+        schema_payload.clone()
+    );
+    assert_eq!(
+        detail_payload["data"]["root"]["payload"],
+        root_payload.clone()
+    );
+
+    let (_, sibling_payload) = create_page(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        Some("Sibling"),
+        None,
+        "b",
+    )
+    .await;
+    let sibling_page_id = sibling_payload["data"]["id"].as_str().unwrap();
+    let (sibling_detail_status, sibling_detail_payload) = get_json(
+        &app,
+        &format!("/api/console/frontstage/{workspace_id}/pages/{sibling_page_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(sibling_detail_status, StatusCode::OK);
+    assert_eq!(
+        sibling_detail_payload["data"]["schema"]["payload"]["nodes"],
+        json!([])
+    );
+
+    let (_, other_page_payload) = create_page(
+        &app,
+        &cookie,
+        &csrf,
+        &other_workspace_id.to_string(),
+        Some("Other Workspace Page"),
+        None,
+        "a",
+    )
+    .await;
+    let other_page_id = other_page_payload["data"]["id"].as_str().unwrap();
+    let (cross_workspace_status, _) = save_page_content(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        other_page_id,
+        json!({ "version": 1, "nodes": [] }),
+        json!({ "children": [] }),
+    )
+    .await;
+    assert_eq!(cross_workspace_status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn page_content_save_rejects_group_nodes() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &cookie).await;
+    let (group_status, group_payload) =
+        create_group(&app, &cookie, &csrf, &workspace_id, Some("Group"), "a").await;
+    assert_eq!(group_status, StatusCode::CREATED);
+    let group_id = group_payload["data"]["id"].as_str().unwrap();
+
+    let (save_status, _) = save_page_content(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        group_id,
+        json!({ "version": 1 }),
+        json!({ "children": [] }),
+    )
+    .await;
+
+    assert_eq!(save_status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn block_code_write_requires_design_permission_but_read_allows_workspace_access() {
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
@@ -730,4 +900,16 @@ async fn block_code_write_requires_design_permission_but_read_allows_workspace_a
     )
     .await;
     assert_eq!(write_status, StatusCode::FORBIDDEN);
+
+    let (content_write_status, _) = save_page_content(
+        &app,
+        &viewer_cookie,
+        &viewer_csrf,
+        &workspace_id,
+        page_id,
+        json!({ "version": 1, "nodes": [] }),
+        json!({ "children": [] }),
+    )
+    .await;
+    assert_eq!(content_write_status, StatusCode::FORBIDDEN);
 }

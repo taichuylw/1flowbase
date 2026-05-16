@@ -10,6 +10,7 @@ import {
   listFrontstagePages,
   moveFrontstagePageNode,
   saveFrontstageBlockCode,
+  saveFrontstagePageContent,
   updateFrontstagePageNodeTitle
 } from '../console-frontstage';
 
@@ -107,6 +108,36 @@ describe('console-frontstage client', () => {
     ).resolves.toMatchObject({
       path: '/api/console/frontstage/workspace-1/pages/page-1',
       method: 'GET'
+    });
+  });
+
+  test('saveFrontstagePageContent puts schema and root payloads with CSRF', async () => {
+    await expect(
+      saveFrontstagePageContent(
+        'workspace-1',
+        'page-1',
+        {
+          schema: {
+            payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+          },
+          root: {
+            payload: { children: ['hero-1'] }
+          }
+        },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/console/frontstage/workspace-1/pages/page-1/content',
+      method: 'PUT',
+      body: {
+        schema: {
+          payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+        },
+        root: {
+          payload: { children: ['hero-1'] }
+        }
+      },
+      csrfToken: 'csrf-123'
     });
   });
 

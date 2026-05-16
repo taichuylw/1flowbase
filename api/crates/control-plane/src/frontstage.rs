@@ -12,7 +12,8 @@ use crate::{
     errors::ControlPlaneError,
     ports::{
         CreateFrontstagePageInput, FrontstagePageRepository, MoveFrontstagePageInput,
-        SaveFrontstageBlockCodeInput, UpdateFrontstagePageTitleInput,
+        SaveFrontstageBlockCodeInput, SaveFrontstagePageContentInput,
+        UpdateFrontstagePageTitleInput,
     },
 };
 
@@ -64,6 +65,14 @@ pub struct GetFrontstageBlockCodeCommand {
     pub workspace_id: Uuid,
     pub page_id: Uuid,
     pub code_ref: String,
+}
+
+pub struct SaveFrontstagePageContentCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub schema_payload: serde_json::Value,
+    pub root_payload: serde_json::Value,
 }
 
 pub struct SaveFrontstageBlockCodeCommand {
@@ -267,6 +276,33 @@ where
             .await?;
 
         Ok(())
+    }
+
+    pub async fn save_page_content(
+        &self,
+        command: SaveFrontstagePageContentCommand,
+    ) -> Result<domain::frontstage::FrontstagePageDetail> {
+        let actor = self
+            .repository
+            .load_actor_context_for_workspace(command.actor_user_id, command.workspace_id)
+            .await?;
+        ensure_design_permission(&actor)?;
+        self.ensure_existing_page(command.workspace_id, command.page_id)
+            .await?;
+
+        let detail = self
+            .repository
+            .save_frontstage_page_content(&SaveFrontstagePageContentInput {
+                workspace_id: command.workspace_id,
+                page_id: command.page_id,
+                schema_payload: command.schema_payload,
+                root_payload: command.root_payload,
+            })
+            .await?;
+        self.audit(&actor, &detail.page, "frontstage.page_content_saved")
+            .await?;
+
+        Ok(detail)
     }
 
     pub async fn get_block_code(

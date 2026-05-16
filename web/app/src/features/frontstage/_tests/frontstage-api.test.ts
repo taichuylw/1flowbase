@@ -12,7 +12,8 @@ import {
 } from '../api/block-catalog';
 import {
   fetchFrontstagePageContent,
-  frontstagePageContentQueryKey
+  frontstagePageContentQueryKey,
+  saveFrontstagePageContent
 } from '../api/page-content';
 import {
   createFrontstagePageGroupNode,
@@ -212,6 +213,80 @@ describe('frontstage page content feature api', () => {
       );
     } finally {
       detailSpy.mockRestore();
+    }
+  });
+
+  test('adapts page content save calls to api-client DTOs', async () => {
+    const saveSpy = vi
+      .spyOn(apiClient, 'saveFrontstagePageContent')
+      .mockResolvedValue({
+        page: {
+          id: 'page-1',
+          title: '页面 1',
+          kind: 'page',
+          parent_id: 'group-1',
+          rank: '001000',
+          schema_root_uid: 'root-1'
+        },
+        schema: {
+          root_uid: 'root-1',
+          payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+        },
+        root: {
+          uid: 'root-1',
+          payload: { children: ['hero-1'] }
+        }
+      });
+
+    try {
+      await expect(
+        saveFrontstagePageContent(
+          'workspace-1',
+          'page-1',
+          {
+            schema: {
+              payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+            },
+            root: {
+              payload: { children: ['hero-1'] }
+            }
+          },
+          'csrf-123'
+        )
+      ).resolves.toEqual({
+        page: {
+          id: 'page-1',
+          title: '页面 1',
+          kind: 'page',
+          parentId: 'group-1',
+          rank: '001000',
+          schemaRootUid: 'root-1'
+        },
+        schema: {
+          rootUid: 'root-1',
+          payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+        },
+        root: {
+          uid: 'root-1',
+          payload: { children: ['hero-1'] }
+        }
+      });
+      expect(saveSpy).toHaveBeenCalledWith(
+        'workspace-1',
+        'page-1',
+        {
+          schema: {
+            payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+          },
+          root: {
+            payload: { children: ['hero-1'] }
+          }
+        },
+        'csrf-123',
+        expect.any(String)
+      );
+    } finally {
+      saveSpy.mockRestore();
     }
   });
 });
