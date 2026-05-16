@@ -15,3 +15,4 @@ export * from './js-block-worker-host';
 export * from './js-block-worker-runtime';
 export * from './js-block-worker-adapter';
 export * from './js-block-worker-executor';
+export * from './js-block-worker-modules';

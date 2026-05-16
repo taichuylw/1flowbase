@@ -216,6 +216,12 @@ importers:
 
   packages/page-runtime:
     dependencies:
+      '@1flowbase/antd-facade':
+        specifier: workspace:*
+        version: link:../antd-facade
+      '@1flowbase/block-sdk':
+        specifier: workspace:*
+        version: link:../block-sdk
       '@1flowbase/page-protocol':
         specifier: workspace:*
         version: link:../page-protocol
