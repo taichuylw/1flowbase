@@ -18,10 +18,18 @@ import { FrontStagePage } from '../../pages/FrontStagePage';
 const pageContentSaveHook = vi.hoisted(() => ({
   useFrontstagePageContentSave: vi.fn()
 }));
+const blockCatalogHook = vi.hoisted(() => ({
+  useFrontstageBlockCatalog: vi.fn()
+}));
+const blockCodeHook = vi.hoisted(() => ({
+  useFrontstageBlockCode: vi.fn()
+}));
 
 vi.mock('../../hooks/use-frontstage-page-content-save', () =>
   pageContentSaveHook
 );
+vi.mock('../../hooks/use-frontstage-block-catalog', () => blockCatalogHook);
+vi.mock('../../hooks/use-frontstage-block-code', () => blockCodeHook);
 vi.mock('../../components/BlockCodeEditorDrawer', () => ({
   BlockCodeEditorDrawer: ({
     open,
@@ -210,6 +218,29 @@ function mockPageContentSaveState(
   return state;
 }
 
+function mockFrontstageBlockCatalog() {
+  blockCatalogHook.useFrontstageBlockCatalog.mockReturnValue({
+    items: [],
+    diagnostics: [],
+    loading: false,
+    error: null
+  });
+}
+
+function mockFrontstageBlockCode() {
+  blockCodeHook.useFrontstageBlockCode.mockReturnValue({
+    code: '',
+    draft: '',
+    dirty: false,
+    loading: false,
+    saving: false,
+    error: null,
+    setDraft: vi.fn(),
+    reset: vi.fn(),
+    save: vi.fn()
+  });
+}
+
 function renderFrontStagePage(pageContent: FrontstagePageContent) {
   return render(
     <AppProviders>
@@ -272,6 +303,8 @@ describe('FrontStagePage block arrange actions', () => {
     resetAuthStore();
     vi.clearAllMocks();
     mockPageContentSaveState();
+    mockFrontstageBlockCatalog();
+    mockFrontstageBlockCode();
   });
 
   test('saves selected block deletion and falls back to the next block', async () => {
