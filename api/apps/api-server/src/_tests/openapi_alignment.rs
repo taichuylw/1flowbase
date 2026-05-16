@@ -277,14 +277,41 @@ async fn openapi_contains_workspace_detail_path_and_omits_team_path() {
 async fn openapi_contains_frontstage_pages_route_and_error_responses() {
     let paths = openapi_paths().await;
     let frontstage_route = paths.get("/api/console/frontstage/{workspace_id}/pages");
+    let frontstage_groups_route = paths.get("/api/console/frontstage/{workspace_id}/pages/groups");
+    let frontstage_node_route = paths.get("/api/console/frontstage/{workspace_id}/pages/{page_id}");
+    let frontstage_move_route =
+        paths.get("/api/console/frontstage/{workspace_id}/pages/{page_id}/move");
 
     assert!(
         frontstage_route.is_some(),
         "missing path /api/console/frontstage/{{workspace_id}}/pages"
     );
+    assert!(
+        frontstage_groups_route.is_some(),
+        "missing path /api/console/frontstage/{{workspace_id}}/pages/groups"
+    );
+    assert!(
+        frontstage_node_route.is_some(),
+        "missing path /api/console/frontstage/{{workspace_id}}/pages/{{page_id}}"
+    );
+    assert!(
+        frontstage_move_route.is_some(),
+        "missing path /api/console/frontstage/{{workspace_id}}/pages/{{page_id}}/move"
+    );
 
     let get_op = &frontstage_route.unwrap()["get"];
+    let post_page_op = &frontstage_route.unwrap()["post"];
+    let post_group_op = &frontstage_groups_route.unwrap()["post"];
+    let patch_op = &frontstage_node_route.unwrap()["patch"];
+    let delete_op = &frontstage_node_route.unwrap()["delete"];
+    let move_op = &frontstage_move_route.unwrap()["post"];
+
     assert!(get_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
+    assert!(post_page_op["responses"]["201"]["content"]["application/json"]["schema"].is_object());
+    assert!(post_group_op["responses"]["201"]["content"]["application/json"]["schema"].is_object());
+    assert!(patch_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
+    assert!(move_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
+    assert!(delete_op["responses"]["204"].is_object());
     assert_eq!(
         get_op["responses"]["400"]["content"]["application/json"]["schema"]["$ref"],
         json!("#/components/schemas/ErrorBody")

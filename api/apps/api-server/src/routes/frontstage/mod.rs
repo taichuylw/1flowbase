@@ -1,23 +1,23 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
-    http::HeaderMap,
-    routing::get,
+    http::{HeaderMap, StatusCode},
+    routing::{get, post},
     Json, Router,
 };
-use control_plane::workspace::WorkspaceService;
+use control_plane::frontstage::{
+    CreateFrontstageGroupCommand, CreateFrontstagePageCommand, DeleteFrontstagePageCommand,
+    FrontstagePageService, MoveFrontstagePageCommand, UpdateFrontstagePageTitleCommand,
+};
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
+    app_state::ApiState,
+    error_response::ApiError,
+    middleware::{require_csrf::require_csrf, require_session::require_session},
     response::ApiSuccess,
 };
 
@@ -38,26 +38,59 @@ pub struct FrontstagePageTreeNodeResponse {
     pub children: Vec<FrontstagePageTreeNodeResponse>,
 }
 
-#[derive(Debug)]
-struct FrontstagePageRecord {
-    id: Uuid,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontstagePageResponse {
+    pub id: String,
     title: Option<String>,
-    kind: FrontstagePageTreeNodeKind,
-    parent_id: Option<Uuid>,
-    rank: Option<String>,
+    pub kind: FrontstagePageTreeNodeKind,
+    pub parent_id: Option<String>,
+    pub rank: String,
+    pub schema_root_uid: Option<String>,
 }
 
-#[derive(Debug)]
-struct FrontstagePageTreeNode {
-    id: Uuid,
-    node: FrontstagePageTreeNodeResponse,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateFrontstageGroupBody {
+    pub title: Option<String>,
+    pub parent_id: Option<String>,
+    pub rank: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateFrontstagePageBody {
+    pub title: Option<String>,
+    pub parent_id: Option<String>,
+    pub rank: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateFrontstagePageTitleBody {
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MoveFrontstagePageBody {
+    pub parent_id: Option<String>,
+    pub rank: Option<String>,
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
-    Router::new().route(
-        "/frontstage/:workspace_id/pages",
-        get(list_frontstage_pages),
-    )
+    Router::new()
+        .route(
+            "/frontstage/:workspace_id/pages",
+            get(list_frontstage_pages).post(create_frontstage_page),
+        )
+        .route(
+            "/frontstage/:workspace_id/pages/groups",
+            post(create_frontstage_group),
+        )
+        .route(
+            "/frontstage/:workspace_id/pages/:page_id",
+            axum::routing::patch(update_frontstage_page_title).delete(delete_frontstage_page),
+        )
+        .route(
+            "/frontstage/:workspace_id/pages/:page_id/move",
+            post(move_frontstage_page),
+        )
 }
 
 #[utoipa::path(
@@ -79,39 +112,208 @@ pub async fn list_frontstage_pages(
     Path(workspace_id): Path<String>,
 ) -> Result<Json<ApiSuccess<Vec<FrontstagePageTreeNodeResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
-    WorkspaceService::new(state.store.clone())
-        .get_accessible_workspace(context.user.id, workspace_id)
+    let tree = FrontstagePageService::new(state.store.clone())
+        .list_page_tree(context.user.id, workspace_id)
         .await?;
 
-    let rows = sqlx::query(
-        "
-        select id, title, kind, parent_id, rank
-        from frontstage_pages
-        where workspace_id = $1
-        order by workspace_id, parent_id nulls first, rank nulls last
-        ",
+    Ok(Json(ApiSuccess::new(
+        tree.into_iter().map(to_tree_node_response).collect(),
+    )))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/frontstage/{workspace_id}/pages/groups",
+    request_body = CreateFrontstageGroupBody,
+    params(("workspace_id" = String, Path, description = "Workspace id")),
+    responses(
+        (status = 201, body = FrontstagePageResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody)
     )
-    .bind(workspace_id)
-    .fetch_all(state.store.pool())
-    .await?;
+)]
+pub async fn create_frontstage_group(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(workspace_id): Path<String>,
+    Json(body): Json<CreateFrontstageGroupBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<FrontstagePageResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let parent_id = parse_optional_uuid(body.parent_id.as_deref(), "parent_id")?;
 
-    let records = rows
-        .into_iter()
-        .map(|row| {
-            let raw_kind = row.get::<String, _>("kind");
-            Ok(FrontstagePageRecord {
-                id: row.get("id"),
-                title: row.get("title"),
-                kind: parse_frontstage_page_kind(&raw_kind)?,
-                parent_id: row.get("parent_id"),
-                rank: row.get("rank"),
-            })
+    let page = FrontstagePageService::new(state.store.clone())
+        .create_group(CreateFrontstageGroupCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            title: body.title,
+            parent_id,
+            rank: body.rank,
         })
-        .collect::<Result<Vec<_>, ApiError>>()?;
+        .await?;
 
-    Ok(Json(ApiSuccess::new(build_frontstage_page_tree(records))))
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_page_response(page))),
+    ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/frontstage/{workspace_id}/pages",
+    request_body = CreateFrontstagePageBody,
+    params(("workspace_id" = String, Path, description = "Workspace id")),
+    responses(
+        (status = 201, body = FrontstagePageResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn create_frontstage_page(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(workspace_id): Path<String>,
+    Json(body): Json<CreateFrontstagePageBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<FrontstagePageResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let parent_id = parse_optional_uuid(body.parent_id.as_deref(), "parent_id")?;
+
+    let page = FrontstagePageService::new(state.store.clone())
+        .create_page(CreateFrontstagePageCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            title: body.title,
+            parent_id,
+            rank: body.rank,
+        })
+        .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_page_response(page))),
+    ))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/console/frontstage/{workspace_id}/pages/{page_id}",
+    request_body = UpdateFrontstagePageTitleBody,
+    params(
+        ("workspace_id" = String, Path, description = "Workspace id"),
+        ("page_id" = String, Path, description = "Page or group id")
+    ),
+    responses(
+        (status = 200, body = FrontstagePageResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn update_frontstage_page_title(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((workspace_id, page_id)): Path<(String, String)>,
+    Json(body): Json<UpdateFrontstagePageTitleBody>,
+) -> Result<Json<ApiSuccess<FrontstagePageResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let page_id = parse_uuid(&page_id, "page_id")?;
+
+    let page = FrontstagePageService::new(state.store.clone())
+        .update_title(UpdateFrontstagePageTitleCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            page_id,
+            title: body.title,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_page_response(page))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/frontstage/{workspace_id}/pages/{page_id}/move",
+    request_body = MoveFrontstagePageBody,
+    params(
+        ("workspace_id" = String, Path, description = "Workspace id"),
+        ("page_id" = String, Path, description = "Page or group id")
+    ),
+    responses(
+        (status = 200, body = FrontstagePageResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn move_frontstage_page(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((workspace_id, page_id)): Path<(String, String)>,
+    Json(body): Json<MoveFrontstagePageBody>,
+) -> Result<Json<ApiSuccess<FrontstagePageResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let page_id = parse_uuid(&page_id, "page_id")?;
+    let parent_id = parse_optional_uuid(body.parent_id.as_deref(), "parent_id")?;
+
+    let page = FrontstagePageService::new(state.store.clone())
+        .move_page(MoveFrontstagePageCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            page_id,
+            parent_id,
+            rank: body.rank,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_page_response(page))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/frontstage/{workspace_id}/pages/{page_id}",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace id"),
+        ("page_id" = String, Path, description = "Page or group id")
+    ),
+    responses(
+        (status = 204),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn delete_frontstage_page(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((workspace_id, page_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let page_id = parse_uuid(&page_id, "page_id")?;
+
+    FrontstagePageService::new(state.store.clone())
+        .delete_page(DeleteFrontstagePageCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            page_id,
+        })
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
@@ -119,224 +321,37 @@ fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
         .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
 }
 
-fn parse_frontstage_page_kind(raw_kind: &str) -> Result<FrontstagePageTreeNodeKind, ApiError> {
-    match raw_kind {
-        "group" => Ok(FrontstagePageTreeNodeKind::Group),
-        "page" => Ok(FrontstagePageTreeNodeKind::Page),
-        _ => Err(control_plane::errors::ControlPlaneError::InvalidInput("kind").into()),
+fn parse_optional_uuid(raw: Option<&str>, field: &'static str) -> Result<Option<Uuid>, ApiError> {
+    raw.map(|value| parse_uuid(value, field)).transpose()
+}
+
+fn to_kind_response(kind: domain::FrontstagePageKind) -> FrontstagePageTreeNodeKind {
+    match kind {
+        domain::FrontstagePageKind::Group => FrontstagePageTreeNodeKind::Group,
+        domain::FrontstagePageKind::Page => FrontstagePageTreeNodeKind::Page,
     }
 }
 
-fn build_frontstage_page_tree(
-    mut records: Vec<FrontstagePageRecord>,
-) -> Vec<FrontstagePageTreeNodeResponse> {
-    let existing_ids = records
-        .iter()
-        .map(|record| record.id)
-        .collect::<HashSet<_>>();
-
-    for record in &mut records {
-        if !matches!(record.parent_id, Some(parent_id) if existing_ids.contains(&parent_id)) {
-            record.parent_id = None;
-        }
+fn to_page_response(page: domain::FrontstagePageRecord) -> FrontstagePageResponse {
+    FrontstagePageResponse {
+        id: page.id.to_string(),
+        title: page.title,
+        kind: to_kind_response(page.kind),
+        parent_id: page.parent_id.map(|id| id.to_string()),
+        rank: page.rank,
+        schema_root_uid: page.schema_root_uid,
     }
-
-    records.sort_by(|left, right| {
-        let parent_cmp = left.parent_id.cmp(&right.parent_id);
-        if parent_cmp != Ordering::Equal {
-            return parent_cmp;
-        }
-
-        match (&left.rank, &right.rank) {
-            (Some(left_rank), Some(right_rank)) => left_rank.cmp(right_rank),
-            (None, None) => left.id.cmp(&right.id),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-        }
-    });
-
-    let mut nodes_by_parent: HashMap<Option<Uuid>, Vec<FrontstagePageTreeNode>> = HashMap::new();
-    for record in records {
-        nodes_by_parent
-            .entry(record.parent_id)
-            .or_default()
-            .push(FrontstagePageTreeNode {
-                id: record.id,
-                node: FrontstagePageTreeNodeResponse {
-                    id: record.id.to_string(),
-                    title: record.title,
-                    kind: record.kind,
-                    children: vec![],
-                },
-            });
-    }
-
-    fn flatten_group_children(
-        group_id: Uuid,
-        nodes_by_parent: &HashMap<Option<Uuid>, Vec<FrontstagePageTreeNode>>,
-        visiting_groups: &mut HashSet<Uuid>,
-    ) -> Vec<FrontstagePageTreeNodeResponse> {
-        if !visiting_groups.insert(group_id) {
-            return vec![];
-        }
-
-        let mut output = vec![];
-
-        if let Some(children) = nodes_by_parent.get(&Some(group_id)) {
-            output.reserve(children.len());
-            for child in children {
-                if child.node.kind == FrontstagePageTreeNodeKind::Page {
-                    output.push(child.node.clone());
-                    continue;
-                }
-
-                output.extend(flatten_group_children(
-                    child.id,
-                    nodes_by_parent,
-                    visiting_groups,
-                ));
-            }
-        }
-
-        visiting_groups.remove(&group_id);
-        output
-    }
-
-    let mut roots = nodes_by_parent.remove(&None).unwrap_or_default();
-    for root in &mut roots {
-        if root.node.kind == FrontstagePageTreeNodeKind::Group {
-            root.node.children =
-                flatten_group_children(root.id, &nodes_by_parent, &mut HashSet::new());
-        }
-    }
-
-    roots.into_iter().map(|node| node.node).collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use super::*;
-
-    #[test]
-    fn build_frontstage_page_tree_flattens_nested_groups_into_group_pages() {
-        let root_group_id = Uuid::from_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let nested_group_id = Uuid::from_str("11111111-1111-1111-1111-111111111112").unwrap();
-        let nested_page_id = Uuid::from_str("11111111-1111-1111-1111-111111111113").unwrap();
-        let root_page_id = Uuid::from_str("11111111-1111-1111-1111-111111111114").unwrap();
-
-        let output = build_frontstage_page_tree(vec![
-            FrontstagePageRecord {
-                id: nested_page_id,
-                title: Some("Nested".to_string()),
-                kind: FrontstagePageTreeNodeKind::Page,
-                parent_id: Some(nested_group_id),
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: nested_group_id,
-                title: Some("Nested Group".to_string()),
-                kind: FrontstagePageTreeNodeKind::Group,
-                parent_id: Some(root_group_id),
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: root_group_id,
-                title: Some("Root Group".to_string()),
-                kind: FrontstagePageTreeNodeKind::Group,
-                parent_id: None,
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: root_page_id,
-                title: Some("Root Page".to_string()),
-                kind: FrontstagePageTreeNodeKind::Page,
-                parent_id: None,
-                rank: Some("b".to_string()),
-            },
-        ]);
-
-        assert_eq!(output.len(), 2);
-        assert_eq!(output[0].kind, FrontstagePageTreeNodeKind::Group);
-        assert_eq!(output[0].id, root_group_id.to_string());
-        assert_eq!(output[0].children.len(), 1);
-        assert_eq!(output[0].children[0].id, nested_page_id.to_string());
-        assert_eq!(output[0].children[0].kind, FrontstagePageTreeNodeKind::Page);
-        assert_eq!(output[1].id, root_page_id.to_string());
-    }
-
-    #[test]
-    fn build_frontstage_page_tree_sanitizes_orphan_parent_as_root() {
-        let orphan_parent_id = Uuid::from_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let orphan_page_id = Uuid::from_str("11111111-1111-1111-1111-111111111112").unwrap();
-        let root_page_id = Uuid::from_str("11111111-1111-1111-1111-111111111113").unwrap();
-
-        let output = build_frontstage_page_tree(vec![
-            FrontstagePageRecord {
-                id: orphan_page_id,
-                title: Some("Orphan".to_string()),
-                kind: FrontstagePageTreeNodeKind::Page,
-                parent_id: Some(orphan_parent_id),
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: root_page_id,
-                title: Some("Root".to_string()),
-                kind: FrontstagePageTreeNodeKind::Page,
-                parent_id: None,
-                rank: Some("b".to_string()),
-            },
-        ]);
-
-        assert_eq!(output.len(), 2);
-        assert_eq!(output[0].id, orphan_page_id.to_string());
-        assert_eq!(output[0].kind, FrontstagePageTreeNodeKind::Page);
-        assert_eq!(output[1].id, root_page_id.to_string());
-    }
-
-    #[test]
-    fn build_frontstage_page_tree_handles_group_cycles_without_infinite_loop() {
-        let group_a_id = Uuid::from_str("11111111-1111-1111-1111-111111111111").unwrap();
-        let group_b_id = Uuid::from_str("11111111-1111-1111-1111-111111111112").unwrap();
-        let root_group_id = Uuid::from_str("11111111-1111-1111-1111-111111111113").unwrap();
-        let root_page_id = Uuid::from_str("11111111-1111-1111-1111-111111111114").unwrap();
-
-        let output = build_frontstage_page_tree(vec![
-            FrontstagePageRecord {
-                id: group_a_id,
-                title: Some("Group A".to_string()),
-                kind: FrontstagePageTreeNodeKind::Group,
-                parent_id: Some(group_b_id),
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: group_b_id,
-                title: Some("Group B".to_string()),
-                kind: FrontstagePageTreeNodeKind::Group,
-                parent_id: Some(group_a_id),
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: root_group_id,
-                title: Some("Root Group".to_string()),
-                kind: FrontstagePageTreeNodeKind::Group,
-                parent_id: None,
-                rank: Some("a".to_string()),
-            },
-            FrontstagePageRecord {
-                id: root_page_id,
-                title: Some("Root Page".to_string()),
-                kind: FrontstagePageTreeNodeKind::Page,
-                parent_id: None,
-                rank: Some("c".to_string()),
-            },
-        ]);
-
-        assert_eq!(output.len(), 2);
-        assert_eq!(output[0].id, root_group_id.to_string());
-        assert_eq!(output[0].kind, FrontstagePageTreeNodeKind::Group);
-        assert_eq!(output[0].children.len(), 0);
-        assert_eq!(output[1].id, root_page_id.to_string());
+fn to_tree_node_response(node: domain::FrontstagePageTreeNode) -> FrontstagePageTreeNodeResponse {
+    FrontstagePageTreeNodeResponse {
+        id: node.page.id.to_string(),
+        title: node.page.title,
+        kind: to_kind_response(node.page.kind),
+        children: node
+            .children
+            .into_iter()
+            .map(to_tree_node_response)
+            .collect(),
     }
 }
