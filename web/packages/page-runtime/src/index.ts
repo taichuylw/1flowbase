@@ -8,3 +8,4 @@ export function renderPageTitle(definition: PageDefinition): string {
 }
 
 export * from './js-block-source-policy';
+export * from './js-block-worker-runtime';
