@@ -15,6 +15,7 @@ import type {
   FrontstagePageContent,
   SaveFrontstagePageContentInput
 } from '../api/page-content';
+import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
 import {
   insertPageIntoGroup,
   moveNodeInTree,
@@ -32,10 +33,14 @@ const blockCatalogHook = vi.hoisted(() => ({
 const blockCodeHook = vi.hoisted(() => ({
   useFrontstageBlockCode: vi.fn()
 }));
+const blockCodeApi = vi.hoisted(() => ({
+  saveFrontstageBlockCode: vi.fn()
+}));
 
 vi.mock('../hooks/use-frontstage-page-content-save', () => pageContentSaveHook);
 vi.mock('../hooks/use-frontstage-block-catalog', () => blockCatalogHook);
 vi.mock('../hooks/use-frontstage-block-code', () => blockCodeHook);
+vi.mock('../api/block-code', () => blockCodeApi);
 
 type TestFrontStageTreeNode = {
   id: string;
@@ -265,9 +270,39 @@ function mockPageContentSaveState(
   return state;
 }
 
-function mockFrontstageBlockCatalog() {
+function createCatalogEntry(
+  overrides: Partial<NormalizedFrontstageBlockCatalogEntry> = {}
+): NormalizedFrontstageBlockCatalogEntry {
+  return {
+    id: '1flowbase:frontstage.js-ui-block',
+    runtimeKind: 'js-ui',
+    installationId: 'builtin-installation',
+    providerCode: '1flowbase',
+    pluginId: 'builtin-frontstage',
+    pluginVersion: '1.0.0',
+    contributionCode: 'frontstage.js-ui-block',
+    title: '空白 JS Block',
+    entry: 'index.js',
+    permissions: {
+      network: 'none',
+      storage: 'none',
+      secrets: 'none'
+    },
+    contextContract: {
+      primitives: [],
+      inputSchema: {}
+    },
+    uiCapabilities: [],
+    raw: {} as NormalizedFrontstageBlockCatalogEntry['raw'],
+    ...overrides
+  };
+}
+
+function mockFrontstageBlockCatalog(
+  items: NormalizedFrontstageBlockCatalogEntry[] = []
+) {
   blockCatalogHook.useFrontstageBlockCatalog.mockReturnValue({
-    items: [],
+    items,
     diagnostics: [],
     loading: false,
     error: null
@@ -314,6 +349,11 @@ describe('FrontStagePage', () => {
     mockPageContentSaveState();
     mockFrontstageBlockCatalog();
     mockFrontstageBlockCode();
+    blockCodeApi.saveFrontstageBlockCode.mockResolvedValue({
+      pageId: 'page-1',
+      codeRef: 'frontstage-js-block-1-code',
+      code: 'saved template'
+    });
     confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
@@ -461,8 +501,9 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('保存中')).toBeInTheDocument();
   });
 
-  test('saves a minimal JS UI block when Add Block is clicked in design mode', async () => {
+  test('saves selected catalog block and writes blank JS template code', async () => {
     authenticate(['frontstage.page.design']);
+    mockFrontstageBlockCatalog([createCatalogEntry()]);
     const saveState = mockPageContentSaveState();
 
     render(
@@ -477,6 +518,7 @@ describe('FrontStagePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
     fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+    fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
     await waitFor(() => {
       expect(saveState.save).toHaveBeenCalledTimes(1);
@@ -498,12 +540,12 @@ describe('FrontStagePage', () => {
       id: 'frontstage-js-block-1',
       codeRef: 'frontstage-js-block-1-code',
       catalog: {
-        providerCode: null,
-        installationId: null
+        providerCode: '1flowbase',
+        installationId: 'builtin-installation'
       },
       contribution: {
-        pluginId: null,
-        pluginVersion: null,
+        pluginId: 'builtin-frontstage',
+        pluginVersion: '1.0.0',
         code: 'frontstage.js-ui-block'
       },
       props: {},
@@ -513,10 +555,19 @@ describe('FrontStagePage', () => {
       },
       runtime: {
         kind: 'js-ui',
-        entry: null,
+        entry: 'index.js',
         hint: 'js-ui'
       }
     });
+    expect(blockCodeApi.saveFrontstageBlockCode).toHaveBeenCalledWith(
+      'workspace-1',
+      'page-1',
+      expect.objectContaining({
+        codeRef: 'frontstage-js-block-1-code',
+        code: expect.stringContaining("codeRef: 'frontstage-js-block-1-code'")
+      }),
+      'csrf-123'
+    );
   });
 
   test('disables Add Block while page content is saving', () => {
@@ -541,6 +592,7 @@ describe('FrontStagePage', () => {
 
   test('shows a clear Add Block save error in design mode', async () => {
     authenticate(['frontstage.page.design']);
+    mockFrontstageBlockCatalog([createCatalogEntry()]);
     mockPageContentSaveState({
       save: vi.fn(() => Promise.reject(new Error('request failed')))
     });
@@ -557,9 +609,37 @@ describe('FrontStagePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
     fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+    fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
     expect(await screen.findByText('区块保存失败')).toBeInTheDocument();
     expect(screen.getByText('request failed')).toBeInTheDocument();
+  });
+
+  test('shows a clear Add Block code template save error', async () => {
+    authenticate(['frontstage.page.design']);
+    mockFrontstageBlockCatalog([createCatalogEntry()]);
+    mockPageContentSaveState();
+    blockCodeApi.saveFrontstageBlockCode.mockRejectedValueOnce(
+      new Error('code save failed')
+    );
+
+    render(
+      <AppProviders>
+        <FrontStagePageHarness
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          pageContent={createPageContent()}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+    fireEvent.click(await screen.findByRole('button', { name: '选择' }));
+
+    expect(await screen.findByText('区块保存失败')).toBeInTheDocument();
+    expect(screen.getByText('code save failed')).toBeInTheDocument();
+    expect(screen.queryByText('1 个区块')).not.toBeInTheDocument();
   });
 
   test('disables Add Block when no page or no page content is available', () => {
@@ -587,6 +667,7 @@ describe('FrontStagePage', () => {
 
   test('renders and selects the new block after Add Block save succeeds', async () => {
     authenticate(['frontstage.page.design']);
+    mockFrontstageBlockCatalog([createCatalogEntry()]);
     mockPageContentSaveState();
 
     render(
@@ -601,6 +682,7 @@ describe('FrontStagePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
     fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+    fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
     await waitFor(() => {
       expect(screen.getByText('1 个区块')).toBeInTheDocument();
