@@ -4,7 +4,10 @@ import {
   type BlockUiSchema
 } from '@1flowbase/page-protocol';
 
-import { validateJsBlockSource } from './js-block-source-policy';
+import {
+  transformJsBlockSource,
+  type JsBlockSourceTransformSuccess
+} from './js-block-source-transform';
 
 export interface JsBlockRuntimeLimits {
   timeoutMs: number;
@@ -95,6 +98,7 @@ export interface JsBlockRuntimeRequestState {
   blockId: string;
   status: JsBlockRunStatus;
   request: JsBlockRunRequest;
+  compiledSource?: JsBlockSourceTransformSuccess;
   result?: JsBlockRunResult;
   logs: JsBlockWorkerLogEntry[];
   effects: JsBlockWorkerEffect[];
@@ -332,7 +336,7 @@ function reduceRunMessage(
   }
 
   const request = requestResult.request;
-  const sourceResult = validateJsBlockSource(request.source);
+  const sourceResult = transformJsBlockSource(request.source);
   const requestState: JsBlockRuntimeRequestState = {
     requestId: request.requestId,
     blockId: request.blockId,
@@ -353,7 +357,14 @@ function reduceRunMessage(
     return withRequest(state, failedRequest);
   }
 
-  return withRequest(state, requestState, request.requestId);
+  return withRequest(
+    state,
+    {
+      ...requestState,
+      compiledSource: sourceResult
+    },
+    request.requestId
+  );
 }
 
 function reduceRenderedMessage(

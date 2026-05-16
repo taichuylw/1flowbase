@@ -125,6 +125,41 @@ describe('JS block worker runtime protocol state machine', () => {
     });
   });
 
+  test('maps source transform failures into a stable run result before sending source to a worker', () => {
+    const state = run(
+      createJsBlockRuntimeSession(),
+      createRunRequest({
+        source: `
+import { defineBlock } from '@1flowbase/block-sdk';
+
+const block = defineBlock({
+  render() {
+    return { primitive: 'Text' };
+  }
+});
+`
+      })
+    );
+
+    expect(state.currentRequestId).toBeUndefined();
+    expect(state.requests['request-1']).toMatchObject({
+      status: 'failed',
+      result: {
+        ok: false,
+        requestId: 'request-1',
+        error: {
+          kind: 'source_policy_failed',
+          errors: [
+            {
+              code: 'transform_failed',
+              path: 'source.defaultExport'
+            }
+          ]
+        }
+      }
+    });
+  });
+
   test('rejects late rendered messages after source policy failure without overwriting the failure result', () => {
     const failed = run(
       createJsBlockRuntimeSession(),
