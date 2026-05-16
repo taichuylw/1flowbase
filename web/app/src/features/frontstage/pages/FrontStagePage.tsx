@@ -13,7 +13,9 @@ import type { FC } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
+import { saveFrontstageBlockCode } from '../api/block-code';
 import type { FrontstagePageContent } from '../api/page-content';
+import { AddBlockCatalogPickerDrawer } from '../components/AddBlockCatalogPickerDrawer';
 import { BlockCodeEditorDrawer } from '../components/BlockCodeEditorDrawer';
 import { JsBlockTrialPanel } from '../components/JsBlockTrialPanel';
 import { PageCanvas } from '../components/PageCanvas';
@@ -30,6 +32,7 @@ import {
   type FrontstageBlockCompositionInput,
   type FrontstageBlockCompositionState
 } from '../lib/block-composition';
+import { createBlankJsBlockTemplateCode } from '../lib/block-templates';
 import {
   createFrontstagePageDocument,
   createFrontstagePageDocumentSaveInput,
@@ -114,7 +117,8 @@ type PageTreeMutationResult = {
 
 type PageTreeOperationStatus = 'idle' | 'pending' | 'error';
 
-function createMinimalJsUiBlockInput(
+function createCatalogBlockInput(
+  entry: NormalizedFrontstageBlockCatalogEntry,
   blockIndex: number
 ): FrontstageBlockCompositionInput {
   const blockNumber = blockIndex + 1;
@@ -124,13 +128,13 @@ function createMinimalJsUiBlockInput(
     id: blockId,
     codeRef: `${blockId}-code`,
     catalog: {
-      providerCode: null,
-      installationId: null
+      providerCode: entry.providerCode,
+      installationId: entry.installationId
     },
     contribution: {
-      pluginId: null,
-      pluginVersion: null,
-      code: 'frontstage.js-ui-block'
+      pluginId: entry.pluginId,
+      pluginVersion: entry.pluginVersion,
+      code: entry.contributionCode
     },
     props: {},
     layout: {
@@ -138,9 +142,9 @@ function createMinimalJsUiBlockInput(
       region: 'main'
     },
     runtime: {
-      kind: 'js-ui',
-      entry: null,
-      hint: 'js-ui'
+      kind: entry.runtimeKind,
+      entry: entry.entry,
+      hint: entry.runtimeKind
     }
   };
 }
@@ -151,6 +155,14 @@ function toDisplayErrorMessage(error: unknown): string {
   }
 
   return '页面内容保存失败，请稍后重试。';
+}
+
+function requireCsrfToken(csrfToken: string | null): string {
+  if (!csrfToken) {
+    throw new Error('missing csrf token');
+  }
+
+  return csrfToken;
 }
 
 function rankForAppendIndex(index: number): string {
@@ -272,6 +284,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   onMovePageNode,
   onDeletePageNode
 }) => {
+  const csrfToken = useAuthStore((state) => state.csrfToken);
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const [isDesignMode, setIsDesignMode] = useState(false);
@@ -288,6 +301,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     useState<FrontstagePageContent | null>(null);
   const [isBlockSavePending, setIsBlockSavePending] = useState(false);
   const [blockSaveError, setBlockSaveError] = useState<string | null>(null);
+  const [isAddBlockPickerOpen, setIsAddBlockPickerOpen] = useState(false);
   const [pageTree, setPageTree] = useState<FrontStageTreeNode[]>(() =>
     normalizePageTree(initialPageTree ?? [])
   );
@@ -446,6 +460,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setSelectedBlockId(null);
     setIsBlockCodeEditorOpen(false);
     setIsJsBlockTrialPanelOpen(false);
+    setIsAddBlockPickerOpen(false);
     setBlockSaveError(null);
   }, [selectedPageId]);
 
@@ -455,6 +470,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       if (!currentBlockId || !pageContent) {
         setIsBlockCodeEditorOpen(false);
         setIsJsBlockTrialPanelOpen(false);
+        setIsAddBlockPickerOpen(false);
         return null;
       }
 
@@ -477,6 +493,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       setIsJsBlockTrialPanelOpen(false);
     }
   }, [canShowSelectedBlockActions]);
+
+  useEffect(() => {
+    if (!canEnterDesignMode || !isDesignMode) {
+      setIsAddBlockPickerOpen(false);
+    }
+  }, [canEnterDesignMode, isDesignMode]);
 
   useEffect(() => {
     setJsBlockTrialContextSnapshot(defaultJsBlockTrialContextSnapshot);
@@ -743,17 +765,78 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   };
 
   const handleAddBlock = () => {
+    if (!canAddBlock) {
+      return;
+    }
+
+    setBlockSaveError(null);
+    pageContentSave.clearError();
+    setIsAddBlockPickerOpen(true);
+  };
+
+  const handleSelectBlockCatalogEntry = async (
+    entry: NormalizedFrontstageBlockCatalogEntry
+  ) => {
     const sourceContent = activePageContent;
     if (!canAddBlock || !sourceContent || !blockCompositionState) {
       return;
     }
 
+    const nextBlockInput = createCatalogBlockInput(
+      entry,
+      blockCompositionState.document.blocks.length
+    );
     const nextCompositionState = appendFrontstageBlock(
       blockCompositionState,
-      createMinimalJsUiBlockInput(blockCompositionState.document.blocks.length)
+      nextBlockInput
     );
 
-    void saveBlockComposition(sourceContent, nextCompositionState);
+    setIsBlockSavePending(true);
+    setBlockSaveError(null);
+    pageContentSave.clearError();
+
+    try {
+      const input = createFrontstagePageDocumentSaveInput(
+        sourceContent,
+        nextCompositionState.document
+      );
+      const nextContent = await pageContentSave.save(input);
+      const createdBlock =
+        nextCompositionState.document.blocks.find(
+          (block) => block.id === nextCompositionState.selectedBlockId
+        ) ??
+        nextCompositionState.document.blocks[
+          nextCompositionState.document.blocks.length - 1
+        ];
+      if (!createdBlock) {
+        throw new Error('created block is missing');
+      }
+
+      const codeRef = createdBlock.codeRef;
+      const blockId = createdBlock.id;
+
+      await saveFrontstageBlockCode(
+        workspaceId,
+        selectedPageId ?? sourceContent.page.id,
+        {
+          codeRef,
+          code: createBlankJsBlockTemplateCode({
+            blockId,
+            codeRef,
+            contributionCode: entry.contributionCode
+          })
+        },
+        requireCsrfToken(csrfToken)
+      );
+
+      setSavedPageContent(nextContent);
+      setSelectedBlockId(nextCompositionState.selectedBlockId);
+      setIsAddBlockPickerOpen(false);
+    } catch (error) {
+      setBlockSaveError(toDisplayErrorMessage(error));
+    } finally {
+      setIsBlockSavePending(false);
+    }
   };
 
   const handleDeleteSelectedBlock = () => {
@@ -1298,6 +1381,19 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           ) : null}
         </Content>
       </Layout>
+      {canEnterDesignMode && isDesignMode ? (
+        <AddBlockCatalogPickerDrawer
+          open={isAddBlockPickerOpen}
+          items={blockCatalog.items}
+          loading={blockCatalog.loading}
+          error={blockCatalog.error}
+          saving={isPageContentSavePending}
+          onSelect={(entry) => {
+            void handleSelectBlockCatalogEntry(entry);
+          }}
+          onClose={() => setIsAddBlockPickerOpen(false)}
+        />
+      ) : null}
       <BlockCodeEditorDrawer
         open={isBlockCodeEditorOpen && canShowSelectedBlockActions}
         onClose={() => setIsBlockCodeEditorOpen(false)}
