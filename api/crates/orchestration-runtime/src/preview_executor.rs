@@ -135,9 +135,13 @@ where
                 Vec::new(),
             )
         } else {
+            let error_payload = Some(build_node_type_not_implemented_error_payload(
+                &node.node_type,
+                "preview",
+            ));
             (
-                Value::Null,
-                None,
+                json!({}),
+                error_payload,
                 json!({ "preview_mode": true }),
                 json!({}),
                 Vec::new(),

@@ -1680,3 +1680,53 @@ async fn code_node_returns_not_implemented_failure_in_debug_runtime() {
     assert!(outcome.variable_pool.get("node-llm").is_none());
     assert_eq!(outcome.node_traces.len(), 2);
 }
+
+#[tokio::test]
+async fn unknown_node_type_returns_not_implemented_failure_in_debug_runtime() {
+    let mut plan = base_plan();
+    if let Some(node_llm) = plan.nodes.get_mut("node-llm") {
+        node_llm.node_type = "x_unknown".to_string();
+        node_llm.alias = "Unknown".to_string();
+    }
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(failure.node_alias, "Unknown");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("node_type_not_implemented")
+            );
+            assert_eq!(failure.error_payload["node_type"], json!("x_unknown"));
+            assert_eq!(
+                failure.error_payload["message"],
+                json!("x_unknown nodes are not implemented in preview runtime")
+            );
+            assert_eq!(outcome.node_traces[1].node_type, "x_unknown");
+            assert!(outcome.node_traces[1]
+                .output_payload
+                .as_object()
+                .unwrap()
+                .is_empty());
+            assert_eq!(
+                outcome.node_traces[1]
+                    .error_payload
+                    .as_ref()
+                    .unwrap()["node_type"],
+                json!("x_unknown")
+            );
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+
+    assert!(outcome.variable_pool.get("node-llm").is_none());
+    assert_eq!(outcome.node_traces.len(), 2);
+}

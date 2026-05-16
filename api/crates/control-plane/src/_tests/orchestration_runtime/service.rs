@@ -734,6 +734,120 @@ async fn live_debug_run_returns_code_not_implemented_error() {
 }
 
 #[tokio::test]
+async fn live_debug_run_returns_unknown_node_type_not_implemented_error() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Unknown Node Agent").await;
+
+    let document = serde_json::json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": {
+            "flowId": seeded.flow_id.to_string(),
+            "name": "Unknown Node Agent",
+            "description": "",
+            "tags": []
+        },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": []
+                },
+                {
+                    "id": "node-unknown",
+                    "type": "x_unknown",
+                    "alias": "Unknown",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": [{ "key": "result", "title": "结果", "valueType": "json" }]
+                }
+            ],
+            "edges": [{
+                "id": "edge-start-unknown",
+                "source": "node-start",
+                "target": "node-unknown",
+                "sourceHandle": null,
+                "targetHandle": null,
+                "containerId": null,
+                "points": []
+            }]
+        },
+        "editor": {
+            "viewport": { "x": 0, "y": 0, "zoom": 1 },
+            "annotations": [],
+            "activeContainerPath": []
+        }
+    });
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(document),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let failed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(failed.flow_run.status, domain::FlowRunStatus::Failed);
+    let flow_error_payload = failed
+        .flow_run
+        .error_payload
+        .as_ref()
+        .expect("flow error payload should be persisted");
+    assert_eq!(
+        flow_error_payload["error_code"],
+        json!("node_type_not_implemented")
+    );
+    assert_eq!(flow_error_payload["node_type"], json!("x_unknown"));
+    assert_eq!(
+        flow_error_payload["message"].as_str(),
+        Some("x_unknown nodes are not implemented in debug runtime")
+    );
+
+    let unknown_node = failed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-unknown")
+        .expect("unknown node should be persisted");
+    assert_eq!(unknown_node.status, domain::NodeRunStatus::Failed);
+    assert_eq!(
+        unknown_node.error_payload.as_ref().unwrap()["error_code"],
+        json!("node_type_not_implemented")
+    );
+    assert_eq!(
+        unknown_node.error_payload.as_ref().unwrap()["node_type"],
+        json!("x_unknown")
+    );
+    assert_eq!(
+        unknown_node.error_payload.as_ref().unwrap()["message"],
+        json!("x_unknown nodes are not implemented in debug runtime")
+    );
+    assert_eq!(failed.node_runs.len(), 2);
+}
+
+#[tokio::test]
 async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::ReasoningDelta {

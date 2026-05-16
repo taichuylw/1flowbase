@@ -40,3 +40,11 @@ fn builtin_roles_lock_root_but_keep_admin_and_manager_editable() {
     assert!(admin.is_editable);
     assert!(manager.is_editable);
 }
+
+#[test]
+fn manager_role_includes_frontstage_design_permission_by_default() {
+    let templates = builtin_role_templates();
+    let manager = templates.iter().find(|role| role.code == "manager").unwrap();
+
+    assert!(manager.permissions.contains(&"frontstage.page.design".to_string()));
+}
