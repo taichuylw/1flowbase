@@ -4,26 +4,21 @@ export function createBlankJsBlockTemplateCode(input: {
   contributionCode: string;
 }): string {
   return `import { defineBlock } from '@1flowbase/block-sdk';
-import { Card, Space, Typography } from '@1flowbase/block-renderer/antd-facade';
+import { Alert, Stack, Text, Title } from '@1flowbase/block-renderer/antd-facade';
+
+// blockId: '${input.blockId}'
+// codeRef: '${input.codeRef}'
+// contributionCode: '${input.contributionCode}'
 
 export default defineBlock({
-  meta: {
-    blockId: '${input.blockId}',
-    codeRef: '${input.codeRef}',
-    contributionCode: '${input.contributionCode}'
-  },
-
-  async setup(ctx) {
-    const state = ctx.state({
-      title: 'Blank JS Block',
-      error: null
-    });
-
-    return { state };
+  id: '${input.blockId}',
+  title: 'Blank JS Block',
+  initialState: {
+    error: null
   },
 
   async render(ctx) {
-    const { state } = ctx;
+    const error = typeof ctx.state.error === 'string' ? ctx.state.error : null;
 
     // Read records:
     // const records = await ctx.data.query('data_model_code', {
@@ -36,19 +31,14 @@ export default defineBlock({
     // await ctx.data.update('data_model_code', created.id, {});
     // await ctx.data.delete('data_model_code', created.id);
 
-    return Card({
-      title: state.title,
-      children: Space({
-        direction: 'vertical',
-        children: [
-          Typography.Text({
-            children: 'Start from this built-in blank JS Block skeleton.'
-          }),
-          state.error
-            ? Typography.Text({ type: 'danger', children: state.error })
-            : null
-        ]
-      })
+    return Stack({
+      children: [
+        Title({ children: 'Blank JS Block' }),
+        Text({
+          children: 'Start from this built-in blank JS Block skeleton.'
+        }),
+        error ? Alert({ props: { type: 'error', message: error } }) : null
+      ]
     });
   }
 });
