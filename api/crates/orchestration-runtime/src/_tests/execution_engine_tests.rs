@@ -13,17 +13,18 @@ use plugin_framework::{
         ProviderToolCall, ProviderUsage,
     },
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledLlmRouteTarget, CompiledLlmRouting, CompiledLlmRuntime,
-        CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
+        CompiledBinding, CompiledCodeRuntime, CompiledLlmRouteTarget, CompiledLlmRouting,
+        CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
+        LlmRoutingMode,
     },
     execution_engine::{
-        resume_flow_debug_run, start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
-        ProviderInvocationOutput, ProviderInvoker,
+        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
+        ProviderInvocationOutput, ProviderInvoker, resume_flow_debug_run, start_flow_debug_run,
     },
     execution_state::ExecutionStopReason,
 };
@@ -168,6 +169,37 @@ impl CapabilityInvoker for ReservedCapabilityOutputInvoker {
         })
     }
 }
+
+macro_rules! impl_noop_code_invoker {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            #[async_trait]
+            impl CodeInvoker for $ty {
+                async fn invoke_code_node(
+                    &self,
+                    _runtime: &CompiledCodeRuntime,
+                    _config_payload: Value,
+                    _input_payload: Value,
+                ) -> Result<CodeInvocationOutput> {
+                    unreachable!("this test invoker does not execute code nodes")
+                }
+            }
+        )+
+    };
+}
+
+impl_noop_code_invoker!(
+    StubProviderInvoker,
+    UnknownCapabilityOutputInvoker,
+    ReservedCapabilityOutputInvoker,
+    RuntimeContractErrorInvoker,
+    FailsAfterFirstTokenInvoker,
+    InputCacheUsageSnapshotInvoker,
+    ToolMcpMetadataInvoker,
+    FailFirstFailoverInvoker,
+    FailAfterTokenFinishErrorFailoverInvoker,
+    ReasoningDeltaProviderInvoker,
+);
 
 struct RuntimeContractErrorInvoker;
 
@@ -500,6 +532,7 @@ fn base_plan() -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -546,6 +579,7 @@ fn base_plan() -> CompiledPlan {
                 model: "gpt-5.4-mini".to_string(),
                 routing: None,
             }),
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -574,6 +608,7 @@ fn base_plan() -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -602,6 +637,7 @@ fn base_plan() -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
 
@@ -1162,6 +1198,7 @@ fn plugin_plan() -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -1210,6 +1247,7 @@ fn plugin_plan() -> CompiledPlan {
                 side_effect_policy: "external_read".to_string(),
             }),
             llm_runtime: None,
+            code_runtime: None,
         },
     );
 
@@ -1307,9 +1345,11 @@ async fn resume_flow_debug_run_rejects_non_public_resume_output_keys() {
     .await
     .unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("resume payload key node-llm is not a public output for node-human"));
+    assert!(
+        error
+            .to_string()
+            .contains("resume payload key node-llm is not a public output for node-human")
+    );
 }
 
 #[tokio::test]
@@ -1338,6 +1378,7 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
             config: json!({ "tool_name": "lookup_order" }),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
 
@@ -1382,10 +1423,12 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
             );
             assert!(outcome.node_traces[1].output_payload.get("text").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
-            assert!(failure.error_payload["provider_summary"]
-                .as_str()
-                .unwrap()
-                .contains("[REDACTED]"));
+            assert!(
+                failure.error_payload["provider_summary"]
+                    .as_str()
+                    .unwrap()
+                    .contains("[REDACTED]")
+            );
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
@@ -1512,10 +1555,12 @@ async fn llm_runtime_sends_enabled_model_parameters_and_keeps_undeclared_structu
         outcome.node_traces[1].output_payload["text"],
         json!("{\"ok\":true}")
     );
-    assert!(outcome.node_traces[1]
-        .output_payload
-        .get("structured_output")
-        .is_none());
+    assert!(
+        outcome.node_traces[1]
+            .output_payload
+            .get("structured_output")
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -1589,8 +1634,8 @@ async fn plugin_node_routes_to_capability_runtime_and_preserves_output_payload()
 }
 
 #[tokio::test]
-async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden_from_variable_pool(
-) {
+async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden_from_variable_pool()
+ {
     let outcome = start_flow_debug_run(
         &plugin_plan(),
         &json!({ "node-start": { "query": "world" } }),
@@ -1603,9 +1648,11 @@ async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden
         outcome.node_traces[1].output_payload["unexpected"],
         json!(true)
     );
-    assert!(outcome.variable_pool["node-plugin"]
-        .get("unexpected")
-        .is_none());
+    assert!(
+        outcome.variable_pool["node-plugin"]
+            .get("unexpected")
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -1622,63 +1669,11 @@ async fn plugin_node_keeps_runtime_named_executor_output_keys_hidden_from_variab
         outcome.node_traces[1].output_payload["metadata"]["secret"],
         json!("x")
     );
-    assert!(outcome.variable_pool["node-plugin"]
-        .get("metadata")
-        .is_none());
-}
-
-#[tokio::test]
-async fn code_node_returns_not_implemented_failure_in_debug_runtime() {
-    let mut plan = base_plan();
-    if let Some(node_llm) = plan.nodes.get_mut("node-llm") {
-        node_llm.node_type = "code".to_string();
-        node_llm.alias = "Code".to_string();
-    }
-
-    let outcome = start_flow_debug_run(
-        &plan,
-        &json!({ "node-start": { "query": "hello" } }),
-        &successful_invoker(),
-    )
-    .await
-    .unwrap();
-
-    match outcome.stop_reason {
-        ExecutionStopReason::Failed(failure) => {
-            assert_eq!(failure.node_id, "node-llm");
-            assert_eq!(failure.node_alias, "Code");
-            assert_eq!(
-                failure.error_payload["error_code"],
-                json!("node_type_not_implemented")
-            );
-            assert_eq!(
-                failure.error_payload["node_type"],
-                json!("code")
-            );
-            assert_eq!(
-                failure.error_payload["message"],
-                json!("code nodes are not implemented in preview runtime")
-            );
-            assert!(failure.error_payload["error_code"].is_string());
-            assert_eq!(outcome.node_traces[1].node_type, "code");
-            assert!(outcome.node_traces[1]
-                .output_payload
-                .as_object()
-                .unwrap()
-                .is_empty());
-            assert_eq!(
-                outcome.node_traces[1]
-                    .error_payload
-                    .as_ref()
-                    .unwrap()["error_code"],
-                json!("node_type_not_implemented")
-            );
-        }
-        other => panic!("expected failed stop reason, got {other:?}"),
-    }
-
-    assert!(outcome.variable_pool.get("node-llm").is_none());
-    assert_eq!(outcome.node_traces.len(), 2);
+    assert!(
+        outcome.variable_pool["node-plugin"]
+            .get("metadata")
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -1711,16 +1706,15 @@ async fn unknown_node_type_returns_not_implemented_failure_in_debug_runtime() {
                 json!("x_unknown nodes are not implemented in preview runtime")
             );
             assert_eq!(outcome.node_traces[1].node_type, "x_unknown");
-            assert!(outcome.node_traces[1]
-                .output_payload
-                .as_object()
-                .unwrap()
-                .is_empty());
-            assert_eq!(
+            assert!(
                 outcome.node_traces[1]
-                    .error_payload
-                    .as_ref()
-                    .unwrap()["node_type"],
+                    .output_payload
+                    .as_object()
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["node_type"],
                 json!("x_unknown")
             );
         }

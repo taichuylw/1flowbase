@@ -105,6 +105,7 @@ fn sample_compiled_plan() -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -135,6 +136,7 @@ fn sample_compiled_plan() -> CompiledPlan {
                 model: "gpt-5.4-mini".to_string(),
                 routing: None,
             }),
+            code_runtime: None,
         },
     );
 

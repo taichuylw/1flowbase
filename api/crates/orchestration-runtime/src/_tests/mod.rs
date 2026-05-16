@@ -1,4 +1,5 @@
 mod binding_runtime_tests;
+mod code_runtime_tests;
 mod compiler_tests;
 mod execution_engine_tests;
 mod llm_prompt_messages_validation_tests;

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use plugin_framework::{
     error::PluginFrameworkError,
@@ -10,22 +10,25 @@ use plugin_framework::{
         ProviderUsage,
     },
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
+    code_runtime::execute_code_node,
     compiled_plan::{
         CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
     },
-    node_errors::build_node_type_not_implemented_error_payload,
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
     },
+    node_errors::build_node_type_not_implemented_error_payload,
     payload_builder::{
-        is_reserved_payload_key, BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult,
+        BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult, is_reserved_payload_key,
     },
 };
+
+pub use crate::code_runtime::{CodeInvocationOutput, CodeInvoker};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderInvocationOutput {
@@ -80,7 +83,7 @@ pub async fn start_flow_debug_run<I>(
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
-    I: ProviderInvoker + CapabilityInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let variable_pool = input_payload
         .as_object()
@@ -98,7 +101,7 @@ pub async fn resume_flow_debug_run<I>(
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
-    I: ProviderInvoker + CapabilityInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let patch = resume_payload
         .as_object()
@@ -133,7 +136,7 @@ async fn execute_from<I>(
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
-    I: ProviderInvoker + CapabilityInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let mut node_traces = Vec::new();
 
@@ -363,37 +366,39 @@ where
                 });
             }
             "code" => {
-                let error_payload = build_node_type_not_implemented_error_payload(
-                    &node.node_type,
-                    "preview",
-                );
+                let execution = execute_code_node(node, &resolved_inputs, invoker).await?;
                 node_traces.push(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
                     node_alias: node.alias.clone(),
                     input_payload: Value::Object(resolved_inputs),
-                    output_payload: json!({}),
-                    error_payload: Some(error_payload.clone()),
-                    metrics_payload: json!({ "preview_mode": true, "waiting": "code" }),
-                    debug_payload: json!({}),
+                    output_payload: execution.output_payload.clone(),
+                    error_payload: execution.error_payload.clone(),
+                    metrics_payload: execution.metrics_payload.clone(),
+                    debug_payload: execution.debug_payload.clone(),
                     provider_events: Vec::new(),
                 });
-                return Ok(FlowDebugExecutionOutcome {
-                    stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                        node_id: node.node_id.clone(),
-                        node_alias: node.alias.clone(),
-                        error_payload,
-                    }),
-                    variable_pool,
-                    checkpoint_snapshot: None,
-                    node_traces,
-                });
+
+                if let Some(error_payload) = execution.error_payload {
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                            node_id: node.node_id.clone(),
+                            node_alias: node.alias.clone(),
+                            error_payload,
+                        }),
+                        variable_pool,
+                        checkpoint_snapshot: None,
+                        node_traces,
+                    });
+                }
+
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &execution.output_payload)?,
+                );
             }
             other => {
-                let error_payload = build_node_type_not_implemented_error_payload(
-                    other,
-                    "preview",
-                );
+                let error_payload = build_node_type_not_implemented_error_payload(other, "preview");
                 node_traces.push(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),

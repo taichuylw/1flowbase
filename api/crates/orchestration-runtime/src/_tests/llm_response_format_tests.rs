@@ -13,11 +13,12 @@ use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+        CompiledBinding, CompiledCodeRuntime, CompiledLlmRuntime, CompiledNode, CompiledOutput,
+        CompiledPlan,
     },
     execution_engine::{
-        start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
-        ProviderInvocationOutput, ProviderInvoker,
+        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
+        ProviderInvocationOutput, ProviderInvoker, start_flow_debug_run,
     },
 };
 
@@ -67,6 +68,18 @@ impl CapabilityInvoker for CaptureInvoker {
     }
 }
 
+#[async_trait]
+impl CodeInvoker for CaptureInvoker {
+    async fn invoke_code_node(
+        &self,
+        _runtime: &CompiledCodeRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CodeInvocationOutput> {
+        unreachable!("response format plan does not execute code nodes")
+    }
+}
+
 fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
     let mut nodes = BTreeMap::new();
     nodes.insert(
@@ -83,6 +96,7 @@ fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -128,6 +142,7 @@ fn llm_plan(response_format: serde_json::Value) -> CompiledPlan {
                 model: "qwen3.5-27b".to_string(),
                 routing: None,
             }),
+            code_runtime: None,
         },
     );
 

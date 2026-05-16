@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use plugin_framework::{
+    ProviderConfigField,
     provider_contract::{ProviderInvocationInput, ProviderStreamEvent},
     provider_package::ProviderPackage,
-    ProviderConfigField,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -17,7 +17,7 @@ use crate::{
     capability_plugin_runtime::{CapabilityPluginRuntimePort, ExecuteCapabilityNodeInput},
     errors::ControlPlaneError,
     flow::FlowService,
-    model_provider::failover_queue::{freeze_queue_items, FailoverQueueSnapshotItem},
+    model_provider::failover_queue::{FailoverQueueSnapshotItem, freeze_queue_items},
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
         AppendRunEventInput, ApplicationJsDependencySelectionRepository, ApplicationRepository,
@@ -49,9 +49,9 @@ use self::{
     },
     payloads::persisted_node_output_payload,
     persistence::{
-        checkpoint_node_id, checkpoint_snapshot_from_record, next_node_started_at,
-        persist_flow_debug_outcome, persist_preview_events, PersistFlowDebugOutcomeInput,
-        WaitingNodeResumeUpdate,
+        PersistFlowDebugOutcomeInput, WaitingNodeResumeUpdate, checkpoint_node_id,
+        checkpoint_snapshot_from_record, next_node_started_at, persist_flow_debug_outcome,
+        persist_preview_events,
     },
 };
 
@@ -1416,6 +1416,22 @@ where
     }
 }
 
+#[async_trait]
+impl<R, H> orchestration_runtime::execution_engine::CodeInvoker for RuntimeProviderInvoker<R, H>
+where
+    R: Clone + Send + Sync,
+    H: Clone + Send + Sync,
+{
+    async fn invoke_code_node(
+        &self,
+        _runtime: &orchestration_runtime::compiled_plan::CompiledCodeRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<orchestration_runtime::execution_engine::CodeInvocationOutput> {
+        Err(anyhow!("code runtime invoker is not configured"))
+    }
+}
+
 async fn build_provider_runtime_config<R>(
     repository: &R,
     master_key: &str,
@@ -1578,8 +1594,8 @@ mod tests {
     use crate::{errors::ControlPlaneError, ports::ModelProviderRepository};
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_missing(
-    ) {
+    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_missing()
+     {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let (alpha_instance_id, _) = repository.seed_included_provider_instances();
@@ -1615,8 +1631,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_not_ready(
-    ) {
+    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_not_ready()
+     {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let (_, backup_instance_id) = repository.seed_included_provider_instances();
@@ -1655,8 +1671,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_uses_selected_child_instance_without_provider_fallback(
-    ) {
+    async fn orchestration_runtime_resolve_llm_instance_uses_selected_child_instance_without_provider_fallback()
+     {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let (_, backup_instance_id) = repository.seed_included_provider_instances();
@@ -1695,8 +1711,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_in_catalog_cache(
-    ) {
+    async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_in_catalog_cache()
+     {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let selected_instance_id = repository.seed_provider_instance(

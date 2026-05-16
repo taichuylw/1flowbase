@@ -13,11 +13,12 @@ use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+        CompiledBinding, CompiledCodeRuntime, CompiledLlmRuntime, CompiledNode, CompiledOutput,
+        CompiledPlan,
     },
     execution_engine::{
-        start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
-        ProviderInvocationOutput, ProviderInvoker,
+        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
+        ProviderInvocationOutput, ProviderInvoker, start_flow_debug_run,
     },
     execution_state::ExecutionStopReason,
 };
@@ -70,6 +71,18 @@ impl CapabilityInvoker for CapturingProviderInvoker {
     }
 }
 
+#[async_trait]
+impl CodeInvoker for CapturingProviderInvoker {
+    async fn invoke_code_node(
+        &self,
+        _runtime: &CompiledCodeRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CodeInvocationOutput> {
+        unreachable!("prompt message validation plan does not execute code nodes")
+    }
+}
+
 fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
     let mut nodes = BTreeMap::new();
     nodes.insert(
@@ -91,6 +104,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
             config: json!({}),
             plugin_runtime: None,
             llm_runtime: None,
+            code_runtime: None,
         },
     );
     nodes.insert(
@@ -152,6 +166,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
                 model: "gpt-5.4-mini".to_string(),
                 routing: None,
             }),
+            code_runtime: None,
         },
     );
 
@@ -207,10 +222,12 @@ async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
     .await
     .unwrap();
 
-    assert!(captured_input
-        .lock()
-        .expect("captured input mutex poisoned")
-        .is_none());
+    assert!(
+        captured_input
+            .lock()
+            .expect("captured input mutex poisoned")
+            .is_none()
+    );
 
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
@@ -243,10 +260,12 @@ async fn llm_runtime_fails_before_provider_when_prompt_template_selector_is_miss
     .await
     .unwrap();
 
-    assert!(captured_input
-        .lock()
-        .expect("captured input mutex poisoned")
-        .is_none());
+    assert!(
+        captured_input
+            .lock()
+            .expect("captured input mutex poisoned")
+            .is_none()
+    );
 
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
@@ -255,10 +274,12 @@ async fn llm_runtime_fails_before_provider_when_prompt_template_selector_is_miss
                 failure.error_payload["error_kind"],
                 json!("prompt_template_unresolved")
             );
-            assert!(failure.error_payload["message"]
-                .as_str()
-                .expect("message should be a string")
-                .contains("node-start.query"));
+            assert!(
+                failure.error_payload["message"]
+                    .as_str()
+                    .expect("message should be a string")
+                    .contains("node-start.query")
+            );
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }

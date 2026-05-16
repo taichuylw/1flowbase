@@ -29,6 +29,8 @@ pub struct CompiledNode {
     pub plugin_runtime: Option<CompiledPluginRuntime>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_runtime: Option<CompiledLlmRuntime>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_runtime: Option<CompiledCodeRuntime>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,6 +84,26 @@ pub struct CompiledLlmRuntime {
     pub model: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing: Option<CompiledLlmRouting>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledCodeRuntime {
+    pub language: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_ref: Option<String>,
+    pub entrypoint: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependencies: Vec<CompiledCodeDependency>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledCodeDependency {
+    pub alias: String,
+    pub target: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

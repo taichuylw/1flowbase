@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
 
 use crate::compiled_plan::{
-    CompileIssue, CompileIssueCode, CompiledBinding, CompiledLlmRouteTarget, CompiledLlmRouting,
-    CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
-    LlmRoutingMode,
+    CompileIssue, CompileIssueCode, CompiledBinding, CompiledCodeDependency, CompiledCodeRuntime,
+    CompiledLlmRouteTarget, CompiledLlmRouting, CompiledLlmRuntime, CompiledNode, CompiledOutput,
+    CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
 };
 use crate::payload_builder::PublicOutputContract;
 
@@ -272,9 +272,10 @@ fn compile_node(
     let plugin_runtime = (node_type == "plugin_node")
         .then(|| compile_plugin_runtime(&node_id, node, &outputs, context, compile_issues))
         .flatten();
-    if node_type == "code" {
+    let code_runtime = (node_type == "code").then(|| {
         validate_code_imports(&node_id, &config, context, compile_issues);
-    }
+        compile_code_runtime(&config, context)
+    });
 
     Ok(CompiledNode {
         node_id,
@@ -288,7 +289,67 @@ fn compile_node(
         config,
         plugin_runtime,
         llm_runtime,
+        code_runtime,
     })
+}
+
+fn compile_code_runtime(config: &Value, context: &FlowCompileContext) -> CompiledCodeRuntime {
+    let language = trimmed_config_string(config, "language").unwrap_or("javascript");
+    let source = trimmed_config_string(config, "source").map(str::to_string);
+    let source_ref = trimmed_config_string(config, "source_ref")
+        .or_else(|| trimmed_config_string(config, "sourceRef"))
+        .map(str::to_string);
+    let entrypoint = trimmed_config_string(config, "entrypoint").unwrap_or("main");
+    let imports = code_import_aliases(config);
+    let dependencies = imports
+        .iter()
+        .filter_map(|alias| {
+            let key = js_dependency_lookup_key("backend_code", alias);
+            context
+                .js_dependencies
+                .get(&key)
+                .map(|dependency| CompiledCodeDependency {
+                    alias: dependency.alias.clone(),
+                    target: dependency.target.clone(),
+                })
+        })
+        .collect();
+
+    CompiledCodeRuntime {
+        language: language.to_string(),
+        source,
+        source_ref,
+        entrypoint: entrypoint.to_string(),
+        imports,
+        dependencies,
+    }
+}
+
+fn trimmed_config_string<'a>(config: &'a Value, key: &str) -> Option<&'a str> {
+    config
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn code_import_aliases(config: &Value) -> Vec<String> {
+    config
+        .get("imports")
+        .and_then(Value::as_array)
+        .map(|imports| {
+            imports
+                .iter()
+                .filter_map(|import| {
+                    import
+                        .as_str()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn validate_code_imports(

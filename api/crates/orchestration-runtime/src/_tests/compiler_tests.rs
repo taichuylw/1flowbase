@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use orchestration_runtime::compiled_plan::CompileIssueCode;
+use orchestration_runtime::compiled_plan::{CompileIssueCode, CompiledCodeDependency};
 use orchestration_runtime::compiler::{
     FlowCompileContext, FlowCompileJsDependency, FlowCompileNodeContribution,
     FlowCompileProviderFamily, FlowCompileProviderInstance, FlowCompiler,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 fn compile_context() -> FlowCompileContext {
@@ -337,6 +337,67 @@ fn code_js_dependency_import_enabled_by_context_has_no_issue() {
 }
 
 #[test]
+fn code_runtime_metadata_compiles_language_entrypoint_source_and_import_snapshot() {
+    let flow_id = Uuid::now_v7();
+    let mut document = code_js_dependency_document(flow_id, "code", Some(json!(["zod"])));
+    document["graph"]["nodes"][1]["config"]["language"] = json!("javascript");
+    document["graph"]["nodes"][1]["config"]["source"] =
+        json!("export function main(input) { return input; }");
+    document["graph"]["nodes"][1]["config"]["entrypoint"] = json!("main");
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &document,
+        &code_js_dependency_context("zod", "backend_code"),
+    )
+    .unwrap();
+
+    let runtime = plan.nodes["node-code"]
+        .code_runtime
+        .as_ref()
+        .expect("code node should compile runtime metadata");
+
+    assert_eq!(runtime.language, "javascript");
+    assert_eq!(
+        runtime.source.as_deref(),
+        Some("export function main(input) { return input; }")
+    );
+    assert_eq!(runtime.source_ref, None);
+    assert_eq!(runtime.entrypoint, "main");
+    assert_eq!(runtime.imports, vec!["zod".to_string()]);
+    assert_eq!(
+        runtime.dependencies,
+        vec![CompiledCodeDependency {
+            alias: "zod".to_string(),
+            target: "backend_code".to_string(),
+        }]
+    );
+}
+
+#[test]
+fn code_runtime_metadata_defaults_entrypoint_and_preserves_source_ref() {
+    let flow_id = Uuid::now_v7();
+    let mut document = code_js_dependency_document(flow_id, "code", None);
+    document["graph"]["nodes"][1]["config"]["sourceRef"] = json!("artifact://code/node-code");
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    let runtime = plan.nodes["node-code"]
+        .code_runtime
+        .as_ref()
+        .expect("code node should compile runtime metadata");
+
+    assert_eq!(runtime.language, "javascript");
+    assert_eq!(runtime.source, None);
+    assert_eq!(
+        runtime.source_ref.as_deref(),
+        Some("artifact://code/node-code")
+    );
+    assert_eq!(runtime.entrypoint, "main");
+    assert!(runtime.imports.is_empty());
+    assert!(runtime.dependencies.is_empty());
+}
+
+#[test]
 fn code_js_dependency_import_without_context_reports_not_enabled_issue() {
     let flow_id = Uuid::now_v7();
     let plan = FlowCompiler::compile(
@@ -439,9 +500,11 @@ fn compile_rejects_unsupported_flow_schema_version() {
     let error =
         FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("unsupported flow schemaVersion: 1flowbase.flow/v1"));
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported flow schemaVersion: 1flowbase.flow/v1")
+    );
 }
 
 #[test]
@@ -454,9 +517,11 @@ fn compile_rejects_legacy_start_outputs() {
     let error =
         FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("start node node-start outputs must be empty"));
+    assert!(
+        error
+            .to_string()
+            .contains("start node node-start outputs must be empty")
+    );
 }
 
 #[test]
@@ -470,13 +535,17 @@ fn compile_llm_node_ignores_legacy_prompt_bindings() {
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
-    assert!(plan.nodes["node-llm"]
-        .bindings
-        .contains_key("prompt_messages"));
+    assert!(
+        plan.nodes["node-llm"]
+            .bindings
+            .contains_key("prompt_messages")
+    );
     assert!(!plan.nodes["node-llm"].bindings.contains_key("user_prompt"));
-    assert!(!plan.nodes["node-llm"]
-        .bindings
-        .contains_key("system_prompt"));
+    assert!(
+        !plan.nodes["node-llm"]
+            .bindings
+            .contains_key("system_prompt")
+    );
 }
 
 #[test]
@@ -606,9 +675,11 @@ fn compile_data_model_filters_inactive_bindings_by_node_type() {
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
     assert!(!plan.nodes["node-data-model"].bindings.contains_key("query"));
-    assert!(plan.nodes["node-data-model"]
-        .bindings
-        .contains_key("payload"));
+    assert!(
+        plan.nodes["node-data-model"]
+            .bindings
+            .contains_key("payload")
+    );
 }
 
 #[test]
@@ -652,12 +723,16 @@ fn compile_data_model_create_node_filters_inactive_bindings_by_type() {
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
-    assert!(!plan.nodes["node-data-model-create"]
-        .bindings
-        .contains_key("query"));
-    assert!(plan.nodes["node-data-model-create"]
-        .bindings
-        .contains_key("payload"));
+    assert!(
+        !plan.nodes["node-data-model-create"]
+            .bindings
+            .contains_key("query")
+    );
+    assert!(
+        plan.nodes["node-data-model-create"]
+            .bindings
+            .contains_key("payload")
+    );
 }
 
 #[test]
@@ -740,10 +815,11 @@ fn compile_uses_selected_instance_models_instead_of_provider_family_aggregate() 
     let plan =
         FlowCompiler::compile(flow_id, "draft-1", &sample_document(flow_id), &context).unwrap();
 
-    assert!(plan
-        .compile_issues
-        .iter()
-        .any(|issue| issue.code == CompileIssueCode::ModelNotAvailable));
+    assert!(
+        plan.compile_issues
+            .iter()
+            .any(|issue| issue.code == CompileIssueCode::ModelNotAvailable)
+    );
 }
 
 #[test]
@@ -810,10 +886,11 @@ fn compile_collects_missing_source_instance_issue() {
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
-    assert!(plan
-        .compile_issues
-        .iter()
-        .any(|issue| issue.code == CompileIssueCode::MissingProviderInstance));
+    assert!(
+        plan.compile_issues
+            .iter()
+            .any(|issue| issue.code == CompileIssueCode::MissingProviderInstance)
+    );
 }
 
 #[test]
@@ -828,14 +905,16 @@ fn compile_rejects_legacy_top_level_llm_config_shape() {
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
-    assert!(plan
-        .compile_issues
-        .iter()
-        .any(|issue| issue.code == CompileIssueCode::MissingProviderInstance));
-    assert!(plan
-        .compile_issues
-        .iter()
-        .any(|issue| issue.code == CompileIssueCode::MissingModel));
+    assert!(
+        plan.compile_issues
+            .iter()
+            .any(|issue| issue.code == CompileIssueCode::MissingProviderInstance)
+    );
+    assert!(
+        plan.compile_issues
+            .iter()
+            .any(|issue| issue.code == CompileIssueCode::MissingModel)
+    );
 }
 
 #[test]
