@@ -257,6 +257,12 @@ function getBlockRow(blockId: string) {
   });
 }
 
+function getPageTreeItem(title: string) {
+  return screen.getByRole('button', {
+    name: new RegExp(`${escapeRegExp(title)}\\s+页面节点`)
+  });
+}
+
 function getSelectedBlockActions() {
   return screen.getByTestId('frontstage-selected-block-actions');
 }
