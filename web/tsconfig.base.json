@@ -17,6 +17,7 @@
       "@1flowbase/model-provider-contracts/*": ["../scripts/node/testing/contracts/model-providers/*"],
       "@1flowbase/ui": ["packages/ui/src/index.tsx"],
       "@1flowbase/flow-schema": ["packages/flow-schema/src/index.ts"],
+      "@1flowbase/antd-facade": ["packages/antd-facade/src/index.ts"],
       "@1flowbase/page-protocol": ["packages/page-protocol/src/index.ts"],
       "@1flowbase/page-runtime": ["packages/page-runtime/src/index.ts"],
       "@1flowbase/embed-sdk": ["packages/embed-sdk/src/index.ts"],
