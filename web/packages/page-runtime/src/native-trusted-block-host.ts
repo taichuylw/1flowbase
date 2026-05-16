@@ -83,8 +83,7 @@ export function createNativeTrustedBlockHost(
         const instance = await options.adapter.mount({ plan, root });
         if (didDisposeHost) {
           if (isMountedInstance(instance)) {
-            mountedInstance = instance;
-            await disposeMountedInstanceOnce();
+            await instance.dispose?.();
           }
           return state;
         }

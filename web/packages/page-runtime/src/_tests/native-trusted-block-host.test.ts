@@ -5,6 +5,7 @@ import {
   NATIVE_TRUSTED_BLOCK_RUNTIME,
   createNativeTrustedBlockHost,
   type NativeTrustedBlockHostAdapter,
+  type NativeTrustedBlockMountedInstance,
   type NativeTrustedBlockPreparePlan
 } from '../index';
 
@@ -81,6 +82,32 @@ describe('Native trusted block host lifecycle adapter', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(firstState).toEqual({ status: 'disposed' });
     expect(secondState).toBe(firstState);
+  });
+
+  test('disposes instances that resolve after dispose while mount is pending', async () => {
+    const plan = createPreparePlan();
+    const root = { handle: 'root-1' };
+    const dispose = vi.fn();
+    let resolveMount!: (instance: NativeTrustedBlockMountedInstance) => void;
+    const pendingMount = new Promise<NativeTrustedBlockMountedInstance>(
+      (resolve) => {
+        resolveMount = resolve;
+      }
+    );
+    const adapter: NativeTrustedBlockHostAdapter = {
+      mount: vi.fn().mockReturnValue(pendingMount)
+    };
+    const host = createNativeTrustedBlockHost({ adapter });
+
+    const mountStatePromise = host.mount(plan, root);
+    const disposedState = await host.dispose();
+    resolveMount({ dispose });
+    const mountState = await mountStatePromise;
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(disposedState).toEqual({ status: 'disposed' });
+    expect(mountState).toBe(disposedState);
+    expect(host.getState()).toBe(disposedState);
   });
 
   test('calls after dispose do not remount or reach mounted state', async () => {
