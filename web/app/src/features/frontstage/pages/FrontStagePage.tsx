@@ -12,6 +12,7 @@ import type { FC } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
+import type { FrontstagePageContent } from '../api/page-content';
 import {
   canMoveNode,
   findNodeById,
@@ -35,6 +36,10 @@ type FrontStagePageProps = {
   isPageTreeLoading?: boolean;
   hasPageTreeLoadError?: boolean;
   onRetryLoadPageTree?: () => void;
+  pageContent?: FrontstagePageContent;
+  isPageContentLoading?: boolean;
+  hasPageContentLoadError?: boolean;
+  onRetryLoadPageContent?: () => void;
   isPageTreeMutating?: boolean;
   pageTreeMutationError?: Error | null;
   onCreateGroupNode?: (
@@ -144,6 +149,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   isPageTreeLoading,
   hasPageTreeLoadError,
   onRetryLoadPageTree,
+  pageContent,
+  isPageContentLoading,
+  hasPageContentLoadError,
+  onRetryLoadPageContent,
   isPageTreeMutating,
   pageTreeMutationError,
   onCreateGroupNode,
@@ -317,6 +326,56 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }
     />
   ) : null;
+
+  const renderPageContentPlaceholder = () => {
+    if (!selectedPageLabel) {
+      return (
+        <Typography.Text>
+          当前前台未指定 pageId，后续将默认加载该工作区页面树里的首页。
+        </Typography.Text>
+      );
+    }
+
+    if (isPageContentLoading) {
+      return <Typography.Text>页面内容加载中</Typography.Text>;
+    }
+
+    if (hasPageContentLoadError) {
+      return (
+        <Space direction="vertical" size={8}>
+          <Typography.Text type="danger">页面内容加载失败</Typography.Text>
+          <Typography.Text type="secondary">
+            页面内容加载失败，请检查网络后重试。
+          </Typography.Text>
+          {onRetryLoadPageContent ? (
+            <Button size="small" onClick={onRetryLoadPageContent}>
+              重试
+            </Button>
+          ) : null}
+        </Space>
+      );
+    }
+
+    if (pageContent) {
+      return (
+        <Space direction="vertical" size={4}>
+          <Typography.Text>页面内容已加载</Typography.Text>
+          <Typography.Text type="secondary">
+            Schema Root：{pageContent.schema.rootUid}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            Content Root：{pageContent.root.uid}
+          </Typography.Text>
+        </Space>
+      );
+    }
+
+    return (
+      <Typography.Text>
+        当前页面尚未接入区块内容，浏览态仅展示空状态。请在设计态添加页面区块与内容。
+      </Typography.Text>
+    );
+  };
 
   const runPageTreeOperation = async <T,>(
     operation: () => Promise<T | void>
@@ -710,16 +769,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <div style={{ marginTop: 8 }}>
-                {selectedPageLabel ? (
-                  <Typography.Text>
-                    当前页面尚未接入区块内容，浏览态仅展示空状态。请在设计态添加页面区块与内容。
-                  </Typography.Text>
-                ) : (
-                  <Typography.Text>
-                    当前前台未指定
-                    pageId，后续将默认加载该工作区页面树里的首页。
-                  </Typography.Text>
-                )}
+                {renderPageContentPlaceholder()}
                 {canEnterDesignMode && isDesignMode ? (
                   <Typography.Paragraph
                     type="secondary"
