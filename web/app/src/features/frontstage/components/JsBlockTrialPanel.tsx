@@ -5,12 +5,17 @@ import {
 import { Alert, Button, Descriptions, Input, Space, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
+import {
+  RestrictedBlockRuntimePreview,
+  type RestrictedBlockRuntimeActionEvent
+} from './RestrictedBlockRuntimePreview';
 import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
 import type { FrontstageBlockInstance } from '../lib/page-document';
 import {
   createRestrictedBlockRunPlan,
   type RestrictedBlockLoaderLimits
 } from '../lib/restricted-block-loader';
+import type { RestrictedBlockRuntimeHostSnapshot } from '../lib/restricted-block-runtime-host';
 
 export interface JsBlockTrialPanelProps {
   block: FrontstageBlockInstance | null | undefined;
@@ -18,9 +23,11 @@ export interface JsBlockTrialPanelProps {
   code: string;
   contextSnapshot: Record<string, unknown>;
   limits?: RestrictedBlockLoaderLimits;
+  runtimeSnapshot?: RestrictedBlockRuntimeHostSnapshot;
   onCodeChange?: (code: string) => void;
   onContextSnapshotChange?: (contextSnapshot: Record<string, unknown>) => void;
   onLimitsChange?: (limits: RestrictedBlockLoaderLimits) => void;
+  onRuntimeAction?: (event: RestrictedBlockRuntimeActionEvent) => void;
 }
 
 type JsonDraftKind = 'context' | 'limits';
@@ -224,9 +231,11 @@ export function JsBlockTrialPanel({
   code,
   contextSnapshot,
   limits,
+  runtimeSnapshot,
   onCodeChange,
   onContextSnapshotChange,
-  onLimitsChange
+  onLimitsChange,
+  onRuntimeAction
 }: JsBlockTrialPanelProps) {
   const [contextDraft, setContextDraft] = useState(() =>
     stringifyDraft(contextSnapshot)
@@ -511,6 +520,13 @@ export function JsBlockTrialPanel({
             ]}
           />
         </Space>
+      ) : null}
+
+      {runtimeSnapshot ? (
+        <RestrictedBlockRuntimePreview
+          snapshot={runtimeSnapshot}
+          onAction={onRuntimeAction}
+        />
       ) : null}
     </Space>
   );

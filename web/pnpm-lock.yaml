@@ -84,6 +84,9 @@ importers:
       '@1flowbase/api-client':
         specifier: workspace:*
         version: link:../packages/api-client
+      '@1flowbase/block-renderer':
+        specifier: workspace:*
+        version: link:../packages/block-renderer
       '@1flowbase/embed-sdk':
         specifier: workspace:*
         version: link:../packages/embed-sdk

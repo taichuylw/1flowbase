@@ -77,6 +77,9 @@ export default defineConfig(({ mode }) => {
         '@1flowbase/api-client': fileURLToPath(
           new URL('../packages/api-client/src/index.ts', import.meta.url)
         ),
+        '@1flowbase/block-renderer': fileURLToPath(
+          new URL('../packages/block-renderer/src/index.tsx', import.meta.url)
+        ),
         '@1flowbase/model-provider-contracts': fileURLToPath(
           new URL('../../scripts/node/testing/contracts/model-providers', import.meta.url)
         ),
