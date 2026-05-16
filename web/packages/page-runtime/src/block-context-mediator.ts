@@ -1,0 +1,789 @@
+import type {
+  BlockDataPermission,
+  BlockRuntimeErrorCode
+} from '@1flowbase/page-protocol';
+
+import type { JsBlockWorkerEffect } from './js-block-worker-runtime';
+
+export type BlockContextMediatorDataOperation = BlockDataPermission;
+
+export type BlockContextMediatorRejectionCode =
+  | Extract<
+      BlockRuntimeErrorCode,
+      | 'event_denied'
+      | 'action_denied'
+      | 'query_denied'
+      | 'create_denied'
+      | 'update_denied'
+      | 'delete_denied'
+    >
+  | 'payload_invalid'
+  | 'effect_invalid'
+  | 'data_operation_invalid';
+
+export type BlockContextJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | BlockContextJsonValue[]
+  | { [key: string]: BlockContextJsonValue };
+
+export interface BlockContextMediatorPolicy {
+  allowedEvents?: readonly string[];
+  allowedActions?: readonly string[];
+  allowedDataModels?: readonly string[];
+  allowedDataOperations?: readonly BlockContextMediatorDataOperation[];
+  maxEventChainDepth?: number;
+}
+
+export interface BlockContextMediatorContext {
+  tickId?: string;
+}
+
+export interface BlockContextMediatorState {
+  eventChains: Record<string, number>;
+}
+
+export type BlockContextMediatorResult =
+  | {
+      ok: true;
+      requestId: string;
+      effect: JsBlockWorkerEffect;
+    }
+  | {
+      ok: false;
+      requestId?: string;
+      code: BlockContextMediatorRejectionCode;
+      path: string;
+      message: string;
+    };
+
+export interface BlockContextMediatorTransition {
+  state: BlockContextMediatorState;
+  result: BlockContextMediatorResult;
+}
+
+export interface BlockContextMediator {
+  getState(): BlockContextMediatorState;
+  handle(
+    effect: unknown,
+    context?: BlockContextMediatorContext
+  ): BlockContextMediatorTransition;
+}
+
+type NormalizedEffect = JsBlockWorkerEffect;
+
+type JsonNormalizationResult =
+  | { ok: true; value: BlockContextJsonValue }
+  | {
+      ok: false;
+      path: string;
+      message: string;
+    };
+
+const DEFAULT_MAX_EVENT_CHAIN_DEPTH = 32;
+
+const DATA_DENIAL_CODES = {
+  query: 'query_denied',
+  create: 'create_denied',
+  update: 'update_denied',
+  delete: 'delete_denied'
+} as const satisfies Record<BlockContextMediatorDataOperation, BlockRuntimeErrorCode>;
+
+export function createBlockContextMediatorState(): BlockContextMediatorState {
+  return {
+    eventChains: {}
+  };
+}
+
+export function createBlockContextMediator(
+  policy: BlockContextMediatorPolicy,
+  initialState: BlockContextMediatorState = createBlockContextMediatorState()
+): BlockContextMediator {
+  let state = initialState;
+
+  return {
+    getState() {
+      return state;
+    },
+    handle(effect, context) {
+      const transition = reduceBlockContextMediator(
+        state,
+        effect,
+        policy,
+        context
+      );
+      state = transition.state;
+      return transition;
+    }
+  };
+}
+
+export function reduceBlockContextMediator(
+  state: BlockContextMediatorState,
+  effect: unknown,
+  policy: BlockContextMediatorPolicy,
+  context: BlockContextMediatorContext = {}
+): BlockContextMediatorTransition {
+  const effectResult = normalizeEffect(effect);
+  if (!effectResult.ok) {
+    return {
+      state,
+      result: effectResult.result
+    };
+  }
+
+  const normalizedEffect = effectResult.effect;
+  switch (normalizedEffect.type) {
+    case 'event':
+      return reduceEventEffect(state, normalizedEffect, policy, context);
+    case 'action':
+      return reduceActionEffect(state, normalizedEffect, policy);
+    case 'data':
+      return reduceDataEffect(state, normalizedEffect, policy);
+  }
+}
+
+function reduceEventEffect(
+  state: BlockContextMediatorState,
+  effect: Extract<NormalizedEffect, { type: 'event' }>,
+  policy: BlockContextMediatorPolicy,
+  context: BlockContextMediatorContext
+): BlockContextMediatorTransition {
+  if (!toSet(policy.allowedEvents).has(effect.name)) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: 'event_denied',
+      path: 'event.name',
+      message: `Event is not allowed: ${effect.name}.`
+    });
+  }
+
+  const payloadResult = normalizeOptionalPayload(effect.payload);
+  if (!payloadResult.ok) {
+    return rejectPayload(state, effect.requestId, payloadResult);
+  }
+
+  const chainKey = getEventChainKey(effect.requestId, context.tickId);
+  const currentDepth = state.eventChains[chainKey] ?? 0;
+  const nextDepth = currentDepth + 1;
+  const maxDepth = getMaxEventChainDepth(policy);
+  if (nextDepth > maxDepth) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: 'event_denied',
+      path: 'event.chain',
+      message: `Event chain exceeded the maximum depth of ${maxDepth}.`
+    });
+  }
+
+  const nextState = {
+    ...state,
+    eventChains: {
+      ...state.eventChains,
+      [chainKey]: nextDepth
+    }
+  };
+
+  return allow(nextState, {
+    type: 'event',
+    requestId: effect.requestId,
+    name: effect.name,
+    ...(payloadResult.value === undefined
+      ? {}
+      : { payload: payloadResult.value })
+  });
+}
+
+function reduceActionEffect(
+  state: BlockContextMediatorState,
+  effect: Extract<NormalizedEffect, { type: 'action' }>,
+  policy: BlockContextMediatorPolicy
+): BlockContextMediatorTransition {
+  if (!toSet(policy.allowedActions).has(effect.actionId)) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: 'action_denied',
+      path: 'action.actionId',
+      message: `Action is not allowed: ${effect.actionId}.`
+    });
+  }
+
+  const payloadResult = normalizeOptionalPayload(effect.payload);
+  if (!payloadResult.ok) {
+    return rejectPayload(state, effect.requestId, payloadResult);
+  }
+
+  return allow(state, {
+    type: 'action',
+    requestId: effect.requestId,
+    actionId: effect.actionId,
+    ...(payloadResult.value === undefined
+      ? {}
+      : { payload: payloadResult.value })
+  });
+}
+
+function reduceDataEffect(
+  state: BlockContextMediatorState,
+  effect: Extract<NormalizedEffect, { type: 'data' }>,
+  policy: BlockContextMediatorPolicy
+): BlockContextMediatorTransition {
+  if (!isDataOperation(effect.operation)) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: 'data_operation_invalid',
+      path: 'data.operation',
+      message: `Data operation is invalid: ${effect.operation}.`
+    });
+  }
+
+  const denialCode = DATA_DENIAL_CODES[effect.operation];
+  if (!toSet(policy.allowedDataOperations).has(effect.operation)) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: denialCode,
+      path: 'data.operation',
+      message: `Data operation is not allowed: ${effect.operation}.`
+    });
+  }
+
+  const payloadResult = normalizeOptionalPayload(effect.payload);
+  if (!payloadResult.ok) {
+    return rejectPayload(state, effect.requestId, payloadResult);
+  }
+
+  if (!isJsonRecord(payloadResult.value)) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: 'payload_invalid',
+      path: 'payload',
+      message: 'Data request payload must be an object.'
+    });
+  }
+
+  const model = payloadResult.value.model;
+  if (typeof model !== 'string' || model.length === 0) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: 'payload_invalid',
+      path: 'payload.model',
+      message: 'Data request payload.model must be a non-empty string.'
+    });
+  }
+
+  if (!toSet(policy.allowedDataModels).has(model)) {
+    return reject(state, {
+      requestId: effect.requestId,
+      code: denialCode,
+      path: 'payload.model',
+      message: `Data model is not allowed: ${model}.`
+    });
+  }
+
+  return allow(state, {
+    type: 'data',
+    requestId: effect.requestId,
+    operation: effect.operation,
+    payload: payloadResult.value
+  });
+}
+
+function allow(
+  state: BlockContextMediatorState,
+  effect: JsBlockWorkerEffect
+): BlockContextMediatorTransition {
+  return {
+    state,
+    result: {
+      ok: true,
+      requestId: effect.requestId,
+      effect
+    }
+  };
+}
+
+function reject(
+  state: BlockContextMediatorState,
+  result: Omit<Exclude<BlockContextMediatorResult, { ok: true }>, 'ok'>
+): BlockContextMediatorTransition {
+  return {
+    state,
+    result: {
+      ok: false,
+      ...result
+    }
+  };
+}
+
+function rejectPayload(
+  state: BlockContextMediatorState,
+  requestId: string,
+  payloadResult: Extract<JsonNormalizationResult, { ok: false }>
+): BlockContextMediatorTransition {
+  return reject(state, {
+    requestId,
+    code: 'payload_invalid',
+    path: payloadResult.path,
+    message: payloadResult.message
+  });
+}
+
+function normalizeEffect(
+  value: unknown
+):
+  | { ok: true; effect: NormalizedEffect }
+  | { ok: false; result: Exclude<BlockContextMediatorResult, { ok: true }> } {
+  if (!isRecord(value)) {
+    return effectInvalid('effect', 'Worker effect must be an object.');
+  }
+
+  const type = readStringProperty(value, 'type', 'effect.type');
+  if (!type.ok) {
+    return effectInvalid(type.path, type.message);
+  }
+
+  const requestId = readStringProperty(value, 'requestId', 'effect.requestId');
+  if (!requestId.ok) {
+    return effectInvalid(requestId.path, requestId.message);
+  }
+
+  const payload = readOptionalProperty(value, 'payload');
+  if (!payload.ok) {
+    return effectInvalid(payload.path, payload.message, requestId.value);
+  }
+
+  if (type.value === 'event') {
+    const name = readStringProperty(value, 'name', 'effect.name');
+    if (!name.ok) {
+      return effectInvalid(name.path, name.message, requestId.value);
+    }
+
+    return {
+      ok: true,
+      effect: {
+        type: 'event',
+        requestId: requestId.value,
+        name: name.value,
+        ...(payload.hasValue ? { payload: payload.value } : {})
+      }
+    };
+  }
+
+  if (type.value === 'action') {
+    const actionId = readStringProperty(value, 'actionId', 'effect.actionId');
+    if (!actionId.ok) {
+      return effectInvalid(actionId.path, actionId.message, requestId.value);
+    }
+
+    return {
+      ok: true,
+      effect: {
+        type: 'action',
+        requestId: requestId.value,
+        actionId: actionId.value,
+        ...(payload.hasValue ? { payload: payload.value } : {})
+      }
+    };
+  }
+
+  if (type.value === 'data') {
+    const operation = readStringProperty(value, 'operation', 'effect.operation');
+    if (!operation.ok) {
+      return effectInvalid(operation.path, operation.message, requestId.value);
+    }
+
+    return {
+      ok: true,
+      effect: {
+        type: 'data',
+        requestId: requestId.value,
+        operation: operation.value,
+        ...(payload.hasValue ? { payload: payload.value } : {})
+      }
+    };
+  }
+
+  return effectInvalid(
+    'effect.type',
+    `Worker effect type is unsupported: ${type.value}.`,
+    requestId.value
+  );
+}
+
+function normalizeOptionalPayload(
+  value: unknown
+):
+  | { ok: true; value?: BlockContextJsonValue }
+  | Extract<JsonNormalizationResult, { ok: false }> {
+  if (value === undefined) {
+    return { ok: true };
+  }
+
+  return normalizeJsonValue(value, 'payload', new WeakSet<object>());
+}
+
+function normalizeJsonValue(
+  value: unknown,
+  path: string,
+  seen: WeakSet<object>
+): JsonNormalizationResult {
+  if (value === null) {
+    return { ok: true, value: null };
+  }
+
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return { ok: true, value };
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return invalidJson(path, 'Payload numbers must be finite.');
+    }
+
+    return { ok: true, value };
+  }
+
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    return invalidJson(path, 'Payload values must be JSON-compatible data.');
+  }
+
+  if (typeof value === 'bigint' || value === undefined) {
+    return invalidJson(path, 'Payload values must be JSON-compatible data.');
+  }
+
+  if (!isRecordLike(value)) {
+    return invalidJson(path, 'Payload values must be JSON-compatible data.');
+  }
+
+  if (seen.has(value)) {
+    return invalidJson(path, 'Payload must not contain circular references.');
+  }
+
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return normalizeJsonArray(value, path, seen);
+  }
+
+  return normalizeJsonObject(value, path, seen);
+}
+
+function normalizeJsonArray(
+  value: unknown[],
+  path: string,
+  seen: WeakSet<object>
+): JsonNormalizationResult {
+  const output: BlockContextJsonValue[] = [];
+
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = getOwnDescriptor(value, `${index}`, `${path}[${index}]`);
+    if (!descriptor.ok) {
+      return descriptor;
+    }
+
+    if (!descriptor.descriptor || !('value' in descriptor.descriptor)) {
+      return invalidJson(
+        `${path}[${index}]`,
+        'Payload accessors are not JSON-compatible data.'
+      );
+    }
+
+    const item = normalizeJsonValue(
+      descriptor.descriptor.value,
+      `${path}[${index}]`,
+      seen
+    );
+    if (!item.ok) {
+      return item;
+    }
+    output.push(item.value);
+  }
+
+  return { ok: true, value: output };
+}
+
+function normalizeJsonObject(
+  value: object,
+  path: string,
+  seen: WeakSet<object>
+): JsonNormalizationResult {
+  const prototype = safeGetPrototypeOf(value, path);
+  if (!prototype.ok) {
+    return prototype;
+  }
+
+  if (prototype.value !== null && prototype.value !== Object.prototype) {
+    return invalidJson(path, 'Payload objects must be plain JSON objects.');
+  }
+
+  const symbolKeys = safeGetOwnPropertySymbols(value, path);
+  if (!symbolKeys.ok) {
+    return symbolKeys;
+  }
+
+  if (symbolKeys.value.length > 0) {
+    return invalidJson(path, 'Payload objects must not contain symbol keys.');
+  }
+
+  const stringKeys = safeObjectKeys(value, path);
+  if (!stringKeys.ok) {
+    return stringKeys;
+  }
+
+  const output: { [key: string]: BlockContextJsonValue } = {};
+  for (const key of stringKeys.value) {
+    const descriptor = getOwnDescriptor(value, key, `${path}.${key}`);
+    if (!descriptor.ok) {
+      return descriptor;
+    }
+
+    if (!descriptor.descriptor || !('value' in descriptor.descriptor)) {
+      return invalidJson(
+        `${path}.${key}`,
+        'Payload accessors are not JSON-compatible data.'
+      );
+    }
+
+    const property = normalizeJsonValue(
+      descriptor.descriptor.value,
+      `${path}.${key}`,
+      seen
+    );
+    if (!property.ok) {
+      return property;
+    }
+
+    output[key] = property.value;
+  }
+
+  return { ok: true, value: output };
+}
+
+function readStringProperty(
+  record: Record<string, unknown>,
+  key: string,
+  path: string
+): { ok: true; value: string } | { ok: false; path: string; message: string } {
+  const value = readRequiredProperty(record, key, path);
+  if (!value.ok) {
+    return value;
+  }
+
+  if (typeof value.value !== 'string' || value.value.length === 0) {
+    return {
+      ok: false,
+      path,
+      message: `${key} must be a non-empty string.`
+    };
+  }
+
+  return { ok: true, value: value.value };
+}
+
+function readRequiredProperty(
+  record: Record<string, unknown>,
+  key: string,
+  path: string
+):
+  | { ok: true; value: unknown }
+  | { ok: false; path: string; message: string } {
+  const property = readOptionalProperty(record, key);
+  if (!property.ok) {
+    return property;
+  }
+
+  if (!property.hasValue) {
+    return {
+      ok: false,
+      path,
+      message: `${key} is required.`
+    };
+  }
+
+  return { ok: true, value: property.value };
+}
+
+function readOptionalProperty(
+  record: Record<string, unknown>,
+  key: string
+):
+  | { ok: true; hasValue: false }
+  | { ok: true; hasValue: true; value: unknown }
+  | { ok: false; path: string; message: string } {
+  const descriptor = getOwnDescriptor(record, key, `effect.${key}`);
+  if (!descriptor.ok) {
+    return descriptor;
+  }
+
+  if (!descriptor.descriptor) {
+    return { ok: true, hasValue: false };
+  }
+
+  if (!('value' in descriptor.descriptor)) {
+    return {
+      ok: false,
+      path: `effect.${key}`,
+      message: `${key} accessors are not supported.`
+    };
+  }
+
+  return {
+    ok: true,
+    hasValue: true,
+    value: descriptor.descriptor.value
+  };
+}
+
+function getOwnDescriptor(
+  record: object,
+  key: string,
+  path: string
+):
+  | { ok: true; descriptor?: PropertyDescriptor }
+  | { ok: false; path: string; message: string } {
+  try {
+    return {
+      ok: true,
+      descriptor: Object.getOwnPropertyDescriptor(record, key)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      path,
+      message: getUnknownAccessMessage(error)
+    };
+  }
+}
+
+function safeGetPrototypeOf(
+  value: object,
+  path: string
+):
+  | { ok: true; value: object | null }
+  | { ok: false; path: string; message: string } {
+  try {
+    return { ok: true, value: Object.getPrototypeOf(value) };
+  } catch (error) {
+    return {
+      ok: false,
+      path,
+      message: getUnknownAccessMessage(error)
+    };
+  }
+}
+
+function safeGetOwnPropertySymbols(
+  value: object,
+  path: string
+):
+  | { ok: true; value: symbol[] }
+  | { ok: false; path: string; message: string } {
+  try {
+    return { ok: true, value: Object.getOwnPropertySymbols(value) };
+  } catch (error) {
+    return {
+      ok: false,
+      path,
+      message: getUnknownAccessMessage(error)
+    };
+  }
+}
+
+function safeObjectKeys(
+  value: object,
+  path: string
+):
+  | { ok: true; value: string[] }
+  | { ok: false; path: string; message: string } {
+  try {
+    return { ok: true, value: Object.keys(value) };
+  } catch (error) {
+    return {
+      ok: false,
+      path,
+      message: getUnknownAccessMessage(error)
+    };
+  }
+}
+
+function effectInvalid(
+  path: string,
+  message: string,
+  requestId?: string
+): { ok: false; result: Exclude<BlockContextMediatorResult, { ok: true }> } {
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      requestId,
+      code: 'effect_invalid',
+      path,
+      message
+    }
+  };
+}
+
+function invalidJson(
+  path: string,
+  message: string
+): Extract<JsonNormalizationResult, { ok: false }> {
+  return {
+    ok: false,
+    path,
+    message
+  };
+}
+
+function getUnknownAccessMessage(error: unknown): string {
+  return error instanceof Error
+    ? `Payload access failed: ${error.message}`
+    : 'Payload access failed.';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isRecordLike(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isJsonRecord(
+  value: BlockContextJsonValue | undefined
+): value is { [key: string]: BlockContextJsonValue } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function isDataOperation(
+  value: string
+): value is BlockContextMediatorDataOperation {
+  return (
+    value === 'query' ||
+    value === 'create' ||
+    value === 'update' ||
+    value === 'delete'
+  );
+}
+
+function toSet(values: readonly string[] | undefined): ReadonlySet<string> {
+  return new Set(values ?? []);
+}
+
+function getMaxEventChainDepth(policy: BlockContextMediatorPolicy): number {
+  const depth = policy.maxEventChainDepth;
+  if (typeof depth !== 'number' || !Number.isFinite(depth) || depth < 1) {
+    return DEFAULT_MAX_EVENT_CHAIN_DEPTH;
+  }
+
+  return Math.floor(depth);
+}
+
+function getEventChainKey(requestId: string, tickId: string | undefined): string {
+  return `${requestId}::${tickId ?? 'default'}`;
+}
