@@ -25,6 +25,7 @@ pub(super) async fn start_flow_debug_run<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::ApplicationJsDependencySelectionRepository
         + crate::ports::FlowRepository
         + crate::ports::OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository
@@ -67,6 +68,7 @@ pub(super) async fn prepare_flow_debug_run_from_shell<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::ApplicationJsDependencySelectionRepository
         + crate::ports::FlowRepository
         + crate::ports::OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository

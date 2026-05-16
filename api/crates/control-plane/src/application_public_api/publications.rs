@@ -176,7 +176,7 @@ where
         let document = protected_state.draft.document.clone();
         let compile_context = self
             .repository
-            .build_application_compile_context(application.workspace_id)
+            .build_application_compile_context(application.workspace_id, application.id)
             .await?;
         let compiled_plan = FlowCompiler::compile(
             protected_state.flow.id,

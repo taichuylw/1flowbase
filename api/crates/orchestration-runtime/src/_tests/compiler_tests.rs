@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use orchestration_runtime::compiled_plan::CompileIssueCode;
 use orchestration_runtime::compiler::{
-    FlowCompileContext, FlowCompileNodeContribution, FlowCompileProviderFamily,
-    FlowCompileProviderInstance, FlowCompiler,
+    FlowCompileContext, FlowCompileJsDependency, FlowCompileNodeContribution,
+    FlowCompileProviderFamily, FlowCompileProviderInstance, FlowCompiler,
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -34,6 +34,7 @@ fn compile_context() -> FlowCompileContext {
             },
         )]),
         node_contributions: BTreeMap::new(),
+        js_dependencies: BTreeMap::new(),
     }
 }
 
@@ -205,6 +206,74 @@ fn plugin_document(flow_id: Uuid) -> serde_json::Value {
     })
 }
 
+fn code_js_dependency_document(
+    flow_id: Uuid,
+    node_type: &str,
+    imports: Option<Value>,
+) -> serde_json::Value {
+    let mut config = json!({});
+    if let Some(imports) = imports {
+        config["imports"] = imports;
+    }
+
+    json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": { "flowId": flow_id.to_string(), "name": "Code Imports", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": []
+                },
+                {
+                    "id": "node-code",
+                    "type": node_type,
+                    "alias": "Code",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": config,
+                    "bindings": {},
+                    "outputs": [{ "key": "result", "title": "Result", "valueType": "json" }]
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge-start-code",
+                    "source": "node-start",
+                    "target": "node-code",
+                    "sourceHandle": null,
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+fn code_js_dependency_context(alias: &str, target: &str) -> FlowCompileContext {
+    let mut context = compile_context();
+    context.js_dependencies.insert(
+        format!("{target}::{alias}"),
+        FlowCompileJsDependency {
+            alias: alias.to_string(),
+            target: target.to_string(),
+        },
+    );
+    context
+}
+
 #[test]
 fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runtime() {
     let flow_id = Uuid::now_v7();
@@ -247,6 +316,96 @@ fn compile_flow_document_emits_topology_selector_dependencies_and_provider_runti
         "provider-selected"
     );
     assert!(plan.compile_issues.is_empty());
+}
+
+#[test]
+fn code_js_dependency_import_enabled_by_context_has_no_issue() {
+    let flow_id = Uuid::now_v7();
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &code_js_dependency_document(flow_id, "code", Some(json!(["zod"]))),
+        &code_js_dependency_context("zod", "backend_code"),
+    )
+    .unwrap();
+
+    assert!(
+        plan.compile_issues.is_empty(),
+        "enabled backend_code import should compile cleanly, got {:?}",
+        plan.compile_issues
+    );
+}
+
+#[test]
+fn code_js_dependency_import_without_context_reports_not_enabled_issue() {
+    let flow_id = Uuid::now_v7();
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &code_js_dependency_document(flow_id, "code", Some(json!(["zod"]))),
+        &compile_context(),
+    )
+    .unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-code"
+            && issue.code == CompileIssueCode::JsDependencyImportNotEnabled
+            && issue.message.contains("node-code")
+            && issue.message.contains("zod")
+            && issue.message.contains("backend_code")
+    }));
+}
+
+#[test]
+fn code_js_dependency_missing_or_empty_imports_are_compatible() {
+    let flow_id = Uuid::now_v7();
+    let missing = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &code_js_dependency_document(flow_id, "code", None),
+        &compile_context(),
+    )
+    .unwrap();
+    let empty = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &code_js_dependency_document(flow_id, "code", Some(json!([]))),
+        &compile_context(),
+    )
+    .unwrap();
+
+    assert!(missing.compile_issues.is_empty());
+    assert!(empty.compile_issues.is_empty());
+}
+
+#[test]
+fn code_js_dependency_imports_are_ignored_for_non_code_nodes() {
+    let flow_id = Uuid::now_v7();
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &code_js_dependency_document(flow_id, "answer", Some(json!(["zod"]))),
+        &compile_context(),
+    )
+    .unwrap();
+
+    assert!(plan.compile_issues.is_empty());
+}
+
+#[test]
+fn code_js_dependency_invalid_imports_report_stable_issue() {
+    let flow_id = Uuid::now_v7();
+    let plan = FlowCompiler::compile(
+        flow_id,
+        "draft-1",
+        &code_js_dependency_document(flow_id, "code", Some(json!(["", 42]))),
+        &compile_context(),
+    )
+    .unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-code" && issue.code == CompileIssueCode::InvalidJsDependencyImport
+    }));
 }
 
 #[test]

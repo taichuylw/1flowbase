@@ -5,7 +5,10 @@ use uuid::Uuid;
 
 use crate::{
     errors::ControlPlaneError,
-    ports::{ModelProviderRepository, NodeContributionRepository, PluginRepository},
+    ports::{
+        ApplicationJsDependencySelectionRepository, ModelProviderRepository,
+        NodeContributionRepository, PluginRepository,
+    },
 };
 
 pub(crate) async fn build_compile_context<R>(
@@ -111,7 +114,40 @@ where
         provider_families,
         provider_instances,
         node_contributions,
+        js_dependencies: BTreeMap::new(),
     })
+}
+
+pub(crate) async fn build_application_compile_context<R>(
+    repository: &R,
+    workspace_id: Uuid,
+    application_id: Uuid,
+) -> Result<orchestration_runtime::compiler::FlowCompileContext>
+where
+    R: ModelProviderRepository
+        + NodeContributionRepository
+        + PluginRepository
+        + ApplicationJsDependencySelectionRepository,
+{
+    let mut context = build_compile_context(repository, workspace_id).await?;
+    context.js_dependencies = repository
+        .list_application_js_dependency_selections(workspace_id, application_id)
+        .await?
+        .into_iter()
+        .map(|selection| {
+            (
+                orchestration_runtime::compiler::js_dependency_lookup_key(
+                    &selection.target,
+                    &selection.alias,
+                ),
+                orchestration_runtime::compiler::FlowCompileJsDependency {
+                    alias: selection.alias,
+                    target: selection.target,
+                },
+            )
+        })
+        .collect();
+    Ok(context)
 }
 
 pub(super) fn ensure_compiled_plan_runnable(
@@ -164,6 +200,10 @@ pub(super) fn ensure_compiled_plan_runnable(
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginContribution
             | orchestration_runtime::compiled_plan::CompileIssueCode::PluginContributionDependencyNotReady =>
                 "contribution_code",
+            orchestration_runtime::compiled_plan::CompileIssueCode::JsDependencyImportNotEnabled
+            | orchestration_runtime::compiled_plan::CompileIssueCode::InvalidJsDependencyImport => {
+                "imports"
+            }
         };
         return Err(ControlPlaneError::InvalidInput(field).into());
     }
@@ -287,7 +327,13 @@ mod tests {
     use serde_json::{json, Value};
 
     use super::*;
-    use crate::{errors::ControlPlaneError, ports::ModelProviderRepository};
+    use crate::{
+        errors::ControlPlaneError,
+        ports::{
+            ApplicationJsDependencySelectionRepository, ModelProviderRepository,
+            ReplaceApplicationJsDependencySelectionInput,
+        },
+    };
 
     fn llm_document(
         flow_id: Uuid,
@@ -363,6 +409,62 @@ mod tests {
         })
     }
 
+    fn code_js_dependency_document(flow_id: Uuid, imports: Value) -> Value {
+        json!({
+            "schemaVersion": "1flowbase.flow/v2",
+            "meta": {
+                "flowId": flow_id.to_string(),
+                "name": "Code Import Test",
+                "description": "",
+                "tags": []
+            },
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "node-start",
+                        "type": "start",
+                        "alias": "Start",
+                        "description": "",
+                        "containerId": null,
+                        "position": { "x": 0, "y": 0 },
+                        "configVersion": 1,
+                        "config": {},
+                        "bindings": {},
+                        "outputs": []
+                    },
+                    {
+                        "id": "node-code",
+                        "type": "code",
+                        "alias": "Code",
+                        "description": "",
+                        "containerId": null,
+                        "position": { "x": 240, "y": 0 },
+                        "configVersion": 1,
+                        "config": { "imports": imports },
+                        "bindings": {},
+                        "outputs": [{ "key": "result", "title": "Result", "valueType": "json" }]
+                    }
+                ],
+                "edges": [
+                    {
+                        "id": "edge-start-code",
+                        "source": "node-start",
+                        "target": "node-code",
+                        "sourceHandle": null,
+                        "targetHandle": null,
+                        "containerId": null,
+                        "points": []
+                    }
+                ]
+            },
+            "editor": {
+                "viewport": { "x": 0, "y": 0, "zoom": 1 },
+                "annotations": [],
+                "activeContainerPath": []
+            }
+        })
+    }
+
     async fn compile_error_field(
         repository: &super::super::test_support::InMemoryOrchestrationRuntimeRepository,
         document: &Value,
@@ -382,6 +484,64 @@ mod tests {
             Some(ControlPlaneError::InvalidInput(field)) => (*field).to_string(),
             other => panic!("expected invalid input error, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn orchestration_runtime_code_js_dependency_context_includes_application_selection() {
+        let repository =
+            super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
+                vec![],
+            );
+        let application_id = Uuid::now_v7();
+
+        ApplicationJsDependencySelectionRepository::replace_application_js_dependency_selection(
+            &repository,
+            &ReplaceApplicationJsDependencySelectionInput {
+                actor_user_id: Uuid::nil(),
+                workspace_id: Uuid::nil(),
+                application_id,
+                installation_id: Uuid::now_v7(),
+                provider_code: "fixture_js_dependency_pack".into(),
+                plugin_id: "fixture_js_dependency_pack@3.24.0".into(),
+                plugin_version: "3.24.0".into(),
+                alias: "zod".into(),
+                package: "zod".into(),
+                version: "3.24.0".into(),
+                target: "backend_code".into(),
+                artifact_path: "artifacts/zod-3.24.0.backend.mjs".into(),
+                artifact_hash: "sha256-zod-3.24.0".into(),
+                integrity: "sha256-zod-3.24.0".into(),
+                permissions: domain::JsDependencyPermissions {
+                    network: "outbound_only".into(),
+                    filesystem: "deny".into(),
+                    env: "deny".into(),
+                },
+            },
+        )
+        .await
+        .expect("selection should be stored");
+
+        let context = build_application_compile_context(&repository, Uuid::nil(), application_id)
+            .await
+            .expect("application compile context should build");
+
+        assert!(context.js_dependencies.contains_key("backend_code::zod"));
+    }
+
+    #[tokio::test]
+    async fn orchestration_runtime_code_js_dependency_missing_import_maps_to_imports_field() {
+        let repository =
+            super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
+                vec![],
+            );
+
+        let field = compile_error_field(
+            &repository,
+            &code_js_dependency_document(Uuid::now_v7(), json!(["zod"])),
+        )
+        .await;
+
+        assert_eq!(field, "imports");
     }
 
     #[tokio::test]

@@ -123,6 +123,8 @@ pub enum CompileIssueCode {
     PluginContributionDependencyNotReady,
     PluginContributionChecksumMismatch,
     PluginContributionOutputSchemaMismatch,
+    JsDependencyImportNotEnabled,
+    InvalidJsDependencyImport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

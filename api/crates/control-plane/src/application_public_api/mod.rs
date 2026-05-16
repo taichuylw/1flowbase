@@ -40,7 +40,7 @@ pub(crate) fn ensure_application_edit_permission(
 
 #[cfg(test)]
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
 };
 
@@ -869,12 +869,36 @@ impl ApplicationApiMappingRepository for ApplicationPublicApiTestRepository {
 impl ApplicationCompileContextRepository for ApplicationPublicApiTestRepository {
     async fn build_application_compile_context(
         &self,
-        _workspace_id: Uuid,
+        workspace_id: Uuid,
+        application_id: Uuid,
     ) -> Result<orchestration_runtime::compiler::FlowCompileContext> {
+        let js_dependencies = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .js_dependency_selections
+            .values()
+            .filter(|selection| {
+                selection.workspace_id == workspace_id && selection.application_id == application_id
+            })
+            .map(|selection| {
+                (
+                    orchestration_runtime::compiler::js_dependency_lookup_key(
+                        &selection.target,
+                        &selection.alias,
+                    ),
+                    orchestration_runtime::compiler::FlowCompileJsDependency {
+                        alias: selection.alias.clone(),
+                        target: selection.target.clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         Ok(orchestration_runtime::compiler::FlowCompileContext {
             provider_families: Default::default(),
             provider_instances: Default::default(),
             node_contributions: Default::default(),
+            js_dependencies,
         })
     }
 }

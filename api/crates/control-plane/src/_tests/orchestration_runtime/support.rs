@@ -27,9 +27,10 @@ use plugin_framework::provider_contract::ProviderStreamEvent;
 use crate::{
     flow::InMemoryFlowRepository,
     ports::{
-        ApplicationEnvironmentVariableInput, ApplicationVisibility, CreateApplicationInput,
-        CreateApplicationTagInput, DeleteApplicationInput,
-        ReplaceApplicationEnvironmentVariablesInput, UpdateApplicationInput,
+        ApplicationEnvironmentVariableInput, ApplicationJsDependencySelectionRepository,
+        ApplicationVisibility, CreateApplicationInput, CreateApplicationTagInput,
+        DeleteApplicationInput, ReplaceApplicationEnvironmentVariablesInput,
+        ReplaceApplicationJsDependencySelectionInput, UpdateApplicationInput,
     },
 };
 

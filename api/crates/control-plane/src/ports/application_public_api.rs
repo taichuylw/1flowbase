@@ -65,20 +65,31 @@ pub trait ApplicationCompileContextRepository: Send + Sync {
     async fn build_application_compile_context(
         &self,
         workspace_id: Uuid,
+        application_id: Uuid,
     ) -> anyhow::Result<orchestration_runtime::compiler::FlowCompileContext>;
 }
 
 #[async_trait]
 impl<T> ApplicationCompileContextRepository for T
 where
-    T: ModelProviderRepository + NodeContributionRepository + PluginRepository + Send + Sync,
+    T: ModelProviderRepository
+        + NodeContributionRepository
+        + PluginRepository
+        + ApplicationJsDependencySelectionRepository
+        + Send
+        + Sync,
 {
     async fn build_application_compile_context(
         &self,
         workspace_id: Uuid,
+        application_id: Uuid,
     ) -> anyhow::Result<orchestration_runtime::compiler::FlowCompileContext> {
-        crate::orchestration_runtime::compile_context::build_compile_context(self, workspace_id)
-            .await
+        crate::orchestration_runtime::compile_context::build_application_compile_context(
+            self,
+            workspace_id,
+            application_id,
+        )
+        .await
     }
 }
 

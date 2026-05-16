@@ -17,7 +17,8 @@ use control_plane::{
     },
     auth::{ApiKeyService, CreateApiKeyCommand},
     ports::{
-        ApplicationJsDependencySelectionRepository, ReplaceApplicationJsDependencySelectionInput,
+        ApplicationJsDependencySelectionRepository, FlowRepository,
+        ReplaceApplicationJsDependencySelectionInput,
     },
 };
 use std::sync::Arc;
@@ -41,6 +42,53 @@ fn other_user_id() -> Uuid {
 
 fn root_user_id() -> Uuid {
     Uuid::from_u128(0x33333333333333333333333333333333)
+}
+
+fn application_public_api_code_js_dependency_document(flow_id: Uuid) -> serde_json::Value {
+    serde_json::json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": { "flowId": flow_id.to_string(), "name": "Code Imports", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": []
+                },
+                {
+                    "id": "node-code",
+                    "type": "code",
+                    "alias": "Code",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": { "imports": ["zod"] },
+                    "bindings": {},
+                    "outputs": [{ "key": "result", "title": "Result", "valueType": "json" }]
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge-start-code",
+                    "source": "node-start",
+                    "target": "node-code",
+                    "sourceHandle": null,
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
 }
 
 #[tokio::test]
@@ -632,6 +680,78 @@ async fn application_public_api_js_dependency_snapshot_is_frozen_per_publication
     assert_eq!(
         second.dependency_snapshot[0].artifact_hash,
         "sha256-zod-4.0.0"
+    );
+}
+
+#[tokio::test]
+async fn application_public_api_js_dependency_compile_context_enables_code_imports() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Support Bot");
+    let repository = harness.repository();
+    let service = ApplicationPublicationService::new(repository.clone());
+    let editor_state = repository
+        .get_or_create_editor_state(application.workspace_id, application.id, actor_user_id())
+        .await
+        .unwrap();
+
+    FlowRepository::save_draft(
+        &repository,
+        application.workspace_id,
+        application.id,
+        actor_user_id(),
+        application_public_api_code_js_dependency_document(editor_state.flow.id),
+        domain::FlowChangeKind::Logical,
+        "Add code dependency import",
+    )
+    .await
+    .unwrap();
+
+    ApplicationJsDependencySelectionRepository::replace_application_js_dependency_selection(
+        &repository,
+        &ReplaceApplicationJsDependencySelectionInput {
+            actor_user_id: actor_user_id(),
+            workspace_id: application.workspace_id,
+            application_id: application.id,
+            installation_id: Uuid::from_u128(0x90000000000000000000000000000003),
+            provider_code: "fixture_js_dependency_pack_3".into(),
+            plugin_id: "fixture_js_dependency_pack@3.24.0".into(),
+            plugin_version: "3.24.0".into(),
+            alias: "zod".into(),
+            package: "zod".into(),
+            version: "3.24.0".into(),
+            target: "backend_code".into(),
+            artifact_path: "artifacts/zod-3.24.0.backend.mjs".into(),
+            artifact_hash: "sha256-zod-3.24.0".into(),
+            integrity: "sha256-zod-3.24.0".into(),
+            permissions: domain::JsDependencyPermissions {
+                network: "outbound_only".into(),
+                filesystem: "deny".into(),
+                env: "deny".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let publication = service
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: ApplicationApiMappingConfig::default_native(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let compiled_plan = repository
+        .get_compiled_plan(publication.compiled_plan_id)
+        .await
+        .unwrap()
+        .expect("publish should persist a compiled plan");
+
+    assert_eq!(
+        compiled_plan.plan["compile_issues"],
+        serde_json::json!([]),
+        "application compile context should include selected backend_code::zod"
     );
 }
 

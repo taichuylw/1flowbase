@@ -18,6 +18,13 @@ pub struct FlowCompileContext {
     pub provider_families: BTreeMap<String, FlowCompileProviderFamily>,
     pub provider_instances: BTreeMap<String, FlowCompileProviderInstance>,
     pub node_contributions: BTreeMap<String, FlowCompileNodeContribution>,
+    pub js_dependencies: BTreeMap<String, FlowCompileJsDependency>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlowCompileJsDependency {
+    pub alias: String,
+    pub target: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,6 +272,9 @@ fn compile_node(
     let plugin_runtime = (node_type == "plugin_node")
         .then(|| compile_plugin_runtime(&node_id, node, &outputs, context, compile_issues))
         .flatten();
+    if node_type == "code" {
+        validate_code_imports(&node_id, &config, context, compile_issues);
+    }
 
     Ok(CompiledNode {
         node_id,
@@ -279,6 +289,53 @@ fn compile_node(
         plugin_runtime,
         llm_runtime,
     })
+}
+
+fn validate_code_imports(
+    node_id: &str,
+    config: &Value,
+    context: &FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) {
+    let Some(imports) = config.get("imports") else {
+        return;
+    };
+    let Some(imports) = imports.as_array() else {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::InvalidJsDependencyImport,
+            message: format!("node {node_id} config.imports must be an array of alias strings"),
+        });
+        return;
+    };
+
+    for (index, import) in imports.iter().enumerate() {
+        let Some(alias) = import
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            compile_issues.push(CompileIssue {
+                node_id: node_id.to_string(),
+                code: CompileIssueCode::InvalidJsDependencyImport,
+                message: format!(
+                    "node {node_id} config.imports[{index}] must be a non-empty alias string"
+                ),
+            });
+            continue;
+        };
+        let target = "backend_code";
+        let key = js_dependency_lookup_key(target, alias);
+        if !context.js_dependencies.contains_key(&key) {
+            compile_issues.push(CompileIssue {
+                node_id: node_id.to_string(),
+                code: CompileIssueCode::JsDependencyImportNotEnabled,
+                message: format!(
+                    "node {node_id} imports alias {alias} for target {target}, but it is not enabled"
+                ),
+            });
+        }
+    }
 }
 
 fn compile_llm_runtime(
@@ -861,6 +918,10 @@ fn node_contribution_lookup_key(
     schema_version: &str,
 ) -> String {
     format!("{plugin_id}::{plugin_version}::{contribution_code}::{node_shell}::{schema_version}")
+}
+
+pub fn js_dependency_lookup_key(target: &str, alias: &str) -> String {
+    format!("{target}::{alias}")
 }
 
 fn compile_bindings(

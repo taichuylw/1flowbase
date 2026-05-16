@@ -28,6 +28,7 @@ pub(super) async fn start_flow_debug_run<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::ApplicationJsDependencySelectionRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository
@@ -166,6 +167,7 @@ pub(super) async fn prepare_flow_debug_run_from_shell<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::ApplicationJsDependencySelectionRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository
@@ -206,7 +208,7 @@ where
     let document_hash = flow_document_hash(debug_document);
     let pre_attach_result = async {
         let compile_context = service
-            .build_compile_context(application.workspace_id)
+            .build_compile_context(application.workspace_id, application.id)
             .await?;
 
         let mut compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(

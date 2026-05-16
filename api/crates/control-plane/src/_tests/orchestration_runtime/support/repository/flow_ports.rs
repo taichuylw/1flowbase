@@ -188,6 +188,68 @@ impl ApplicationRepository for InMemoryOrchestrationRuntimeRepository {
 }
 
 #[async_trait]
+impl ApplicationJsDependencySelectionRepository for InMemoryOrchestrationRuntimeRepository {
+    async fn list_application_js_dependency_selections(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationJsDependencySelection>> {
+        let mut selections = self
+            .inner
+            .lock()
+            .expect("runtime repository mutex poisoned")
+            .application_js_dependency_selections
+            .values()
+            .filter(|selection| {
+                selection.workspace_id == workspace_id && selection.application_id == application_id
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        selections.sort_by(|left, right| {
+            left.alias
+                .cmp(&right.alias)
+                .then(left.target.cmp(&right.target))
+        });
+        Ok(selections)
+    }
+
+    async fn replace_application_js_dependency_selection(
+        &self,
+        input: &ReplaceApplicationJsDependencySelectionInput,
+    ) -> Result<domain::ApplicationJsDependencySelection> {
+        let selection = domain::ApplicationJsDependencySelection {
+            workspace_id: input.workspace_id,
+            application_id: input.application_id,
+            installation_id: input.installation_id,
+            provider_code: input.provider_code.clone(),
+            plugin_id: input.plugin_id.clone(),
+            plugin_version: input.plugin_version.clone(),
+            alias: input.alias.clone(),
+            package: input.package.clone(),
+            version: input.version.clone(),
+            target: input.target.clone(),
+            artifact_path: input.artifact_path.clone(),
+            artifact_hash: input.artifact_hash.clone(),
+            integrity: input.integrity.clone(),
+            permissions: input.permissions.clone(),
+        };
+        self.inner
+            .lock()
+            .expect("runtime repository mutex poisoned")
+            .application_js_dependency_selections
+            .insert(
+                (
+                    input.application_id,
+                    input.target.clone(),
+                    input.alias.clone(),
+                ),
+                selection.clone(),
+            );
+        Ok(selection)
+    }
+}
+
+#[async_trait]
 impl FlowRepository for InMemoryOrchestrationRuntimeRepository {
     async fn get_or_create_editor_state(
         &self,

@@ -20,10 +20,11 @@ use crate::{
     model_provider::failover_queue::{freeze_queue_items, FailoverQueueSnapshotItem},
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
-        AppendRunEventInput, ApplicationRepository, CompleteCallbackTaskInput, FlowRepository,
-        ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
-        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
-        RuntimeEventEnvelope, RuntimeEventStream, UpdateFlowRunInput, UpdateNodeRunInput,
+        AppendRunEventInput, ApplicationJsDependencySelectionRepository, ApplicationRepository,
+        CompleteCallbackTaskInput, FlowRepository, ModelDefinitionRepository,
+        ModelProviderRepository, NodeContributionRepository, OrchestrationRuntimeRepository,
+        PluginRepository, ProviderRuntimePort, RuntimeEventEnvelope, RuntimeEventStream,
+        UpdateFlowRunInput, UpdateNodeRunInput,
     },
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
@@ -40,7 +41,7 @@ mod persistence;
 mod runtime_event_persister;
 
 use self::{
-    compile_context::{build_compile_context, ensure_compiled_plan_runnable},
+    compile_context::ensure_compiled_plan_runnable,
     debug_variable_cache::{persist_debug_variable_cache_entries, public_node_variable_cache},
     inputs::{
         build_compiled_plan_input, build_complete_flow_run_input, build_complete_node_run_input,
@@ -270,14 +271,26 @@ where
     async fn build_compile_context(
         &self,
         workspace_id: Uuid,
-    ) -> Result<orchestration_runtime::compiler::FlowCompileContext> {
-        build_compile_context(&self.repository, workspace_id).await
+        application_id: Uuid,
+    ) -> Result<orchestration_runtime::compiler::FlowCompileContext>
+    where
+        R: ApplicationJsDependencySelectionRepository,
+    {
+        compile_context::build_application_compile_context(
+            &self.repository,
+            workspace_id,
+            application_id,
+        )
+        .await
     }
 
     pub async fn start_node_debug_preview(
         &self,
         command: StartNodeDebugPreviewCommand,
-    ) -> Result<domain::NodeDebugPreviewResult> {
+    ) -> Result<domain::NodeDebugPreviewResult>
+    where
+        R: ApplicationJsDependencySelectionRepository,
+    {
         let actor = ApplicationRepository::load_actor_context_for_user(
             &self.repository,
             command.actor_user_id,
@@ -291,7 +304,9 @@ where
             .get_application(actor.current_workspace_id, command.application_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("application"))?;
-        let compile_context = self.build_compile_context(application.workspace_id).await?;
+        let compile_context = self
+            .build_compile_context(application.workspace_id, application.id)
+            .await?;
 
         let preview_document = command
             .document_snapshot
@@ -409,7 +424,10 @@ where
     pub async fn start_flow_debug_run(
         &self,
         command: StartFlowDebugRunCommand,
-    ) -> Result<domain::ApplicationRunDetail> {
+    ) -> Result<domain::ApplicationRunDetail>
+    where
+        R: ApplicationJsDependencySelectionRepository,
+    {
         live_debug_run::start_flow_debug_run(self, command).await
     }
 
@@ -423,7 +441,10 @@ where
     pub async fn prepare_flow_debug_run_from_shell(
         &self,
         command: PrepareFlowDebugRunCommand,
-    ) -> Result<domain::ApplicationRunDetail> {
+    ) -> Result<domain::ApplicationRunDetail>
+    where
+        R: ApplicationJsDependencySelectionRepository,
+    {
         live_debug_run::prepare_flow_debug_run_from_shell(self, command).await
     }
 

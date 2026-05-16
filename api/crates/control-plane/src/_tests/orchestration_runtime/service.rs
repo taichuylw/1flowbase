@@ -6,10 +6,11 @@ use control_plane::{
     capability_plugin_runtime::CapabilityPluginRuntimePort,
     errors::ControlPlaneError,
     ports::{
-        ApplicationRepository, FlowRepository, ModelDefinitionRepository, ModelProviderRepository,
-        NodeContributionRepository, OrchestrationRuntimeRepository, PluginRepository,
-        ProviderRuntimePort, RuntimeEventDurability, RuntimeEventEnvelope, RuntimeEventPayload,
-        RuntimeEventSource, UpsertDataModelSideEffectReceiptInput,
+        ApplicationJsDependencySelectionRepository, ApplicationRepository, FlowRepository,
+        ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
+        OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
+        RuntimeEventDurability, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventSource,
+        UpsertDataModelSideEffectReceiptInput,
     },
 };
 use serde_json::{json, Value};
@@ -708,7 +709,10 @@ async fn live_debug_run_returns_code_not_implemented_error() {
         .error_payload
         .as_ref()
         .expect("flow error payload should be persisted");
-    assert_eq!(flow_error_payload["error_code"], json!("node_type_not_implemented"));
+    assert_eq!(
+        flow_error_payload["error_code"],
+        json!("node_type_not_implemented")
+    );
     assert_eq!(flow_error_payload["node_type"], json!("code"));
     assert_eq!(
         flow_error_payload["message"].as_str(),
@@ -725,7 +729,10 @@ async fn live_debug_run_returns_code_not_implemented_error() {
         code_node.error_payload.as_ref().unwrap()["error_code"],
         json!("node_type_not_implemented")
     );
-    assert_eq!(code_node.error_payload.as_ref().unwrap()["node_type"], json!("code"));
+    assert_eq!(
+        code_node.error_payload.as_ref().unwrap()["node_type"],
+        json!("code")
+    );
     assert_eq!(
         code_node.error_payload.as_ref().unwrap()["message"],
         json!("code nodes are not implemented in debug runtime")
@@ -736,7 +743,9 @@ async fn live_debug_run_returns_code_not_implemented_error() {
 #[tokio::test]
 async fn live_debug_run_returns_unknown_node_type_not_implemented_error() {
     let service = OrchestrationRuntimeService::for_tests();
-    let seeded = service.seed_application_with_flow("Unknown Node Agent").await;
+    let seeded = service
+        .seed_application_with_flow("Unknown Node Agent")
+        .await;
 
     let document = serde_json::json!({
         "schemaVersion": "1flowbase.flow/v2",
@@ -2155,6 +2164,7 @@ async fn run_data_model_flow(
 
 trait RuntimeRepositoryBounds:
     ApplicationRepository
+    + ApplicationJsDependencySelectionRepository
     + FlowRepository
     + OrchestrationRuntimeRepository
     + ModelDefinitionRepository
@@ -2170,6 +2180,7 @@ trait RuntimeRepositoryBounds:
 
 impl<T> RuntimeRepositoryBounds for T where
     T: ApplicationRepository
+        + ApplicationJsDependencySelectionRepository
         + FlowRepository
         + OrchestrationRuntimeRepository
         + ModelDefinitionRepository
