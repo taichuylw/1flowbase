@@ -45,3 +45,30 @@ pub struct FrontstagePageTreeNode {
     pub page: FrontstagePageRecord,
     pub children: Vec<FrontstagePageTreeNode>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FrontstagePageSchemaRecord {
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub root_uid: String,
+    pub schema_payload: serde_json::Value,
+    pub root_payload: serde_json::Value,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FrontstagePageDetail {
+    pub page: FrontstagePageRecord,
+    pub schema: FrontstagePageSchemaRecord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrontstageBlockCodeRecord {
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub code_ref: String,
+    pub code: String,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}

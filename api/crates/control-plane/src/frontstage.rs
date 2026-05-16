@@ -12,7 +12,7 @@ use crate::{
     errors::ControlPlaneError,
     ports::{
         CreateFrontstagePageInput, FrontstagePageRepository, MoveFrontstagePageInput,
-        UpdateFrontstagePageTitleInput,
+        SaveFrontstageBlockCodeInput, UpdateFrontstagePageTitleInput,
     },
 };
 
@@ -51,6 +51,27 @@ pub struct DeleteFrontstagePageCommand {
     pub actor_user_id: Uuid,
     pub workspace_id: Uuid,
     pub page_id: Uuid,
+}
+
+pub struct GetFrontstagePageDetailCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+}
+
+pub struct GetFrontstageBlockCodeCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub code_ref: String,
+}
+
+pub struct SaveFrontstageBlockCodeCommand {
+    pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub code_ref: String,
+    pub code: String,
 }
 
 pub struct FrontstagePageService<R> {
@@ -143,6 +164,24 @@ where
         Ok(created)
     }
 
+    pub async fn get_page_detail(
+        &self,
+        command: GetFrontstagePageDetailCommand,
+    ) -> Result<domain::frontstage::FrontstagePageDetail> {
+        self.repository
+            .load_actor_context_for_workspace(command.actor_user_id, command.workspace_id)
+            .await?;
+
+        let detail = self
+            .repository
+            .get_frontstage_page_detail(command.workspace_id, command.page_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("frontstage_page"))?;
+        ensure_page_record(&detail.page)?;
+
+        Ok(detail)
+    }
+
     pub async fn update_title(
         &self,
         command: UpdateFrontstagePageTitleCommand,
@@ -230,6 +269,49 @@ where
         Ok(())
     }
 
+    pub async fn get_block_code(
+        &self,
+        command: GetFrontstageBlockCodeCommand,
+    ) -> Result<domain::frontstage::FrontstageBlockCodeRecord> {
+        self.repository
+            .load_actor_context_for_workspace(command.actor_user_id, command.workspace_id)
+            .await?;
+        self.ensure_existing_page(command.workspace_id, command.page_id)
+            .await?;
+        let code_ref = normalize_code_ref(command.code_ref)?;
+
+        self.repository
+            .get_frontstage_block_code(command.workspace_id, command.page_id, &code_ref)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("frontstage_block_code").into())
+    }
+
+    pub async fn save_block_code(
+        &self,
+        command: SaveFrontstageBlockCodeCommand,
+    ) -> Result<domain::frontstage::FrontstageBlockCodeRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_workspace(command.actor_user_id, command.workspace_id)
+            .await?;
+        ensure_design_permission(&actor)?;
+        self.ensure_existing_page(command.workspace_id, command.page_id)
+            .await?;
+        let code_ref = normalize_code_ref(command.code_ref)?;
+
+        let saved = self
+            .repository
+            .save_frontstage_block_code(&SaveFrontstageBlockCodeInput {
+                workspace_id: command.workspace_id,
+                page_id: command.page_id,
+                code_ref,
+                code: command.code,
+            })
+            .await?;
+
+        Ok(saved)
+    }
+
     async fn ensure_page_parent(&self, workspace_id: Uuid, parent_id: Option<Uuid>) -> Result<()> {
         let Some(parent_id) = parent_id else {
             return Ok(());
@@ -246,6 +328,15 @@ where
         }
 
         Ok(())
+    }
+
+    async fn ensure_existing_page(&self, workspace_id: Uuid, page_id: Uuid) -> Result<()> {
+        let page = self
+            .repository
+            .get_frontstage_page(workspace_id, page_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("frontstage_page"))?;
+        ensure_page_record(&page)
     }
 
     async fn audit(
@@ -275,6 +366,23 @@ fn ensure_design_permission(actor: &domain::ActorContext) -> Result<()> {
     ensure_permission(actor, "frontstage.page.design")
         .map_err(ControlPlaneError::PermissionDenied)?;
     Ok(())
+}
+
+fn ensure_page_record(page: &domain::FrontstagePageRecord) -> Result<()> {
+    if page.kind != domain::FrontstagePageKind::Page {
+        return Err(ControlPlaneError::NotFound("frontstage_page").into());
+    }
+
+    Ok(())
+}
+
+fn normalize_code_ref(code_ref: String) -> Result<String> {
+    let trimmed = code_ref.trim();
+    if trimmed.is_empty() || trimmed.len() > 200 {
+        return Err(ControlPlaneError::InvalidInput("code_ref").into());
+    }
+
+    Ok(trimmed.to_owned())
 }
 
 fn normalize_rank(rank: Option<String>) -> String {

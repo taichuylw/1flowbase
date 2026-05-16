@@ -3,11 +3,11 @@ use crate::_tests::support::{
     replace_role_permissions, seed_workspace, test_app, test_app_with_database_url,
 };
 use axum::{
-    body::{to_bytes, Body},
+    body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use tower::ServiceExt;
 
 async fn current_workspace_id(app: &axum::Router, cookie: &str) -> String {
@@ -131,6 +131,26 @@ async fn delete_node(
         .await
         .unwrap()
         .status()
+}
+
+async fn get_json(app: &axum::Router, path: &str, cookie: &str) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(path)
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+            .unwrap_or_else(|_| json!({}));
+    (status, payload)
 }
 
 #[tokio::test]
@@ -528,4 +548,186 @@ async fn deleting_group_removes_child_page_from_tree() {
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(payload["data"], json!([]));
     assert!(!payload.to_string().contains(page_id));
+}
+
+#[tokio::test]
+async fn page_detail_and_block_code_round_trip_are_persisted_by_page_scope() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &cookie).await;
+    let (_, group_payload) =
+        create_group(&app, &cookie, &csrf, &workspace_id, Some("Group"), "a").await;
+    let group_id = group_payload["data"]["id"].as_str().unwrap();
+    let (page_status, page_payload) = create_page(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        Some("Child"),
+        Some(group_id),
+        "a",
+    )
+    .await;
+    assert_eq!(page_status, StatusCode::CREATED);
+    let page_id = page_payload["data"]["id"].as_str().unwrap();
+    let schema_root_uid = page_payload["data"]["schema_root_uid"].as_str().unwrap();
+
+    let (detail_status, detail_payload) = get_json(
+        &app,
+        &format!("/api/console/frontstage/{workspace_id}/pages/{page_id}"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(detail_status, StatusCode::OK);
+    assert_eq!(detail_payload["data"]["page"]["id"], json!(page_id));
+    assert_eq!(
+        detail_payload["data"]["schema"]["root_uid"],
+        json!(schema_root_uid)
+    );
+    assert_eq!(
+        detail_payload["data"]["root"]["uid"],
+        json!(schema_root_uid)
+    );
+
+    let code_path =
+        format!("/api/console/frontstage/{workspace_id}/pages/{page_id}/block-codes/hero");
+    let (save_status, save_payload) = send_json(
+        &app,
+        "PUT",
+        &code_path,
+        &cookie,
+        &csrf,
+        json!({ "code": "export default function Hero() { return 'v1'; }" }),
+    )
+    .await;
+    assert_eq!(save_status, StatusCode::OK);
+    assert_eq!(
+        save_payload["data"]["code"],
+        json!("export default function Hero() { return 'v1'; }")
+    );
+
+    let (overwrite_status, _) = send_json(
+        &app,
+        "PUT",
+        &code_path,
+        &cookie,
+        &csrf,
+        json!({ "code": "export default function Hero() { return 'v2'; }" }),
+    )
+    .await;
+    assert_eq!(overwrite_status, StatusCode::OK);
+
+    let (read_status, read_payload) = get_json(&app, &code_path, &cookie).await;
+    assert_eq!(read_status, StatusCode::OK);
+    assert_eq!(read_payload["data"]["code_ref"], json!("hero"));
+    assert_eq!(
+        read_payload["data"]["code"],
+        json!("export default function Hero() { return 'v2'; }")
+    );
+
+    let (_, other_page_payload) = create_page(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        Some("Sibling"),
+        Some(group_id),
+        "b",
+    )
+    .await;
+    let other_page_id = other_page_payload["data"]["id"].as_str().unwrap();
+    let (other_page_code_status, _) = get_json(
+        &app,
+        &format!("/api/console/frontstage/{workspace_id}/pages/{other_page_id}/block-codes/hero"),
+        &cookie,
+    )
+    .await;
+    assert_eq!(other_page_code_status, StatusCode::NOT_FOUND);
+
+    let delete_status = delete_node(&app, &cookie, &csrf, &workspace_id, group_id).await;
+    assert_eq!(delete_status, StatusCode::NO_CONTENT);
+    let (deleted_code_status, _) = get_json(&app, &code_path, &cookie).await;
+    assert_eq!(deleted_code_status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn block_code_write_requires_design_permission_but_read_allows_workspace_access() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let member_id = create_member(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        "frontstage-code-viewer",
+        "temp-pass",
+    )
+    .await;
+    create_role(&app, &root_cookie, &root_csrf, "frontstage_code_viewer").await;
+    replace_role_permissions(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        "frontstage_code_viewer",
+        &[],
+    )
+    .await;
+    replace_member_roles(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        &member_id,
+        &["frontstage_code_viewer"],
+    )
+    .await;
+
+    let workspace_id = current_workspace_id(&app, &root_cookie).await;
+    let (_, page_payload) = create_page(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        &workspace_id,
+        Some("Readable"),
+        None,
+        "a",
+    )
+    .await;
+    let page_id = page_payload["data"]["id"].as_str().unwrap();
+    let code_path =
+        format!("/api/console/frontstage/{workspace_id}/pages/{page_id}/block-codes/hero");
+    let (save_status, _) = send_json(
+        &app,
+        "PUT",
+        &code_path,
+        &root_cookie,
+        &root_csrf,
+        json!({ "code": "export default 1;" }),
+    )
+    .await;
+    assert_eq!(save_status, StatusCode::OK);
+
+    let (viewer_cookie, viewer_csrf) =
+        login_and_capture_cookie(&app, "frontstage-code-viewer", "temp-pass").await;
+    let (detail_status, detail_payload) = get_json(
+        &app,
+        &format!("/api/console/frontstage/{workspace_id}/pages/{page_id}"),
+        &viewer_cookie,
+    )
+    .await;
+    assert_eq!(detail_status, StatusCode::OK);
+    assert_eq!(detail_payload["data"]["page"]["id"], json!(page_id));
+
+    let (read_status, read_payload) = get_json(&app, &code_path, &viewer_cookie).await;
+    assert_eq!(read_status, StatusCode::OK);
+    assert_eq!(read_payload["data"]["code"], json!("export default 1;"));
+
+    let (write_status, _) = send_json(
+        &app,
+        "PUT",
+        &code_path,
+        &viewer_cookie,
+        &viewer_csrf,
+        json!({ "code": "export default 2;" }),
+    )
+    .await;
+    assert_eq!(write_status, StatusCode::FORBIDDEN);
 }

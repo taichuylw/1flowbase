@@ -29,6 +29,14 @@ pub struct MoveFrontstagePageInput {
     pub rank: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct SaveFrontstageBlockCodeInput {
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub code_ref: String,
+    pub code: String,
+}
+
 #[async_trait]
 pub trait FrontstagePageRepository: Send + Sync {
     async fn load_actor_context_for_workspace(
@@ -48,6 +56,12 @@ pub trait FrontstagePageRepository: Send + Sync {
         page_id: Uuid,
     ) -> anyhow::Result<Option<domain::FrontstagePageRecord>>;
 
+    async fn get_frontstage_page_detail(
+        &self,
+        workspace_id: Uuid,
+        page_id: Uuid,
+    ) -> anyhow::Result<Option<domain::frontstage::FrontstagePageDetail>>;
+
     async fn create_frontstage_page(
         &self,
         input: &CreateFrontstagePageInput,
@@ -64,7 +78,19 @@ pub trait FrontstagePageRepository: Send + Sync {
     ) -> anyhow::Result<domain::FrontstagePageRecord>;
 
     async fn delete_frontstage_page(&self, workspace_id: Uuid, page_id: Uuid)
-        -> anyhow::Result<()>;
+    -> anyhow::Result<()>;
+
+    async fn get_frontstage_block_code(
+        &self,
+        workspace_id: Uuid,
+        page_id: Uuid,
+        code_ref: &str,
+    ) -> anyhow::Result<Option<domain::frontstage::FrontstageBlockCodeRecord>>;
+
+    async fn save_frontstage_block_code(
+        &self,
+        input: &SaveFrontstageBlockCodeInput,
+    ) -> anyhow::Result<domain::frontstage::FrontstageBlockCodeRecord>;
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> anyhow::Result<()>;
 }

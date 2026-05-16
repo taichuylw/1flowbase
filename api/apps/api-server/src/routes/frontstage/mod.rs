@@ -1,16 +1,18 @@
 use std::sync::Arc;
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     routing::{get, post},
-    Json, Router,
 };
 use control_plane::frontstage::{
     CreateFrontstageGroupCommand, CreateFrontstagePageCommand, DeleteFrontstagePageCommand,
-    FrontstagePageService, MoveFrontstagePageCommand, UpdateFrontstagePageTitleCommand,
+    FrontstagePageService, GetFrontstageBlockCodeCommand, GetFrontstagePageDetailCommand,
+    MoveFrontstagePageCommand, SaveFrontstageBlockCodeCommand, UpdateFrontstagePageTitleCommand,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -48,6 +50,32 @@ pub struct FrontstagePageResponse {
     pub schema_root_uid: Option<String>,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontstagePageSchemaResponse {
+    pub root_uid: String,
+    pub payload: Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontstagePageRootResponse {
+    pub uid: String,
+    pub payload: Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontstagePageDetailResponse {
+    pub page: FrontstagePageResponse,
+    pub schema: FrontstagePageSchemaResponse,
+    pub root: FrontstagePageRootResponse,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontstageBlockCodeResponse {
+    pub page_id: String,
+    pub code_ref: String,
+    pub code: String,
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateFrontstageGroupBody {
     pub title: Option<String>,
@@ -73,6 +101,11 @@ pub struct MoveFrontstagePageBody {
     pub rank: Option<String>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SaveFrontstageBlockCodeBody {
+    pub code: String,
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route(
@@ -85,11 +118,17 @@ pub fn router() -> Router<Arc<ApiState>> {
         )
         .route(
             "/frontstage/:workspace_id/pages/:page_id",
-            axum::routing::patch(update_frontstage_page_title).delete(delete_frontstage_page),
+            get(get_frontstage_page_detail)
+                .patch(update_frontstage_page_title)
+                .delete(delete_frontstage_page),
         )
         .route(
             "/frontstage/:workspace_id/pages/:page_id/move",
             post(move_frontstage_page),
+        )
+        .route(
+            "/frontstage/:workspace_id/pages/:page_id/block-codes/:code_ref",
+            get(get_frontstage_block_code).put(save_frontstage_block_code),
         )
 }
 
@@ -198,6 +237,41 @@ pub async fn create_frontstage_page(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_page_response(page))),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/frontstage/{workspace_id}/pages/{page_id}",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace id"),
+        ("page_id" = String, Path, description = "Page id")
+    ),
+    responses(
+        (status = 200, body = FrontstagePageDetailResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_frontstage_page_detail(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((workspace_id, page_id)): Path<(String, String)>,
+) -> Result<Json<ApiSuccess<FrontstagePageDetailResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let page_id = parse_uuid(&page_id, "page_id")?;
+
+    let detail = FrontstagePageService::new(state.store.clone())
+        .get_page_detail(GetFrontstagePageDetailCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            page_id,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_page_detail_response(detail))))
 }
 
 #[utoipa::path(
@@ -316,6 +390,84 @@ pub async fn delete_frontstage_page(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/console/frontstage/{workspace_id}/pages/{page_id}/block-codes/{code_ref}",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace id"),
+        ("page_id" = String, Path, description = "Page id"),
+        ("code_ref" = String, Path, description = "JS block code ref")
+    ),
+    responses(
+        (status = 200, body = FrontstageBlockCodeResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_frontstage_block_code(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((workspace_id, page_id, code_ref)): Path<(String, String, String)>,
+) -> Result<Json<ApiSuccess<FrontstageBlockCodeResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let page_id = parse_uuid(&page_id, "page_id")?;
+
+    let code = FrontstagePageService::new(state.store.clone())
+        .get_block_code(GetFrontstageBlockCodeCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            page_id,
+            code_ref,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_block_code_response(code))))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/console/frontstage/{workspace_id}/pages/{page_id}/block-codes/{code_ref}",
+    request_body = SaveFrontstageBlockCodeBody,
+    params(
+        ("workspace_id" = String, Path, description = "Workspace id"),
+        ("page_id" = String, Path, description = "Page id"),
+        ("code_ref" = String, Path, description = "JS block code ref")
+    ),
+    responses(
+        (status = 200, body = FrontstageBlockCodeResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn save_frontstage_block_code(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((workspace_id, page_id, code_ref)): Path<(String, String, String)>,
+    Json(body): Json<SaveFrontstageBlockCodeBody>,
+) -> Result<Json<ApiSuccess<FrontstageBlockCodeResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
+    let page_id = parse_uuid(&page_id, "page_id")?;
+
+    let code = FrontstagePageService::new(state.store.clone())
+        .save_block_code(SaveFrontstageBlockCodeCommand {
+            actor_user_id: context.user.id,
+            workspace_id,
+            page_id,
+            code_ref,
+            code: body.code,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_block_code_response(code))))
+}
+
 fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(raw)
         .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
@@ -340,6 +492,32 @@ fn to_page_response(page: domain::FrontstagePageRecord) -> FrontstagePageRespons
         parent_id: page.parent_id.map(|id| id.to_string()),
         rank: page.rank,
         schema_root_uid: page.schema_root_uid,
+    }
+}
+
+fn to_page_detail_response(
+    detail: domain::frontstage::FrontstagePageDetail,
+) -> FrontstagePageDetailResponse {
+    FrontstagePageDetailResponse {
+        page: to_page_response(detail.page),
+        schema: FrontstagePageSchemaResponse {
+            root_uid: detail.schema.root_uid.clone(),
+            payload: detail.schema.schema_payload,
+        },
+        root: FrontstagePageRootResponse {
+            uid: detail.schema.root_uid,
+            payload: detail.schema.root_payload,
+        },
+    }
+}
+
+fn to_block_code_response(
+    code: domain::frontstage::FrontstageBlockCodeRecord,
+) -> FrontstageBlockCodeResponse {
+    FrontstageBlockCodeResponse {
+        page_id: code.page_id.to_string(),
+        code_ref: code.code_ref,
+        code: code.code,
     }
 }
 

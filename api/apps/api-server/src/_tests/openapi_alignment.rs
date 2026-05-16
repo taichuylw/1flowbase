@@ -1,10 +1,10 @@
 use crate::_tests::support::{login_and_capture_cookie, test_app};
 use api_server::app;
 use axum::{
-    body::{to_bytes, Body},
+    body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use tower::ServiceExt;
 
 async fn openapi_paths() -> Map<String, Value> {
@@ -281,6 +281,8 @@ async fn openapi_contains_frontstage_pages_route_and_error_responses() {
     let frontstage_node_route = paths.get("/api/console/frontstage/{workspace_id}/pages/{page_id}");
     let frontstage_move_route =
         paths.get("/api/console/frontstage/{workspace_id}/pages/{page_id}/move");
+    let frontstage_block_code_route =
+        paths.get("/api/console/frontstage/{workspace_id}/pages/{page_id}/block-codes/{code_ref}");
 
     assert!(
         frontstage_route.is_some(),
@@ -298,19 +300,29 @@ async fn openapi_contains_frontstage_pages_route_and_error_responses() {
         frontstage_move_route.is_some(),
         "missing path /api/console/frontstage/{{workspace_id}}/pages/{{page_id}}/move"
     );
+    assert!(
+        frontstage_block_code_route.is_some(),
+        "missing path /api/console/frontstage/{{workspace_id}}/pages/{{page_id}}/block-codes/{{code_ref}}"
+    );
 
     let get_op = &frontstage_route.unwrap()["get"];
     let post_page_op = &frontstage_route.unwrap()["post"];
     let post_group_op = &frontstage_groups_route.unwrap()["post"];
+    let detail_get_op = &frontstage_node_route.unwrap()["get"];
     let patch_op = &frontstage_node_route.unwrap()["patch"];
     let delete_op = &frontstage_node_route.unwrap()["delete"];
     let move_op = &frontstage_move_route.unwrap()["post"];
+    let block_get_op = &frontstage_block_code_route.unwrap()["get"];
+    let block_put_op = &frontstage_block_code_route.unwrap()["put"];
 
     assert!(get_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
     assert!(post_page_op["responses"]["201"]["content"]["application/json"]["schema"].is_object());
     assert!(post_group_op["responses"]["201"]["content"]["application/json"]["schema"].is_object());
+    assert!(detail_get_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
     assert!(patch_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
     assert!(move_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
+    assert!(block_get_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
+    assert!(block_put_op["responses"]["200"]["content"]["application/json"]["schema"].is_object());
     assert!(delete_op["responses"]["204"].is_object());
     assert_eq!(
         get_op["responses"]["400"]["content"]["application/json"]["schema"]["$ref"],
