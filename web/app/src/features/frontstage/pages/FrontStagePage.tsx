@@ -14,6 +14,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../../state/auth-store';
 import type { FrontstagePageContent } from '../api/page-content';
 import { PageCanvas } from '../components/PageCanvas';
+import { useFrontstagePageContentSave } from '../hooks/use-frontstage-page-content-save';
+import {
+  appendFrontstageBlock,
+  createFrontstageBlockCompositionState,
+  type FrontstageBlockCompositionInput
+} from '../lib/block-composition';
+import {
+  createFrontstagePageDocument,
+  createFrontstagePageDocumentSaveInput
+} from '../lib/page-document';
 import {
   canMoveNode,
   findNodeById,
@@ -81,6 +91,45 @@ type PageTreeMutationResult = {
 };
 
 type PageTreeOperationStatus = 'idle' | 'pending' | 'error';
+
+function createMinimalJsUiBlockInput(
+  blockIndex: number
+): FrontstageBlockCompositionInput {
+  const blockNumber = blockIndex + 1;
+  const blockId = `frontstage-js-block-${blockNumber}`;
+
+  return {
+    id: blockId,
+    codeRef: `${blockId}-code`,
+    catalog: {
+      providerCode: null,
+      installationId: null
+    },
+    contribution: {
+      pluginId: null,
+      pluginVersion: null,
+      code: 'frontstage.js-ui-block'
+    },
+    props: {},
+    layout: {
+      order: blockIndex,
+      region: 'main'
+    },
+    runtime: {
+      kind: 'js-ui',
+      entry: null,
+      hint: 'js-ui'
+    }
+  };
+}
+
+function toDisplayErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return '页面内容保存失败，请稍后重试。';
+}
 
 function rankForAppendIndex(index: number): string {
   return String((index + 1) * 1000).padStart(6, '0');
@@ -168,6 +217,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const [operationStatus, setOperationStatus] =
     useState<PageTreeOperationStatus>('idle');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [savedPageContent, setSavedPageContent] =
+    useState<FrontstagePageContent | null>(null);
+  const [isBlockSavePending, setIsBlockSavePending] = useState(false);
+  const [blockSaveError, setBlockSaveError] = useState<string | null>(null);
   const [pageTree, setPageTree] = useState<FrontStageTreeNode[]>(() =>
     normalizePageTree(initialPageTree ?? [])
   );
@@ -179,10 +232,30 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }).selectedPageId
   );
   const { Sider, Content } = Layout;
+  const pageContentSave = useFrontstagePageContentSave({
+    workspaceId,
+    pageId: selectedPageId
+  });
+  const displayedPageContent = savedPageContent ?? pageContent;
+  const hasLoadedSelectedPageContent = Boolean(
+    selectedPageId && displayedPageContent?.page.id === selectedPageId
+  );
   const isOperationPending =
     operationStatus === 'pending' || Boolean(isPageTreeMutating);
   const hasOperationError =
     operationStatus === 'error' || Boolean(pageTreeMutationError);
+  const isPageContentSavePending =
+    isBlockSavePending || pageContentSave.saving || pageContentSave.isPending;
+  const pageContentSaveError =
+    blockSaveError ??
+    (pageContentSave.error
+      ? toDisplayErrorMessage(pageContentSave.error)
+      : null);
+  const canAddBlock =
+    hasLoadedSelectedPageContent &&
+    !isPageContentLoading &&
+    !hasPageContentLoadError &&
+    !isPageContentSavePending;
   const operationStatusText = isOperationPending
     ? '保存中'
     : hasOperationError
@@ -222,8 +295,24 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   }, [onNavigatePage, pageId, pageTree, selectedPageId]);
 
   useEffect(() => {
+    setSavedPageContent(null);
     setSelectedBlockId(null);
-  }, [selectedPageId, pageContent]);
+    setBlockSaveError(null);
+  }, [selectedPageId]);
+
+  useEffect(() => {
+    setSavedPageContent(null);
+    setSelectedBlockId((currentBlockId) => {
+      if (!currentBlockId || !pageContent) {
+        return null;
+      }
+
+      const document = createFrontstagePageDocument(pageContent);
+      return document.blocks.some((block) => block.id === currentBlockId)
+        ? currentBlockId
+        : null;
+    });
+  }, [pageContent]);
 
   const selectedPageDisplayTitle = getPageDisplayTitle(
     pageTree,
@@ -460,6 +549,39 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     });
   };
 
+  const handleAddBlock = () => {
+    const sourceContent = displayedPageContent;
+    if (!canAddBlock || !sourceContent) {
+      return;
+    }
+
+    void (async () => {
+      setIsBlockSavePending(true);
+      setBlockSaveError(null);
+      pageContentSave.clearError();
+
+      try {
+        const document = createFrontstagePageDocument(sourceContent);
+        const compositionState = appendFrontstageBlock(
+          createFrontstageBlockCompositionState(document, selectedBlockId),
+          createMinimalJsUiBlockInput(document.blocks.length)
+        );
+        const input = createFrontstagePageDocumentSaveInput(
+          sourceContent,
+          compositionState.document
+        );
+        const nextContent = await pageContentSave.save(input);
+
+        setSavedPageContent(nextContent);
+        setSelectedBlockId(compositionState.selectedBlockId);
+      } catch (error) {
+        setBlockSaveError(toDisplayErrorMessage(error));
+      } finally {
+        setIsBlockSavePending(false);
+      }
+    })();
+  };
+
   const renderTreeNode = (
     node: FrontStageTreeNode,
     level: number = 0,
@@ -652,11 +774,30 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
 
       {canEnterDesignMode && isDesignMode ? (
         <Space wrap size={8} style={{ marginBottom: 12 }}>
-          <Button size="small">新增区块</Button>
+          <Button size="small" onClick={handleAddBlock} disabled={!canAddBlock}>
+            新增区块
+          </Button>
           <Button size="small">页面管理</Button>
           <Button size="small">当前页面设置</Button>
           <Button size="small">JS Block 试运行</Button>
         </Space>
+      ) : null}
+      {canEnterDesignMode && isDesignMode && isPageContentSavePending ? (
+        <Typography.Text
+          type="secondary"
+          style={{ marginBottom: 12, display: 'block' }}
+        >
+          区块保存中
+        </Typography.Text>
+      ) : null}
+      {canEnterDesignMode && isDesignMode && pageContentSaveError ? (
+        <Alert
+          style={{ marginBottom: 12 }}
+          message="区块保存失败"
+          description={pageContentSaveError}
+          type="error"
+          showIcon
+        />
       ) : null}
       {canEnterDesignMode && isDesignMode ? (
         <Typography.Text
@@ -722,7 +863,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         </Sider>
         <Content style={{ padding: 16, background: 'white' }}>
           <PageCanvas
-            content={selectedPageLabel ? pageContent : undefined}
+            content={
+              selectedPageLabel && hasLoadedSelectedPageContent
+                ? displayedPageContent
+                : undefined
+            }
             isLoading={Boolean(selectedPageLabel && isPageContentLoading)}
             hasError={Boolean(selectedPageLabel && hasPageContentLoadError)}
             selectedBlockId={selectedBlockId}
