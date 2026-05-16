@@ -8,6 +8,7 @@ export function renderPageTitle(definition: PageDefinition): string {
 }
 
 export * from './js-block-source-policy';
+export * from './native-trusted-block-source-policy';
 export * from './js-block-source-transform';
 export * from './js-block-source-evaluator';
 export * from './block-context-mediator';
