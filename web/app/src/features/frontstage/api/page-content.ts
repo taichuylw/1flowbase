@@ -1,5 +1,6 @@
 import {
   getFrontstagePageDetail,
+  saveFrontstagePageContent as saveConsoleFrontstagePageContent,
   type ConsoleFrontstagePageDetail,
   type ConsoleFrontstagePageNode
 } from '@1flowbase/api-client';
@@ -29,6 +30,15 @@ export interface FrontstagePageContent {
   page: FrontstagePageContentNode;
   schema: FrontstagePageSchema;
   root: FrontstagePageRoot;
+}
+
+export interface SaveFrontstagePageContentPayloadInput {
+  payload: unknown;
+}
+
+export interface SaveFrontstagePageContentInput {
+  schema: SaveFrontstagePageContentPayloadInput;
+  root: SaveFrontstagePageContentPayloadInput;
 }
 
 export const frontstagePageContentQueryKey = (
@@ -72,6 +82,23 @@ export async function fetchFrontstagePageContent(
   const detail = await getFrontstagePageDetail(
     workspaceId,
     pageId,
+    getFrontstageApiBaseUrl()
+  );
+
+  return mapFrontstagePageContent(detail);
+}
+
+export async function saveFrontstagePageContent(
+  workspaceId: string,
+  pageId: string,
+  input: SaveFrontstagePageContentInput,
+  csrfToken: string
+): Promise<FrontstagePageContent> {
+  const detail = await saveConsoleFrontstagePageContent(
+    workspaceId,
+    pageId,
+    input,
+    csrfToken,
     getFrontstageApiBaseUrl()
   );
 

@@ -53,6 +53,15 @@ export interface MoveFrontstagePageNodeInput {
   rank?: string | null;
 }
 
+export interface SaveFrontstagePageContentPayloadInput {
+  payload: unknown;
+}
+
+export interface SaveFrontstagePageContentInput {
+  schema: SaveFrontstagePageContentPayloadInput;
+  root: SaveFrontstagePageContentPayloadInput;
+}
+
 export interface SaveFrontstageBlockCodeInput {
   code: string;
 }
@@ -151,6 +160,22 @@ export function deleteFrontstagePageNode(
   return apiFetch<void>({
     path: `/api/console/frontstage/${workspaceId}/pages/${pageNodeId}`,
     method: 'DELETE',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function saveFrontstagePageContent(
+  workspaceId: string,
+  pageId: string,
+  input: SaveFrontstagePageContentInput,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ConsoleFrontstagePageDetail> {
+  return apiFetch<ConsoleFrontstagePageDetail>({
+    path: `/api/console/frontstage/${workspaceId}/pages/${pageId}/content`,
+    method: 'PUT',
+    body: input,
     csrfToken,
     baseUrl
   });

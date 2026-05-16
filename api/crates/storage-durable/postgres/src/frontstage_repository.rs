@@ -4,8 +4,8 @@ use control_plane::{
     errors::ControlPlaneError,
     ports::{
         AuthRepository, CreateFrontstagePageInput, FrontstagePageRepository,
-        MoveFrontstagePageInput, SaveFrontstageBlockCodeInput, UpdateFrontstagePageTitleInput,
-        WorkspaceRepository,
+        MoveFrontstagePageInput, SaveFrontstageBlockCodeInput, SaveFrontstagePageContentInput,
+        UpdateFrontstagePageTitleInput, WorkspaceRepository,
     },
 };
 use serde_json::json;
@@ -362,6 +362,84 @@ impl FrontstagePageRepository for PgControlPlaneStore {
 
         tx.commit().await?;
         Ok(())
+    }
+
+    async fn save_frontstage_page_content(
+        &self,
+        input: &SaveFrontstagePageContentInput,
+    ) -> Result<domain::frontstage::FrontstagePageDetail> {
+        let row = sqlx::query(
+            r#"
+            with updated_schema as (
+                update frontstage_page_schemas
+                set schema_payload = $3,
+                    root_payload = $4,
+                    updated_at = now()
+                where workspace_id = $1 and page_id = $2
+                returning
+                    workspace_id,
+                    page_id,
+                    root_uid,
+                    schema_payload,
+                    root_payload,
+                    created_at,
+                    updated_at
+            ),
+            updated_page as (
+                update frontstage_pages
+                set updated_at = now()
+                where workspace_id = $1
+                  and id = $2
+                  and exists (select 1 from updated_schema)
+                returning
+                    id,
+                    workspace_id,
+                    parent_id,
+                    kind,
+                    title,
+                    slug,
+                    schema_root_uid,
+                    rank,
+                    created_at,
+                    updated_at
+            )
+            select
+                p.id,
+                p.workspace_id,
+                p.parent_id,
+                p.kind,
+                p.title,
+                p.slug,
+                p.schema_root_uid,
+                p.rank,
+                p.created_at,
+                p.updated_at,
+                s.workspace_id as schema_workspace_id,
+                s.page_id as schema_page_id,
+                s.root_uid,
+                s.schema_payload,
+                s.root_payload,
+                s.created_at as schema_created_at,
+                s.updated_at as schema_updated_at
+            from updated_page p
+            join updated_schema s
+              on s.workspace_id = p.workspace_id
+             and s.page_id = p.id
+            "#,
+        )
+        .bind(input.workspace_id)
+        .bind(input.page_id)
+        .bind(&input.schema_payload)
+        .bind(&input.root_payload)
+        .fetch_optional(self.pool())
+        .await?;
+
+        let row = row.ok_or(ControlPlaneError::NotFound("frontstage_page"))?;
+        let page = map_frontstage_page_row(&row)?;
+        Ok(domain::frontstage::FrontstagePageDetail {
+            page,
+            schema: map_frontstage_schema_row(&row),
+        })
     }
 
     async fn get_frontstage_block_code(

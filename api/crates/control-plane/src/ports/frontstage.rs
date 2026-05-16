@@ -30,6 +30,14 @@ pub struct MoveFrontstagePageInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct SaveFrontstagePageContentInput {
+    pub workspace_id: Uuid,
+    pub page_id: Uuid,
+    pub schema_payload: serde_json::Value,
+    pub root_payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
 pub struct SaveFrontstageBlockCodeInput {
     pub workspace_id: Uuid,
     pub page_id: Uuid,
@@ -79,6 +87,11 @@ pub trait FrontstagePageRepository: Send + Sync {
 
     async fn delete_frontstage_page(&self, workspace_id: Uuid, page_id: Uuid)
     -> anyhow::Result<()>;
+
+    async fn save_frontstage_page_content(
+        &self,
+        input: &SaveFrontstagePageContentInput,
+    ) -> anyhow::Result<domain::frontstage::FrontstagePageDetail>;
 
     async fn get_frontstage_block_code(
         &self,
