@@ -15,7 +15,7 @@ import type {
 
 const validSource = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   render(ctx) {
@@ -34,7 +34,7 @@ function createModules(
         return definition;
       }
     },
-    '@1flowbase/antd-facade': {
+    '@1flowbase/block-renderer/antd-facade': {
       Text(input: { children?: unknown; props?: { children?: unknown } }) {
         return {
           primitive: 'Text',
@@ -110,7 +110,7 @@ describe('JS block worker executor', () => {
     const messages: JsBlockWorkerToHostMessage[] = [];
     const executor = createJsBlockWorkerExecutor({
       modules: createModules({
-        '@1flowbase/antd-facade': {
+        '@1flowbase/block-renderer/antd-facade': {
           Text() {
             return { primitive: 'Unknown' };
           }
@@ -242,7 +242,7 @@ export default defineBlock({
       request: createRunRequest({
         source: `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -328,7 +328,7 @@ export default defineBlock({
       request: createRunRequest({
         source: `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -408,7 +408,7 @@ export default defineBlock({
       request: createRunRequest({
         source: `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -483,7 +483,7 @@ export default defineBlock({
         request: createRunRequest({
           source: `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -534,7 +534,7 @@ export default defineBlock({
       request: createRunRequest({
         source: `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -585,7 +585,7 @@ export default defineBlock({
       state: { count: 1 },
       source: `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   render(ctx) {

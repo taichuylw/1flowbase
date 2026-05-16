@@ -4,7 +4,7 @@ import { transformJsBlockSource } from '../index';
 
 const blockSkeleton = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Card, Space, Typography } from '@1flowbase/antd-facade';
+import { Card, Space, Typography } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   render() {
@@ -39,25 +39,25 @@ describe('JS block source transform', () => {
         ]
       },
       {
-        source: '@1flowbase/antd-facade',
+        source: '@1flowbase/block-renderer/antd-facade',
         bindings: [
           {
             kind: 'named',
             imported: 'Card',
             local: 'Card',
-            source: '@1flowbase/antd-facade'
+            source: '@1flowbase/block-renderer/antd-facade'
           },
           {
             kind: 'named',
             imported: 'Space',
             local: 'Space',
-            source: '@1flowbase/antd-facade'
+            source: '@1flowbase/block-renderer/antd-facade'
           },
           {
             kind: 'named',
             imported: 'Typography',
             local: 'Typography',
-            source: '@1flowbase/antd-facade'
+            source: '@1flowbase/block-renderer/antd-facade'
           }
         ]
       }
@@ -71,7 +71,7 @@ describe('JS block source transform', () => {
       'const { defineBlock } = __flowbaseJsBlockModules["@1flowbase/block-sdk"];'
     );
     expect(result.executableBody).toContain(
-      'const { Card, Space, Typography } = __flowbaseJsBlockModules["@1flowbase/antd-facade"];'
+      'const { Card, Space, Typography } = __flowbaseJsBlockModules["@1flowbase/block-renderer/antd-facade"];'
     );
     expect(result.executableBody).toContain(
       'const __flowbaseJsBlockDefaultExport = defineBlock({'
@@ -86,7 +86,7 @@ describe('JS block source transform', () => {
   test('supports alias imports from first-party modules', () => {
     const source = `
 import { defineBlock as createBlock } from '@1flowbase/block-sdk';
-import { Text as Copy, Button } from '@1flowbase/antd-facade';
+import { Text as Copy, Button } from '@1flowbase/block-renderer/antd-facade';
 
 export default createBlock({
   render() {
@@ -113,27 +113,27 @@ export default createBlock({
         kind: 'named',
         imported: 'Text',
         local: 'Copy',
-        source: '@1flowbase/antd-facade'
+        source: '@1flowbase/block-renderer/antd-facade'
       },
       {
         kind: 'named',
         imported: 'Button',
         local: 'Button',
-        source: '@1flowbase/antd-facade'
+        source: '@1flowbase/block-renderer/antd-facade'
       }
     ]);
     expect(result.executableBody).toContain(
       'const { defineBlock: createBlock } = __flowbaseJsBlockModules["@1flowbase/block-sdk"];'
     );
     expect(result.executableBody).toContain(
-      'const { Text: Copy, Button } = __flowbaseJsBlockModules["@1flowbase/antd-facade"];'
+      'const { Text: Copy, Button } = __flowbaseJsBlockModules["@1flowbase/block-renderer/antd-facade"];'
     );
   });
 
   test('supports namespace imports for the block SDK defineBlock contract', () => {
     const source = `
 import * as BlockSdk from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default BlockSdk.defineBlock({
   render() {
@@ -159,7 +159,7 @@ export default BlockSdk.defineBlock({
         kind: 'named',
         imported: 'Text',
         local: 'Text',
-        source: '@1flowbase/antd-facade'
+        source: '@1flowbase/block-renderer/antd-facade'
       }
     ]);
     expect(result.executableBody).toContain(
@@ -271,7 +271,7 @@ export default function Block() {
 
   test('returns transform_failed when the default export does not call the injected defineBlock', () => {
     const result = transformJsBlockSource(`
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default {
   render() {

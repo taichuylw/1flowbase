@@ -1,4 +1,4 @@
-import * as antdFacade from '@1flowbase/antd-facade';
+import * as antdFacade from '@1flowbase/block-renderer/antd-facade';
 import * as blockSdk from '@1flowbase/block-sdk';
 
 import {
@@ -32,7 +32,7 @@ export function createDefaultJsBlockInjectedModules(
 ): JsBlockInjectedModuleMap {
   return {
     '@1flowbase/block-sdk': blockSdk as Record<string, unknown>,
-    '@1flowbase/antd-facade': antdFacade as Record<string, unknown>,
+    '@1flowbase/block-renderer/antd-facade': antdFacade as Record<string, unknown>,
     ...(options.moduleOverrides ?? {})
   };
 }

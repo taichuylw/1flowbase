@@ -17,7 +17,7 @@ import {
 
 const validSource = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -109,7 +109,7 @@ function createTestModuleOverrides() {
         return definition;
       }
     },
-    '@1flowbase/antd-facade': {
+    '@1flowbase/block-renderer/antd-facade': {
       Text(input: { children?: unknown; props?: { children?: unknown } }) {
         return {
           primitive: 'Text',
@@ -245,7 +245,7 @@ describe('FrontStage restricted block source policy', () => {
   test('keeps browser escape APIs denied and does not expand default imports', () => {
     expect(JS_BLOCK_ALLOWED_IMPORTS).toEqual([
       '@1flowbase/block-sdk',
-      '@1flowbase/antd-facade'
+      '@1flowbase/block-renderer/antd-facade'
     ]);
 
     expect(validateJsBlockSource('window.location.href;')).toMatchObject({
@@ -261,6 +261,14 @@ describe('FrontStage restricted block source policy', () => {
     expect(
       validateJsBlockSource(
         "import { z } from '@1flowbase/not-open';\nexport default z;"
+      )
+    ).toMatchObject({
+      ok: false,
+      errors: [{ path: 'source.imports[0]' }]
+    });
+    expect(
+      validateJsBlockSource(
+        "import { Text } from '@1flowbase/antd-facade';\nexport default Text;"
       )
     ).toMatchObject({
       ok: false,

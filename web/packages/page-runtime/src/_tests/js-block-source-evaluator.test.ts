@@ -10,7 +10,7 @@ import {
 
 const blockSkeleton = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Card, Space, Typography } from '@1flowbase/antd-facade';
+import { Card, Space, Typography } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   async render(ctx) {
@@ -80,7 +80,7 @@ function createModules(
         return definition;
       }
     },
-    '@1flowbase/antd-facade': {
+    '@1flowbase/block-renderer/antd-facade': {
       Card: stack,
       Space: stack,
       Typography: {
@@ -162,8 +162,8 @@ export default defineBlock({
     ],
     [
       'missing facade module',
-      { '@1flowbase/antd-facade': undefined },
-      'modules.@1flowbase/antd-facade'
+      { '@1flowbase/block-renderer/antd-facade': undefined },
+      'modules.@1flowbase/block-renderer/antd-facade'
     ],
     [
       'missing defineBlock binding',
@@ -172,8 +172,8 @@ export default defineBlock({
     ],
     [
       'missing facade binding',
-      { '@1flowbase/antd-facade': { Card: vi.fn(), Space: vi.fn() } },
-      'modules.@1flowbase/antd-facade.Typography'
+      { '@1flowbase/block-renderer/antd-facade': { Card: vi.fn(), Space: vi.fn() } },
+      'modules.@1flowbase/block-renderer/antd-facade.Typography'
     ]
   ] as const)(
     'returns a stable runtime error for %s',

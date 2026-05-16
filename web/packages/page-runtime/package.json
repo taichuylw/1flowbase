@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@1flowbase/antd-facade": "workspace:*",
+    "@1flowbase/block-renderer": "workspace:*",
     "@1flowbase/block-sdk": "workspace:*",
     "@1flowbase/page-protocol": "workspace:*"
   },

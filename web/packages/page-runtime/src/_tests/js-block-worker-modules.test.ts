@@ -14,7 +14,7 @@ import type {
 
 const source = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Stack, Text } from '@1flowbase/antd-facade';
+import { Stack, Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   render() {
@@ -39,7 +39,7 @@ describe('JS block default worker modules', () => {
     expect(modules['@1flowbase/block-sdk']).toMatchObject({
       defineBlock: expect.any(Function)
     });
-    expect(modules['@1flowbase/antd-facade']).toMatchObject({
+    expect(modules['@1flowbase/block-renderer/antd-facade']).toMatchObject({
       Stack: expect.any(Function),
       Text: expect.any(Function)
     });
@@ -48,7 +48,7 @@ describe('JS block default worker modules', () => {
   test('lets host code override a default module for tests or future runtime injection', async () => {
     const executor = createDefaultJsBlockWorkerExecutor({
       moduleOverrides: {
-        '@1flowbase/antd-facade': {
+        '@1flowbase/block-renderer/antd-facade': {
           Stack(input: { children?: unknown }) {
             return { primitive: 'Grid', children: input.children };
           },

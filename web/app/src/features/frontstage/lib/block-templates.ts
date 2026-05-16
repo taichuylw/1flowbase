@@ -4,7 +4,7 @@ export function createBlankJsBlockTemplateCode(input: {
   contributionCode: string;
 }): string {
   return `import { defineBlock } from '@1flowbase/block-sdk';
-import { Card, Space, Typography } from '@1flowbase/antd-facade';
+import { Card, Space, Typography } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   meta: {

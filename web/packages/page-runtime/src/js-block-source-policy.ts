@@ -2,7 +2,7 @@ import type { BlockProtocolError } from '@1flowbase/page-protocol';
 
 export const JS_BLOCK_ALLOWED_IMPORTS = [
   '@1flowbase/block-sdk',
-  '@1flowbase/antd-facade'
+  '@1flowbase/block-renderer/antd-facade'
 ] as const;
 
 type JsBlockAllowedImport = (typeof JS_BLOCK_ALLOWED_IMPORTS)[number];

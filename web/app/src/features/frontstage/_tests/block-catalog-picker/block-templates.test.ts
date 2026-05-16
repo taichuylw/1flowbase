@@ -11,7 +11,7 @@ describe('frontstage block templates', () => {
     });
 
     expect(code).toContain("@1flowbase/block-sdk");
-    expect(code).toContain("@1flowbase/antd-facade");
+    expect(code).toContain("@1flowbase/block-renderer/antd-facade");
     expect(code).toContain('defineBlock');
     expect(code).toContain("blockId: 'frontstage-js-block-1'");
     expect(code).toContain("codeRef: 'frontstage-js-block-1-code'");

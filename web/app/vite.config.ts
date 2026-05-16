@@ -77,6 +77,12 @@ export default defineConfig(({ mode }) => {
         '@1flowbase/api-client': fileURLToPath(
           new URL('../packages/api-client/src/index.ts', import.meta.url)
         ),
+        '@1flowbase/antd-facade': fileURLToPath(
+          new URL('../packages/antd-facade/src/index.ts', import.meta.url)
+        ),
+        '@1flowbase/block-renderer/antd-facade': fileURLToPath(
+          new URL('../packages/block-renderer/src/antd-facade.ts', import.meta.url)
+        ),
         '@1flowbase/block-renderer': fileURLToPath(
           new URL('../packages/block-renderer/src/index.tsx', import.meta.url)
         ),

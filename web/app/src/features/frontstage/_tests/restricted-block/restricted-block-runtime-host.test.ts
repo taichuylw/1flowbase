@@ -13,7 +13,7 @@ import type { RestrictedBlockRunPlan } from '../../lib/restricted-block-loader';
 
 const validSource = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Text } from '@1flowbase/antd-facade';
+import { Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   render() {

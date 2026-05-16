@@ -4,7 +4,7 @@ import { validateJsBlockSource } from '../index';
 
 const validBlockSkeleton = `
 import { defineBlock } from '@1flowbase/block-sdk';
-import { Stack, Text } from '@1flowbase/antd-facade';
+import { Stack, Text } from '@1flowbase/block-renderer/antd-facade';
 
 export default defineBlock({
   render() {
@@ -28,6 +28,7 @@ describe('JS block source static policy', () => {
   test.each([
     ['react import', "import React from 'react';"],
     ['antd import', "import { Button } from 'antd';"],
+    ['old facade import', "import { Text } from '@1flowbase/antd-facade';"],
     ['dom import', "import { createRoot } from 'react-dom/client';"],
     ['npm package import', "import dayjs from 'dayjs';"]
   ])('rejects denied static import: %s', (_label, source) => {
