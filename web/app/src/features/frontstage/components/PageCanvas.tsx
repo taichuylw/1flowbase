@@ -1,0 +1,318 @@
+import { Alert, Button, Empty, Flex, Space, Tag, Typography } from 'antd';
+import type { CSSProperties, FC, KeyboardEvent } from 'react';
+import { useMemo } from 'react';
+
+import type { FrontstagePageContent } from '../api/page-content';
+import {
+  createFrontstagePageDocument,
+  type FrontstageBlockInstance,
+  type FrontstagePageDocumentDiagnostic
+} from '../lib/page-document';
+
+type PageCanvasProps = {
+  content?: FrontstagePageContent;
+  isLoading?: boolean;
+  hasError?: boolean;
+  selectedBlockId?: string | null;
+  onSelectBlock?: (blockId: string | null) => void;
+  onRetry?: () => void;
+};
+
+function formatPageTitle(content: FrontstagePageContent): string {
+  return content.page.title?.trim() || '未命名页面';
+}
+
+function formatOptional(value: string | null | undefined): string {
+  return value && value.trim().length > 0 ? value : '未设置';
+}
+
+function formatLayoutValue(value: unknown): string {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value);
+  }
+
+  return '未设置';
+}
+
+function getDiagnosticTone(
+  diagnostic: FrontstagePageDocumentDiagnostic
+): 'error' | 'warning' {
+  return diagnostic.severity === 'error' ? 'error' : 'warning';
+}
+
+const sectionStyle: CSSProperties = {
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  padding: 12,
+  background: '#fff'
+};
+
+const mutedSectionStyle: CSSProperties = {
+  ...sectionStyle,
+  background: '#fafafa'
+};
+
+const blockRowBaseStyle: CSSProperties = {
+  width: '100%',
+  border: '1px solid #f0f0f0',
+  borderRadius: 6,
+  background: '#fff',
+  padding: '10px 12px',
+  font: 'inherit',
+  textAlign: 'left',
+  cursor: 'pointer'
+};
+
+function BlockRow({
+  block,
+  isSelected,
+  onSelectBlock
+}: {
+  block: FrontstageBlockInstance;
+  isSelected: boolean;
+  onSelectBlock?: (blockId: string | null) => void;
+}) {
+  const rowStyle: CSSProperties = {
+    ...blockRowBaseStyle,
+    borderColor: isSelected ? '#1677ff' : '#f0f0f0',
+    background: isSelected ? '#e6f4ff' : '#fff'
+  };
+
+  const handleSelect = () => {
+    onSelectBlock?.(block.id);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleSelect();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      style={rowStyle}
+      onClick={handleSelect}
+      onKeyDown={handleKeyDown}
+    >
+      <Flex justify="space-between" align="center" gap={12}>
+        <Space direction="vertical" size={2} style={{ minWidth: 0 }}>
+          <Typography.Text strong ellipsis style={{ maxWidth: 360 }}>
+            {block.id}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {block.contribution.code} · {block.codeRef}
+          </Typography.Text>
+        </Space>
+        <Space size={6}>
+          <Tag>{block.runtime.kind}</Tag>
+          <Tag>#{block.order}</Tag>
+        </Space>
+      </Flex>
+    </button>
+  );
+}
+
+function SelectedBlockPanel({
+  block
+}: {
+  block: FrontstageBlockInstance | null;
+}) {
+  if (!block) {
+    return (
+      <div style={mutedSectionStyle}>
+        <Typography.Text type="secondary">未选择区块</Typography.Text>
+      </div>
+    );
+  }
+
+  return (
+    <div style={sectionStyle}>
+      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Typography.Text strong>已选区块</Typography.Text>
+        <Flex wrap gap={8}>
+          <Tag color="blue">{block.id}</Tag>
+          <Tag>{block.contribution.code}</Tag>
+          <Tag>{block.runtime.kind}</Tag>
+        </Flex>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '96px minmax(0, 1fr)',
+            rowGap: 6,
+            columnGap: 8
+          }}
+        >
+          <Typography.Text type="secondary">Code Ref</Typography.Text>
+          <Typography.Text>{block.codeRef}</Typography.Text>
+          <Typography.Text type="secondary">Plugin</Typography.Text>
+          <Typography.Text>
+            {formatOptional(block.contribution.pluginId)}
+          </Typography.Text>
+          <Typography.Text type="secondary">Runtime Entry</Typography.Text>
+          <Typography.Text>
+            {formatOptional(block.runtime.entry)}
+          </Typography.Text>
+          <Typography.Text type="secondary">Region</Typography.Text>
+          <Typography.Text>
+            {formatLayoutValue(block.layout.region)}
+          </Typography.Text>
+        </div>
+      </Space>
+    </div>
+  );
+}
+
+export const PageCanvas: FC<PageCanvasProps> = ({
+  content,
+  isLoading,
+  hasError,
+  selectedBlockId = null,
+  onSelectBlock,
+  onRetry
+}) => {
+  const document = useMemo(
+    () => (content ? createFrontstagePageDocument(content) : null),
+    [content]
+  );
+  const blocks = useMemo(
+    () =>
+      document
+        ? [...document.blocks].sort((left, right) => left.order - right.order)
+        : [],
+    [document]
+  );
+  const selectedBlock =
+    blocks.find((block) => block.id === selectedBlockId) ?? null;
+
+  if (isLoading) {
+    return (
+      <div style={mutedSectionStyle}>
+        <Space direction="vertical" size={4}>
+          <Typography.Text strong>页面内容加载中</Typography.Text>
+          <Typography.Text type="secondary">
+            正在读取页面内容和区块清单。
+          </Typography.Text>
+        </Space>
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="页面内容加载失败"
+        description="请检查网络后重试，画布不会使用过期内容进行渲染。"
+        action={
+          onRetry ? (
+            <Button size="small" onClick={onRetry}>
+              重试
+            </Button>
+          ) : null
+        }
+      />
+    );
+  }
+
+  if (!content || !document) {
+    return (
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          <Space direction="vertical" size={2}>
+            <Typography.Text>未选择页面内容</Typography.Text>
+            <Typography.Text type="secondary">
+              选择页面后将显示只读内容画布。
+            </Typography.Text>
+          </Space>
+        }
+      />
+    );
+  }
+
+  return (
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Flex
+        justify="space-between"
+        align="center"
+        wrap
+        gap={12}
+        style={sectionStyle}
+      >
+        <Space direction="vertical" size={2}>
+          <Typography.Text strong>{formatPageTitle(content)}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Root {document.rootUid}
+          </Typography.Text>
+        </Space>
+        <Space size={8} wrap>
+          <Tag>{blocks.length} 个区块</Tag>
+          <Tag color={document.diagnostics.length > 0 ? 'warning' : 'success'}>
+            {document.diagnostics.length} 条诊断
+          </Tag>
+        </Space>
+      </Flex>
+
+      {document.diagnostics.length > 0 ? (
+        <div data-testid="page-canvas-diagnostics" style={sectionStyle}>
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Typography.Text strong>文档诊断</Typography.Text>
+            {document.diagnostics.map((diagnostic, index) => (
+              <Alert
+                key={`${diagnostic.code}-${diagnostic.path}-${index}`}
+                type={getDiagnosticTone(diagnostic)}
+                showIcon
+                message={
+                  <Space size={6} wrap>
+                    <Typography.Text>{diagnostic.code}</Typography.Text>
+                    <Typography.Text type="secondary">
+                      {diagnostic.path}
+                    </Typography.Text>
+                  </Space>
+                }
+                description={diagnostic.message}
+              />
+            ))}
+          </Space>
+        </div>
+      ) : null}
+
+      {document.isEmpty ? (
+        <div style={mutedSectionStyle}>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Typography.Text type="secondary">页面内容为空</Typography.Text>
+            }
+          />
+        </div>
+      ) : (
+        <Flex gap={12} align="flex-start" wrap>
+          <div style={{ ...sectionStyle, flex: '1 1 auto', minWidth: 0 }}>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Typography.Text strong>区块列表</Typography.Text>
+              {blocks.map((block) => (
+                <BlockRow
+                  key={block.id}
+                  block={block}
+                  isSelected={block.id === selectedBlockId}
+                  onSelectBlock={onSelectBlock}
+                />
+              ))}
+            </Space>
+          </div>
+          <div style={{ width: 320, flex: '1 0 280px', maxWidth: 360 }}>
+            <SelectedBlockPanel block={selectedBlock} />
+          </div>
+        </Flex>
+      )}
+    </Space>
+  );
+};
