@@ -26,8 +26,16 @@ import { FrontStagePage } from '../pages/FrontStagePage';
 const pageContentSaveHook = vi.hoisted(() => ({
   useFrontstagePageContentSave: vi.fn()
 }));
+const blockCatalogHook = vi.hoisted(() => ({
+  useFrontstageBlockCatalog: vi.fn()
+}));
+const blockCodeHook = vi.hoisted(() => ({
+  useFrontstageBlockCode: vi.fn()
+}));
 
 vi.mock('../hooks/use-frontstage-page-content-save', () => pageContentSaveHook);
+vi.mock('../hooks/use-frontstage-block-catalog', () => blockCatalogHook);
+vi.mock('../hooks/use-frontstage-block-code', () => blockCodeHook);
 
 type TestFrontStageTreeNode = {
   id: string;
@@ -257,6 +265,29 @@ function mockPageContentSaveState(
   return state;
 }
 
+function mockFrontstageBlockCatalog() {
+  blockCatalogHook.useFrontstageBlockCatalog.mockReturnValue({
+    items: [],
+    diagnostics: [],
+    loading: false,
+    error: null
+  });
+}
+
+function mockFrontstageBlockCode() {
+  blockCodeHook.useFrontstageBlockCode.mockReturnValue({
+    code: '',
+    draft: '',
+    dirty: false,
+    loading: false,
+    saving: false,
+    error: null,
+    setDraft: vi.fn(),
+    reset: vi.fn(),
+    save: vi.fn()
+  });
+}
+
 function getSavedBlocks(input: SaveFrontstagePageContentInput) {
   const payload = input.root.payload;
   if (typeof payload !== 'object' || payload === null) {
@@ -281,6 +312,8 @@ describe('FrontStagePage', () => {
     resetAuthStore();
     vi.clearAllMocks();
     mockPageContentSaveState();
+    mockFrontstageBlockCatalog();
+    mockFrontstageBlockCode();
     confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
@@ -336,8 +369,8 @@ describe('FrontStagePage', () => {
       screen.getByRole('button', { name: '当前页面设置' })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'JS Block 试运行' })
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'JS Block 试运行' })
+    ).not.toBeInTheDocument();
     expect(screen.getByText('页面树已同步')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '新建分组' })

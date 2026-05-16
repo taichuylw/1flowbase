@@ -15,8 +15,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../../state/auth-store';
 import type { FrontstagePageContent } from '../api/page-content';
 import { BlockCodeEditorDrawer } from '../components/BlockCodeEditorDrawer';
+import { JsBlockTrialPanel } from '../components/JsBlockTrialPanel';
 import { PageCanvas } from '../components/PageCanvas';
+import { useFrontstageBlockCatalog } from '../hooks/use-frontstage-block-catalog';
+import { useFrontstageBlockCode } from '../hooks/use-frontstage-block-code';
 import { useFrontstagePageContentSave } from '../hooks/use-frontstage-page-content-save';
+import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
 import {
   appendFrontstageBlock,
   createFrontstageBlockCompositionState,
@@ -28,7 +32,8 @@ import {
 } from '../lib/block-composition';
 import {
   createFrontstagePageDocument,
-  createFrontstagePageDocumentSaveInput
+  createFrontstagePageDocumentSaveInput,
+  type FrontstageBlockInstance
 } from '../lib/page-document';
 import {
   canMoveNode,
@@ -42,8 +47,19 @@ import {
   resolveSelectedPageId
 } from '../lib/page-tree';
 import type { FrontStageTreeNode } from '../lib/page-tree';
+import type { RestrictedBlockLoaderLimits } from '../lib/restricted-block-loader';
 
 const DESIGN_MODE_PERMISSION = 'frontstage.page.design';
+const DEFAULT_JS_BLOCK_TRIAL_LIMITS: RestrictedBlockLoaderLimits = {
+  timeoutMs: 1000,
+  maxRenderDepth: 8,
+  maxRenderNodes: 250,
+  maxEventChainDepth: 4,
+  allowedActions: [],
+  allowedEvents: [],
+  allowedDataModels: [],
+  allowedDataOperations: []
+};
 
 type FrontStagePageProps = {
   workspaceId: string;
@@ -216,6 +232,26 @@ function normalizeLayoutDimension(value: number | string | null): number | null 
   return null;
 }
 
+function findMatchingFrontstageBlockCatalogEntry(
+  block: FrontstageBlockInstance | null | undefined,
+  catalogItems: NormalizedFrontstageBlockCatalogEntry[]
+): NormalizedFrontstageBlockCatalogEntry | null {
+  if (!block) {
+    return null;
+  }
+
+  return (
+    catalogItems.find(
+      (item) =>
+        block.catalog.providerCode === item.providerCode &&
+        block.catalog.installationId === item.installationId &&
+        block.contribution.pluginId === item.pluginId &&
+        block.contribution.pluginVersion === item.pluginVersion &&
+        block.contribution.code === item.contributionCode
+    ) ?? null
+  );
+}
+
 export const FrontStagePage: FC<FrontStagePageProps> = ({
   workspaceId,
   pageId,
@@ -243,6 +279,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     useState<PageTreeOperationStatus>('idle');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isBlockCodeEditorOpen, setIsBlockCodeEditorOpen] = useState(false);
+  const [isJsBlockTrialPanelOpen, setIsJsBlockTrialPanelOpen] = useState(false);
+  const [jsBlockTrialContextSnapshot, setJsBlockTrialContextSnapshot] =
+    useState<Record<string, unknown>>({});
+  const [jsBlockTrialLimits, setJsBlockTrialLimits] =
+    useState<RestrictedBlockLoaderLimits>(DEFAULT_JS_BLOCK_TRIAL_LIMITS);
   const [savedPageContent, setSavedPageContent] =
     useState<FrontstagePageContent | null>(null);
   const [isBlockSavePending, setIsBlockSavePending] = useState(false);
@@ -258,6 +299,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }).selectedPageId
   );
   const { Sider, Content } = Layout;
+  const blockCatalog = useFrontstageBlockCatalog();
   const pageContentSave = useFrontstagePageContentSave({
     workspaceId,
     pageId: selectedPageId
@@ -349,6 +391,30 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         selectedBlockIndex >= 0 &&
         selectedBlockIndex < blockCompositionState.document.blocks.length - 1
     );
+  const selectedBlockCode = useFrontstageBlockCode({
+    workspaceId: canShowSelectedBlockActions ? workspaceId : null,
+    pageId: canShowSelectedBlockActions ? selectedPageId : null,
+    codeRef: canShowSelectedBlockActions ? selectedBlock?.codeRef : null
+  });
+  const matchingJsBlockCatalogEntry = useMemo(
+    () =>
+      findMatchingFrontstageBlockCatalogEntry(
+        selectedBlock,
+        blockCatalog.items
+      ),
+    [blockCatalog.items, selectedBlock]
+  );
+  const defaultJsBlockTrialContextSnapshot = useMemo(
+    () => ({
+      workspaceId,
+      pageId: activePageContent?.page.id ?? selectedPageId,
+      pageTitle: activePageContent?.page.title ?? null,
+      blockId: selectedBlock?.id ?? null,
+      blockCodeRef: selectedBlock?.codeRef ?? null,
+      props: selectedBlock?.props ?? {}
+    }),
+    [activePageContent, selectedBlock, selectedPageId, workspaceId]
+  );
 
   useEffect(() => {
     if (!initialPageTree) {
@@ -379,6 +445,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setSavedPageContent(null);
     setSelectedBlockId(null);
     setIsBlockCodeEditorOpen(false);
+    setIsJsBlockTrialPanelOpen(false);
     setBlockSaveError(null);
   }, [selectedPageId]);
 
@@ -387,6 +454,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setSelectedBlockId((currentBlockId) => {
       if (!currentBlockId || !pageContent) {
         setIsBlockCodeEditorOpen(false);
+        setIsJsBlockTrialPanelOpen(false);
         return null;
       }
 
@@ -396,6 +464,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       );
       if (!hasCurrentBlock) {
         setIsBlockCodeEditorOpen(false);
+        setIsJsBlockTrialPanelOpen(false);
       }
 
       return hasCurrentBlock ? currentBlockId : null;
@@ -405,8 +474,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   useEffect(() => {
     if (!canShowSelectedBlockActions) {
       setIsBlockCodeEditorOpen(false);
+      setIsJsBlockTrialPanelOpen(false);
     }
   }, [canShowSelectedBlockActions]);
+
+  useEffect(() => {
+    setJsBlockTrialContextSnapshot(defaultJsBlockTrialContextSnapshot);
+    setJsBlockTrialLimits(DEFAULT_JS_BLOCK_TRIAL_LIMITS);
+  }, [defaultJsBlockTrialContextSnapshot]);
 
   const selectedPageDisplayTitle = getPageDisplayTitle(
     pageTree,
@@ -764,6 +839,16 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     void saveBlockComposition(sourceContent, nextCompositionState);
   };
 
+  const handleOpenJsBlockTrialPanel = () => {
+    if (!canRunSelectedBlockAction) {
+      return;
+    }
+
+    setJsBlockTrialContextSnapshot(defaultJsBlockTrialContextSnapshot);
+    setJsBlockTrialLimits(DEFAULT_JS_BLOCK_TRIAL_LIMITS);
+    setIsJsBlockTrialPanelOpen(true);
+  };
+
   const renderTreeNode = (
     node: FrontStageTreeNode,
     level: number = 0,
@@ -945,6 +1030,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                 if (isDesignMode) {
                   setSelectedBlockId(null);
                   setIsBlockCodeEditorOpen(false);
+                  setIsJsBlockTrialPanelOpen(false);
                 }
 
                 setIsDesignMode((current) => !current);
@@ -966,7 +1052,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           </Button>
           <Button size="small">页面管理</Button>
           <Button size="small">当前页面设置</Button>
-          <Button size="small">JS Block 试运行</Button>
         </Space>
       ) : null}
       {canEnterDesignMode && isDesignMode && isPageContentSavePending ? (
@@ -1145,6 +1230,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   <Button
                     size="small"
                     disabled={!canRunSelectedBlockAction}
+                    onClick={handleOpenJsBlockTrialPanel}
+                  >
+                    JS Block 试运行
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={!canRunSelectedBlockAction}
                     onClick={() => setIsBlockCodeEditorOpen(true)}
                   >
                     编辑代码
@@ -1159,6 +1251,41 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   </Button>
                 </Space>
               </Flex>
+            </div>
+          ) : null}
+          {isJsBlockTrialPanelOpen && canShowSelectedBlockActions ? (
+            <div
+              aria-label="JS Block 试运行面板"
+              role="region"
+              style={{
+                marginTop: 12,
+                padding: '12px',
+                border: '1px solid #f0f0f0',
+                borderRadius: 6,
+                background: '#fff'
+              }}
+            >
+              <Flex justify="space-between" align="center" gap={12}>
+                <Typography.Text strong>试运行计划</Typography.Text>
+                <Button
+                  size="small"
+                  onClick={() => setIsJsBlockTrialPanelOpen(false)}
+                >
+                  关闭
+                </Button>
+              </Flex>
+              <div style={{ marginTop: 12 }}>
+                <JsBlockTrialPanel
+                  block={selectedBlock}
+                  catalogEntry={matchingJsBlockCatalogEntry}
+                  code={selectedBlockCode.draft}
+                  contextSnapshot={jsBlockTrialContextSnapshot}
+                  limits={jsBlockTrialLimits}
+                  onCodeChange={selectedBlockCode.setDraft}
+                  onContextSnapshotChange={setJsBlockTrialContextSnapshot}
+                  onLimitsChange={setJsBlockTrialLimits}
+                />
+              </div>
             </div>
           ) : null}
           {canEnterDesignMode && isDesignMode ? (
