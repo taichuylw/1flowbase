@@ -10,6 +10,7 @@ export function renderPageTitle(definition: PageDefinition): string {
 export * from './js-block-source-policy';
 export * from './native-trusted-block-source-policy';
 export * from './native-trusted-block-manifest';
+export * from './native-trusted-block-host';
 export * from './js-block-source-transform';
 export * from './js-block-source-evaluator';
 export * from './block-context-mediator';

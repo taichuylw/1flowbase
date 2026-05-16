@@ -1,0 +1,100 @@
+import { describe, expect, test, vi } from 'vitest';
+
+import {
+  NATIVE_TRUSTED_BLOCK_PERMISSION,
+  NATIVE_TRUSTED_BLOCK_RUNTIME,
+  createNativeTrustedBlockHost,
+  type NativeTrustedBlockHostAdapter,
+  type NativeTrustedBlockPreparePlan
+} from '../index';
+
+function createPreparePlan(
+  overrides: Partial<NativeTrustedBlockPreparePlan> = {}
+): NativeTrustedBlockPreparePlan {
+  return {
+    runtime: NATIVE_TRUSTED_BLOCK_RUNTIME,
+    blockId: 'block-1',
+    entry: './Block.tsx',
+    source: 'export default function Block() { return null; }',
+    normalizedSource: 'export default function Block() { return null; }',
+    props: { recordId: 'record-1' },
+    requiredPermissions: [NATIVE_TRUSTED_BLOCK_PERMISSION],
+    ...overrides
+  };
+}
+
+describe('Native trusted block host lifecycle adapter', () => {
+  test('mount delegates the prepare plan and caller root to the injected adapter', async () => {
+    const plan = createPreparePlan();
+    const root = { handle: 'root-1' };
+    const mountedInstance = { dispose: vi.fn() };
+    const adapter: NativeTrustedBlockHostAdapter = {
+      mount: vi.fn().mockResolvedValue(mountedInstance)
+    };
+    const host = createNativeTrustedBlockHost({ adapter });
+
+    const state = await host.mount(plan, root);
+
+    expect(adapter.mount).toHaveBeenCalledTimes(1);
+    expect(adapter.mount).toHaveBeenCalledWith({ plan, root });
+    expect(state).toMatchObject({
+      status: 'mounted',
+      blockId: 'block-1',
+      runtime: NATIVE_TRUSTED_BLOCK_RUNTIME
+    });
+    expect(host.getState()).toBe(state);
+  });
+
+  test('maps adapter mount failures to structured runtime errors scoped to the session', async () => {
+    const adapter: NativeTrustedBlockHostAdapter = {
+      mount: vi.fn().mockRejectedValue(new Error('mount exploded'))
+    };
+    const host = createNativeTrustedBlockHost({ adapter });
+
+    const state = await host.mount(createPreparePlan({ blockId: 'block-fail' }), {
+      handle: 'root-fail'
+    });
+
+    expect(state).toMatchObject({
+      status: 'failed',
+      blockId: 'block-fail',
+      runtime: NATIVE_TRUSTED_BLOCK_RUNTIME,
+      error: {
+        code: 'runtime_error',
+        path: 'runtime.mount',
+        message: expect.stringContaining('mount exploded')
+      }
+    });
+  });
+
+  test('dispose calls the mounted instance dispose exactly once and is idempotent', async () => {
+    const dispose = vi.fn();
+    const adapter: NativeTrustedBlockHostAdapter = {
+      mount: vi.fn().mockReturnValue({ dispose })
+    };
+    const host = createNativeTrustedBlockHost({ adapter });
+
+    await host.mount(createPreparePlan(), { handle: 'root-1' });
+    const firstState = await host.dispose();
+    const secondState = await host.dispose();
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(firstState).toEqual({ status: 'disposed' });
+    expect(secondState).toBe(firstState);
+  });
+
+  test('calls after dispose do not remount or reach mounted state', async () => {
+    const adapter: NativeTrustedBlockHostAdapter = {
+      mount: vi.fn()
+    };
+    const host = createNativeTrustedBlockHost({ adapter });
+
+    const disposedState = await host.dispose();
+    const mountState = await host.mount(createPreparePlan(), { handle: 'root-1' });
+
+    expect(adapter.mount).not.toHaveBeenCalled();
+    expect(disposedState).toEqual({ status: 'disposed' });
+    expect(mountState).toBe(disposedState);
+    expect(host.getState().status).toBe('disposed');
+  });
+});
