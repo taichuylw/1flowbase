@@ -120,6 +120,117 @@ describe('frontstage native trusted block React adapter', () => {
     ]);
   });
 
+  test('catches native render crashes and reports a runtime error with the current block id', async () => {
+    const root = createBlockRoot();
+    const testingRoot = createTestingRoot();
+    const onRuntimeError = vi.fn();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const adapter = createFrontstageNativeTrustedBlockReactAdapter({
+      createRoot: testingRoot.createRoot,
+      onRuntimeError,
+      resolveComponent: () => () => {
+        throw new Error('native render exploded');
+      }
+    });
+
+    try {
+      await adapter.mount({
+        plan: createPlan({ blockId: 'native-block-crash' }),
+        root
+      });
+
+      await waitFor(() => {
+        expect(onRuntimeError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'runtime_error',
+            path: 'runtime.render',
+            message: 'native render exploded'
+          }),
+          expect.objectContaining({
+            blockId: 'native-block-crash',
+            root,
+            plan: expect.objectContaining({ blockId: 'native-block-crash' })
+          })
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('keeps one crashing native block scoped away from another mounted native block', async () => {
+    const crashingRoot = createBlockRoot();
+    const stableRoot = createBlockRoot();
+    const testingRoot = createTestingRoot();
+    const onRuntimeError = vi.fn();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const adapter = createFrontstageNativeTrustedBlockReactAdapter({
+      createRoot: testingRoot.createRoot,
+      onRuntimeError,
+      resolveComponent: (plan) => {
+        if (plan.blockId === 'native-block-crash') {
+          return () => {
+            throw new Error('first block failed');
+          };
+        }
+
+        return () => <div data-testid="stable-native-block">Still mounted</div>;
+      }
+    });
+
+    try {
+      await adapter.mount({
+        plan: createPlan({ blockId: 'native-block-crash' }),
+        root: crashingRoot
+      });
+      await adapter.mount({
+        plan: createPlan({ blockId: 'native-block-stable' }),
+        root: stableRoot
+      });
+
+      expect(await screen.findByTestId('stable-native-block')).toHaveTextContent(
+        'Still mounted'
+      );
+      await waitFor(() => {
+        expect(onRuntimeError).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'runtime_error' }),
+          expect.objectContaining({ blockId: 'native-block-crash' })
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test('renders no raw crash details by default', async () => {
+    const root = createBlockRoot();
+    const testingRoot = createTestingRoot();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const adapter = createFrontstageNativeTrustedBlockReactAdapter({
+      createRoot: testingRoot.createRoot,
+      resolveComponent: () => () => {
+        throw new Error('raw secret stack debug JSON prompt text');
+      }
+    });
+
+    try {
+      await adapter.mount({ plan: createPlan(), root });
+
+      expect(root).not.toHaveTextContent('raw secret stack debug JSON prompt text');
+      expect(root).not.toHaveTextContent('Error:');
+      expect(root).not.toHaveTextContent('runtime.render');
+      expect(root).not.toHaveTextContent('{');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   test('unmounts exactly once when dispose is called repeatedly', async () => {
     const root = createBlockRoot();
     const testingRoot = createTestingRoot();
@@ -162,12 +273,19 @@ describe('frontstage native trusted block React adapter', () => {
     ).rejects.toThrow('resolver unavailable');
   });
 
-  test('is not statically imported by existing frontstage pages or components', () => {
+  test('is not statically imported by existing frontstage pages, components, catalog, or route code', () => {
     const frontstageDir = join(process.cwd(), 'src/features/frontstage');
     const matches = collectSourceFiles([
       join(frontstageDir, 'pages'),
-      join(frontstageDir, 'components')
+      join(frontstageDir, 'components'),
+      join(frontstageDir, 'api'),
+      join(frontstageDir, 'hooks'),
+      join(frontstageDir, 'lib'),
+      join(process.cwd(), 'src/routes'),
+      join(process.cwd(), 'src/app')
     ]).filter((filePath) =>
+      filePath !== __filename &&
+      !filePath.endsWith('native-trusted-block-runtime-factory.tsx') &&
       readFileSync(filePath, 'utf8').includes('native-trusted-block-react-adapter')
     );
 

@@ -1,7 +1,8 @@
-import type { ComponentType, ReactNode } from 'react';
+import { Component, type ComponentType, type ErrorInfo, type ReactNode } from 'react';
 import { App as AntdApp, ConfigProvider } from 'antd';
 import { createRoot as defaultCreateRoot } from 'react-dom/client';
 
+import type { BlockProtocolError } from '@1flowbase/page-protocol';
 import {
   createNativeTrustedBlockPortalContainment,
   type NativeTrustedBlockHostAdapter,
@@ -42,10 +43,22 @@ export type FrontstageNativeTrustedBlockProviderWrapper = (
   context: FrontstageNativeTrustedBlockProviderContext
 ) => ReactNode;
 
+export interface FrontstageNativeTrustedBlockRuntimeErrorContext
+  extends FrontstageNativeTrustedBlockProviderContext {
+  blockId: string;
+  componentStack?: string;
+}
+
+export type FrontstageNativeTrustedBlockRuntimeErrorHandler = (
+  error: BlockProtocolError,
+  context: FrontstageNativeTrustedBlockRuntimeErrorContext
+) => void;
+
 export interface FrontstageNativeTrustedBlockReactAdapterOptions {
   resolveComponent: FrontstageNativeTrustedBlockResolveComponent;
   createRoot?: FrontstageNativeTrustedBlockCreateRoot;
   providerWrapper?: FrontstageNativeTrustedBlockProviderWrapper;
+  onRuntimeError?: FrontstageNativeTrustedBlockRuntimeErrorHandler;
 }
 
 export function createFrontstageNativeTrustedBlockReactAdapter(
@@ -57,20 +70,29 @@ export function createFrontstageNativeTrustedBlockReactAdapter(
       const Component = options.resolveComponent(input.plan);
       const portalContainment = createPortalContainment(rootElement);
       const reactRoot = (options.createRoot ?? defaultCreateRoot)(rootElement);
+      const providerContext = {
+        plan: input.plan,
+        root: rootElement,
+        portalContainment
+      };
       let didUnmount = false;
 
       reactRoot.render(
         wrapWithHostProviders(
-          <Component
-            plan={input.plan}
-            props={input.plan.props}
-            portalContainment={portalContainment}
-          />,
-          {
-            plan: input.plan,
-            root: rootElement,
-            portalContainment
-          },
+          <FrontstageNativeTrustedBlockErrorBoundary
+            context={{
+              ...providerContext,
+              blockId: input.plan.blockId
+            }}
+            onRuntimeError={options.onRuntimeError}
+          >
+            <Component
+              plan={input.plan}
+              props={input.plan.props}
+              portalContainment={portalContainment}
+            />
+          </FrontstageNativeTrustedBlockErrorBoundary>,
+          providerContext,
           options.providerWrapper
         )
       );
@@ -87,6 +109,42 @@ export function createFrontstageNativeTrustedBlockReactAdapter(
       };
     }
   };
+}
+
+interface FrontstageNativeTrustedBlockErrorBoundaryProps {
+  children: ReactNode;
+  context: FrontstageNativeTrustedBlockRuntimeErrorContext;
+  onRuntimeError?: FrontstageNativeTrustedBlockRuntimeErrorHandler;
+}
+
+interface FrontstageNativeTrustedBlockErrorBoundaryState {
+  didCatch: boolean;
+}
+
+class FrontstageNativeTrustedBlockErrorBoundary extends Component<
+  FrontstageNativeTrustedBlockErrorBoundaryProps,
+  FrontstageNativeTrustedBlockErrorBoundaryState
+> {
+  state: FrontstageNativeTrustedBlockErrorBoundaryState = { didCatch: false };
+
+  static getDerivedStateFromError(): FrontstageNativeTrustedBlockErrorBoundaryState {
+    return { didCatch: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    this.props.onRuntimeError?.(
+      createRuntimeRenderError(error),
+      createRuntimeErrorContext(this.props.context, errorInfo)
+    );
+  }
+
+  render(): ReactNode {
+    if (this.state.didCatch) {
+      return null;
+    }
+
+    return this.props.children;
+  }
 }
 
 function validateRootElement(root: unknown): Element {
@@ -111,6 +169,42 @@ function createPortalContainment(
   }
 
   return result.containment;
+}
+
+function createRuntimeRenderError(error: unknown): BlockProtocolError {
+  return {
+    code: 'runtime_error',
+    path: 'runtime.render',
+    message: getErrorMessage(error)
+  };
+}
+
+function createRuntimeErrorContext(
+  context: FrontstageNativeTrustedBlockRuntimeErrorContext,
+  errorInfo: ErrorInfo
+): FrontstageNativeTrustedBlockRuntimeErrorContext {
+  const componentStack = errorInfo.componentStack?.trim();
+
+  if (!componentStack) {
+    return context;
+  }
+
+  return {
+    ...context,
+    componentStack
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim() !== '') {
+    return error;
+  }
+
+  return 'unknown error';
 }
 
 function wrapWithHostProviders(
