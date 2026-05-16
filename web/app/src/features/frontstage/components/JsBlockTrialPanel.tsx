@@ -1,3 +1,7 @@
+import {
+  BLOCK_DATA_PERMISSIONS,
+  type BlockDataPermission
+} from '@1flowbase/page-protocol';
 import { Alert, Button, Descriptions, Input, Space, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -25,6 +29,8 @@ interface JsonDraftError {
   kind: JsonDraftKind;
   message: string;
 }
+
+const dataPermissionSet = new Set<string>(BLOCK_DATA_PERMISSIONS);
 
 function stringifyDraft(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2);
@@ -66,10 +72,150 @@ function formatNumber(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : '未设置';
 }
 
-function toRuntimeLimits(
+function toRuntimeLimitsDraft(
   value: Record<string, unknown>
-): RestrictedBlockLoaderLimits {
-  return value as RestrictedBlockLoaderLimits;
+):
+  | { ok: true; value: RestrictedBlockLoaderLimits }
+  | { ok: false; message: string } {
+  const timeoutMs = readPositiveNumber(value, 'timeoutMs');
+  if (timeoutMs === null) {
+    return {
+      ok: false,
+      message: 'Runtime limits.timeoutMs 必须是正数。'
+    };
+  }
+
+  const maxRenderDepth = readOptionalPositiveNumber(value, 'maxRenderDepth');
+  if (!maxRenderDepth.ok) {
+    return { ok: false, message: 'Runtime limits.maxRenderDepth 必须是正数。' };
+  }
+
+  const maxRenderNodes = readOptionalPositiveNumber(value, 'maxRenderNodes');
+  if (!maxRenderNodes.ok) {
+    return { ok: false, message: 'Runtime limits.maxRenderNodes 必须是正数。' };
+  }
+
+  const maxEventChainDepth = readOptionalPositiveNumber(
+    value,
+    'maxEventChainDepth'
+  );
+  if (!maxEventChainDepth.ok) {
+    return {
+      ok: false,
+      message: 'Runtime limits.maxEventChainDepth 必须是正数。'
+    };
+  }
+
+  const allowedActions = readStringArray(value, 'allowedActions');
+  if (!allowedActions.ok) {
+    return { ok: false, message: 'Runtime limits.allowedActions 必须是字符串数组。' };
+  }
+
+  const allowedEvents = readStringArray(value, 'allowedEvents');
+  if (!allowedEvents.ok) {
+    return { ok: false, message: 'Runtime limits.allowedEvents 必须是字符串数组。' };
+  }
+
+  const allowedDataModels = readStringArray(value, 'allowedDataModels');
+  if (!allowedDataModels.ok) {
+    return {
+      ok: false,
+      message: 'Runtime limits.allowedDataModels 必须是字符串数组。'
+    };
+  }
+
+  const allowedDataOperations = readDataPermissions(
+    value,
+    'allowedDataOperations'
+  );
+  if (!allowedDataOperations.ok) {
+    return {
+      ok: false,
+      message: 'Runtime limits.allowedDataOperations 只能包含 query/create/update/delete。'
+    };
+  }
+
+  const limits: RestrictedBlockLoaderLimits = { timeoutMs };
+  if (maxRenderDepth.value !== undefined) {
+    limits.maxRenderDepth = maxRenderDepth.value;
+  }
+  if (maxRenderNodes.value !== undefined) {
+    limits.maxRenderNodes = maxRenderNodes.value;
+  }
+  if (maxEventChainDepth.value !== undefined) {
+    limits.maxEventChainDepth = maxEventChainDepth.value;
+  }
+  if (allowedActions.value !== undefined) {
+    limits.allowedActions = allowedActions.value;
+  }
+  if (allowedEvents.value !== undefined) {
+    limits.allowedEvents = allowedEvents.value;
+  }
+  if (allowedDataModels.value !== undefined) {
+    limits.allowedDataModels = allowedDataModels.value;
+  }
+  if (allowedDataOperations.value !== undefined) {
+    limits.allowedDataOperations = allowedDataOperations.value;
+  }
+
+  return { ok: true, value: limits };
+}
+
+function readPositiveNumber(
+  value: Record<string, unknown>,
+  key: string
+): number | null {
+  const nextValue = value[key];
+  return typeof nextValue === 'number' &&
+    Number.isFinite(nextValue) &&
+    nextValue > 0
+    ? nextValue
+    : null;
+}
+
+function readOptionalPositiveNumber(
+  value: Record<string, unknown>,
+  key: string
+): { ok: true; value?: number } | { ok: false } {
+  if (value[key] === undefined) {
+    return { ok: true };
+  }
+
+  const nextValue = readPositiveNumber(value, key);
+  return nextValue === null ? { ok: false } : { ok: true, value: nextValue };
+}
+
+function readStringArray(
+  value: Record<string, unknown>,
+  key: string
+): { ok: true; value?: string[] } | { ok: false } {
+  const nextValue = value[key];
+  if (nextValue === undefined) {
+    return { ok: true };
+  }
+
+  return Array.isArray(nextValue) &&
+    nextValue.every((item): item is string => typeof item === 'string')
+    ? { ok: true, value: nextValue }
+    : { ok: false };
+}
+
+function readDataPermissions(
+  value: Record<string, unknown>,
+  key: string
+): { ok: true; value?: BlockDataPermission[] } | { ok: false } {
+  const nextValue = value[key];
+  if (nextValue === undefined) {
+    return { ok: true };
+  }
+
+  return Array.isArray(nextValue) &&
+    nextValue.every(
+      (item): item is BlockDataPermission =>
+        typeof item === 'string' && dataPermissionSet.has(item)
+    )
+    ? { ok: true, value: nextValue }
+    : { ok: false };
 }
 
 export function JsBlockTrialPanel({
@@ -128,8 +274,14 @@ export function JsBlockTrialPanel({
       return;
     }
 
+    const runtimeLimits = toRuntimeLimitsDraft(parsed.value);
+    if (!runtimeLimits.ok) {
+      setDraftError({ kind: 'limits', message: runtimeLimits.message });
+      return;
+    }
+
     setDraftError(null);
-    onLimitsChange?.(toRuntimeLimits(parsed.value));
+    onLimitsChange?.(runtimeLimits.value);
   }
 
   if (!block) {

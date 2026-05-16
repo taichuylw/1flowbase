@@ -42,7 +42,7 @@ describe('PageCanvas', () => {
     render(<PageCanvas hasError onRetry={onRetry} />);
 
     expect(screen.getByText('页面内容加载失败')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
 
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

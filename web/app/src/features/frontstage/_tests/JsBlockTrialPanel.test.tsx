@@ -235,4 +235,29 @@ describe('JsBlockTrialPanel', () => {
     });
     expect(screen.getByText('2000ms')).toBeInTheDocument();
   });
+
+  test('rejects invalid runtime limits drafts before emitting changes', () => {
+    const onLimitsChange = vi.fn();
+
+    render(
+      <JsBlockTrialPanel
+        block={createBlock()}
+        catalogEntry={createCatalogEntry()}
+        code="export default {}"
+        contextSnapshot={{ pageId: 'page-1' }}
+        limits={createLimits()}
+        onLimitsChange={onLimitsChange}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Runtime limits'), {
+      target: { value: '{ "maxRenderDepth": 4 }' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '更新 limits' }));
+
+    expect(
+      screen.getByText('Runtime limits.timeoutMs 必须是正数。')
+    ).toBeInTheDocument();
+    expect(onLimitsChange).not.toHaveBeenCalled();
+  });
 });

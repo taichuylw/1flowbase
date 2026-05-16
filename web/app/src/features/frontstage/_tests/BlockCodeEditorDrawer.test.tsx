@@ -113,10 +113,10 @@ describe('BlockCodeEditorDrawer', () => {
     });
     expect(state.setDraft).toHaveBeenCalledWith('export default 3;');
 
-    fireEvent.click(screen.getByRole('button', { name: '重置' }));
+    fireEvent.click(screen.getByRole('button', { name: /重\s*置/ }));
     expect(state.reset).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
     await waitFor(() => {
       expect(state.save).toHaveBeenCalledTimes(1);
     });
@@ -142,8 +142,8 @@ describe('BlockCodeEditorDrawer', () => {
       screen.getByText('请选择一个带 codeRef 的区块后再编辑代码。')
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Block code draft')).toBeDisabled();
-    expect(screen.getByRole('button', { name: '重置' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /重\s*置/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /保\s*存/ })).toBeDisabled();
     expect(blockCodeHook.useFrontstageBlockCode).toHaveBeenCalledWith({
       workspaceId: 'workspace-1',
       pageId: 'page-1',
@@ -166,7 +166,7 @@ describe('BlockCodeEditorDrawer', () => {
       screen.getByText('当前区块缺少 codeRef，无法加载或保存代码。')
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Block code draft')).toBeDisabled();
-    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /保\s*存/ })).toBeDisabled();
   });
 
   test('shows loading and error states without enabling save', () => {
@@ -187,6 +187,6 @@ describe('BlockCodeEditorDrawer', () => {
 
     expect(screen.getByText('代码加载中')).toBeInTheDocument();
     expect(screen.getByText('load failed')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /保\s*存/ })).toBeDisabled();
   });
 });
