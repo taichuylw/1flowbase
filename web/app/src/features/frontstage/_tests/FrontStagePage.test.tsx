@@ -11,6 +11,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
+import type {
+  FrontstagePageContent,
+  SaveFrontstagePageContentInput
+} from '../api/page-content';
 import {
   insertPageIntoGroup,
   moveNodeInTree,
@@ -19,11 +23,26 @@ import {
 } from '../lib/page-tree';
 import { FrontStagePage } from '../pages/FrontStagePage';
 
+const pageContentSaveHook = vi.hoisted(() => ({
+  useFrontstagePageContentSave: vi.fn()
+}));
+
+vi.mock('../hooks/use-frontstage-page-content-save', () => pageContentSaveHook);
+
 type TestFrontStageTreeNode = {
   id: string;
   title: string | null;
   kind: 'group' | 'page';
   children?: TestFrontStageTreeNode[];
+};
+
+type FrontstagePageContentSaveState = {
+  save: ReturnType<typeof vi.fn>;
+  saving: boolean;
+  isPending: boolean;
+  error: Error | null;
+  reset: ReturnType<typeof vi.fn>;
+  clearError: ReturnType<typeof vi.fn>;
 };
 
 function authenticate(permissions: string[]) {
@@ -58,6 +77,45 @@ function createBackendPage(pageId: string): TestFrontStageTreeNode {
   };
 }
 
+function createPageContent(
+  overrides: Partial<FrontstagePageContent> = {}
+): FrontstagePageContent {
+  return {
+    page: {
+      id: 'page-1',
+      title: 'Landing',
+      kind: 'page',
+      parentId: null,
+      rank: '001000',
+      schemaRootUid: 'root-1'
+    },
+    schema: {
+      rootUid: 'root-1',
+      payload: {}
+    },
+    root: {
+      uid: 'root-1',
+      payload: {}
+    },
+    ...overrides
+  };
+}
+
+function createSavedPageContentFromInput(
+  input: SaveFrontstagePageContentInput
+): FrontstagePageContent {
+  return createPageContent({
+    schema: {
+      rootUid: 'root-1',
+      payload: input.schema.payload
+    },
+    root: {
+      uid: 'root-1',
+      payload: input.root.payload
+    }
+  });
+}
+
 function createTestNodeId() {
   return crypto.randomUUID();
 }
@@ -66,12 +124,18 @@ function FrontStagePageHarness({
   workspaceId = 'workspace-1',
   pageId,
   onNavigatePage,
-  initialPageTree
+  initialPageTree,
+  pageContent,
+  isPageContentLoading,
+  hasPageContentLoadError
 }: {
   workspaceId?: string;
   pageId?: string;
   onNavigatePage?: (pageId?: string) => void;
   initialPageTree?: TestFrontStageTreeNode[];
+  pageContent?: FrontstagePageContent;
+  isPageContentLoading?: boolean;
+  hasPageContentLoadError?: boolean;
 }) {
   const [pageTree, setPageTree] = useState<TestFrontStageTreeNode[]>(
     initialPageTree ?? []
@@ -83,6 +147,9 @@ function FrontStagePageHarness({
       pageId={pageId}
       onNavigatePage={onNavigatePage}
       initialPageTree={pageTree}
+      pageContent={pageContent}
+      isPageContentLoading={isPageContentLoading}
+      hasPageContentLoadError={hasPageContentLoadError}
       onCreateGroupNode={(input) => {
         const groupNode = {
           id: createTestNodeId(),
@@ -171,6 +238,39 @@ function getGroupTreeItem(title: string) {
   return screen.getByTestId(`frontstage-tree-node-group-${title}`);
 }
 
+function mockPageContentSaveState(
+  overrides: Partial<FrontstagePageContentSaveState> = {}
+): FrontstagePageContentSaveState {
+  const state = {
+    save: vi.fn((input: SaveFrontstagePageContentInput) =>
+      Promise.resolve(createSavedPageContentFromInput(input))
+    ),
+    saving: false,
+    isPending: false,
+    error: null,
+    reset: vi.fn(),
+    clearError: vi.fn(),
+    ...overrides
+  };
+
+  pageContentSaveHook.useFrontstagePageContentSave.mockReturnValue(state);
+  return state;
+}
+
+function getSavedBlocks(input: SaveFrontstagePageContentInput) {
+  const payload = input.root.payload;
+  if (typeof payload !== 'object' || payload === null) {
+    throw new Error('root payload must be an object');
+  }
+
+  const blocks = (payload as { blocks?: unknown }).blocks;
+  if (!Array.isArray(blocks)) {
+    throw new Error('root payload blocks must be an array');
+  }
+
+  return blocks as Array<Record<string, unknown>>;
+}
+
 describe('FrontStagePage', () => {
   let confirmSpy: {
     mockRestore: () => void;
@@ -179,6 +279,8 @@ describe('FrontStagePage', () => {
 
   beforeEach(() => {
     resetAuthStore();
+    vi.clearAllMocks();
+    mockPageContentSaveState();
     confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
@@ -194,6 +296,9 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('页面 page-1')).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '进入设计模式' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '新增区块' })
     ).not.toBeInTheDocument();
     expect(screen.getByText('当前页面：页面 page-1')).toBeInTheDocument();
   });
@@ -321,6 +426,158 @@ describe('FrontStagePage', () => {
     fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
 
     expect(screen.getByText('保存中')).toBeInTheDocument();
+  });
+
+  test('saves a minimal JS UI block when Add Block is clicked in design mode', async () => {
+    authenticate(['frontstage.page.design']);
+    const saveState = mockPageContentSaveState();
+
+    render(
+      <AppProviders>
+        <FrontStagePageHarness
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          pageContent={createPageContent()}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+
+    await waitFor(() => {
+      expect(saveState.save).toHaveBeenCalledTimes(1);
+    });
+
+    expect(
+      pageContentSaveHook.useFrontstagePageContentSave
+    ).toHaveBeenLastCalledWith({
+      workspaceId: 'workspace-1',
+      pageId: 'page-1'
+    });
+
+    const [saveInput] = saveState.save.mock.calls[0] as [
+      SaveFrontstagePageContentInput
+    ];
+    const [block] = getSavedBlocks(saveInput);
+
+    expect(block).toMatchObject({
+      id: 'frontstage-js-block-1',
+      codeRef: 'frontstage-js-block-1-code',
+      catalog: {
+        providerCode: null,
+        installationId: null
+      },
+      contribution: {
+        pluginId: null,
+        pluginVersion: null,
+        code: 'frontstage.js-ui-block'
+      },
+      props: {},
+      layout: {
+        order: 0,
+        region: 'main'
+      },
+      runtime: {
+        kind: 'js-ui',
+        entry: null,
+        hint: 'js-ui'
+      }
+    });
+  });
+
+  test('disables Add Block while page content is saving', () => {
+    authenticate(['frontstage.page.design']);
+    mockPageContentSaveState({ saving: true, isPending: true });
+
+    render(
+      <AppProviders>
+        <FrontStagePageHarness
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          pageContent={createPageContent()}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+
+    expect(screen.getByRole('button', { name: '新增区块' })).toBeDisabled();
+    expect(screen.getByText('区块保存中')).toBeInTheDocument();
+  });
+
+  test('shows a clear Add Block save error in design mode', async () => {
+    authenticate(['frontstage.page.design']);
+    mockPageContentSaveState({
+      save: vi.fn(() => Promise.reject(new Error('request failed')))
+    });
+
+    render(
+      <AppProviders>
+        <FrontStagePageHarness
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          pageContent={createPageContent()}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+
+    expect(await screen.findByText('区块保存失败')).toBeInTheDocument();
+    expect(screen.getByText('request failed')).toBeInTheDocument();
+  });
+
+  test('disables Add Block when no page or no page content is available', () => {
+    authenticate(['frontstage.page.design']);
+    const view = render(
+      <AppProviders>
+        <FrontStagePageHarness />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    expect(screen.getByRole('button', { name: '新增区块' })).toBeDisabled();
+
+    view.rerender(
+      <AppProviders>
+        <FrontStagePageHarness
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+        />
+      </AppProviders>
+    );
+
+    expect(screen.getByRole('button', { name: '新增区块' })).toBeDisabled();
+  });
+
+  test('renders and selects the new block after Add Block save succeeds', async () => {
+    authenticate(['frontstage.page.design']);
+    mockPageContentSaveState();
+
+    render(
+      <AppProviders>
+        <FrontStagePageHarness
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          pageContent={createPageContent()}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('1 个区块')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole('button', { name: /frontstage-js-block-1/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText('已选区块')).toBeInTheDocument();
+    expect(screen.getAllByText('frontstage-js-block-1')).toHaveLength(2);
   });
 
   test('supports adding and deleting page tree nodes in design mode', () => {
@@ -949,11 +1206,8 @@ describe('FrontStagePage', () => {
       screen.getByRole('heading', { name: '页面管理' })
     ).toBeInTheDocument();
     expect(screen.getByText('当前页面：页面 page-1')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        '当前页面尚未接入区块内容，浏览态仅展示空状态。请在设计态添加页面区块与内容。'
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText('未选择页面内容')).toBeInTheDocument();
+    expect(screen.getByText('选择页面后将显示只读内容画布。')).toBeInTheDocument();
     expect(screen.getByText('页面 page-1')).toBeInTheDocument();
   });
 
