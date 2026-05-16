@@ -55,6 +55,7 @@ export const AddBlockCatalogPickerDrawer: FC<
                 actions={[
                   <Button
                     key="select"
+                    aria-label="选择"
                     type="primary"
                     size="small"
                     disabled={isBusy}

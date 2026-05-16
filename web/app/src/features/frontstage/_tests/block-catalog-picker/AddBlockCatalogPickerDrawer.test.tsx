@@ -9,7 +9,7 @@ function createCatalogEntry(
 ): NormalizedFrontstageBlockCatalogEntry {
   return {
     id: '1flowbase:frontstage.js-ui-block',
-    runtimeKind: 'js-ui',
+    runtimeKind: 'iframe',
     installationId: 'builtin-installation',
     providerCode: '1flowbase',
     pluginId: 'builtin-frontstage',
@@ -63,7 +63,7 @@ describe('AddBlockCatalogPickerDrawer', () => {
 
     const row = screen.getByText('空白 JS Block').closest('.ant-list-item');
     expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByText('js-ui')).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText('iframe')).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText('1flowbase')).toBeInTheDocument();
     expect(
       within(row as HTMLElement).getByText('frontstage.js-ui-block')

@@ -275,7 +275,7 @@ function createCatalogEntry(
 ): NormalizedFrontstageBlockCatalogEntry {
   return {
     id: '1flowbase:frontstage.js-ui-block',
-    runtimeKind: 'js-ui',
+    runtimeKind: 'iframe',
     installationId: 'builtin-installation',
     providerCode: '1flowbase',
     pluginId: 'builtin-frontstage',
@@ -554,9 +554,9 @@ describe('FrontStagePage', () => {
         region: 'main'
       },
       runtime: {
-        kind: 'js-ui',
+        kind: 'iframe',
         entry: 'index.js',
-        hint: 'js-ui'
+        hint: 'iframe'
       }
     });
     expect(blockCodeApi.saveFrontstageBlockCode).toHaveBeenCalledWith(
