@@ -251,7 +251,16 @@ export function validateBlockUiSchema(
     seen: new WeakSet<object>()
   };
 
-  validateNode(schema, 'root', 1, state, errors);
+  try {
+    validateNode(schema, 'root', 1, state, errors);
+  } catch {
+    addError(
+      errors,
+      'schema_invalid',
+      'root',
+      'Schema validation failed.'
+    );
+  }
 
   if (errors.length > 0) {
     return { ok: false, errors };
@@ -307,14 +316,24 @@ function validateNode(
     return;
   }
 
-  for (const key of Object.keys(value)) {
+  const keys = getObjectKeys(value, path, errors);
+  if (keys === undefined) {
+    return;
+  }
+
+  for (const key of keys) {
     if (!nodeKeySet.has(key)) {
       addError(errors, 'schema_invalid', `${path}.${key}`, 'Unknown schema key.');
       return;
     }
   }
 
-  if (!primitiveSet.has(String(value.primitive))) {
+  const primitive = readProperty(value, 'primitive', `${path}.primitive`, errors);
+  if (!primitive.ok) {
+    return;
+  }
+
+  if (typeof primitive.value !== 'string' || !primitiveSet.has(primitive.value)) {
     addError(
       errors,
       'schema_invalid',
@@ -324,40 +343,67 @@ function validateNode(
     return;
   }
 
-  if (value.key !== undefined && typeof value.key !== 'string') {
+  const key = readProperty(value, 'key', `${path}.key`, errors);
+  if (!key.ok) {
+    return;
+  }
+
+  if (key.value !== undefined && typeof key.value !== 'string') {
     addError(errors, 'schema_invalid', `${path}.key`, 'Key must be a string.');
     return;
   }
 
-  if (value.props !== undefined && !isJsonLike(value.props)) {
-    addError(
-      errors,
-      'schema_invalid',
-      `${path}.props`,
-      'Props must be JSON-compatible data.'
-    );
+  const props = readProperty(value, 'props', `${path}.props`, errors);
+  if (!props.ok) {
     return;
   }
 
-  if (value.style !== undefined) {
-    validateStyle(value.style, `${path}.style`, errors);
+  if (
+    props.value !== undefined &&
+    !validateJsonCompatible(props.value, `${path}.props`, errors)
+  ) {
+    return;
+  }
+
+  const style = readProperty(value, 'style', `${path}.style`, errors);
+  if (!style.ok) {
+    return;
+  }
+
+  if (style.value !== undefined) {
+    validateStyle(style.value, `${path}.style`, errors);
     if (errors.length > 0) {
       return;
     }
   }
 
-  if (value.permissions !== undefined) {
-    validatePermissions(value.permissions, `${path}.permissions`, state, errors);
+  const permissions = readProperty(
+    value,
+    'permissions',
+    `${path}.permissions`,
+    errors
+  );
+  if (!permissions.ok) {
+    return;
+  }
+
+  if (permissions.value !== undefined) {
+    validatePermissions(permissions.value, `${path}.permissions`, state, errors);
     if (errors.length > 0) {
       return;
     }
   }
 
-  if (value.children === undefined) {
+  const children = readProperty(value, 'children', `${path}.children`, errors);
+  if (!children.ok) {
     return;
   }
 
-  if (!Array.isArray(value.children)) {
+  if (children.value === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(children.value)) {
     addError(
       errors,
       'schema_invalid',
@@ -367,9 +413,24 @@ function validateNode(
     return;
   }
 
-  value.children.forEach((child, index) => {
-    validateNode(child, `${path}.children[${index}]`, depth + 1, state, errors);
-  });
+  for (let index = 0; index < children.value.length; index += 1) {
+    const child = readArrayItem(
+      children.value,
+      index,
+      `${path}.children[${index}]`,
+      errors
+    );
+    if (!child.ok) {
+      return;
+    }
+    validateNode(
+      child.value,
+      `${path}.children[${index}]`,
+      depth + 1,
+      state,
+      errors
+    );
+  }
 }
 
 function validateStyle(
@@ -382,7 +443,12 @@ function validateStyle(
     return;
   }
 
-  for (const [category, categoryValue] of Object.entries(value)) {
+  const categories = getObjectKeys(value, path, errors);
+  if (categories === undefined) {
+    return;
+  }
+
+  for (const category of categories) {
     if (!styleCategorySet.has(category)) {
       addError(
         errors,
@@ -393,7 +459,17 @@ function validateStyle(
       return;
     }
 
-    if (!isRecord(categoryValue)) {
+    const categoryValue = readProperty(
+      value,
+      category,
+      `${path}.${category}`,
+      errors
+    );
+    if (!categoryValue.ok) {
+      return;
+    }
+
+    if (!isRecord(categoryValue.value)) {
       addError(
         errors,
         'schema_invalid',
@@ -404,7 +480,12 @@ function validateStyle(
     }
 
     const allowedKeys = styleKeySets[category as BlockStyleCategory];
-    for (const [styleKey, tokenValue] of Object.entries(categoryValue)) {
+    const styleTokenKeys = getObjectKeys(categoryValue.value, `${path}.${category}`, errors);
+    if (styleTokenKeys === undefined) {
+      return;
+    }
+
+    for (const styleKey of styleTokenKeys) {
       if (!allowedKeys.has(styleKey)) {
         addError(
           errors,
@@ -415,7 +496,17 @@ function validateStyle(
         return;
       }
 
-      if (!isTokenValue(tokenValue)) {
+      const tokenValue = readProperty(
+        categoryValue.value,
+        styleKey,
+        `${path}.${category}.${styleKey}`,
+        errors
+      );
+      if (!tokenValue.ok) {
+        return;
+      }
+
+      if (!isTokenValue(tokenValue.value)) {
         addError(
           errors,
           'schema_invalid',
@@ -439,7 +530,12 @@ function validatePermissions(
     return;
   }
 
-  for (const key of Object.keys(value)) {
+  const keys = getObjectKeys(value, path, errors);
+  if (keys === undefined) {
+    return;
+  }
+
+  for (const key of keys) {
     if (key !== 'data' && key !== 'actions' && key !== 'events') {
       addError(
         errors,
@@ -451,12 +547,20 @@ function validatePermissions(
     }
   }
 
-  validateDataPermissions(value.data, `${path}.data`, state, errors);
+  const data = readProperty(value, 'data', `${path}.data`, errors);
+  if (!data.ok) {
+    return;
+  }
+  validateDataPermissions(data.value, `${path}.data`, state, errors);
   if (errors.length > 0) {
     return;
   }
+  const actions = readProperty(value, 'actions', `${path}.actions`, errors);
+  if (!actions.ok) {
+    return;
+  }
   validateStringPermissionList(
-    value.actions,
+    actions.value,
     `${path}.actions`,
     state.allowedActions,
     'action_denied',
@@ -465,8 +569,12 @@ function validatePermissions(
   if (errors.length > 0) {
     return;
   }
+  const events = readProperty(value, 'events', `${path}.events`, errors);
+  if (!events.ok) {
+    return;
+  }
   validateStringPermissionList(
-    value.events,
+    events.value,
     `${path}.events`,
     state.allowedEvents,
     'event_denied',
@@ -489,10 +597,17 @@ function validateDataPermissions(
     return;
   }
 
-  value.forEach((permission, index) => {
+  for (let index = 0; index < value.length; index += 1) {
     const itemPath = `${path}[${index}]`;
+    const permission = readArrayItem(value, index, itemPath, errors);
+    if (!permission.ok) {
+      return;
+    }
 
-    if (typeof permission !== 'string' || !dataPermissionSet.has(permission)) {
+    if (
+      typeof permission.value !== 'string' ||
+      !dataPermissionSet.has(permission.value)
+    ) {
       addError(
         errors,
         'schema_invalid',
@@ -502,7 +617,7 @@ function validateDataPermissions(
       return;
     }
 
-    const dataPermission = permission as BlockDataPermission;
+    const dataPermission = permission.value as BlockDataPermission;
     if (!state.allowedDataPermissions.has(dataPermission)) {
       addError(
         errors,
@@ -511,7 +626,7 @@ function validateDataPermissions(
         'Data permission marker is not allowed.'
       );
     }
-  });
+  }
 }
 
 function validateStringPermissionList(
@@ -530,10 +645,14 @@ function validateStringPermissionList(
     return;
   }
 
-  value.forEach((permission, index) => {
+  for (let index = 0; index < value.length; index += 1) {
     const itemPath = `${path}[${index}]`;
+    const permission = readArrayItem(value, index, itemPath, errors);
+    if (!permission.ok) {
+      return;
+    }
 
-    if (typeof permission !== 'string' || permission.length === 0) {
+    if (typeof permission.value !== 'string' || permission.value.length === 0) {
       addError(
         errors,
         'schema_invalid',
@@ -543,7 +662,7 @@ function validateStringPermissionList(
       return;
     }
 
-    if (!allowed.has(permission)) {
+    if (!allowed.has(permission.value)) {
       addError(
         errors,
         deniedCode,
@@ -551,16 +670,19 @@ function validateStringPermissionList(
         'Permission marker is not allowed.'
       );
     }
-  });
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype
-  );
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  try {
+    return Object.getPrototypeOf(value) === Object.prototype;
+  } catch {
+    return false;
+  }
 }
 
 function isTokenValue(value: unknown): value is BlockStyleTokenValue {
@@ -572,19 +694,125 @@ function isTokenValue(value: unknown): value is BlockStyleTokenValue {
   );
 }
 
-function isJsonLike(value: unknown): boolean {
+type SafeReadResult =
+  | {
+      ok: true;
+      value: unknown;
+    }
+  | {
+      ok: false;
+    };
+
+function getObjectKeys(
+  value: Record<string, unknown>,
+  path: string,
+  errors: BlockProtocolError[]
+): string[] | undefined {
+  try {
+    return Object.keys(value);
+  } catch {
+    addError(errors, 'schema_invalid', path, 'Schema object keys are unreadable.');
+    return undefined;
+  }
+}
+
+function readProperty(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  errors: BlockProtocolError[]
+): SafeReadResult {
+  try {
+    return { ok: true, value: value[key] };
+  } catch {
+    addError(errors, 'schema_invalid', path, 'Schema field is unreadable.');
+    return { ok: false };
+  }
+}
+
+function readArrayItem(
+  value: unknown[],
+  index: number,
+  path: string,
+  errors: BlockProtocolError[]
+): SafeReadResult {
+  try {
+    return { ok: true, value: value[index] };
+  } catch {
+    addError(errors, 'schema_invalid', path, 'Schema array item is unreadable.');
+    return { ok: false };
+  }
+}
+
+function validateJsonCompatible(
+  value: unknown,
+  path: string,
+  errors: BlockProtocolError[],
+  seen: WeakSet<object> = new WeakSet()
+): boolean {
   if (isTokenValue(value)) {
     return true;
   }
 
   if (Array.isArray(value)) {
-    return value.every((item) => isJsonLike(item));
+    if (seen.has(value)) {
+      addError(
+        errors,
+        'schema_invalid',
+        path,
+        'Props must not contain cycles.'
+      );
+      return false;
+    }
+
+    seen.add(value);
+
+    for (let index = 0; index < value.length; index += 1) {
+      const itemPath = `${path}[${index}]`;
+      const item = readArrayItem(value, index, itemPath, errors);
+      if (!item.ok || !validateJsonCompatible(item.value, itemPath, errors, seen)) {
+        seen.delete(value);
+        return false;
+      }
+    }
+
+    seen.delete(value);
+    return true;
   }
 
   if (isRecord(value)) {
-    return Object.values(value).every((item) => isJsonLike(item));
+    if (seen.has(value)) {
+      addError(
+        errors,
+        'schema_invalid',
+        path,
+        'Props must not contain cycles.'
+      );
+      return false;
+    }
+
+    seen.add(value);
+
+    const keys = getObjectKeys(value, path, errors);
+    if (keys === undefined) {
+      seen.delete(value);
+      return false;
+    }
+
+    for (const key of keys) {
+      const itemPath = `${path}.${key}`;
+      const item = readProperty(value, key, itemPath, errors);
+      if (!item.ok || !validateJsonCompatible(item.value, itemPath, errors, seen)) {
+        seen.delete(value);
+        return false;
+      }
+    }
+
+    seen.delete(value);
+    return true;
   }
 
+  addError(errors, 'schema_invalid', path, 'Props must be JSON-compatible data.');
   return false;
 }
 

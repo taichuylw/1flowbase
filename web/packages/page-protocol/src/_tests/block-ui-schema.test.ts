@@ -227,4 +227,92 @@ describe('block UI schema protocol', () => {
       path: 'root'
     });
   });
+
+  test('returns a structured failure for cyclic props without throwing', () => {
+    const props: Record<string, unknown> = {};
+    props.self = props;
+
+    expect(() =>
+      validateBlockUiSchema({ primitive: 'Text', props })
+    ).not.toThrow();
+
+    const result = validateBlockUiSchema({ primitive: 'Text', props });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({
+      code: 'schema_invalid',
+      path: 'root.props.self'
+    });
+  });
+
+  test('returns a structured failure for throwing schema getters without throwing', () => {
+    const schema = {
+      get props(): unknown {
+        throw new Error('boom');
+      },
+      primitive: 'Text'
+    };
+
+    expect(() => validateBlockUiSchema(schema)).not.toThrow();
+
+    const result = validateBlockUiSchema(schema);
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({
+      code: 'schema_invalid',
+      path: 'root.props'
+    });
+  });
+
+  test('returns a structured failure for throwing props getters without throwing', () => {
+    const props = {
+      get label(): unknown {
+        throw new Error('boom');
+      }
+    };
+
+    expect(() =>
+      validateBlockUiSchema({ primitive: 'Text', props })
+    ).not.toThrow();
+
+    const result = validateBlockUiSchema({ primitive: 'Text', props });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({
+      code: 'schema_invalid',
+      path: 'root.props.label'
+    });
+  });
+
+  test('returns a structured failure for cyclic props arrays without throwing', () => {
+    const props: { items: unknown[] } = { items: [] };
+    props.items.push(props.items);
+
+    expect(() =>
+      validateBlockUiSchema({ primitive: 'Text', props })
+    ).not.toThrow();
+
+    const result = validateBlockUiSchema({ primitive: 'Text', props });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({
+      code: 'schema_invalid',
+      path: 'root.props.items[0]'
+    });
+  });
+
+  test('rejects object style token values with a structured schema error', () => {
+    expect(() =>
+      validateBlockUiSchema({
+        primitive: 'Text',
+        style: { color: { text: { token: 'text.primary' } } }
+      })
+    ).not.toThrow();
+
+    const result = validateBlockUiSchema({
+      primitive: 'Text',
+      style: { color: { text: { token: 'text.primary' } } }
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({
+      code: 'schema_invalid',
+      path: 'root.style.color.text'
+    });
+  });
 });
