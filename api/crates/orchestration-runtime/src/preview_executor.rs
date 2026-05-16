@@ -4,8 +4,8 @@ use serde_json::{json, Map, Value};
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
+    execution_engine::{execute_code_node, execute_llm_node, CodeInvoker, ProviderInvoker},
     node_errors::build_node_type_not_implemented_error_payload,
-    execution_engine::{execute_llm_node, ProviderInvoker},
 };
 
 pub struct NodePreviewOutcome {
@@ -66,7 +66,7 @@ pub async fn run_node_preview<I>(
     invoker: &I,
 ) -> Result<NodePreviewOutcome>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CodeInvoker + ?Sized,
 {
     let node = plan
         .nodes
@@ -124,14 +124,12 @@ where
                 execution.provider_events,
             )
         } else if node.node_type == "code" {
+            let execution = execute_code_node(node, &resolved_inputs, invoker).await?;
             (
-                json!({}),
-                Some(build_node_type_not_implemented_error_payload(
-                    &node.node_type,
-                    "preview",
-                )),
-                json!({ "preview_mode": true, "waiting": "code" }),
-                json!({}),
+                execution.output_payload,
+                execution.error_payload,
+                execution.metrics_payload,
+                execution.debug_payload,
                 Vec::new(),
             )
         } else {

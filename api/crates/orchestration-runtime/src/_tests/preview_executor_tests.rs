@@ -14,9 +14,12 @@ use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+        CompiledBinding, CompiledCodeRuntime, CompiledLlmRuntime, CompiledNode, CompiledOutput,
+        CompiledPlan,
     },
-    execution_engine::{ProviderInvocationOutput, ProviderInvoker},
+    execution_engine::{
+        CodeInvocationOutput, CodeInvoker, ProviderInvocationOutput, ProviderInvoker,
+    },
     preview_executor,
 };
 
@@ -57,6 +60,20 @@ impl ProviderInvoker for StubPreviewInvoker {
                 finish_reason: Some(ProviderFinishReason::Stop),
                 ..ProviderInvocationResult::default()
             },
+        })
+    }
+}
+
+#[async_trait]
+impl CodeInvoker for StubPreviewInvoker {
+    async fn invoke_code_node(
+        &self,
+        _runtime: &CompiledCodeRuntime,
+        _config_payload: serde_json::Value,
+        input_payload: serde_json::Value,
+    ) -> Result<CodeInvocationOutput> {
+        Ok(CodeInvocationOutput {
+            output_payload: json!({ "result": input_payload["query"] }),
         })
     }
 }
@@ -218,10 +235,32 @@ async fn preview_executor_resolves_bindings_renders_prompt_and_calls_provider() 
 }
 
 #[tokio::test]
-async fn preview_executor_code_node_not_implemented_returns_error() {
+async fn preview_executor_code_node_executes_runner() {
     let mut plan = sample_compiled_plan();
     if let Some(node) = plan.nodes.get_mut("node-llm") {
         node.node_type = "code".to_string();
+        node.bindings = BTreeMap::from([(
+            "query".to_string(),
+            CompiledBinding {
+                kind: "selector".to_string(),
+                raw_value: json!({ "kind": "selector", "value": ["node-start", "query"] }),
+                selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            },
+        )]);
+        node.outputs = vec![CompiledOutput {
+            key: "result".to_string(),
+            title: "Result".to_string(),
+            value_type: "string".to_string(),
+            selector: Vec::new(),
+        }];
+        node.code_runtime = Some(CompiledCodeRuntime {
+            language: "javascript".to_string(),
+            source: Some("function main(inputs) { return { result: inputs.query }; }".to_string()),
+            source_ref: None,
+            entrypoint: "main".to_string(),
+            imports: Vec::new(),
+            dependencies: Vec::new(),
+        });
     }
 
     let invoker = StubPreviewInvoker {
@@ -237,19 +276,14 @@ async fn preview_executor_code_node_not_implemented_returns_error() {
     .unwrap();
 
     assert_eq!(outcome.target_node_id, "node-llm");
-    assert!(outcome.is_failed());
-    let error_payload = outcome
-        .error_payload
-        .expect("code node should return preview error payload");
-    assert_eq!(error_payload["error_code"], "node_type_not_implemented");
-    assert_eq!(error_payload["node_type"], "code");
+    assert!(!outcome.is_failed());
     assert_eq!(
-        error_payload["message"],
-        "code nodes are not implemented in preview runtime"
+        outcome.node_output,
+        serde_json::json!({ "result": "退款流程是什么？" })
     );
-    assert_eq!(outcome.metrics_payload["preview_mode"], true);
-    assert_eq!(outcome.metrics_payload["waiting"], "code");
-    assert_eq!(outcome.node_output, serde_json::json!({}));
+    assert_eq!(outcome.metrics_payload["language"], "javascript");
+    assert_eq!(outcome.metrics_payload["entrypoint"], "main");
+    assert_eq!(outcome.metrics_payload["error"], false);
     assert!(outcome.provider_events.is_empty());
 }
 

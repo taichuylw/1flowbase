@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use plugin_framework::{
     error::PluginFrameworkError,
@@ -10,11 +10,10 @@ use plugin_framework::{
         ProviderUsage,
     },
 };
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
-    code_runtime::execute_code_node,
     compiled_plan::{
         CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
     },
@@ -24,11 +23,13 @@ use crate::{
     },
     node_errors::build_node_type_not_implemented_error_payload,
     payload_builder::{
-        BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult, is_reserved_payload_key,
+        is_reserved_payload_key, BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult,
     },
 };
 
-pub use crate::code_runtime::{CodeInvocationOutput, CodeInvoker, QuickJsCodeInvoker};
+pub use crate::code_runtime::{
+    execute_code_node, CodeInvocationOutput, CodeInvoker, QuickJsCodeInvoker,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderInvocationOutput {

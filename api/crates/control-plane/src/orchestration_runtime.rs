@@ -1424,11 +1424,17 @@ where
 {
     async fn invoke_code_node(
         &self,
-        _runtime: &orchestration_runtime::compiled_plan::CompiledCodeRuntime,
-        _config_payload: Value,
-        _input_payload: Value,
+        runtime: &orchestration_runtime::compiled_plan::CompiledCodeRuntime,
+        config_payload: Value,
+        input_payload: Value,
     ) -> Result<orchestration_runtime::execution_engine::CodeInvocationOutput> {
-        Err(anyhow!("code runtime invoker is not configured"))
+        orchestration_runtime::execution_engine::CodeInvoker::invoke_code_node(
+            &orchestration_runtime::execution_engine::QuickJsCodeInvoker::default(),
+            runtime,
+            config_payload,
+            input_payload,
+        )
+        .await
     }
 }
 

@@ -444,6 +444,7 @@ where
                 executor_output: Map::new(),
                 metrics_facts: code_runtime_metrics(runtime, true)?,
                 error_facts: object_from_value(json!({
+                    "error_code": "code_runtime_error",
                     "error_kind": "code_runtime_error",
                     "message": "code execution failed",
                     "runtime_message": error.to_string(),

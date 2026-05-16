@@ -679,7 +679,7 @@ async fn flow_debug_run_fails_before_provider_when_prompt_template_selector_is_m
 }
 
 #[tokio::test]
-async fn live_debug_run_returns_code_not_implemented_error() {
+async fn live_debug_run_code_success_persists_output_and_completes() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Code Node Agent").await;
 
@@ -687,8 +687,109 @@ async fn live_debug_run_returns_code_not_implemented_error() {
         .start_flow_debug_run(StartFlowDebugRunCommand {
             actor_user_id: seeded.actor_user_id,
             application_id: seeded.application_id,
-            input_payload: json!({}),
-            document_snapshot: Some(code_flow_document(seeded.flow_id)),
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: Some(code_flow_document(
+                seeded.flow_id,
+                "function main(inputs) { return { result: inputs.query + ' from code' }; }",
+            )),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(
+        completed.flow_run.output_payload["result"],
+        "hello from code"
+    );
+    assert!(completed.flow_run.error_payload.is_none());
+
+    let code_node = completed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-code")
+        .expect("code node should be persisted");
+    assert_eq!(code_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(code_node.output_payload["result"], "hello from code");
+    assert!(code_node.error_payload.is_none());
+    assert_eq!(code_node.metrics_payload["language"], "javascript");
+    assert_eq!(code_node.metrics_payload["entrypoint"], "main");
+    assert_eq!(code_node.metrics_payload["error"], false);
+    assert!(code_node.debug_payload.as_object().unwrap().is_empty());
+    assert_eq!(completed.node_runs.len(), 2);
+}
+
+#[tokio::test]
+async fn live_debug_run_code_output_is_available_to_downstream_answer() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service
+        .seed_application_with_flow("Code Downstream Agent")
+        .await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: Some(code_to_answer_flow_document(
+                seeded.flow_id,
+                "function main(inputs) { return { result: inputs.query + ' downstream' }; }",
+            )),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(
+        completed.flow_run.output_payload["answer"],
+        "Code said: hello downstream"
+    );
+
+    let answer_node = completed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-answer")
+        .expect("answer node should be persisted");
+    assert_eq!(answer_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(
+        answer_node.output_payload["answer"],
+        "Code said: hello downstream"
+    );
+}
+
+#[tokio::test]
+async fn live_debug_run_code_runtime_error_fails_without_host_stack() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Code Error Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: Some(code_flow_document(
+                seeded.flow_id,
+                "function main(inputs) { throw new Error('user failure'); }",
+            )),
             debug_session_id: None,
         })
         .await
@@ -711,13 +812,16 @@ async fn live_debug_run_returns_code_not_implemented_error() {
         .expect("flow error payload should be persisted");
     assert_eq!(
         flow_error_payload["error_code"],
-        json!("node_type_not_implemented")
+        json!("code_runtime_error")
     );
-    assert_eq!(flow_error_payload["node_type"], json!("code"));
     assert_eq!(
-        flow_error_payload["message"].as_str(),
-        Some("code nodes are not implemented in debug runtime")
+        flow_error_payload["message"],
+        json!("code execution failed")
     );
+    assert!(!flow_error_payload
+        .to_string()
+        .to_ascii_lowercase()
+        .contains("stack"));
 
     let code_node = failed
         .node_runs
@@ -725,18 +829,23 @@ async fn live_debug_run_returns_code_not_implemented_error() {
         .find(|node_run| node_run.node_id == "node-code")
         .expect("code node should be persisted");
     assert_eq!(code_node.status, domain::NodeRunStatus::Failed);
+    let node_error_payload = code_node
+        .error_payload
+        .as_ref()
+        .expect("code node error should be persisted");
     assert_eq!(
-        code_node.error_payload.as_ref().unwrap()["error_code"],
-        json!("node_type_not_implemented")
+        node_error_payload["error_code"],
+        json!("code_runtime_error")
     );
     assert_eq!(
-        code_node.error_payload.as_ref().unwrap()["node_type"],
-        json!("code")
+        node_error_payload["message"],
+        json!("code execution failed")
     );
-    assert_eq!(
-        code_node.error_payload.as_ref().unwrap()["message"],
-        json!("code nodes are not implemented in debug runtime")
-    );
+    assert!(!node_error_payload
+        .to_string()
+        .to_ascii_lowercase()
+        .contains("stack"));
+    assert_eq!(code_node.metrics_payload["error"], true);
     assert_eq!(failed.node_runs.len(), 2);
 }
 
@@ -2295,7 +2404,7 @@ fn data_model_node_type(action: &str) -> &'static str {
     }
 }
 
-fn code_flow_document(flow_id: Uuid) -> Value {
+fn code_flow_document(flow_id: Uuid, source: &str) -> Value {
     let mut nodes = vec![json!({
         "id": "node-start",
         "type": "start",
@@ -2308,7 +2417,7 @@ fn code_flow_document(flow_id: Uuid) -> Value {
         "bindings": {},
         "outputs": []
     })];
-    nodes.push(code_node("node-code"));
+    nodes.push(code_node("node-code", source));
 
     json!({
         "schemaVersion": "1flowbase.flow/v2",
@@ -2338,7 +2447,52 @@ fn code_flow_document(flow_id: Uuid) -> Value {
     })
 }
 
-fn code_node(id: &str) -> Value {
+fn code_to_answer_flow_document(flow_id: Uuid, source: &str) -> Value {
+    let mut document = code_flow_document(flow_id, source);
+    let nodes = document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("code flow document nodes should be an array");
+    nodes.push(json!({
+        "id": "node-answer",
+        "type": "answer",
+        "alias": "Answer",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 480, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {
+            "answer": {
+                "kind": "templated_text",
+                "value": "Code said: {{node-code.result}}"
+            }
+        },
+        "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+    }));
+    document["graph"]["edges"] = json!([
+        {
+            "id": "edge-start-code",
+            "source": "node-start",
+            "target": "node-code",
+            "sourceHandle": null,
+            "targetHandle": null,
+            "containerId": null,
+            "points": []
+        },
+        {
+            "id": "edge-code-answer",
+            "source": "node-code",
+            "target": "node-answer",
+            "sourceHandle": null,
+            "targetHandle": null,
+            "containerId": null,
+            "points": []
+        }
+    ]);
+    document
+}
+
+fn code_node(id: &str, source: &str) -> Value {
     json!({
         "id": id,
         "type": "code",
@@ -2347,8 +2501,17 @@ fn code_node(id: &str) -> Value {
         "containerId": null,
         "position": { "x": 240, "y": 0 },
         "configVersion": 1,
-        "config": {},
-        "bindings": {},
+        "config": {
+            "language": "javascript",
+            "source": source,
+            "entrypoint": "main"
+        },
+        "bindings": {
+            "query": {
+                "kind": "selector",
+                "value": ["node-start", "query"]
+            }
+        },
         "outputs": [{ "key": "result", "title": "结果", "valueType": "json" }]
     })
 }
