@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use plugin_framework::{
-    ProviderConfigField,
     provider_contract::{ProviderInvocationInput, ProviderStreamEvent},
     provider_package::ProviderPackage,
+    ProviderConfigField,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -17,7 +17,7 @@ use crate::{
     capability_plugin_runtime::{CapabilityPluginRuntimePort, ExecuteCapabilityNodeInput},
     errors::ControlPlaneError,
     flow::FlowService,
-    model_provider::failover_queue::{FailoverQueueSnapshotItem, freeze_queue_items},
+    model_provider::failover_queue::{freeze_queue_items, FailoverQueueSnapshotItem},
     plugin_lifecycle::reconcile_installation_snapshot,
     ports::{
         AppendRunEventInput, ApplicationJsDependencySelectionRepository, ApplicationRepository,
@@ -49,9 +49,9 @@ use self::{
     },
     payloads::persisted_node_output_payload,
     persistence::{
-        PersistFlowDebugOutcomeInput, WaitingNodeResumeUpdate, checkpoint_node_id,
-        checkpoint_snapshot_from_record, next_node_started_at, persist_flow_debug_outcome,
-        persist_preview_events,
+        checkpoint_node_id, checkpoint_snapshot_from_record, next_node_started_at,
+        persist_flow_debug_outcome, persist_preview_events, PersistFlowDebugOutcomeInput,
+        WaitingNodeResumeUpdate,
     },
 };
 
@@ -1600,8 +1600,8 @@ mod tests {
     use crate::{errors::ControlPlaneError, ports::ModelProviderRepository};
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_missing()
-     {
+    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_missing(
+    ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let (alpha_instance_id, _) = repository.seed_included_provider_instances();
@@ -1637,8 +1637,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_not_ready()
-     {
+    async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_not_ready(
+    ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let (_, backup_instance_id) = repository.seed_included_provider_instances();
@@ -1677,8 +1677,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_uses_selected_child_instance_without_provider_fallback()
-     {
+    async fn orchestration_runtime_resolve_llm_instance_uses_selected_child_instance_without_provider_fallback(
+    ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let (_, backup_instance_id) = repository.seed_included_provider_instances();
@@ -1717,8 +1717,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_in_catalog_cache()
-     {
+    async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_in_catalog_cache(
+    ) {
         let repository =
             test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
         let selected_instance_id = repository.seed_provider_instance(

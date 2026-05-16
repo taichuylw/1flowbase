@@ -86,7 +86,7 @@ pub trait FrontstagePageRepository: Send + Sync {
     ) -> anyhow::Result<domain::FrontstagePageRecord>;
 
     async fn delete_frontstage_page(&self, workspace_id: Uuid, page_id: Uuid)
-    -> anyhow::Result<()>;
+        -> anyhow::Result<()>;
 
     async fn save_frontstage_page_content(
         &self,

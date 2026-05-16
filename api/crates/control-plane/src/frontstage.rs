@@ -563,12 +563,7 @@ mod tests {
         let missing_parent_id = test_uuid(0x999);
 
         let tree = build_frontstage_page_tree(vec![
-            page_record(
-                0x20,
-                FrontstagePageKind::Page,
-                Some(missing_parent_id),
-                "b",
-            ),
+            page_record(0x20, FrontstagePageKind::Page, Some(missing_parent_id), "b"),
             page_record(0x30, FrontstagePageKind::Group, None, "c"),
             page_record(0x40, FrontstagePageKind::Page, Some(root_group_id), "a"),
             page_record(
@@ -580,7 +575,10 @@ mod tests {
         ]);
 
         let root_ids = tree.iter().map(|node| node.page.id).collect::<Vec<_>>();
-        assert_eq!(root_ids, vec![orphan_group_id, orphan_page_id, root_group_id]);
+        assert_eq!(
+            root_ids,
+            vec![orphan_group_id, orphan_page_id, root_group_id]
+        );
         assert_eq!(tree[0].page.parent_id, None);
         assert_eq!(tree[1].page.parent_id, None);
         assert!(tree[0].children.is_empty());
@@ -617,9 +615,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(nested_page_id, FrontstagePageKind::Page)]
         );
-        assert!(tree[0]
-            .children
-            .iter()
-            .all(|node| node.children.is_empty()));
+        assert!(tree[0].children.iter().all(|node| node.children.is_empty()));
     }
 }

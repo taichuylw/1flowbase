@@ -158,7 +158,10 @@ fn native_run_request_accepts_expand_id_and_title() {
     let accepted: NativeRunRequest = serde_json::from_value(payload).unwrap();
 
     assert_eq!(accepted.expand_id.as_deref(), Some("external-user-123"));
-    assert_eq!(accepted.title.as_deref(), Some("Quarterly support escalation"));
+    assert_eq!(
+        accepted.title.as_deref(),
+        Some("Quarterly support escalation")
+    );
 }
 
 #[test]
@@ -174,7 +177,7 @@ fn native_run_request_rejects_invalid_public_native_fields() {
         ("stream_options", json!("not-object")),
         ("execution", json!("not-object")),
         ("metadata", json!("not-object")),
-        ("title", json!([ "Quarterly support escalation" ])),
+        ("title", json!(["Quarterly support escalation"])),
     ] {
         let mut payload = native_request(json!("any-model"));
         payload[field] = invalid_value;

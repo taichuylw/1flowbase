@@ -69,16 +69,8 @@ pub fn permission_catalog() -> Vec<PermissionDefinition> {
             ("use", &["own", "all"]),
         ],
     );
-    push_permissions(
-        &mut permissions,
-        "frontstage",
-        &[("page", &["design"])],
-    );
-    push_permissions(
-        &mut permissions,
-        "ui_block",
-        &[("javascript", &["native"])],
-    );
+    push_permissions(&mut permissions, "frontstage", &[("page", &["design"])]);
+    push_permissions(&mut permissions, "ui_block", &[("javascript", &["native"])]);
     push_permissions(
         &mut permissions,
         "state_model",
@@ -187,7 +179,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         "external_data_source",
         "embedded_app",
     ];
-    let mut manager_permissions = all_codes
+    let manager_permissions = all_codes
         .iter()
         .filter(|code| {
             let matches_resource = manager_resources

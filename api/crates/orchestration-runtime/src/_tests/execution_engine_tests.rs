@@ -13,7 +13,7 @@ use plugin_framework::{
         ProviderToolCall, ProviderUsage,
     },
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
@@ -23,8 +23,8 @@ use crate::{
         LlmRoutingMode,
     },
     execution_engine::{
-        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
-        ProviderInvocationOutput, ProviderInvoker, resume_flow_debug_run, start_flow_debug_run,
+        resume_flow_debug_run, start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
+        CodeInvocationOutput, CodeInvoker, ProviderInvocationOutput, ProviderInvoker,
     },
     execution_state::ExecutionStopReason,
 };
@@ -1345,11 +1345,9 @@ async fn resume_flow_debug_run_rejects_non_public_resume_output_keys() {
     .await
     .unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("resume payload key node-llm is not a public output for node-human")
-    );
+    assert!(error
+        .to_string()
+        .contains("resume payload key node-llm is not a public output for node-human"));
 }
 
 #[tokio::test]
@@ -1423,12 +1421,10 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
             );
             assert!(outcome.node_traces[1].output_payload.get("text").is_none());
             assert!(outcome.variable_pool.get("node-llm").is_none());
-            assert!(
-                failure.error_payload["provider_summary"]
-                    .as_str()
-                    .unwrap()
-                    .contains("[REDACTED]")
-            );
+            assert!(failure.error_payload["provider_summary"]
+                .as_str()
+                .unwrap()
+                .contains("[REDACTED]"));
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
@@ -1555,12 +1551,10 @@ async fn llm_runtime_sends_enabled_model_parameters_and_keeps_undeclared_structu
         outcome.node_traces[1].output_payload["text"],
         json!("{\"ok\":true}")
     );
-    assert!(
-        outcome.node_traces[1]
-            .output_payload
-            .get("structured_output")
-            .is_none()
-    );
+    assert!(outcome.node_traces[1]
+        .output_payload
+        .get("structured_output")
+        .is_none());
 }
 
 #[tokio::test]
@@ -1634,8 +1628,8 @@ async fn plugin_node_routes_to_capability_runtime_and_preserves_output_payload()
 }
 
 #[tokio::test]
-async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden_from_variable_pool()
- {
+async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden_from_variable_pool(
+) {
     let outcome = start_flow_debug_run(
         &plugin_plan(),
         &json!({ "node-start": { "query": "world" } }),
@@ -1648,11 +1642,9 @@ async fn plugin_node_keeps_executor_output_keys_outside_compiled_contract_hidden
         outcome.node_traces[1].output_payload["unexpected"],
         json!(true)
     );
-    assert!(
-        outcome.variable_pool["node-plugin"]
-            .get("unexpected")
-            .is_none()
-    );
+    assert!(outcome.variable_pool["node-plugin"]
+        .get("unexpected")
+        .is_none());
 }
 
 #[tokio::test]
@@ -1669,11 +1661,9 @@ async fn plugin_node_keeps_runtime_named_executor_output_keys_hidden_from_variab
         outcome.node_traces[1].output_payload["metadata"]["secret"],
         json!("x")
     );
-    assert!(
-        outcome.variable_pool["node-plugin"]
-            .get("metadata")
-            .is_none()
-    );
+    assert!(outcome.variable_pool["node-plugin"]
+        .get("metadata")
+        .is_none());
 }
 
 #[tokio::test]
@@ -1706,13 +1696,11 @@ async fn unknown_node_type_returns_not_implemented_failure_in_debug_runtime() {
                 json!("x_unknown nodes are not implemented in preview runtime")
             );
             assert_eq!(outcome.node_traces[1].node_type, "x_unknown");
-            assert!(
-                outcome.node_traces[1]
-                    .output_payload
-                    .as_object()
-                    .unwrap()
-                    .is_empty()
-            );
+            assert!(outcome.node_traces[1]
+                .output_payload
+                .as_object()
+                .unwrap()
+                .is_empty());
             assert_eq!(
                 outcome.node_traces[1].error_payload.as_ref().unwrap()["node_type"],
                 json!("x_unknown")

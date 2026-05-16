@@ -306,7 +306,7 @@ async fn native_run_route_validates_public_native_request_fields() {
         ("stream_options", json!("not-object")),
         ("execution", json!("not-object")),
         ("metadata", json!("not-object")),
-        ("title", json!([ "Quarterly support escalation" ])),
+        ("title", json!(["Quarterly support escalation"])),
     ] {
         let mut body = native_run_body(json!("any-model"));
         body[field] = invalid_value;

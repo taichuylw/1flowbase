@@ -17,8 +17,8 @@ use crate::{
         CompiledPlan,
     },
     execution_engine::{
-        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
-        ProviderInvocationOutput, ProviderInvoker, start_flow_debug_run,
+        start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput,
+        CodeInvoker, ProviderInvocationOutput, ProviderInvoker,
     },
     execution_state::ExecutionStopReason,
 };
@@ -222,12 +222,10 @@ async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
     .await
     .unwrap();
 
-    assert!(
-        captured_input
-            .lock()
-            .expect("captured input mutex poisoned")
-            .is_none()
-    );
+    assert!(captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .is_none());
 
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
@@ -260,12 +258,10 @@ async fn llm_runtime_fails_before_provider_when_prompt_template_selector_is_miss
     .await
     .unwrap();
 
-    assert!(
-        captured_input
-            .lock()
-            .expect("captured input mutex poisoned")
-            .is_none()
-    );
+    assert!(captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .is_none());
 
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
@@ -274,12 +270,10 @@ async fn llm_runtime_fails_before_provider_when_prompt_template_selector_is_miss
                 failure.error_payload["error_kind"],
                 json!("prompt_template_unresolved")
             );
-            assert!(
-                failure.error_payload["message"]
-                    .as_str()
-                    .expect("message should be a string")
-                    .contains("node-start.query")
-            );
+            assert!(failure.error_payload["message"]
+                .as_str()
+                .expect("message should be a string")
+                .contains("node-start.query"));
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }

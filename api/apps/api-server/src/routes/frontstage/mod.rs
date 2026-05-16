@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     routing::{get, post, put},
+    Json, Router,
 };
 use control_plane::frontstage::{
     CreateFrontstageGroupCommand, CreateFrontstagePageCommand, DeleteFrontstagePageCommand,

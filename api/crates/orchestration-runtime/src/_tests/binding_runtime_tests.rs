@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use orchestration_runtime::binding_runtime::resolve_node_inputs;
 use orchestration_runtime::compiled_plan::{CompiledBinding, CompiledNode};
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 
 fn compiled_node(binding: CompiledBinding) -> CompiledNode {
     CompiledNode {
@@ -77,9 +77,7 @@ fn resolve_data_model_query_rejects_invalid_operator() {
 
     let error = resolve_node_inputs(&node, &Map::<String, Value>::new()).unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("data_model list filter operator is unsupported")
-    );
+    assert!(error
+        .to_string()
+        .contains("data_model list filter operator is unsupported"));
 }
