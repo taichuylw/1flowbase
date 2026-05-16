@@ -22,6 +22,27 @@ const pageContentSaveHook = vi.hoisted(() => ({
 vi.mock('../../hooks/use-frontstage-page-content-save', () =>
   pageContentSaveHook
 );
+vi.mock('../../components/BlockCodeEditorDrawer', () => ({
+  BlockCodeEditorDrawer: ({
+    open,
+    workspaceId,
+    pageId,
+    block
+  }: {
+    open: boolean;
+    workspaceId: string | null | undefined;
+    pageId: string | null | undefined;
+    block?: { id?: string; codeRef?: string | null } | null;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="区块代码">
+        <span>workspace:{workspaceId ?? 'none'}</span>
+        <span>page:{pageId ?? 'none'}</span>
+        <span>block:{block?.id ?? 'none'}</span>
+        <span>code:{block?.codeRef ?? 'none'}</span>
+      </div>
+    ) : null
+}));
 
 type FrontstagePageContentSaveState = {
   save: ReturnType<typeof vi.fn>;
@@ -425,6 +446,166 @@ describe('FrontStagePage block arrange actions', () => {
     expect(within(actions).getByLabelText('区块宽度')).toBeDisabled();
     expect(within(actions).getByLabelText('区块高度')).toBeDisabled();
     expect(screen.getByText('区块保存中')).toBeInTheDocument();
+  });
+
+  test('opens block code editor drawer for the selected block in design mode', async () => {
+    authenticate(['frontstage.page.design']);
+    renderFrontStagePage(createPageContentWithBlocks(['hero', 'cta']));
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(getBlockRow('hero'));
+    fireEvent.click(
+      within(getSelectedBlockActions()).getByRole('button', {
+        name: '编辑代码'
+      })
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: '区块代码' });
+    expect(
+      within(dialog).getByText('workspace:workspace-1')
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText('page:page-1')).toBeInTheDocument();
+    expect(within(dialog).getByText('block:hero')).toBeInTheDocument();
+    expect(within(dialog).getByText('code:hero-code')).toBeInTheDocument();
+  });
+
+  test('hides block code editor entry outside design mode and without design permission', () => {
+    authenticate(['frontstage.page.design']);
+    const view = renderFrontStagePage(createPageContentWithBlocks(['hero']));
+
+    fireEvent.click(getBlockRow('hero'));
+    expect(
+      screen.queryByRole('button', { name: '编辑代码' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(getBlockRow('hero'));
+    expect(
+      within(getSelectedBlockActions()).getByRole('button', {
+        name: '编辑代码'
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    expect(
+      screen.queryByRole('button', { name: '编辑代码' })
+    ).not.toBeInTheDocument();
+
+    resetAuthStore();
+    authenticate(['route_page.view.all']);
+    view.rerender(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={[
+            {
+              id: 'page-1',
+              title: '页面 page-1',
+              kind: 'page'
+            }
+          ]}
+          pageContent={createPageContentWithBlocks(['hero'])}
+        />
+      </AppProviders>
+    );
+
+    expect(
+      screen.queryByRole('button', { name: '编辑代码' })
+    ).not.toBeInTheDocument();
+  });
+
+  test('closes block code editor drawer when exiting design mode or switching pages', async () => {
+    authenticate(['frontstage.page.design']);
+    const pageTree = [
+      {
+        id: 'page-1',
+        title: '页面 page-1',
+        kind: 'page' as const
+      },
+      {
+        id: 'page-2',
+        title: '页面 page-2',
+        kind: 'page' as const
+      }
+    ];
+    const view = render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={pageTree}
+          pageContent={createPageContentWithBlocks(['hero'])}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(getBlockRow('hero'));
+    fireEvent.click(
+      within(getSelectedBlockActions()).getByRole('button', {
+        name: '编辑代码'
+      })
+    );
+    expect(
+      await screen.findByRole('dialog', { name: '区块代码' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: '区块代码' })
+      ).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(getBlockRow('hero'));
+    fireEvent.click(
+      within(getSelectedBlockActions()).getByRole('button', {
+        name: '编辑代码'
+      })
+    );
+    expect(
+      await screen.findByRole('dialog', { name: '区块代码' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(getPageTreeItem('页面 page-2'));
+    view.rerender(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-2"
+          initialPageTree={pageTree}
+          pageContent={createPageContent({
+            page: {
+              id: 'page-2',
+              title: 'Second',
+              kind: 'page',
+              parentId: null,
+              rank: '002000',
+              schemaRootUid: 'root-2'
+            },
+            schema: {
+              rootUid: 'root-2',
+              payload: {}
+            },
+            root: {
+              uid: 'root-2',
+              payload: {}
+            }
+          })}
+        />
+      </AppProviders>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: '区块代码' })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('frontstage-selected-block-actions')
+      ).not.toBeInTheDocument();
+    });
   });
 
   test('shows a clear block arrange save error in design mode', async () => {
