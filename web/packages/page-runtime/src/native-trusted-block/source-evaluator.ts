@@ -43,6 +43,37 @@ export type {
   NativeTrustedBlockSourceTransformSuccess
 } from './source-evaluator-types';
 
+export class NativeTrustedBlockRuntimeError extends Error {
+  readonly kind: JsBlockRunError['kind'];
+  readonly errors: JsBlockRunError['errors'];
+
+  constructor(error: JsBlockRunError) {
+    super(error.message);
+    this.name = 'NativeTrustedBlockRuntimeError';
+    this.kind = error.kind;
+    this.errors = error.errors;
+  }
+}
+
+export function createNativeTrustedBlockRuntimeError(
+  error: JsBlockRunError
+): NativeTrustedBlockRuntimeError {
+  return new NativeTrustedBlockRuntimeError(error);
+}
+
+export function isNativeTrustedBlockRuntimeError(
+  error: unknown
+): error is NativeTrustedBlockRuntimeError {
+  return (
+    error instanceof NativeTrustedBlockRuntimeError ||
+    (isRecord(error) &&
+      error.name === 'NativeTrustedBlockRuntimeError' &&
+      typeof error.message === 'string' &&
+      isJsBlockRunErrorKind(error.kind) &&
+      Array.isArray(error.errors))
+  );
+}
+
 export function evaluateNativeTrustedBlockSource(
   input: EvaluateNativeTrustedBlockSourceInput
 ): NativeTrustedBlockSourceEvaluationResult {
@@ -90,7 +121,7 @@ export function evaluateNativeTrustedBlockSource(
 
     return {
       ok: true,
-      component: defaultExport,
+      component: wrapNativeTrustedBlockComponent(defaultExport),
       compiledSource,
       errors: []
     };
@@ -261,6 +292,27 @@ function isNativeTrustedBlockComponent(
   return typeof value === 'function';
 }
 
+function wrapNativeTrustedBlockComponent(
+  component: NativeTrustedBlockComponent
+): NativeTrustedBlockComponent {
+  return function guardedNativeTrustedBlockComponent(
+    this: unknown,
+    ...args: unknown[]
+  ): unknown {
+    try {
+      return component.apply(this, args);
+    } catch (error) {
+      if (isNativeTrustedBlockRuntimeCapabilityGuardError(error)) {
+        throw createNativeTrustedBlockRuntimeError(
+          runtimeError(error.path, error.message)
+        );
+      }
+
+      throw error;
+    }
+  };
+}
+
 function createRunError(
   kind: JsBlockRunError['kind'],
   message: string,
@@ -306,4 +358,13 @@ function getErrorMessage(error: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isJsBlockRunErrorKind(value: unknown): value is JsBlockRunError['kind'] {
+  return (
+    value === 'runtime_error' ||
+    value === 'source_policy_failed' ||
+    value === 'schema_invalid' ||
+    value === 'runtime_timeout'
+  );
 }

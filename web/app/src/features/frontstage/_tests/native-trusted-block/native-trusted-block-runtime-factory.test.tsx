@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { ComponentType, ReactNode } from 'react';
@@ -121,6 +121,40 @@ export default function Block() {
     });
 
     expect(testingRoot.renderSpy).not.toHaveBeenCalled();
+  });
+
+  test('reports component render capability guard failures with structured runtime paths', async () => {
+    const onRuntimeError = vi.fn();
+    const testingRoot = createTestingRoot();
+    const adapter = createFrontstageNativeTrustedBlockReactAdapter({
+      createRoot: testingRoot.createRoot,
+      onRuntimeError,
+      resolveComponent: createFrontstageNativeTrustedBlockRuntimeFactory()
+    });
+
+    await adapter.mount({
+      plan: createPlan({
+        source: `
+import React from 'react';
+
+export default function Block() {
+  f\\u0065tch('/api/native-trusted-block');
+  return React.createElement('div', null, 'Denied');
+}
+`
+      }),
+      root: createBlockRoot()
+    });
+
+    await waitFor(() => {
+      expect(onRuntimeError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'runtime_error',
+          path: 'runtime.capability.fetch'
+        }),
+        expect.objectContaining({ blockId: 'native-block-1' })
+      );
+    });
   });
 
   test('scopes module overrides to each created resolver', async () => {

@@ -321,6 +321,38 @@ export default function Block() {
     });
   });
 
+  test('maps escaped fetch calls during component invocation to a structured runtime_error', () => {
+    const result = evaluateNativeTrustedBlockSource({
+      source: `
+import React from 'react';
+
+export default function Block() {
+  f\\u0065tch('/api/native-trusted-block');
+  return React.createElement('div');
+}
+`,
+      modules: createModules()
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(() => result.component({ props: {} })).toThrowError(
+      expect.objectContaining({
+        name: 'NativeTrustedBlockRuntimeError',
+        kind: 'runtime_error',
+        errors: [
+          expect.objectContaining({
+            code: 'runtime_error',
+            path: 'runtime.capability.fetch'
+          })
+        ]
+      })
+    );
+  });
+
   test('returns runtime_error when the source has no default export', () => {
     const result = evaluateNativeTrustedBlockSource({
       source: 'const Block = () => null;',

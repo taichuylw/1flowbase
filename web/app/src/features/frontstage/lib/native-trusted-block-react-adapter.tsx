@@ -5,6 +5,7 @@ import { createRoot as defaultCreateRoot } from 'react-dom/client';
 import type { BlockProtocolError } from '@1flowbase/page-protocol';
 import {
   createNativeTrustedBlockPortalContainment,
+  isNativeTrustedBlockRuntimeError,
   type NativeTrustedBlockHostAdapter,
   type NativeTrustedBlockPortalContainment,
   type NativeTrustedBlockPreparePlan
@@ -172,6 +173,10 @@ function createPortalContainment(
 }
 
 function createRuntimeRenderError(error: unknown): BlockProtocolError {
+  if (isNativeTrustedBlockRuntimeError(error) && error.errors.length > 0) {
+    return error.errors[0];
+  }
+
   return {
     code: 'runtime_error',
     path: 'runtime.render',
