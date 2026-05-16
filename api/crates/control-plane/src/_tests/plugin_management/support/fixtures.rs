@@ -360,6 +360,64 @@ js_dependencies:
     .unwrap();
 }
 
+pub(crate) fn create_frontend_block_fixture(root: &Path) {
+    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::create_dir_all(root.join("blocks/hero")).unwrap();
+    fs::write(
+        root.join("manifest.yaml"),
+        r#"manifest_version: 1
+plugin_id: fixture_frontend_blocks@0.1.0
+version: 0.1.0
+vendor: 1flowbase tests
+display_name: Fixture Frontend Blocks
+description: Fixture frontend block catalog
+icon: icon.svg
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture-frontend-blocks
+block_contributions:
+  - contribution_code: hero_banner
+    title: Hero Banner
+    runtime: iframe
+    entry: blocks/hero/index.html
+    context_contract:
+      primitives:
+        - text
+        - image
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+      - configurable
+"#,
+    )
+    .unwrap();
+    fs::write(root.join("bin/fixture-frontend-blocks"), "echo fixture").unwrap();
+    fs::write(root.join("blocks/hero/index.html"), "<div>hero</div>").unwrap();
+}
+
 pub(crate) fn create_provider_fixture_with_node_contribution(root: &Path) {
     create_provider_fixture(root);
     let manifest_path = root.join("manifest.yaml");

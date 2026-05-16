@@ -1,0 +1,94 @@
+use std::sync::Arc;
+
+use axum::{extract::State, http::HeaderMap, routing::get, Json, Router};
+use control_plane::frontend_block_catalog::{
+    FrontendBlockCatalogService, ListFrontendBlockCatalogQuery,
+};
+use serde::Serialize;
+use utoipa::ToSchema;
+
+use crate::{
+    app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
+    response::ApiSuccess,
+};
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontendBlockPermissionsResponse {
+    pub network: String,
+    pub storage: String,
+    pub secrets: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontendBlockContextContractResponse {
+    pub primitives: Vec<String>,
+    #[schema(value_type = Object)]
+    pub input_schema: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FrontendBlockCatalogResponse {
+    pub installation_id: String,
+    pub provider_code: String,
+    pub plugin_id: String,
+    pub plugin_version: String,
+    pub contribution_code: String,
+    pub title: String,
+    pub runtime: String,
+    pub entry: String,
+    pub context_contract: FrontendBlockContextContractResponse,
+    pub permissions: FrontendBlockPermissionsResponse,
+    pub ui_capabilities: Vec<String>,
+}
+
+pub fn router() -> Router<Arc<ApiState>> {
+    Router::new().route("/frontend-blocks", get(list_frontend_blocks))
+}
+
+fn to_response(entry: domain::FrontendBlockCatalogEntry) -> FrontendBlockCatalogResponse {
+    FrontendBlockCatalogResponse {
+        installation_id: entry.installation_id.to_string(),
+        provider_code: entry.provider_code,
+        plugin_id: entry.plugin_id,
+        plugin_version: entry.plugin_version,
+        contribution_code: entry.contribution_code,
+        title: entry.title,
+        runtime: entry.runtime,
+        entry: entry.entry,
+        context_contract: FrontendBlockContextContractResponse {
+            primitives: entry.context_contract.primitives,
+            input_schema: entry.context_contract.input_schema,
+        },
+        permissions: FrontendBlockPermissionsResponse {
+            network: entry.permissions.network,
+            storage: entry.permissions.storage,
+            secrets: entry.permissions.secrets,
+        },
+        ui_capabilities: entry.ui_capabilities,
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/frontend-blocks",
+    responses(
+        (status = 200, body = [FrontendBlockCatalogResponse]),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn list_frontend_blocks(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<Vec<FrontendBlockCatalogResponse>>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let entries = FrontendBlockCatalogService::new(state.store.clone())
+        .list_frontend_blocks(ListFrontendBlockCatalogQuery {
+            actor_user_id: context.user.id,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        entries.entries.into_iter().map(to_response).collect(),
+    )))
+}

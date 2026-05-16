@@ -167,6 +167,38 @@ fn build_js_dependency_sync_input(
     }
 }
 
+fn build_frontend_block_sync_input(
+    installation: &domain::PluginInstallationRecord,
+    manifest: &PluginManifestV1,
+) -> ReplaceInstallationFrontendBlocksInput {
+    ReplaceInstallationFrontendBlocksInput {
+        installation_id: installation.id,
+        provider_code: installation.provider_code.clone(),
+        plugin_id: installation.plugin_id.clone(),
+        plugin_version: installation.plugin_version.clone(),
+        entries: manifest
+            .block_contributions
+            .iter()
+            .map(|block| FrontendBlockCatalogRegistryInput {
+                contribution_code: block.contribution_code.clone(),
+                title: block.title.clone(),
+                runtime: block.runtime.clone(),
+                entry: block.entry.clone(),
+                context_contract: domain::FrontendBlockContextContract {
+                    primitives: block.context_contract.primitives.clone(),
+                    input_schema: block.context_contract.input_schema.clone(),
+                },
+                permissions: domain::FrontendBlockPermissions {
+                    network: block.permissions.network.clone(),
+                    storage: block.permissions.storage.clone(),
+                    secrets: block.permissions.secrets.clone(),
+                },
+                ui_capabilities: block.ui_capabilities.clone(),
+            })
+            .collect(),
+    }
+}
+
 fn stable_plugin_unique_identifier(plugin_id: &str) -> String {
     plugin_id
         .split_once('@')
@@ -234,7 +266,8 @@ where
         + PluginRepository
         + ModelProviderRepository
         + NodeContributionRepository
-        + JsDependencyRepository,
+        + JsDependencyRepository
+        + FrontendBlockCatalogRepository,
     H: ProviderRuntimePort,
 {
     pub async fn install_plugin(
@@ -652,6 +685,12 @@ where
                         ))
                         .await?;
                     self.repository
+                        .replace_installation_frontend_blocks(&build_frontend_block_sync_input(
+                            &installation,
+                            &manifest,
+                        ))
+                        .await?;
+                    self.repository
                         .append_audit_log(&audit_log(
                             Some(actor.current_workspace_id),
                             Some(command.actor_user_id),
@@ -737,6 +776,11 @@ where
                             .iter()
                             .map(|entry| entry.contribution_code.clone())
                             .collect::<Vec<_>>(),
+                        "block_contributions": manifest
+                            .block_contributions
+                            .iter()
+                            .map(|entry| entry.contribution_code.clone())
+                            .collect::<Vec<_>>(),
                     });
                     if let Some(install_kind) = detail_json.get("install_kind").cloned() {
                         metadata_json["install_kind"] = install_kind;
@@ -784,6 +828,12 @@ where
                         .await?;
                     self.repository
                         .replace_installation_js_dependencies(&build_js_dependency_sync_input(
+                            &installation,
+                            &manifest,
+                        ))
+                        .await?;
+                    self.repository
+                        .replace_installation_frontend_blocks(&build_frontend_block_sync_input(
                             &installation,
                             &manifest,
                         ))

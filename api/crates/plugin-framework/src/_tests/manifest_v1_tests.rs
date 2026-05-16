@@ -211,6 +211,336 @@ js_dependencies:
 }
 
 #[test]
+fn plugin_manifest_v1_accepts_frontend_block_contribution() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: fixture_frontend_blocks@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Fixture Frontend Blocks
+description: Frontend block contribution plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture-frontend-blocks
+block_contributions:
+  - contribution_code: hero_banner
+    title: Hero Banner
+    runtime: iframe
+    entry: blocks/hero/index.html
+    context_contract:
+      primitives:
+        - text
+        - image
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+      - configurable
+"#,
+    )
+    .unwrap();
+
+    assert_eq!(manifest.block_contributions.len(), 1);
+    let block = &manifest.block_contributions[0];
+    assert_eq!(block.contribution_code, "hero_banner");
+    assert_eq!(block.runtime, "iframe");
+    assert_eq!(block.entry, "blocks/hero/index.html");
+    assert_eq!(block.context_contract.primitives, vec!["text", "image"]);
+    assert_eq!(block.ui_capabilities, vec!["responsive", "configurable"]);
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_invalid_frontend_block_values_with_stable_errors() {
+    let invalid_runtime = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block
+description: invalid runtime
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block
+block_contributions:
+  - contribution_code: bad_runtime
+    title: Bad Runtime
+    runtime: react_remote
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_runtime
+        .to_string()
+        .contains("block_contributions[].runtime must be one of iframe"));
+
+    let missing_entry = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: missing_frontend_block_entry@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Missing Frontend Block Entry
+description: missing entry
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/missing-frontend-block-entry
+block_contributions:
+  - contribution_code: missing_entry
+    title: Missing Entry
+    runtime: iframe
+    entry: ""
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(missing_entry
+        .to_string()
+        .contains("block_contributions[].entry cannot be empty"));
+
+    let invalid_permission = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block_permission@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block Permission
+description: invalid permission
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block-permission
+block_contributions:
+  - contribution_code: bad_permission
+    title: Bad Permission
+    runtime: iframe
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: workspace_write
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_permission
+        .to_string()
+        .contains("block_contributions[].permissions.storage must be one of none"));
+
+    let invalid_primitive = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block_primitive@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block Primitive
+description: invalid primitive
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block-primitive
+block_contributions:
+  - contribution_code: bad_primitive
+    title: Bad Primitive
+    runtime: iframe
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - script
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_primitive.to_string().contains(
+        "block_contributions[].context_contract.primitives[] must be one of text, image, link, button, rich_text, data_record"
+    ));
+
+    let invalid_capability = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block_capability@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block Capability
+description: invalid capability
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block-capability
+block_contributions:
+  - contribution_code: bad_capability
+    title: Bad Capability
+    runtime: iframe
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - arbitrary_dom_access
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_capability.to_string().contains(
+        "block_contributions[].ui_capabilities[] must be one of responsive, configurable, theming, data_binding"
+    ));
+}
+
+#[test]
 fn plugin_manifest_v1_defaults_js_dependency_permissions_to_none() {
     let manifest = parse_plugin_manifest(
         r#"

@@ -36,13 +36,15 @@ use crate::{
     plugin_lifecycle::{derive_availability_status, reconcile_installation_snapshot},
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
+        FrontendBlockCatalogRegistryInput, FrontendBlockCatalogRepository,
         JsDependencyRegistryInput, JsDependencyRepository, ModelProviderRepository,
         NodeContributionRegistryInput, NodeContributionRepository, OfficialPluginArtifact,
         OfficialPluginSourceEntry, OfficialPluginSourcePort, PluginRepository, ProviderRuntimePort,
-        ReassignModelProviderInstancesInput, ReplaceInstallationJsDependenciesInput,
-        ReplaceInstallationNodeContributionsInput, UpdatePluginDesiredStateInput,
-        UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput,
-        UpsertModelProviderCatalogCacheInput, UpsertPluginInstallationInput,
+        ReassignModelProviderInstancesInput, ReplaceInstallationFrontendBlocksInput,
+        ReplaceInstallationJsDependenciesInput, ReplaceInstallationNodeContributionsInput,
+        UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
+        UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
+        UpsertPluginInstallationInput,
     },
     state_transition::ensure_plugin_task_transition,
 };
@@ -66,7 +68,8 @@ where
         + PluginRepository
         + ModelProviderRepository
         + NodeContributionRepository
-        + JsDependencyRepository,
+        + JsDependencyRepository
+        + FrontendBlockCatalogRepository,
     H: ProviderRuntimePort,
 {
     pub fn new(

@@ -299,6 +299,39 @@ pub trait JsDependencyRepository: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
+pub struct FrontendBlockCatalogRegistryInput {
+    pub contribution_code: String,
+    pub title: String,
+    pub runtime: String,
+    pub entry: String,
+    pub context_contract: domain::FrontendBlockContextContract,
+    pub permissions: domain::FrontendBlockPermissions,
+    pub ui_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReplaceInstallationFrontendBlocksInput {
+    pub installation_id: Uuid,
+    pub provider_code: String,
+    pub plugin_id: String,
+    pub plugin_version: String,
+    pub entries: Vec<FrontendBlockCatalogRegistryInput>,
+}
+
+#[async_trait]
+pub trait FrontendBlockCatalogRepository: Send + Sync {
+    async fn replace_installation_frontend_blocks(
+        &self,
+        input: &ReplaceInstallationFrontendBlocksInput,
+    ) -> anyhow::Result<()>;
+
+    async fn list_workspace_frontend_blocks(
+        &self,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::FrontendBlockCatalogEntry>>;
+}
+
+#[derive(Debug, Clone)]
 pub struct CreatePluginWorkerLeaseInput {
     pub installation_id: Uuid,
     pub worker_key: String,

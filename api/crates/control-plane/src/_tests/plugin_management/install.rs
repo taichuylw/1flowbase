@@ -6,7 +6,7 @@ use crate::{
         InstallPluginCommand, InstallUploadedPluginCommand, PluginCatalogFilter,
         PluginManagementService,
     },
-    ports::{JsDependencyRepository, NodeContributionRepository},
+    ports::{FrontendBlockCatalogRepository, JsDependencyRepository, NodeContributionRepository},
 };
 use domain::{NodeContributionDependencyStatus, PluginTaskStatus};
 use sha2::{Digest, Sha256};
@@ -15,7 +15,7 @@ use uuid::Uuid;
 use super::support::{
     actor_with_permissions, build_openai_compatible_package_bytes,
     build_signed_openai_upload_package, create_capability_plugin_fixture,
-    create_js_dependency_pack_fixture, create_provider_fixture,
+    create_frontend_block_fixture, create_js_dependency_pack_fixture, create_provider_fixture,
     create_provider_fixture_with_node_contribution, requested_locales, MemoryOfficialPluginSource,
     MemoryPluginManagementRepository, MemoryProviderRuntime,
 };
@@ -369,6 +369,77 @@ async fn plugin_management_service_syncs_js_dependency_pack_and_catalog_requires
     assert_eq!(entries[0].permissions.network, "outbound_only");
     assert_eq!(entries[0].permissions.filesystem, "deny");
     assert_eq!(entries[0].permissions.env, "deny");
+}
+
+#[tokio::test]
+async fn plugin_management_service_syncs_frontend_block_catalog_and_requires_assignment() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let nonce = Uuid::now_v7().to_string();
+    let package_root = std::env::temp_dir().join(format!("frontend-block-source-{nonce}"));
+    let install_root = std::env::temp_dir().join(format!("frontend-block-installed-{nonce}"));
+    create_frontend_block_fixture(&package_root);
+
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+
+    let installation = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .unwrap()
+        .installation;
+
+    let hidden_entries =
+        FrontendBlockCatalogRepository::list_workspace_frontend_blocks(&repository, workspace_id)
+            .await
+            .unwrap();
+    assert!(hidden_entries.is_empty());
+
+    service
+        .enable_plugin(EnablePluginCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: installation.id,
+        })
+        .await
+        .unwrap();
+    service
+        .assign_plugin(AssignPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: installation.id,
+        })
+        .await
+        .unwrap();
+
+    let entries =
+        FrontendBlockCatalogRepository::list_workspace_frontend_blocks(&repository, workspace_id)
+            .await
+            .unwrap();
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].installation_id, installation.id);
+    assert_eq!(entries[0].provider_code, "fixture_frontend_blocks");
+    assert_eq!(entries[0].contribution_code, "hero_banner");
+    assert_eq!(entries[0].runtime, "iframe");
+    assert_eq!(entries[0].entry, "blocks/hero/index.html");
+    assert_eq!(
+        entries[0].context_contract.primitives,
+        vec!["text", "image"]
+    );
+    assert_eq!(entries[0].permissions.storage, "none");
+    assert_eq!(
+        entries[0].ui_capabilities,
+        vec!["responsive", "configurable"]
+    );
 }
 
 #[tokio::test]

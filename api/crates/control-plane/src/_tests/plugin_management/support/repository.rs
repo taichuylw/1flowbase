@@ -12,6 +12,7 @@ pub(crate) struct MemoryPluginManagementRepository {
     main_instances: Arc<RwLock<HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>>>,
     node_contributions: Arc<RwLock<Vec<domain::NodeContributionRegistryEntry>>>,
     js_dependencies: Arc<RwLock<Vec<domain::JsDependencyRegistryEntry>>>,
+    frontend_blocks: Arc<RwLock<Vec<domain::FrontendBlockCatalogEntry>>>,
     host_infrastructure_configs:
         Arc<RwLock<HashMap<(Uuid, String), HostInfrastructureProviderConfigRecord>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
@@ -35,6 +36,7 @@ impl MemoryPluginManagementRepository {
             main_instances: Arc::new(RwLock::new(HashMap::new())),
             node_contributions: Arc::new(RwLock::new(Vec::new())),
             js_dependencies: Arc::new(RwLock::new(Vec::new())),
+            frontend_blocks: Arc::new(RwLock::new(Vec::new())),
             host_infrastructure_configs: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
             created_task_status_override: Arc::new(RwLock::new(None)),
@@ -288,6 +290,10 @@ impl PluginRepository for MemoryPluginManagementRepository {
             .await
             .retain(|entry| entry.installation_id != installation_id);
         self.js_dependencies
+            .write()
+            .await
+            .retain(|entry| entry.installation_id != installation_id);
+        self.frontend_blocks
             .write()
             .await
             .retain(|entry| entry.installation_id != installation_id);
@@ -597,6 +603,54 @@ impl JsDependencyRepository for MemoryPluginManagementRepository {
         workspace_id: Uuid,
     ) -> Result<Vec<domain::JsDependencyRegistryEntry>> {
         let rows = self.js_dependencies.read().await.clone();
+        let assignments = self.assignments.read().await.clone();
+
+        Ok(rows
+            .into_iter()
+            .filter(|entry| {
+                assignments.iter().any(|assignment| {
+                    assignment.workspace_id == workspace_id
+                        && assignment.installation_id == entry.installation_id
+                })
+            })
+            .collect())
+    }
+}
+
+#[async_trait]
+impl FrontendBlockCatalogRepository for MemoryPluginManagementRepository {
+    async fn replace_installation_frontend_blocks(
+        &self,
+        input: &ReplaceInstallationFrontendBlocksInput,
+    ) -> Result<()> {
+        let mut rows = self.frontend_blocks.write().await;
+        rows.retain(|entry| entry.installation_id != input.installation_id);
+        rows.extend(
+            input
+                .entries
+                .iter()
+                .map(|entry| domain::FrontendBlockCatalogEntry {
+                    installation_id: input.installation_id,
+                    provider_code: input.provider_code.clone(),
+                    plugin_id: input.plugin_id.clone(),
+                    plugin_version: input.plugin_version.clone(),
+                    contribution_code: entry.contribution_code.clone(),
+                    title: entry.title.clone(),
+                    runtime: entry.runtime.clone(),
+                    entry: entry.entry.clone(),
+                    context_contract: entry.context_contract.clone(),
+                    permissions: entry.permissions.clone(),
+                    ui_capabilities: entry.ui_capabilities.clone(),
+                }),
+        );
+        Ok(())
+    }
+
+    async fn list_workspace_frontend_blocks(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::FrontendBlockCatalogEntry>> {
+        let rows = self.frontend_blocks.read().await.clone();
         let assignments = self.assignments.read().await.clone();
 
         Ok(rows

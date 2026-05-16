@@ -124,6 +124,36 @@ pub struct NodeContributionManifest {
     pub dependency: NodeContributionDependencyManifest,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FrontendBlockPermissionsManifest {
+    pub network: String,
+    pub storage: String,
+    pub secrets: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FrontendBlockContextContractManifest {
+    #[serde(default)]
+    pub primitives: Vec<String>,
+    #[serde(default)]
+    pub input_schema: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FrontendBlockContributionManifest {
+    pub contribution_code: String,
+    pub title: String,
+    pub runtime: String,
+    pub entry: String,
+    pub context_contract: FrontendBlockContextContractManifest,
+    pub permissions: FrontendBlockPermissionsManifest,
+    #[serde(default)]
+    pub ui_capabilities: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PluginManifestV1 {
@@ -153,6 +183,8 @@ pub struct PluginManifestV1 {
     pub node_contributions: Vec<NodeContributionManifest>,
     #[serde(default)]
     pub js_dependencies: Vec<JsDependencyManifest>,
+    #[serde(default)]
+    pub block_contributions: Vec<FrontendBlockContributionManifest>,
 }
 
 impl PluginManifestV1 {
@@ -259,9 +291,13 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
             .slot_codes
             .iter()
             .any(|slot| slot == "js_dependency_pack")
+        && !manifest
+            .slot_codes
+            .iter()
+            .any(|slot| slot == "frontend_block")
     {
         return Err(PluginFrameworkError::invalid_provider_package(
-            "capability_plugin must declare node_contributions or js_dependency_pack",
+            "capability_plugin must declare node_contributions, js_dependency_pack, or frontend_block",
         ));
     }
 
@@ -354,6 +390,93 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
         validate_js_dependencies(&manifest.js_dependencies)?;
     }
 
+    if manifest
+        .slot_codes
+        .iter()
+        .any(|slot| slot == "frontend_block")
+    {
+        validate_frontend_block_contributions(&manifest.block_contributions)?;
+    }
+
+    Ok(())
+}
+
+const FRONTEND_BLOCK_ALLOWED_RUNTIMES: &[&str] = &["iframe"];
+const FRONTEND_BLOCK_ALLOWED_PRIMITIVES: &[&str] = &[
+    "text",
+    "image",
+    "link",
+    "button",
+    "rich_text",
+    "data_record",
+];
+const FRONTEND_BLOCK_ALLOWED_UI_CAPABILITIES: &[&str] =
+    &["responsive", "configurable", "theming", "data_binding"];
+
+fn validate_frontend_block_contributions(
+    contributions: &[FrontendBlockContributionManifest],
+) -> FrameworkResult<()> {
+    if contributions.is_empty() {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "capability_plugin must declare block_contributions",
+        ));
+    }
+
+    for contribution in contributions {
+        validate_non_empty(
+            &contribution.contribution_code,
+            "block_contributions[].contribution_code",
+        )?;
+        validate_non_empty(&contribution.title, "block_contributions[].title")?;
+        validate_non_empty(&contribution.entry, "block_contributions[].entry")?;
+        validate_allowed(
+            &contribution.runtime,
+            "block_contributions[].runtime",
+            FRONTEND_BLOCK_ALLOWED_RUNTIMES,
+        )?;
+        validate_frontend_block_permissions(&contribution.permissions)?;
+        for primitive in &contribution.context_contract.primitives {
+            validate_allowed(
+                primitive,
+                "block_contributions[].context_contract.primitives[]",
+                FRONTEND_BLOCK_ALLOWED_PRIMITIVES,
+            )?;
+        }
+        for capability in &contribution.ui_capabilities {
+            validate_allowed(
+                capability,
+                "block_contributions[].ui_capabilities[]",
+                FRONTEND_BLOCK_ALLOWED_UI_CAPABILITIES,
+            )?;
+        }
+        if contribution.context_contract.input_schema.is_null() {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "block_contributions[].context_contract.input_schema cannot be null",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_frontend_block_permissions(
+    permissions: &FrontendBlockPermissionsManifest,
+) -> FrameworkResult<()> {
+    validate_allowed(
+        &permissions.network,
+        "block_contributions[].permissions.network",
+        &["none", "outbound_only"],
+    )?;
+    validate_allowed(
+        &permissions.storage,
+        "block_contributions[].permissions.storage",
+        &["none"],
+    )?;
+    validate_allowed(
+        &permissions.secrets,
+        "block_contributions[].permissions.secrets",
+        &["none"],
+    )?;
     Ok(())
 }
 
@@ -620,7 +743,8 @@ fn validate_slot_codes(manifest: &PluginManifestV1) -> FrameworkResult<()> {
         "field_computed_value",
     ];
     const HOST_EXTENSION_ALLOWED: &[&str] = &["host_bootstrap"];
-    const CAPABILITY_PLUGIN_ALLOWED: &[&str] = &["node_contribution", "js_dependency_pack"];
+    const CAPABILITY_PLUGIN_ALLOWED: &[&str] =
+        &["node_contribution", "js_dependency_pack", "frontend_block"];
 
     let allowed = match manifest.consumption_kind {
         PluginConsumptionKind::HostExtension => HOST_EXTENSION_ALLOWED,

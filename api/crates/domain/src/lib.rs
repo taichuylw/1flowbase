@@ -7,6 +7,7 @@ pub mod base;
 pub mod data_source;
 pub mod file_management;
 pub mod flow;
+pub mod frontend_block_catalog;
 pub mod frontstage;
 pub mod host_extension;
 pub mod js_dependency;
@@ -43,6 +44,9 @@ pub use flow::{
     default_flow_document, FlowChangeKind, FlowDraftRecord, FlowEditorState, FlowRecord,
     FlowVersionRecord, FlowVersionTrigger, FLOW_AUTOSAVE_INTERVAL_SECONDS, FLOW_HISTORY_LIMIT,
     FLOW_SCHEMA_VERSION,
+};
+pub use frontend_block_catalog::{
+    FrontendBlockCatalogEntry, FrontendBlockContextContract, FrontendBlockPermissions,
 };
 pub use frontstage::{FrontstagePageKind, FrontstagePageRecord, FrontstagePageTreeNode};
 pub use host_extension::{

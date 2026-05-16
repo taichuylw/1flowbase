@@ -41,7 +41,8 @@ pub use host_extension_manifest::{
 pub use host_extension_registry::{HostExtensionRegistry, RegisteredHostExtension};
 pub use installation::*;
 pub use manifest_v1::{
-    parse_plugin_manifest, NodeContributionDependencyManifest, NodeContributionManifest,
+    parse_plugin_manifest, FrontendBlockContextContractManifest, FrontendBlockContributionManifest,
+    FrontendBlockPermissionsManifest, NodeContributionDependencyManifest, NodeContributionManifest,
     PluginExecutionMode, PluginManifestV1, PluginPermissionManifest, PluginRuntimeLimits,
     PluginRuntimeManifest,
 };

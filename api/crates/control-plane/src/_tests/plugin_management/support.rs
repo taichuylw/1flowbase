@@ -22,12 +22,13 @@ use crate::{
     i18n::RequestedLocales,
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreatePluginAssignmentInput,
-        CreatePluginTaskInput, DownloadedOfficialPluginPackage, HostInfrastructureConfigRepository,
-        JsDependencyRepository, ModelProviderRepository, NodeContributionRepository,
-        OfficialPluginArtifact, OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource,
-        OfficialPluginI18nSummary, OfficialPluginSourceEntry, OfficialPluginSourcePort,
-        PluginRepository, ProviderRuntimeInvocationOutput, ProviderRuntimePort,
-        ReassignModelProviderInstancesInput, ReplaceInstallationJsDependenciesInput,
+        CreatePluginTaskInput, DownloadedOfficialPluginPackage, FrontendBlockCatalogRepository,
+        HostInfrastructureConfigRepository, JsDependencyRepository, ModelProviderRepository,
+        NodeContributionRepository, OfficialPluginArtifact, OfficialPluginCatalogSnapshot,
+        OfficialPluginCatalogSource, OfficialPluginI18nSummary, OfficialPluginSourceEntry,
+        OfficialPluginSourcePort, PluginRepository, ProviderRuntimeInvocationOutput,
+        ProviderRuntimePort, ReassignModelProviderInstancesInput,
+        ReplaceInstallationFrontendBlocksInput, ReplaceInstallationJsDependenciesInput,
         ReplaceInstallationNodeContributionsInput, UpdateModelProviderInstanceInput,
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
@@ -57,8 +58,8 @@ mod repository;
 mod source;
 
 pub(crate) use fixtures::{
-    actor_with_permissions, create_capability_plugin_fixture, create_js_dependency_pack_fixture,
-    create_provider_fixture,
+    actor_with_permissions, create_capability_plugin_fixture, create_frontend_block_fixture,
+    create_js_dependency_pack_fixture, create_provider_fixture,
 };
 pub(super) use fixtures::{
     build_openai_compatible_package_bytes, build_signed_openai_upload_package,
