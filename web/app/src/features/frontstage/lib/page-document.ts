@@ -1,6 +1,7 @@
 import type {
   FrontstagePageContent,
-  FrontstagePageContentNode
+  FrontstagePageContentNode,
+  SaveFrontstagePageContentInput
 } from '../api/page-content';
 
 export type FrontstagePageDocumentDiagnosticSeverity = 'warning' | 'error';
@@ -52,6 +53,16 @@ export interface FrontstagePageDocument {
   blocks: FrontstageBlockInstance[];
   isEmpty: boolean;
   diagnostics: FrontstagePageDocumentDiagnostic[];
+}
+
+interface FrontstageBlockPayload {
+  id: string;
+  codeRef: string;
+  catalog: FrontstageBlockCatalogRef;
+  contribution: FrontstageBlockContributionRef;
+  props: Record<string, unknown>;
+  layout: FrontstageBlockLayout;
+  runtime: FrontstageBlockRuntimeHint;
 }
 
 type PayloadSource = 'root' | 'schema';
@@ -416,5 +427,56 @@ export function createFrontstagePageDocument(
     blocks,
     isEmpty: blocks.length === 0,
     diagnostics
+  };
+}
+
+function createPayloadRecord(payload: unknown): Record<string, unknown> {
+  return isRecord(payload) ? { ...payload } : {};
+}
+
+function createBlockPayload(
+  block: FrontstageBlockInstance
+): FrontstageBlockPayload {
+  return {
+    id: block.id,
+    codeRef: block.codeRef,
+    catalog: { ...block.catalog },
+    contribution: { ...block.contribution },
+    props: { ...block.props },
+    layout: {
+      ...block.layout,
+      order: block.order
+    },
+    runtime: { ...block.runtime }
+  };
+}
+
+function createPayloadWithBlocks(
+  payload: unknown,
+  blocks: FrontstageBlockPayload[]
+): Record<string, unknown> {
+  return {
+    ...createPayloadRecord(payload),
+    blocks
+  };
+}
+
+export function createFrontstagePageDocumentSaveInput(
+  content: FrontstagePageContent,
+  document: FrontstagePageDocument
+): SaveFrontstagePageContentInput {
+  return {
+    schema: {
+      payload: createPayloadWithBlocks(
+        content.schema.payload,
+        document.blocks.map(createBlockPayload)
+      )
+    },
+    root: {
+      payload: createPayloadWithBlocks(
+        content.root.payload,
+        document.blocks.map(createBlockPayload)
+      )
+    }
   };
 }

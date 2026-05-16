@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'vitest';
 
 import type { FrontstagePageContent } from '../api/page-content';
-import { createFrontstagePageDocument } from '../lib/page-document';
+import {
+  createFrontstagePageDocument,
+  createFrontstagePageDocumentSaveInput,
+  type FrontstageBlockInstance
+} from '../lib/page-document';
 
 function createPageContent(
   overrides: Partial<FrontstagePageContent> = {}
@@ -231,5 +235,161 @@ describe('frontstage page document', () => {
       'missing_runtime',
       'missing_runtime'
     ]);
+  });
+
+  test('creates save payloads for empty documents while preserving non-block fields', () => {
+    const content = createPageContent({
+      schema: {
+        rootUid: 'root-1',
+        payload: {
+          version: 1,
+          schemaMeta: { owner: 'frontstage' }
+        }
+      },
+      root: {
+        uid: 'root-1',
+        payload: {
+          kind: 'frontstage.page.root',
+          rootMeta: ['keep']
+        }
+      }
+    });
+    const document = createFrontstagePageDocument(content);
+
+    const input = createFrontstagePageDocumentSaveInput(content, document);
+
+    expect(input).toEqual({
+      schema: {
+        payload: {
+          version: 1,
+          schemaMeta: { owner: 'frontstage' },
+          blocks: []
+        }
+      },
+      root: {
+        payload: {
+          kind: 'frontstage.page.root',
+          rootMeta: ['keep'],
+          blocks: []
+        }
+      }
+    });
+  });
+
+  test('serializes current blocks without runtime-only document fields', () => {
+    const content = createPageContent({
+      schema: {
+        rootUid: 'root-1',
+        payload: {
+          version: 1,
+          blocks: [{ id: 'stale-schema-block', codeRef: 'stale-schema-code' }]
+        }
+      },
+      root: {
+        uid: 'root-1',
+        payload: {
+          kind: 'frontstage.page.root',
+          blocks: [{ id: 'stale-root-block', codeRef: 'stale-root-code' }]
+        }
+      }
+    });
+    const block: FrontstageBlockInstance = {
+      id: 'hero',
+      sourceId: 'stale-root-block',
+      codeRef: 'hero-code',
+      sourceCodeRef: 'stale-root-code',
+      catalog: {
+        providerCode: 'official',
+        installationId: 'installation-1'
+      },
+      contribution: {
+        pluginId: 'official.blocks',
+        pluginVersion: '1.0.0',
+        code: 'official.hero'
+      },
+      props: { title: 'Hello' },
+      layout: { region: 'main', order: 99, span: 12 },
+      order: 3,
+      runtime: {
+        kind: 'iframe',
+        entry: 'blocks/hero.html',
+        hint: 'iframe'
+      }
+    };
+    const document = {
+      ...createFrontstagePageDocument(content),
+      blocks: [block],
+      isEmpty: false,
+      diagnostics: [
+        {
+          severity: 'warning' as const,
+          code: 'duplicate_block_id',
+          path: 'blocks.0',
+          message: 'diagnostic only'
+        }
+      ]
+    };
+
+    const input = createFrontstagePageDocumentSaveInput(content, document);
+
+    const expectedBlock = {
+      id: 'hero',
+      codeRef: 'hero-code',
+      catalog: {
+        providerCode: 'official',
+        installationId: 'installation-1'
+      },
+      contribution: {
+        pluginId: 'official.blocks',
+        pluginVersion: '1.0.0',
+        code: 'official.hero'
+      },
+      props: { title: 'Hello' },
+      layout: { region: 'main', order: 3, span: 12 },
+      runtime: {
+        kind: 'iframe',
+        entry: 'blocks/hero.html',
+        hint: 'iframe'
+      }
+    };
+
+    expect(input.schema.payload).toEqual({
+      version: 1,
+      blocks: [expectedBlock]
+    });
+    expect(input.root.payload).toEqual({
+      kind: 'frontstage.page.root',
+      blocks: [expectedBlock]
+    });
+    expect(input.root.payload).not.toHaveProperty('diagnostics');
+    expect(input.root.payload).not.toHaveProperty('isEmpty');
+    expect(input.root.payload).not.toHaveProperty('sourceId');
+    expect(input.root.payload).not.toHaveProperty('sourceCodeRef');
+    expect(expectedBlock).not.toHaveProperty('sourceId');
+    expect(expectedBlock).not.toHaveProperty('sourceCodeRef');
+
+    const roundTripDocument = createFrontstagePageDocument(
+      createPageContent({
+        schema: {
+          rootUid: 'root-1',
+          payload: input.schema.payload
+        },
+        root: {
+          uid: 'root-1',
+          payload: input.root.payload
+        }
+      })
+    );
+
+    expect(roundTripDocument.blocks).toEqual([
+      {
+        ...block,
+        sourceId: 'hero',
+        sourceCodeRef: 'hero-code',
+        layout: { region: 'main', order: 3, span: 12 },
+        order: 3
+      }
+    ]);
+    expect(roundTripDocument.diagnostics).toEqual([]);
   });
 });
