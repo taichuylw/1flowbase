@@ -216,6 +216,38 @@ const block = defineBlock({
     });
   });
 
+  test('preserves stable worker error kinds when worker reports a controlled failure', () => {
+    const failed = reduceJsBlockRuntimeSession(
+      run(createJsBlockRuntimeSession(), createRunRequest()),
+      {
+        direction: 'worker_to_host',
+        type: 'error',
+        requestId: 'request-1',
+        kind: 'source_policy_failed',
+        message: 'JS block source transform failed.',
+        errors: [
+          {
+            code: 'transform_failed',
+            path: 'source.identifiers.window',
+            message: "Identifier 'window' is not allowed in JS block source."
+          }
+        ]
+      }
+    );
+
+    expect(failed.requests['request-1']).toMatchObject({
+      status: 'failed',
+      result: {
+        ok: false,
+        requestId: 'request-1',
+        error: {
+          kind: 'source_policy_failed',
+          errors: [{ path: 'source.identifiers.window' }]
+        }
+      }
+    });
+  });
+
   test('applies timeout and runtime error messages only to the current requestId', () => {
     const request1 = createRunRequest({ requestId: 'request-1' });
     const request2 = createRunRequest({ requestId: 'request-2' });

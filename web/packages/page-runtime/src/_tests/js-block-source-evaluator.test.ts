@@ -94,13 +94,13 @@ function createModules(
 
 describe('JS block source evaluator', () => {
   test('evaluates and renders a transformed blank JS block skeleton through injected modules', async () => {
-    const result = await renderJsBlockSource({
+    const view = await renderJsBlockSource({
       source: blockSkeleton,
       modules: createModules(),
       context: createContext()
     });
 
-    expect(result).toMatchObject({
+    expect(view).toMatchObject({
       ok: true,
       schema: {
         primitive: 'Stack',
@@ -178,13 +178,13 @@ export default defineBlock({
   ] as const)(
     'returns a stable runtime error for %s',
     async (_label, moduleOverrides, path) => {
-      const result = await renderJsBlockSource({
+      const view = await renderJsBlockSource({
         source: blockSkeleton,
         modules: createModules(moduleOverrides),
         context: createContext()
       });
 
-      expect(result).toMatchObject({
+      expect(view).toMatchObject({
         ok: false,
         error: {
           kind: 'runtime_error',
@@ -195,13 +195,13 @@ export default defineBlock({
   );
 
   test('returns source policy failure when transform rejects the source', async () => {
-    const result = await renderJsBlockSource({
+    const view = await renderJsBlockSource({
       source: "import React from 'react';\nexport default {};",
       modules: createModules(),
       context: createContext()
     });
 
-    expect(result).toMatchObject({
+    expect(view).toMatchObject({
       ok: false,
       error: {
         kind: 'source_policy_failed',
@@ -230,7 +230,7 @@ export default defineBlock({ title: 'Missing render' });
   });
 
   test('returns runtime_error when render throws', async () => {
-    const result = await renderJsBlockSource({
+    const view = await renderJsBlockSource({
       source: `
 import { defineBlock } from '@1flowbase/block-sdk';
 
@@ -244,7 +244,7 @@ export default defineBlock({
       context: createContext()
     });
 
-    expect(result).toMatchObject({
+    expect(view).toMatchObject({
       ok: false,
       error: {
         kind: 'runtime_error',
@@ -254,7 +254,7 @@ export default defineBlock({
   });
 
   test('returns schema_invalid when render returns an invalid UI schema', async () => {
-    const result = await renderJsBlockSource({
+    const view = await renderJsBlockSource({
       source: `
 import { defineBlock } from '@1flowbase/block-sdk';
 
@@ -268,7 +268,7 @@ export default defineBlock({
       context: createContext()
     });
 
-    expect(result).toMatchObject({
+    expect(view).toMatchObject({
       ok: false,
       error: {
         kind: 'schema_invalid',

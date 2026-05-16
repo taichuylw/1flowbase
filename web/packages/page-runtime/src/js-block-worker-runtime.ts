@@ -171,6 +171,7 @@ export interface JsBlockWorkerErrorMessage {
   direction: 'worker_to_host';
   type: 'error';
   requestId: string;
+  kind?: JsBlockRunErrorKind;
   message?: string;
   errors?: BlockProtocolError[];
 }
@@ -440,10 +441,13 @@ function reduceRuntimeErrorMessage(
   const errors = readProtocolErrors(message.errors) ?? [
     createProtocolError('runtime_error', 'runtime', runtimeMessage)
   ];
+  const errorKind = isRunErrorKind(message.kind)
+    ? message.kind
+    : 'runtime_error';
 
   return completeRequest(
     state,
-    withRunFailure(requestResult.request, 'runtime_error', runtimeMessage, errors)
+    withRunFailure(requestResult.request, errorKind, runtimeMessage, errors)
   );
 }
 
@@ -958,6 +962,15 @@ function isLogLevel(value: unknown): value is JsBlockWorkerLogLevel {
     value === 'info' ||
     value === 'warn' ||
     value === 'error'
+  );
+}
+
+function isRunErrorKind(value: unknown): value is JsBlockRunErrorKind {
+  return (
+    value === 'source_policy_failed' ||
+    value === 'schema_invalid' ||
+    value === 'runtime_timeout' ||
+    value === 'runtime_error'
   );
 }
 

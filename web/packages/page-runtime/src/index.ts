@@ -14,3 +14,4 @@ export * from './block-context-mediator';
 export * from './js-block-worker-host';
 export * from './js-block-worker-runtime';
 export * from './js-block-worker-adapter';
+export * from './js-block-worker-executor';
