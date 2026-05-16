@@ -120,8 +120,10 @@ export interface ConsoleDataModelAdvisorFinding {
   can_acknowledge: boolean;
 }
 
+export type ConsoleRuntimeModelRecord = Record<string, unknown>;
+
 export interface ConsoleRuntimeRecordPreview {
-  items: Record<string, unknown>[];
+  items: ConsoleRuntimeModelRecord[];
   total: number;
 }
 
@@ -205,6 +207,27 @@ export interface UpdateConsoleDataModelScopeGrantInput {
   confirm_unsafe_external_source_system_all: boolean;
 }
 
+export interface ConsoleRuntimeModelRecordFilterInput {
+  field: string;
+  operator: string;
+  value: string | number | boolean | null;
+}
+
+export interface ConsoleRuntimeModelRecordSortInput {
+  field: string;
+  direction: string;
+}
+
+export interface FetchConsoleRuntimeModelRecordsInput {
+  page?: number;
+  page_size?: number;
+  filter?: ConsoleRuntimeModelRecordFilterInput | string;
+  sort?: ConsoleRuntimeModelRecordSortInput | string;
+  expand?: string | string[];
+}
+
+export type ConsoleRuntimeModelRecordInput = Record<string, unknown>;
+
 function appendQuery(path: string, params: Record<string, string | undefined>) {
   const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -212,6 +235,76 @@ function appendQuery(path: string, params: Record<string, string | undefined>) {
       searchParams.set(key, value);
     }
   }
+  const query = searchParams.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function encodedPathSegment(value: string) {
+  return encodeURIComponent(value);
+}
+
+function runtimeModelRecordsPath(modelCode: string) {
+  return `/api/runtime/models/${encodedPathSegment(modelCode)}/records`;
+}
+
+function runtimeModelRecordPath(modelCode: string, recordId: string) {
+  return `${runtimeModelRecordsPath(modelCode)}/${encodedPathSegment(recordId)}`;
+}
+
+function serializeRuntimeRecordFilter(
+  filter: FetchConsoleRuntimeModelRecordsInput['filter']
+) {
+  if (filter === undefined || typeof filter === 'string') {
+    return filter;
+  }
+  return `${filter.field}:${filter.operator}:${String(filter.value)}`;
+}
+
+function serializeRuntimeRecordSort(
+  sort: FetchConsoleRuntimeModelRecordsInput['sort']
+) {
+  if (sort === undefined || typeof sort === 'string') {
+    return sort;
+  }
+  return `${sort.field}:${sort.direction}`;
+}
+
+function serializeRuntimeRecordExpand(
+  expand: FetchConsoleRuntimeModelRecordsInput['expand']
+) {
+  if (Array.isArray(expand)) {
+    return expand.join(',');
+  }
+  return expand;
+}
+
+function appendRuntimeRecordsQuery(
+  path: string,
+  input: FetchConsoleRuntimeModelRecordsInput
+) {
+  const searchParams = new URLSearchParams();
+  if (input.page !== undefined) {
+    searchParams.set('page', String(input.page));
+  }
+  if (input.page_size !== undefined) {
+    searchParams.set('page_size', String(input.page_size));
+  }
+
+  const filter = serializeRuntimeRecordFilter(input.filter);
+  if (filter) {
+    searchParams.set('filter', filter);
+  }
+
+  const sort = serializeRuntimeRecordSort(input.sort);
+  if (sort) {
+    searchParams.set('sort', sort);
+  }
+
+  const expand = serializeRuntimeRecordExpand(input.expand);
+  if (expand) {
+    searchParams.set('expand', expand);
+  }
+
   const query = searchParams.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -415,7 +508,77 @@ export function fetchConsoleDataModelRecordPreview(
   baseUrl?: string
 ) {
   return apiFetch<ConsoleRuntimeRecordPreview>({
-    path: `/api/runtime/models/${modelCode}/records?page=1&page_size=20`,
+    path: appendRuntimeRecordsQuery(runtimeModelRecordsPath(modelCode), {
+      page: 1,
+      page_size: 20
+    }),
+    baseUrl
+  });
+}
+
+export function fetchConsoleRuntimeModelRecords(
+  modelCode: string,
+  input: FetchConsoleRuntimeModelRecordsInput = {},
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRuntimeRecordPreview>({
+    path: appendRuntimeRecordsQuery(runtimeModelRecordsPath(modelCode), input),
+    baseUrl
+  });
+}
+
+export function fetchConsoleRuntimeModelRecord(
+  modelCode: string,
+  recordId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRuntimeModelRecord>({
+    path: runtimeModelRecordPath(modelCode, recordId),
+    baseUrl
+  });
+}
+
+export function createConsoleRuntimeModelRecord(
+  modelCode: string,
+  input: ConsoleRuntimeModelRecordInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRuntimeModelRecord>({
+    path: runtimeModelRecordsPath(modelCode),
+    method: 'POST',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function updateConsoleRuntimeModelRecord(
+  modelCode: string,
+  recordId: string,
+  input: ConsoleRuntimeModelRecordInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRuntimeModelRecord>({
+    path: runtimeModelRecordPath(modelCode, recordId),
+    method: 'PATCH',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsoleRuntimeModelRecord(
+  modelCode: string,
+  recordId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<{ deleted: true }>({
+    path: runtimeModelRecordPath(modelCode, recordId),
+    method: 'DELETE',
+    csrfToken,
     baseUrl
   });
 }

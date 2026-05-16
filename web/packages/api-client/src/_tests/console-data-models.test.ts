@@ -5,8 +5,10 @@ import {
   createConsoleDataModel,
   createConsoleDataModelField,
   createConsoleDataModelScopeGrant,
+  createConsoleRuntimeModelRecord,
   deleteConsoleDataModel,
   deleteConsoleDataModelField,
+  deleteConsoleRuntimeModelRecord,
   fetchConsoleDataModelAdvisorFindings,
   fetchConsoleDataModelOpenApiDocument,
   fetchConsoleDataModelRecordPreview,
@@ -14,10 +16,13 @@ import {
   fetchConsoleAgentFlowDataModelOptions,
   fetchConsoleDataModels,
   fetchConsoleDataSourceInstances,
+  fetchConsoleRuntimeModelRecord,
+  fetchConsoleRuntimeModelRecords,
   updateConsoleDataModel,
   updateConsoleDataModelApiExposure,
   updateConsoleDataModelField,
   updateConsoleDataModelScopeGrant,
+  updateConsoleRuntimeModelRecord,
   updateConsoleDataSourceDefaults
 } from '../console-data-models';
 
@@ -259,6 +264,82 @@ describe('console-data-models client', () => {
       fetchConsoleDataModelOpenApiDocument('model-1')
     ).resolves.toMatchObject({
       path: '/api/console/docs/data-models/model-1/openapi.json'
+    });
+  });
+
+  test('runtime model records list serializes query options and encoded model code', async () => {
+    await expect(
+      fetchConsoleRuntimeModelRecords('sales/orders', {
+        page: 2,
+        page_size: 50,
+        filter: {
+          field: 'status',
+          operator: 'eq',
+          value: 'needs review'
+        },
+        sort: {
+          field: 'created_at',
+          direction: 'desc'
+        },
+        expand: ['customer', 'line items']
+      })
+    ).resolves.toMatchObject({
+      path: '/api/runtime/models/sales%2Forders/records?page=2&page_size=50&filter=status%3Aeq%3Aneeds+review&sort=created_at%3Adesc&expand=customer%2Cline+items'
+    });
+  });
+
+  test('runtime model record get encodes model code and record id', async () => {
+    await expect(
+      fetchConsoleRuntimeModelRecord('sales/orders', 'record/1')
+    ).resolves.toMatchObject({
+      path: '/api/runtime/models/sales%2Forders/records/record%2F1'
+    });
+  });
+
+  test('runtime model record mutations use body and CSRF token', async () => {
+    await expect(
+      createConsoleRuntimeModelRecord(
+        'sales/orders',
+        {
+          title: 'Needs review',
+          total: 42
+        },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/runtime/models/sales%2Forders/records',
+      method: 'POST',
+      body: {
+        title: 'Needs review',
+        total: 42
+      },
+      csrfToken: 'csrf-123'
+    });
+
+    await expect(
+      updateConsoleRuntimeModelRecord(
+        'sales/orders',
+        'record/1',
+        {
+          title: 'Approved'
+        },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/runtime/models/sales%2Forders/records/record%2F1',
+      method: 'PATCH',
+      body: {
+        title: 'Approved'
+      },
+      csrfToken: 'csrf-123'
+    });
+
+    await expect(
+      deleteConsoleRuntimeModelRecord('sales/orders', 'record/1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/runtime/models/sales%2Forders/records/record%2F1',
+      method: 'DELETE',
+      csrfToken: 'csrf-123'
     });
   });
 });
