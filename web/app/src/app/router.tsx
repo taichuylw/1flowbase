@@ -17,10 +17,15 @@ import { SignInPage } from '../features/auth/pages/SignInPage';
 import type { ApplicationSectionKey } from '../features/applications/lib/application-sections';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import {
+  fetchFrontstagePageContent,
+  frontstagePageContentQueryKey
+} from '../features/frontstage/api/page-content';
+import {
   fetchFrontstagePageTree,
   frontstagePageTreeQueryKey
 } from '../features/frontstage/api/page-tree';
 import { useFrontstagePageTreeMutations } from '../features/frontstage/hooks/use-frontstage-page-tree-mutations';
+import { resolveSelectedPageId } from '../features/frontstage/lib/page-tree';
 import { HomePage } from '../features/home/pages/HomePage';
 import { FrontStagePage } from '../features/frontstage/pages/FrontStagePage';
 import type { MeSectionKey } from '../features/me/lib/me-sections';
@@ -239,6 +244,27 @@ function renderFrontStageRoute({
   });
   const pageTreeMutations = useFrontstagePageTreeMutations(workspaceId);
   const pageTreeFromApi = pageTreeQuery.data;
+  const selectedPageId = pageTreeFromApi
+    ? resolveSelectedPageId({
+        pageId,
+        pageTree: pageTreeFromApi
+      }).selectedPageId
+    : null;
+  const shouldLoadPageContent = Boolean(pageId && selectedPageId);
+  const pageContentQuery = useQuery({
+    queryKey: selectedPageId
+      ? frontstagePageContentQueryKey(workspaceId, selectedPageId)
+      : ['frontstage', workspaceId, 'pages', 'unselected', 'content'],
+    queryFn: () => {
+      if (!selectedPageId) {
+        throw new Error('FrontStage page content query requires selected page');
+      }
+
+      return fetchFrontstagePageContent(workspaceId, selectedPageId);
+    },
+    enabled: shouldLoadPageContent,
+    retry: false
+  });
 
   return (
     <RouteGuard routeId="frontstage">
@@ -249,6 +275,9 @@ function renderFrontStageRoute({
           initialPageTree={pageTreeFromApi}
           isPageTreeLoading={pageTreeQuery.isLoading}
           hasPageTreeLoadError={pageTreeQuery.isError}
+          pageContent={pageContentQuery.data}
+          isPageContentLoading={pageContentQuery.isLoading}
+          hasPageContentLoadError={pageContentQuery.isError}
           isPageTreeMutating={pageTreeMutations.isPending}
           pageTreeMutationError={pageTreeMutations.error}
           onCreateGroupNode={pageTreeMutations.createGroup}
@@ -258,6 +287,9 @@ function renderFrontStageRoute({
           onDeletePageNode={pageTreeMutations.deleteNode}
           onRetryLoadPageTree={() => {
             void pageTreeQuery.refetch();
+          }}
+          onRetryLoadPageContent={() => {
+            void pageContentQuery.refetch();
           }}
           onNavigatePage={(nextPageId) => {
             if (nextPageId) {
