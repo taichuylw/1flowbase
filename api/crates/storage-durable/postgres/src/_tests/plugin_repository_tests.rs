@@ -1,5 +1,6 @@
 use control_plane::ports::{
-    CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
+    CreatePluginAssignmentInput, CreatePluginTaskInput, JsDependencyRegistryInput,
+    JsDependencyRepository, PluginRepository, ReplaceInstallationJsDependenciesInput,
     UpdatePluginTaskStatusInput, UpsertPluginInstallationInput,
 };
 use domain::{
@@ -186,6 +187,119 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
         .await
         .unwrap();
     assert_eq!(assignments.len(), 1);
+}
+
+#[tokio::test]
+async fn js_dependency_repository_replaces_entries_and_lists_assigned_workspace_catalog() {
+    let (store, workspace, actor) = seed_store().await;
+    let installation = PluginRepository::upsert_installation(
+        &store,
+        &UpsertPluginInstallationInput {
+            installation_id: Uuid::now_v7(),
+            provider_code: "fixture_js_dependency_pack".into(),
+            plugin_id: "fixture_js_dependency_pack@0.1.0".into(),
+            plugin_version: "0.1.0".into(),
+            contract_version: "1flowbase.capability/v1".into(),
+            protocol: "stdio_json".into(),
+            display_name: "Fixture JS Dependency Pack".into(),
+            source_kind: "uploaded".into(),
+            trust_level: "checksum_only".into(),
+            verification_status: PluginVerificationStatus::Valid,
+            desired_state: PluginDesiredState::ActiveRequested,
+            artifact_status: PluginArtifactStatus::Ready,
+            runtime_status: PluginRuntimeStatus::Inactive,
+            availability_status: PluginAvailabilityStatus::Available,
+            package_path: None,
+            installed_path: "/tmp/plugins/fixture_js_dependency_pack/0.1.0".into(),
+            checksum: None,
+            manifest_fingerprint: None,
+            signature_status: None,
+            signature_algorithm: None,
+            signing_key_id: None,
+            last_load_error: None,
+            metadata_json: json!({}),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    JsDependencyRepository::replace_installation_js_dependencies(
+        &store,
+        &ReplaceInstallationJsDependenciesInput {
+            installation_id: installation.id,
+            provider_code: installation.provider_code.clone(),
+            plugin_id: installation.plugin_id.clone(),
+            plugin_version: installation.plugin_version.clone(),
+            entries: vec![JsDependencyRegistryInput {
+                alias: "zod".into(),
+                package: "zod".into(),
+                version: "3.24.0".into(),
+                target: "backend_code".into(),
+                artifact_path: "artifacts/zod.backend.mjs".into(),
+                integrity: "sha256-zod".into(),
+                permissions: domain::JsDependencyPermissions {
+                    network: "outbound_only".into(),
+                    filesystem: "deny".into(),
+                    env: "deny".into(),
+                },
+            }],
+        },
+    )
+    .await
+    .unwrap();
+
+    let hidden = JsDependencyRepository::list_workspace_js_dependencies(&store, workspace.id)
+        .await
+        .unwrap();
+    assert!(hidden.is_empty());
+
+    PluginRepository::create_assignment(
+        &store,
+        &CreatePluginAssignmentInput {
+            installation_id: installation.id,
+            workspace_id: workspace.id,
+            provider_code: installation.provider_code.clone(),
+            actor_user_id: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+
+    JsDependencyRepository::replace_installation_js_dependencies(
+        &store,
+        &ReplaceInstallationJsDependenciesInput {
+            installation_id: installation.id,
+            provider_code: installation.provider_code.clone(),
+            plugin_id: installation.plugin_id.clone(),
+            plugin_version: installation.plugin_version.clone(),
+            entries: vec![JsDependencyRegistryInput {
+                alias: "valibot".into(),
+                package: "valibot".into(),
+                version: "1.2.3".into(),
+                target: "backend_code".into(),
+                artifact_path: "artifacts/valibot.backend.mjs".into(),
+                integrity: "sha256-valibot".into(),
+                permissions: domain::JsDependencyPermissions {
+                    network: "none".into(),
+                    filesystem: "deny".into(),
+                    env: "deny".into(),
+                },
+            }],
+        },
+    )
+    .await
+    .unwrap();
+
+    let entries = JsDependencyRepository::list_workspace_js_dependencies(&store, workspace.id)
+        .await
+        .unwrap();
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].alias, "valibot");
+    assert_eq!(entries[0].package, "valibot");
+    assert_eq!(entries[0].artifact_path, "artifacts/valibot.backend.mjs");
+    assert_eq!(entries[0].permissions.network, "none");
 }
 
 #[tokio::test]

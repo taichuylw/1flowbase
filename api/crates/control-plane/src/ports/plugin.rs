@@ -264,6 +264,40 @@ pub trait NodeContributionRepository: Send + Sync {
         workspace_id: Uuid,
     ) -> anyhow::Result<Vec<domain::NodeContributionRegistryEntry>>;
 }
+
+#[derive(Debug, Clone)]
+pub struct JsDependencyRegistryInput {
+    pub alias: String,
+    pub package: String,
+    pub version: String,
+    pub target: String,
+    pub artifact_path: String,
+    pub integrity: String,
+    pub permissions: domain::JsDependencyPermissions,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReplaceInstallationJsDependenciesInput {
+    pub installation_id: Uuid,
+    pub provider_code: String,
+    pub plugin_id: String,
+    pub plugin_version: String,
+    pub entries: Vec<JsDependencyRegistryInput>,
+}
+
+#[async_trait]
+pub trait JsDependencyRepository: Send + Sync {
+    async fn replace_installation_js_dependencies(
+        &self,
+        input: &ReplaceInstallationJsDependenciesInput,
+    ) -> anyhow::Result<()>;
+
+    async fn list_workspace_js_dependencies(
+        &self,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::JsDependencyRegistryEntry>>;
+}
+
 #[derive(Debug, Clone)]
 pub struct CreatePluginWorkerLeaseInput {
     pub installation_id: Uuid,

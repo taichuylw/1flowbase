@@ -30,7 +30,11 @@ pub struct DeletePluginFamilyCommand {
 
 impl<R, H> PluginManagementService<R, H>
 where
-    R: AuthRepository + PluginRepository + ModelProviderRepository + NodeContributionRepository,
+    R: AuthRepository
+        + PluginRepository
+        + ModelProviderRepository
+        + NodeContributionRepository
+        + JsDependencyRepository,
     H: ProviderRuntimePort,
 {
     pub(super) async fn transition_task(

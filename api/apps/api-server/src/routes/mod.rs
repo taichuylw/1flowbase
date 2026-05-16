@@ -17,7 +17,8 @@ pub use applications_group::{
 };
 pub use identity_group::{api_keys, auth, me, session};
 pub use plugins_and_models_group::{
-    data_sources, model_definitions, model_providers, node_contributions, plugins, runtime_models,
+    data_sources, js_dependencies, model_definitions, model_providers, node_contributions, plugins,
+    runtime_models,
 };
 pub use settings_group::{
     docs, file_storages, file_tables, host_infrastructure, members, permissions, roles, system,

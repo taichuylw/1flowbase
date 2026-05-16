@@ -36,9 +36,10 @@ use crate::{
     plugin_lifecycle::{derive_availability_status, reconcile_installation_snapshot},
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
-        ModelProviderRepository, NodeContributionRegistryInput, NodeContributionRepository,
-        OfficialPluginArtifact, OfficialPluginSourceEntry, OfficialPluginSourcePort,
-        PluginRepository, ProviderRuntimePort, ReassignModelProviderInstancesInput,
+        JsDependencyRegistryInput, JsDependencyRepository, ModelProviderRepository,
+        NodeContributionRegistryInput, NodeContributionRepository, OfficialPluginArtifact,
+        OfficialPluginSourceEntry, OfficialPluginSourcePort, PluginRepository, ProviderRuntimePort,
+        ReassignModelProviderInstancesInput, ReplaceInstallationJsDependenciesInput,
         ReplaceInstallationNodeContributionsInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput,
         UpsertModelProviderCatalogCacheInput, UpsertPluginInstallationInput,
@@ -61,7 +62,11 @@ pub struct PluginManagementService<R, H> {
 
 impl<R, H> PluginManagementService<R, H>
 where
-    R: AuthRepository + PluginRepository + ModelProviderRepository + NodeContributionRepository,
+    R: AuthRepository
+        + PluginRepository
+        + ModelProviderRepository
+        + NodeContributionRepository
+        + JsDependencyRepository,
     H: ProviderRuntimePort,
 {
     pub fn new(

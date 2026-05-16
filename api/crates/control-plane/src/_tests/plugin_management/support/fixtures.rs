@@ -299,6 +299,67 @@ node_contributions:
     fs::write(root.join("bin/fixture-capability"), "echo fixture").unwrap();
 }
 
+pub(crate) fn create_js_dependency_pack_fixture(root: &Path, alias: &str, package: &str) {
+    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::create_dir_all(root.join("artifacts")).unwrap();
+    fs::write(
+        root.join("manifest.yaml"),
+        format!(
+            r#"manifest_version: 1
+plugin_id: fixture_js_dependency_pack@0.1.0
+version: 0.1.0
+vendor: 1flowbase tests
+display_name: Fixture JS Dependency Pack
+description: Fixture JS dependency pack
+icon: icon.svg
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - js_dependency_pack
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture-js-dependency-pack
+js_dependencies:
+  - alias: {alias}
+    package: {package}
+    version: 1.2.3
+    targets:
+      - backend_code
+    artifacts:
+      backend_code: artifacts/{alias}.backend.mjs
+    integrity: sha256-{alias}
+    permissions:
+      network: outbound_only
+      filesystem: deny
+      env: deny
+    native_addon: false
+    lifecycle_scripts: false
+"#
+        ),
+    )
+    .unwrap();
+    fs::write(root.join("bin/fixture-js-dependency-pack"), "echo fixture").unwrap();
+    fs::write(
+        root.join(format!("artifacts/{alias}.backend.mjs")),
+        "export default {};",
+    )
+    .unwrap();
+}
+
 pub(crate) fn create_provider_fixture_with_node_contribution(root: &Path) {
     create_provider_fixture(root);
     let manifest_path = root.join("manifest.yaml");

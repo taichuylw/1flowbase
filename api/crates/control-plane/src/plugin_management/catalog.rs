@@ -231,7 +231,11 @@ fn metadata_string(metadata: &serde_json::Value, key: &str) -> Option<String> {
 
 impl<R, H> PluginManagementService<R, H>
 where
-    R: AuthRepository + PluginRepository + ModelProviderRepository + NodeContributionRepository,
+    R: AuthRepository
+        + PluginRepository
+        + ModelProviderRepository
+        + NodeContributionRepository
+        + JsDependencyRepository,
     H: ProviderRuntimePort,
 {
     pub async fn list_catalog(

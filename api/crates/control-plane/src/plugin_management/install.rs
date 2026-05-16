@@ -132,6 +132,41 @@ fn build_node_contribution_sync_input(
     }
 }
 
+fn build_js_dependency_sync_input(
+    installation: &domain::PluginInstallationRecord,
+    manifest: &PluginManifestV1,
+) -> ReplaceInstallationJsDependenciesInput {
+    ReplaceInstallationJsDependenciesInput {
+        installation_id: installation.id,
+        provider_code: installation.provider_code.clone(),
+        plugin_id: installation.plugin_id.clone(),
+        plugin_version: installation.plugin_version.clone(),
+        entries: manifest
+            .js_dependencies
+            .iter()
+            .flat_map(|dependency| {
+                dependency.targets.iter().filter_map(|target| {
+                    dependency.artifacts.get(target).map(|artifact_path| {
+                        JsDependencyRegistryInput {
+                            alias: dependency.alias.clone(),
+                            package: dependency.package.clone(),
+                            version: dependency.version.clone(),
+                            target: target.clone(),
+                            artifact_path: artifact_path.clone(),
+                            integrity: dependency.integrity.clone(),
+                            permissions: domain::JsDependencyPermissions {
+                                network: dependency.permissions.network.clone(),
+                                filesystem: dependency.permissions.filesystem.clone(),
+                                env: dependency.permissions.env.clone(),
+                            },
+                        }
+                    })
+                })
+            })
+            .collect(),
+    }
+}
+
 fn stable_plugin_unique_identifier(plugin_id: &str) -> String {
     plugin_id
         .split_once('@')
@@ -195,7 +230,11 @@ fn map_framework_error(error: plugin_framework::error::PluginFrameworkError) -> 
 
 impl<R, H> PluginManagementService<R, H>
 where
-    R: AuthRepository + PluginRepository + ModelProviderRepository + NodeContributionRepository,
+    R: AuthRepository
+        + PluginRepository
+        + ModelProviderRepository
+        + NodeContributionRepository
+        + JsDependencyRepository,
     H: ProviderRuntimePort,
 {
     pub async fn install_plugin(
@@ -607,6 +646,12 @@ where
                         )
                         .await?;
                     self.repository
+                        .replace_installation_js_dependencies(&build_js_dependency_sync_input(
+                            &installation,
+                            &manifest,
+                        ))
+                        .await?;
+                    self.repository
                         .append_audit_log(&audit_log(
                             Some(actor.current_workspace_id),
                             Some(command.actor_user_id),
@@ -736,6 +781,12 @@ where
                         .replace_installation_node_contributions(
                             &build_node_contribution_sync_input(&installation, &manifest),
                         )
+                        .await?;
+                    self.repository
+                        .replace_installation_js_dependencies(&build_js_dependency_sync_input(
+                            &installation,
+                            &manifest,
+                        ))
                         .await?;
                     self.repository
                         .append_audit_log(&audit_log(

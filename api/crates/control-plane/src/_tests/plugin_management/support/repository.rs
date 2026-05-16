@@ -11,6 +11,7 @@ pub(crate) struct MemoryPluginManagementRepository {
     caches: Arc<RwLock<HashMap<Uuid, ModelProviderCatalogCacheRecord>>>,
     main_instances: Arc<RwLock<HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>>>,
     node_contributions: Arc<RwLock<Vec<domain::NodeContributionRegistryEntry>>>,
+    js_dependencies: Arc<RwLock<Vec<domain::JsDependencyRegistryEntry>>>,
     host_infrastructure_configs:
         Arc<RwLock<HashMap<(Uuid, String), HostInfrastructureProviderConfigRecord>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
@@ -33,6 +34,7 @@ impl MemoryPluginManagementRepository {
             caches: Arc::new(RwLock::new(HashMap::new())),
             main_instances: Arc::new(RwLock::new(HashMap::new())),
             node_contributions: Arc::new(RwLock::new(Vec::new())),
+            js_dependencies: Arc::new(RwLock::new(Vec::new())),
             host_infrastructure_configs: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
             created_task_status_override: Arc::new(RwLock::new(None)),
@@ -282,6 +284,10 @@ impl PluginRepository for MemoryPluginManagementRepository {
             .await
             .retain(|assignment| assignment.installation_id != installation_id);
         self.node_contributions
+            .write()
+            .await
+            .retain(|entry| entry.installation_id != installation_id);
+        self.js_dependencies
             .write()
             .await
             .retain(|entry| entry.installation_id != installation_id);
@@ -552,6 +558,54 @@ impl NodeContributionRepository for MemoryPluginManagementRepository {
                     (true, Some(_)) => NodeContributionDependencyStatus::Ready,
                 };
                 entry
+            })
+            .collect())
+    }
+}
+
+#[async_trait]
+impl JsDependencyRepository for MemoryPluginManagementRepository {
+    async fn replace_installation_js_dependencies(
+        &self,
+        input: &ReplaceInstallationJsDependenciesInput,
+    ) -> Result<()> {
+        let mut rows = self.js_dependencies.write().await;
+        rows.retain(|entry| entry.installation_id != input.installation_id);
+        rows.extend(
+            input
+                .entries
+                .iter()
+                .map(|entry| domain::JsDependencyRegistryEntry {
+                    installation_id: input.installation_id,
+                    provider_code: input.provider_code.clone(),
+                    plugin_id: input.plugin_id.clone(),
+                    plugin_version: input.plugin_version.clone(),
+                    alias: entry.alias.clone(),
+                    package: entry.package.clone(),
+                    version: entry.version.clone(),
+                    target: entry.target.clone(),
+                    artifact_path: entry.artifact_path.clone(),
+                    integrity: entry.integrity.clone(),
+                    permissions: entry.permissions.clone(),
+                }),
+        );
+        Ok(())
+    }
+
+    async fn list_workspace_js_dependencies(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::JsDependencyRegistryEntry>> {
+        let rows = self.js_dependencies.read().await.clone();
+        let assignments = self.assignments.read().await.clone();
+
+        Ok(rows
+            .into_iter()
+            .filter(|entry| {
+                assignments.iter().any(|assignment| {
+                    assignment.workspace_id == workspace_id
+                        && assignment.installation_id == entry.installation_id
+                })
             })
             .collect())
     }

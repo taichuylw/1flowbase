@@ -8,6 +8,7 @@ pub mod data_source;
 pub mod file_management;
 pub mod flow;
 pub mod host_extension;
+pub mod js_dependency;
 pub mod model_provider;
 pub mod modeling;
 pub mod node_contribution;
@@ -46,6 +47,7 @@ pub use host_extension::{
     HostExtensionActivationStatus, HostExtensionInventoryRecord, HostExtensionTrustLevel,
     HostInfrastructureConfigStatus, HostInfrastructureProviderConfigRecord,
 };
+pub use js_dependency::{JsDependencyPermissions, JsDependencyRegistryEntry};
 pub use model_provider::{
     ModelCatalogSyncRunRecord, ModelFailoverQueueItemRecord, ModelFailoverQueueSnapshotRecord,
     ModelFailoverQueueTemplateRecord, ModelProviderCatalogCacheRecord,

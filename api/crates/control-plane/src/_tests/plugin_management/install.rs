@@ -2,10 +2,11 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use crate::{
     plugin_management::{
-        InstallOfficialPluginCommand, InstallPluginCommand, InstallUploadedPluginCommand,
-        PluginCatalogFilter, PluginManagementService,
+        AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
+        InstallPluginCommand, InstallUploadedPluginCommand, PluginCatalogFilter,
+        PluginManagementService,
     },
-    ports::NodeContributionRepository,
+    ports::{JsDependencyRepository, NodeContributionRepository},
 };
 use domain::{NodeContributionDependencyStatus, PluginTaskStatus};
 use sha2::{Digest, Sha256};
@@ -13,7 +14,8 @@ use uuid::Uuid;
 
 use super::support::{
     actor_with_permissions, build_openai_compatible_package_bytes,
-    build_signed_openai_upload_package, create_capability_plugin_fixture, create_provider_fixture,
+    build_signed_openai_upload_package, create_capability_plugin_fixture,
+    create_js_dependency_pack_fixture, create_provider_fixture,
     create_provider_fixture_with_node_contribution, requested_locales, MemoryOfficialPluginSource,
     MemoryPluginManagementRepository, MemoryProviderRuntime,
 };
@@ -299,6 +301,141 @@ async fn plugin_management_service_installs_capability_plugin_node_contributions
         entries[0].dependency_status,
         NodeContributionDependencyStatus::MissingPlugin
     );
+}
+
+#[tokio::test]
+async fn plugin_management_service_syncs_js_dependency_pack_and_catalog_requires_assignment() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let nonce = Uuid::now_v7().to_string();
+    let package_root = std::env::temp_dir().join(format!("js-dependency-pack-source-{nonce}"));
+    let install_root = std::env::temp_dir().join(format!("js-dependency-pack-installed-{nonce}"));
+    create_js_dependency_pack_fixture(&package_root, "zod", "zod");
+
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+
+    let installation = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .unwrap()
+        .installation;
+
+    let hidden_entries =
+        JsDependencyRepository::list_workspace_js_dependencies(&repository, workspace_id)
+            .await
+            .unwrap();
+    assert!(hidden_entries.is_empty());
+
+    service
+        .enable_plugin(EnablePluginCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: installation.id,
+        })
+        .await
+        .unwrap();
+    service
+        .assign_plugin(AssignPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: installation.id,
+        })
+        .await
+        .unwrap();
+
+    let entries = JsDependencyRepository::list_workspace_js_dependencies(&repository, workspace_id)
+        .await
+        .unwrap();
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].installation_id, installation.id);
+    assert_eq!(entries[0].provider_code, "fixture_js_dependency_pack");
+    assert_eq!(entries[0].alias, "zod");
+    assert_eq!(entries[0].package, "zod");
+    assert_eq!(entries[0].version, "1.2.3");
+    assert_eq!(entries[0].target, "backend_code");
+    assert_eq!(entries[0].artifact_path, "artifacts/zod.backend.mjs");
+    assert_eq!(entries[0].integrity, "sha256-zod");
+    assert_eq!(entries[0].permissions.network, "outbound_only");
+    assert_eq!(entries[0].permissions.filesystem, "deny");
+    assert_eq!(entries[0].permissions.env, "deny");
+}
+
+#[tokio::test]
+async fn plugin_management_service_replaces_js_dependency_registry_on_reinstall() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let nonce = Uuid::now_v7().to_string();
+    let package_root =
+        std::env::temp_dir().join(format!("js-dependency-pack-replace-source-{nonce}"));
+    let install_root =
+        std::env::temp_dir().join(format!("js-dependency-pack-replace-installed-{nonce}"));
+    create_js_dependency_pack_fixture(&package_root, "zod", "zod");
+
+    let service = PluginManagementService::new(
+        repository.clone(),
+        runtime,
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+
+    let installation = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .unwrap()
+        .installation;
+    service
+        .enable_plugin(EnablePluginCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: installation.id,
+        })
+        .await
+        .unwrap();
+    service
+        .assign_plugin(AssignPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: installation.id,
+        })
+        .await
+        .unwrap();
+
+    fs::remove_dir_all(&package_root).unwrap();
+    create_js_dependency_pack_fixture(&package_root, "valibot", "valibot");
+
+    let replaced_installation = service
+        .install_plugin(InstallPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            package_root: package_root.display().to_string(),
+        })
+        .await
+        .unwrap()
+        .installation;
+    let entries = JsDependencyRepository::list_workspace_js_dependencies(&repository, workspace_id)
+        .await
+        .unwrap();
+
+    assert_eq!(replaced_installation.id, installation.id);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].alias, "valibot");
+    assert_eq!(entries[0].package, "valibot");
+    assert_eq!(entries[0].artifact_path, "artifacts/valibot.backend.mjs");
 }
 
 #[tokio::test]

@@ -210,6 +210,141 @@ async fn seed_node_contribution_registry(database_url: &str) -> (Uuid, Uuid) {
     (workspace_id, actor_id)
 }
 
+async fn seed_js_dependency_registry(database_url: &str, assigned: bool) {
+    let pool = PgPool::connect(database_url).await.unwrap();
+    let workspace_id: Uuid =
+        sqlx::query_scalar("select id from workspaces order by created_at asc limit 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let actor_id: Uuid = sqlx::query_scalar("select id from users where account = 'root' limit 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let installation_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        insert into plugin_installations (
+            id,
+            provider_code,
+            plugin_id,
+            plugin_version,
+            contract_version,
+            protocol,
+            display_name,
+            source_kind,
+            trust_level,
+            verification_status,
+            desired_state,
+            artifact_status,
+            runtime_status,
+            availability_status,
+            package_path,
+            installed_path,
+            checksum,
+            manifest_fingerprint,
+            signature_status,
+            signature_algorithm,
+            signing_key_id,
+            last_load_error,
+            metadata_json,
+            created_by
+        ) values (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+            $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        )
+        "#,
+    )
+    .bind(installation_id)
+    .bind("fixture_js_dependency_pack")
+    .bind("fixture_js_dependency_pack@0.1.0")
+    .bind("0.1.0")
+    .bind("1flowbase.capability/v1")
+    .bind("stdio_json")
+    .bind("Fixture JS Dependency Pack")
+    .bind("uploaded")
+    .bind("checksum_only")
+    .bind("valid")
+    .bind("active_requested")
+    .bind("ready")
+    .bind("inactive")
+    .bind("available")
+    .bind::<Option<String>>(None)
+    .bind("/tmp/plugins/fixture_js_dependency_pack/0.1.0")
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
+    .bind(Some("unsigned"))
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
+    .bind(json!({}))
+    .bind(actor_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    if assigned {
+        sqlx::query(
+            r#"
+            insert into plugin_assignments (
+                id,
+                installation_id,
+                workspace_id,
+                provider_code,
+                assigned_by
+            ) values ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(installation_id)
+        .bind(workspace_id)
+        .bind("fixture_js_dependency_pack")
+        .bind(actor_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    sqlx::query(
+        r#"
+        insert into js_dependency_registry (
+            id,
+            installation_id,
+            provider_code,
+            plugin_id,
+            plugin_version,
+            alias,
+            package,
+            version,
+            target,
+            artifact_path,
+            integrity,
+            permission_network,
+            permission_filesystem,
+            permission_env
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(installation_id)
+    .bind("fixture_js_dependency_pack")
+    .bind("fixture_js_dependency_pack@0.1.0")
+    .bind("0.1.0")
+    .bind("zod")
+    .bind("zod")
+    .bind("3.24.0")
+    .bind("backend_code")
+    .bind("artifacts/zod.backend.mjs")
+    .bind("sha256-zod")
+    .bind("outbound_only")
+    .bind("deny")
+    .bind("deny")
+    .execute(&pool)
+    .await
+    .unwrap();
+}
+
 #[tokio::test]
 async fn node_contribution_routes_list_registry_entries_for_application_workspace() {
     let (app, database_url) = test_app_with_database_url().await;
@@ -266,4 +401,71 @@ async fn node_contribution_routes_list_registry_entries_for_application_workspac
     );
     assert_eq!(entry["side_effect_policy"].as_str(), Some("external_read"));
     assert_eq!(entry["experimental"].as_bool(), Some(false));
+}
+
+#[tokio::test]
+async fn js_dependency_route_lists_only_assigned_workspace_catalog() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, _) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    seed_js_dependency_registry(&database_url, false).await;
+    let hidden_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/js-dependencies")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(hidden_response.status(), StatusCode::OK);
+    let hidden_body = to_bytes(hidden_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let hidden_payload: Value = serde_json::from_slice(&hidden_body).unwrap();
+    assert!(hidden_payload["data"].as_array().unwrap().is_empty());
+
+    seed_js_dependency_registry(&database_url, true).await;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/js-dependencies")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let entry = payload["data"][0].clone();
+
+    assert_eq!(payload["data"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        entry["provider_code"].as_str(),
+        Some("fixture_js_dependency_pack")
+    );
+    assert_eq!(entry["alias"].as_str(), Some("zod"));
+    assert_eq!(entry["package"].as_str(), Some("zod"));
+    assert_eq!(entry["version"].as_str(), Some("3.24.0"));
+    assert_eq!(entry["target"].as_str(), Some("backend_code"));
+    assert_eq!(
+        entry["artifact_path"].as_str(),
+        Some("artifacts/zod.backend.mjs")
+    );
+    assert_eq!(entry["integrity"].as_str(), Some("sha256-zod"));
+    assert_eq!(
+        entry["permissions"]["network"].as_str(),
+        Some("outbound_only")
+    );
+    assert_eq!(entry["permissions"]["filesystem"].as_str(), Some("deny"));
+    assert_eq!(entry["permissions"]["env"].as_str(), Some("deny"));
 }
