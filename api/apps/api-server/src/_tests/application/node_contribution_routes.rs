@@ -210,7 +210,7 @@ async fn seed_node_contribution_registry(database_url: &str) -> (Uuid, Uuid) {
     (workspace_id, actor_id)
 }
 
-async fn seed_js_dependency_registry(database_url: &str, assigned: bool) {
+async fn seed_js_dependency_registry(database_url: &str) -> (Uuid, Uuid, Uuid) {
     let pool = PgPool::connect(database_url).await.unwrap();
     let workspace_id: Uuid =
         sqlx::query_scalar("select id from workspaces order by created_at asc limit 1")
@@ -284,28 +284,6 @@ async fn seed_js_dependency_registry(database_url: &str, assigned: bool) {
     .await
     .unwrap();
 
-    if assigned {
-        sqlx::query(
-            r#"
-            insert into plugin_assignments (
-                id,
-                installation_id,
-                workspace_id,
-                provider_code,
-                assigned_by
-            ) values ($1, $2, $3, $4, $5)
-            "#,
-        )
-        .bind(Uuid::now_v7())
-        .bind(installation_id)
-        .bind(workspace_id)
-        .bind("fixture_js_dependency_pack")
-        .bind(actor_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
-
     sqlx::query(
         r#"
         insert into js_dependency_registry (
@@ -340,6 +318,36 @@ async fn seed_js_dependency_registry(database_url: &str, assigned: bool) {
     .bind("outbound_only")
     .bind("deny")
     .bind("deny")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    (installation_id, workspace_id, actor_id)
+}
+
+async fn assign_js_dependency_pack(
+    database_url: &str,
+    installation_id: Uuid,
+    workspace_id: Uuid,
+    actor_id: Uuid,
+) {
+    let pool = PgPool::connect(database_url).await.unwrap();
+    sqlx::query(
+        r#"
+        insert into plugin_assignments (
+            id,
+            installation_id,
+            workspace_id,
+            provider_code,
+            assigned_by
+        ) values ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(installation_id)
+    .bind(workspace_id)
+    .bind("fixture_js_dependency_pack")
+    .bind(actor_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -408,7 +416,8 @@ async fn js_dependency_route_lists_only_assigned_workspace_catalog() {
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, _) = login_and_capture_cookie(&app, "root", "change-me").await;
 
-    seed_js_dependency_registry(&database_url, false).await;
+    let (installation_id, workspace_id, actor_id) =
+        seed_js_dependency_registry(&database_url).await;
     let hidden_response = app
         .clone()
         .oneshot(
@@ -428,7 +437,7 @@ async fn js_dependency_route_lists_only_assigned_workspace_catalog() {
     let hidden_payload: Value = serde_json::from_slice(&hidden_body).unwrap();
     assert!(hidden_payload["data"].as_array().unwrap().is_empty());
 
-    seed_js_dependency_registry(&database_url, true).await;
+    assign_js_dependency_pack(&database_url, installation_id, workspace_id, actor_id).await;
     let response = app
         .clone()
         .oneshot(
