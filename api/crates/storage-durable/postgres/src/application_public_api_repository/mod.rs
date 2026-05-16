@@ -114,9 +114,10 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 mapping_snapshot,
                 runtime_profile_snapshot,
                 output_selector,
+                dependency_snapshot,
                 created_by
             ) values (
-                $1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $14
+                $1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $14, $15
             )
             returning
                 id,
@@ -133,6 +134,7 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 mapping_snapshot,
                 runtime_profile_snapshot,
                 output_selector,
+                dependency_snapshot,
                 created_by,
                 created_at
             "#,
@@ -150,6 +152,7 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
         .bind(serde_json::to_value(&input.mapping_snapshot)?)
         .bind(&input.runtime_profile_snapshot)
         .bind(&input.output_selector)
+        .bind(serde_json::to_value(&input.dependency_snapshot)?)
         .bind(input.actor_user_id)
         .fetch_one(&mut *tx)
         .await?;
@@ -249,6 +252,7 @@ fn publication_select_sql(predicate: &str) -> String {
             mapping_snapshot,
             runtime_profile_snapshot,
             output_selector,
+            dependency_snapshot,
             created_by,
             created_at
         from application_publication_versions
@@ -273,6 +277,7 @@ fn map_publication_row(row: sqlx::postgres::PgRow) -> Result<ApplicationPublicat
         mapping_snapshot: serde_json::from_value(row.get("mapping_snapshot"))?,
         runtime_profile_snapshot: row.get("runtime_profile_snapshot"),
         output_selector: row.get("output_selector"),
+        dependency_snapshot: serde_json::from_value(row.get("dependency_snapshot"))?,
         created_by: row.get("created_by"),
         created_at: row.get("created_at"),
     })

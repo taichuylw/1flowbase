@@ -128,6 +128,29 @@ pub struct ApplicationApiStatusResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationPublicationJsDependencyPermissionsResponse {
+    pub network: String,
+    pub filesystem: String,
+    pub env: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationPublicationJsDependencySnapshotResponse {
+    pub installation_id: Uuid,
+    pub provider_code: String,
+    pub plugin_id: String,
+    pub plugin_version: String,
+    pub alias: String,
+    pub package: String,
+    pub version: String,
+    pub target: String,
+    pub artifact_path: String,
+    pub artifact_hash: String,
+    pub integrity: String,
+    pub permissions: ApplicationPublicationJsDependencyPermissionsResponse,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApplicationPublicationResponse {
     pub id: Uuid,
     pub application_id: Uuid,
@@ -138,6 +161,7 @@ pub struct ApplicationPublicationResponse {
     pub active: bool,
     pub api_enabled: bool,
     pub mapping_snapshot: ApplicationApiMappingBody,
+    pub dependency_snapshot: Vec<ApplicationPublicationJsDependencySnapshotResponse>,
     pub public_url: String,
     pub created_by: Uuid,
     pub created_at: String,
@@ -285,6 +309,30 @@ fn to_publication_response(
         active: publication.active,
         api_enabled: publication.api_enabled,
         mapping_snapshot: to_mapping_body(publication.mapping_snapshot),
+        dependency_snapshot: publication
+            .dependency_snapshot
+            .into_iter()
+            .map(
+                |dependency| ApplicationPublicationJsDependencySnapshotResponse {
+                    installation_id: dependency.installation_id,
+                    provider_code: dependency.provider_code,
+                    plugin_id: dependency.plugin_id,
+                    plugin_version: dependency.plugin_version,
+                    alias: dependency.alias,
+                    package: dependency.package,
+                    version: dependency.version,
+                    target: dependency.target,
+                    artifact_path: dependency.artifact_path,
+                    artifact_hash: dependency.artifact_hash,
+                    integrity: dependency.integrity,
+                    permissions: ApplicationPublicationJsDependencyPermissionsResponse {
+                        network: dependency.permissions.network,
+                        filesystem: dependency.permissions.filesystem,
+                        env: dependency.permissions.env,
+                    },
+                },
+            )
+            .collect(),
         public_url: PUBLIC_RUNS_PATH.to_string(),
         created_by: publication.created_by,
         created_at: format_time(publication.created_at),

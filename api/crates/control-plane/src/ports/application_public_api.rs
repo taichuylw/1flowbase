@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::application_public_api::mapping::ApplicationApiMappingConfig;
+use crate::application_public_api::publications::ApplicationPublicationJsDependencySnapshot;
 
 #[derive(Debug, Clone)]
 pub struct ReplaceApplicationApiMappingInput {
@@ -23,6 +24,7 @@ pub struct CreateApplicationPublicationVersionInput {
     pub document_snapshot: serde_json::Value,
     pub runtime_profile_snapshot: serde_json::Value,
     pub output_selector: serde_json::Value,
+    pub dependency_snapshot: Vec<ApplicationPublicationJsDependencySnapshot>,
 }
 
 #[derive(Debug, Clone)]

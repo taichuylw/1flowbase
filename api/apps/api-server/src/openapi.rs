@@ -174,6 +174,8 @@ use utoipa::OpenApi;
         crate::routes::application_api::ApplicationApiMappingInputBody,
         crate::routes::application_api::ApplicationApiMappingOutputBody,
         crate::routes::application_api::ApplicationApiStatusResponse,
+        crate::routes::application_api::ApplicationPublicationJsDependencyPermissionsResponse,
+        crate::routes::application_api::ApplicationPublicationJsDependencySnapshotResponse,
         crate::routes::application_api::ApplicationPublicationResponse,
         crate::routes::application_api::CreateApplicationApiKeyBody,
         crate::routes::application_api::CreatedApplicationApiKeyResponse,

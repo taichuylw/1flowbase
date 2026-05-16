@@ -1,6 +1,9 @@
 use control_plane::{
-    application_public_api::mapping::{
-        ApplicationApiMappingConfig, ApplicationApiMappingInput, ApplicationApiMappingOutput,
+    application_public_api::{
+        mapping::{
+            ApplicationApiMappingConfig, ApplicationApiMappingInput, ApplicationApiMappingOutput,
+        },
+        publications::ApplicationPublicationJsDependencySnapshot,
     },
     ports::{
         ApplicationApiMappingRepository, ApplicationPublicationRepository,
@@ -357,6 +360,7 @@ async fn application_public_api_repository_publication_insert_uses_real_foreign_
                 document_snapshot: document.clone(),
                 runtime_profile_snapshot: serde_json::json!({"profile": "test"}),
                 output_selector: serde_json::json!({"answer_selector": "answer.text"}),
+                dependency_snapshot: Vec::new(),
             },
         )
         .await
@@ -381,6 +385,76 @@ async fn application_public_api_repository_publication_insert_uses_real_foreign_
     assert_eq!(publication.document_snapshot, document);
     assert_eq!(active.id, publication.id);
     assert!(stored_api_enabled);
+}
+
+#[tokio::test]
+async fn application_public_api_js_dependency_snapshot_persists_on_publication_version() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool.clone());
+    let workspace_id = seed_workspace(&store, "Application Publication Dependency").await;
+    let actor_user_id = seed_user(&store, workspace_id, "publication-dependency-owner").await;
+    let application_id = seed_application(&store, workspace_id, actor_user_id, "Public App").await;
+    let (flow_id, flow_version_id, compiled_plan_id, document) =
+        seed_flow_version_and_compiled_plan(&store, application_id, actor_user_id).await;
+    let dependency_snapshot = vec![ApplicationPublicationJsDependencySnapshot {
+        installation_id: Uuid::from_u128(0x90000000000000000000000000000001),
+        provider_code: "fixture_js_dependency_pack".into(),
+        plugin_id: "fixture_js_dependency_pack@3.24.0".into(),
+        plugin_version: "3.24.0".into(),
+        alias: "zod".into(),
+        package: "zod".into(),
+        version: "3.24.0".into(),
+        target: "backend_code".into(),
+        artifact_path: "artifacts/zod-3.24.0.backend.mjs".into(),
+        artifact_hash: "sha256-zod-3.24.0".into(),
+        integrity: "sha256-zod-3.24.0".into(),
+        permissions: domain::JsDependencyPermissions {
+            network: "outbound_only".into(),
+            filesystem: "deny".into(),
+            env: "deny".into(),
+        },
+    }];
+
+    let publication =
+        ApplicationPublicationRepository::create_active_application_publication_version(
+            &store,
+            &CreateApplicationPublicationVersionInput {
+                actor_user_id,
+                application_id,
+                mapping_snapshot: ApplicationApiMappingConfig::default_native(),
+                api_enabled: true,
+                compiled_plan_id,
+                flow_id,
+                flow_version_id,
+                flow_schema_version: domain::FLOW_SCHEMA_VERSION.to_string(),
+                document_hash: "sha256:test".into(),
+                document_snapshot: document,
+                runtime_profile_snapshot: serde_json::json!({}),
+                output_selector: serde_json::json!({}),
+                dependency_snapshot: dependency_snapshot.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    let reloaded = ApplicationPublicationRepository::get_application_publication_version(
+        &store,
+        publication.id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(publication.dependency_snapshot, dependency_snapshot);
+    assert_eq!(reloaded.dependency_snapshot[0].alias, "zod");
+    assert_eq!(
+        reloaded.dependency_snapshot[0].artifact_hash,
+        "sha256-zod-3.24.0"
+    );
+    assert_eq!(
+        reloaded.dependency_snapshot[0].permissions.network,
+        "outbound_only"
+    );
 }
 
 #[tokio::test]
@@ -453,6 +527,7 @@ async fn application_public_api_repository_migration_creates_publication_core_ta
         "mapping_snapshot",
         "runtime_profile_snapshot",
         "output_selector",
+        "dependency_snapshot",
     ] {
         assert!(
             publication_columns.contains(&expected_column.to_string()),

@@ -16,6 +16,9 @@ use control_plane::{
         ApplicationPublicApiTestHarness,
     },
     auth::{ApiKeyService, CreateApiKeyCommand},
+    ports::{
+        ApplicationJsDependencySelectionRepository, ReplaceApplicationJsDependencySelectionInput,
+    },
 };
 use std::sync::Arc;
 use time::Duration;
@@ -500,6 +503,111 @@ async fn application_public_api_publish_creates_immutable_publication_version_re
     assert_eq!(reloaded_first.mapping_snapshot, first.mapping_snapshot);
     assert_eq!(reloaded_first.compiled_plan_id, first.compiled_plan_id);
     assert!(!reloaded_first.active);
+}
+
+#[tokio::test]
+async fn application_public_api_js_dependency_snapshot_is_frozen_per_publication_version() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Support Bot");
+    let repository = harness.repository();
+    let service = ApplicationPublicationService::new(repository.clone());
+
+    ApplicationJsDependencySelectionRepository::replace_application_js_dependency_selection(
+        &repository,
+        &ReplaceApplicationJsDependencySelectionInput {
+            actor_user_id: actor_user_id(),
+            workspace_id: application.workspace_id,
+            application_id: application.id,
+            installation_id: Uuid::from_u128(0x90000000000000000000000000000001),
+            provider_code: "fixture_js_dependency_pack_3".into(),
+            plugin_id: "fixture_js_dependency_pack@3.24.0".into(),
+            plugin_version: "3.24.0".into(),
+            alias: "zod".into(),
+            package: "zod".into(),
+            version: "3.24.0".into(),
+            target: "backend_code".into(),
+            artifact_path: "artifacts/zod-3.24.0.backend.mjs".into(),
+            artifact_hash: "sha256-zod-3.24.0".into(),
+            integrity: "sha256-zod-3.24.0".into(),
+            permissions: domain::JsDependencyPermissions {
+                network: "outbound_only".into(),
+                filesystem: "deny".into(),
+                env: "deny".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let first = service
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: ApplicationApiMappingConfig::default_native(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+
+    ApplicationJsDependencySelectionRepository::replace_application_js_dependency_selection(
+        &repository,
+        &ReplaceApplicationJsDependencySelectionInput {
+            actor_user_id: actor_user_id(),
+            workspace_id: application.workspace_id,
+            application_id: application.id,
+            installation_id: Uuid::from_u128(0x90000000000000000000000000000002),
+            provider_code: "fixture_js_dependency_pack_4".into(),
+            plugin_id: "fixture_js_dependency_pack@4.0.0".into(),
+            plugin_version: "4.0.0".into(),
+            alias: "zod".into(),
+            package: "zod".into(),
+            version: "4.0.0".into(),
+            target: "backend_code".into(),
+            artifact_path: "artifacts/zod-4.0.0.backend.mjs".into(),
+            artifact_hash: "sha256-zod-4.0.0".into(),
+            integrity: "sha256-zod-4.0.0".into(),
+            permissions: domain::JsDependencyPermissions {
+                network: "outbound_only".into(),
+                filesystem: "deny".into(),
+                env: "deny".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let second = service
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: ApplicationApiMappingConfig::default_native(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let reloaded_first = service
+        .get_publication_version(first.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(reloaded_first.dependency_snapshot.len(), 1);
+    assert_eq!(reloaded_first.dependency_snapshot[0].alias, "zod");
+    assert_eq!(reloaded_first.dependency_snapshot[0].package, "zod");
+    assert_eq!(reloaded_first.dependency_snapshot[0].version, "3.24.0");
+    assert_eq!(
+        reloaded_first.dependency_snapshot[0].artifact_hash,
+        "sha256-zod-3.24.0"
+    );
+    assert_eq!(
+        reloaded_first.dependency_snapshot[0].permissions.network,
+        "outbound_only"
+    );
+    assert_eq!(second.dependency_snapshot[0].version, "4.0.0");
+    assert_eq!(
+        second.dependency_snapshot[0].artifact_hash,
+        "sha256-zod-4.0.0"
+    );
 }
 
 #[tokio::test]

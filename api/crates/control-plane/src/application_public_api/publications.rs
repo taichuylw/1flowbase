@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use orchestration_runtime::compiler::FlowCompiler;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -16,8 +17,9 @@ use crate::{
     },
     ports::{
         ApplicationCompileContextRepository, ApplicationCompiledPlanRepository,
-        ApplicationPublicationRepository, ApplicationRepository,
-        CreateApplicationPublicationVersionInput, FlowRepository, SetApplicationApiEnabledInput,
+        ApplicationJsDependencySelectionRepository, ApplicationPublicationRepository,
+        ApplicationRepository, CreateApplicationPublicationVersionInput, FlowRepository,
+        SetApplicationApiEnabledInput,
     },
 };
 
@@ -41,6 +43,41 @@ pub struct SetApplicationApiEnabledCommand {
     pub api_enabled: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationPublicationJsDependencySnapshot {
+    pub installation_id: Uuid,
+    pub provider_code: String,
+    pub plugin_id: String,
+    pub plugin_version: String,
+    pub alias: String,
+    pub package: String,
+    pub version: String,
+    pub target: String,
+    pub artifact_path: String,
+    pub artifact_hash: String,
+    pub integrity: String,
+    pub permissions: domain::JsDependencyPermissions,
+}
+
+impl From<domain::ApplicationJsDependencySelection> for ApplicationPublicationJsDependencySnapshot {
+    fn from(selection: domain::ApplicationJsDependencySelection) -> Self {
+        Self {
+            installation_id: selection.installation_id,
+            provider_code: selection.provider_code,
+            plugin_id: selection.plugin_id,
+            plugin_version: selection.plugin_version,
+            alias: selection.alias,
+            package: selection.package,
+            version: selection.version,
+            target: selection.target,
+            artifact_path: selection.artifact_path,
+            artifact_hash: selection.artifact_hash,
+            integrity: selection.integrity,
+            permissions: selection.permissions,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplicationPublicationVersionRecord {
     pub id: Uuid,
@@ -57,6 +94,7 @@ pub struct ApplicationPublicationVersionRecord {
     pub document_snapshot: serde_json::Value,
     pub runtime_profile_snapshot: serde_json::Value,
     pub output_selector: serde_json::Value,
+    pub dependency_snapshot: Vec<ApplicationPublicationJsDependencySnapshot>,
     pub created_by: Uuid,
     pub created_at: OffsetDateTime,
 }
@@ -81,6 +119,7 @@ where
         R: ApplicationPublicationRepository
             + ApplicationCompiledPlanRepository
             + ApplicationCompileContextRepository
+            + ApplicationJsDependencySelectionRepository
             + FlowRepository
             + Clone,
     {
@@ -96,6 +135,13 @@ where
             .await?
             .ok_or(ControlPlaneError::NotFound("application"))?;
         ensure_application_edit_permission(&actor, &application)?;
+        let dependency_snapshot = self
+            .repository
+            .list_application_js_dependency_selections(application.workspace_id, application.id)
+            .await?
+            .into_iter()
+            .map(ApplicationPublicationJsDependencySnapshot::from)
+            .collect::<Vec<_>>();
 
         let flow_service = FlowService::new(self.repository.clone());
         let editor_state = flow_service
@@ -163,6 +209,7 @@ where
                     document_snapshot: document,
                     runtime_profile_snapshot: json!({}),
                     output_selector,
+                    dependency_snapshot,
                 },
             )
             .await

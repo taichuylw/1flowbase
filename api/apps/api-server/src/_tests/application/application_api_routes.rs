@@ -1,6 +1,6 @@
 use crate::_tests::support::{
     create_member, create_role, login_and_capture_cookie, replace_member_roles,
-    replace_role_permissions, test_app,
+    replace_role_permissions, test_app, test_app_with_database_url,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -8,6 +8,7 @@ use axum::{
     Router,
 };
 use serde_json::{json, Value};
+use sqlx::PgPool;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -61,6 +62,85 @@ async fn create_member_with_permissions(
     replace_role_permissions(app, root_cookie, root_csrf, &role_code, permissions).await;
     replace_member_roles(app, root_cookie, root_csrf, &member_id, &[&role_code]).await;
     login_and_capture_cookie(app, &account, "temp-pass").await
+}
+
+async fn seed_js_dependency_pack(database_url: &str, version: &str) -> Uuid {
+    let pool = PgPool::connect(database_url).await.unwrap();
+    let workspace_id: Uuid =
+        sqlx::query_scalar("select id from workspaces order by created_at asc limit 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let actor_id: Uuid = sqlx::query_scalar("select id from users where account = 'root' limit 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let installation_id = Uuid::now_v7();
+
+    sqlx::query(
+        r#"
+        insert into plugin_installations (
+            id, provider_code, plugin_id, plugin_version, contract_version, protocol,
+            display_name, source_kind, trust_level, verification_status, desired_state,
+            artifact_status, runtime_status, availability_status, package_path, installed_path,
+            checksum, manifest_fingerprint, signature_status, signature_algorithm, signing_key_id,
+            last_load_error, metadata_json, created_by
+        ) values (
+            $1, $2, $3, $4, '1flowbase.capability/v1', 'stdio_json',
+            'Fixture JS Dependency Pack', 'uploaded', 'checksum_only', 'valid', 'active_requested',
+            'ready', 'inactive', 'available', null, $5, null, null, 'unsigned', null, null,
+            null, $6, $7
+        )
+        "#,
+    )
+    .bind(installation_id)
+    .bind(format!("fixture_js_dependency_pack_{version}"))
+    .bind(format!("fixture_js_dependency_pack@{version}"))
+    .bind(version)
+    .bind(format!("/tmp/plugins/fixture_js_dependency_pack/{version}"))
+    .bind(json!({}))
+    .bind(actor_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        insert into js_dependency_registry (
+            id, installation_id, provider_code, plugin_id, plugin_version, alias, package,
+            version, target, artifact_path, integrity, permission_network,
+            permission_filesystem, permission_env
+        ) values ($1, $2, $3, $4, $5, 'zod', 'zod', $6, 'backend_code', $7, $8,
+            'outbound_only', 'deny', 'deny')
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(installation_id)
+    .bind(format!("fixture_js_dependency_pack_{version}"))
+    .bind(format!("fixture_js_dependency_pack@{version}"))
+    .bind(version)
+    .bind(version)
+    .bind(format!("artifacts/zod-{version}.backend.mjs"))
+    .bind(format!("sha256-zod-{version}"))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        insert into plugin_assignments (
+            id, installation_id, workspace_id, provider_code, assigned_by
+        ) values ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(installation_id)
+    .bind(workspace_id)
+    .bind(format!("fixture_js_dependency_pack_{version}"))
+    .bind(actor_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    installation_id
 }
 
 #[tokio::test]
@@ -498,4 +578,97 @@ async fn application_api_publication_routes_publish_and_patch_api_enabled_state(
         detail_payload["data"]["sections"]["api"]["api_capability_status"].as_str(),
         Some("disabled")
     );
+}
+
+#[tokio::test]
+async fn application_public_api_js_dependency_snapshot_is_returned_on_publish_response() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let application_id =
+        create_application(&app, &cookie, &csrf, "Publication Dependency App").await;
+    let zod_v3 = seed_js_dependency_pack(&database_url, "3.24.0").await;
+    let zod_v4 = seed_js_dependency_pack(&database_url, "4.0.0").await;
+    let mapping = json!({
+        "input": {
+            "query_target": "node-start.query",
+            "model_target": null,
+            "inputs_target": null,
+            "history_target": null,
+            "attachments_target": null
+        },
+        "output": {
+            "answer_selector": null,
+            "usage_selector": null,
+            "files_selector": null,
+            "error_selector": null
+        }
+    });
+
+    for installation_id in [zod_v3, zod_v4] {
+        let replace_selection = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!(
+                        "/api/console/applications/{application_id}/js-dependencies"
+                    ))
+                    .header("cookie", &cookie)
+                    .header("x-csrf-token", &csrf)
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "installation_id": installation_id.to_string(),
+                            "alias": "zod",
+                            "target": "backend_code"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(replace_selection.status(), StatusCode::OK);
+
+        let publish = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/api/console/applications/{application_id}/api-publications"
+                    ))
+                    .header("cookie", &cookie)
+                    .header("x-csrf-token", &csrf)
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "mapping": mapping,
+                            "api_enabled": true
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(publish.status(), StatusCode::CREATED);
+        let payload = response_json(publish).await;
+        let snapshot = payload["data"]["dependency_snapshot"].as_array().unwrap();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0]["alias"].as_str(), Some("zod"));
+        assert_eq!(snapshot[0]["package"].as_str(), Some("zod"));
+        assert_eq!(
+            snapshot[0]["version"].as_str(),
+            Some(if installation_id == zod_v3 {
+                "3.24.0"
+            } else {
+                "4.0.0"
+            })
+        );
+        assert_eq!(
+            snapshot[0]["permissions"]["network"].as_str(),
+            Some("outbound_only")
+        );
+    }
 }

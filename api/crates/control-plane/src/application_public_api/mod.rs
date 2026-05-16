@@ -57,13 +57,13 @@ use uuid::Uuid;
 use crate::ports::{
     ApiKeyRepository, AppendRunEventInput, ApplicationApiMappingRepository,
     ApplicationCompileContextRepository, ApplicationCompiledPlanRepository,
-    ApplicationPublicationRepository, ApplicationRepository, ApplicationVisibility, AuthRepository,
-    CacheStore, CreateApiKeyInput, CreateApplicationInput,
-    CreateApplicationPublicationVersionInput, CreateApplicationTagInput, CreateFlowRunInput,
-    DeleteApplicationInput, FlowRepository, ReplaceApplicationApiMappingInput,
-    ReplaceApplicationEnvironmentVariablesInput, SetApplicationApiEnabledInput,
-    UpdateApplicationInput, UpdateProfileInput, UpsertApiKeyDataModelPermissionInput,
-    UpsertCompiledPlanInput,
+    ApplicationJsDependencySelectionRepository, ApplicationPublicationRepository,
+    ApplicationRepository, ApplicationVisibility, AuthRepository, CacheStore, CreateApiKeyInput,
+    CreateApplicationInput, CreateApplicationPublicationVersionInput, CreateApplicationTagInput,
+    CreateFlowRunInput, DeleteApplicationInput, FlowRepository, ReplaceApplicationApiMappingInput,
+    ReplaceApplicationEnvironmentVariablesInput, ReplaceApplicationJsDependencySelectionInput,
+    SetApplicationApiEnabledInput, UpdateApplicationInput, UpdateProfileInput,
+    UpsertApiKeyDataModelPermissionInput, UpsertCompiledPlanInput,
 };
 
 #[cfg(test)]
@@ -87,6 +87,8 @@ struct ApplicationPublicApiTestRepositoryInner {
     editor_states: HashMap<Uuid, domain::FlowEditorState>,
     compiled_plans: HashMap<Uuid, domain::CompiledPlanRecord>,
     publications: HashMap<Uuid, publications::ApplicationPublicationVersionRecord>,
+    js_dependency_selections:
+        HashMap<(Uuid, String, String), domain::ApplicationJsDependencySelection>,
     application_api_enabled: HashMap<Uuid, bool>,
     native_runs: HashMap<Uuid, native::NativeRunResult>,
     flow_runs: HashMap<Uuid, domain::FlowRunRecord>,
@@ -1089,6 +1091,7 @@ impl ApplicationPublicationRepository for ApplicationPublicApiTestRepository {
             document_snapshot: input.document_snapshot.clone(),
             runtime_profile_snapshot: input.runtime_profile_snapshot.clone(),
             output_selector: input.output_selector.clone(),
+            dependency_snapshot: input.dependency_snapshot.clone(),
             created_by: input.actor_user_id,
             created_at: OffsetDateTime::UNIX_EPOCH + time::Duration::seconds(ordinal as i64),
         };
@@ -1166,6 +1169,69 @@ impl ApplicationPublicationRepository for ApplicationPublicApiTestRepository {
             .application_api_enabled
             .insert(input.application_id, input.api_enabled);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl ApplicationJsDependencySelectionRepository for ApplicationPublicApiTestRepository {
+    async fn list_application_js_dependency_selections(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationJsDependencySelection>> {
+        let mut selections = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .js_dependency_selections
+            .values()
+            .filter(|selection| {
+                selection.workspace_id == workspace_id && selection.application_id == application_id
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        selections.sort_by(|left, right| {
+            left.alias
+                .cmp(&right.alias)
+                .then(left.target.cmp(&right.target))
+        });
+        Ok(selections)
+    }
+
+    async fn replace_application_js_dependency_selection(
+        &self,
+        input: &ReplaceApplicationJsDependencySelectionInput,
+    ) -> Result<domain::ApplicationJsDependencySelection> {
+        let selection = domain::ApplicationJsDependencySelection {
+            workspace_id: input.workspace_id,
+            application_id: input.application_id,
+            installation_id: input.installation_id,
+            provider_code: input.provider_code.clone(),
+            plugin_id: input.plugin_id.clone(),
+            plugin_version: input.plugin_version.clone(),
+            alias: input.alias.clone(),
+            package: input.package.clone(),
+            version: input.version.clone(),
+            target: input.target.clone(),
+            artifact_path: input.artifact_path.clone(),
+            artifact_hash: input.artifact_hash.clone(),
+            integrity: input.integrity.clone(),
+            permissions: input.permissions.clone(),
+        };
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .js_dependency_selections
+            .insert(
+                (
+                    input.application_id,
+                    input.alias.clone(),
+                    input.target.clone(),
+                ),
+                selection.clone(),
+            );
+        Ok(selection)
     }
 }
 
