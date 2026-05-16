@@ -671,11 +671,18 @@ describe('FrontStagePage', () => {
           title: '页面-已重命名'
         });
       });
+      await waitFor(() => {
+        expect(screen.getByText('页面树已同步')).toBeInTheDocument();
+      });
       expect(screen.queryByText('页面-已重命名')).not.toBeInTheDocument();
 
-      fireEvent.click(
-        within(pageItem).getByRole('button', { name: /删\s*除/ })
-      );
+      const deleteButton = within(pageItem).getByRole('button', {
+        name: /删\s*除/
+      });
+      await waitFor(() => {
+        expect(deleteButton).toBeEnabled();
+      });
+      fireEvent.click(deleteButton);
       await waitFor(() => {
         expect(onDeletePageNode).toHaveBeenCalledWith('page-1');
       });
