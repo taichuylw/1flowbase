@@ -1,21 +1,21 @@
 use std::{collections::BTreeMap, fs, time::Duration};
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use plugin_framework::provider_contract::ProviderInvocationInput;
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
-    code_runtime::{QuickJsCodeInvoker, execute_code_node},
+    code_runtime::{execute_code_node, QuickJsCodeInvoker},
     compiled_plan::{
         CodeIsolationProfile, CompiledBinding, CompiledCodeDependency, CompiledCodeRuntime,
         CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
     },
     execution_engine::{
-        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
-        ProviderInvocationOutput, ProviderInvoker, start_flow_debug_run,
+        start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput,
+        CodeInvoker, ProviderInvocationOutput, ProviderInvoker,
     },
     execution_state::ExecutionStopReason,
 };
@@ -556,6 +556,22 @@ async fn code_isolation_profile_timeout_is_enforced_by_quickjs_runner() {
 }
 
 #[tokio::test]
+async fn code_isolation_profile_executor_id_is_enforced_by_quickjs_runner() {
+    let mut runtime = quickjs_runtime("function main() { return { result: 'ok' }; }");
+    runtime.isolation_profile.executor_id = "container-js".to_string();
+
+    let error = QuickJsCodeInvoker::default()
+        .invoke_code_node(&runtime, json!({}), json!({}))
+        .await
+        .expect_err("unsupported executor should not fall back to quickjs");
+
+    assert_eq!(
+        error.to_string(),
+        "executor_not_found: code executor `container-js` is not available"
+    );
+}
+
+#[tokio::test]
 async fn code_isolation_profile_is_included_in_code_metrics() {
     let mut runtime = quickjs_runtime("function main() { return { result: 'ok' }; }");
     runtime.isolation_profile.timeout_ms = 250;
@@ -637,13 +653,11 @@ async fn code_runtime_invoker_error_yields_stable_failed_stop_reason_and_trace_p
                 json!("runtime failed: user code threw")
             );
             assert_eq!(outcome.node_traces[1].node_type, "code");
-            assert!(
-                outcome.node_traces[1]
-                    .output_payload
-                    .as_object()
-                    .unwrap()
-                    .is_empty()
-            );
+            assert!(outcome.node_traces[1]
+                .output_payload
+                .as_object()
+                .unwrap()
+                .is_empty());
             assert_eq!(
                 outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
                 json!("code_runtime_error")
@@ -672,12 +686,10 @@ async fn code_runtime_missing_declared_output_projects_empty_variable_payload() 
     match outcome.stop_reason {
         ExecutionStopReason::Failed(failure) => {
             assert_eq!(failure.node_id, "node-answer");
-            assert!(
-                failure.error_payload["message"]
-                    .as_str()
-                    .unwrap()
-                    .contains("selector path not found: node-code.result")
-            );
+            assert!(failure.error_payload["message"]
+                .as_str()
+                .unwrap()
+                .contains("selector path not found: node-code.result"));
         }
         other => panic!("expected downstream binding failure, got {other:?}"),
     }

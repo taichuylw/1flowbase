@@ -1,4 +1,5 @@
 mod binding_runtime_tests;
+mod code_executor_capability_tests;
 mod code_runtime_tests;
 mod compiler_tests;
 mod execution_engine_tests;

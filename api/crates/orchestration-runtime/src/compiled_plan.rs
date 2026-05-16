@@ -150,7 +150,9 @@ impl Default for CodeIsolationProfile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeExecutorCapability {
     pub executor_id: String,
+    pub supported_languages: Vec<String>,
     pub supported_modes: Vec<String>,
+    pub supported_artifact_targets: Vec<String>,
     pub max_timeout_ms: u64,
     pub max_memory_mb: u32,
     pub max_stack_kb: u32,
@@ -168,7 +170,9 @@ impl CodeExecutorCapability {
     pub fn quickjs_local() -> Self {
         Self {
             executor_id: CodeIsolationProfile::DEFAULT_EXECUTOR_ID.to_string(),
+            supported_languages: vec!["javascript".to_string()],
             supported_modes: vec![CodeIsolationProfile::DEFAULT_MODE.to_string()],
+            supported_artifact_targets: vec!["backend_code".to_string()],
             max_timeout_ms: Self::QUICKJS_MAX_TIMEOUT_MS,
             max_memory_mb: Self::QUICKJS_MAX_MEMORY_MB,
             max_stack_kb: Self::QUICKJS_MAX_STACK_KB,

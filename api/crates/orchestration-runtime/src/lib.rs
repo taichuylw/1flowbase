@@ -1,6 +1,7 @@
 extern crate self as orchestration_runtime;
 
 pub mod binding_runtime;
+pub mod code_executor_capability;
 mod code_runtime;
 pub mod compiled_plan;
 pub mod compiler;

@@ -2,22 +2,23 @@ use std::{
     error::Error,
     fmt, fs,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     time::Duration,
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use rquickjs::{Context, Runtime};
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 use crate::{
+    code_executor_capability::select_code_executor,
     compiled_plan::{CompiledCodeDependency, CompiledCodeRuntime, CompiledNode},
     payload_builder::{
-        BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult, is_reserved_payload_key,
+        is_reserved_payload_key, BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult,
     },
 };
 
@@ -66,6 +67,12 @@ impl CodeInvoker for QuickJsCodeInvoker {
         _config_payload: Value,
         input_payload: Value,
     ) -> Result<CodeInvocationOutput> {
+        select_code_executor(
+            &runtime.isolation_profile,
+            &runtime.language,
+            &runtime.dependencies,
+            &[crate::compiled_plan::CodeExecutorCapability::quickjs_local()],
+        )?;
         let request = QuickJsInvocationRequest {
             language: runtime.language.clone(),
             source: runtime.source.clone(),
