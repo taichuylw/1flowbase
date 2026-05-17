@@ -25,16 +25,12 @@ import {
 } from '../lib/page-tree';
 import { FrontStagePage } from '../pages/FrontStagePage';
 
-const pageContentSaveHook = vi.hoisted(() => ({
-  useFrontstagePageContentSave: vi.fn()
-}));
-const blockCatalogHook = vi.hoisted(() => ({
-  useFrontstageBlockCatalog: vi.fn()
-}));
-const blockCodeHook = vi.hoisted(() => ({
-  useFrontstageBlockCode: vi.fn()
-}));
+const pageContentSaveHook = vi.hoisted(() => ({ useFrontstagePageContentSave: vi.fn() }));
+const blockCatalogHook = vi.hoisted(() => ({ useFrontstageBlockCatalog: vi.fn() }));
+const blockCodeHook = vi.hoisted(() => ({ useFrontstageBlockCode: vi.fn() }));
 const blockCodeApi = vi.hoisted(() => ({
+  fetchFrontstageBlockCode: vi.fn((_workspaceId: string, pageId: string, codeRef: string) => Promise.resolve({ pageId, codeRef, code: 'export default {}' })),
+  frontstageBlockCodeQueryKey: vi.fn((workspaceId: string, pageId: string, codeRef: string) => ['frontstage', workspaceId, 'pages', pageId, 'block-code', codeRef] as const),
   saveFrontstageBlockCode: vi.fn()
 }));
 

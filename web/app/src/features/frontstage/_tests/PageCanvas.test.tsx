@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import type { FrontstagePageContent } from '../api/page-content';
 import { PageCanvas } from '../components/PageCanvas';
+import type { FrontstagePageCanvasRuntimeSourceState } from '../lib/page-canvas/runtime-source';
 
 function createPageContent(
   overrides: Partial<FrontstagePageContent> = {}
@@ -147,6 +148,124 @@ describe('PageCanvas', () => {
     expect(slots[1]).toHaveTextContent('placeholder');
     expect(slots[1]).toHaveTextContent('unsupported_runtime');
     expect(slots[1]).toHaveTextContent('legacy.js');
+  });
+
+  test('renders block code read status from runtime source state per render slot', () => {
+    const runtimeSourceState = {
+      workspaceId: 'workspace-1',
+      pageId: 'page-1',
+      sources: [
+        {
+          status: 'ready',
+          blockId: 'ready',
+          sourceIndex: 0,
+          slotIndex: 0,
+          codeRef: 'ready-code'
+        },
+        {
+          status: 'loading',
+          blockId: 'loading',
+          sourceIndex: 1,
+          slotIndex: 1,
+          codeRef: 'loading-code'
+        },
+        {
+          status: 'missing',
+          blockId: 'missing',
+          sourceIndex: 2,
+          slotIndex: 2,
+          codeRef: 'missing-code',
+          message: 'Block code is empty for missing-code.'
+        },
+        {
+          status: 'failed',
+          blockId: 'failed',
+          sourceIndex: 3,
+          slotIndex: 3,
+          codeRef: 'failed-code',
+          error: { message: 'read failed' }
+        },
+        {
+          status: 'skipped',
+          blockId: 'legacy',
+          sourceIndex: 4,
+          slotIndex: 4,
+          codeRef: 'legacy-code',
+          fallbackReasons: [
+            {
+              code: 'unsupported_runtime',
+              path: 'blocks.4.runtime.kind',
+              message: 'Unsupported runtime.'
+            }
+          ]
+        }
+      ]
+    } as FrontstagePageCanvasRuntimeSourceState;
+
+    render(
+      <PageCanvas
+        runtimeSourceState={runtimeSourceState}
+        content={createPageContent({
+          root: {
+            uid: 'root-1',
+            payload: {
+              blocks: [
+                {
+                  id: 'ready',
+                  codeRef: 'ready-code',
+                  contributionCode: 'official.ready',
+                  runtime: { kind: 'iframe', entry: 'blocks/ready.js' },
+                  layout: { order: 0, region: 'main' }
+                },
+                {
+                  id: 'loading',
+                  codeRef: 'loading-code',
+                  contributionCode: 'official.loading',
+                  runtime: { kind: 'iframe', entry: 'blocks/loading.js' },
+                  layout: { order: 1, region: 'main' }
+                },
+                {
+                  id: 'missing',
+                  codeRef: 'missing-code',
+                  contributionCode: 'official.missing',
+                  runtime: { kind: 'iframe', entry: 'blocks/missing.js' },
+                  layout: { order: 2, region: 'main' }
+                },
+                {
+                  id: 'failed',
+                  codeRef: 'failed-code',
+                  contributionCode: 'official.failed',
+                  runtime: { kind: 'iframe', entry: 'blocks/failed.js' },
+                  layout: { order: 3, region: 'main' }
+                },
+                {
+                  id: 'legacy',
+                  codeRef: 'legacy-code',
+                  contributionCode: 'official.legacy',
+                  runtime: { kind: 'inline', entry: 'legacy.js' },
+                  layout: { order: 4, region: 'footer' }
+                }
+              ]
+            }
+          }
+        })}
+      />
+    );
+
+    const slots = within(screen.getByTestId('page-canvas-render-slots'))
+      .getAllByRole('button');
+
+    expect(slots[0]).toHaveTextContent('ready');
+    expect(slots[0]).toHaveTextContent('代码已就绪');
+    expect(slots[1]).toHaveTextContent('loading');
+    expect(slots[1]).toHaveTextContent('代码读取中');
+    expect(slots[2]).toHaveTextContent('missing');
+    expect(slots[2]).toHaveTextContent('代码缺失');
+    expect(slots[3]).toHaveTextContent('failed');
+    expect(slots[3]).toHaveTextContent('代码读取失败');
+    expect(slots[4]).toHaveTextContent('legacy');
+    expect(slots[4]).toHaveTextContent('跳过运行');
+    expect(slots[4]).toHaveTextContent('unsupported_runtime');
   });
 
   test('notifies selection changes without persisting content', () => {

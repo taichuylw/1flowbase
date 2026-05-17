@@ -22,6 +22,7 @@ import { JsBlockTrialPanel } from '../components/JsBlockTrialPanel';
 import { PageCanvas } from '../components/PageCanvas';
 import { useFrontstageBlockCatalog } from '../hooks/use-frontstage-block-catalog';
 import { useFrontstageBlockCode } from '../hooks/use-frontstage-block-code';
+import { useFrontstagePageCanvasRuntimeSources } from '../hooks/use-frontstage-page-canvas-runtime-sources';
 import { useFrontstagePageContentSave } from '../hooks/use-frontstage-page-content-save';
 import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
 import {
@@ -44,6 +45,7 @@ import {
   createFrontstagePageDocumentSaveInput,
   type FrontstageBlockInstance
 } from '../lib/page-document';
+import { createFrontstagePageRenderPlan } from '../lib/page-canvas/render-plan';
 import {
   canMoveNode,
   findNodeById,
@@ -346,6 +348,17 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         : null,
     [activePageContent]
   );
+  const activePageRenderPlan = useMemo(
+    () =>
+      displayedPageDocument
+        ? createFrontstagePageRenderPlan(displayedPageDocument)
+        : null,
+    [displayedPageDocument]
+  );
+  const pageCanvasRuntimeSources = useFrontstagePageCanvasRuntimeSources({
+    workspaceId,
+    renderPlan: activePageRenderPlan
+  });
   const blockCompositionState = useMemo(
     () =>
       displayedPageDocument
@@ -1272,6 +1285,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                 : undefined
             }
             onRetry={onRetryLoadPageContent}
+            runtimeSourceState={pageCanvasRuntimeSources.sourceState}
           />
           {canShowSelectedBlockActions ? (
             <div

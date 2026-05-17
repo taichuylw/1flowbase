@@ -12,6 +12,10 @@ import {
   createFrontstagePageRenderPlan,
   type FrontstageBlockRenderPlanItem
 } from '../lib/page-canvas/render-plan';
+import type {
+  FrontstagePageCanvasRuntimeSource,
+  FrontstagePageCanvasRuntimeSourceState
+} from '../lib/page-canvas/runtime-source';
 
 type PageCanvasProps = {
   content?: FrontstagePageContent;
@@ -20,6 +24,7 @@ type PageCanvasProps = {
   selectedBlockId?: string | null;
   onSelectBlock?: (blockId: string | null) => void;
   onRetry?: () => void;
+  runtimeSourceState?: FrontstagePageCanvasRuntimeSourceState | null;
 };
 
 function formatPageTitle(content: FrontstagePageContent): string {
@@ -116,7 +121,48 @@ const renderSlotButtonBaseStyle: CSSProperties = {
   cursor: 'pointer'
 };
 
-function getRenderSlotStateText(item: FrontstageBlockRenderPlanItem): string {
+function getRuntimeSourceStatusText(
+  source: FrontstagePageCanvasRuntimeSource
+): string {
+  switch (source.status) {
+    case 'ready':
+      return '代码已就绪';
+    case 'loading':
+      return '代码读取中';
+    case 'missing':
+      return '代码缺失';
+    case 'failed':
+      return '代码读取失败';
+    case 'skipped':
+      return '跳过运行';
+  }
+}
+
+function getRuntimeSourceStatusColor(
+  source: FrontstagePageCanvasRuntimeSource
+): string {
+  switch (source.status) {
+    case 'ready':
+      return 'success';
+    case 'loading':
+      return 'processing';
+    case 'missing':
+      return 'warning';
+    case 'failed':
+      return 'error';
+    case 'skipped':
+      return 'default';
+  }
+}
+
+function getRenderSlotStateText(
+  item: FrontstageBlockRenderPlanItem,
+  source?: FrontstagePageCanvasRuntimeSource | null
+): string {
+  if (source) {
+    return getRuntimeSourceStatusText(source);
+  }
+
   if (item.renderMode === 'restricted_js_block') {
     return item.canEnterRestrictedJsRuntime
       ? '可运行，等待运行时接入'
@@ -126,12 +172,51 @@ function getRenderSlotStateText(item: FrontstageBlockRenderPlanItem): string {
   return '占位显示';
 }
 
+function getRenderSlotStateColor(
+  item: FrontstageBlockRenderPlanItem,
+  source?: FrontstagePageCanvasRuntimeSource | null
+): string {
+  if (source) {
+    return getRuntimeSourceStatusColor(source);
+  }
+
+  return item.renderMode === 'placeholder' ? 'warning' : 'green';
+}
+
+function findRuntimeSourceForSlot({
+  item,
+  slotIndex,
+  pageId,
+  runtimeSourceState
+}: {
+  item: FrontstageBlockRenderPlanItem;
+  slotIndex: number;
+  pageId: string;
+  runtimeSourceState?: FrontstagePageCanvasRuntimeSourceState | null;
+}): FrontstagePageCanvasRuntimeSource | null {
+  if (!runtimeSourceState || runtimeSourceState.pageId !== pageId) {
+    return null;
+  }
+
+  return (
+    runtimeSourceState.sources.find(
+      (source) =>
+        source.slotIndex === slotIndex &&
+        source.sourceIndex === item.sourceIndex &&
+        source.blockId === item.blockId &&
+        source.codeRef === item.codeRef
+    ) ?? null
+  );
+}
+
 function RenderPlanSlot({
   item,
+  source,
   isSelected,
   onSelectBlock
 }: {
   item: FrontstageBlockRenderPlanItem;
+  source?: FrontstagePageCanvasRuntimeSource | null;
   isSelected: boolean;
   onSelectBlock?: (blockId: string | null) => void;
 }) {
@@ -151,6 +236,9 @@ function RenderPlanSlot({
       handleSelect();
     }
   };
+
+  const fallbackReasons =
+    source?.status === 'skipped' ? source.fallbackReasons : item.fallbackReasons;
 
   return (
     <button
@@ -173,10 +261,8 @@ function RenderPlanSlot({
             <Tag color={item.renderMode === 'placeholder' ? 'default' : 'blue'}>
               {item.renderMode}
             </Tag>
-            <Tag
-              color={item.renderMode === 'placeholder' ? 'warning' : 'green'}
-            >
-              {getRenderSlotStateText(item)}
+            <Tag color={getRenderSlotStateColor(item, source)}>
+              {getRenderSlotStateText(item, source)}
             </Tag>
             <Tag>#{item.order}</Tag>
           </Space>
@@ -204,9 +290,9 @@ function RenderPlanSlot({
           </Space>
         </div>
 
-        {item.fallbackReasons.length > 0 ? (
+        {fallbackReasons.length > 0 ? (
           <Space size={6} wrap>
-            {item.fallbackReasons.map((reason) => (
+            {fallbackReasons.map((reason) => (
               <Tag key={`${reason.code}-${reason.path}`} color="warning">
                 {reason.code}
               </Tag>
@@ -274,7 +360,8 @@ export const PageCanvas: FC<PageCanvasProps> = ({
   hasError,
   selectedBlockId = null,
   onSelectBlock,
-  onRetry
+  onRetry,
+  runtimeSourceState
 }) => {
   const document = useMemo(
     () => (content ? createFrontstagePageDocument(content) : null),
@@ -404,10 +491,16 @@ export const PageCanvas: FC<PageCanvasProps> = ({
               style={{ width: '100%' }}
             >
               <Typography.Text strong>渲染槽位</Typography.Text>
-              {renderItems.map((item) => (
+              {renderItems.map((item, slotIndex) => (
                 <RenderPlanSlot
                   key={item.blockId}
                   item={item}
+                  source={findRuntimeSourceForSlot({
+                    item,
+                    slotIndex,
+                    pageId: renderPlan.pageId,
+                    runtimeSourceState
+                  })}
                   isSelected={item.blockId === selectedBlockId}
                   onSelectBlock={onSelectBlock}
                 />
