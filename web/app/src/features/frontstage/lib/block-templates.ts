@@ -70,7 +70,9 @@ const templateFactories: Record<
 };
 
 export function listFrontstageBuiltInJsBlockTemplates(): FrontstageBuiltInJsBlockTemplateList {
-  return FRONTSTAGE_BUILT_IN_JS_BLOCK_TEMPLATES;
+  return FRONTSTAGE_BUILT_IN_JS_BLOCK_TEMPLATES.map((template) => ({
+    ...template
+  }));
 }
 
 export function createFrontstageBuiltInJsBlockTemplateCode(

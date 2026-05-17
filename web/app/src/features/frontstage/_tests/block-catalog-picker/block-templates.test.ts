@@ -10,6 +10,7 @@ import {
   createBlankJsBlockTemplateCode,
   createFrontstageBuiltInJsBlockTemplateCode,
   listFrontstageBuiltInJsBlockTemplates,
+  type FrontstageBuiltInJsBlockTemplate,
   type FrontstageBuiltInJsBlockTemplateId
 } from '../../lib/block-templates';
 
@@ -54,6 +55,24 @@ describe('frontstage block templates', () => {
     expect(listFrontstageBuiltInJsBlockTemplates()).toEqual(
       FRONTSTAGE_BUILT_IN_JS_BLOCK_TEMPLATES
     );
+  });
+
+  test('does not expose the mutable built-in template registry internals', () => {
+    const listedTemplates =
+      listFrontstageBuiltInJsBlockTemplates() as FrontstageBuiltInJsBlockTemplate[];
+
+    listedTemplates.reverse();
+    listedTemplates[0].title = 'Mutated Template';
+
+    const nextTemplates = listFrontstageBuiltInJsBlockTemplates();
+    expect(nextTemplates.map((template) => template.id)).toEqual([
+      'blank',
+      'data-table',
+      'create-form',
+      'edit-form',
+      'search-table'
+    ]);
+    expect(nextTemplates[0].title).toBe('Blank JS Block');
   });
 
   test('creates built-in JS block source by stable template id', () => {
