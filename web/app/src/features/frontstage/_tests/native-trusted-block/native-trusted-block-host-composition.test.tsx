@@ -11,6 +11,7 @@ import {
   prepareNativeTrustedBlock,
   type NativeTrustedBlockPrepareInput
 } from '@1flowbase/page-runtime';
+import type { BlockContext } from '@1flowbase/page-protocol';
 
 import {
   createFrontstageNativeTrustedBlockReactAdapter,
@@ -59,6 +60,36 @@ function createBlockRoot(): HTMLDivElement {
   return root;
 }
 
+function createFakeBlockContext(
+  overrides: Partial<BlockContext> = {}
+): BlockContext {
+  return {
+    currentUser: null,
+    workspace: { id: 'workspace-1', name: 'Workspace' },
+    application: { id: 'application-1', name: 'Application' },
+    page: { id: 'page-1', route: '/page-1', title: 'Page' },
+    params: {},
+    props: {},
+    state: {},
+    patch: vi.fn(),
+    data: {
+      query: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn()
+    },
+    actions: {
+      invoke: vi.fn()
+    },
+    events: {
+      emit: vi.fn()
+    },
+    theme: { mode: 'light', tokens: {} },
+    ui: {},
+    ...overrides
+  };
+}
+
 function createPrepareInput(
   overrides: Partial<NativeTrustedBlockPrepareInput> = {}
 ): NativeTrustedBlockPrepareInput {
@@ -71,9 +102,12 @@ import React from 'react';
 import { Button, Space } from 'antd';
 
 export default function HostCompositionBlock(props) {
+  void props.ctx.data.query('native-records', { title: props.props.title });
+
   return (
     <Space title="native-composition-block">
       <Button type="primary">{props.props.title}</Button>
+      <Button>{props.ctx.props.title}</Button>
       <Button>
         {String(props.portalContainment.root instanceof HTMLElement)}
       </Button>
@@ -91,11 +125,22 @@ describe('native trusted block host composition smoke contract', () => {
   test('mounts a prepared permissioned JSX source through host, runtime factory, and React adapter', async () => {
     const root = createBlockRoot();
     const testingRoot = createTestingRoot();
+    const query = vi.fn(async () => ({ title: 'Resolved by controlled ctx' }));
     const adapter = createFrontstageNativeTrustedBlockReactAdapter({
       createRoot: testingRoot.createRoot,
       providerWrapper: (children) => (
         <div title="native-provider-scope">{children}</div>
       ),
+      resolveBlockContext: () =>
+        createFakeBlockContext({
+          props: { title: 'Controlled ctx title' },
+          data: {
+            query,
+            create: vi.fn(),
+            update: vi.fn(),
+            delete: vi.fn()
+          }
+        }),
       resolveComponent: createFrontstageNativeTrustedBlockRuntimeFactory()
     });
     const host = createNativeTrustedBlockHost({ adapter });
@@ -117,7 +162,13 @@ describe('native trusted block host composition smoke contract', () => {
     expect(
       await screen.findByRole('button', { name: 'Prepared JSX AntD block' })
     ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Controlled ctx title' })
+    ).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'true' })).toBeInTheDocument();
+    expect(query).toHaveBeenCalledWith('native-records', {
+      title: 'Prepared JSX AntD block'
+    });
     expect(root).toHaveAttribute(NATIVE_STYLE_SCOPE_ROOT_ATTRIBUTE, '');
     expect(root).toHaveAttribute(
       NATIVE_STYLE_SCOPE_ID_ATTRIBUTE,

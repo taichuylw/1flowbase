@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { NativeTrustedBlockPreparePlan } from '@1flowbase/page-runtime';
+import type { BlockContext } from '@1flowbase/page-protocol';
 
 import {
   createFrontstageNativeTrustedBlockReactAdapter,
@@ -93,6 +94,36 @@ function createBlockRoot(): HTMLDivElement {
   const root = document.createElement('div');
   document.body.append(root);
   return root;
+}
+
+function createFakeBlockContext(
+  overrides: Partial<BlockContext> = {}
+): BlockContext {
+  return {
+    currentUser: null,
+    workspace: { id: 'workspace-1', name: 'Workspace' },
+    application: { id: 'application-1', name: 'Application' },
+    page: { id: 'page-1', route: '/page-1', title: 'Page' },
+    params: {},
+    props: {},
+    state: {},
+    patch: vi.fn(),
+    data: {
+      query: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn()
+    },
+    actions: {
+      invoke: vi.fn()
+    },
+    events: {
+      emit: vi.fn()
+    },
+    theme: { mode: 'light', tokens: {} },
+    ui: {},
+    ...overrides
+  };
 }
 
 describe('frontstage native trusted block React adapter', () => {
@@ -374,6 +405,114 @@ describe('frontstage native trusted block React adapter', () => {
         })
       })
     ]);
+  });
+
+  test('passes a controlled default block context to the resolved component', async () => {
+    const root = createBlockRoot();
+    const testingRoot = createTestingRoot();
+    let receivedContext: BlockContext | undefined;
+    const adapter = createFrontstageNativeTrustedBlockReactAdapter({
+      createRoot: testingRoot.createRoot,
+      resolveComponent: () => (props) => {
+        receivedContext = props.ctx;
+
+        return (
+          <output data-testid="native-context">{props.ctx.props.title as string}</output>
+        );
+      }
+    });
+
+    await adapter.mount({
+      plan: createPlan({
+        blockId: 'native-block-default-context',
+        props: { title: 'Context title' }
+      }),
+      root
+    });
+
+    expect(await screen.findByTestId('native-context')).toHaveTextContent(
+      'Context title'
+    );
+    expect(receivedContext).toEqual(
+      expect.objectContaining({
+        currentUser: null,
+        workspace: { id: 'workspace' },
+        application: { id: 'application' },
+        page: expect.objectContaining({
+          id: 'native-block-default-context',
+          route: 'native-block-default-context'
+        }),
+        params: {},
+        props: { title: 'Context title' },
+        state: {},
+        theme: { mode: 'light', tokens: {} },
+        ui: {}
+      })
+    );
+    await expect(receivedContext?.data.query('records')).rejects.toThrow(
+      'Native trusted block ctx.data.query is unavailable until the host injects a controlled BlockContext.'
+    );
+    await expect(receivedContext?.data.create('records', {})).rejects.toThrow(
+      'Native trusted block ctx.data.create is unavailable until the host injects a controlled BlockContext.'
+    );
+    await expect(
+      receivedContext?.data.update('records', 'record-1', {})
+    ).rejects.toThrow(
+      'Native trusted block ctx.data.update is unavailable until the host injects a controlled BlockContext.'
+    );
+    await expect(receivedContext?.data.delete('records', 'record-1')).rejects.toThrow(
+      'Native trusted block ctx.data.delete is unavailable until the host injects a controlled BlockContext.'
+    );
+    await expect(receivedContext?.actions.invoke('open-record')).rejects.toThrow(
+      'Native trusted block ctx.actions.invoke is unavailable until the host injects a controlled BlockContext.'
+    );
+    expect(() => receivedContext?.events.emit('record.opened')).toThrow(
+      'Native trusted block ctx.events.emit is unavailable until the host injects a controlled BlockContext.'
+    );
+  });
+
+  test('resolves a controlled block context per mount and injects it into component props', async () => {
+    const root = createBlockRoot();
+    const testingRoot = createTestingRoot();
+    const fakeContext = createFakeBlockContext({
+      props: { title: 'Injected context' },
+      data: {
+        query: vi.fn(async () => ({ title: 'Queried title' })),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn()
+      }
+    });
+    const resolveBlockContext = vi.fn(() => fakeContext);
+    const adapter = createFrontstageNativeTrustedBlockReactAdapter({
+      createRoot: testingRoot.createRoot,
+      resolveBlockContext,
+      resolveComponent: () => (props) => {
+        void props.ctx.data.query('records', { blockId: props.plan.blockId });
+
+        return (
+          <output data-testid="native-injected-context">
+            {props.ctx.props.title as string}
+          </output>
+        );
+      }
+    });
+
+    await adapter.mount({ plan: createPlan({ blockId: 'native-block-ctx' }), root });
+
+    expect(await screen.findByTestId('native-injected-context')).toHaveTextContent(
+      'Injected context'
+    );
+    expect(resolveBlockContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({ blockId: 'native-block-ctx' }),
+        root,
+        portalContainment: expect.objectContaining({ root })
+      })
+    );
+    expect(fakeContext.data.query).toHaveBeenCalledWith('records', {
+      blockId: 'native-block-ctx'
+    });
   });
 
   test('catches native render crashes and reports a runtime error with the current block id', async () => {

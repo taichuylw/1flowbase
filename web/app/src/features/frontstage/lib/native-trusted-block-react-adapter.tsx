@@ -3,7 +3,7 @@ import { App as AntdApp, ConfigProvider } from 'antd';
 import type { ConfigProviderProps } from 'antd/es/config-provider';
 import { createRoot as defaultCreateRoot } from 'react-dom/client';
 
-import type { BlockProtocolError } from '@1flowbase/page-protocol';
+import type { BlockContext, BlockProtocolError } from '@1flowbase/page-protocol';
 import {
   createNativeTrustedBlockPortalContainment,
   isNativeTrustedBlockRuntimeError,
@@ -20,6 +20,7 @@ const NATIVE_TRUSTED_BLOCK_ID_ATTRIBUTE =
 export interface FrontstageNativeTrustedBlockReactComponentProps {
   plan: NativeTrustedBlockPreparePlan;
   props: NativeTrustedBlockPreparePlan['props'];
+  ctx: BlockContext;
   portalContainment: NativeTrustedBlockPortalContainment;
 }
 
@@ -54,6 +55,10 @@ export type FrontstageNativeTrustedBlockResolveProviderScope = (
   context: FrontstageNativeTrustedBlockProviderContext
 ) => FrontstageNativeTrustedBlockProviderScope | undefined;
 
+export type FrontstageNativeTrustedBlockResolveContext = (
+  context: FrontstageNativeTrustedBlockProviderContext
+) => BlockContext;
+
 export type FrontstageNativeTrustedBlockProviderWrapper = (
   children: ReactNode,
   context: FrontstageNativeTrustedBlockProviderContext
@@ -73,6 +78,7 @@ export type FrontstageNativeTrustedBlockRuntimeErrorHandler = (
 export interface FrontstageNativeTrustedBlockReactAdapterOptions {
   resolveComponent: FrontstageNativeTrustedBlockResolveComponent;
   createRoot?: FrontstageNativeTrustedBlockCreateRoot;
+  resolveBlockContext?: FrontstageNativeTrustedBlockResolveContext;
   resolveProviderScope?: FrontstageNativeTrustedBlockResolveProviderScope;
   providerWrapper?: FrontstageNativeTrustedBlockProviderWrapper;
   onRuntimeError?: FrontstageNativeTrustedBlockRuntimeErrorHandler;
@@ -96,6 +102,10 @@ export function createFrontstageNativeTrustedBlockReactAdapter(
         root: rootElement,
         portalContainment
       };
+      const blockContext = resolveControlledBlockContext(
+        providerContext,
+        options.resolveBlockContext
+      );
       let didUnmount = false;
 
       reactRoot.render(
@@ -110,6 +120,7 @@ export function createFrontstageNativeTrustedBlockReactAdapter(
             <Component
               plan={input.plan}
               props={input.plan.props}
+              ctx={blockContext}
               portalContainment={portalContainment}
             />
           </FrontstageNativeTrustedBlockErrorBoundary>,
@@ -135,6 +146,67 @@ export function createFrontstageNativeTrustedBlockReactAdapter(
       };
     }
   };
+}
+
+function resolveControlledBlockContext(
+  context: FrontstageNativeTrustedBlockProviderContext,
+  resolveBlockContext:
+    | FrontstageNativeTrustedBlockResolveContext
+    | undefined
+): BlockContext {
+  return resolveBlockContext?.(context) ?? createUnavailableBlockContext(context.plan);
+}
+
+function createUnavailableBlockContext(
+  plan: NativeTrustedBlockPreparePlan
+): BlockContext {
+  const state: Record<string, unknown> = {};
+
+  return {
+    currentUser: null,
+    workspace: { id: 'workspace' },
+    application: { id: 'application' },
+    page: {
+      id: plan.blockId,
+      route: plan.blockId
+    },
+    params: {},
+    props: { ...plan.props },
+    state,
+    patch(patch) {
+      Object.assign(state, patch);
+    },
+    data: {
+      query: rejectUnavailable('ctx.data.query'),
+      create: rejectUnavailable('ctx.data.create'),
+      update: rejectUnavailable('ctx.data.update'),
+      delete: rejectUnavailable('ctx.data.delete')
+    },
+    actions: {
+      invoke: rejectUnavailable('ctx.actions.invoke')
+    },
+    events: {
+      emit() {
+        throw createUnavailableContextError('ctx.events.emit');
+      }
+    },
+    theme: { mode: 'light', tokens: {} },
+    ui: {}
+  };
+}
+
+function rejectUnavailable<Args extends unknown[]>(
+  capability: string
+): (...args: Args) => Promise<never> {
+  return async () => {
+    throw createUnavailableContextError(capability);
+  };
+}
+
+function createUnavailableContextError(capability: string): Error {
+  return new Error(
+    `Native trusted block ${capability} is unavailable until the host injects a controlled BlockContext.`
+  );
 }
 
 interface FrontstageNativeTrustedBlockErrorBoundaryProps {

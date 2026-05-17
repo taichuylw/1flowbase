@@ -21,6 +21,7 @@ import {
   type FrontstageNativeTrustedBlockCreateRoot
 } from '../../lib/native-trusted-block-react-adapter';
 import {
+  createFrontstageNativeTrustedBlockModuleMap,
   createFrontstageNativeTrustedBlockRuntimeFactory,
   getFrontstageNativeTrustedBlockRuntimeCompatibility
 } from '../../lib/native-trusted-block-runtime-factory';
@@ -243,6 +244,23 @@ export default function Block() {
       await screen.findByRole('button', { name: 'Default modules' })
     ).toBeInTheDocument();
     expect(screen.queryByText('Override: Default modules')).not.toBeInTheDocument();
+  });
+
+  test('does not statically expose API or query clients through the runtime module map', () => {
+    const runtimeFactorySource = readFileSync(
+      join(process.cwd(), 'src/features/frontstage/lib/native-trusted-block-runtime-factory.tsx'),
+      'utf8'
+    );
+    const moduleMap = createFrontstageNativeTrustedBlockModuleMap();
+
+    expect(runtimeFactorySource).not.toContain('@1flowbase/api-client');
+    expect(runtimeFactorySource).not.toContain('@tanstack/react-query');
+    expect(runtimeFactorySource).not.toContain('QueryClient');
+    expect(Object.keys(moduleMap).sort()).toEqual([
+      '@1flowbase/ui',
+      'antd',
+      'react'
+    ]);
   });
 
   test('is not statically imported by existing FrontStage pages, components, or catalog code', () => {
