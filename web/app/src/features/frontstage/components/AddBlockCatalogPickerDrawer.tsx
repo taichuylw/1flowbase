@@ -1,7 +1,22 @@
-import { Alert, Button, Drawer, Empty, List, Space, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Drawer,
+  Empty,
+  List,
+  Radio,
+  Space,
+  Tag,
+  Typography
+} from 'antd';
 import type { FC } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
+import {
+  listFrontstageBuiltInJsBlockTemplates,
+  type FrontstageBuiltInJsBlockTemplateId
+} from '../lib/block-templates';
 
 export interface AddBlockCatalogPickerDrawerProps {
   open: boolean;
@@ -9,7 +24,10 @@ export interface AddBlockCatalogPickerDrawerProps {
   loading?: boolean;
   error?: Error | null;
   saving?: boolean;
-  onSelect: (entry: NormalizedFrontstageBlockCatalogEntry) => void;
+  onSelect: (
+    entry: NormalizedFrontstageBlockCatalogEntry,
+    templateId: FrontstageBuiltInJsBlockTemplateId
+  ) => void;
   onClose: () => void;
 }
 
@@ -17,6 +35,18 @@ export const AddBlockCatalogPickerDrawer: FC<
   AddBlockCatalogPickerDrawerProps
 > = ({ open, items, loading, error, saving, onSelect, onClose }) => {
   const isBusy = Boolean(loading || saving);
+  const templates = useMemo(() => listFrontstageBuiltInJsBlockTemplates(), []);
+  const [selectedTemplateId, setSelectedTemplateId] =
+    useState<FrontstageBuiltInJsBlockTemplateId>('blank');
+  const selectedTemplate = templates.find(
+    (template) => template.id === selectedTemplateId
+  );
+
+  useEffect(() => {
+    if (open) {
+      setSelectedTemplateId('blank');
+    }
+  }, [open]);
 
   return (
     <Drawer
@@ -27,6 +57,32 @@ export const AddBlockCatalogPickerDrawer: FC<
       width={520}
     >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          <Typography.Text strong>内置模板</Typography.Text>
+          <Radio.Group
+            value={selectedTemplateId}
+            disabled={isBusy}
+            onChange={(event) =>
+              setSelectedTemplateId(
+                event.target.value as FrontstageBuiltInJsBlockTemplateId
+              )
+            }
+          >
+            <Space direction="vertical" size={4}>
+              {templates.map((template) => (
+                <Radio key={template.id} value={template.id}>
+                  {template.title}
+                </Radio>
+              ))}
+            </Space>
+          </Radio.Group>
+          {selectedTemplate ? (
+            <Typography.Text type="secondary">
+              {selectedTemplate.description}
+            </Typography.Text>
+          ) : null}
+        </Space>
+
         {error ? (
           <Alert
             message="区块目录加载失败"
@@ -60,7 +116,7 @@ export const AddBlockCatalogPickerDrawer: FC<
                     size="small"
                     disabled={isBusy}
                     loading={saving}
-                    onClick={() => onSelect(entry)}
+                    onClick={() => onSelect(entry, selectedTemplateId)}
                   >
                     选择
                   </Button>

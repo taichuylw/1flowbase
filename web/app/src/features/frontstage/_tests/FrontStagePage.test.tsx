@@ -16,6 +16,7 @@ import type {
   SaveFrontstagePageContentInput
 } from '../api/page-content';
 import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
+import { createFrontstageBuiltInJsBlockTemplateCode } from '../lib/block-templates';
 import {
   insertPageIntoGroup,
   moveNodeInTree,
@@ -565,11 +566,56 @@ describe('FrontStagePage', () => {
       'page-1',
       expect.objectContaining({
         codeRef: 'frontstage-js-block-1-code',
-        code: expect.stringContaining("codeRef: 'frontstage-js-block-1-code'")
+        code: createFrontstageBuiltInJsBlockTemplateCode({
+          templateId: 'blank',
+          blockId: 'frontstage-js-block-1',
+          codeRef: 'frontstage-js-block-1-code',
+          contributionCode: 'frontstage.js-ui-block'
+        })
       }),
       'csrf-123'
     );
   });
+
+  test.each([['Data Table', 'data-table'], ['Create Form', 'create-form']] as const)(
+    'writes the selected %s JS template code when adding a block',
+    async (templateName, templateId) => {
+      authenticate(['frontstage.page.design']);
+      mockFrontstageBlockCatalog([createCatalogEntry()]);
+      mockPageContentSaveState();
+      render(
+        <AppProviders>
+          <FrontStagePageHarness
+            pageId="page-1"
+            initialPageTree={[createBackendPage('page-1')]}
+            pageContent={createPageContent()}
+          />
+        </AppProviders>
+      );
+      fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+      fireEvent.click(screen.getByRole('button', { name: '新增区块' }));
+      fireEvent.click(await screen.findByRole('radio', { name: templateName }));
+      fireEvent.click(screen.getByRole('button', { name: '选择' }));
+
+      await waitFor(() =>
+        expect(blockCodeApi.saveFrontstageBlockCode).toHaveBeenCalledTimes(1)
+      );
+
+      expect(blockCodeApi.saveFrontstageBlockCode).toHaveBeenCalledWith(
+        'workspace-1',
+        'page-1',
+        expect.objectContaining({
+          code: createFrontstageBuiltInJsBlockTemplateCode({
+            templateId,
+            blockId: 'frontstage-js-block-1',
+            codeRef: 'frontstage-js-block-1-code',
+            contributionCode: 'frontstage.js-ui-block'
+          })
+        }),
+        'csrf-123'
+      );
+    }
+  );
 
   test('disables Add Block while page content is saving', () => {
     authenticate(['frontstage.page.design']);

@@ -32,7 +32,10 @@ import {
   type FrontstageBlockCompositionInput,
   type FrontstageBlockCompositionState
 } from '../lib/block-composition';
-import { createBlankJsBlockTemplateCode } from '../lib/block-templates';
+import {
+  createFrontstageBuiltInJsBlockTemplateCode,
+  type FrontstageBuiltInJsBlockTemplateId
+} from '../lib/block-templates';
 import { createFrontstageJsBlockDataEffectHandler } from '../lib/js-block-data-effect-handler';
 import {
   createFrontstagePageDocument,
@@ -780,7 +783,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   };
 
   const handleSelectBlockCatalogEntry = async (
-    entry: NormalizedFrontstageBlockCatalogEntry
+    entry: NormalizedFrontstageBlockCatalogEntry,
+    templateId: FrontstageBuiltInJsBlockTemplateId
   ) => {
     const sourceContent = activePageContent;
     if (!canAddBlock || !sourceContent || !blockCompositionState) {
@@ -825,7 +829,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         selectedPageId ?? sourceContent.page.id,
         {
           codeRef,
-          code: createBlankJsBlockTemplateCode({
+          code: createFrontstageBuiltInJsBlockTemplateCode({
+            templateId,
             blockId,
             codeRef,
             contributionCode: entry.contributionCode
@@ -1394,8 +1399,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           loading={blockCatalog.loading}
           error={blockCatalog.error}
           saving={isPageContentSavePending}
-          onSelect={(entry) => {
-            void handleSelectBlockCatalogEntry(entry);
+          onSelect={(entry, templateId) => {
+            void handleSelectBlockCatalogEntry(entry, templateId);
           }}
           onClose={() => setIsAddBlockPickerOpen(false)}
         />
