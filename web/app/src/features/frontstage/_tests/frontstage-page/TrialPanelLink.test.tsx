@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { AppProviders } from '../../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 import type { FrontstagePageContent } from '../../api/page-content';
+import type { UseFrontstagePageCanvasRuntimeSessionsResult } from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
 import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';
 import { FrontStagePage } from '../../pages/FrontStagePage';
 
@@ -22,12 +23,38 @@ const blockCatalogHook = vi.hoisted(() => ({
 const blockCodeHook = vi.hoisted(() => ({
   useFrontstageBlockCode: vi.fn()
 }));
+const runtimeSessionsHook = vi.hoisted(() => ({
+  useFrontstagePageCanvasRuntimeSessions: vi.fn()
+}));
+const blockCodeApi = vi.hoisted(() => ({
+  fetchFrontstageBlockCode: vi.fn(
+    (_workspaceId: string, pageId: string, codeRef: string) =>
+      Promise.resolve({ pageId, codeRef, code: 'export default {}' })
+  ),
+  frontstageBlockCodeQueryKey: vi.fn(
+    (workspaceId: string, pageId: string, codeRef: string) =>
+      [
+        'frontstage',
+        workspaceId,
+        'pages',
+        pageId,
+        'block-code',
+        codeRef
+      ] as const
+  ),
+  saveFrontstageBlockCode: vi.fn()
+}));
 
 vi.mock('../../hooks/use-frontstage-page-content-save', () =>
   pageContentSaveHook
 );
 vi.mock('../../hooks/use-frontstage-block-catalog', () => blockCatalogHook);
 vi.mock('../../hooks/use-frontstage-block-code', () => blockCodeHook);
+vi.mock(
+  '../../hooks/use-frontstage-page-canvas-runtime-sessions',
+  () => runtimeSessionsHook
+);
+vi.mock('../../api/block-code', () => blockCodeApi);
 
 function authenticate(permissions: string[]) {
   useAuthStore.getState().setAuthenticated({
@@ -180,6 +207,18 @@ function mockBlockCode(code = 'export default { render() {} }') {
   });
 }
 
+function mockRuntimeSessions(
+  overrides: Partial<UseFrontstagePageCanvasRuntimeSessionsResult> = {}
+) {
+  runtimeSessionsHook.useFrontstagePageCanvasRuntimeSessions.mockReturnValue({
+    entries: [],
+    snapshotsBySlot: {},
+    running: false,
+    hasError: false,
+    ...overrides
+  });
+}
+
 function renderFrontStagePage(pageContent: FrontstagePageContent) {
   return render(
     <AppProviders>
@@ -212,6 +251,7 @@ describe('FrontStagePage JS block trial panel link', () => {
     mockPageContentSaveState();
     mockBlockCatalog();
     mockBlockCode();
+    mockRuntimeSessions();
   });
 
   test('opens the trial panel for the selected block with a matched catalog entry and run plan', () => {
@@ -305,7 +345,42 @@ describe('FrontStagePage JS block trial panel link', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('cleans up the trial panel when exiting design mode or switching pages', async () => {
+  test('cleans up the trial panel when exiting design mode', async () => {
+    authenticate(['frontstage.page.design']);
+    mockBlockCatalog([createCatalogEntry()]);
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={[
+            {
+              id: 'page-1',
+              title: '页面 page-1',
+              kind: 'page'
+            }
+          ]}
+          pageContent={createPageContentWithBlock('hero')}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    fireEvent.click(getBlockRow('hero'));
+    fireEvent.click(screen.getByRole('button', { name: 'JS Block 试运行' }));
+    expect(
+      screen.getByRole('region', { name: 'JS Block 试运行面板' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('region', { name: 'JS Block 试运行面板' })
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  test('cleans up the trial panel when switching pages', async () => {
     authenticate(['frontstage.page.design']);
     mockBlockCatalog([createCatalogEntry()]);
     const pageTree = [
@@ -330,20 +405,6 @@ describe('FrontStagePage JS block trial panel link', () => {
         />
       </AppProviders>
     );
-
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(screen.getByRole('button', { name: 'JS Block 试运行' }));
-    expect(
-      screen.getByRole('region', { name: 'JS Block 试运行面板' })
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('region', { name: 'JS Block 试运行面板' })
-      ).not.toBeInTheDocument();
-    });
 
     fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
     fireEvent.click(getBlockRow('hero'));
