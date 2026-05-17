@@ -61,7 +61,7 @@ interface FrontstageBlockPayload {
   catalog: FrontstageBlockCatalogRef;
   contribution: FrontstageBlockContributionRef;
   props: Record<string, unknown>;
-  layout: FrontstageBlockLayout;
+  'x-layout': FrontstageBlockLayout;
   runtime: FrontstageBlockRuntimeHint;
 }
 
@@ -181,7 +181,8 @@ function normalizeLayout(
   path: string,
   diagnostics: FrontstagePageDocumentDiagnostic[]
 ): FrontstageBlockLayout {
-  const rawLayout = block.layout;
+  const layoutKey = Object.hasOwn(block, 'x-layout') ? 'x-layout' : 'layout';
+  const rawLayout = block[layoutKey];
   if (rawLayout === undefined || rawLayout === null) {
     return { order };
   }
@@ -190,7 +191,7 @@ function normalizeLayout(
     pushDiagnostic(diagnostics, {
       severity: 'warning',
       code: 'invalid_block_layout',
-      path: `${path}.layout`,
+      path: `${path}.${layoutKey}`,
       message: 'Frontstage block layout must be an object.'
     });
     return { order };
@@ -443,7 +444,7 @@ function createBlockPayload(
     catalog: { ...block.catalog },
     contribution: { ...block.contribution },
     props: { ...block.props },
-    layout: {
+    'x-layout': {
       ...block.layout,
       order: block.order
     },

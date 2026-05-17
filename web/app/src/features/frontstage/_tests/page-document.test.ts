@@ -62,7 +62,7 @@ describe('frontstage page document', () => {
                   code: 'official.hero'
                 },
                 props: { title: 'Hello' },
-                layout: { region: 'main', order: 20, span: 12 },
+                'x-layout': { region: 'main', order: 20, span: 12 },
                 runtime: { kind: 'iframe', entry: 'blocks/hero.html' }
               }
             ]
@@ -97,6 +97,72 @@ describe('frontstage page document', () => {
         }
       }
     ]);
+    expect(document.diagnostics).toEqual([]);
+  });
+
+  test('prefers x-layout over legacy layout when both are present', () => {
+    const document = createFrontstagePageDocument(
+      createPageContent({
+        root: {
+          uid: 'root-1',
+          payload: {
+            blocks: [
+              {
+                id: 'hero',
+                codeRef: 'hero-code',
+                contributionCode: 'official.hero',
+                layout: { region: 'legacy', order: 99, width: 1, height: 1 },
+                'x-layout': {
+                  region: 'main',
+                  order: 20,
+                  width: 12,
+                  height: 4
+                },
+                runtime: 'inline'
+              }
+            ]
+          }
+        }
+      })
+    );
+
+    expect(document.blocks[0].layout).toEqual({
+      region: 'main',
+      order: 20,
+      width: 12,
+      height: 4
+    });
+    expect(document.blocks[0].order).toBe(20);
+    expect(document.diagnostics).toEqual([]);
+  });
+
+  test('falls back to legacy layout when x-layout is missing', () => {
+    const document = createFrontstagePageDocument(
+      createPageContent({
+        root: {
+          uid: 'root-1',
+          payload: {
+            blocks: [
+              {
+                id: 'hero',
+                codeRef: 'hero-code',
+                contributionCode: 'official.hero',
+                layout: { region: 'legacy', order: 7, width: 8, height: 2 },
+                runtime: 'inline'
+              }
+            ]
+          }
+        }
+      })
+    );
+
+    expect(document.blocks[0].layout).toEqual({
+      region: 'legacy',
+      order: 7,
+      width: 8,
+      height: 2
+    });
+    expect(document.blocks[0].order).toBe(7);
     expect(document.diagnostics).toEqual([]);
   });
 
@@ -165,7 +231,7 @@ describe('frontstage page document', () => {
         root: {
           uid: 'root-1',
           payload: {
-            blocks: [{ props: 'invalid-props', layout: 'invalid-layout' }]
+            blocks: [{ props: 'invalid-props', 'x-layout': 'invalid-layout' }]
           }
         }
       })
@@ -308,7 +374,7 @@ describe('frontstage page document', () => {
         code: 'official.hero'
       },
       props: { title: 'Hello' },
-      layout: { region: 'main', order: 99, span: 12 },
+      layout: { region: 'main', order: 99, span: 12, width: 12, height: 4 },
       order: 3,
       runtime: {
         kind: 'iframe',
@@ -345,7 +411,13 @@ describe('frontstage page document', () => {
         code: 'official.hero'
       },
       props: { title: 'Hello' },
-      layout: { region: 'main', order: 3, span: 12 },
+      'x-layout': {
+        region: 'main',
+        order: 3,
+        span: 12,
+        width: 12,
+        height: 4
+      },
       runtime: {
         kind: 'iframe',
         entry: 'blocks/hero.html',
@@ -367,6 +439,7 @@ describe('frontstage page document', () => {
     expect(input.root.payload).not.toHaveProperty('sourceCodeRef');
     expect(expectedBlock).not.toHaveProperty('sourceId');
     expect(expectedBlock).not.toHaveProperty('sourceCodeRef');
+    expect(expectedBlock).not.toHaveProperty('layout');
 
     const roundTripDocument = createFrontstagePageDocument(
       createPageContent({
@@ -386,7 +459,13 @@ describe('frontstage page document', () => {
         ...block,
         sourceId: 'hero',
         sourceCodeRef: 'hero-code',
-        layout: { region: 'main', order: 3, span: 12 },
+        layout: {
+          region: 'main',
+          order: 3,
+          span: 12,
+          width: 12,
+          height: 4
+        },
         order: 3
       }
     ]);

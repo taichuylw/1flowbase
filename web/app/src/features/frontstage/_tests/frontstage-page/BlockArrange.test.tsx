@@ -123,7 +123,7 @@ function createBlockPayload(blockId: string, order: number) {
       code: 'frontstage.js-ui-block'
     },
     props: {},
-    layout: {
+    'x-layout': {
       order,
       region: 'main'
     },
@@ -142,7 +142,7 @@ function createBlockPayloadWithLayout(
 ) {
   return {
     ...createBlockPayload(blockId, order),
-    layout: {
+    'x-layout': {
       order,
       region: 'main',
       ...layout
@@ -449,13 +449,15 @@ describe('FrontStagePage block arrange actions', () => {
       SaveFrontstagePageContentInput
     ];
     const [heroBlock, ctaBlock] = getSavedBlocks(saveInput);
-    expect(heroBlock.layout).toMatchObject({
+    expect(heroBlock['x-layout']).toMatchObject({
       order: 0,
       region: 'main',
       width: 16,
       height: 4
     });
-    expect(ctaBlock.layout).toMatchObject({ order: 1, region: 'main' });
+    expect(ctaBlock['x-layout']).toMatchObject({ order: 1, region: 'main' });
+    expect(heroBlock).not.toHaveProperty('layout');
+    expect(ctaBlock).not.toHaveProperty('layout');
 
     await waitFor(() => {
       expect(getSelectedBlockActions()).toHaveTextContent(
