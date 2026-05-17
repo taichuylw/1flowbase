@@ -17,6 +17,7 @@ import { saveFrontstageBlockCode } from '../api/block-code';
 import type { FrontstagePageContent } from '../api/page-content';
 import { AddBlockCatalogPickerDrawer } from '../components/AddBlockCatalogPickerDrawer';
 import { BlockCodeEditorDrawer } from '../components/BlockCodeEditorDrawer';
+import { BlockConfigurationDrawer } from '../components/BlockConfigurationDrawer';
 import { JsBlockTrialPanel } from '../components/JsBlockTrialPanel';
 import { PageCanvas } from '../components/PageCanvas';
 import { useFrontstageBlockCatalog } from '../hooks/use-frontstage-block-catalog';
@@ -36,6 +37,7 @@ import {
   createFrontstageBuiltInJsBlockTemplateCode,
   type FrontstageBuiltInJsBlockTemplateId
 } from '../lib/block-templates';
+import { createFrontstageBlockConfigurationModel } from '../lib/block-configuration';
 import { createFrontstageJsBlockDataEffectHandler } from '../lib/js-block-data-effect-handler';
 import {
   createFrontstagePageDocument,
@@ -235,7 +237,9 @@ function getNumericLayoutValue(value: unknown): number | undefined {
     : undefined;
 }
 
-function normalizeLayoutDimension(value: number | string | null): number | null {
+function normalizeLayoutDimension(
+  value: number | string | null
+): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.trunc(value);
   }
@@ -296,6 +300,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     useState<PageTreeOperationStatus>('idle');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isBlockCodeEditorOpen, setIsBlockCodeEditorOpen] = useState(false);
+  const [isBlockConfigurationOpen, setIsBlockConfigurationOpen] =
+    useState(false);
   const [isJsBlockTrialPanelOpen, setIsJsBlockTrialPanelOpen] = useState(false);
   const [jsBlockTrialContextSnapshot, setJsBlockTrialContextSnapshot] =
     useState<Record<string, unknown>>({});
@@ -335,7 +341,9 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     : undefined;
   const displayedPageDocument = useMemo(
     () =>
-      activePageContent ? createFrontstagePageDocument(activePageContent) : null,
+      activePageContent
+        ? createFrontstagePageDocument(activePageContent)
+        : null,
     [activePageContent]
   );
   const blockCompositionState = useMemo(
@@ -394,10 +402,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   );
   const canShowSelectedBlockActions = Boolean(
     canEnterDesignMode &&
-      isDesignMode &&
-      activePageContent &&
-      blockCompositionState &&
-      selectedBlock
+    isDesignMode &&
+    activePageContent &&
+    blockCompositionState &&
+    selectedBlock
   );
   const canRunSelectedBlockAction =
     canShowSelectedBlockActions &&
@@ -410,8 +418,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     canRunSelectedBlockAction &&
     Boolean(
       blockCompositionState &&
-        selectedBlockIndex >= 0 &&
-        selectedBlockIndex < blockCompositionState.document.blocks.length - 1
+      selectedBlockIndex >= 0 &&
+      selectedBlockIndex < blockCompositionState.document.blocks.length - 1
     );
   const selectedBlockCode = useFrontstageBlockCode({
     workspaceId: canShowSelectedBlockActions ? workspaceId : null,
@@ -436,6 +444,17 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       props: selectedBlock?.props ?? {}
     }),
     [activePageContent, selectedBlock, selectedPageId, workspaceId]
+  );
+  const selectedBlockConfigurationModel = useMemo(
+    () =>
+      selectedBlock
+        ? createFrontstageBlockConfigurationModel({
+            block: selectedBlock,
+            catalogEntry: matchingJsBlockCatalogEntry,
+            limits: jsBlockTrialLimits
+          })
+        : null,
+    [jsBlockTrialLimits, matchingJsBlockCatalogEntry, selectedBlock]
   );
 
   useEffect(() => {
@@ -467,6 +486,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setSavedPageContent(null);
     setSelectedBlockId(null);
     setIsBlockCodeEditorOpen(false);
+    setIsBlockConfigurationOpen(false);
     setIsJsBlockTrialPanelOpen(false);
     setIsAddBlockPickerOpen(false);
     setBlockSaveError(null);
@@ -477,6 +497,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setSelectedBlockId((currentBlockId) => {
       if (!currentBlockId || !pageContent) {
         setIsBlockCodeEditorOpen(false);
+        setIsBlockConfigurationOpen(false);
         setIsJsBlockTrialPanelOpen(false);
         setIsAddBlockPickerOpen(false);
         return null;
@@ -488,6 +509,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       );
       if (!hasCurrentBlock) {
         setIsBlockCodeEditorOpen(false);
+        setIsBlockConfigurationOpen(false);
         setIsJsBlockTrialPanelOpen(false);
       }
 
@@ -498,6 +520,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   useEffect(() => {
     if (!canShowSelectedBlockActions) {
       setIsBlockCodeEditorOpen(false);
+      setIsBlockConfigurationOpen(false);
       setIsJsBlockTrialPanelOpen(false);
     }
   }, [canShowSelectedBlockActions]);
@@ -1123,6 +1146,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                 if (isDesignMode) {
                   setSelectedBlockId(null);
                   setIsBlockCodeEditorOpen(false);
+                  setIsBlockConfigurationOpen(false);
                   setIsJsBlockTrialPanelOpen(false);
                 }
 
@@ -1240,7 +1264,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             }
             onSelectBlock={
               canEnterDesignMode && isDesignMode
-                ? setSelectedBlockId
+                ? (blockId) => {
+                    setSelectedBlockId((currentBlockId) =>
+                      currentBlockId === blockId ? null : blockId
+                    );
+                  }
                 : undefined
             }
             onRetry={onRetryLoadPageContent}
@@ -1277,10 +1305,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                       value={selectedBlockLayoutWidth}
                       disabled={!canRunSelectedBlockAction}
                       onChange={(value) =>
-                        handleSelectedBlockLayoutDimensionChange(
-                          'width',
-                          value
-                        )
+                        handleSelectedBlockLayoutDimensionChange('width', value)
                       }
                       style={{ width: 72 }}
                     />
@@ -1326,6 +1351,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                     onClick={handleOpenJsBlockTrialPanel}
                   >
                     JS Block 试运行
+                  </Button>
+                  <Button
+                    size="small"
+                    disabled={!canRunSelectedBlockAction}
+                    onClick={() => setIsBlockConfigurationOpen(true)}
+                  >
+                    配置区块
                   </Button>
                   <Button
                     size="small"
@@ -1411,6 +1443,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         workspaceId={workspaceId}
         pageId={selectedPageId}
         block={canShowSelectedBlockActions ? selectedBlock : null}
+      />
+      <BlockConfigurationDrawer
+        open={isBlockConfigurationOpen && canShowSelectedBlockActions}
+        onClose={() => setIsBlockConfigurationOpen(false)}
+        model={
+          canShowSelectedBlockActions ? selectedBlockConfigurationModel : null
+        }
       />
     </div>
   );
