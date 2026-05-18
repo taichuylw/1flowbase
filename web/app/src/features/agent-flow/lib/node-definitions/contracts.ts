@@ -28,6 +28,15 @@ const COMMON_RUNTIME_INPUTS = [
   { key: 'input_payload', title: 'Input Payload', valueType: 'json' }
 ];
 
+const DEFAULT_CODE_SOURCE = `function main({arg1, arg2}) {
+   const param=arg1 + arg2
+    console.log(param)
+
+    return {
+        result: param
+    }
+}`;
+
 function cloneJsonValue<T>(value: T): T {
   return structuredClone(value);
 }
@@ -417,14 +426,23 @@ function createIfElseContract(): NodeRuntimeUiContract {
 }
 
 function createCodeContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: '代码结果', valueType: 'unknown' }];
+  const outputs = [{ key: 'result', title: 'result', valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'code',
     title: 'Code',
     description: '执行自定义代码并返回结构化结果。',
     category: 'data',
-    config: { language: 'javascript', source: '' },
+    config: { language: 'javascript', source: DEFAULT_CODE_SOURCE },
+    bindings: {
+      named_bindings: {
+        kind: 'named_bindings',
+        value: [
+          { name: 'arg1', selector: [] },
+          { name: 'arg2', selector: [] }
+        ]
+      }
+    },
     outputs,
     panelSections: [
       basicsPanelSection,

@@ -57,6 +57,15 @@ function findFieldBlock(
   return null;
 }
 
+const DEFAULT_CODE_NODE_SOURCE = `function main({arg1, arg2}) {
+   const param=arg1 + arg2
+    console.log(param)
+
+    return {
+        result: param
+    }
+}`;
+
 describe('agent-flow node schema registry', () => {
   test('keeps identity fields in the header and config fields in the config tab', () => {
     const schema = resolveAgentFlowNodeSchema('llm');
@@ -239,6 +248,27 @@ describe('agent-flow node schema registry', () => {
     expect(serializedConfigBlocks).not.toContain(
       '"renderer":"output_contract"'
     );
+  });
+
+  test('creates Code nodes with default args, source, and string result output', () => {
+    const codeNode = createNodeDocument('code', 'node-code-defaults');
+
+    expect(codeNode.bindings).toEqual({
+      named_bindings: {
+        kind: 'named_bindings',
+        value: [
+          { name: 'arg1', selector: [] },
+          { name: 'arg2', selector: [] }
+        ]
+      }
+    });
+    expect(codeNode.config).toEqual({
+      language: 'javascript',
+      source: DEFAULT_CODE_NODE_SOURCE
+    });
+    expect(codeNode.outputs).toEqual([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
   });
 
   test('keeps the start node on input fields instead of the shared output editor', () => {
