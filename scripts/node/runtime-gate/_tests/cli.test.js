@@ -27,7 +27,7 @@ test('buildCommand proxies runtime-gate arguments to page-debug', () => {
   });
 });
 
-test('main writes advisory warning output under tmp/test-governance', () => {
+test('runtime-gate main writes advisory warning output under tmp/test-governance', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-runtime-gate-'));
   const calls = [];
 

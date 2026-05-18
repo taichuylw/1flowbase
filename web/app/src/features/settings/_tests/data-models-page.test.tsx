@@ -246,7 +246,7 @@ async function openDataModelEditorByTitle(title: string) {
   const contactsRow = screen
     .getAllByRole('row')
     .find((row) => within(row).queryByText(title));
-  expect(contactsRow).toBeDefined();
+  expect(contactsRow).toBeInstanceOf(HTMLElement);
 
   fireEvent.click(
     within(contactsRow as HTMLElement).getByRole('button', { name: '编辑' })
@@ -633,7 +633,7 @@ describe('Settings data models page', () => {
     const hubSpotRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('HubSpot'));
-    expect(hubSpotRow).toBeDefined();
+    expect(hubSpotRow).toBeInstanceOf(HTMLElement);
     expect(
       within(hubSpotRow as HTMLElement).getByLabelText('HubSpot 启用')
     ).toBeChecked();
@@ -664,7 +664,7 @@ describe('Settings data models page', () => {
     const mainSourceRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('主数据源'));
-    expect(mainSourceRow).toBeDefined();
+    expect(mainSourceRow).toBeInstanceOf(HTMLElement);
     fireEvent.click(
       within(mainSourceRow as HTMLElement).getByRole('button', {
         name: '配置'
@@ -681,9 +681,9 @@ describe('Settings data models page', () => {
     const rolesRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('roles'));
-    expect(attachmentsRow).toBeDefined();
-    expect(usersRow).toBeDefined();
-    expect(rolesRow).toBeDefined();
+    expect(attachmentsRow).toBeInstanceOf(HTMLElement);
+    expect(usersRow).toBeInstanceOf(HTMLElement);
+    expect(rolesRow).toBeInstanceOf(HTMLElement);
     expect(
       within(attachmentsRow as HTMLElement).queryByRole('button', {
         name: '删除数据表 Attachments'
@@ -899,7 +899,7 @@ describe('Settings data models page', () => {
     const contactsRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('Contacts'));
-    expect(contactsRow).toBeDefined();
+    expect(contactsRow).toBeInstanceOf(HTMLElement);
 
     fireEvent.click(
       within(contactsRow as HTMLElement).getByRole('button', { name: '编辑' })
@@ -972,7 +972,7 @@ describe('Settings data models page', () => {
     const contactsRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('Contacts'));
-    expect(contactsRow).toBeDefined();
+    expect(contactsRow).toBeInstanceOf(HTMLElement);
 
     fireEvent.click(
       within(contactsRow as HTMLElement).getByRole('button', {

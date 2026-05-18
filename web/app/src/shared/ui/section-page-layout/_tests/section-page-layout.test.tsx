@@ -139,7 +139,7 @@ describe('SectionPageLayout', () => {
       /\.section-page-layout__rail\s*\{[\s\S]*?\n\}/
     )?.[0];
 
-    expect(desktopRailBlock).toBeTruthy();
+    expect(desktopRailBlock).toContain('.section-page-layout__rail');
     expect(desktopRailBlock).not.toContain('min-height: calc(100vh - 56px);');
   });
 

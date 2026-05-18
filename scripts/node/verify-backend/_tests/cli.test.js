@@ -14,7 +14,7 @@ function getExpectedParallelism() {
   return Math.max(1, Math.floor(available / 2));
 }
 
-test('buildCommands uses independent cargo jobs and cargo test threads', () => {
+test('verify-backend buildCommands uses independent cargo jobs and cargo test threads', () => {
   assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2, repoRoot: '/repo-root', env: {} }), [
     {
       label: 'rust-backend-static-gate',

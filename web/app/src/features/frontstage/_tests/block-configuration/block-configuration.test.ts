@@ -136,7 +136,7 @@ function section(
   id: (typeof FRONTSTAGE_BLOCK_CONFIGURATION_SECTION_IDS)[number]
 ) {
   const result = model.sections.find((item) => item.id === id);
-  expect(result).toBeDefined();
+  expect(result).toMatchObject({ id });
   return result;
 }
 

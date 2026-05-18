@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../test-backend.js');
 
-test('buildCommands uses independent cargo jobs and cargo test threads', () => {
+test('test-backend buildCommands uses independent cargo jobs and cargo test threads', () => {
   assert.deepEqual(buildCommands({ cargoJobs: 4, cargoTestThreads: 2, repoRoot: '/repo-root', env: {} }), [
     {
       label: 'rust-backend-static-gate',
@@ -83,7 +83,7 @@ test('main routes backend test execution through the heavy managed gate', async 
   }));
 });
 
-test('main writes advisory warning output under tmp/test-governance', async () => {
+test('test-backend main writes advisory warning output under tmp/test-governance', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-test-backend-'));
   const calls = [];
 

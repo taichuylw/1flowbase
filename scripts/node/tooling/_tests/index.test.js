@@ -59,6 +59,20 @@ test('tooling index dispatches hotspot-review subcommand', async () => {
   assert.deepEqual(capturedArgv, ['--since', '1 day ago']);
 });
 
+test('tooling index dispatches repo-hygiene subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['repo-hygiene', '--max-findings', '10'], {
+    runRepoHygieneImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-findings', '10']);
+});
+
 test('tooling index passes subcommand help through to the subcommand', async () => {
   let capturedArgv = null;
 

@@ -41,7 +41,7 @@ describe('JS block source static policy', () => {
     });
   });
 
-  test('rejects dynamic import with a stable import error', () => {
+  test('JS block policy rejects dynamic import with a stable import error', () => {
     const result = validateJsBlockSource(
       "const mod = await import('@1flowbase/block-sdk');"
     );
@@ -164,7 +164,7 @@ describe('JS block source static policy', () => {
     });
   });
 
-  test('does not reject dangerous words inside comments and strings', () => {
+  test('JS block policy ignores dangerous words inside comments and strings', () => {
     const source = `
 const label = 'fetch eval Function require XMLHttpRequest WebSocket sendBeacon';
 const description = "navigator['sendBeacon']('/track')";
@@ -183,7 +183,7 @@ const words = ['constructor', 'prototype', '__proto__'];
     });
   });
 
-  test('returns syntax_invalid for malformed source without throwing', () => {
+  test('JS block policy returns syntax_invalid for malformed source without throwing', () => {
     expect(() =>
       validateJsBlockSource('const value = "unterminated')
     ).not.toThrow();
@@ -197,7 +197,7 @@ const words = ['constructor', 'prototype', '__proto__'];
     });
   });
 
-  test('returns a structured failure for non-string source without throwing', () => {
+  test('JS block policy returns a structured failure for non-string source without throwing', () => {
     expect(() => validateJsBlockSource(null)).not.toThrow();
 
     const result = validateJsBlockSource(null);

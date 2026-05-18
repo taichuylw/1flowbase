@@ -70,7 +70,7 @@ describe('Native trusted block source static policy', () => {
     });
   });
 
-  test('rejects dynamic import with a stable import error', () => {
+  test('native trusted block policy rejects dynamic import with a stable import error', () => {
     const result = validateNativeTrustedBlockSource(
       "const mod = await import('antd');"
     );
@@ -211,7 +211,7 @@ describe('Native trusted block source static policy', () => {
     });
   });
 
-  test('does not reject dangerous words inside comments and strings', () => {
+  test('native trusted block policy ignores dangerous words inside comments and strings', () => {
     const source = `
 const label = 'fetch eval Function require XMLHttpRequest WebSocket sendBeacon ReactDOM createPortal Upload';
 const words = ['constructor', 'prototype', '__proto__', 'message', 'notification'];
@@ -229,7 +229,7 @@ const words = ['constructor', 'prototype', '__proto__', 'message', 'notification
     });
   });
 
-  test('returns syntax_invalid for malformed source without throwing', () => {
+  test('native trusted block policy returns syntax_invalid for malformed source without throwing', () => {
     expect(() =>
       validateNativeTrustedBlockSource('const value = "unterminated')
     ).not.toThrow();
@@ -243,7 +243,7 @@ const words = ['constructor', 'prototype', '__proto__', 'message', 'notification
     });
   });
 
-  test('returns a structured failure for non-string source without throwing', () => {
+  test('native trusted block policy returns a structured failure for non-string source without throwing', () => {
     expect(() => validateNativeTrustedBlockSource(null)).not.toThrow();
 
     const result = validateNativeTrustedBlockSource(null);

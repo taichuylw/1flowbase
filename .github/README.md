@@ -26,6 +26,11 @@ scope: backend-consistency
 scope: coverage
 ```
 
+The `repo` scope includes `repo-hygiene`, which writes
+`tmp/test-governance/repo-hygiene.json` with deprecated-marker, weak-assertion,
+duplicate-test-title, file-size, and directory-pressure findings. Advisory findings
+remain warnings; focused tests still fail the repo gate.
+
 It also runs React Doctor as a frontend quality gate against `web/app` changed files:
 
 ```yaml
@@ -109,6 +114,7 @@ The Quality Gate Action writes:
 - `tmp/test-governance/quality-gate.latest.log`
 - `tmp/test-governance/quality-gate-report.md`
 - `tmp/test-governance/quality-gate-report.json`
+- `tmp/test-governance/repo-hygiene.json` for `repo` and `ci`
 - `tmp/test-governance/backend-consistency-targets.json` for `ci` and `backend-consistency`
 
 Existing warning, coverage, screenshot, and QA evidence files remain under

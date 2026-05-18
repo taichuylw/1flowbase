@@ -114,6 +114,7 @@ node scripts/node/verify.js ci
 
 仓库级验证组合：
 
+- repo hygiene 审计：废弃标记、弱断言、重复测试标题、文件/目录压力
 - 脚本测试
 - 契约测试
 - 前端 full gate
@@ -121,7 +122,7 @@ node scripts/node/verify.js ci
 
 ### `node scripts/node/verify-ci.js`
 
-CI 组合入口，当前执行 `verify-repo` 与 `verify-coverage all`。
+CI 组合入口，当前执行 `verify-repo`、`verify-backend-consistency` 与 `verify-coverage all`。
 
 ## Frontend Tooling
 
@@ -196,7 +197,19 @@ node scripts/node/claude-skill-sync.js --source .agents/skills --target .claude/
 - `claude-skill-sync`
 - `mock-ui-sync`
 - `page-debug`
+- `repo-hygiene`
 - `runtime-gate`
+
+### `node scripts/node/tooling.js repo-hygiene [--max-findings <n>]`
+
+工程卫生审计入口。默认写入 `tmp/test-governance/repo-hygiene.json`，覆盖：
+
+- 废弃 / legacy / TODO 类标记
+- `test.only`、跳过测试和弱断言
+- 重复测试标题
+- 超大文件和目录文件数压力
+
+当前只有会改变 CI 测试语义的 `test.only` 类命中阻塞；历史债先以 warning 形式进入 QA 证据。
 
 ## Plugin CLI
 

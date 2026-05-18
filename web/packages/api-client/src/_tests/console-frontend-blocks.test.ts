@@ -8,8 +8,8 @@ describe('console-frontend-blocks client', () => {
     .spyOn(transport, 'apiFetch')
     .mockImplementation(async (input) => input as never);
 
-  test('transport spy is active', () => {
-    expect(apiFetchSpy).toBeDefined();
+  test('frontend blocks transport spy is active', () => {
+    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
   });
 
   test('lists frontend block catalog entries from console endpoint', async () => {

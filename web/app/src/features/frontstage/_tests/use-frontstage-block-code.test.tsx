@@ -182,7 +182,7 @@ describe('useFrontstageBlockCode', () => {
     });
   });
 
-  test('rejects save without csrf token before calling feature api', async () => {
+  test('block code save rejects missing csrf token before calling feature api', async () => {
     authenticate(null);
     const { result } = setupBlockCode();
     let saveError: unknown;

@@ -19,8 +19,8 @@ describe('console-frontstage client', () => {
     .spyOn(transport, 'apiFetch')
     .mockImplementation(async (input) => input as never);
 
-  test('transport spy is active', () => {
-    expect(apiFetchSpy).toBeDefined();
+  test('frontstage transport spy is active', () => {
+    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
   });
 
   test('listFrontstagePages reads the workspace page tree', async () => {

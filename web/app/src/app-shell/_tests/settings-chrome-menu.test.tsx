@@ -79,7 +79,7 @@ describe('createSettingsChromeMenuItems', () => {
     }
 
     expect(label.props['aria-label']).toBe('设置');
-    expect(label.props.children).toBeTruthy();
+    expect(label.props.children).toEqual(expect.anything());
     expect(label.props.children).not.toBe('设置');
   });
 
@@ -104,7 +104,6 @@ describe('createSettingsChromeMenuItems', () => {
       /\.app-shell-settings-block \{([\s\S]*?)\n\}/
     )?.[1];
 
-    expect(settingsBlockRule).toBeDefined();
     expect(settingsBlockRule).not.toContain('min-width:');
   });
 });

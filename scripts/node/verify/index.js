@@ -759,6 +759,12 @@ function buildRepoCommands({ repoRoot, env = process.env }) {
 
   return [
     {
+      label: 'repo-hygiene',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'repo-hygiene'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-script-tests',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'scripts'],
@@ -788,7 +794,7 @@ function buildRepoCommands({ repoRoot, env = process.env }) {
 function usageRepo(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/verify-repo.js\n'
-      + 'Runs: scripts/node tests + contract tests + frontend full gate + backend full gate\n'
+      + 'Runs: repo hygiene + scripts/node tests + contract tests + frontend full gate + backend full gate\n'
   );
 }
 
