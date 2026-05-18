@@ -134,6 +134,44 @@ describe('AgentFlowNodeCard', () => {
     expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
 
+  test('renders Code nodes with a code SVG icon', () => {
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-code',
+              nodeType: 'code',
+              nodeSchema: resolveAgentFlowNodeSchema('code'),
+              typeLabel: 'Code',
+              alias: 'Code',
+              description: '执行自定义代码并返回结构化结果。',
+              config: {},
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn()
+            },
+            id: 'node-code',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    const card = screen.getByRole('button', { name: /code Code/ });
+
+    expect(card).toHaveClass('agent-flow-node-card--type-code');
+    expect(within(card).getByRole('img', { name: 'code' })).toBeInTheDocument();
+  });
+
   test('uses the source handle itself as the add-node trigger instead of nesting a separate button', () => {
     const onOpenPicker = vi.fn();
 
