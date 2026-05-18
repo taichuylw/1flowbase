@@ -1,4 +1,5 @@
-import { Button, Input, Select, Typography } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import { Button, Input, Select } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
 import { SelectorField } from './SelectorField';
@@ -33,62 +34,65 @@ export function NamedBindingsField({
     <div className="agent-flow-binding-list">
       {value.map((entry, index) => (
         <div key={`${entry.name}-${index}`} className="agent-flow-binding-row">
-          {nameOptions ? (
-            <Select
-              aria-label={`${ariaLabel}-${index}-field`}
-              options={nameOptions}
-              placeholder={namePlaceholder}
-              value={entry.name || undefined}
-              onChange={(nextName) =>
-                onChange(
-                  value.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, name: nextName } : item
+          <div className="agent-flow-binding-row__name">
+            {nameOptions ? (
+              <Select
+                aria-label={`${ariaLabel}-${index}-field`}
+                options={nameOptions}
+                placeholder={namePlaceholder}
+                value={entry.name || undefined}
+                onChange={(nextName) =>
+                  onChange(
+                    value.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, name: nextName } : item
+                    )
                   )
-                )
-              }
-            />
-          ) : (
-            <Input
-              aria-label={`${ariaLabel}-${index}-name`}
-              placeholder={namePlaceholder}
-              value={entry.name}
-              onChange={(event) =>
+                }
+              />
+            ) : (
+              <Input
+                aria-label={`${ariaLabel}-${index}-name`}
+                placeholder={namePlaceholder}
+                value={entry.name}
+                onChange={(event) =>
+                  onChange(
+                    value.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, name: event.target.value }
+                        : item
+                    )
+                  )
+                }
+              />
+            )}
+          </div>
+          <div className="agent-flow-binding-row__selector">
+            <SelectorField
+              ariaLabel={`${ariaLabel}-${index}-${selectorLabel}`}
+              options={options}
+              value={entry.selector}
+              onChange={(nextValue) =>
                 onChange(
                   value.map((item, itemIndex) =>
                     itemIndex === index
-                      ? { ...item, name: event.target.value }
+                      ? { ...item, selector: nextValue as string[] }
                       : item
                   )
                 )
               }
             />
-          )}
-          {nameOptions ? (
-            <Typography.Text type="secondary">:</Typography.Text>
-          ) : null}
-          <SelectorField
-            ariaLabel={`${ariaLabel}-${index}-${selectorLabel}`}
-            options={options}
-            value={entry.selector}
-            onChange={(nextValue) =>
-              onChange(
-                value.map((item, itemIndex) =>
-                  itemIndex === index
-                    ? { ...item, selector: nextValue as string[] }
-                    : item
-                )
-              )
-            }
-          />
+          </div>
           <Button
+            aria-label={`删除变量 ${entry.name || index + 1}`}
+            className="agent-flow-binding-row__delete"
             danger
+            icon={<DeleteOutlined />}
+            size="small"
             type="text"
             onClick={() =>
               onChange(value.filter((_, itemIndex) => itemIndex !== index))
             }
-          >
-            删除
-          </Button>
+          />
         </div>
       ))}
       <Button

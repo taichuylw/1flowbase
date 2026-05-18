@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import {
   fireEvent,
   render,
@@ -113,6 +115,15 @@ function createInitialStateWithCustomCodeNode() {
   }
 
   codeNode.config.source = 'return { riskScore: 0.82 };';
+  codeNode.bindings.named_bindings = {
+    kind: 'named_bindings',
+    value: [
+      {
+        name: 'arg1',
+        selector: ['sys', 'conversation_id']
+      }
+    ]
+  };
   codeNode.outputs = [
     {
       key: 'riskScore',
@@ -580,7 +591,15 @@ describe('NodeInspector', () => {
   });
 
   test('renders Code as input variables, JavaScript editor, then output variables and persists edits', async () => {
+    const inspectorStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/inspector.css',
+      'utf8'
+    );
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    expect(inspectorStyles).toContain(
+      'grid-template-columns: minmax(96px, 0.8fr) minmax(132px, 1.4fr) 28px;'
+    );
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider
@@ -617,6 +636,10 @@ describe('NodeInspector', () => {
     expect(sourceField.compareDocumentPosition(outputField)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+    expect(screen.getByLabelText('输入变量-0-name')).toHaveValue('arg1');
+    expect(
+      screen.getByRole('button', { name: '删除变量 arg1' })
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('JavaScript 代码')).toHaveValue(
       'return { riskScore: 0.82 };'
     );

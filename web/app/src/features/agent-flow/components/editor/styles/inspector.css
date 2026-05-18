@@ -434,16 +434,32 @@
 
 .agent-flow-binding-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .agent-flow-binding-row {
   display: grid;
+  grid-template-columns: minmax(96px, 0.8fr) minmax(132px, 1.4fr) 28px;
+  align-items: center;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid #dce6d9;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-binding-row__name,
+.agent-flow-binding-row__selector {
+  min-width: 0;
+}
+
+.agent-flow-binding-row__name .ant-input,
+.agent-flow-binding-row__name .ant-select,
+.agent-flow-binding-row__selector .ant-cascader,
+.agent-flow-binding-row__selector .ant-select {
+  width: 100%;
+}
+
+.agent-flow-binding-row__delete {
+  justify-self: end;
 }
 
 @media (max-width: 960px) {
