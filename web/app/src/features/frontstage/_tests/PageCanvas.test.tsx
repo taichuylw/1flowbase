@@ -3,8 +3,6 @@ import { describe, expect, test, vi } from 'vitest';
 
 import type { FrontstagePageContent } from '../api/page-content';
 import { PageCanvas } from '../components/PageCanvas';
-import type { FrontstagePageCanvasRuntimeSourceState } from '../lib/page-canvas/runtime-source';
-import type { FrontstagePageCanvasRuntimeRunPlanState } from '../lib/page-canvas/runtime-run-plan';
 
 function createPageContent(
   overrides: Partial<FrontstagePageContent> = {}
@@ -35,7 +33,9 @@ describe('PageCanvas', () => {
     render(<PageCanvas isLoading />);
 
     expect(screen.getByText('页面内容加载中')).toBeInTheDocument();
-    expect(screen.getByText('正在读取页面内容和区块清单。')).toBeInTheDocument();
+    expect(
+      screen.getByText('正在读取页面内容和区块清单。')
+    ).toBeInTheDocument();
   });
 
   test('renders an error state with retry action', () => {
@@ -53,22 +53,21 @@ describe('PageCanvas', () => {
     render(<PageCanvas content={undefined} />);
 
     expect(screen.getByText('未选择页面内容')).toBeInTheDocument();
-    expect(screen.getByText('选择页面后将显示只读内容画布。')).toBeInTheDocument();
+    expect(
+      screen.getByText('选择页面后将显示页面预览。')
+    ).toBeInTheDocument();
   });
 
-  test('renders empty document diagnostics from normalized page content', () => {
+  test('renders page title and empty content placeholder', () => {
     render(<PageCanvas content={createPageContent()} />);
 
     expect(screen.getByText('Landing')).toBeInTheDocument();
-    expect(screen.getByText('Root root-1')).toBeInTheDocument();
-    expect(screen.getByText('0 个区块')).toBeInTheDocument();
     expect(screen.getByText('页面内容为空')).toBeInTheDocument();
   });
 
-  test('renders normalized block list and selected block details', () => {
+  test('renders blocks sorted by order — each block shows loading placeholder', () => {
     render(
       <PageCanvas
-        selectedBlockId="cta"
         content={createPageContent({
           root: {
             uid: 'root-1',
@@ -83,8 +82,8 @@ describe('PageCanvas', () => {
                 },
                 {
                   id: 'cta',
-                  code_ref: 'cta-code',
-                  contribution_code: 'official.cta',
+                  codeRef: 'cta-code',
+                  contributionCode: 'official.cta',
                   runtime: 'inline',
                   layout: { order: 10, region: 'footer' }
                 }
@@ -95,17 +94,14 @@ describe('PageCanvas', () => {
       />
     );
 
-    const rows = screen.getAllByRole('button');
-    expect(rows[0]).toHaveTextContent('cta');
-    expect(rows[1]).toHaveTextContent('hero');
-
-    expect(screen.getByText('已选区块')).toBeInTheDocument();
-    expect(screen.getByText('official.cta')).toBeInTheDocument();
-    expect(screen.getAllByText('inline').length).toBeGreaterThan(0);
-    expect(screen.getByText('footer')).toBeInTheDocument();
+    // All blocks show "区块加载中..." when no runtime session available
+    expect(
+      within(screen.getByTestId('page-canvas-render-slots'))
+        .getAllByText('区块加载中...')
+    ).toHaveLength(2);
   });
 
-  test('renders read-only render plan slots with runtime state and fallback reasons', () => {
+  test('shows loading placeholder for blocks without runtime sessions', () => {
     render(
       <PageCanvas
         content={createPageContent({
@@ -113,13 +109,6 @@ describe('PageCanvas', () => {
             uid: 'root-1',
             payload: {
               blocks: [
-                {
-                  id: 'legacy',
-                  codeRef: 'legacy-code',
-                  contributionCode: 'official.legacy',
-                  runtime: { kind: 'inline', entry: 'legacy.js' },
-                  layout: { order: 20, region: 'footer', span: 6 }
-                },
                 {
                   id: 'hero',
                   codeRef: 'hero-code',
@@ -134,288 +123,13 @@ describe('PageCanvas', () => {
       />
     );
 
-    const slots = within(screen.getByTestId('page-canvas-render-slots'))
-      .getAllByRole('button');
-    expect(slots).toHaveLength(2);
-    expect(slots[0]).toHaveTextContent('hero');
-    expect(slots[0]).toHaveTextContent('restricted_js_block');
-    expect(slots[0]).toHaveTextContent('可运行，等待运行时接入');
-    expect(slots[0]).toHaveTextContent('blocks/hero.js');
-    expect(slots[0]).toHaveTextContent('order: 10');
-    expect(slots[0]).toHaveTextContent('region: main');
-    expect(slots[0]).toHaveTextContent('span: 12');
-
-    expect(slots[1]).toHaveTextContent('legacy');
-    expect(slots[1]).toHaveTextContent('placeholder');
-    expect(slots[1]).toHaveTextContent('unsupported_runtime');
-    expect(slots[1]).toHaveTextContent('legacy.js');
-  });
-
-  test('renders block code read status from runtime source state per render slot', () => {
-    const runtimeSourceState = {
-      workspaceId: 'workspace-1',
-      pageId: 'page-1',
-      sources: [
-        {
-          status: 'ready',
-          blockId: 'ready',
-          sourceIndex: 0,
-          slotIndex: 0,
-          codeRef: 'ready-code'
-        },
-        {
-          status: 'loading',
-          blockId: 'loading',
-          sourceIndex: 1,
-          slotIndex: 1,
-          codeRef: 'loading-code'
-        },
-        {
-          status: 'missing',
-          blockId: 'missing',
-          sourceIndex: 2,
-          slotIndex: 2,
-          codeRef: 'missing-code',
-          message: 'Block code is empty for missing-code.'
-        },
-        {
-          status: 'failed',
-          blockId: 'failed',
-          sourceIndex: 3,
-          slotIndex: 3,
-          codeRef: 'failed-code',
-          error: { message: 'read failed' }
-        },
-        {
-          status: 'skipped',
-          blockId: 'legacy',
-          sourceIndex: 4,
-          slotIndex: 4,
-          codeRef: 'legacy-code',
-          fallbackReasons: [
-            {
-              code: 'unsupported_runtime',
-              path: 'blocks.4.runtime.kind',
-              message: 'Unsupported runtime.'
-            }
-          ]
-        }
-      ]
-    } as FrontstagePageCanvasRuntimeSourceState;
-
-    render(
-      <PageCanvas
-        runtimeSourceState={runtimeSourceState}
-        content={createPageContent({
-          root: {
-            uid: 'root-1',
-            payload: {
-              blocks: [
-                {
-                  id: 'ready',
-                  codeRef: 'ready-code',
-                  contributionCode: 'official.ready',
-                  runtime: { kind: 'iframe', entry: 'blocks/ready.js' },
-                  layout: { order: 0, region: 'main' }
-                },
-                {
-                  id: 'loading',
-                  codeRef: 'loading-code',
-                  contributionCode: 'official.loading',
-                  runtime: { kind: 'iframe', entry: 'blocks/loading.js' },
-                  layout: { order: 1, region: 'main' }
-                },
-                {
-                  id: 'missing',
-                  codeRef: 'missing-code',
-                  contributionCode: 'official.missing',
-                  runtime: { kind: 'iframe', entry: 'blocks/missing.js' },
-                  layout: { order: 2, region: 'main' }
-                },
-                {
-                  id: 'failed',
-                  codeRef: 'failed-code',
-                  contributionCode: 'official.failed',
-                  runtime: { kind: 'iframe', entry: 'blocks/failed.js' },
-                  layout: { order: 3, region: 'main' }
-                },
-                {
-                  id: 'legacy',
-                  codeRef: 'legacy-code',
-                  contributionCode: 'official.legacy',
-                  runtime: { kind: 'inline', entry: 'legacy.js' },
-                  layout: { order: 4, region: 'footer' }
-                }
-              ]
-            }
-          }
-        })}
-      />
+    const slots = within(
+      screen.getByTestId('page-canvas-render-slots')
     );
-
-    const slots = within(screen.getByTestId('page-canvas-render-slots'))
-      .getAllByRole('button');
-
-    expect(slots[0]).toHaveTextContent('ready');
-    expect(slots[0]).toHaveTextContent('代码已就绪');
-    expect(slots[1]).toHaveTextContent('loading');
-    expect(slots[1]).toHaveTextContent('代码读取中');
-    expect(slots[2]).toHaveTextContent('missing');
-    expect(slots[2]).toHaveTextContent('代码缺失');
-    expect(slots[3]).toHaveTextContent('failed');
-    expect(slots[3]).toHaveTextContent('代码读取失败');
-    expect(slots[4]).toHaveTextContent('legacy');
-    expect(slots[4]).toHaveTextContent('跳过运行');
-    expect(slots[4]).toHaveTextContent('unsupported_runtime');
+    expect(slots.getByText('区块加载中...')).toBeInTheDocument();
   });
 
-  test('renders runtime run plan status per matched render slot while keeping code status', () => {
-    const runtimeSourceState = {
-      workspaceId: 'workspace-1',
-      pageId: 'page-1',
-      sources: [
-        {
-          status: 'ready',
-          blockId: 'ready',
-          sourceIndex: 0,
-          slotIndex: 0,
-          codeRef: 'ready-code'
-        },
-        {
-          status: 'loading',
-          blockId: 'loading',
-          sourceIndex: 1,
-          slotIndex: 1,
-          codeRef: 'loading-code'
-        },
-        {
-          status: 'ready',
-          blockId: 'catalog-missing',
-          sourceIndex: 2,
-          slotIndex: 2,
-          codeRef: 'catalog-missing-code'
-        },
-        {
-          status: 'ready',
-          blockId: 'rejected',
-          sourceIndex: 3,
-          slotIndex: 3,
-          codeRef: 'rejected-code'
-        }
-      ]
-    } as FrontstagePageCanvasRuntimeSourceState;
-    const runtimeRunPlanState = {
-      workspaceId: 'workspace-1',
-      pageId: 'page-1',
-      items: [
-        {
-          status: 'run_plan_ready',
-          blockId: 'ready',
-          slotIndex: 0,
-          codeRef: 'ready-code'
-        },
-        {
-          status: 'source_not_ready',
-          blockId: 'loading',
-          slotIndex: 1,
-          codeRef: 'loading-code',
-          reason: {
-            code: 'source_not_ready',
-            path: 'sources.1.status',
-            message: 'waiting for block code'
-          }
-        },
-        {
-          status: 'catalog_missing',
-          blockId: 'catalog-missing',
-          slotIndex: 2,
-          codeRef: 'catalog-missing-code',
-          reason: {
-            code: 'catalog_missing',
-            path: 'catalogEntries',
-            message: 'missing catalog'
-          }
-        },
-        {
-          status: 'rejected',
-          blockId: 'rejected',
-          slotIndex: 3,
-          codeRef: 'rejected-code',
-          rejection: {
-            ok: false,
-            code: 'missing_limits',
-            path: 'limits',
-            message: 'missing limits'
-          }
-        }
-      ]
-    } as FrontstagePageCanvasRuntimeRunPlanState;
-
-    render(
-      <PageCanvas
-        runtimeSourceState={runtimeSourceState}
-        runtimeRunPlanState={runtimeRunPlanState}
-        content={createPageContent({
-          root: {
-            uid: 'root-1',
-            payload: {
-              blocks: [
-                {
-                  id: 'ready',
-                  codeRef: 'ready-code',
-                  contributionCode: 'official.ready',
-                  runtime: { kind: 'iframe', entry: 'blocks/ready.js' },
-                  layout: { order: 0, region: 'main' }
-                },
-                {
-                  id: 'loading',
-                  codeRef: 'loading-code',
-                  contributionCode: 'official.loading',
-                  runtime: { kind: 'iframe', entry: 'blocks/loading.js' },
-                  layout: { order: 1, region: 'main' }
-                },
-                {
-                  id: 'catalog-missing',
-                  codeRef: 'catalog-missing-code',
-                  contributionCode: 'official.catalog-missing',
-                  runtime: {
-                    kind: 'iframe',
-                    entry: 'blocks/catalog-missing.js'
-                  },
-                  layout: { order: 2, region: 'main' }
-                },
-                {
-                  id: 'rejected',
-                  codeRef: 'rejected-code',
-                  contributionCode: 'official.rejected',
-                  runtime: { kind: 'iframe', entry: 'blocks/rejected.js' },
-                  layout: { order: 3, region: 'main' }
-                }
-              ]
-            }
-          }
-        })}
-      />
-    );
-
-    const slots = within(screen.getByTestId('page-canvas-render-slots'))
-      .getAllByRole('button');
-
-    expect(slots[0]).toHaveTextContent('ready');
-    expect(slots[0]).toHaveTextContent('代码已就绪');
-    expect(slots[0]).toHaveTextContent('运行计划已就绪');
-    expect(slots[1]).toHaveTextContent('loading');
-    expect(slots[1]).toHaveTextContent('代码读取中');
-    expect(slots[1]).toHaveTextContent('等待代码状态');
-    expect(slots[2]).toHaveTextContent('catalog-missing');
-    expect(slots[2]).toHaveTextContent('代码已就绪');
-    expect(slots[2]).toHaveTextContent('Catalog 未匹配');
-    expect(slots[3]).toHaveTextContent('rejected');
-    expect(slots[3]).toHaveTextContent('代码已就绪');
-    expect(slots[3]).toHaveTextContent('运行计划失败');
-  });
-
-  test('notifies selection changes without persisting content', () => {
+  test('notifies selection changes when clicked in design mode', () => {
     const onSelectBlock = vi.fn();
 
     render(
@@ -436,33 +150,97 @@ describe('PageCanvas', () => {
             }
           }
         })}
+        isDesignMode
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /hero/ }));
+    // In design mode, block containers have role="button"
+    const slots = within(
+      screen.getByTestId('page-canvas-render-slots')
+    );
+
+    fireEvent.click(slots.getByRole('button', { name: '区块 hero' }));
 
     expect(onSelectBlock).toHaveBeenCalledWith('hero');
   });
 
-  test('renders document diagnostics without exposing raw JSON', () => {
+  test('does not show hover toolbar when isDesignMode is false', () => {
     render(
       <PageCanvas
         content={createPageContent({
           root: {
             uid: 'root-1',
             payload: {
-              blocks: [{ id: 'hero' }, { id: 'hero' }]
+              blocks: [
+                {
+                  id: 'hero',
+                  codeRef: 'hero-code',
+                  contributionCode: 'official.hero',
+                  runtime: 'inline'
+                }
+              ]
             }
           }
         })}
+        isDesignMode={false}
       />
     );
 
-    const diagnostics = screen.getByTestId('page-canvas-diagnostics');
+    // The toolbar buttons should not be present
     expect(
-      within(diagnostics).getByText('duplicate_block_id')
-    ).toBeInTheDocument();
-    expect(within(diagnostics).getAllByText('missing_runtime')).toHaveLength(2);
-    expect(diagnostics).not.toHaveTextContent('"blocks"');
+      screen.queryByRole('button', { name: '移动或排序区块' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '更多区块操作' })
+    ).not.toBeInTheDocument();
+  });
+
+  test('renders design mode with hover toolbar actions', () => {
+    const designActions = {
+      onMoveUp: vi.fn(),
+      onMoveDown: vi.fn(),
+      onConfigure: vi.fn(),
+      onEditCode: vi.fn(),
+      onDelete: vi.fn()
+    };
+
+    render(
+      <PageCanvas
+        content={createPageContent({
+          root: {
+            uid: 'root-1',
+            payload: {
+              blocks: [
+                {
+                  id: 'hero',
+                  codeRef: 'hero-code',
+                  contributionCode: 'official.hero',
+                  runtime: { kind: 'iframe', entry: 'blocks/hero.js' },
+                  layout: { order: 10, region: 'main' }
+                },
+                {
+                  id: 'cta',
+                  codeRef: 'cta-code',
+                  contributionCode: 'official.cta',
+                  runtime: { kind: 'iframe', entry: 'blocks/cta.js' },
+                  layout: { order: 20, region: 'footer' }
+                }
+              ]
+            }
+          }
+        })}
+        isDesignMode
+        designActions={designActions}
+      />
+    );
+
+    // In design mode, blocks are rendered as buttons (container + toolbar buttons)
+    const renderSlots = screen.getByTestId('page-canvas-render-slots');
+    expect(renderSlots).toBeInTheDocument();
+    // Each block container is a role="button" (2 total for 2 blocks)
+    const blockButtons = within(renderSlots).getAllByRole('button', {
+      name: /区块 /
+    });
+    expect(blockButtons).toHaveLength(2);
   });
 });

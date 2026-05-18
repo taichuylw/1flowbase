@@ -2,15 +2,16 @@ import {
   Alert,
   Button,
   Divider,
+  Drawer,
   Empty,
   Flex,
-  InputNumber,
+  Grid,
   Layout,
   Space,
   Typography
 } from 'antd';
 import type { FC } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { saveFrontstageBlockCode } from '../api/block-code';
@@ -326,7 +327,9 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         pageTree: normalizePageTree(initialPageTree ?? [])
       }).selectedPageId
   );
+  const screens = Grid.useBreakpoint();
   const { Sider, Content } = Layout;
+  const isCompactLayout = screens.md === false;
   const blockCatalog = useFrontstageBlockCatalog();
   const pageContentSave = useFrontstagePageContentSave({
     workspaceId,
@@ -502,17 +505,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         : null,
     [jsBlockTrialLimits, matchingJsBlockCatalogEntry, selectedBlock]
   );
-
   useEffect(() => {
-    if (!initialPageTree) {
-      return;
-    }
 
-    setPageTree(normalizePageTree(initialPageTree));
-    setOperationStatus('idle');
-  }, [initialPageTree]);
-
-  useEffect(() => {
     const resolution = resolveSelectedPageId({
       currentSelectedPageId: selectedPageId,
       pageId,
@@ -527,6 +521,15 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onNavigatePage?.(resolution.navigationTarget);
     }
   }, [onNavigatePage, pageId, pageTree, selectedPageId]);
+
+  useEffect(() => {
+    if (!initialPageTree) {
+      return;
+    }
+
+    setPageTree(normalizePageTree(initialPageTree));
+    setOperationStatus('idle');
+  }, [initialPageTree]);
 
   useEffect(() => {
     setSavedPageContent(null);
@@ -597,6 +600,97 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const pageNodeTitle = selectedPageLabel
     ? `当前页面：${selectedPageLabel}`
     : '当前未选中页面';
+
+  const saveBlockComposition = useCallback(
+    async (
+      sourceContent: FrontstagePageContent,
+      compositionState: FrontstageBlockCompositionState
+    ) => {
+      setIsBlockSavePending(true);
+      setBlockSaveError(null);
+      pageContentSave.clearError();
+
+      try {
+        const input = createFrontstagePageDocumentSaveInput(
+          sourceContent,
+          compositionState.document
+        );
+        const nextContent = await pageContentSave.save(input);
+
+        setSavedPageContent(nextContent);
+        setSelectedBlockId(compositionState.selectedBlockId);
+      } catch (error) {
+        setBlockSaveError(toDisplayErrorMessage(error));
+      } finally {
+        setIsBlockSavePending(false);
+      }
+    },
+    [pageContentSave]
+  );
+
+  const designActions = useMemo(() => {
+    if (!canEnterDesignMode || !isDesignMode) {
+      return undefined;
+    }
+
+    const renderItems = activePageRenderPlan?.items ?? [];
+
+    return {
+      onMoveUp: (blockId: string) => {
+        const idx = renderItems.findIndex(
+          (item) => item.blockId === blockId
+        );
+        if (idx <= 0 || !blockCompositionState || !activePageContent) return;
+        const next = moveFrontstageBlock(
+          blockCompositionState,
+          blockId,
+          idx - 1
+        );
+        void saveBlockComposition(activePageContent, next);
+      },
+      onMoveDown: (blockId: string) => {
+        const idx = renderItems.findIndex(
+          (item) => item.blockId === blockId
+        );
+        if (
+          idx < 0 ||
+          idx >= renderItems.length - 1 ||
+          !blockCompositionState ||
+          !activePageContent
+        )
+          return;
+        const next = moveFrontstageBlock(
+          blockCompositionState,
+          blockId,
+          idx + 1
+        );
+        void saveBlockComposition(activePageContent, next);
+      },
+      onConfigure: (blockId: string) => {
+        setSelectedBlockId(blockId);
+        setIsBlockConfigurationOpen(true);
+      },
+      onEditCode: (blockId: string) => {
+        setSelectedBlockId(blockId);
+        setIsBlockCodeEditorOpen(true);
+      },
+      onDelete: (blockId: string) => {
+        if (!blockCompositionState || !activePageContent) return;
+        const next = removeFrontstageBlock(blockCompositionState, blockId);
+        void saveBlockComposition(activePageContent, next);
+      }
+    };
+  }, [
+    canEnterDesignMode,
+    isDesignMode,
+    activePageRenderPlan?.items,
+    blockCompositionState,
+    activePageContent,
+    saveBlockComposition,
+    setSelectedBlockId,
+    setIsBlockConfigurationOpen,
+    setIsBlockCodeEditorOpen
+  ]);
 
   if (initialPageTree === undefined && isPageTreeLoading) {
     return (
@@ -817,30 +911,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     });
   };
 
-  const saveBlockComposition = async (
-    sourceContent: FrontstagePageContent,
-    compositionState: FrontstageBlockCompositionState
-  ) => {
-    setIsBlockSavePending(true);
-    setBlockSaveError(null);
-    pageContentSave.clearError();
-
-    try {
-      const input = createFrontstagePageDocumentSaveInput(
-        sourceContent,
-        compositionState.document
-      );
-      const nextContent = await pageContentSave.save(input);
-
-      setSavedPageContent(nextContent);
-      setSelectedBlockId(compositionState.selectedBlockId);
-    } catch (error) {
-      setBlockSaveError(toDisplayErrorMessage(error));
-    } finally {
-      setIsBlockSavePending(false);
-    }
-  };
-
   const handleAddBlock = () => {
     if (!canAddBlock) {
       return;
@@ -1028,14 +1098,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       marginLeft: `${level * 16}px`,
       display: 'flex',
       alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
       justifyContent: 'space-between',
       border: isSelected ? '1px solid #91caff' : '1px solid transparent',
       background: isSelected ? '#e6f7ff' : 'transparent',
       cursor: isPageNode ? 'pointer' : 'default'
-    } as const;
-    const buttonStyle = {
-      marginLeft: 8,
-      marginRight: 8
     } as const;
 
     const childNodes = node.children ?? [];
@@ -1044,7 +1112,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       <li
         key={node.id}
         data-testid={`frontstage-tree-node-${node.kind}-${node.title || node.id}`}
-        style={rowStyle}
+        style={{ listStyle: 'none' }}
         onClick={() => {
           if (isPageNode) {
             handleSelectPage(node.id);
@@ -1063,90 +1131,90 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
           }
         }}
       >
-        <div
-          style={{
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}
-        >
-          <Typography.Text style={{ fontSize: 12 }}>
-            {node.title
-              ? node.title
-              : node.kind === 'group'
-                ? '未命名分组'
-                : '未命名页面'}
-          </Typography.Text>
-          <Typography.Text
-            type="secondary"
-            style={{ fontSize: 11, display: 'block' }}
+        <div style={rowStyle}>
+          <div
+            style={{
+              minWidth: 0,
+              flex: '1 1 96px',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
           >
-            {node.kind === 'group' ? '分组节点' : '页面节点'}
-          </Typography.Text>
-        </div>
-        {canEnterDesignMode && isDesignMode ? (
-          <>
-            <Button
-              size="small"
-              disabled={isOperationPending}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleRenameNode(node.id, node.title);
-              }}
+            <Typography.Text style={{ fontSize: 12 }} ellipsis>
+              {node.title
+                ? node.title
+                : node.kind === 'group'
+                  ? '未命名分组'
+                  : '未命名页面'}
+            </Typography.Text>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 11, display: 'block' }}
             >
-              重命名
-            </Button>
-            {canAddPageToGroup ? (
+              {node.kind === 'group' ? '分组节点' : '页面节点'}
+            </Typography.Text>
+          </div>
+          {canEnterDesignMode && isDesignMode ? (
+            <Space size={6} wrap>
               <Button
                 size="small"
+                disabled={isOperationPending}
                 onClick={(event) => {
                   event.stopPropagation();
-                  handleAddPageInGroup(node.id);
+                  handleRenameNode(node.id, node.title);
                 }}
-                disabled={isOperationPending}
               >
-                组内新增页面
+                重命名
               </Button>
-            ) : null}
-            <Button
-              size="small"
-              disabled={!canMoveUp || isOperationPending}
-              style={buttonStyle}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleMoveNode(node.id, -1);
-              }}
-            >
-              上移
-            </Button>
-            <Button
-              size="small"
-              disabled={!canMoveDown || isOperationPending}
-              style={buttonStyle}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleMoveNode(node.id, 1);
-              }}
-            >
-              下移
-            </Button>
-            <Button
-              style={buttonStyle}
-              size="small"
-              danger
-              disabled={isOperationPending}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleDeleteNode(node.id);
-              }}
-            >
-              删除
-            </Button>
-          </>
-        ) : null}
+              {canAddPageToGroup ? (
+                <Button
+                  size="small"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleAddPageInGroup(node.id);
+                  }}
+                  disabled={isOperationPending}
+                >
+                  组内新增页面
+                </Button>
+              ) : null}
+              <Button
+                size="small"
+                disabled={!canMoveUp || isOperationPending}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleMoveNode(node.id, -1);
+                }}
+              >
+                上移
+              </Button>
+              <Button
+                size="small"
+                disabled={!canMoveDown || isOperationPending}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleMoveNode(node.id, 1);
+                }}
+              >
+                下移
+              </Button>
+              <Button
+                size="small"
+                danger
+                disabled={isOperationPending}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeleteNode(node.id);
+                }}
+              >
+                删除
+              </Button>
+            </Space>
+          ) : null}
+        </div>
         {childNodes.length > 0 ? (
-          <ul style={{ listStyle: 'none', margin: 0, paddingLeft: 16 }}>
+          <ul style={{ listStyle: 'none', margin: 0, paddingLeft: 0 }}>
             {childNodes.map((childNode) =>
               renderTreeNode(childNode, level + 1, childNodes)
             )}
@@ -1160,110 +1228,51 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     <div
       style={{
         width: '100%',
-        padding: '24px 0',
-        maxWidth: 1240,
-        margin: '0 auto'
+        minHeight: 'calc(100vh - 96px)',
+        padding: isCompactLayout ? 12 : 18,
+        maxWidth: 1480,
+        margin: '0 auto',
+        background:
+          'linear-gradient(180deg, rgba(240, 253, 248, 0.95) 0%, rgba(246, 252, 249, 0.95) 100%)'
       }}
     >
-      <Flex
-        justify="space-between"
-        align="center"
-        wrap
-        gap={12}
-        style={{ marginBottom: 12 }}
+      <Layout
+        style={{
+          background: 'transparent',
+          gap: isCompactLayout ? 12 : 20,
+          flexDirection: isCompactLayout ? 'column' : 'row'
+        }}
       >
-        <Space direction="vertical" size={0}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            前台
-          </Typography.Text>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            空态占位 · {pageLabel}
-          </Typography.Title>
-          <Typography.Text type="secondary" style={{ marginTop: 4 }}>
-            Workspace：{workspaceId}
-          </Typography.Text>
-        </Space>
-
-        {canEnterDesignMode ? (
-          <Space align="center" size={8} direction="vertical">
-            <Button
-              type={isDesignMode ? 'default' : 'primary'}
-              onClick={() => {
-                if (isDesignMode) {
-                  setSelectedBlockId(null);
-                  setIsBlockCodeEditorOpen(false);
-                  setIsBlockConfigurationOpen(false);
-                  setIsJsBlockTrialPanelOpen(false);
-                }
-
-                setIsDesignMode((current) => !current);
-              }}
-            >
-              {isDesignMode ? '退出设计模式' : '进入设计模式'}
-            </Button>
-          </Space>
-        ) : null}
-      </Flex>
-
-      <Divider style={{ margin: '0 0 16px' }} />
-      {renderPageTreeErrorBanner}
-
-      {canEnterDesignMode && isDesignMode ? (
-        <Space wrap size={8} style={{ marginBottom: 12 }}>
-          <Button size="small" onClick={handleAddBlock} disabled={!canAddBlock}>
-            新增区块
-          </Button>
-          <Button size="small">页面管理</Button>
-          <Button size="small">当前页面设置</Button>
-        </Space>
-      ) : null}
-      {canEnterDesignMode && isDesignMode && isPageContentSavePending ? (
-        <Typography.Text
-          type="secondary"
-          style={{ marginBottom: 12, display: 'block' }}
-        >
-          区块保存中
-        </Typography.Text>
-      ) : null}
-      {canEnterDesignMode && isDesignMode && pageContentSaveError ? (
-        <Alert
-          style={{ marginBottom: 12 }}
-          message="区块保存失败"
-          description={pageContentSaveError}
-          type="error"
-          showIcon
-        />
-      ) : null}
-      {canEnterDesignMode && isDesignMode ? (
-        <Typography.Text
-          type={hasOperationError ? 'danger' : 'secondary'}
-          style={{ marginBottom: 12, display: 'block' }}
-        >
-          {operationStatusText}
-        </Typography.Text>
-      ) : null}
-      <Layout style={{ background: 'transparent' }}>
         <Sider
-          width={280}
+          width={isCompactLayout ? '100%' : 280}
           theme="light"
           style={{
             background: 'white',
-            borderRight: '1px solid #f0f0f0',
-            padding: 12
+            border: '1px solid #edf7f1',
+            borderRadius: 8,
+            boxShadow: '0 18px 45px rgba(15, 118, 110, 0.08)',
+            padding: isCompactLayout ? 16 : 18,
+            overflow: 'hidden',
+            flex: isCompactLayout ? '0 0 auto' : undefined,
+            maxWidth: '100%',
+            minWidth: 0
           }}
         >
-          <Typography.Title level={5} style={{ margin: 0 }}>
-            页面管理
-          </Typography.Title>
-          <Divider style={{ margin: '12px 0' }} />
+          <Flex justify="space-between" align="center">
+            <Typography.Title level={5} style={{ margin: 0 }}>
+              分组
+            </Typography.Title>
+            <Typography.Text type="secondary">⌃</Typography.Text>
+          </Flex>
+          <Divider style={{ margin: '16px 0' }} />
           <Typography.Text
             type="secondary"
-            style={{ marginBottom: 8, display: 'block' }}
+            style={{ marginBottom: 10, display: 'block', fontSize: 12 }}
           >
             {pageNodeTitle}
           </Typography.Text>
           {canEnterDesignMode && isDesignMode ? (
-            <Space size={8} wrap style={{ marginBottom: 12 }}>
+            <Space size={8} wrap style={{ marginBottom: 14 }}>
               <Button
                 size="small"
                 onClick={handleAddGroup}
@@ -1273,10 +1282,16 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               </Button>
               <Button
                 size="small"
+                aria-label="新建页面"
                 onClick={handleAddPage}
                 disabled={isOperationPending}
+                style={{
+                  borderStyle: 'dashed',
+                  borderColor: '#20d48a',
+                  color: '#00a86b'
+                }}
               >
-                新建页面
+                添加菜单项
               </Button>
             </Space>
           ) : null}
@@ -1296,181 +1311,161 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             />
           )}
         </Sider>
-        <Content style={{ padding: 16, background: 'white' }}>
-          <PageCanvas
-            content={
-              selectedPageLabel && hasLoadedSelectedPageContent
-                ? displayedPageContent
-                : undefined
-            }
-            isLoading={Boolean(selectedPageLabel && isPageContentLoading)}
-            hasError={Boolean(selectedPageLabel && hasPageContentLoadError)}
-            selectedBlockId={
-              canEnterDesignMode && isDesignMode ? selectedBlockId : null
-            }
-            onSelectBlock={
-              canEnterDesignMode && isDesignMode
-                ? (blockId) => {
-                    setSelectedBlockId((currentBlockId) =>
-                      currentBlockId === blockId ? null : blockId
-                    );
+        <Content
+          style={{
+            background: 'white',
+            border: '1px solid #edf7f1',
+            borderRadius: 8,
+            boxShadow: '0 18px 45px rgba(15, 118, 110, 0.08)',
+            minHeight: 720,
+            overflow: 'hidden',
+            minWidth: 0,
+            width: '100%'
+          }}
+        >
+          <Flex
+            justify="space-between"
+            align="center"
+            gap={16}
+            wrap
+            style={{
+              padding: isCompactLayout ? '18px 16px 16px' : '24px 34px 20px'
+            }}
+          >
+            <Typography.Title
+              level={3}
+              style={{ margin: 0, overflowWrap: 'anywhere' }}
+            >
+              {pageLabel}
+            </Typography.Title>
+            {canEnterDesignMode ? (
+              <Button
+                type={isDesignMode ? 'default' : 'primary'}
+                style={
+                  isDesignMode
+                    ? undefined
+                    : {
+                        background: '#00c875',
+                        borderColor: '#00c875',
+                        boxShadow: '0 8px 20px rgba(0, 200, 117, 0.22)'
+                      }
+                }
+                onClick={() => {
+                  if (isDesignMode) {
+                    setSelectedBlockId(null);
+                    setIsBlockCodeEditorOpen(false);
+                    setIsBlockConfigurationOpen(false);
+                    setIsJsBlockTrialPanelOpen(false);
                   }
-                : undefined
-            }
-            onRetry={onRetryLoadPageContent}
-            runtimeSourceState={pageCanvasRuntimeSources.sourceState}
-            runtimeRunPlanState={pageCanvasRuntimeRunPlanState}
-            runtimeSessionEntries={pageCanvasRuntimeSessions.entries}
-          />
-          {canShowSelectedBlockActions ? (
-            <div
-              data-testid="frontstage-selected-block-actions"
-              style={{
-                marginTop: 12,
-                padding: '10px 12px',
-                border: '1px solid #f0f0f0',
-                borderRadius: 6,
-                background: '#fafafa'
-              }}
-            >
-              <Flex justify="space-between" align="center" wrap gap={12}>
-                <Space direction="vertical" size={2}>
-                  <Typography.Text strong>区块编排</Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    当前选中区块：{selectedBlock?.id}
-                  </Typography.Text>
-                </Space>
-                <Space size={8} wrap>
-                  <Space size={4}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      宽度
-                    </Typography.Text>
-                    <InputNumber
-                      aria-label="区块宽度"
-                      size="small"
-                      min={1}
-                      max={24}
-                      precision={0}
-                      value={selectedBlockLayoutWidth}
-                      disabled={!canRunSelectedBlockAction}
-                      onChange={(value) =>
-                        handleSelectedBlockLayoutDimensionChange('width', value)
-                      }
-                      style={{ width: 72 }}
-                    />
-                  </Space>
-                  <Space size={4}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      高度
-                    </Typography.Text>
-                    <InputNumber
-                      aria-label="区块高度"
-                      size="small"
-                      min={1}
-                      max={24}
-                      precision={0}
-                      value={selectedBlockLayoutHeight}
-                      disabled={!canRunSelectedBlockAction}
-                      onChange={(value) =>
-                        handleSelectedBlockLayoutDimensionChange(
-                          'height',
-                          value
-                        )
-                      }
-                      style={{ width: 72 }}
-                    />
-                  </Space>
-                  <Button
-                    size="small"
-                    disabled={!canMoveSelectedBlockUp}
-                    onClick={() => handleMoveSelectedBlock(-1)}
-                  >
-                    上移区块
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!canMoveSelectedBlockDown}
-                    onClick={() => handleMoveSelectedBlock(1)}
-                  >
-                    下移区块
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!canRunSelectedBlockAction}
-                    onClick={handleOpenJsBlockTrialPanel}
-                  >
-                    JS Block 试运行
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!canRunSelectedBlockAction}
-                    onClick={() => setIsBlockConfigurationOpen(true)}
-                  >
-                    配置区块
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!canRunSelectedBlockAction}
-                    onClick={() => setIsBlockCodeEditorOpen(true)}
-                  >
-                    编辑代码
-                  </Button>
-                  <Button
-                    size="small"
-                    danger
-                    disabled={!canRunSelectedBlockAction}
-                    onClick={handleDeleteSelectedBlock}
-                  >
-                    删除区块
-                  </Button>
-                </Space>
-              </Flex>
-            </div>
-          ) : null}
-          {isJsBlockTrialPanelOpen && canShowSelectedBlockActions ? (
-            <div
-              aria-label="JS Block 试运行面板"
-              role="region"
-              style={{
-                marginTop: 12,
-                padding: '12px',
-                border: '1px solid #f0f0f0',
-                borderRadius: 6,
-                background: '#fff'
-              }}
-            >
-              <Flex justify="space-between" align="center" gap={12}>
-                <Typography.Text strong>试运行计划</Typography.Text>
-                <Button
-                  size="small"
-                  onClick={() => setIsJsBlockTrialPanelOpen(false)}
-                >
-                  关闭
-                </Button>
-              </Flex>
-              <div style={{ marginTop: 12 }}>
-                <JsBlockTrialPanel
-                  block={selectedBlock}
-                  catalogEntry={matchingJsBlockCatalogEntry}
-                  code={selectedBlockCode.draft}
-                  contextSnapshot={jsBlockTrialContextSnapshot}
-                  dataEffectHandler={jsBlockDataEffectHandler}
-                  limits={jsBlockTrialLimits}
-                  onCodeChange={selectedBlockCode.setDraft}
-                  onContextSnapshotChange={setJsBlockTrialContextSnapshot}
-                  onLimitsChange={setJsBlockTrialLimits}
-                />
-              </div>
-            </div>
-          ) : null}
-          {canEnterDesignMode && isDesignMode ? (
-            <Typography.Paragraph
-              type="secondary"
-              style={{ marginTop: 12, marginBottom: 0 }}
-            >
-              设计模式已开启，后续在此承载区块编排与页面树管理能力。
-            </Typography.Paragraph>
-          ) : null}
+
+                  setIsDesignMode((current) => !current);
+                }}
+              >
+                {isDesignMode ? '退出设计模式' : '进入设计模式'}
+              </Button>
+            ) : null}
+          </Flex>
+          <Divider style={{ margin: 0 }} />
+          <div
+            style={{
+              padding: isCompactLayout ? '24px 14px 24px' : '76px 36px 28px'
+            }}
+          >
+            {renderPageTreeErrorBanner}
+
+            {canEnterDesignMode && isDesignMode && isPageContentSavePending ? (
+              <Typography.Text
+                type="secondary"
+                style={{ marginBottom: 12, display: 'block' }}
+              >
+                区块保存中
+              </Typography.Text>
+            ) : null}
+            {canEnterDesignMode && isDesignMode && pageContentSaveError ? (
+              <Alert
+                style={{ marginBottom: 12 }}
+                message="区块保存失败"
+                description={pageContentSaveError}
+                type="error"
+                showIcon
+              />
+            ) : null}
+            {canEnterDesignMode && isDesignMode ? (
+              <Typography.Text
+                type={hasOperationError ? 'danger' : 'secondary'}
+                style={{ marginBottom: 12, display: 'block' }}
+              >
+                {operationStatusText}
+              </Typography.Text>
+            ) : null}
+            <PageCanvas
+              content={
+                selectedPageLabel && hasLoadedSelectedPageContent
+                  ? displayedPageContent
+                  : undefined
+              }
+              isLoading={Boolean(selectedPageLabel && isPageContentLoading)}
+              hasError={Boolean(selectedPageLabel && hasPageContentLoadError)}
+              selectedBlockId={
+                canEnterDesignMode && isDesignMode ? selectedBlockId : null
+              }
+              onSelectBlock={
+                canEnterDesignMode && isDesignMode
+                  ? (blockId) => {
+                      setSelectedBlockId((currentBlockId) =>
+                        currentBlockId === blockId ? null : blockId
+                      );
+                    }
+                  : undefined
+              }
+              onRetry={onRetryLoadPageContent}
+              runtimeSourceState={pageCanvasRuntimeSources.sourceState}
+              runtimeRunPlanState={pageCanvasRuntimeRunPlanState}
+              runtimeSessionEntries={pageCanvasRuntimeSessions.entries}
+              isDesignMode={canEnterDesignMode && isDesignMode}
+              designActions={designActions}
+              toolbarDisabled={isPageContentSavePending}
+              showTitle={false}
+            />
+            {canEnterDesignMode && isDesignMode ? (
+              <Button
+                size="middle"
+                aria-label="创建区块"
+                onClick={handleAddBlock}
+                disabled={!canAddBlock}
+                style={{
+                  marginTop: 20,
+                  borderStyle: 'dashed',
+                  borderColor: '#20d48a',
+                  color: '#00a86b'
+                }}
+              >
+                + 创建区块
+              </Button>
+            ) : null}
+          </div>
+          {/* Block actions moved to BlockHoverToolbar inside PageCanvas */}
+          <Drawer
+            title="JS 区块试运行"
+            open={isJsBlockTrialPanelOpen}
+            onClose={() => setIsJsBlockTrialPanelOpen(false)}
+            width={600}
+            destroyOnClose
+          >
+            {selectedBlock && (
+              <JsBlockTrialPanel
+                block={selectedBlock}
+                catalogEntry={matchingJsBlockCatalogEntry}
+                code={selectedBlockCode.draft}
+                contextSnapshot={jsBlockTrialContextSnapshot}
+                dataEffectHandler={jsBlockDataEffectHandler}
+                limits={jsBlockTrialLimits}
+                onCodeChange={selectedBlockCode.setDraft}
+                onContextSnapshotChange={setJsBlockTrialContextSnapshot}
+                onLimitsChange={setJsBlockTrialLimits}
+              />
+            )}
+          </Drawer>
         </Content>
       </Layout>
       {canEnterDesignMode && isDesignMode ? (
@@ -1489,6 +1484,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       <BlockCodeEditorDrawer
         open={isBlockCodeEditorOpen && canShowSelectedBlockActions}
         onClose={() => setIsBlockCodeEditorOpen(false)}
+        onOpenTrialPanel={handleOpenJsBlockTrialPanel}
         workspaceId={workspaceId}
         pageId={selectedPageId}
         block={canShowSelectedBlockActions ? selectedBlock : null}

@@ -291,6 +291,25 @@ function createSavedPageContentFromInput(
   });
 }
 
+
+function getSavedBlocks(input: SaveFrontstagePageContentInput) {
+    const payload = input.root.payload;
+    if (typeof payload !== 'object' || payload === null) {
+      throw new Error('root payload must be an object');
+    }
+
+    const blocks = (payload as { blocks?: unknown }).blocks;
+    if (!Array.isArray(blocks)) {
+      throw new Error('root payload blocks must be an array');
+    }
+
+    return blocks as Array<Record<string, unknown>>;
+  }
+
+  function getSavedBlockIds(input: SaveFrontstagePageContentInput): unknown[] {
+    return getSavedBlocks(input).map((block) => block.id);
+  }
+
 function mockPageContentSaveState(
   overrides: Partial<FrontstagePageContentSaveState> = {}
 ): FrontstagePageContentSaveState {
@@ -354,42 +373,45 @@ function renderFrontStagePage(pageContent: FrontstagePageContent) {
   );
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getSavedBlocks(input: SaveFrontstagePageContentInput) {
-  const payload = input.root.payload;
-  if (typeof payload !== 'object' || payload === null) {
-    throw new Error('root payload must be an object');
-  }
-
-  const blocks = (payload as { blocks?: unknown }).blocks;
-  if (!Array.isArray(blocks)) {
-    throw new Error('root payload blocks must be an array');
-  }
-
-  return blocks as Array<Record<string, unknown>>;
-}
-
-function getSavedBlockIds(input: SaveFrontstagePageContentInput): unknown[] {
-  return getSavedBlocks(input).map((block) => block.id);
-}
-
 function getBlockRow(blockId: string) {
-  return screen.getByRole('button', {
-    name: new RegExp(escapeRegExp(blockId))
-  });
+  return screen.getByTestId(`block-slot-${blockId}`);
 }
 
-function getPageTreeItem(title: string) {
-  return screen.getByRole('button', {
-    name: new RegExp(`${escapeRegExp(title)}\\s+页面节点`)
-  });
+function clickBlockToolbar(blockId: string, buttonName: string) {
+  fireEvent.click(
+    within(screen.getByTestId(`block-slot-${blockId}`))
+      .getByRole('button', { name: buttonName })
+  );
 }
 
-function getSelectedBlockActions() {
-  return screen.getByTestId('frontstage-selected-block-actions');
+async function clickBlockMoveAction(blockId: string, actionName: string) {
+  clickBlockToolbar(blockId, '移动或排序区块');
+  fireEvent.click(await screen.findByRole('button', { name: actionName }));
+}
+
+async function clickBlockMoreAction(blockId: string, actionName: string) {
+  clickBlockToolbar(blockId, '更多区块操作');
+  fireEvent.click(await screen.findByRole('button', { name: actionName }));
+}
+
+async function confirmBlockDelete(blockId: string) {
+  clickBlockToolbar(blockId, '更多区块操作');
+  await screen.findByRole('button', { name: '删除区块' });
+  const deleteMenuButtons = screen.getAllByRole('button', {
+    name: '删除区块'
+  });
+  fireEvent.click(deleteMenuButtons[deleteMenuButtons.length - 1]);
+  fireEvent.click(
+    await screen.findByRole('button', { name: '确认删除区块' })
+  );
+}
+
+function activateDesignMode() {
+  fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+}
+
+function exitDesignMode() {
+  fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
 }
 
 describe('FrontStagePage block arrange actions', () => {
@@ -408,13 +430,9 @@ describe('FrontStagePage block arrange actions', () => {
       createPageContentWithBlocks(['hero', 'feature', 'cta'])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('feature'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '删除区块'
-      })
-    );
+    await confirmBlockDelete('feature');
 
     await waitFor(() => {
       expect(saveState.save).toHaveBeenCalledTimes(1);
@@ -426,11 +444,15 @@ describe('FrontStagePage block arrange actions', () => {
     expect(getSavedBlockIds(saveInput)).toEqual(['hero', 'cta']);
 
     await waitFor(() => {
-      expect(screen.getByText('2 个区块')).toBeInTheDocument();
       expect(
-        screen.queryByRole('button', { name: /feature/ })
+        screen.queryByTestId('block-slot-feature')
       ).not.toBeInTheDocument();
-      expect(getSelectedBlockActions()).toHaveTextContent('当前选中区块：cta');
+      expect(
+        screen.getByTestId('block-slot-hero')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('block-slot-cta')
+      ).toBeInTheDocument();
     });
   });
 
@@ -439,13 +461,9 @@ describe('FrontStagePage block arrange actions', () => {
     const saveState = mockPageContentSaveState();
     renderFrontStagePage(createPageContentWithBlocks(['hero']));
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '删除区块'
-      })
-    );
+    await confirmBlockDelete('hero');
 
     await waitFor(() => {
       expect(saveState.save).toHaveBeenCalledTimes(1);
@@ -458,26 +476,19 @@ describe('FrontStagePage block arrange actions', () => {
 
     await waitFor(() => {
       expect(screen.getByText('页面内容为空')).toBeInTheDocument();
-      expect(
-        screen.queryByTestId('frontstage-selected-block-actions')
-      ).not.toBeInTheDocument();
     });
   });
 
-  test('saves selected block move down and move up while keeping selection', async () => {
+  test('saves selected block move down and move up', async () => {
     authenticate(['frontstage.page.design']);
     const saveState = mockPageContentSaveState();
     renderFrontStagePage(
       createPageContentWithBlocks(['hero', 'feature', 'cta'])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('feature'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '下移区块'
-      })
-    );
+    await clickBlockMoveAction('feature', '下移区块');
 
     await waitFor(() => {
       expect(saveState.save).toHaveBeenCalledTimes(1);
@@ -488,22 +499,7 @@ describe('FrontStagePage block arrange actions', () => {
     ];
     expect(getSavedBlockIds(moveDownInput)).toEqual(['hero', 'cta', 'feature']);
 
-    await waitFor(() => {
-      expect(getSelectedBlockActions()).toHaveTextContent(
-        '当前选中区块：feature'
-      );
-      expect(
-        within(getSelectedBlockActions()).getByRole('button', {
-          name: '上移区块'
-        })
-      ).toBeEnabled();
-    });
-
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '上移区块'
-      })
-    );
+    await clickBlockMoveAction('feature', '上移区块');
 
     await waitFor(() => {
       expect(saveState.save).toHaveBeenCalledTimes(2);
@@ -513,49 +509,6 @@ describe('FrontStagePage block arrange actions', () => {
       SaveFrontstagePageContentInput
     ];
     expect(getSavedBlockIds(moveUpInput)).toEqual(['hero', 'feature', 'cta']);
-    expect(getSelectedBlockActions()).toHaveTextContent(
-      '当前选中区块：feature'
-    );
-  });
-
-  test('saves selected block layout dimensions and keeps selection', async () => {
-    authenticate(['frontstage.page.design']);
-    const saveState = mockPageContentSaveState();
-    renderFrontStagePage(
-      createPageContentWithBlockPayloads([
-        createBlockPayloadWithLayout('hero', 0, { width: 12, height: 4 }),
-        createBlockPayload('cta', 1)
-      ])
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(getBlockRow('hero'));
-    fireEvent.change(
-      within(getSelectedBlockActions()).getByLabelText('区块宽度'),
-      { target: { value: '16' } }
-    );
-
-    await waitFor(() => {
-      expect(saveState.save).toHaveBeenCalledTimes(1);
-    });
-
-    const [saveInput] = saveState.save.mock.calls[0] as [
-      SaveFrontstagePageContentInput
-    ];
-    const [heroBlock, ctaBlock] = getSavedBlocks(saveInput);
-    expect(heroBlock['x-layout']).toMatchObject({
-      order: 0,
-      region: 'main',
-      width: 16,
-      height: 4
-    });
-    expect(ctaBlock['x-layout']).toMatchObject({ order: 1, region: 'main' });
-    expect(heroBlock).not.toHaveProperty('layout');
-    expect(ctaBlock).not.toHaveProperty('layout');
-
-    await waitFor(() => {
-      expect(getSelectedBlockActions()).toHaveTextContent('当前选中区块：hero');
-    });
   });
 
   test('disables selected block arrange actions while page content is saving', () => {
@@ -565,21 +518,22 @@ describe('FrontStagePage block arrange actions', () => {
       createPageContentWithBlocks(['hero', 'feature', 'cta'])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('feature'));
 
-    const actions = getSelectedBlockActions();
     expect(
-      within(actions).getByRole('button', { name: '上移区块' })
+      within(getBlockRow('feature')).getByRole('button', {
+        name: '移动或排序区块'
+      })
     ).toBeDisabled();
     expect(
-      within(actions).getByRole('button', { name: '下移区块' })
+      within(getBlockRow('feature')).getByRole('button', { name: '编辑区块' })
     ).toBeDisabled();
     expect(
-      within(actions).getByRole('button', { name: '删除区块' })
+      within(getBlockRow('feature')).getByRole('button', {
+        name: '更多区块操作'
+      })
     ).toBeDisabled();
-    expect(within(actions).getByLabelText('区块宽度')).toBeDisabled();
-    expect(within(actions).getByLabelText('区块高度')).toBeDisabled();
     expect(screen.getByText('区块保存中')).toBeInTheDocument();
   });
 
@@ -587,13 +541,9 @@ describe('FrontStagePage block arrange actions', () => {
     authenticate(['frontstage.page.design']);
     renderFrontStagePage(createPageContentWithBlocks(['hero', 'cta']));
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '编辑代码'
-      })
-    );
+    clickBlockToolbar('hero', '编辑区块');
 
     const dialog = await screen.findByRole('dialog', { name: '区块代码' });
     expect(
@@ -610,20 +560,18 @@ describe('FrontStagePage block arrange actions', () => {
 
     fireEvent.click(getBlockRow('hero'));
     expect(
-      screen.queryByRole('button', { name: '编辑代码' })
+      screen.queryByRole('button', { name: '编辑区块' })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
     expect(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '编辑代码'
-      })
-    ).toBeInTheDocument();
+      within(getBlockRow('hero')).getByRole('button', { name: '编辑区块' })
+    ).toBeVisible();
 
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    exitDesignMode();
     expect(
-      screen.queryByRole('button', { name: '编辑代码' })
+      screen.queryByRole('button', { name: '编辑区块' })
     ).not.toBeInTheDocument();
 
     resetAuthStore();
@@ -646,34 +594,33 @@ describe('FrontStagePage block arrange actions', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: '编辑代码' })
+      screen.queryByRole('button', { name: '编辑区块' })
     ).not.toBeInTheDocument();
   });
 
-  test('shows block configuration entry only for a selected block in design mode with design permission', () => {
+  test('shows block configuration entry only for a selected block in design mode with design permission', async () => {
     authenticate(['frontstage.page.design']);
     const view = renderFrontStagePage(createPageContentWithBlocks(['hero']));
 
     fireEvent.click(getBlockRow('hero'));
     expect(
-      screen.queryByRole('button', { name: '配置区块' })
+      screen.queryByRole('button', { name: '标题和描述' })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     expect(
-      screen.queryByRole('button', { name: '配置区块' })
+      screen.queryByRole('button', { name: '更多区块操作' })
     ).not.toBeInTheDocument();
 
     fireEvent.click(getBlockRow('hero'));
+    clickBlockToolbar('hero', '更多区块操作');
     expect(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '配置区块'
-      })
+      await screen.findByRole('button', { name: '标题和描述' })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    exitDesignMode();
     expect(
-      screen.queryByRole('button', { name: '配置区块' })
+      screen.queryByRole('button', { name: '标题和描述' })
     ).not.toBeInTheDocument();
 
     resetAuthStore();
@@ -696,7 +643,7 @@ describe('FrontStagePage block arrange actions', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: '配置区块' })
+      screen.queryByRole('button', { name: '标题和描述' })
     ).not.toBeInTheDocument();
   });
 
@@ -707,13 +654,9 @@ describe('FrontStagePage block arrange actions', () => {
       createPageContentWithBlockPayloads([createConfigurableBlockPayload()])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '配置区块'
-      })
-    );
+    await clickBlockMoreAction('hero', '标题和描述');
 
     const dialog = await screen.findByRole('dialog', { name: '区块配置' });
     const basicSection = within(dialog).getByTestId(
@@ -779,31 +722,23 @@ describe('FrontStagePage block arrange actions', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '配置区块'
-      })
-    );
+    await clickBlockMoreAction('hero', '标题和描述');
     expect(
       await screen.findByRole('dialog', { name: '区块配置' })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    exitDesignMode();
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: '区块配置' })
       ).not.toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '配置区块'
-      })
-    );
+    await clickBlockMoreAction('hero', '标题和描述');
     expect(
       await screen.findByRole('dialog', { name: '区块配置' })
     ).toBeInTheDocument();
@@ -813,22 +748,20 @@ describe('FrontStagePage block arrange actions', () => {
       expect(
         screen.queryByRole('dialog', { name: '区块配置' })
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId('frontstage-selected-block-actions')
-      ).not.toBeInTheDocument();
     });
 
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '配置区块'
-      })
-    );
+    await clickBlockMoreAction('hero', '标题和描述');
     expect(
       await screen.findByRole('dialog', { name: '区块配置' })
     ).toBeInTheDocument();
 
-    fireEvent.click(getPageTreeItem('页面 page-2'));
+    // Switch page
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /页面 page-2/
+      })
+    );
     view.rerender(
       <AppProviders>
         <FrontStagePage
@@ -860,9 +793,6 @@ describe('FrontStagePage block arrange actions', () => {
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: '区块配置' })
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId('frontstage-selected-block-actions')
       ).not.toBeInTheDocument();
     });
   }, 15000);
@@ -892,36 +822,32 @@ describe('FrontStagePage block arrange actions', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '编辑代码'
-      })
-    );
+    clickBlockToolbar('hero', '编辑区块');
     expect(
       await screen.findByRole('dialog', { name: '区块代码' })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    exitDesignMode();
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: '区块代码' })
       ).not.toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('hero'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '编辑代码'
-      })
-    );
+    clickBlockToolbar('hero', '编辑区块');
     expect(
       await screen.findByRole('dialog', { name: '区块代码' })
     ).toBeInTheDocument();
 
-    fireEvent.click(getPageTreeItem('页面 page-2'));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /页面 page-2/
+      })
+    );
     view.rerender(
       <AppProviders>
         <FrontStagePage
@@ -954,9 +880,6 @@ describe('FrontStagePage block arrange actions', () => {
       expect(
         screen.queryByRole('dialog', { name: '区块代码' })
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId('frontstage-selected-block-actions')
-      ).not.toBeInTheDocument();
     });
   });
 
@@ -967,20 +890,15 @@ describe('FrontStagePage block arrange actions', () => {
     });
     renderFrontStagePage(createPageContentWithBlocks(['hero', 'cta']));
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(getBlockRow('cta'));
-    fireEvent.click(
-      within(getSelectedBlockActions()).getByRole('button', {
-        name: '上移区块'
-      })
-    );
+    await clickBlockMoveAction('cta', '上移区块');
 
     expect(await screen.findByText('区块保存失败')).toBeInTheDocument();
     expect(screen.getByText('arrange failed')).toBeInTheDocument();
-    expect(getSelectedBlockActions()).toHaveTextContent('当前选中区块：cta');
   });
 
-  test('does not show selected block arrange actions in browsing mode or without design permission', () => {
+  test('does not show block action toolbar in browsing mode or without design permission', () => {
     authenticate(['frontstage.page.design']);
     const view = renderFrontStagePage(
       createPageContentWithBlocks(['hero', 'cta'])
@@ -988,10 +906,10 @@ describe('FrontStagePage block arrange actions', () => {
 
     fireEvent.click(getBlockRow('hero'));
     expect(
-      screen.queryByTestId('frontstage-selected-block-actions')
+      screen.queryByRole('button', { name: '更多区块操作' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '删除区块' })
+      screen.queryByRole('button', { name: '删除' })
     ).not.toBeInTheDocument();
 
     resetAuthStore();
@@ -1017,10 +935,10 @@ describe('FrontStagePage block arrange actions', () => {
       screen.queryByRole('button', { name: '进入设计模式' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId('frontstage-selected-block-actions')
+      screen.queryByRole('button', { name: '更多区块操作' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '删除区块' })
+      screen.queryByRole('button', { name: '删除' })
     ).not.toBeInTheDocument();
   });
 });

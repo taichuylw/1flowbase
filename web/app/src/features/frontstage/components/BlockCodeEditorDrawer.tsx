@@ -7,6 +7,7 @@ import type { FrontstageBlockInstance } from '../lib/page-document';
 export interface BlockCodeEditorDrawerProps {
   open: boolean;
   onClose: () => void;
+  onOpenTrialPanel?: () => void;
   workspaceId: string | null | undefined;
   pageId: string | null | undefined;
   block?: FrontstageBlockInstance | null;
@@ -32,6 +33,7 @@ function resolveCodeRef({
 export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
   open,
   onClose,
+  onOpenTrialPanel,
   workspaceId,
   pageId,
   block,
@@ -73,6 +75,11 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
       width={560}
       extra={
         <Space size={8}>
+          {onOpenTrialPanel ? (
+            <Button disabled={!canEdit} onClick={onOpenTrialPanel}>
+              JS Block 试运行
+            </Button>
+          ) : null}
           <Button disabled={resetDisabled} onClick={reset}>
             重置
           </Button>

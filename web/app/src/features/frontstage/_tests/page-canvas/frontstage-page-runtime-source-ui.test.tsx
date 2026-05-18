@@ -262,14 +262,15 @@ describe('FrontStagePage PageCanvas runtime source UI', () => {
       );
     });
 
-    const slots = within(
-      screen.getByTestId('page-canvas-render-slots')
-    ).getAllByRole('button');
-    expect(slots).toHaveLength(1);
-    expect(slots[0]).toHaveTextContent('hero');
-    await waitFor(() => {
-      expect(slots[0]).toHaveTextContent('代码已就绪');
-    });
+    expect(
+      within(screen.getByTestId('page-canvas-render-slots')).getByTestId(
+        'block-slot-hero'
+      )
+    ).toBeInTheDocument();
+    // No runtime session yet, so shows loading placeholder
+    expect(screen.getByTestId('block-slot-hero')).toHaveTextContent(
+      '区块加载中...'
+    );
   });
 
   test('connects mocked runtime session snapshots into the PageCanvas preview without creating real workers', async () => {
@@ -314,7 +315,7 @@ describe('FrontStagePage PageCanvas runtime source UI', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByText('运行计划已就绪')).toBeInTheDocument();
+    // No more "运行计划已就绪" text — canvas now shows actual block content instead
     expect(
       await screen.findByRole('heading', {
         name: 'FrontStage Runtime Snapshot'

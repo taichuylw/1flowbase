@@ -229,7 +229,7 @@ function renderMeRoute(requestedSectionKey?: MeSectionKey) {
   );
 }
 
-function renderFrontStageRoute({
+function FrontStageRoute({
   workspaceId,
   pageId
 }: {
@@ -428,7 +428,7 @@ const frontstageWorkspaceRoute = createRoute({
   component: () => {
     const { workspaceId } = frontstageWorkspaceRoute.useParams();
 
-    return renderFrontStageRoute({ workspaceId });
+    return <FrontStageRoute workspaceId={workspaceId} />;
   }
 });
 
@@ -439,7 +439,7 @@ const frontstageWorkspacePageRoute = createRoute({
   component: () => {
     const { pageId, workspaceId } = frontstageWorkspacePageRoute.useParams();
 
-    return renderFrontStageRoute({ workspaceId, pageId });
+    return <FrontStageRoute workspaceId={workspaceId} pageId={pageId} />;
   }
 });
 

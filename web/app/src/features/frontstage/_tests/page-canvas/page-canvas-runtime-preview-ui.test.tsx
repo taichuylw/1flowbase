@@ -165,16 +165,15 @@ describe('PageCanvas runtime preview UI', () => {
       />
     );
 
-    const slot = within(
-      screen.getByTestId('page-canvas-render-slots')
-    ).getAllByRole('button')[0];
-    expect(slot).toHaveTextContent('ready');
-    expect(slot).toHaveTextContent('代码已就绪');
-    expect(slot).toHaveTextContent('运行计划已就绪');
+    expect(
+      within(screen.getByTestId('page-canvas-render-slots')).getByTestId(
+        'block-slot-ready'
+      )
+    ).toBeInTheDocument();
+    // Block renders its actual content (no more debug status tags)
     expect(
       screen.getByTestId('restricted-block-runtime-preview')
     ).toBeInTheDocument();
-    expect(screen.getByText('运行结果')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: 'Synthetic Runtime Preview' })
     ).toBeInTheDocument();
@@ -320,7 +319,10 @@ describe('PageCanvas runtime preview UI', () => {
       screen.queryByTestId('restricted-block-runtime-preview')
     ).not.toBeInTheDocument();
     expect(screen.getByText('运行时预览不可用')).toBeInTheDocument();
-    expect(screen.getByText('运行时预览等待代码就绪')).toBeInTheDocument();
+    expect(
+      screen.getByText('受限运行时会话创建失败。')
+    ).toBeInTheDocument();
+    expect(screen.getByText('区块跳过运行')).toBeInTheDocument();
     expect(screen.queryByText('worker unavailable')).not.toBeInTheDocument();
   });
 });
