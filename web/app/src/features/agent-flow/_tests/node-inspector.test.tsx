@@ -583,6 +583,7 @@ describe('NodeInspector', () => {
     );
 
     expect(await screen.findByLabelText('JavaScript 代码')).toBeInTheDocument();
+    expect(screen.queryByText('JavaScript 代码')).not.toBeInTheDocument();
     expect(screen.queryByText('输出契约')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '新增变量' })

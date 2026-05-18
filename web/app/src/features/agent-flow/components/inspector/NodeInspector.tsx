@@ -33,6 +33,7 @@ function isInlineFieldRenderer(renderer: string) {
 function hasEmbeddedLabel(renderer: string) {
   return (
     renderer === 'templated_text' ||
+    renderer === 'code_source' ||
     renderer === 'output_contract_definition' ||
     renderer === 'start_input_fields' ||
     renderer === 'start_model_list'
