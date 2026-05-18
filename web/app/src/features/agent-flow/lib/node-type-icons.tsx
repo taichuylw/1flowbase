@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import {
   ApiOutlined,
@@ -17,38 +17,28 @@ import {
   ToolOutlined
 } from '@ant-design/icons';
 
+const CODE_NODE_ICON_STYLE: CSSProperties = {
+  display: 'inline-block',
+  width: '1em',
+  height: '1em',
+  backgroundColor: 'currentColor',
+  maskImage: 'url("/icons/code-node.svg")',
+  maskPosition: 'center',
+  maskRepeat: 'no-repeat',
+  maskSize: 'contain',
+  WebkitMaskImage: 'url("/icons/code-node.svg")',
+  WebkitMaskPosition: 'center',
+  WebkitMaskRepeat: 'no-repeat',
+  WebkitMaskSize: 'contain'
+};
+
 function CodeNodeIcon() {
   return (
-    <svg
+    <span
       aria-label="code"
-      fill="none"
-      focusable="false"
-      height="1em"
       role="img"
-      viewBox="0 0 24 24"
-      width="1em"
-    >
-      <path
-        d="M9.25 7.75 5 12l4.25 4.25"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-      <path
-        d="m14.75 7.75 4.25 4.25-4.25 4.25"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-      <path
-        d="m13.25 5.75-2.5 12.5"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-    </svg>
+      style={CODE_NODE_ICON_STYLE}
+    />
   );
 }
 
