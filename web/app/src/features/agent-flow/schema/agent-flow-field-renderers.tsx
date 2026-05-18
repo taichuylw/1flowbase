@@ -14,6 +14,7 @@ import { SelectorField } from '../components/bindings/SelectorField';
 import { StateWriteField } from '../components/bindings/StateWriteField';
 import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
 import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
+import { CodeSourceField } from '../components/detail/fields/CodeSourceField';
 import { DataModelField } from '../components/detail/fields/DataModelField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';
 import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMessagesField';
@@ -298,6 +299,16 @@ function renderOutputContractDefinitionField({
   );
 }
 
+function renderCodeSourceField({ adapter, block }: SchemaFieldRendererProps) {
+  return (
+    <CodeSourceField
+      label={block.label}
+      value={adapter.getValue(block.path)}
+      onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+    />
+  );
+}
+
 function renderStartInputFieldsField({
   adapter,
   block
@@ -369,6 +380,7 @@ export const agentFlowFieldRenderers = {
   static_select: renderStaticSelectField,
   data_model: DataModelField,
   data_model_query: renderDataModelQueryField,
+  code_source: renderCodeSourceField,
   llm_model: LlmModelField,
   llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,

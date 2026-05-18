@@ -71,6 +71,7 @@ impl CodeInvoker for CodeFixtureInvoker {
 
         Ok(CodeInvocationOutput {
             output_payload: self.output_payload.clone(),
+            console_logs: Vec::new(),
         })
     }
 }
@@ -588,6 +589,96 @@ async fn code_isolation_profile_is_included_in_code_metrics() {
     assert_eq!(execution.metrics_payload["timeout_ms"], 250);
     assert_eq!(execution.metrics_payload["memory_mb"], 16);
     assert_eq!(execution.metrics_payload["stack_kb"], 512);
+}
+
+#[tokio::test]
+async fn code_runtime_quickjs_console_logs_are_debug_payload_only() {
+    let runtime = quickjs_runtime(
+        r#"
+function main(inputs) {
+  console.log("hello", inputs.query, { nested: true, count: inputs.count });
+  console.warn("heads", ["a", 2]);
+  console.error("bad", false);
+  return { result: { value: inputs.query } };
+}
+"#,
+    );
+    let node = code_node_with_runtime(runtime);
+    let resolved_inputs = json!({ "query": "hello", "count": 1 })
+        .as_object()
+        .cloned()
+        .unwrap();
+
+    let execution = execute_code_node(&node, &resolved_inputs, &QuickJsCodeInvoker::default())
+        .await
+        .expect("code node should execute");
+
+    assert_eq!(
+        execution.output_payload,
+        json!({ "result": { "value": "hello" } })
+    );
+    assert!(execution.output_payload.get("console_logs").is_none());
+    assert_eq!(
+        execution.debug_payload["console_logs"],
+        json!([
+            {
+                "level": "log",
+                "message": "hello hello {\"nested\":true,\"count\":1}",
+                "args": ["hello", "hello", { "nested": true, "count": 1 }]
+            },
+            {
+                "level": "warn",
+                "message": "heads [\"a\",2]",
+                "args": ["heads", ["a", 2]]
+            },
+            {
+                "level": "error",
+                "message": "bad false",
+                "args": ["bad", false]
+            }
+        ])
+    );
+}
+
+#[tokio::test]
+async fn code_runtime_quickjs_console_logs_survive_sanitized_runtime_error() {
+    let runtime = quickjs_runtime(
+        r#"
+function main() {
+  console.error("before throw", { detail: "visible debug fact" });
+  throw new Error("secret host stack should not leak");
+}
+"#,
+    );
+    let node = code_node_with_runtime(runtime);
+
+    let execution = execute_code_node(&node, &Map::new(), &QuickJsCodeInvoker::default())
+        .await
+        .expect("code node errors should be converted to execution payloads");
+
+    let error_payload = execution
+        .error_payload
+        .expect("runtime throw should produce an error payload");
+    assert_eq!(error_payload["error_kind"], json!("code_runtime_error"));
+    assert_eq!(error_payload["message"], json!("code execution failed"));
+    assert_eq!(
+        error_payload["runtime_message"],
+        json!("runtime_error: code execution failed")
+    );
+    assert!(!error_payload["runtime_message"]
+        .as_str()
+        .unwrap()
+        .contains("secret host stack"));
+    assert_eq!(
+        execution.debug_payload["console_logs"],
+        json!([
+            {
+                "level": "error",
+                "message": "before throw {\"detail\":\"visible debug fact\"}",
+                "args": ["before throw", { "detail": "visible debug fact" }]
+            }
+        ])
+    );
 }
 
 #[tokio::test]

@@ -74,6 +74,7 @@ impl CodeInvoker for StubPreviewInvoker {
     ) -> Result<CodeInvocationOutput> {
         Ok(CodeInvocationOutput {
             output_payload: json!({ "result": input_payload["query"] }),
+            console_logs: Vec::new(),
         })
     }
 }

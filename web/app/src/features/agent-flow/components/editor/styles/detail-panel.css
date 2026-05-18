@@ -482,6 +482,29 @@
   justify-self: end;
 }
 
+.agent-flow-code-source-field {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d9e3dc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.agent-flow-code-source-field:focus-within {
+  border-color: #4b8bff;
+  box-shadow: 0 0 0 2px rgba(75, 139, 255, 0.12);
+}
+
+.agent-flow-code-source-field__loading {
+  display: flex;
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
 .agent-flow-start-input-fields {
   display: flex;
   flex-direction: column;

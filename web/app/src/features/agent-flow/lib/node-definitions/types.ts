@@ -19,6 +19,7 @@ export type NodeEditorKind =
   | 'llm_model'
   | 'llm_prompt_messages'
   | 'llm_response_format'
+  | 'code_source'
   | 'number'
   | 'selector'
   | 'selector_list'

@@ -424,7 +424,7 @@ function createCodeContract(): NodeRuntimeUiContract {
     title: 'Code',
     description: '执行自定义代码并返回结构化结果。',
     category: 'data',
-    config: { language: 'javascript' },
+    config: { language: 'javascript', source: '' },
     outputs,
     panelSections: [
       basicsPanelSection,
@@ -436,22 +436,19 @@ function createCodeContract(): NodeRuntimeUiContract {
           valueType: 'json'
         })
       ]),
-      panelSection('advanced', 'Advanced', [
+      panelSection('code', 'JavaScript', [
         panelField({
-          key: 'config.language',
-          title: '运行语言',
-          renderer: 'static_select',
-          options: [
-            {
-              value: 'javascript',
-              label: 'JavaScript'
-            }
-          ],
+          key: 'config.source',
+          title: 'JavaScript 代码',
+          renderer: 'code_source',
+          valueType: 'string',
           required: true
-        }),
+        })
+      ]),
+      panelSection('outputs', '输出变量', [
         panelField({
           key: 'config.output_contract',
-          title: '输出契约',
+          title: '输出变量',
           renderer: 'output_contract_definition',
           valueType: 'array'
         })

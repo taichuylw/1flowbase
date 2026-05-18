@@ -1,0 +1,66 @@
+import type { editor } from 'monaco-editor';
+import { Suspense, lazy, useMemo } from 'react';
+
+const MonacoEditor = lazy(() => import('@monaco-editor/react'));
+
+const CODE_EDITOR_OPTIONS = {
+  automaticLayout: true,
+  minimap: { enabled: false },
+  fontSize: 13,
+  lineHeight: 20,
+  lineNumbersMinChars: 3,
+  scrollBeyondLastLine: false,
+  tabSize: 2,
+  wordWrap: 'on',
+  padding: {
+    top: 12,
+    bottom: 12
+  },
+  scrollbar: {
+    verticalScrollbarSize: 8,
+    horizontalScrollbarSize: 8
+  }
+} satisfies editor.IStandaloneEditorConstructionOptions;
+
+function CodeSourceEditorFallback() {
+  return (
+    <div className="agent-flow-code-source-field__loading">
+      正在加载 JavaScript 编辑器
+    </div>
+  );
+}
+
+export function CodeSourceField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+}) {
+  const source = typeof value === 'string' ? value : '';
+  const options = useMemo(
+    () => ({
+      ...CODE_EDITOR_OPTIONS,
+      ariaLabel: label
+    }),
+    [label]
+  );
+
+  return (
+    <div className="agent-flow-code-source-field">
+      <Suspense fallback={<CodeSourceEditorFallback />}>
+        <MonacoEditor
+          defaultLanguage="javascript"
+          height="260px"
+          language="javascript"
+          options={options}
+          theme="vs"
+          value={source}
+          onChange={(nextValue) => onChange(nextValue ?? '')}
+        />
+      </Suspense>
+    </div>
+  );
+}

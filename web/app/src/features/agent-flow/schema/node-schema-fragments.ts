@@ -24,6 +24,7 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   llm_model: 'llm_model',
   llm_prompt_messages: 'llm_prompt_messages',
   llm_response_format: 'llm_response_format',
+  code_source: 'code_source',
   number: 'number',
   selector: 'selector',
   selector_list: 'selector_list',
@@ -177,7 +178,10 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
   const contract = getBuiltinNodeRuntimeContract(nodeType);
   const contractSections = (contract?.panel.sections ?? [])
     .filter((section) => {
-      if (section.key === 'basics' || section.key === 'outputs') {
+      if (
+        section.key === 'basics' ||
+        (section.key === 'outputs' && nodeType !== 'code')
+      ) {
         return false;
       }
 
@@ -193,7 +197,10 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
     ? contractSections
     : getNodeDefinitionSections(nodeType)
         .filter((section) => {
-          if (section.key === 'basics' || section.key === 'outputs') {
+          if (
+            section.key === 'basics' ||
+            (section.key === 'outputs' && nodeType !== 'code')
+          ) {
             return false;
           }
 

@@ -10,7 +10,8 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use rquickjs::{Context, Runtime};
+use rquickjs::{Context, Ctx, Runtime};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -27,6 +28,14 @@ const INVALID_OUTPUT_SENTINEL: &str = "__1flowbase_invalid_output__";
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodeInvocationOutput {
     pub output_payload: Value,
+    pub console_logs: Vec<ConsoleLogEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConsoleLogEntry {
+    pub level: String,
+    pub message: String,
+    pub args: Vec<Value>,
 }
 
 #[async_trait]
@@ -121,94 +130,79 @@ enum CodeRunnerErrorKind {
     Timeout,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 struct CodeRunnerError {
     kind: CodeRunnerErrorKind,
+    console_logs: Vec<ConsoleLogEntry>,
 }
 
 impl CodeRunnerError {
-    fn unsupported_language() -> Self {
+    fn new(kind: CodeRunnerErrorKind) -> Self {
         Self {
-            kind: CodeRunnerErrorKind::UnsupportedLanguage,
+            kind,
+            console_logs: Vec::new(),
         }
+    }
+
+    fn unsupported_language() -> Self {
+        Self::new(CodeRunnerErrorKind::UnsupportedLanguage)
     }
 
     fn source_missing() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::SourceMissing,
-        }
+        Self::new(CodeRunnerErrorKind::SourceMissing)
     }
 
     fn entrypoint_unsupported() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::EntrypointUnsupported,
-        }
+        Self::new(CodeRunnerErrorKind::EntrypointUnsupported)
     }
 
     fn module_import_denied() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::ModuleImportDenied,
-        }
+        Self::new(CodeRunnerErrorKind::ModuleImportDenied)
     }
 
     fn dynamic_import_denied() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::DynamicImportDenied,
-        }
+        Self::new(CodeRunnerErrorKind::DynamicImportDenied)
     }
 
     fn dependency_artifact_missing() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::DependencyArtifactMissing,
-        }
+        Self::new(CodeRunnerErrorKind::DependencyArtifactMissing)
     }
 
     fn dependency_integrity_mismatch() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::DependencyIntegrityMismatch,
-        }
+        Self::new(CodeRunnerErrorKind::DependencyIntegrityMismatch)
     }
 
     fn dependency_artifact_invalid() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::DependencyArtifactInvalid,
-        }
+        Self::new(CodeRunnerErrorKind::DependencyArtifactInvalid)
     }
 
     fn dependency_alias_invalid() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::DependencyAliasInvalid,
-        }
+        Self::new(CodeRunnerErrorKind::DependencyAliasInvalid)
     }
 
     fn syntax_error() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::SyntaxError,
-        }
+        Self::new(CodeRunnerErrorKind::SyntaxError)
     }
 
     fn main_missing() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::MainMissing,
-        }
+        Self::new(CodeRunnerErrorKind::MainMissing)
     }
 
     fn invalid_output() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::InvalidOutput,
-        }
+        Self::new(CodeRunnerErrorKind::InvalidOutput)
     }
 
     fn runtime_error() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::RuntimeError,
-        }
+        Self::new(CodeRunnerErrorKind::RuntimeError)
     }
 
     fn timeout() -> Self {
-        Self {
-            kind: CodeRunnerErrorKind::Timeout,
-        }
+        Self::new(CodeRunnerErrorKind::Timeout)
+    }
+
+    fn with_console_logs(mut self, console_logs: Vec<ConsoleLogEntry>) -> Self {
+        self.console_logs = console_logs;
+        self
     }
 
     fn public_code(&self) -> &'static str {
@@ -346,6 +340,7 @@ fn run_quickjs_code(request: QuickJsInvocationRequest) -> Result<CodeInvocationO
 
     let context = Context::full(&runtime).map_err(|_| CodeRunnerError::runtime_error())?;
     context.with(|ctx| {
+        install_console_capture(&ctx).map_err(|_| CodeRunnerError::runtime_error())?;
         ctx.eval::<(), _>("globalThis.__dependencies = globalThis.__dependencies || {};")
             .map_err(|_| CodeRunnerError::runtime_error())?;
         for dependency in &dependencies {
@@ -369,48 +364,182 @@ fn run_quickjs_code(request: QuickJsInvocationRequest) -> Result<CodeInvocationO
             ctx.eval::<(), _>(facade_script)
                 .map_err(|_| CodeRunnerError::dependency_artifact_invalid())?;
         }
-        ctx.eval::<(), _>(source).map_err(|_| {
-            code_error_for_elapsed(
+        if ctx.eval::<(), _>(source).is_err() {
+            return Err(code_error_for_elapsed(
                 request.timeout,
                 deadline,
                 &interrupted,
                 CodeRunnerError::syntax_error(),
             )
-        })?;
-        let main_type = ctx.eval::<String, _>("typeof main").map_err(|_| {
-            code_error_for_elapsed(
+            .with_console_logs(read_console_logs(&ctx))
+            .into());
+        }
+        let main_type = match ctx.eval::<String, _>("typeof main") {
+            Ok(main_type) => main_type,
+            Err(_) => {
+                return Err(code_error_for_elapsed(
                 request.timeout,
                 deadline,
                 &interrupted,
                 CodeRunnerError::runtime_error(),
             )
-        })?;
+                .with_console_logs(read_console_logs(&ctx))
+                .into());
+            }
+        };
         if main_type != "function" {
-            return Err(CodeRunnerError::main_missing().into());
+            return Err(CodeRunnerError::main_missing()
+                .with_console_logs(read_console_logs(&ctx))
+                .into());
         }
 
         let input_literal = serde_json::to_string(&request.input_payload)
             .map_err(|_| CodeRunnerError::runtime_error())?;
         let invocation_script = build_invocation_script(&input_literal);
-        let output_json = ctx.eval::<String, _>(invocation_script).map_err(|_| {
-            code_error_for_elapsed(
+        let output_json = match ctx.eval::<String, _>(invocation_script) {
+            Ok(output_json) => output_json,
+            Err(_) => {
+                return Err(code_error_for_elapsed(
                 request.timeout,
                 deadline,
                 &interrupted,
                 CodeRunnerError::runtime_error(),
             )
-        })?;
+                .with_console_logs(read_console_logs(&ctx))
+                .into());
+            }
+        };
+        let console_logs = read_console_logs(&ctx);
         if output_json == INVALID_OUTPUT_SENTINEL {
-            return Err(CodeRunnerError::invalid_output().into());
+            return Err(CodeRunnerError::invalid_output()
+                .with_console_logs(console_logs)
+                .into());
         }
         let output_payload = serde_json::from_str::<Value>(&output_json)
-            .map_err(|_| CodeRunnerError::invalid_output())?;
+            .map_err(|_| CodeRunnerError::invalid_output().with_console_logs(console_logs.clone()))?;
         if !matches!(output_payload, Value::Object(_)) {
-            return Err(CodeRunnerError::invalid_output().into());
+            return Err(CodeRunnerError::invalid_output()
+                .with_console_logs(console_logs)
+                .into());
         }
 
-        Ok(CodeInvocationOutput { output_payload })
+        Ok(CodeInvocationOutput {
+            output_payload,
+            console_logs,
+        })
     })
+}
+
+fn install_console_capture(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.eval::<(), _>(
+        r#"
+(function () {
+  const logs = [];
+
+  function normalizeConsoleArg(value, seen) {
+    if (value === undefined) {
+      return { type: "undefined" };
+    }
+    if (value === null || typeof value === "string" || typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : String(value);
+    }
+    if (typeof value === "bigint" || typeof value === "symbol") {
+      return String(value);
+    }
+    if (typeof value === "function") {
+      return value.name ? "[Function " + value.name + "]" : "[Function]";
+    }
+    if (seen.indexOf(value) >= 0) {
+      return "[Circular]";
+    }
+
+    const nextSeen = seen.concat([value]);
+    if (Array.isArray(value)) {
+      return value.map(function (item) {
+        try {
+          return normalizeConsoleArg(item, nextSeen);
+        } catch (_error) {
+          return "[Unserializable]";
+        }
+      });
+    }
+
+    if (value instanceof Error) {
+      return { name: value.name, message: value.message };
+    }
+
+    const output = {};
+    Object.keys(value).forEach(function (key) {
+      try {
+        output[key] = normalizeConsoleArg(value[key], nextSeen);
+      } catch (_error) {
+        output[key] = "[Unserializable]";
+      }
+    });
+    return output;
+  }
+
+  function formatConsoleArg(value) {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (value && typeof value === "object" && value.type === "undefined") {
+      return "undefined";
+    }
+    if (value && typeof value === "object") {
+      try {
+        const json = JSON.stringify(value);
+        return json === undefined ? String(value) : json;
+      } catch (_error) {
+        return "[Unserializable]";
+      }
+    }
+    return String(value);
+  }
+
+  function captureConsole(level, args) {
+    const normalizedArgs = Array.prototype.map.call(args, function (arg) {
+      return normalizeConsoleArg(arg, []);
+    });
+    logs.push({
+      level: level,
+      message: normalizedArgs.map(formatConsoleArg).join(" "),
+      args: normalizedArgs
+    });
+  }
+
+  Object.defineProperty(globalThis, "__oneflowbase_console_logs", {
+    value: logs,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+  Object.defineProperty(globalThis, "console", {
+    value: Object.freeze({
+      log: function () { captureConsole("log", arguments); },
+      warn: function () { captureConsole("warn", arguments); },
+      error: function () { captureConsole("error", arguments); }
+    }),
+    configurable: true,
+    enumerable: false,
+    writable: true
+  });
+})();
+"#,
+    )?;
+    Ok(())
+}
+
+fn read_console_logs(ctx: &Ctx<'_>) -> Vec<ConsoleLogEntry> {
+    let Ok(logs_json) =
+        ctx.eval::<String, _>(r#"JSON.stringify(globalThis.__oneflowbase_console_logs || [])"#)
+    else {
+        return Vec::new();
+    };
+    serde_json::from_str(&logs_json).unwrap_or_default()
 }
 
 fn code_error_for_elapsed(
@@ -584,11 +713,12 @@ where
         .await
     {
         Ok(output) => {
+            let debug_facts = code_runtime_debug_facts(&output.console_logs)?;
             let raw = RawNodeExecutionResult {
                 executor_output: object_from_value(output.output_payload)?,
                 metrics_facts: code_runtime_metrics(runtime, false)?,
                 error_facts: Map::new(),
-                debug_facts: Map::new(),
+                debug_facts,
                 provider_events: Vec::new(),
             };
             let built = build_code_node_payloads(node, raw)?;
@@ -601,6 +731,10 @@ where
             })
         }
         Err(error) => {
+            let console_logs = error
+                .downcast_ref::<CodeRunnerError>()
+                .map(|error| error.console_logs.clone())
+                .unwrap_or_default();
             let raw = RawNodeExecutionResult {
                 executor_output: Map::new(),
                 metrics_facts: code_runtime_metrics(runtime, true)?,
@@ -610,7 +744,7 @@ where
                     "message": "code execution failed",
                     "runtime_message": error.to_string(),
                 }))?,
-                debug_facts: Map::new(),
+                debug_facts: code_runtime_debug_facts(&console_logs)?,
                 provider_events: Vec::new(),
             };
             let built = build_code_node_payloads(node, raw)?;
@@ -623,6 +757,17 @@ where
             })
         }
     }
+}
+
+fn code_runtime_debug_facts(console_logs: &[ConsoleLogEntry]) -> Result<Map<String, Value>> {
+    let mut debug_facts = Map::new();
+    if !console_logs.is_empty() {
+        debug_facts.insert(
+            "console_logs".to_string(),
+            serde_json::to_value(console_logs)?,
+        );
+    }
+    Ok(debug_facts)
 }
 
 fn code_runtime_metrics(runtime: &CompiledCodeRuntime, error: bool) -> Result<Map<String, Value>> {

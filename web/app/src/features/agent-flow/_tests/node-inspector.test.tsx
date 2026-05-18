@@ -30,6 +30,26 @@ import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorSto
 import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
 
+vi.mock('@monaco-editor/react', () => ({
+  default: ({
+    'aria-label': ariaLabel,
+    options,
+    value,
+    onChange
+  }: {
+    'aria-label'?: string;
+    options?: { ariaLabel?: string };
+    value?: string;
+    onChange?: (value?: string) => void;
+  }) => (
+    <textarea
+      aria-label={ariaLabel ?? options?.ariaLabel}
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  )
+}));
+
 const primaryProviderOption = modelProviderOptionsProviders[0];
 const primaryProviderFirstGroup = primaryProviderOption.model_groups[0];
 const primaryProviderFirstModel = primaryProviderFirstGroup.models[0];
@@ -80,6 +100,28 @@ function createInitialStateWithCodeNode() {
     autosave_interval_seconds: 30,
     versions: []
   };
+}
+
+function createInitialStateWithCustomCodeNode() {
+  const state = createInitialStateWithCodeNode();
+  const codeNode = state.draft.document.graph.nodes.find(
+    (node) => node.id === 'node-code'
+  );
+
+  if (!codeNode) {
+    throw new Error('expected code node');
+  }
+
+  codeNode.config.source = 'return { riskScore: 0.82 };';
+  codeNode.outputs = [
+    {
+      key: 'riskScore',
+      title: 'Risk Score',
+      valueType: 'number'
+    }
+  ];
+
+  return state;
 }
 
 function createInitialStateWithLoopNode() {
@@ -204,6 +246,18 @@ function getDataModelNode(
   }
 
   return dataModelNode;
+}
+
+function getCodeNode(
+  document: ReturnType<typeof createDefaultAgentFlowDocument>
+) {
+  const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+  if (!codeNode) {
+    throw new Error('expected code node');
+  }
+
+  return codeNode;
 }
 
 async function openSelect(label: string) {
@@ -507,7 +561,7 @@ describe('NodeInspector', () => {
     expect(screen.queryByLabelText('输出变量名 1')).not.toBeInTheDocument();
   });
 
-  test('keeps code output contract definition editable without rendering the shared output contract card', () => {
+  test('keeps code output contract definition editable without rendering the shared output contract card', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider
         initialState={createInitialStateWithCodeNode()}
@@ -517,11 +571,78 @@ describe('NodeInspector', () => {
       </AgentFlowEditorStoreProvider>
     );
 
+    expect(await screen.findByLabelText('JavaScript 代码')).toBeInTheDocument();
     expect(screen.queryByText('输出契约')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '新增变量' })
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('代码结果')).not.toBeInTheDocument();
+  });
+
+  test('renders Code as input variables, JavaScript editor, then output variables and persists edits', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider
+        initialState={createInitialStateWithCustomCodeNode()}
+      >
+        <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: '运行语言' })
+    ).not.toBeInTheDocument();
+
+    const inputField = screen.getByTestId(
+      'inspector-field-bindings.named_bindings'
+    );
+    const sourceField = await screen.findByTestId(
+      'inspector-field-config.source'
+    );
+    const outputField = screen.getByTestId(
+      'inspector-field-config.output_contract'
+    );
+
+    expect(inputField.compareDocumentPosition(sourceField)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(sourceField.compareDocumentPosition(outputField)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(screen.getByLabelText('JavaScript 代码')).toHaveValue(
+      'return { riskScore: 0.82 };'
+    );
+    expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
+    expect(screen.getByLabelText('输出显示名 1')).toHaveValue('Risk Score');
+
+    fireEvent.change(screen.getByLabelText('JavaScript 代码'), {
+      target: { value: 'return { riskScore: inputs.score };' }
+    });
+    fireEvent.change(screen.getByLabelText('输出显示名 1'), {
+      target: { value: 'Risk score' }
+    });
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).config).toMatchObject({
+        language: 'javascript',
+        source: 'return { riskScore: inputs.score };'
+      });
+      expect(getCodeNode(latestDocument).outputs).toEqual([
+        {
+          key: 'riskScore',
+          title: 'Risk score',
+          valueType: 'number'
+        }
+      ]);
+    });
   });
 
   test('renders loop number fields in compact inline rows while keeping condition groups stacked', () => {

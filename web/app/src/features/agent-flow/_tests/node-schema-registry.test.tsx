@@ -87,6 +87,7 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf(
       'function'
     );
+    expect(agentFlowRendererRegistry.fields.code_source).toBeTypeOf('function');
     expect(
       agentFlowRendererRegistry.fields.output_contract_definition
     ).toBeTypeOf('function');
@@ -194,16 +195,47 @@ describe('agent-flow node schema registry', () => {
     );
   });
 
-  test('keeps Code on the editable output contract instead of the generated output view', () => {
+  test('keeps Code on the main input, JavaScript source, and editable output flow', () => {
     const schema = resolveAgentFlowNodeSchema('code');
     const serializedConfigBlocks = JSON.stringify(
       schema.detail.tabs.config.blocks
     );
+    const inputField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'bindings.named_bindings'
+    );
+    const sourceField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.source'
+    );
+    const outputField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.output_contract'
+    );
 
+    expect(inputField).toEqual(
+      expect.objectContaining({ renderer: 'named_bindings' })
+    );
+    expect(sourceField).toEqual(
+      expect.objectContaining({ renderer: 'code_source' })
+    );
+    expect(outputField).toEqual(
+      expect.objectContaining({ renderer: 'output_contract_definition' })
+    );
+    expect(
+      serializedConfigBlocks.indexOf('"path":"bindings.named_bindings"')
+    ).toBeLessThan(serializedConfigBlocks.indexOf('"path":"config.source"'));
+    expect(
+      serializedConfigBlocks.indexOf('"path":"config.source"')
+    ).toBeLessThan(
+      serializedConfigBlocks.indexOf('"path":"config.output_contract"')
+    );
     expect(serializedConfigBlocks).toContain('"path":"config.output_contract"');
     expect(serializedConfigBlocks).toContain(
       '"renderer":"output_contract_definition"'
     );
+    expect(serializedConfigBlocks).not.toContain('"path":"config.language"');
+    expect(serializedConfigBlocks).not.toContain('"title":"Advanced"');
     expect(serializedConfigBlocks).not.toContain(
       '"renderer":"output_contract"'
     );
