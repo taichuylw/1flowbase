@@ -14,6 +14,25 @@ const {
   runQualityGate,
 } = require('../core.js');
 
+const REPO_BACKEND_COMPONENT_SCOPES = [
+  'repo-backend-static',
+  'repo-backend-fmt',
+  'repo-backend-clippy-core-libs',
+  'repo-backend-clippy-runtime-storage',
+  'repo-backend-clippy-apps',
+  'repo-backend-test-core-libs',
+  'repo-backend-test-runtime-storage',
+  'repo-backend-test-apps',
+  'repo-backend-check-core-libs',
+  'repo-backend-check-runtime-storage',
+  'repo-backend-check-apps',
+];
+const COVERAGE_BACKEND_COMPONENT_SCOPES = [
+  'coverage-backend-control-plane',
+  'coverage-backend-storage-postgres',
+  'coverage-backend-api-server',
+];
+
 test('buildGateCommand maps supported scopes to repository verify scripts', () => {
   const repoRoot = '/repo';
 
@@ -41,6 +60,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'coverage-backend-api-server' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-coverage.js'), 'backend', 'api-server'],
+    cwd: repoRoot,
+  });
+
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-tooling' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'tooling'],
@@ -56,6 +81,24 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'backend'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-static' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'static'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-fmt' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'fmt'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-test-apps' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'test', 'apps'],
     cwd: repoRoot,
   });
 
@@ -671,15 +714,17 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
     backendConsistencyTargets: [],
     warningFiles: [],
   });
-  writeArtifact('test-governance-repo-backend', {
-    reportType: 'ci',
-    status: 'passed',
-    scope: 'repo-backend',
-    exitCode: 0,
-    coverageSummaries: [],
-    backendConsistencyTargets: [],
-    warningFiles: [],
-  });
+  for (const scope of REPO_BACKEND_COMPONENT_SCOPES) {
+    writeArtifact(`test-governance-${scope}`, {
+      reportType: 'ci',
+      status: 'passed',
+      scope,
+      exitCode: 0,
+      coverageSummaries: [],
+      backendConsistencyTargets: [],
+      warningFiles: [],
+    });
+  }
   writeArtifact('test-governance-backend-consistency', {
     reportType: 'ci',
     status: 'passed',
@@ -717,15 +762,17 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
     backendConsistencyTargets: [],
     warningFiles: [],
   });
-  writeArtifact('test-governance-coverage-backend', {
-    reportType: 'ci',
-    status: 'passed',
-    scope: 'coverage-backend',
-    exitCode: 0,
-    coverageSummaries: [],
-    backendConsistencyTargets: [],
-    warningFiles: [],
-  });
+  for (const scope of COVERAGE_BACKEND_COMPONENT_SCOPES) {
+    writeArtifact(`test-governance-${scope}`, {
+      reportType: 'ci',
+      status: 'passed',
+      scope,
+      exitCode: 0,
+      coverageSummaries: [],
+      backendConsistencyTargets: [],
+      warningFiles: [],
+    });
+  }
 
   const result = await runQualityGateAggregate({
     repoRoot,
@@ -757,9 +804,10 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
   assert.match(createdIssues[0].body, /## Component Results/u);
   assert.match(createdIssues[0].body, /\| `repo-tooling` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `repo-frontend` \| passed \| 0 \|/u);
-  assert.match(createdIssues[0].body, /\| `repo-backend` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `repo-backend-static` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `repo-backend-test-apps` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `coverage-frontend` \| passed \| 0 \|/u);
-  assert.match(createdIssues[0].body, /\| `coverage-backend` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `coverage-backend-api-server` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /frontend total: lines 80\.00%, functions 75\.00%, statements 80\.00%, branches 78\.00%/u);
   assert.match(createdIssues[0].body, /consistency-runtime-engine/u);
   assert.equal(
@@ -801,15 +849,17 @@ test('runQualityGateAggregate fails when component warning logs are captured', a
     backendConsistencyTargets: [],
     warningFiles: [],
   });
-  writeArtifact('test-governance-repo-backend', {
-    reportType: 'ci',
-    status: 'passed',
-    scope: 'repo-backend',
-    exitCode: 0,
-    coverageSummaries: [],
-    backendConsistencyTargets: [],
-    warningFiles: [],
-  });
+  for (const scope of REPO_BACKEND_COMPONENT_SCOPES) {
+    writeArtifact(`test-governance-${scope}`, {
+      reportType: 'ci',
+      status: 'passed',
+      scope,
+      exitCode: 0,
+      coverageSummaries: [],
+      backendConsistencyTargets: [],
+      warningFiles: [],
+    });
+  }
   writeArtifact('test-governance-backend-consistency', {
     reportType: 'ci',
     status: 'passed',
@@ -828,15 +878,17 @@ test('runQualityGateAggregate fails when component warning logs are captured', a
     backendConsistencyTargets: [],
     warningFiles: [],
   });
-  writeArtifact('test-governance-coverage-backend', {
-    reportType: 'ci',
-    status: 'passed',
-    scope: 'coverage-backend',
-    exitCode: 0,
-    coverageSummaries: [],
-    backendConsistencyTargets: [],
-    warningFiles: [],
-  });
+  for (const scope of COVERAGE_BACKEND_COMPONENT_SCOPES) {
+    writeArtifact(`test-governance-${scope}`, {
+      reportType: 'ci',
+      status: 'passed',
+      scope,
+      exitCode: 0,
+      coverageSummaries: [],
+      backendConsistencyTargets: [],
+      warningFiles: [],
+    });
+  }
 
   const result = await runQualityGateAggregate({
     repoRoot,

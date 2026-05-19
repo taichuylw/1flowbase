@@ -15,6 +15,9 @@ concurrency:
   group: verify-${{ github.ref_name }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   repo-tooling-gate:
     runs-on: ubuntu-latest
@@ -68,18 +71,33 @@ jobs:
 
   repo-backend-gate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scope:
+          - repo-backend-static
+          - repo-backend-fmt
+          - repo-backend-clippy-core-libs
+          - repo-backend-clippy-runtime-storage
+          - repo-backend-clippy-apps
+          - repo-backend-test-core-libs
+          - repo-backend-test-runtime-storage
+          - repo-backend-test-apps
+          - repo-backend-check-core-libs
+          - repo-backend-check-runtime-storage
+          - repo-backend-check-apps
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: ./.github/actions/quality-gate
         with:
-          scope: repo-backend
+          scope: ${{ matrix.scope }}
           report_type: ci
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-repo-backend
+          name: test-governance-${{ matrix.scope }}
           path: tmp/test-governance
 
   backend-consistency-gate:
@@ -125,19 +143,26 @@ jobs:
 
   coverage-backend-gate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scope:
+          - coverage-backend-control-plane
+          - coverage-backend-storage-postgres
+          - coverage-backend-api-server
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: ./.github/actions/quality-gate
         with:
-          scope: coverage-backend
+          scope: ${{ matrix.scope }}
           report_type: ci
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-coverage-backend
+          name: test-governance-${{ matrix.scope }}
           path: tmp/test-governance
 
   react-doctor-gate:

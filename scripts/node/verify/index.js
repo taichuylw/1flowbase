@@ -21,10 +21,35 @@ const {
 
 const VALID_COVERAGE_TARGETS = new Set(['frontend', 'backend', 'all']);
 const VALID_REPO_TARGETS = new Set(['tooling', 'frontend', 'backend', 'all']);
+const VALID_BACKEND_TARGETS = new Set(['all', 'static', 'fmt', 'clippy', 'test', 'check']);
 const VERIFY_COMMANDS = new Set(['backend', 'backend-consistency', 'ci', 'coverage', 'repo']);
 const FRONTEND_METRICS = ['lines', 'functions', 'statements', 'branches'];
 const COVERAGE_SCOPE_LABEL = '1flowbase-verify-coverage';
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
+const BACKEND_SHARDS = [
+  {
+    key: 'core-libs',
+    packages: ['domain', 'access-control', 'observability', 'runtime-profile', 'plugin-framework'],
+  },
+  {
+    key: 'runtime-storage',
+    packages: [
+      'runtime-core',
+      'orchestration-runtime',
+      'publish-gateway',
+      'storage-durable',
+      'storage-ephemeral',
+      'storage-object',
+      'storage-postgres',
+    ],
+  },
+  {
+    key: 'apps',
+    packages: ['control-plane', 'api-server', 'plugin-runner'],
+  },
+];
+const BACKEND_SHARD_BY_KEY = new Map(BACKEND_SHARDS.map((shard) => [shard.key, shard]));
+const BACKEND_COVERAGE_ENTRY_BY_KEY = new Map(backendThresholds.map((entry) => [entry.key, entry]));
 const BACKEND_CONSISTENCY_TARGETS = [
   {
     label: 'consistency-control-plane-state-transitions',
@@ -172,58 +197,179 @@ function buildRustBackendStaticGateCommand({ repoRoot, env = process.env }) {
   };
 }
 
-function buildBackendCommands({ cargoJobs, cargoTestThreads, repoRoot = getRepoRoot(), env = process.env }) {
+function normalizeBackendShard(shard) {
+  if (!shard) {
+    return null;
+  }
+
+  if (typeof shard === 'string') {
+    const resolved = BACKEND_SHARD_BY_KEY.get(shard);
+
+    if (!resolved) {
+      throw new Error(`Unknown backend shard: ${shard}`);
+    }
+
+    return resolved;
+  }
+
+  return shard;
+}
+
+function buildBackendPackageArgs(shard) {
+  const normalizedShard = normalizeBackendShard(shard);
+
+  if (!normalizedShard) {
+    return ['--workspace'];
+  }
+
+  return normalizedShard.packages.flatMap((packageName) => ['--package', packageName]);
+}
+
+function buildBackendCargoCommand({
+  target,
+  cargoJobs,
+  cargoTestThreads,
+  shard,
+}) {
+  const normalizedShard = normalizeBackendShard(shard);
+  const labelSuffix = normalizedShard ? `-${normalizedShard.key}` : '';
+  const packageArgs = buildBackendPackageArgs(normalizedShard);
+
+  if (target === 'clippy') {
+    return {
+      label: `cargo-clippy${labelSuffix}`,
+      command: 'cargo',
+      args: ['clippy', ...packageArgs, '--all-targets', '--jobs', String(cargoJobs), '--', '-D', 'warnings'],
+      cwd: 'api',
+      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
+    };
+  }
+
+  if (target === 'test') {
+    return {
+      label: `cargo-test${labelSuffix}`,
+      command: 'cargo',
+      args: ['test', ...packageArgs, '--jobs', String(cargoJobs), '--', `--test-threads=${cargoTestThreads}`],
+      cwd: 'api',
+      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
+    };
+  }
+
+  if (target === 'check') {
+    return {
+      label: `cargo-check${labelSuffix}`,
+      command: 'cargo',
+      args: ['check', ...packageArgs, '--jobs', String(cargoJobs)],
+      cwd: 'api',
+      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
+    };
+  }
+
+  throw new Error(`Unsupported backend cargo target: ${target}`);
+}
+
+function buildBackendFmtCommand({ cargoJobs }) {
+  return {
+    label: 'cargo-fmt',
+    command: 'cargo',
+    args: ['fmt', '--all', '--check'],
+    cwd: 'api',
+    env: buildCargoCommandEnv({ cargoParallelism: cargoJobs }),
+  };
+}
+
+function buildBackendCommands({
+  cargoJobs,
+  cargoTestThreads,
+  repoRoot = getRepoRoot(),
+  env = process.env,
+  target = 'all',
+  shard,
+}) {
+  if (target === 'static') {
+    return [buildRustBackendStaticGateCommand({ repoRoot, env })];
+  }
+
+  if (target === 'fmt') {
+    return [buildBackendFmtCommand({ cargoJobs })];
+  }
+
+  if (target === 'clippy' || target === 'test' || target === 'check') {
+    return [buildBackendCargoCommand({ target, cargoJobs, cargoTestThreads, shard })];
+  }
+
   return [
     buildRustBackendStaticGateCommand({ repoRoot, env }),
-    {
-      label: 'cargo-fmt',
-      command: 'cargo',
-      args: ['fmt', '--all', '--check'],
-      cwd: 'api',
-      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs }),
-    },
-    {
-      label: 'cargo-clippy',
-      command: 'cargo',
-      args: ['clippy', '--workspace', '--all-targets', '--jobs', String(cargoJobs), '--', '-D', 'warnings'],
-      cwd: 'api',
-      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
-    },
-    {
-      label: 'cargo-test',
-      command: 'cargo',
-      args: ['test', '--workspace', '--jobs', String(cargoJobs), '--', `--test-threads=${cargoTestThreads}`],
-      cwd: 'api',
-      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
-    },
-    {
-      label: 'cargo-check',
-      command: 'cargo',
-      args: ['check', '--workspace', '--jobs', String(cargoJobs)],
-      cwd: 'api',
-      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
-    },
+    buildBackendFmtCommand({ cargoJobs }),
+    buildBackendCargoCommand({ target: 'clippy', cargoJobs, cargoTestThreads }),
+    buildBackendCargoCommand({ target: 'test', cargoJobs, cargoTestThreads }),
+    buildBackendCargoCommand({ target: 'check', cargoJobs, cargoTestThreads }),
   ];
 }
 
-async function runBackend(_argv = [], deps = {}) {
+function parseBackendCliArgs(argv = []) {
+  if (argv.includes('-h') || argv.includes('--help')) {
+    return { help: true, target: 'all', shard: null };
+  }
+
+  const [target = 'all', shardKey = null] = argv;
+  if (!VALID_BACKEND_TARGETS.has(target)) {
+    throw new Error(`Unknown backend target: ${target}`);
+  }
+
+  const shard = shardKey ? BACKEND_SHARD_BY_KEY.get(shardKey) : null;
+  if (shardKey && !shard) {
+    throw new Error(`Unknown backend shard: ${shardKey}`);
+  }
+
+  if (shard && !['clippy', 'test', 'check'].includes(target)) {
+    throw new Error(`Backend shard is only supported for clippy, test, or check targets: ${target}`);
+  }
+
+  return { help: false, target, shard: shard?.key ?? null };
+}
+
+function usageBackend(writeStdout = (text) => process.stdout.write(text)) {
+  writeStdout(
+    'Usage: node scripts/node/verify-backend.js [all|static|fmt|clippy|test|check] [core-libs|runtime-storage|apps]\n'
+      + 'Runs backend Rust gates, optionally restricted to a CI shard.\n'
+  );
+}
+
+async function runBackend(argv = [], deps = {}) {
+  const options = parseBackendCliArgs(argv);
+
+  if (options.help) {
+    usageBackend(deps.writeStdout);
+    return 0;
+  }
+
   const repoRoot = deps.repoRoot || getRepoRoot();
   const env = deps.env || process.env;
   const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
   const managedRunner = deps.managedRunnerImpl || runManagedCommandSequence;
+  const shard = options.shard ? BACKEND_SHARD_BY_KEY.get(options.shard) : null;
+  const scopeSuffix = options.target === 'all'
+    ? ''
+    : `-${options.target}${options.shard ? `-${options.shard}` : ''}`;
+  const commandSuffix = options.target === 'all'
+    ? ''
+    : ` ${options.target}${options.shard ? ` ${options.shard}` : ''}`;
 
   return managedRunner({
     repoRoot,
     env,
-    scope: 'verify-backend',
+    scope: `verify-backend${scopeSuffix}`,
     lockMode: 'heavy',
-    commandDisplay: 'node scripts/node/verify-backend.js',
+    commandDisplay: `node scripts/node/verify-backend.js${commandSuffix}`,
     runtimeConfig,
     commands: buildBackendCommands({
       cargoJobs: runtimeConfig.backend.cargoJobs,
       cargoTestThreads: runtimeConfig.backend.cargoTestThreads,
       repoRoot,
       env,
+      target: options.target,
+      shard,
     }),
     spawnSyncImpl: deps.spawnSyncImpl,
     writeStdout: deps.writeStdout,
@@ -378,13 +524,27 @@ function parseCoverageCliArgs(argv) {
     return { help: true, target: 'all' };
   }
 
-  const [target = 'all'] = argv;
+  const [target = 'all', ...backendKeys] = argv;
 
   if (!VALID_COVERAGE_TARGETS.has(target)) {
     throw new Error(`Unknown coverage target: ${target}`);
   }
 
-  return { help: false, target };
+  if (backendKeys.length > 0 && target !== 'backend') {
+    throw new Error(`Coverage package filters are only supported for backend target: ${target}`);
+  }
+
+  if (backendKeys.length === 0) {
+    return { help: false, target };
+  }
+
+  const unknownKey = backendKeys.find((backendKey) => !BACKEND_COVERAGE_ENTRY_BY_KEY.has(backendKey));
+
+  if (unknownKey) {
+    throw new Error(`Unknown backend coverage package: ${unknownKey}`);
+  }
+
+  return { help: false, target, backendKeys };
 }
 
 function buildCoverageFrontendCommand({ repoRoot }) {
@@ -396,8 +556,24 @@ function buildCoverageFrontendCommand({ repoRoot }) {
   };
 }
 
-function buildCoverageBackendCommands({ repoRoot, cargoParallelism, cargoTestThreads }) {
-  return backendThresholds.map((entry) => ({
+function selectBackendCoverageEntries(backendKeys) {
+  if (!backendKeys || backendKeys.length === 0) {
+    return backendThresholds;
+  }
+
+  return backendKeys.map((backendKey) => {
+    const entry = BACKEND_COVERAGE_ENTRY_BY_KEY.get(backendKey);
+
+    if (!entry) {
+      throw new Error(`Unknown backend coverage package: ${backendKey}`);
+    }
+
+    return entry;
+  });
+}
+
+function buildCoverageBackendCommands({ repoRoot, cargoParallelism, cargoTestThreads, backendKeys }) {
+  return selectBackendCoverageEntries(backendKeys).map((entry) => ({
     label: `backend-coverage-${entry.key}`,
     command: 'cargo',
     args: [
@@ -532,8 +708,8 @@ function readBackendLinePct(summary) {
   return summary?.data?.[0]?.totals?.lines?.percent ?? 0;
 }
 
-function collectBackendCoverageFailures(summaries) {
-  return backendThresholds.flatMap((threshold) => {
+function collectBackendCoverageFailures(summaries, backendKeys) {
+  return selectBackendCoverageEntries(backendKeys).flatMap((threshold) => {
     const actualPct = readBackendLinePct(summaries[threshold.key]);
     const expectedPct = threshold.line;
 
@@ -591,7 +767,7 @@ function cleanJsonFiles(directoryPath) {
   }
 }
 
-function cleanCoverageOutputFiles(repoRoot, target) {
+function cleanCoverageOutputFiles(repoRoot, target, backendKeys) {
   if (target === 'frontend' || target === 'all') {
     fs.rmSync(
       path.join(repoRoot, COVERAGE_ROOT, 'frontend', 'coverage-summary.json'),
@@ -600,7 +776,16 @@ function cleanCoverageOutputFiles(repoRoot, target) {
   }
 
   if (target === 'backend' || target === 'all') {
-    cleanJsonFiles(path.join(repoRoot, COVERAGE_ROOT, 'backend'));
+    const backendCoverageDir = path.join(repoRoot, COVERAGE_ROOT, 'backend');
+
+    if (!backendKeys || backendKeys.length === 0) {
+      cleanJsonFiles(backendCoverageDir);
+      return;
+    }
+
+    for (const backendKey of backendKeys) {
+      fs.rmSync(path.join(backendCoverageDir, `${backendKey}.json`), { force: true });
+    }
   }
 }
 
@@ -615,9 +800,9 @@ function loadFrontendCoverageSummary(repoRoot, readFileSyncImpl = fs.readFileSyn
   );
 }
 
-function loadBackendCoverageSummaries(repoRoot, readFileSyncImpl = fs.readFileSync) {
+function loadBackendCoverageSummaries(repoRoot, readFileSyncImpl = fs.readFileSync, backendKeys) {
   return Object.fromEntries(
-    backendThresholds.map((entry) => [
+    selectBackendCoverageEntries(backendKeys).map((entry) => [
       entry.key,
       readJsonFile(
         path.join(repoRoot, COVERAGE_ROOT, 'backend', `${entry.key}.json`),
@@ -637,6 +822,7 @@ function reportCoverageThresholds({
   readFileSyncImpl = fs.readFileSync,
   writeStdout = (text) => process.stdout.write(text),
   writeStderr = (text) => process.stderr.write(text),
+  backendKeys,
 }) {
   const failures = [];
 
@@ -645,7 +831,10 @@ function reportCoverageThresholds({
   }
 
   if (target === 'backend' || target === 'all') {
-    failures.push(...collectBackendCoverageFailures(loadBackendCoverageSummaries(repoRoot, readFileSyncImpl)));
+    failures.push(...collectBackendCoverageFailures(
+      loadBackendCoverageSummaries(repoRoot, readFileSyncImpl, backendKeys),
+      backendKeys
+    ));
   }
 
   if (failures.length > 0) {
@@ -678,13 +867,14 @@ async function runCoverage(argv = [], deps = {}) {
   const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
   const managedRunner = deps.managedRunnerImpl || runManagedCommandSequence;
   const coverageCommands = [];
+  const backendKeys = options.backendKeys;
 
   if (options.target === 'backend' || options.target === 'all') {
     ensureCargoLlvmCovInstalled(deps.preflightSpawnSyncImpl, { repoRoot });
   }
 
   ensureCoverageOutputDirs(repoRoot, options.target);
-  cleanCoverageOutputFiles(repoRoot, options.target);
+  cleanCoverageOutputFiles(repoRoot, options.target, backendKeys);
 
   if (options.target === 'frontend' || options.target === 'all') {
     coverageCommands.push(buildCoverageFrontendCommand({ repoRoot }));
@@ -695,10 +885,16 @@ async function runCoverage(argv = [], deps = {}) {
       repoRoot,
       cargoParallelism: runtimeConfig.backend.cargoJobs,
       cargoTestThreads: runtimeConfig.backend.cargoTestThreads,
+      backendKeys,
     }));
   }
 
   const shouldCleanupBackendCoverage = options.target === 'backend' || options.target === 'all';
+  const scopeSuffix = backendKeys?.length ? `-${backendKeys.join('-')}` : '';
+  const commandSuffix = [
+    options.target === 'all' ? '' : options.target,
+    ...(backendKeys ?? []),
+  ].filter(Boolean).join(' ');
   const commands = shouldCleanupBackendCoverage
     ? [...buildCoverageBackendCleanupCommands(), ...coverageCommands]
     : coverageCommands;
@@ -706,9 +902,9 @@ async function runCoverage(argv = [], deps = {}) {
   return managedRunner({
     repoRoot,
     env,
-    scope: `verify-coverage-${options.target}`,
+    scope: `verify-coverage-${options.target}${scopeSuffix}`,
     lockMode: 'heavy',
-    commandDisplay: `node scripts/node/verify-coverage.js ${options.target}`.trim(),
+    commandDisplay: `node scripts/node/verify-coverage.js ${commandSuffix}`.trim(),
     runtimeConfig,
     commands,
     spawnSyncImpl: deps.spawnSyncImpl,
@@ -730,6 +926,7 @@ async function runCoverage(argv = [], deps = {}) {
             readFileSyncImpl: deps.readFileSyncImpl,
             writeStdout: deps.writeStdout,
             writeStderr: deps.writeStderr,
+            backendKeys,
           });
         }
       } finally {
@@ -918,6 +1115,7 @@ async function main(argv = [], deps = {}) {
 
 module.exports = {
   BACKEND_CONSISTENCY_TARGETS,
+  BACKEND_SHARDS,
   buildBackendCommands,
   buildBackendConsistencyCommands,
   runBackendConsistencyCommandSequence,
@@ -930,6 +1128,7 @@ module.exports = {
   collectFrontendCoverageFailures,
   ensureCargoLlvmCovInstalled,
   main,
+  parseBackendCliArgs,
   parseCoverageCliArgs,
   parseRepoCliArgs,
   parseVerifyCliArgs,

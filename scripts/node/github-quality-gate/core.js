@@ -4,17 +4,27 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { getRepoRoot } = require('../testing/warning-capture.js');
-const { BACKEND_CONSISTENCY_TARGETS } = require('../verify/index.js');
+const { backendThresholds } = require('../testing/coverage-thresholds.js');
+const { BACKEND_CONSISTENCY_TARGETS, BACKEND_SHARDS } = require('../verify/index.js');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
+const REPO_BACKEND_SHARD_TARGETS = ['clippy', 'test', 'check'];
+const REPO_BACKEND_COMPONENT_SCOPES = [
+  'repo-backend-static',
+  'repo-backend-fmt',
+  ...REPO_BACKEND_SHARD_TARGETS.flatMap((target) =>
+    BACKEND_SHARDS.map((shard) => `repo-backend-${target}-${shard.key}`)
+  ),
+];
+const COVERAGE_BACKEND_COMPONENT_SCOPES = backendThresholds.map((entry) => `coverage-backend-${entry.key}`);
 const DEFAULT_AGGREGATE_SCOPES = [
   'repo-tooling',
   'repo-frontend',
-  'repo-backend',
+  ...REPO_BACKEND_COMPONENT_SCOPES,
   'backend-consistency',
   'coverage-frontend',
-  'coverage-backend',
+  ...COVERAGE_BACKEND_COMPONENT_SCOPES,
 ];
 const VALID_SCOPES = new Set([
   'ci',
@@ -27,6 +37,8 @@ const VALID_SCOPES = new Set([
   'coverage',
   'coverage-frontend',
   'coverage-backend',
+  ...REPO_BACKEND_COMPONENT_SCOPES,
+  ...COVERAGE_BACKEND_COMPONENT_SCOPES,
 ]);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -68,6 +80,18 @@ function buildGateCommand({ repoRoot, scope }) {
     };
   }
 
+  if (scope.startsWith('coverage-backend-')) {
+    return {
+      command,
+      args: [
+        resolveCliEntry(repoRoot, 'verify-coverage'),
+        'backend',
+        scope.replace(/^coverage-backend-/u, ''),
+      ],
+      cwd: repoRoot,
+    };
+  }
+
   if (scope === 'repo-tooling') {
     return {
       command,
@@ -90,6 +114,34 @@ function buildGateCommand({ repoRoot, scope }) {
       args: [resolveCliEntry(repoRoot, 'verify-repo'), 'backend'],
       cwd: repoRoot,
     };
+  }
+
+  if (scope === 'repo-backend-static') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-backend'), 'static'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-backend-fmt') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-backend'), 'fmt'],
+      cwd: repoRoot,
+    };
+  }
+
+  for (const target of REPO_BACKEND_SHARD_TARGETS) {
+    for (const shard of BACKEND_SHARDS) {
+      if (scope === `repo-backend-${target}-${shard.key}`) {
+        return {
+          command,
+          args: [resolveCliEntry(repoRoot, 'verify-backend'), target, shard.key],
+          cwd: repoRoot,
+        };
+      }
+    }
   }
 
   return {

@@ -55,25 +55,31 @@ test('verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /repo-tooling-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /repo-frontend-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /repo-backend-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /fail-fast: false/u);
+  assert.match(workflow, /- repo-backend-static/u);
+  assert.match(workflow, /- repo-backend-clippy-core-libs/u);
+  assert.match(workflow, /- repo-backend-test-apps/u);
+  assert.match(workflow, /- repo-backend-check-runtime-storage/u);
   assert.match(workflow, /backend-consistency-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /coverage-frontend-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /coverage-backend-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /- coverage-backend-control-plane/u);
+  assert.match(workflow, /- coverage-backend-storage-postgres/u);
+  assert.match(workflow, /- coverage-backend-api-server/u);
   assert.match(
     workflow,
     /verify:\n\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u
   );
   assert.match(workflow, /scope: repo-tooling/u);
   assert.match(workflow, /scope: repo-frontend/u);
-  assert.match(workflow, /scope: repo-backend/u);
+  assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
-  assert.match(workflow, /scope: coverage-backend/u);
   assert.match(workflow, /name: test-governance-repo-tooling/u);
   assert.match(workflow, /name: test-governance-repo-frontend/u);
-  assert.match(workflow, /name: test-governance-repo-backend/u);
+  assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
-  assert.match(workflow, /name: test-governance-coverage-backend/u);
   assert.match(workflow, /merge-multiple: false/u);
   assert.match(workflow, /node scripts\/node\/github-quality-gate-aggregate\.js/u);
 });
@@ -157,6 +163,7 @@ test('quality gate workflow supports dispatch targets and nightly latest CI defa
   );
   assert.match(workflow, /schedule:\n(?:\s+# .+\n)?\s+- cron: '0 18 \* \* \*'/u);
   assert.match(workflow, /QUALITY_GATE_TARGET_BRANCH: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.target_branch \|\| 'latest' \}\}/u);
+  assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true/u);
   assert.match(workflow, /QUALITY_GATE_SCOPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope \|\| 'ci' \}\}/u);
   assert.match(workflow, /QUALITY_GATE_REPORT_TYPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.report_type \|\| 'ci' \}\}/u);
   assert.match(workflow, /QUALITY_GATE_SCHEDULED_ENVIRONMENT: nightly-latest/u);
@@ -171,9 +178,16 @@ test('quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /repo-tooling-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
   assert.match(workflow, /repo-frontend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
   assert.match(workflow, /repo-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /- repo-backend-static/u);
+  assert.match(workflow, /- repo-backend-clippy-runtime-storage/u);
+  assert.match(workflow, /- repo-backend-test-apps/u);
+  assert.match(workflow, /- repo-backend-check-apps/u);
   assert.match(workflow, /backend-consistency-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
   assert.match(workflow, /coverage-frontend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
   assert.match(workflow, /coverage-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /- coverage-backend-control-plane/u);
+  assert.match(workflow, /- coverage-backend-storage-postgres/u);
+  assert.match(workflow, /- coverage-backend-api-server/u);
   assert.match(workflow, /aggregate:\n\s+if: \$\{\{ always\(\) && \(github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\)\) \}\}/u);
   assert.match(
     workflow,
@@ -181,19 +195,17 @@ test('quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(workflow, /scope: repo-tooling/u);
   assert.match(workflow, /scope: repo-frontend/u);
-  assert.match(workflow, /scope: repo-backend/u);
+  assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
-  assert.match(workflow, /scope: coverage-backend/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
   assert.match(workflow, /node scripts\/node\/github-quality-gate-aggregate\.js/u);
   assert.match(workflow, /name: test-governance-repo-tooling/u);
   assert.match(workflow, /name: test-governance-repo-frontend/u);
-  assert.match(workflow, /name: test-governance-repo-backend/u);
+  assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
-  assert.match(workflow, /name: test-governance-coverage-backend/u);
   assert.match(workflow, /name: test-governance-artifacts/u);
 });
 

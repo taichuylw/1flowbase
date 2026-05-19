@@ -255,7 +255,7 @@ export default function Block() {
 
   test('does not statically expose API or query clients through the runtime module map', () => {
     const runtimeFactorySource = readFileSync(
-      join(process.cwd(), 'src/features/frontstage/lib/native-trusted-block-runtime-factory.tsx'),
+      join(process.cwd(), 'src/features/frontstage/lib/native-trusted-block-runtime-factory.ts'),
       'utf8'
     );
     const moduleMap = createFrontstageNativeTrustedBlockModuleMap();

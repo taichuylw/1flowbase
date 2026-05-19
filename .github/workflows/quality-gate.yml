@@ -23,11 +23,25 @@ on:
           - repo-tooling
           - repo-frontend
           - repo-backend
+          - repo-backend-static
+          - repo-backend-fmt
+          - repo-backend-clippy-core-libs
+          - repo-backend-clippy-runtime-storage
+          - repo-backend-clippy-apps
+          - repo-backend-test-core-libs
+          - repo-backend-test-runtime-storage
+          - repo-backend-test-apps
+          - repo-backend-check-core-libs
+          - repo-backend-check-runtime-storage
+          - repo-backend-check-apps
           - backend
           - backend-consistency
           - coverage
           - coverage-frontend
           - coverage-backend
+          - coverage-backend-control-plane
+          - coverage-backend-storage-postgres
+          - coverage-backend-api-server
       report_type:
         description: Report type
         type: choice
@@ -50,6 +64,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   QUALITY_GATE_TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'latest' }}
   QUALITY_GATE_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'ci' }}
   QUALITY_GATE_REPORT_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.report_type || 'ci' }}
@@ -168,6 +183,21 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        scope:
+          - repo-backend-static
+          - repo-backend-fmt
+          - repo-backend-clippy-core-libs
+          - repo-backend-clippy-runtime-storage
+          - repo-backend-clippy-apps
+          - repo-backend-test-core-libs
+          - repo-backend-test-runtime-storage
+          - repo-backend-test-apps
+          - repo-backend-check-core-libs
+          - repo-backend-check-runtime-storage
+          - repo-backend-check-apps
     steps:
       - uses: actions/checkout@v5
         with:
@@ -180,14 +210,14 @@ jobs:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
         with:
-          scope: repo-backend
+          scope: ${{ matrix.scope }}
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-repo-backend
+          name: test-governance-${{ matrix.scope }}
           path: tmp/test-governance
 
   backend-consistency-gate:
@@ -255,6 +285,13 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        scope:
+          - coverage-backend-control-plane
+          - coverage-backend-storage-postgres
+          - coverage-backend-api-server
     steps:
       - uses: actions/checkout@v5
         with:
@@ -268,14 +305,14 @@ jobs:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
         with:
-          scope: coverage-backend
+          scope: ${{ matrix.scope }}
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-coverage-backend
+          name: test-governance-${{ matrix.scope }}
           path: tmp/test-governance
 
   aggregate:

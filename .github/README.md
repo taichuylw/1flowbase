@@ -23,10 +23,12 @@ It runs local Quality Gate Action jobs in parallel:
 ```yaml
 scope: repo-tooling
 scope: repo-frontend
-scope: repo-backend
+scope: repo-backend-static
+scope: repo-backend-fmt
+scope: repo-backend-{clippy,test,check}-{core-libs,runtime-storage,apps}
 scope: backend-consistency
 scope: coverage-frontend
-scope: coverage-backend
+scope: coverage-backend-{control-plane,storage-postgres,api-server}
 ```
 
 The `repo-tooling` scope includes `repo-hygiene`, which writes
@@ -77,9 +79,9 @@ environment: leave empty
 ```
 
 For `scope: ci`, manual and scheduled runs mirror the automatic CI shape: repo tooling,
-repo frontend, repo backend, backend consistency, frontend coverage, and backend coverage
-run as separate jobs, then an aggregate job downloads their artifacts, publishes one Issue
-report, and uploads `test-governance-artifacts`.
+repo frontend, backend static/fmt/package shards, backend consistency, frontend coverage,
+and backend coverage package shards run as separate jobs. An aggregate job downloads their
+artifacts, publishes one Issue report, and uploads `test-governance-artifacts`.
 This keeps wall time close to the slowest component gate instead of the sum of all gates.
 Each component job publishes `publish_issue: "false"`; only the aggregate job publishes the
 final report with `publish_issue: "true"`.
@@ -99,11 +101,25 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `repo-tooling` | `node scripts/node/verify-repo.js tooling` |
 | `repo-frontend` | `node scripts/node/verify-repo.js frontend` |
 | `repo-backend` | `node scripts/node/verify-repo.js backend` |
+| `repo-backend-static` | `node scripts/node/verify-backend.js static` |
+| `repo-backend-fmt` | `node scripts/node/verify-backend.js fmt` |
+| `repo-backend-clippy-core-libs` | `node scripts/node/verify-backend.js clippy core-libs` |
+| `repo-backend-clippy-runtime-storage` | `node scripts/node/verify-backend.js clippy runtime-storage` |
+| `repo-backend-clippy-apps` | `node scripts/node/verify-backend.js clippy apps` |
+| `repo-backend-test-core-libs` | `node scripts/node/verify-backend.js test core-libs` |
+| `repo-backend-test-runtime-storage` | `node scripts/node/verify-backend.js test runtime-storage` |
+| `repo-backend-test-apps` | `node scripts/node/verify-backend.js test apps` |
+| `repo-backend-check-core-libs` | `node scripts/node/verify-backend.js check core-libs` |
+| `repo-backend-check-runtime-storage` | `node scripts/node/verify-backend.js check runtime-storage` |
+| `repo-backend-check-apps` | `node scripts/node/verify-backend.js check apps` |
 | `backend` | `node scripts/node/verify-backend.js` |
 | `backend-consistency` | `node scripts/node/verify-backend-consistency.js` |
 | `coverage` | `node scripts/node/verify-coverage.js all` |
 | `coverage-frontend` | `node scripts/node/verify-coverage.js frontend` |
 | `coverage-backend` | `node scripts/node/verify-coverage.js backend` |
+| `coverage-backend-control-plane` | `node scripts/node/verify-coverage.js backend control-plane` |
+| `coverage-backend-storage-postgres` | `node scripts/node/verify-coverage.js backend storage-postgres` |
+| `coverage-backend-api-server` | `node scripts/node/verify-coverage.js backend api-server` |
 
 Use `ci` for the full online repository quality gate. The local `node scripts/node/verify-ci.js`
 entry still runs the same gates serially for environments that need one local command, but the
@@ -151,3 +167,11 @@ Workflows must install pnpm before enabling `setup-node` pnpm cache:
 
 Putting `setup-node` before `pnpm/action-setup` can fail with `Unable to locate executable
 file: pnpm`.
+
+Workflows opt JavaScript actions into GitHub's Node 24 runtime with:
+
+```yaml
+FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+```
+
+This keeps hosted-action runtime annotations aligned with the repository's Node 24 test runtime.

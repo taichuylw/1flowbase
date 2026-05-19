@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-const { buildBackendCommands: buildCommands, runBackend: main } = require('./verify/index.js');
+const {
+  buildBackendCommands: buildCommands,
+  parseBackendCliArgs,
+  runBackend: main,
+} = require('./verify/index.js');
 
 if (require.main === module) {
   Promise.resolve()
@@ -16,4 +20,5 @@ if (require.main === module) {
 module.exports = {
   buildCommands,
   main,
+  parseBackendCliArgs,
 };

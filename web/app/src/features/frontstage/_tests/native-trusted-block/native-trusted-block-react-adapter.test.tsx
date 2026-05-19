@@ -680,7 +680,7 @@ describe('frontstage native trusted block React adapter', () => {
       join(process.cwd(), 'src/app')
     ]).filter((filePath) =>
       filePath !== __filename &&
-      !filePath.endsWith('native-trusted-block-runtime-factory.tsx') &&
+      !filePath.endsWith('native-trusted-block-runtime-factory.ts') &&
       readFileSync(filePath, 'utf8').includes('native-trusted-block-react-adapter')
     );
 
@@ -699,7 +699,7 @@ function collectSourceFiles(directories: string[]): string[] {
         continue;
       }
 
-      if (['.ts', '.tsx'].includes(extname(entry.name))) {
+      if (SOURCE_FILE_EXTENSIONS.has(extname(entry.name))) {
         files.push(entryPath);
       }
     }
@@ -707,3 +707,5 @@ function collectSourceFiles(directories: string[]): string[] {
 
   return files;
 }
+
+const SOURCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx']);

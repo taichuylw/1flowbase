@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { buildCommands, main } = require('../../verify-backend.js');
+const { buildCommands, main, parseBackendCliArgs } = require('../../verify-backend.js');
 
 function getExpectedParallelism() {
   const available = typeof os.availableParallelism === 'function'
@@ -62,6 +62,49 @@ test('verify-backend buildCommands uses independent cargo jobs and cargo test th
       },
     },
   ]);
+});
+
+test('verify-backend can build targeted shard commands for parallel CI', () => {
+  assert.deepEqual(parseBackendCliArgs(['clippy', 'core-libs']), {
+    help: false,
+    target: 'clippy',
+    shard: 'core-libs',
+  });
+
+  assert.deepEqual(
+    buildCommands({
+      cargoJobs: 4,
+      cargoTestThreads: 2,
+      repoRoot: '/repo-root',
+      env: {},
+      target: 'clippy',
+      shard: 'core-libs',
+    }).map((command) => ({ label: command.label, args: command.args })),
+    [
+      {
+        label: 'cargo-clippy-core-libs',
+        args: [
+          'clippy',
+          '--package',
+          'domain',
+          '--package',
+          'access-control',
+          '--package',
+          'observability',
+          '--package',
+          'runtime-profile',
+          '--package',
+          'plugin-framework',
+          '--all-targets',
+          '--jobs',
+          '4',
+          '--',
+          '-D',
+          'warnings',
+        ],
+      },
+    ]
+  );
 });
 
 test('main routes backend verification through the heavy managed gate', async () => {
