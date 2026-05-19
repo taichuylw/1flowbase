@@ -105,6 +105,37 @@ test('verify-backend can build targeted shard commands for parallel CI', () => {
       },
     ]
   );
+
+  assert.deepEqual(parseBackendCliArgs(['test', 'api-server']), {
+    help: false,
+    target: 'test',
+    shard: 'api-server',
+  });
+
+  assert.deepEqual(
+    buildCommands({
+      cargoJobs: 4,
+      cargoTestThreads: 2,
+      repoRoot: '/repo-root',
+      env: {},
+      target: 'test',
+      shard: 'api-server',
+    }).map((command) => ({ label: command.label, args: command.args })),
+    [
+      {
+        label: 'cargo-test-api-server',
+        args: [
+          'test',
+          '--package',
+          'api-server',
+          '--jobs',
+          '4',
+          '--',
+          '--test-threads=2',
+        ],
+      },
+    ]
+  );
 });
 
 test('main routes backend verification through the heavy managed gate', async () => {

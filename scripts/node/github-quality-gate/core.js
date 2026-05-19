@@ -5,16 +5,25 @@ const { spawnSync } = require('node:child_process');
 
 const { getRepoRoot } = require('../testing/warning-capture.js');
 const { backendThresholds } = require('../testing/coverage-thresholds.js');
-const { BACKEND_CONSISTENCY_TARGETS, BACKEND_SHARDS } = require('../verify/index.js');
+const {
+  BACKEND_CI_TEST_SHARDS,
+  BACKEND_CONSISTENCY_TARGETS,
+  BACKEND_SHARDS,
+} = require('../verify/index.js');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
 const REPO_BACKEND_SHARD_TARGETS = ['clippy', 'test', 'check'];
+const REPO_BACKEND_SHARDS_BY_TARGET = {
+  clippy: BACKEND_SHARDS,
+  test: BACKEND_CI_TEST_SHARDS,
+  check: BACKEND_SHARDS,
+};
 const REPO_BACKEND_COMPONENT_SCOPES = [
   'repo-backend-static',
   'repo-backend-fmt',
   ...REPO_BACKEND_SHARD_TARGETS.flatMap((target) =>
-    BACKEND_SHARDS.map((shard) => `repo-backend-${target}-${shard.key}`)
+    REPO_BACKEND_SHARDS_BY_TARGET[target].map((shard) => `repo-backend-${target}-${shard.key}`)
   ),
 ];
 const COVERAGE_BACKEND_COMPONENT_SCOPES = backendThresholds.map((entry) => `coverage-backend-${entry.key}`);
@@ -133,7 +142,7 @@ function buildGateCommand({ repoRoot, scope }) {
   }
 
   for (const target of REPO_BACKEND_SHARD_TARGETS) {
-    for (const shard of BACKEND_SHARDS) {
+    for (const shard of REPO_BACKEND_SHARDS_BY_TARGET[target]) {
       if (scope === `repo-backend-${target}-${shard.key}`) {
         return {
           command,

@@ -106,6 +106,9 @@ node scripts/node/verify.js ci
 - `cargo test --workspace`
 - `cargo check --workspace`
 
+CI 可用 `core-libs`、`runtime-storage`、`apps` 分片；`test` 目标额外支持
+`control-plane`、`api-server`、`plugin-runner` 包级分片。
+
 ### `node scripts/node/verify-coverage.js [frontend|backend|all]`
 
 仓库覆盖率门禁。覆盖率摘要写入 `tmp/test-governance/coverage-summary.log`，后端覆盖率需要本地安装 `cargo-llvm-cov`。

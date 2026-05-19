@@ -25,7 +25,8 @@ scope: repo-tooling
 scope: repo-frontend
 scope: repo-backend-static
 scope: repo-backend-fmt
-scope: repo-backend-{clippy,test,check}-{core-libs,runtime-storage,apps}
+scope: repo-backend-{clippy,check}-{core-libs,runtime-storage,apps}
+scope: repo-backend-test-{core-libs,runtime-storage,control-plane,api-server,plugin-runner}
 scope: backend-consistency
 scope: coverage-frontend
 scope: coverage-backend-{control-plane,storage-postgres,api-server}
@@ -75,9 +76,10 @@ environment: leave empty
 ```
 
 For `scope: ci`, manual and scheduled runs mirror the automatic CI shape: repo tooling,
-repo frontend, backend static/fmt/package shards, backend consistency, frontend coverage,
-and backend coverage package shards run as separate jobs. An aggregate job downloads their
-artifacts, publishes one Issue report, and uploads `test-governance-artifacts`.
+repo frontend, backend static/fmt/package shards, backend app test package shards, backend
+consistency, frontend coverage, and backend coverage package shards run as separate jobs.
+An aggregate job downloads their artifacts, publishes one Issue report, and uploads
+`test-governance-artifacts`.
 This keeps wall time close to the slowest component gate instead of the sum of all gates.
 Each component job publishes `publish_issue: "false"`; only the aggregate job publishes the
 final report with `publish_issue: "true"`.
@@ -104,7 +106,9 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `repo-backend-clippy-apps` | `node scripts/node/verify-backend.js clippy apps` |
 | `repo-backend-test-core-libs` | `node scripts/node/verify-backend.js test core-libs` |
 | `repo-backend-test-runtime-storage` | `node scripts/node/verify-backend.js test runtime-storage` |
-| `repo-backend-test-apps` | `node scripts/node/verify-backend.js test apps` |
+| `repo-backend-test-control-plane` | `node scripts/node/verify-backend.js test control-plane` |
+| `repo-backend-test-api-server` | `node scripts/node/verify-backend.js test api-server` |
+| `repo-backend-test-plugin-runner` | `node scripts/node/verify-backend.js test plugin-runner` |
 | `repo-backend-check-core-libs` | `node scripts/node/verify-backend.js check core-libs` |
 | `repo-backend-check-runtime-storage` | `node scripts/node/verify-backend.js check runtime-storage` |
 | `repo-backend-check-apps` | `node scripts/node/verify-backend.js check apps` |

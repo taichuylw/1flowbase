@@ -48,7 +48,30 @@ const BACKEND_SHARDS = [
     packages: ['control-plane', 'api-server', 'plugin-runner'],
   },
 ];
-const BACKEND_SHARD_BY_KEY = new Map(BACKEND_SHARDS.map((shard) => [shard.key, shard]));
+const BACKEND_APP_TEST_SHARDS = [
+  {
+    key: 'control-plane',
+    packages: ['control-plane'],
+  },
+  {
+    key: 'api-server',
+    packages: ['api-server'],
+  },
+  {
+    key: 'plugin-runner',
+    packages: ['plugin-runner'],
+  },
+];
+const BACKEND_TEST_SHARDS = [
+  ...BACKEND_SHARDS,
+  ...BACKEND_APP_TEST_SHARDS,
+];
+const BACKEND_CI_TEST_SHARDS = [
+  BACKEND_SHARDS.find((shard) => shard.key === 'core-libs'),
+  BACKEND_SHARDS.find((shard) => shard.key === 'runtime-storage'),
+  ...BACKEND_APP_TEST_SHARDS,
+];
+const BACKEND_SHARD_BY_KEY = new Map(BACKEND_TEST_SHARDS.map((shard) => [shard.key, shard]));
 const BACKEND_COVERAGE_ENTRY_BY_KEY = new Map(backendThresholds.map((entry) => [entry.key, entry]));
 const BACKEND_CONSISTENCY_TARGETS = [
   {
@@ -317,7 +340,9 @@ function parseBackendCliArgs(argv = []) {
     throw new Error(`Unknown backend target: ${target}`);
   }
 
-  const shard = shardKey ? BACKEND_SHARD_BY_KEY.get(shardKey) : null;
+  const validShards = target === 'test' ? BACKEND_TEST_SHARDS : BACKEND_SHARDS;
+  const validShardByKey = new Map(validShards.map((shard) => [shard.key, shard]));
+  const shard = shardKey ? validShardByKey.get(shardKey) : null;
   if (shardKey && !shard) {
     throw new Error(`Unknown backend shard: ${shardKey}`);
   }
@@ -331,8 +356,8 @@ function parseBackendCliArgs(argv = []) {
 
 function usageBackend(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/verify-backend.js [all|static|fmt|clippy|test|check] [core-libs|runtime-storage|apps]\n'
-      + 'Runs backend Rust gates, optionally restricted to a CI shard.\n'
+    'Usage: node scripts/node/verify-backend.js [all|static|fmt|clippy|test|check] [core-libs|runtime-storage|apps|control-plane|api-server|plugin-runner]\n'
+      + 'Runs backend Rust gates, optionally restricted to a CI shard. Package-level app shards are supported for test.\n'
   );
 }
 
@@ -1115,7 +1140,9 @@ async function main(argv = [], deps = {}) {
 
 module.exports = {
   BACKEND_CONSISTENCY_TARGETS,
+  BACKEND_CI_TEST_SHARDS,
   BACKEND_SHARDS,
+  BACKEND_TEST_SHARDS,
   buildBackendCommands,
   buildBackendConsistencyCommands,
   runBackendConsistencyCommandSequence,

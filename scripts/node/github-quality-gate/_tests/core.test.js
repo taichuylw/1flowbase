@@ -22,7 +22,9 @@ const REPO_BACKEND_COMPONENT_SCOPES = [
   'repo-backend-clippy-apps',
   'repo-backend-test-core-libs',
   'repo-backend-test-runtime-storage',
-  'repo-backend-test-apps',
+  'repo-backend-test-control-plane',
+  'repo-backend-test-api-server',
+  'repo-backend-test-plugin-runner',
   'repo-backend-check-core-libs',
   'repo-backend-check-runtime-storage',
   'repo-backend-check-apps',
@@ -96,9 +98,9 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
-  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-test-apps' }), {
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-test-api-server' }), {
     command: process.execPath,
-    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'test', 'apps'],
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'test', 'api-server'],
     cwd: repoRoot,
   });
 
@@ -805,7 +807,7 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
   assert.match(createdIssues[0].body, /\| `repo-tooling` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `repo-frontend` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `repo-backend-static` \| passed \| 0 \|/u);
-  assert.match(createdIssues[0].body, /\| `repo-backend-test-apps` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `repo-backend-test-api-server` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `coverage-frontend` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `coverage-backend-api-server` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /frontend total: lines 80\.00%, functions 75\.00%, statements 80\.00%, branches 78\.00%/u);

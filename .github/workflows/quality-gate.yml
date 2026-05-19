@@ -30,7 +30,9 @@ on:
           - repo-backend-clippy-apps
           - repo-backend-test-core-libs
           - repo-backend-test-runtime-storage
-          - repo-backend-test-apps
+          - repo-backend-test-control-plane
+          - repo-backend-test-api-server
+          - repo-backend-test-plugin-runner
           - repo-backend-check-core-libs
           - repo-backend-check-runtime-storage
           - repo-backend-check-apps
@@ -194,7 +196,9 @@ jobs:
           - repo-backend-clippy-apps
           - repo-backend-test-core-libs
           - repo-backend-test-runtime-storage
-          - repo-backend-test-apps
+          - repo-backend-test-control-plane
+          - repo-backend-test-api-server
+          - repo-backend-test-plugin-runner
           - repo-backend-check-core-libs
           - repo-backend-check-runtime-storage
           - repo-backend-check-apps

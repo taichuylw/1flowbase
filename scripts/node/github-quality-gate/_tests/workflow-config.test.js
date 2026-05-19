@@ -58,7 +58,10 @@ test('verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /fail-fast: false/u);
   assert.match(workflow, /- repo-backend-static/u);
   assert.match(workflow, /- repo-backend-clippy-core-libs/u);
-  assert.match(workflow, /- repo-backend-test-apps/u);
+  assert.match(workflow, /- repo-backend-test-control-plane/u);
+  assert.match(workflow, /- repo-backend-test-api-server/u);
+  assert.match(workflow, /- repo-backend-test-plugin-runner/u);
+  assert.doesNotMatch(workflow, /- repo-backend-test-apps/u);
   assert.match(workflow, /- repo-backend-check-runtime-storage/u);
   assert.match(workflow, /backend-consistency-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /coverage-frontend-gate:\n\s+runs-on: ubuntu-latest/u);
@@ -175,7 +178,10 @@ test('quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /repo-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
   assert.match(workflow, /- repo-backend-static/u);
   assert.match(workflow, /- repo-backend-clippy-runtime-storage/u);
-  assert.match(workflow, /- repo-backend-test-apps/u);
+  assert.match(workflow, /- repo-backend-test-control-plane/u);
+  assert.match(workflow, /- repo-backend-test-api-server/u);
+  assert.match(workflow, /- repo-backend-test-plugin-runner/u);
+  assert.doesNotMatch(workflow, /- repo-backend-test-apps/u);
   assert.match(workflow, /- repo-backend-check-apps/u);
   assert.match(workflow, /backend-consistency-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
   assert.match(workflow, /coverage-frontend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
