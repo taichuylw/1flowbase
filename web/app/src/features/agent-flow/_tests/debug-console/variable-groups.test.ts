@@ -213,7 +213,9 @@ describe('debug console variable groups', () => {
             query: '22',
             model: '',
             history: [],
-            files: []
+            files: [],
+            tools: [],
+            tool_choice: {}
           }
         }
       },
@@ -233,6 +235,16 @@ describe('debug console variable groups', () => {
               key: 'files',
               title: 'userinput.files',
               valueType: 'array[object]'
+            },
+            {
+              key: 'tools',
+              title: 'userinput.tools',
+              valueType: 'array[object]'
+            },
+            {
+              key: 'tool_choice',
+              title: 'userinput.tool_choice',
+              valueType: 'json'
             }
           ]
         }
@@ -244,7 +256,9 @@ describe('debug console variable groups', () => {
       'node-start.query',
       'node-start.model',
       'node-start.history',
-      'node-start.files'
+      'node-start.files',
+      'node-start.tools',
+      'node-start.tool_choice'
     ]);
   });
 

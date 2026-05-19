@@ -217,10 +217,58 @@ fn compatibility_payload(object: &serde_json::Map<String, Value>) -> Value {
 }
 
 fn compatibility_inputs(compatibility: Value) -> Value {
-    if compatibility.is_null() {
+    let Some(object) = compatibility.as_object() else {
         return serde_json::json!({});
+    };
+    let mut inputs = serde_json::Map::new();
+    if let Some(tools) = object
+        .get("tools")
+        .and_then(Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(normalize_openai_tool)
+                .collect::<Vec<_>>()
+        })
+        .filter(|tools| !tools.is_empty())
+    {
+        inputs.insert("tools".to_string(), Value::Array(tools));
     }
-    serde_json::json!({ "compatibility": compatibility })
+    if let Some(tool_choice) = object.get("tool_choice") {
+        inputs.insert("tool_choice".to_string(), tool_choice.clone());
+    } else if let Some(function_call) = object.get("function_call") {
+        inputs.insert("tool_choice".to_string(), function_call.clone());
+    }
+    Value::Object(inputs)
+}
+
+fn normalize_openai_tool(tool: &Value) -> Option<Value> {
+    let function = tool.get("function")?.as_object()?;
+    let name = function.get("name")?.as_str()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let mut normalized = serde_json::Map::new();
+    normalized.insert("name".to_string(), Value::String(name.to_string()));
+    normalized.insert(
+        "source".to_string(),
+        Value::String("openai_compatible".to_string()),
+    );
+    if let Some(description) = function
+        .get("description")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        normalized.insert(
+            "description".to_string(),
+            Value::String(description.to_string()),
+        );
+    }
+    if let Some(parameters) = function.get("parameters") {
+        normalized.insert("input_schema".to_string(), parameters.clone());
+    }
+    Some(Value::Object(normalized))
 }
 
 fn openai_message_text(message: &Value) -> Result<String, OpenAiCompatError> {
@@ -334,5 +382,60 @@ mod tests {
                 name: Some("1flowbase".into()),
             }]
         );
+    }
+
+    #[test]
+    fn maps_tools_into_start_tool_registry_variables() {
+        let request = map_chat_completion_request(json!({
+            "model": "deepseek-v4-flash",
+            "messages": [
+                { "role": "user", "content": "say hello" }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "Read a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": { "type": "string" }
+                            }
+                        }
+                    }
+                }
+            ],
+            "tool_choice": "auto"
+        }))
+        .unwrap();
+
+        let inputs = request.inputs.as_value();
+        assert_eq!(inputs["tools"][0]["name"], json!("read_file"));
+        assert_eq!(inputs["tools"][0]["source"], json!("openai_compatible"));
+        assert_eq!(
+            inputs["tools"][0]["input_schema"]["properties"]["file_path"]["type"],
+            json!("string")
+        );
+        assert_eq!(inputs["tool_choice"], json!("auto"));
+        assert!(inputs.get("function_call").is_none());
+        assert!(inputs.get("compatibility").is_none());
+    }
+
+    #[test]
+    fn maps_legacy_function_call_into_tool_choice_variable() {
+        let request = map_chat_completion_request(json!({
+            "model": "deepseek-v4-flash",
+            "messages": [
+                { "role": "user", "content": "say hello" }
+            ],
+            "function_call": { "name": "read_file" }
+        }))
+        .unwrap();
+
+        let inputs = request.inputs.as_value();
+        assert_eq!(inputs["tool_choice"], json!({ "name": "read_file" }));
+        assert!(inputs.get("function_call").is_none());
+        assert!(inputs.get("compatibility").is_none());
     }
 }

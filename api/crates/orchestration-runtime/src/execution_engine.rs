@@ -190,8 +190,8 @@ where
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
                     node_alias: node.alias.clone(),
-                    input_payload: json!({}),
-                    output_payload: payload,
+                    input_payload: payload,
+                    output_payload: json!({}),
                     error_payload: None,
                     metrics_payload: json!({ "preview_mode": true }),
                     debug_payload: json!({}),
@@ -1036,7 +1036,7 @@ fn provider_tools(
     {
         if let Some(tools) = candidate.as_array() {
             if !tools.is_empty() {
-                return tools.clone();
+                return provider_tool_payloads(tools);
             }
         }
     }
@@ -1049,17 +1049,61 @@ fn provider_tools(
                 .get("compatibility")
                 .and_then(|compatibility| compatibility.get("tools"))
                 .and_then(Value::as_array)
-                .cloned()
+                .map(|tools| provider_tool_payloads(tools))
                 .filter(|tools| !tools.is_empty())
                 .or_else(|| {
                     payload
                         .get("tools")
                         .and_then(Value::as_array)
-                        .cloned()
+                        .map(|tools| provider_tool_payloads(tools))
                         .filter(|tools| !tools.is_empty())
                 })
         })
         .unwrap_or_default()
+}
+
+fn provider_tool_payloads(tools: &[Value]) -> Vec<Value> {
+    tools.iter().map(provider_tool_payload).collect()
+}
+
+fn provider_tool_payload(tool: &Value) -> Value {
+    if tool.get("function").is_some() {
+        return tool.clone();
+    }
+
+    let Some(object) = tool.as_object() else {
+        return tool.clone();
+    };
+    let Some(name) = object
+        .get("name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    else {
+        return tool.clone();
+    };
+
+    let mut function = Map::new();
+    function.insert("name".to_string(), Value::String(name.to_string()));
+    if let Some(description) = object
+        .get("description")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        function.insert(
+            "description".to_string(),
+            Value::String(description.to_string()),
+        );
+    }
+    if let Some(input_schema) = object.get("input_schema") {
+        function.insert("parameters".to_string(), input_schema.clone());
+    }
+
+    json!({
+        "type": "function",
+        "function": Value::Object(function),
+    })
 }
 
 fn value_to_text(value: &Value) -> Option<String> {

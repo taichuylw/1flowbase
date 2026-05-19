@@ -293,6 +293,14 @@ where
             &resolved_inputs,
         );
         let node_started_at = OffsetDateTime::now_utc();
+        let node_input_payload = if node.node_type == "start" {
+            variable_pool
+                .get(node_id)
+                .cloned()
+                .unwrap_or_else(|| json!({}))
+        } else {
+            Value::Object(resolved_inputs.clone())
+        };
         let node_run = service
             .repository
             .create_node_run(&CreateNodeRunInput {
@@ -301,7 +309,7 @@ where
                 node_type: node.node_type.clone(),
                 node_alias: node.alias.clone(),
                 status: domain::NodeRunStatus::Running,
-                input_payload: Value::Object(resolved_inputs.clone()),
+                input_payload: node_input_payload,
                 debug_payload: json!({}),
                 started_at: node_started_at,
             })
@@ -335,18 +343,17 @@ where
 
         match node.node_type.as_str() {
             "start" => {
-                let output_payload = variable_pool
+                last_output_payload = variable_pool
                     .get(node_id)
                     .cloned()
                     .unwrap_or_else(|| json!({}));
-                last_output_payload = output_payload.clone();
                 update_node_run_and_emit(
                     service,
                     flow_run.id,
                     &UpdateNodeRunInput {
                         node_run_id: node_run.id,
                         status: domain::NodeRunStatus::Succeeded,
-                        output_payload,
+                        output_payload: json!({}),
                         error_payload: None,
                         metrics_payload: json!({ "preview_mode": true }),
                         debug_payload: json!({}),

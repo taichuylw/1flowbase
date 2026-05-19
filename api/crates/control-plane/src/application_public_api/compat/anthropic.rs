@@ -128,10 +128,56 @@ fn compatibility_payload(object: &serde_json::Map<String, Value>) -> Value {
 }
 
 fn compatibility_inputs(compatibility: Value) -> Value {
-    if compatibility.is_null() {
+    let Some(object) = compatibility.as_object() else {
         return serde_json::json!({});
+    };
+    let mut inputs = serde_json::Map::new();
+    if let Some(tools) = object
+        .get("tools")
+        .and_then(Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(normalize_anthropic_tool)
+                .collect::<Vec<_>>()
+        })
+        .filter(|tools| !tools.is_empty())
+    {
+        inputs.insert("tools".to_string(), Value::Array(tools));
     }
-    serde_json::json!({ "compatibility": compatibility })
+    if let Some(tool_choice) = object.get("tool_choice") {
+        inputs.insert("tool_choice".to_string(), tool_choice.clone());
+    }
+    Value::Object(inputs)
+}
+
+fn normalize_anthropic_tool(tool: &Value) -> Option<Value> {
+    let object = tool.as_object()?;
+    let name = object.get("name")?.as_str()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let mut normalized = serde_json::Map::new();
+    normalized.insert("name".to_string(), Value::String(name.to_string()));
+    normalized.insert(
+        "source".to_string(),
+        Value::String("anthropic_compatible".to_string()),
+    );
+    if let Some(description) = object
+        .get("description")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        normalized.insert(
+            "description".to_string(),
+            Value::String(description.to_string()),
+        );
+    }
+    if let Some(input_schema) = object.get("input_schema") {
+        normalized.insert("input_schema".to_string(), input_schema.clone());
+    }
+    Some(Value::Object(normalized))
 }
 
 fn anthropic_text_content(content: &Value) -> Result<String, AnthropicCompatError> {
@@ -199,4 +245,45 @@ fn anthropic_tool_result_text(block: &Value) -> String {
             .join("\n");
     }
     content.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn maps_tools_into_start_tool_registry_variables() {
+        let request = map_messages_request(json!({
+            "model": "claude-compatible",
+            "messages": [
+                { "role": "user", "content": "say hello" }
+            ],
+            "tools": [
+                {
+                    "name": "read_file",
+                    "description": "Read a file",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": { "type": "string" }
+                        }
+                    }
+                }
+            ],
+            "tool_choice": { "type": "auto" }
+        }))
+        .unwrap();
+
+        let inputs = request.inputs.as_value();
+        assert_eq!(inputs["tools"][0]["name"], json!("read_file"));
+        assert_eq!(inputs["tools"][0]["source"], json!("anthropic_compatible"));
+        assert_eq!(
+            inputs["tools"][0]["input_schema"]["properties"]["file_path"]["type"],
+            json!("string")
+        );
+        assert_eq!(inputs["tool_choice"], json!({ "type": "auto" }));
+        assert!(inputs.get("compatibility").is_none());
+    }
 }

@@ -671,4 +671,40 @@ mod tests {
         assert_eq!(mapped.metadata["idempotency_key"], json!("idem-1"));
         assert_eq!(mapped.metadata["external_trace_id"], json!("trace-1"));
     }
+
+    #[test]
+    fn mapper_places_tool_registry_under_default_start_input() {
+        let request: NativeRunRequest = serde_json::from_value(json!({
+            "query": "hello",
+            "inputs": {
+                "tools": [
+                    {
+                        "name": "read_file",
+                        "source": "openai_compatible",
+                        "input_schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "tool_choice": "auto"
+            }
+        }))
+        .unwrap();
+
+        let mapped =
+            NativeInputMapper::map(&request, &ApplicationApiMappingConfig::default_native())
+                .unwrap();
+
+        assert_eq!(
+            mapped.node_input_payload["node-start"]["tools"][0]["name"],
+            json!("read_file")
+        );
+        assert_eq!(
+            mapped.node_input_payload["node-start"]["tool_choice"],
+            json!("auto")
+        );
+        assert!(mapped.node_input_payload["node-start"]
+            .get("compatibility")
+            .is_none());
+    }
 }

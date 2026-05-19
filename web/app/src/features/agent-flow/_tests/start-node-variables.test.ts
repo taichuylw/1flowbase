@@ -90,7 +90,9 @@ describe('start node variables', () => {
         { value: ['node-start', 'query'], label: 'Start/query' },
         { value: ['node-start', 'model'], label: 'Start/model' },
         { value: ['node-start', 'history'], label: 'Start/history' },
-        { value: ['node-start', 'files'], label: 'Start/files' }
+        { value: ['node-start', 'files'], label: 'Start/files' },
+        { value: ['node-start', 'tools'], label: 'Start/tools' },
+        { value: ['node-start', 'tool_choice'], label: 'Start/tool_choice' }
       ])
     );
   });
@@ -268,6 +270,8 @@ describe('start node variables', () => {
           customer_name: 'Start customer_name 调试值',
           age: 1,
           files: [],
+          tools: [],
+          tool_choice: {},
           model: '',
           history: [],
           query: ''
@@ -314,6 +318,8 @@ describe('start node variables', () => {
           model: '',
           history: [],
           files: [],
+          tools: [],
+          tool_choice: {},
           query: ''
         }
       }

@@ -93,7 +93,9 @@ describe('start input fields', () => {
     expect(screen.getByText('userinput.model')).toBeInTheDocument();
     expect(screen.getByText('userinput.history')).toBeInTheDocument();
     expect(screen.getByText('userinput.files')).toBeInTheDocument();
-    expect(screen.getAllByText('array[object]')).toHaveLength(2);
+    expect(screen.getByText('userinput.tools')).toBeInTheDocument();
+    expect(screen.getByText('userinput.tool_choice')).toBeInTheDocument();
+    expect(screen.getAllByText('array[object]')).toHaveLength(3);
     expect(screen.queryByText('上一轮用户消息')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /userinput\.history/ }));

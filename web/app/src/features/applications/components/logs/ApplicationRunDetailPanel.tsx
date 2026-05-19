@@ -18,6 +18,7 @@ import {
   applicationRunDetailQueryKey,
   completeCallbackTask,
   fetchApplicationRunDetail,
+  fetchRuntimeDebugArtifact,
   resumeFlowRun,
   type ApplicationRunDetail
 } from '../../api/runtime';
@@ -291,6 +292,9 @@ function RunConversation({
         onChangeRunContextValue={() => {}}
         onClearSession={() => {}}
         onClose={onClose}
+        onLoadArtifact={(artifactRef) =>
+          fetchRuntimeDebugArtifact(detail.flow_run.application_id, artifactRef)
+        }
         onOpenMessageLog={onOpenMessageLog}
         onStopRun={() => {}}
         onSubmitPrompt={() => {}}

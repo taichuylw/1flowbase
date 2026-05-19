@@ -46,6 +46,16 @@ export const startSystemVariables = [
     key: 'files',
     title: 'userinput.files',
     valueType: 'array[object]'
+  },
+  {
+    key: 'tools',
+    title: 'userinput.tools',
+    valueType: 'array[object]'
+  },
+  {
+    key: 'tool_choice',
+    title: 'userinput.tool_choice',
+    valueType: 'json'
   }
 ] satisfies FlowNodeOutputDocument[];
 

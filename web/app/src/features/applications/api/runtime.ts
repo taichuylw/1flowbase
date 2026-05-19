@@ -2,6 +2,7 @@ import {
   completeConsoleCallbackTask,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRuns,
+  getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
   type ConsoleApplicationRunsPage,
   resumeConsoleFlowRun,
@@ -100,6 +101,17 @@ export function fetchRuntimeDebugStream(applicationId: string, runId: string) {
 }
 
 export { getConsoleRuntimeDebugStream };
+
+export function fetchRuntimeDebugArtifact(
+  applicationId: string,
+  artifactId: string
+) {
+  return getConsoleRuntimeDebugArtifact(
+    applicationId,
+    artifactId,
+    getApplicationsApiBaseUrl()
+  );
+}
 
 export function resumeFlowRun(
   applicationId: string,

@@ -588,6 +588,8 @@ fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
 }
 
 fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
+    let (input_payload, output_payload) = normalize_node_run_payloads_for_logs(&run);
+
     NodeRunResponse {
         id: run.id.to_string(),
         flow_run_id: run.flow_run_id.to_string(),
@@ -595,14 +597,33 @@ fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
         node_type: run.node_type,
         node_alias: run.node_alias,
         status: run.status.as_str().to_string(),
-        input_payload: run.input_payload,
-        output_payload: run.output_payload,
+        input_payload,
+        output_payload,
         error_payload: run.error_payload,
         metrics_payload: run.metrics_payload,
         debug_payload: run.debug_payload,
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
     }
+}
+
+fn normalize_node_run_payloads_for_logs(
+    run: &domain::NodeRunRecord,
+) -> (serde_json::Value, serde_json::Value) {
+    if run.node_type == "start"
+        && run
+            .input_payload
+            .as_object()
+            .is_some_and(serde_json::Map::is_empty)
+        && run
+            .output_payload
+            .as_object()
+            .is_some_and(|object| !object.is_empty())
+    {
+        return (run.output_payload.clone(), serde_json::json!({}));
+    }
+
+    (run.input_payload.clone(), run.output_payload.clone())
 }
 
 fn to_checkpoint_response(checkpoint: domain::CheckpointRecord) -> CheckpointResponse {
@@ -1661,5 +1682,41 @@ mod tests {
             ),
             Some(11)
         );
+    }
+
+    #[test]
+    fn start_node_response_moves_legacy_output_payload_into_input() {
+        let run = domain::NodeRunRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: Uuid::now_v7(),
+            node_id: "node-start".to_string(),
+            node_type: "start".to_string(),
+            node_alias: "Start".to_string(),
+            status: domain::NodeRunStatus::Succeeded,
+            input_payload: serde_json::json!({}),
+            output_payload: serde_json::json!({
+                "query": "ping",
+                "tools": [
+                    {
+                        "name": "read_file",
+                        "source": "openai_compatible"
+                    }
+                ]
+            }),
+            error_payload: None,
+            metrics_payload: serde_json::json!({}),
+            debug_payload: serde_json::json!({}),
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+        };
+
+        let response = to_node_run_response(run);
+
+        assert_eq!(response.input_payload["query"], serde_json::json!("ping"));
+        assert_eq!(
+            response.input_payload["tools"][0]["name"],
+            serde_json::json!("read_file")
+        );
+        assert_eq!(response.output_payload, serde_json::json!({}));
     }
 }

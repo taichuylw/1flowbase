@@ -993,22 +993,19 @@ async fn llm_runtime_forwards_compatible_tools_and_tool_history_to_provider() {
                         "content": "{\"status\":\"shipped\"}"
                     }
                 ],
-                "compatibility": {
-                    "tools": [
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "lookup_order",
-                                "parameters": {
-                                    "type": "object",
-                                    "properties": {
-                                        "order_id": { "type": "string" }
-                                    }
-                                }
+                "tools": [
+                    {
+                        "name": "lookup_order",
+                        "description": "Lookup an order",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "order_id": { "type": "string" }
                             }
-                        }
-                    ]
-                }
+                        },
+                        "source": "openai_compatible"
+                    }
+                ]
             }
         }),
         &invoker,
@@ -1022,6 +1019,10 @@ async fn llm_runtime_forwards_compatible_tools_and_tool_history_to_provider() {
         .clone()
         .expect("provider input should be captured");
     assert_eq!(captured.tools[0]["function"]["name"], json!("lookup_order"));
+    assert_eq!(
+        captured.tools[0]["function"]["parameters"]["properties"]["order_id"]["type"],
+        json!("string")
+    );
 
     let messages = serde_json::to_value(&captured.messages).expect("messages serialize");
     assert_eq!(messages[0]["role"], json!("assistant"));
