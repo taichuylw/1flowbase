@@ -39,11 +39,7 @@ remain warnings; focused tests still fail the repo gate.
 It also runs React Doctor as a frontend quality gate against `web/app` changed files:
 
 ```yaml
-uses: millionco/react-doctor@main
-directory: web/app
-diff: main
-fail-on: warning
-offline: "true"
+run: npx react-doctor@latest web/app --diff main --offline --fail-on warning --verbose
 ```
 
 Current FrontStage structural debt is kept in `web/app/react-doctor.config.json`

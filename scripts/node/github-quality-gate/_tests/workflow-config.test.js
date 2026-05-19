@@ -90,12 +90,10 @@ test('verify workflow runs React Doctor as a frontend quality gate', () => {
   assert.match(workflow, /react-doctor-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /fetch-depth: 0/u);
   assert.match(workflow, /git show-ref --verify --quiet refs\/heads\/main \|\| git branch main origin\/main/u);
-  assert.match(workflow, /uses: millionco\/react-doctor@main/u);
-  assert.match(workflow, /directory: web\/app/u);
-  assert.match(workflow, /diff: main/u);
-  assert.match(workflow, /fail-on: warning/u);
-  assert.match(workflow, /offline: "true"/u);
+  assert.match(workflow, /uses: actions\/setup-node@v5/u);
   assert.match(workflow, /node-version: 24/u);
+  assert.match(workflow, /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u);
+  assert.doesNotMatch(workflow, /uses: millionco\/react-doctor@main/u);
   assert.doesNotMatch(workflow, /github-token: \$\{\{ secrets\.GITHUB_TOKEN \}\}/u);
   assert.match(
     workflow,
@@ -144,10 +142,7 @@ test('GitHub automation docs describe the React Doctor frontend gate', () => {
   const readme = readGitHubReadme();
 
   assert.match(readme, /React Doctor frontend gates/u);
-  assert.match(readme, /directory: web\/app/u);
-  assert.match(readme, /diff: main/u);
-  assert.match(readme, /fail-on: warning/u);
-  assert.match(readme, /offline: "true"/u);
+  assert.match(readme, /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u);
   assert.match(readme, /web\/app\/react-doctor\.config\.json/u);
   assert.match(readme, /explicit baseline/u);
 });

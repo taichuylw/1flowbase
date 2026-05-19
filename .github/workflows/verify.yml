@@ -173,13 +173,11 @@ jobs:
           fetch-depth: 0
       - name: Prepare React Doctor diff base
         run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
-      - uses: millionco/react-doctor@main
+      - uses: actions/setup-node@v5
         with:
-          directory: web/app
-          diff: main
-          fail-on: warning
-          offline: "true"
           node-version: 24
+      - name: Run React Doctor
+        run: npx react-doctor@latest web/app --diff main --offline --fail-on warning --verbose
 
   verify:
     needs:
