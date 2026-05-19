@@ -8,8 +8,26 @@ const { BACKEND_CONSISTENCY_TARGETS } = require('../verify/index.js');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
-const DEFAULT_AGGREGATE_SCOPES = ['repo', 'backend-consistency', 'coverage'];
-const VALID_SCOPES = new Set(['ci', 'repo', 'backend', 'backend-consistency', 'coverage']);
+const DEFAULT_AGGREGATE_SCOPES = [
+  'repo-tooling',
+  'repo-frontend',
+  'repo-backend',
+  'backend-consistency',
+  'coverage-frontend',
+  'coverage-backend',
+];
+const VALID_SCOPES = new Set([
+  'ci',
+  'repo',
+  'repo-tooling',
+  'repo-frontend',
+  'repo-backend',
+  'backend',
+  'backend-consistency',
+  'coverage',
+  'coverage-frontend',
+  'coverage-backend',
+]);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
@@ -30,6 +48,46 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'all'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'coverage-frontend') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'frontend'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'coverage-backend') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'backend'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-tooling') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'tooling'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-frontend') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-backend') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'backend'],
       cwd: repoRoot,
     };
   }

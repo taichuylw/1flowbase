@@ -20,6 +20,7 @@ const {
 } = require('../testing/coverage-thresholds.js');
 
 const VALID_COVERAGE_TARGETS = new Set(['frontend', 'backend', 'all']);
+const VALID_REPO_TARGETS = new Set(['tooling', 'frontend', 'backend', 'all']);
 const VERIFY_COMMANDS = new Set(['backend', 'backend-consistency', 'ci', 'coverage', 'repo']);
 const FRONTEND_METRICS = ['lines', 'functions', 'statements', 'branches'];
 const COVERAGE_SCOPE_LABEL = '1flowbase-verify-coverage';
@@ -754,10 +755,24 @@ async function runCoverage(argv = [], deps = {}) {
   });
 }
 
-function buildRepoCommands({ repoRoot, env = process.env }) {
+function parseRepoCliArgs(argv) {
+  if (argv.includes('-h') || argv.includes('--help')) {
+    return { help: true, target: 'all' };
+  }
+
+  const [target = 'all'] = argv;
+
+  if (!VALID_REPO_TARGETS.has(target)) {
+    throw new Error(`Unknown repo target: ${target}`);
+  }
+
+  return { help: false, target };
+}
+
+function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
   const nodeBinary = resolveNodeBinaryFromPath(env);
 
-  return [
+  const toolingCommands = [
     {
       label: 'repo-hygiene',
       command: nodeBinary,
@@ -776,12 +791,16 @@ function buildRepoCommands({ repoRoot, env = process.env }) {
       args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'contracts'],
       cwd: repoRoot,
     },
+  ];
+  const frontendCommands = [
     {
       label: 'repo-frontend-full',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'frontend', 'full'],
       cwd: repoRoot,
     },
+  ];
+  const backendCommands = [
     {
       label: 'repo-backend-full',
       command: nodeBinary,
@@ -789,17 +808,37 @@ function buildRepoCommands({ repoRoot, env = process.env }) {
       cwd: repoRoot,
     },
   ];
+
+  if (target === 'tooling') {
+    return toolingCommands;
+  }
+
+  if (target === 'frontend') {
+    return frontendCommands;
+  }
+
+  if (target === 'backend') {
+    return backendCommands;
+  }
+
+  return [
+    ...toolingCommands,
+    ...frontendCommands,
+    ...backendCommands,
+  ];
 }
 
 function usageRepo(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/verify-repo.js\n'
-      + 'Runs: repo hygiene + scripts/node tests + contract tests + frontend full gate + backend full gate\n'
+    'Usage: node scripts/node/verify-repo.js [tooling|frontend|backend|all]\n'
+      + 'Runs repository gates, optionally restricted to a CI-friendly slice.\n'
   );
 }
 
 async function runRepo(argv = [], deps = {}) {
-  if (argv.includes('-h') || argv.includes('--help')) {
+  const options = parseRepoCliArgs(argv);
+
+  if (options.help) {
     usageRepo(deps.writeStdout);
     return 0;
   }
@@ -812,11 +851,13 @@ async function runRepo(argv = [], deps = {}) {
   return managedRunner({
     repoRoot,
     env,
-    scope: 'verify-repo',
+    scope: options.target === 'all' ? 'verify-repo' : `verify-repo-${options.target}`,
     lockMode: 'heavy',
-    commandDisplay: 'node scripts/node/verify-repo.js',
+    commandDisplay: options.target === 'all'
+      ? 'node scripts/node/verify-repo.js'
+      : `node scripts/node/verify-repo.js ${options.target}`,
     runtimeConfig,
-    commands: buildRepoCommands({ repoRoot, env }),
+    commands: buildRepoCommands({ repoRoot, env, target: options.target }),
     spawnSyncImpl: deps.spawnSyncImpl,
     writeStdout: deps.writeStdout,
     writeStderr: deps.writeStderr,
@@ -890,6 +931,7 @@ module.exports = {
   ensureCargoLlvmCovInstalled,
   main,
   parseCoverageCliArgs,
+  parseRepoCliArgs,
   parseVerifyCliArgs,
   runBackend,
   runBackendConsistency,

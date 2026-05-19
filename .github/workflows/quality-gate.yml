@@ -20,9 +20,14 @@ on:
         options:
           - ci
           - repo
+          - repo-tooling
+          - repo-frontend
+          - repo-backend
           - backend
           - backend-consistency
           - coverage
+          - coverage-frontend
+          - coverage-backend
       report_type:
         description: Report type
         type: choice
@@ -88,10 +93,10 @@ jobs:
           name: test-governance-artifacts
           path: tmp/test-governance
 
-  repo-gate:
+  repo-tooling-gate:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
@@ -113,14 +118,76 @@ jobs:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
         with:
-          scope: repo
+          scope: repo-tooling
+          report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
+          environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-repo-tooling
+          path: tmp/test-governance
+
+  repo-frontend-gate:
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+      - name: Resolve quality gate target SHA
+        run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - uses: ./.github/actions/quality-gate
+        env:
+          GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
+        with:
+          scope: repo-frontend
+          report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
+          environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-repo-frontend
+          path: tmp/test-governance
+
+  repo-backend-gate:
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+      - name: Resolve quality gate target SHA
+        run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/quality-gate
+        env:
+          GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
+        with:
+          scope: repo-backend
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-repo
+          name: test-governance-repo-backend
           path: tmp/test-governance
 
   backend-consistency-gate:
@@ -149,10 +216,10 @@ jobs:
           name: test-governance-backend-consistency
           path: tmp/test-governance
 
-  coverage-gate:
+  coverage-frontend-gate:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
         with:
@@ -168,6 +235,32 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm --dir web install --frozen-lockfile
+      - uses: ./.github/actions/quality-gate
+        env:
+          GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
+        with:
+          scope: coverage-frontend
+          report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
+          environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-coverage-frontend
+          path: tmp/test-governance
+
+  coverage-backend-gate:
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+      - name: Resolve quality gate target SHA
+        run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: ./.github/actions/quality-gate
@@ -175,22 +268,25 @@ jobs:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
         with:
-          scope: coverage
+          scope: coverage-backend
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-coverage
+          name: test-governance-coverage-backend
           path: tmp/test-governance
 
   aggregate:
     if: ${{ always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci')) }}
     needs:
-      - repo-gate
+      - repo-tooling-gate
+      - repo-frontend-gate
+      - repo-backend-gate
       - backend-consistency-gate
-      - coverage-gate
+      - coverage-frontend-gate
+      - coverage-backend-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

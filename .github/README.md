@@ -6,7 +6,7 @@ This directory owns GitHub Actions automation for repository quality gates.
 
 | Path | Purpose |
 | --- | --- |
-| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; runs repo, backend consistency, coverage, and React Doctor frontend gates in parallel, then publishes one aggregate issue only for `latest` pushes. |
+| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; runs repo slices, backend consistency, coverage slices, and React Doctor frontend gates in parallel, then publishes one aggregate issue only for `latest` pushes. |
 | `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates in parallel before one aggregate Issue report. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
@@ -18,15 +18,18 @@ This directory owns GitHub Actions automation for repository quality gates.
 - `push` to `main`
 - `push` to `latest`
 
-It runs three local Quality Gate Action jobs in parallel:
+It runs local Quality Gate Action jobs in parallel:
 
 ```yaml
-scope: repo
+scope: repo-tooling
+scope: repo-frontend
+scope: repo-backend
 scope: backend-consistency
-scope: coverage
+scope: coverage-frontend
+scope: coverage-backend
 ```
 
-The `repo` scope includes `repo-hygiene`, which writes
+The `repo-tooling` scope includes `repo-hygiene`, which writes
 `tmp/test-governance/repo-hygiene.json` with deprecated-marker, weak-assertion,
 duplicate-test-title, file-size, and directory-pressure findings. Advisory findings
 remain warnings; focused tests still fail the repo gate.
@@ -41,7 +44,7 @@ fail-on: warning
 offline: "true"
 ```
 
-The final aggregate job downloads the three component artifacts and publishes a single
+The final aggregate job downloads the component artifacts and publishes a single
 report with:
 
 ```yaml
@@ -69,14 +72,16 @@ report_type: ci
 environment: leave empty
 ```
 
-For `scope: ci`, manual and scheduled runs mirror the automatic CI shape: `repo`,
-`backend-consistency`, and `coverage` run as separate jobs, then an aggregate job downloads
-their artifacts, publishes one Issue report, and uploads `test-governance-artifacts`.
+For `scope: ci`, manual and scheduled runs mirror the automatic CI shape: repo tooling,
+repo frontend, repo backend, backend consistency, frontend coverage, and backend coverage
+run as separate jobs, then an aggregate job downloads their artifacts, publishes one Issue
+report, and uploads `test-governance-artifacts`.
 This keeps wall time close to the slowest component gate instead of the sum of all gates.
 Each component job publishes `publish_issue: "false"`; only the aggregate job publishes the
 final report with `publish_issue: "true"`.
 
-For narrower dispatch scopes such as `repo`, `backend-consistency`, or `coverage`,
+For narrower dispatch scopes such as `repo-frontend`, `repo-backend`, `backend-consistency`,
+or `coverage-backend`,
 `quality-gate.yml` runs one targeted job and publishes that single-scope report directly.
 Manual runs share the same target-branch concurrency group as automatic quality gates.
 Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-latest`.
@@ -85,11 +90,16 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 
 | Scope | Command |
 | --- | --- |
-| `ci` | GitHub workflow only: parallel `repo` + `backend-consistency` + `coverage`, then `github-quality-gate-aggregate.js` |
+| `ci` | GitHub workflow only: parallel repo slices + `backend-consistency` + coverage slices, then `github-quality-gate-aggregate.js` |
 | `repo` | `node scripts/node/verify-repo.js` |
+| `repo-tooling` | `node scripts/node/verify-repo.js tooling` |
+| `repo-frontend` | `node scripts/node/verify-repo.js frontend` |
+| `repo-backend` | `node scripts/node/verify-repo.js backend` |
 | `backend` | `node scripts/node/verify-backend.js` |
 | `backend-consistency` | `node scripts/node/verify-backend-consistency.js` |
 | `coverage` | `node scripts/node/verify-coverage.js all` |
+| `coverage-frontend` | `node scripts/node/verify-coverage.js frontend` |
+| `coverage-backend` | `node scripts/node/verify-coverage.js backend` |
 
 Use `ci` for the full online repository quality gate. The local `node scripts/node/verify-ci.js`
 entry still runs the same gates serially for environments that need one local command, but the
@@ -114,7 +124,7 @@ The Quality Gate Action writes:
 - `tmp/test-governance/quality-gate.latest.log`
 - `tmp/test-governance/quality-gate-report.md`
 - `tmp/test-governance/quality-gate-report.json`
-- `tmp/test-governance/repo-hygiene.json` for `repo` and `ci`
+- `tmp/test-governance/repo-hygiene.json` for `repo`, `repo-tooling`, and `ci`
 - `tmp/test-governance/backend-consistency-targets.json` for `ci` and `backend-consistency`
 
 Existing warning, coverage, screenshot, and QA evidence files remain under

@@ -43,6 +43,23 @@ test('buildCommands composes hygiene, script tests, contract tests, frontend ful
   ]);
 });
 
+test('buildCommands can select repository gate slices for parallel CI jobs', () => {
+  const repoRoot = '/repo-root';
+
+  assert.deepEqual(
+    buildCommands({ repoRoot, target: 'tooling' }).map((command) => command.label),
+    ['repo-hygiene', 'repo-script-tests', 'repo-contract-tests']
+  );
+  assert.deepEqual(
+    buildCommands({ repoRoot, target: 'frontend' }).map((command) => command.label),
+    ['repo-frontend-full']
+  );
+  assert.deepEqual(
+    buildCommands({ repoRoot, target: 'backend' }).map((command) => command.label),
+    ['repo-backend-full']
+  );
+});
+
 test('main runs repository full gate in order and captures advisory output', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-repo-'));
   const calls = [];
@@ -84,6 +101,26 @@ test('main runs repository full gate in order and captures advisory output', asy
   assert.match(warningLog, /warning: .*test\.js\/contracts advisory/u);
   assert.match(warningLog, /warning: .*test\.js\/frontend advisory/u);
   assert.match(warningLog, /warning: .*verify\.js\/backend advisory/u);
+});
+
+test('main runs only the requested repository gate slice', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-repo-slice-'));
+  const calls = [];
+
+  const status = await main(['frontend'], {
+    repoRoot,
+    env: {},
+    writeStdout() {},
+    writeStderr() {},
+    spawnSyncImpl(command, args, options) {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: '', stderr: '' };
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'full']);
 });
 
 test('main passes the inherited lock token through every repository gate command', async () => {

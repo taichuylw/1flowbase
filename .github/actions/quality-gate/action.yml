@@ -3,7 +3,7 @@ description: Run repository quality gates and optionally publish one GitHub Issu
 
 inputs:
   scope:
-    description: "Quality gate scope: ci, repo, backend, backend-consistency, or coverage."
+    description: "Quality gate scope: ci, repo slices, backend, backend-consistency, or coverage slices."
     required: false
     default: ci
   report_type:
@@ -22,6 +22,10 @@ inputs:
     description: Optional deployment or report environment label.
     required: false
     default: ""
+  start_postgres:
+    description: Whether to start the shared Postgres middleware before running the gate.
+    required: false
+    default: "true"
 
 outputs:
   status:
@@ -44,6 +48,7 @@ runs:
   using: composite
   steps:
     - id: quality-gate-postgres
+      if: ${{ inputs.start_postgres == 'true' }}
       shell: bash
       env:
         POSTGRES_MAX_CONNECTIONS: "300"

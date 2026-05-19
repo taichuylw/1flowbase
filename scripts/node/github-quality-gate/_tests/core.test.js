@@ -29,6 +29,36 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'coverage-frontend' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-coverage.js'), 'frontend'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'coverage-backend' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-coverage.js'), 'backend'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-tooling' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'tooling'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-frontend' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'frontend'],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'backend'],
+    cwd: repoRoot,
+  });
+
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'backend-consistency' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend-consistency.js')],
@@ -623,10 +653,28 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
     fs.writeFileSync(path.join(artifactDir, 'quality-gate.latest.log'), `${report.scope} log\n`, 'utf8');
   };
 
-  writeArtifact('test-governance-repo', {
+  writeArtifact('test-governance-repo-tooling', {
     reportType: 'ci',
     status: 'passed',
-    scope: 'repo',
+    scope: 'repo-tooling',
+    exitCode: 0,
+    coverageSummaries: [],
+    backendConsistencyTargets: [],
+    warningFiles: [],
+  });
+  writeArtifact('test-governance-repo-frontend', {
+    reportType: 'ci',
+    status: 'passed',
+    scope: 'repo-frontend',
+    exitCode: 0,
+    coverageSummaries: [],
+    backendConsistencyTargets: [],
+    warningFiles: [],
+  });
+  writeArtifact('test-governance-repo-backend', {
+    reportType: 'ci',
+    status: 'passed',
+    scope: 'repo-backend',
     exitCode: 0,
     coverageSummaries: [],
     backendConsistencyTargets: [],
@@ -650,10 +698,10 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
     }],
     warningFiles: [],
   });
-  writeArtifact('test-governance-coverage', {
+  writeArtifact('test-governance-coverage-frontend', {
     reportType: 'ci',
     status: 'passed',
-    scope: 'coverage',
+    scope: 'coverage-frontend',
     exitCode: 0,
     coverageSummaries: [{
       name: 'frontend total',
@@ -666,6 +714,15 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
         branches: 78,
       },
     }],
+    backendConsistencyTargets: [],
+    warningFiles: [],
+  });
+  writeArtifact('test-governance-coverage-backend', {
+    reportType: 'ci',
+    status: 'passed',
+    scope: 'coverage-backend',
+    exitCode: 0,
+    coverageSummaries: [],
     backendConsistencyTargets: [],
     warningFiles: [],
   });
@@ -698,8 +755,11 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
   assert.equal(result.exitCode, 0);
   assert.equal(createdIssues.length, 1);
   assert.match(createdIssues[0].body, /## Component Results/u);
-  assert.match(createdIssues[0].body, /\| `repo` \| passed \| 0 \|/u);
-  assert.match(createdIssues[0].body, /\| `coverage` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `repo-tooling` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `repo-frontend` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `repo-backend` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `coverage-frontend` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /\| `coverage-backend` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /frontend total: lines 80\.00%, functions 75\.00%, statements 80\.00%, branches 78\.00%/u);
   assert.match(createdIssues[0].body, /consistency-runtime-engine/u);
   assert.equal(
@@ -723,14 +783,32 @@ test('runQualityGateAggregate fails when component warning logs are captured', a
     fs.writeFileSync(path.join(artifactDir, 'quality-gate.latest.log'), `${report.scope} log\n`, 'utf8');
   };
 
-  writeArtifact('test-governance-repo', {
+  writeArtifact('test-governance-repo-tooling', {
     reportType: 'ci',
     status: 'passed',
-    scope: 'repo',
+    scope: 'repo-tooling',
     exitCode: 0,
     coverageSummaries: [],
     backendConsistencyTargets: [],
-    warningFiles: ['tmp/test-governance/repo.warnings.log'],
+    warningFiles: ['tmp/test-governance/repo-tooling.warnings.log'],
+  });
+  writeArtifact('test-governance-repo-frontend', {
+    reportType: 'ci',
+    status: 'passed',
+    scope: 'repo-frontend',
+    exitCode: 0,
+    coverageSummaries: [],
+    backendConsistencyTargets: [],
+    warningFiles: [],
+  });
+  writeArtifact('test-governance-repo-backend', {
+    reportType: 'ci',
+    status: 'passed',
+    scope: 'repo-backend',
+    exitCode: 0,
+    coverageSummaries: [],
+    backendConsistencyTargets: [],
+    warningFiles: [],
   });
   writeArtifact('test-governance-backend-consistency', {
     reportType: 'ci',
@@ -741,10 +819,19 @@ test('runQualityGateAggregate fails when component warning logs are captured', a
     backendConsistencyTargets: [],
     warningFiles: [],
   });
-  writeArtifact('test-governance-coverage', {
+  writeArtifact('test-governance-coverage-frontend', {
     reportType: 'ci',
     status: 'passed',
-    scope: 'coverage',
+    scope: 'coverage-frontend',
+    exitCode: 0,
+    coverageSummaries: [],
+    backendConsistencyTargets: [],
+    warningFiles: [],
+  });
+  writeArtifact('test-governance-coverage-backend', {
+    reportType: 'ci',
+    status: 'passed',
+    scope: 'coverage-backend',
     exitCode: 0,
     coverageSummaries: [],
     backendConsistencyTargets: [],
@@ -772,6 +859,6 @@ test('runQualityGateAggregate fails when component warning logs are captured', a
   assert.equal(result.exitCode, 1);
   assert.match(
     fs.readFileSync(path.join(repoRoot, 'tmp', 'test-governance', 'quality-gate-report.md'), 'utf8'),
-    /Warning log: tmp\/test-governance\/repo\.warnings\.log/u
+    /Warning log: tmp\/test-governance\/repo-tooling\.warnings\.log/u
   );
 });
