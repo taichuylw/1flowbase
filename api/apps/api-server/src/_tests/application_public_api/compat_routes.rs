@@ -317,6 +317,25 @@ async fn openai_chat_completions_accepts_bearer_and_preserves_model() {
 }
 
 #[tokio::test]
+async fn openai_chat_completions_accepts_root_endpoint_for_plain_base_url_clients() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "OpenAI Plain Base URL Compatible Route App").await;
+
+    let response = post_json(
+        &app,
+        "/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        openai_body(false),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["object"], json!("chat.completion"));
+    assert_eq!(payload["model"], json!("provider/custom-model:latest"));
+}
+
+#[tokio::test]
 async fn openai_models_lists_start_node_configured_models() {
     let app = test_app().await;
     let token = setup_published_app(&app, "OpenAI Compatible Models App").await;
