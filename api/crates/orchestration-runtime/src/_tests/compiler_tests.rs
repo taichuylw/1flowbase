@@ -692,6 +692,49 @@ fn compile_prompt_messages_extracts_selector_dependencies_from_message_content()
 }
 
 #[test]
+fn compile_named_bindings_extracts_selector_dependencies_from_templated_content() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1] = json!({
+        "id": "node-code",
+        "type": "code",
+        "alias": "Code",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": {
+            "language": "javascript",
+            "source": "function main({arg1}) { return { result: arg1 }; }",
+            "entrypoint": "main"
+        },
+        "bindings": {
+            "named_bindings": {
+                "kind": "named_bindings",
+                "value": [
+                    {
+                        "name": "arg1",
+                        "content": {
+                            "kind": "templated_text",
+                            "value": "Question: {{ node-start.query }}"
+                        }
+                    }
+                ]
+            }
+        },
+        "outputs": [{ "key": "result", "title": "result", "valueType": "string" }]
+    });
+    document["graph"]["edges"][0]["target"] = json!("node-code");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(
+        plan.nodes["node-code"].bindings["named_bindings"].selector_paths,
+        vec![vec!["node-start".to_string(), "query".to_string()]]
+    );
+}
+
+#[test]
 fn compile_data_model_query_extracts_selector_dependencies() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);

@@ -400,9 +400,15 @@ function extractSelectors(
         extractTemplateSelectors(message.content.value)
       );
     case 'named_bindings':
-      return binding.value
-        .map((entry) => normalizeSelectorPath(entry.selector))
-        .filter((value): value is readonly [string, string] => value !== null);
+      return binding.value.flatMap((entry) => {
+        if (entry.content?.kind === 'templated_text') {
+          return extractTemplateSelectors(entry.content.value);
+        }
+
+        const selector = normalizeSelectorPath(entry.selector);
+
+        return selector ? [selector] : [];
+      });
     case 'condition_group':
       return binding.value.conditions
         .map((condition) => normalizeSelectorPath(condition.left))

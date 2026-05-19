@@ -70,21 +70,28 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
                     .get("name")
                     .and_then(Value::as_str)
                     .ok_or_else(|| anyhow!("named_bindings entry missing name"))?;
-                let selector = entry
-                    .get("selector")
-                    .and_then(Value::as_array)
-                    .ok_or_else(|| anyhow!("named_bindings entry missing selector"))?
-                    .iter()
-                    .map(|segment| {
-                        segment.as_str().map(str::to_string).ok_or_else(|| {
-                            anyhow!("named_bindings selector segment must be a string")
+                let value = if let Some(content) = entry
+                    .get("content")
+                    .and_then(|content| content.get("value"))
+                    .and_then(Value::as_str)
+                {
+                    Value::String(render_template(content, variable_pool)?)
+                } else {
+                    let selector = entry
+                        .get("selector")
+                        .and_then(Value::as_array)
+                        .ok_or_else(|| anyhow!("named_bindings entry missing selector"))?
+                        .iter()
+                        .map(|segment| {
+                            segment.as_str().map(str::to_string).ok_or_else(|| {
+                                anyhow!("named_bindings selector segment must be a string")
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                object.insert(
-                    name.to_string(),
-                    lookup_selector_value(variable_pool, &selector)?,
-                );
+                        .collect::<Result<Vec<_>>>()?;
+                    lookup_selector_value(variable_pool, &selector)?
+                };
+
+                object.insert(name.to_string(), value);
             }
 
             Ok(Value::Object(object))

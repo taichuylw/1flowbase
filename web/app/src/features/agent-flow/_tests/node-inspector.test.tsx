@@ -638,16 +638,18 @@ describe('NodeInspector', () => {
       Node.DOCUMENT_POSITION_FOLLOWING
     );
     expect(screen.getByLabelText('输入变量-0-name')).toHaveValue('arg1');
+    expect(screen.getByLabelText('输入变量-0-value')).toBeInTheDocument();
+    expect(screen.queryByLabelText('输入变量-0-selector')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '删除变量 arg1' })
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('JavaScript 代码')).toHaveValue(
-      'return { riskScore: 0.82 };'
-    );
+    const codeEditor = await screen.findByLabelText('JavaScript 代码');
+
+    expect(codeEditor).toHaveValue('return { riskScore: 0.82 };');
     expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
     expect(screen.getByLabelText('输出显示名 1')).toHaveValue('Risk Score');
 
-    fireEvent.change(screen.getByLabelText('JavaScript 代码'), {
+    fireEvent.change(codeEditor, {
       target: { value: 'return { riskScore: inputs.score };' }
     });
     fireEvent.change(screen.getByLabelText('输出显示名 1'), {

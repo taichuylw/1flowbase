@@ -706,7 +706,15 @@ where
         )
     })?;
     let config_payload = node.config.clone();
-    let input_payload = Value::Object(resolved_inputs.clone());
+    let mut input_object = resolved_inputs.clone();
+
+    if let Some(Value::Object(named_bindings)) = resolved_inputs.get("named_bindings") {
+        for (key, value) in named_bindings {
+            input_object.insert(key.clone(), value.clone());
+        }
+    }
+
+    let input_payload = Value::Object(input_object);
 
     match invoker
         .invoke_code_node(runtime, config_payload, input_payload)

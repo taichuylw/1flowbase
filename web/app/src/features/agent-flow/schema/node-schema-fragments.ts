@@ -30,6 +30,7 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   selector_list: 'selector_list',
   templated_text: 'templated_text',
   named_bindings: 'named_bindings',
+  templated_named_bindings: 'templated_named_bindings',
   condition_group: 'condition_group',
   state_write: 'state_write',
   output_contract_definition: 'output_contract_definition',

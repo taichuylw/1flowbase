@@ -25,6 +25,7 @@ export type NodeEditorKind =
   | 'selector_list'
   | 'templated_text'
   | 'named_bindings'
+  | 'templated_named_bindings'
   | 'condition_group'
   | 'state_write'
   | 'output_contract_definition'

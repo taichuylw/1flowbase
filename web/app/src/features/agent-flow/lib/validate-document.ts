@@ -163,7 +163,13 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
         parseTemplateSelectorTokens(message.content.value)
       );
     case 'named_bindings':
-      return binding.value.map((entry) => entry.selector);
+      return binding.value.flatMap((entry) =>
+        entry.content?.kind === 'templated_text'
+          ? parseTemplateSelectorTokens(entry.content.value)
+          : entry.selector
+            ? [entry.selector]
+            : []
+      );
     case 'condition_group':
       return binding.value.conditions.flatMap((condition) => {
         const selectors = [condition.left];

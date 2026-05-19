@@ -13,6 +13,10 @@ import { NamedBindingsField } from '../components/bindings/NamedBindingsField';
 import { SelectorField } from '../components/bindings/SelectorField';
 import { StateWriteField } from '../components/bindings/StateWriteField';
 import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
+import {
+  TemplatedNamedBindingsField,
+  type TemplatedNamedBindingValue
+} from '../components/bindings/TemplatedNamedBindingsField';
 import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
 import { CodeSourceField } from '../components/detail/fields/CodeSourceField';
 import { DataModelField } from '../components/detail/fields/DataModelField';
@@ -236,6 +240,48 @@ function renderNamedBindingsField({
   );
 }
 
+function normalizeTemplatedNamedBindingEntries(value: unknown) {
+  return getBindingValue<
+    Array<{
+      name: string;
+      selector?: string[];
+      content?: { kind: 'templated_text'; value: string };
+    }>
+  >(value, 'named_bindings', []).map((entry) => ({
+    name: entry.name,
+    selector: entry.selector,
+    content:
+      entry.content?.kind === 'templated_text'
+        ? entry.content
+        : {
+            kind: 'templated_text' as const,
+            value: createTemplateSelectorToken(entry.selector ?? [])
+          }
+  }));
+}
+
+function renderTemplatedNamedBindingsField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const value = adapter.getValue(block.path);
+  const binding = normalizeTemplatedNamedBindingEntries(value);
+
+  return (
+    <TemplatedNamedBindingsField
+      ariaLabel={block.label}
+      options={getSelectorOptions(adapter)}
+      value={binding}
+      onChange={(nextValue: TemplatedNamedBindingValue[]) =>
+        adapter.setValue(block.path, {
+          kind: 'named_bindings',
+          value: nextValue
+        })
+      }
+    />
+  );
+}
+
 function renderConditionGroupField({
   adapter,
   block
@@ -389,6 +435,7 @@ export const agentFlowFieldRenderers = {
   selector_list: renderSelectorListField,
   templated_text: renderTemplatedTextField,
   named_bindings: renderNamedBindingsField,
+  templated_named_bindings: renderTemplatedNamedBindingsField,
   condition_group: renderConditionGroupField,
   state_write: renderStateWriteField,
   output_contract_definition: renderOutputContractDefinitionField,

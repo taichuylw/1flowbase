@@ -438,8 +438,14 @@ function createCodeContract(): NodeRuntimeUiContract {
       named_bindings: {
         kind: 'named_bindings',
         value: [
-          { name: 'arg1', selector: [] },
-          { name: 'arg2', selector: [] }
+          {
+            name: 'arg1',
+            content: { kind: 'templated_text', value: '' }
+          },
+          {
+            name: 'arg2',
+            content: { kind: 'templated_text', value: '' }
+          }
         ]
       }
     },
@@ -450,7 +456,7 @@ function createCodeContract(): NodeRuntimeUiContract {
         panelField({
           key: 'bindings.named_bindings',
           title: '输入变量',
-          renderer: 'named_bindings',
+          renderer: 'templated_named_bindings',
           valueType: 'json'
         })
       ]),

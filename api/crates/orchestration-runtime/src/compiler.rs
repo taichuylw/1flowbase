@@ -1296,12 +1296,29 @@ fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<Strin
         }
         "selector" => Ok(vec![selector_path(raw_value)?]),
         "selector_list" => selector_path_list(raw_value),
-        "named_bindings" => raw_value
-            .as_array()
-            .ok_or_else(|| anyhow!("named_bindings value must be an array"))?
-            .iter()
-            .map(|entry| selector_path(entry.get("selector").unwrap_or(&Value::Null)))
-            .collect(),
+        "named_bindings" => {
+            let entries = raw_value
+                .as_array()
+                .ok_or_else(|| anyhow!("named_bindings value must be an array"))?;
+            let mut selectors = Vec::new();
+
+            for entry in entries {
+                if let Some(content) = entry
+                    .get("content")
+                    .and_then(|content| content.get("value"))
+                    .and_then(Value::as_str)
+                {
+                    selectors.extend(parse_template_selector_tokens(content));
+                    continue;
+                }
+
+                selectors.push(selector_path(
+                    entry.get("selector").unwrap_or(&Value::Null),
+                )?);
+            }
+
+            Ok(selectors)
+        }
         "prompt_messages" => {
             let entries = raw_value
                 .as_array()

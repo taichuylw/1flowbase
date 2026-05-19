@@ -105,7 +105,16 @@ function remapBinding(
         ...binding,
         value: binding.value.map((entry) => ({
           ...entry,
-          selector: remapSelector(entry.selector, idMap)
+          selector: entry.selector
+            ? remapSelector(entry.selector, idMap)
+            : undefined,
+          content:
+            entry.content?.kind === 'templated_text'
+              ? {
+                  ...entry.content,
+                  value: remapTemplateSelectorTokens(entry.content.value, idMap)
+                }
+              : entry.content
         }))
       };
     case 'condition_group':

@@ -278,7 +278,11 @@ export type FlowBinding =
     }
   | {
       kind: 'named_bindings';
-      value: Array<{ name: string; selector: string[] }>;
+      value: Array<{
+        name: string;
+        selector?: string[];
+        content?: { kind: 'templated_text'; value: string };
+      }>;
     }
   | {
       kind: 'condition_group';

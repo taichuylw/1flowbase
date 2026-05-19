@@ -223,7 +223,7 @@ describe('agent-flow node schema registry', () => {
     );
 
     expect(inputField).toEqual(
-      expect.objectContaining({ renderer: 'named_bindings' })
+      expect.objectContaining({ renderer: 'templated_named_bindings' })
     );
     expect(sourceField).toEqual(
       expect.objectContaining({ renderer: 'code_source' })
@@ -257,8 +257,14 @@ describe('agent-flow node schema registry', () => {
       named_bindings: {
         kind: 'named_bindings',
         value: [
-          { name: 'arg1', selector: [] },
-          { name: 'arg2', selector: [] }
+          {
+            name: 'arg1',
+            content: { kind: 'templated_text', value: '' }
+          },
+          {
+            name: 'arg2',
+            content: { kind: 'templated_text', value: '' }
+          }
         ]
       }
     });

@@ -715,6 +715,50 @@ async fn code_runtime_invoker_success_projects_output_for_downstream_template_no
 }
 
 #[tokio::test]
+async fn code_runtime_resolves_templated_named_bindings_as_top_level_args() {
+    let mut plan = code_runtime_plan();
+    let code_node = plan
+        .nodes
+        .get_mut("node-code")
+        .expect("expected code node in fixture plan");
+    code_node.bindings = BTreeMap::from([(
+        "named_bindings".to_string(),
+        CompiledBinding {
+            kind: "named_bindings".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "name": "arg1",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Question: {{ node-start.query }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+    code_node.config["source"] = json!("function main({arg1}) { return { result: arg1 }; }");
+    code_node.code_runtime.as_mut().unwrap().source =
+        Some("function main({arg1}) { return { result: arg1 }; }".to_string());
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &RealCodeFixtureInvoker {
+            code: QuickJsCodeInvoker::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
+    assert_eq!(
+        outcome.variable_pool["node-code"],
+        json!({ "result": "Question: hello" })
+    );
+}
+
+#[tokio::test]
 async fn code_runtime_invoker_error_yields_stable_failed_stop_reason_and_trace_payload() {
     let outcome = start_flow_debug_run(
         &code_runtime_plan(),

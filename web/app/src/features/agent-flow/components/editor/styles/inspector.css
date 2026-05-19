@@ -462,6 +462,32 @@
   justify-self: end;
 }
 
+.agent-flow-templated-binding-list {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-flow-templated-binding-row {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.agent-flow-templated-binding-row__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-flow-templated-binding-row__header .ant-input {
+  width: 100%;
+}
+
+.agent-flow-templated-binding-row__delete {
+  justify-self: end;
+}
+
 @media (max-width: 960px) {
   .agent-flow-editor__inspector {
     position: static;
