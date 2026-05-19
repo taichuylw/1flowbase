@@ -597,6 +597,7 @@ async fn code_runtime_quickjs_console_logs_are_debug_payload_only() {
         r#"
 function main(inputs) {
   console.log("hello", inputs.query, { nested: true, count: inputs.count });
+  console.info("plain info");
   console.warn("heads", ["a", 2]);
   console.error("bad", false);
   return { result: { value: inputs.query } };
@@ -622,9 +623,14 @@ function main(inputs) {
         execution.debug_payload["console_logs"],
         json!([
             {
-                "level": "log",
+                "level": "info",
                 "message": "hello hello {\"nested\":true,\"count\":1}",
                 "args": ["hello", "hello", { "nested": true, "count": 1 }]
+            },
+            {
+                "level": "info",
+                "message": "plain info",
+                "args": ["plain info"]
             },
             {
                 "level": "warn",

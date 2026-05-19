@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Empty, Result } from 'antd';
+import { Result } from 'antd';
 
 import type { CanvasNodeSchema } from '../../../../../shared/schema-ui/contracts/canvas-node-schema';
 import { SchemaRenderer } from '../../../../../shared/schema-ui/runtime/SchemaRenderer';
@@ -9,12 +9,14 @@ import {
   applicationRunNodeLastRunQueryKey,
   fetchApplicationRunNodeLastRun,
   fetchNodeLastRun,
-  nodeLastRunQueryKey
+  nodeLastRunQueryKey,
+  type NodeLastRun
 } from '../../../api/runtime';
 import { agentFlowRendererRegistry } from '../../../schema/agent-flow-renderer-registry';
 import { NodeRunIOCard } from '../last-run/NodeRunIOCard';
 import { NodeRunMetadataCard } from '../last-run/NodeRunMetadataCard';
 import { NodeRunSummaryCard } from '../last-run/NodeRunSummaryCard';
+import { NodeRunEmptyState } from '../last-run/NodeRunEmptyState';
 
 function isNodeLastRun(value: unknown): value is NonNullable<
   Awaited<ReturnType<typeof fetchNodeLastRun>>
@@ -31,6 +33,72 @@ function isNodeLastRun(value: unknown): value is NonNullable<
       candidate.node_run &&
       typeof candidate.node_run === 'object' &&
       Array.isArray(candidate.events)
+  );
+}
+
+function createLastRunAdapter({
+  adapter,
+  lastRun,
+  emptyDescription
+}: {
+  adapter: SchemaAdapter;
+  lastRun: NodeLastRun | null;
+  emptyDescription: string;
+}): SchemaAdapter {
+  return {
+    ...adapter,
+    getDerived(key: string) {
+      if (key === 'lastRun') {
+        return lastRun;
+      }
+
+      if (key === 'lastRunEmptyDescription') {
+        return emptyDescription;
+      }
+
+      return adapter.getDerived(key);
+    }
+  };
+}
+
+function renderLastRunContent({
+  schema,
+  adapter,
+  lastRun,
+  emptyDescription
+}: {
+  schema?: CanvasNodeSchema;
+  adapter?: SchemaAdapter;
+  lastRun: NodeLastRun | null;
+  emptyDescription: string;
+}) {
+  if (schema && adapter) {
+    return (
+      <div className="agent-flow-node-detail__last-run">
+        <SchemaRenderer
+          adapter={createLastRunAdapter({ adapter, lastRun, emptyDescription })}
+          blocks={schema.detail.tabs.lastRun.blocks}
+          capabilities={schema.capabilities}
+          registry={agentFlowRendererRegistry}
+        />
+      </div>
+    );
+  }
+
+  if (!lastRun) {
+    return (
+      <div className="agent-flow-node-detail__last-run">
+        <NodeRunEmptyState description={emptyDescription} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="agent-flow-node-detail__last-run">
+      <NodeRunSummaryCard lastRun={lastRun} />
+      <NodeRunIOCard lastRun={lastRun} />
+      <NodeRunMetadataCard lastRun={lastRun} />
+    </div>
   );
 }
 
@@ -82,13 +150,17 @@ export function NodeLastRunTab({
     return <Result status="error" title="上次运行加载失败" />;
   }
 
+  const emptyDescription = activeRunId
+    ? '当前运行没有该节点记录'
+    : '当前节点还没有运行记录';
+
   if (!lastRunQuery.data) {
-    return (
-      <Empty
-        description={activeRunId ? '当前运行没有该节点记录' : '当前节点还没有运行记录'}
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      />
-    );
+    return renderLastRunContent({
+      schema,
+      adapter,
+      lastRun: null,
+      emptyDescription
+    });
   }
 
   if (!isNodeLastRun(lastRunQuery.data)) {
@@ -97,34 +169,10 @@ export function NodeLastRunTab({
 
   const lastRun = lastRunQuery.data;
 
-  if (!schema || !adapter) {
-    return (
-      <div className="agent-flow-node-detail__last-run">
-        <NodeRunSummaryCard lastRun={lastRun} />
-        <NodeRunIOCard lastRun={lastRun} />
-        <NodeRunMetadataCard lastRun={lastRun} />
-      </div>
-    );
-  }
-
-  const runtimeAdapter: SchemaAdapter = {
-    ...adapter,
-    getDerived(key: string) {
-      if (key === 'lastRun') {
-        return lastRun;
-      }
-
-      return adapter.getDerived(key);
-    }
-  };
-
-  return (
-    <div className="agent-flow-node-detail__last-run">
-      <SchemaRenderer
-        adapter={runtimeAdapter}
-        blocks={schema.detail.tabs.lastRun.blocks}
-        registry={agentFlowRendererRegistry}
-      />
-    </div>
-  );
+  return renderLastRunContent({
+    schema,
+    adapter,
+    lastRun,
+    emptyDescription
+  });
 }

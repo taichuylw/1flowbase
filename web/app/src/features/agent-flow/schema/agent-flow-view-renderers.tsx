@@ -9,6 +9,7 @@ import type {
 import { NodeRunIOCard } from '../components/detail/last-run/NodeRunIOCard';
 import { NodeRunMetadataCard } from '../components/detail/last-run/NodeRunMetadataCard';
 import { NodeRunSummaryCard } from '../components/detail/last-run/NodeRunSummaryCard';
+import { NodeRunEmptyState } from '../components/detail/last-run/NodeRunEmptyState';
 import { LlmCardModelBadge } from '../components/nodes/LlmCardModelBadge';
 import type { NodeLastRun } from '../api/runtime';
 import { getAgentFlowNodeTypeIcon } from '../lib/node-type-icons';
@@ -297,25 +298,23 @@ function renderRelationsView({ adapter, block }: SchemaViewRendererProps) {
   );
 }
 
-function renderRuntimeSummaryView({ adapter, block }: SchemaViewRendererProps) {
+function renderRuntimeSummaryView({ adapter }: SchemaViewRendererProps) {
   const lastRun = adapter.getDerived('lastRun') as
     | NodeLastRun
     | null
     | undefined;
+  const emptyDescription =
+    (adapter.getDerived('lastRunEmptyDescription') as string | null) ??
+    '当前节点还没有运行记录';
 
   return lastRun ? (
     <NodeRunSummaryCard lastRun={lastRun} />
   ) : (
-    <Card title={block.title ?? '运行摘要'}>
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="当前节点还没有运行记录"
-      />
-    </Card>
+    <NodeRunEmptyState description={emptyDescription} />
   );
 }
 
-function renderRuntimeIoView({ adapter, block }: SchemaViewRendererProps) {
+function renderRuntimeIoView({ adapter }: SchemaViewRendererProps) {
   const lastRun = adapter.getDerived('lastRun') as
     | NodeLastRun
     | null
@@ -323,20 +322,10 @@ function renderRuntimeIoView({ adapter, block }: SchemaViewRendererProps) {
 
   return lastRun ? (
     <NodeRunIOCard lastRun={lastRun} />
-  ) : (
-    <Card title={block.title ?? '运行输入输出'}>
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="暂无运行输入输出"
-      />
-    </Card>
-  );
+  ) : null;
 }
 
-function renderRuntimeMetadataView({
-  adapter,
-  block
-}: SchemaViewRendererProps) {
+function renderRuntimeMetadataView({ adapter }: SchemaViewRendererProps) {
   const lastRun = adapter.getDerived('lastRun') as
     | NodeLastRun
     | null
@@ -344,14 +333,7 @@ function renderRuntimeMetadataView({
 
   return lastRun ? (
     <NodeRunMetadataCard lastRun={lastRun} />
-  ) : (
-    <Card title={block.title ?? '运行元数据'}>
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="暂无运行元数据"
-      />
-    </Card>
-  );
+  ) : null;
 }
 
 export const agentFlowViewRenderers = {

@@ -511,7 +511,8 @@ fn install_console_capture(ctx: &Ctx<'_>) -> Result<()> {
   });
   Object.defineProperty(globalThis, "console", {
     value: Object.freeze({
-      log: function () { captureConsole("log", arguments); },
+      log: function () { captureConsole("info", arguments); },
+      info: function () { captureConsole("info", arguments); },
       warn: function () { captureConsole("warn", arguments); },
       error: function () { captureConsole("error", arguments); }
     }),

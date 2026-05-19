@@ -1,9 +1,27 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
 import * as runtimeApi from '../api/runtime';
 import { NodeLastRunTab } from '../components/detail/tabs/NodeLastRunTab';
+import { createAgentFlowNodeSchemaAdapter } from '../schema/node-schema-adapter';
+import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
+
+function createNodeLastRunSchemaProps() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+  const nodeId = 'node-llm';
+
+  return {
+    schema: resolveAgentFlowNodeSchema('llm'),
+    adapter: createAgentFlowNodeSchemaAdapter({
+      document,
+      nodeId,
+      setWorkingDocument: vi.fn(),
+      dispatch: vi.fn()
+    })
+  };
+}
 
 describe('NodeLastRunTab', () => {
   beforeEach(() => {
@@ -22,6 +40,29 @@ describe('NodeLastRunTab', () => {
     expect(
       await screen.findByText('当前节点还没有运行记录')
     ).toBeInTheDocument();
+    expect(screen.getByText('运行记录')).toBeInTheDocument();
+  });
+
+  test('uses the schema last-run template for active-run empty state', async () => {
+    vi.spyOn(runtimeApi, 'fetchApplicationRunNodeLastRun').mockResolvedValue(null);
+
+    render(
+      <AppProviders>
+        <NodeLastRunTab
+          activeRunId="run-active"
+          applicationId="app-1"
+          nodeId="node-llm"
+          {...createNodeLastRunSchemaProps()}
+        />
+      </AppProviders>
+    );
+
+    expect(
+      await screen.findByText('当前运行没有该节点记录')
+    ).toBeInTheDocument();
+    expect(screen.getByText('运行记录')).toBeInTheDocument();
+    expect(screen.queryByText('暂无运行输入输出')).not.toBeInTheDocument();
+    expect(screen.queryByText('暂无运行元数据')).not.toBeInTheDocument();
   });
 
   test('renders runtime-backed summary, io and metadata cards', async () => {
@@ -493,6 +534,74 @@ describe('NodeLastRunTab', () => {
     expect(await screen.findByLabelText('数据处理 JSON')).toHaveTextContent(
       '{}'
     );
+  });
+
+  test('renders code console logs with normalized info level', async () => {
+    vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
+      flow_run: {
+        id: 'run-1',
+        application_id: 'app-1',
+        flow_id: 'flow-1',
+        draft_id: 'draft-1',
+        compiled_plan_id: 'plan-1',
+        run_mode: 'debug_node_preview',
+        status: 'succeeded',
+        target_node_id: 'node-code',
+        input_payload: {},
+        output_payload: {},
+        error_payload: null,
+        created_by: 'user-1',
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z',
+        created_at: '2026-04-17T09:00:00Z'
+      },
+      node_run: {
+        id: 'node-run-1',
+        flow_run_id: 'run-1',
+        node_id: 'node-code',
+        node_type: 'code',
+        node_alias: 'Code',
+        status: 'succeeded',
+        input_payload: { arg1: '1', arg2: '22' },
+        output_payload: { result: '122' },
+        error_payload: null,
+        metrics_payload: {},
+        debug_payload: {
+          console_logs: [
+            {
+              level: 'log',
+              message: '122',
+              args: ['122']
+            },
+            {
+              level: 'warn',
+              message: 'check arg2',
+              args: ['check arg2']
+            }
+          ]
+        },
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z'
+      },
+      checkpoints: [],
+      events: []
+    });
+
+    render(
+      <AppProviders>
+        <NodeLastRunTab applicationId="app-1" nodeId="node-code" />
+      </AppProviders>
+    );
+
+    const consoleLogs = await screen.findByLabelText('控制台日志');
+    expect(consoleLogs).toHaveTextContent('INFO');
+    expect(consoleLogs).toHaveTextContent('122');
+    expect(consoleLogs).toHaveTextContent('WARN');
+    expect(consoleLogs).toHaveTextContent('check arg2');
+
+    const processJson = screen.getByLabelText('数据处理 JSON');
+    expect(processJson).toHaveTextContent('"level": "info"');
+    expect(processJson).not.toHaveTextContent('"level": "log"');
   });
 
   test('renders warning state when runtime payload is malformed', async () => {

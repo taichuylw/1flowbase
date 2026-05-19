@@ -1,4 +1,4 @@
-import { App, Button, Card, Space, Tag } from 'antd';
+import { App, Button, Card, Space, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { NodeLastRun } from '../../../api/runtime';
@@ -42,8 +42,123 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+type ConsoleLogLevel = 'info' | 'warn' | 'error';
+
+interface ConsoleLogEntryView {
+  level: ConsoleLogLevel;
+  message: string;
+  args: unknown[];
+}
+
+function normalizeConsoleLogLevel(value: unknown): ConsoleLogLevel {
+  if (value === 'warn' || value === 'error') {
+    return value;
+  }
+
+  return 'info';
+}
+
+function formatConsoleLogMessage(value: unknown) {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+
+        const serialized = JSON.stringify(item);
+        return serialized ?? String(item);
+      })
+      .join(' ');
+  }
+
+  return '';
+}
+
+function readConsoleLogs(debugPayload: unknown): ConsoleLogEntryView[] {
+  if (!isRecord(debugPayload) || !Array.isArray(debugPayload.console_logs)) {
+    return [];
+  }
+
+  return debugPayload.console_logs
+    .filter(isRecord)
+    .map((entry) => {
+      const args = Array.isArray(entry.args) ? entry.args : [];
+
+      return {
+        level: normalizeConsoleLogLevel(entry.level),
+        message: formatConsoleLogMessage(entry.message || args),
+        args
+      };
+    });
+}
+
 function pickProcessPayload(debugPayload: unknown) {
-  return isRecord(debugPayload) ? debugPayload : {};
+  if (!isRecord(debugPayload)) {
+    return {};
+  }
+
+  const consoleLogs = readConsoleLogs(debugPayload);
+
+  if (consoleLogs.length === 0) {
+    return debugPayload;
+  }
+
+  return {
+    ...debugPayload,
+    console_logs: consoleLogs
+  };
+}
+
+function getConsoleLogTagColor(level: ConsoleLogLevel) {
+  if (level === 'error') {
+    return 'error';
+  }
+
+  if (level === 'warn') {
+    return 'warning';
+  }
+
+  return 'processing';
+}
+
+function NodeRunConsoleLogs({ logs }: { logs: ConsoleLogEntryView[] }) {
+  if (logs.length === 0) {
+    return null;
+  }
+
+  return (
+    <section aria-label="控制台日志" className="agent-flow-node-run-console">
+      <Typography.Text
+        className="agent-flow-node-run-console__title"
+        strong
+      >
+        控制台日志
+      </Typography.Text>
+      <div className="agent-flow-node-run-console__list">
+        {logs.map((log, index) => (
+          <div
+            key={`${log.level}-${index}`}
+            className="agent-flow-node-run-console__row"
+          >
+            <Tag
+              className="agent-flow-node-run-console__level"
+              color={getConsoleLogTagColor(log.level)}
+            >
+              {log.level.toUpperCase()}
+            </Tag>
+            <Typography.Text className="agent-flow-node-run-console__message">
+              {log.message}
+            </Typography.Text>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export function NodeRunPayloadSections({
@@ -60,6 +175,7 @@ export function NodeRunPayloadSections({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const processPayload = pickProcessPayload(debugPayload);
+  const consoleLogs = readConsoleLogs(debugPayload);
 
   return (
     <>
@@ -69,11 +185,14 @@ export function NodeRunPayloadSections({
         onLoadArtifact={onLoadArtifact}
       />
       {includeDebugPayload ? (
-        <NodeRunJsonBlock
-          payload={processPayload}
-          title="数据处理"
-          onLoadArtifact={onLoadArtifact}
-        />
+        <>
+          <NodeRunConsoleLogs logs={consoleLogs} />
+          <NodeRunJsonBlock
+            payload={processPayload}
+            title="数据处理"
+            onLoadArtifact={onLoadArtifact}
+          />
+        </>
       ) : null}
       <NodeRunJsonBlock
         payload={outputPayload}
