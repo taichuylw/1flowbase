@@ -5,7 +5,7 @@ import { Navigation } from '../Navigation';
 import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 
 describe('Navigation', () => {
-  test('links 前台 to workspace-specific path when workspace is available', () => {
+  test('links 前台 to workspace-specific path when workspace is available', async () => {
     resetAuthStore();
     useAuthStore.getState().setAuthenticated({
       csrfToken: 'csrf-123',
@@ -31,18 +31,18 @@ describe('Navigation', () => {
 
     render(<Navigation pathname="/embedded-apps" useRouterLinks={false} />);
 
-    expect(screen.getByRole('link', { name: '前台' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '前台' })).toHaveAttribute(
       'href',
       '/frontstage/workspace-123'
     );
   });
 
-  test('links 前台 to base frontstage path when workspace is not available', () => {
+  test('links 前台 to base frontstage path when workspace is not available', async () => {
     resetAuthStore();
 
     render(<Navigation pathname="/embedded-apps" useRouterLinks={false} />);
 
-    expect(screen.getByRole('link', { name: '前台' })).toHaveAttribute('href', '/frontstage');
+    expect(await screen.findByRole('link', { name: '前台' })).toHaveAttribute('href', '/frontstage');
   });
 
   test('renders primary console navigation and keeps settings out of the primary rail', async () => {

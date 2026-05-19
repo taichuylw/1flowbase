@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -362,6 +363,12 @@ function getBlockRow(blockId: string) {
   return screen.getByTestId(`block-slot-${blockId}`);
 }
 
+async function clickAndFlush(element: HTMLElement) {
+  await act(async () => {
+    element.click();
+  });
+}
+
 function clickBlockToolbar(blockId: string, buttonName: string) {
   fireEvent.click(
     within(screen.getByTestId(`block-slot-${blockId}`))
@@ -371,12 +378,12 @@ function clickBlockToolbar(blockId: string, buttonName: string) {
 
 async function clickBlockMoveAction(blockId: string, actionName: string) {
   clickBlockToolbar(blockId, '移动或排序区块');
-  fireEvent.click(await screen.findByRole('button', { name: actionName }));
+  await clickAndFlush(await screen.findByRole('button', { name: actionName }));
 }
 
 async function clickBlockMoreAction(blockId: string, actionName: string) {
   clickBlockToolbar(blockId, '更多区块操作');
-  fireEvent.click(await screen.findByRole('button', { name: actionName }));
+  await clickAndFlush(await screen.findByRole('button', { name: actionName }));
 }
 
 async function confirmBlockDelete(blockId: string) {
@@ -385,18 +392,18 @@ async function confirmBlockDelete(blockId: string) {
   const deleteMenuButtons = screen.getAllByRole('button', {
     name: '删除区块'
   });
-  fireEvent.click(deleteMenuButtons[deleteMenuButtons.length - 1]);
-  fireEvent.click(
+  await clickAndFlush(deleteMenuButtons[deleteMenuButtons.length - 1]);
+  await clickAndFlush(
     await screen.findByRole('button', { name: '确认删除区块' })
   );
 }
 
-function activateDesignMode() {
-  fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+async function activateDesignMode() {
+  await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
 }
 
-function exitDesignMode() {
-  fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+async function exitDesignMode() {
+  await clickAndFlush(screen.getByRole('button', { name: '退出设计模式' }));
 }
 
 describe('FrontStagePage block arrange actions', () => {
@@ -415,8 +422,8 @@ describe('FrontStagePage block arrange actions', () => {
       createPageContentWithBlocks(['hero', 'feature', 'cta'])
     );
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('feature'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('feature'));
     await confirmBlockDelete('feature');
 
     await waitFor(() => {
@@ -446,8 +453,8 @@ describe('FrontStagePage block arrange actions', () => {
     const saveState = mockPageContentSaveState();
     renderFrontStagePage(createPageContentWithBlocks(['hero']));
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     await confirmBlockDelete('hero');
 
     await waitFor(() => {
@@ -471,8 +478,8 @@ describe('FrontStagePage block arrange actions', () => {
       createPageContentWithBlocks(['hero', 'feature', 'cta'])
     );
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('feature'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('feature'));
     await clickBlockMoveAction('feature', '下移区块');
 
     await waitFor(() => {
@@ -496,15 +503,15 @@ describe('FrontStagePage block arrange actions', () => {
     expect(getSavedBlockIds(moveUpInput)).toEqual(['hero', 'feature', 'cta']);
   });
 
-  test('disables selected block arrange actions while page content is saving', () => {
+  test('disables selected block arrange actions while page content is saving', async () => {
     authenticate(['frontstage.page.design']);
     mockPageContentSaveState({ saving: true, isPending: true });
     renderFrontStagePage(
       createPageContentWithBlocks(['hero', 'feature', 'cta'])
     );
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('feature'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('feature'));
 
     expect(
       within(getBlockRow('feature')).getByRole('button', {
@@ -526,8 +533,8 @@ describe('FrontStagePage block arrange actions', () => {
     authenticate(['frontstage.page.design']);
     renderFrontStagePage(createPageContentWithBlocks(['hero', 'cta']));
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     clickBlockToolbar('hero', '编辑区块');
 
     const dialog = await screen.findByRole('dialog', { name: '区块代码' });
@@ -539,28 +546,30 @@ describe('FrontStagePage block arrange actions', () => {
     expect(within(dialog).getByText('code:hero-code')).toBeInTheDocument();
   });
 
-  test('hides block code editor entry outside design mode and without design permission', () => {
+  test('hides block code editor entry outside design mode and without design permission', async () => {
     authenticate(['frontstage.page.design']);
     const view = renderFrontStagePage(createPageContentWithBlocks(['hero']));
 
-    fireEvent.click(getBlockRow('hero'));
+    await clickAndFlush(getBlockRow('hero'));
     expect(
       screen.queryByRole('button', { name: '编辑区块' })
     ).not.toBeInTheDocument();
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     expect(
       within(getBlockRow('hero')).getByRole('button', { name: '编辑区块' })
     ).toBeVisible();
 
-    exitDesignMode();
+    await exitDesignMode();
     expect(
       screen.queryByRole('button', { name: '编辑区块' })
     ).not.toBeInTheDocument();
 
-    resetAuthStore();
-    authenticate(['route_page.view.all']);
+    await act(async () => {
+      resetAuthStore();
+      authenticate(['route_page.view.all']);
+    });
     view.rerender(
       <AppProviders>
         <FrontStagePage
@@ -587,29 +596,31 @@ describe('FrontStagePage block arrange actions', () => {
     authenticate(['frontstage.page.design']);
     const view = renderFrontStagePage(createPageContentWithBlocks(['hero']));
 
-    fireEvent.click(getBlockRow('hero'));
+    await clickAndFlush(getBlockRow('hero'));
     expect(
       screen.queryByRole('button', { name: '标题和描述' })
     ).not.toBeInTheDocument();
 
-    activateDesignMode();
+    await activateDesignMode();
     expect(
       screen.queryByRole('button', { name: '更多区块操作' })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(getBlockRow('hero'));
+    await clickAndFlush(getBlockRow('hero'));
     clickBlockToolbar('hero', '更多区块操作');
     expect(
       await screen.findByRole('button', { name: '标题和描述' })
     ).toBeInTheDocument();
 
-    exitDesignMode();
+    await exitDesignMode();
     expect(
       screen.queryByRole('button', { name: '标题和描述' })
     ).not.toBeInTheDocument();
 
-    resetAuthStore();
-    authenticate(['route_page.view.all']);
+    await act(async () => {
+      resetAuthStore();
+      authenticate(['route_page.view.all']);
+    });
     view.rerender(
       <AppProviders>
         <FrontStagePage
@@ -639,8 +650,8 @@ describe('FrontStagePage block arrange actions', () => {
       createPageContentWithBlockPayloads([createConfigurableBlockPayload()])
     );
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     await clickBlockMoreAction('hero', '标题和描述');
 
     const dialog = await screen.findByRole('dialog', { name: '区块配置' });
@@ -707,35 +718,35 @@ describe('FrontStagePage block arrange actions', () => {
       </AppProviders>
     );
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     await clickBlockMoreAction('hero', '标题和描述');
     expect(
       await screen.findByRole('dialog', { name: '区块配置' })
     ).toBeInTheDocument();
 
-    exitDesignMode();
+    await exitDesignMode();
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: '区块配置' })
       ).not.toBeInTheDocument();
     });
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     await clickBlockMoreAction('hero', '标题和描述');
     expect(
       await screen.findByRole('dialog', { name: '区块配置' })
     ).toBeInTheDocument();
 
-    fireEvent.click(getBlockRow('hero'));
+    await clickAndFlush(getBlockRow('hero'));
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: '区块配置' })
       ).not.toBeInTheDocument();
     });
 
-    fireEvent.click(getBlockRow('hero'));
+    await clickAndFlush(getBlockRow('hero'));
     await clickBlockMoreAction('hero', '标题和描述');
     expect(
       await screen.findByRole('dialog', { name: '区块配置' })
@@ -807,22 +818,22 @@ describe('FrontStagePage block arrange actions', () => {
       </AppProviders>
     );
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     clickBlockToolbar('hero', '编辑区块');
     expect(
       await screen.findByRole('dialog', { name: '区块代码' })
     ).toBeInTheDocument();
 
-    exitDesignMode();
+    await exitDesignMode();
     await waitFor(() => {
       expect(
         screen.queryByRole('dialog', { name: '区块代码' })
       ).not.toBeInTheDocument();
     });
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('hero'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('hero'));
     clickBlockToolbar('hero', '编辑区块');
     expect(
       await screen.findByRole('dialog', { name: '区块代码' })
@@ -875,21 +886,21 @@ describe('FrontStagePage block arrange actions', () => {
     });
     renderFrontStagePage(createPageContentWithBlocks(['hero', 'cta']));
 
-    activateDesignMode();
-    fireEvent.click(getBlockRow('cta'));
+    await activateDesignMode();
+    await clickAndFlush(getBlockRow('cta'));
     await clickBlockMoveAction('cta', '上移区块');
 
     expect(await screen.findByText('区块保存失败')).toBeInTheDocument();
     expect(screen.getByText('arrange failed')).toBeInTheDocument();
   });
 
-  test('does not show block action toolbar in browsing mode or without design permission', () => {
+  test('does not show block action toolbar in browsing mode or without design permission', async () => {
     authenticate(['frontstage.page.design']);
     const view = renderFrontStagePage(
       createPageContentWithBlocks(['hero', 'cta'])
     );
 
-    fireEvent.click(getBlockRow('hero'));
+    await clickAndFlush(getBlockRow('hero'));
     expect(
       screen.queryByRole('button', { name: '更多区块操作' })
     ).not.toBeInTheDocument();
@@ -897,8 +908,10 @@ describe('FrontStagePage block arrange actions', () => {
       screen.queryByRole('button', { name: '删除' })
     ).not.toBeInTheDocument();
 
-    resetAuthStore();
-    authenticate(['route_page.view.all']);
+    await act(async () => {
+      resetAuthStore();
+      authenticate(['route_page.view.all']);
+    });
     view.rerender(
       <AppProviders>
         <FrontStagePage
