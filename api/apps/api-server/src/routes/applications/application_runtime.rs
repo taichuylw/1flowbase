@@ -16,8 +16,8 @@ use control_plane::{
         ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
     ports::{
-        OrchestrationRuntimeRepository, RuntimeEventCloseReason, RuntimeEventStream,
-        RuntimeEventStreamPolicy,
+        ListApplicationConversationRunsPageInput, OrchestrationRuntimeRepository,
+        RuntimeEventCloseReason, RuntimeEventStream, RuntimeEventStreamPolicy,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -47,8 +47,8 @@ pub use debug_variable_cache::{
 };
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
-    application_run_input_text, load_runtime_debug_artifact_response,
-    offload_application_run_detail_artifacts,
+    application_run_answer, application_run_model, application_run_query,
+    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
 };
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
@@ -312,7 +312,9 @@ pub struct FlowRunResponse {
     pub title: String,
     pub expand_id: Option<String>,
     pub authorized_account: Option<String>,
-    pub input_text: Option<String>,
+    pub external_conversation_id: Option<String>,
+    pub query: Option<String>,
+    pub model: Option<String>,
     pub input_payload: serde_json::Value,
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
@@ -321,6 +323,40 @@ pub struct FlowRunResponse {
     pub finished_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ApplicationConversationMessagesQuery {
+    pub around_run_id: Option<Uuid>,
+    pub before: Option<Uuid>,
+    pub after: Option<Uuid>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationConversationMessageResponse {
+    pub run_id: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub status: String,
+    pub query: Option<String>,
+    pub model: Option<String>,
+    pub answer: Option<String>,
+    pub is_current: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationConversationMessagesPageInfoResponse {
+    pub has_before: bool,
+    pub has_after: bool,
+    pub before_cursor: Option<String>,
+    pub after_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationConversationMessagesPageResponse {
+    pub items: Vec<ApplicationConversationMessageResponse>,
+    pub page: ApplicationConversationMessagesPageInfoResponse,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -458,6 +494,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         )
         .route("/applications/:id/logs/runs", get(list_application_runs))
         .route(
+            "/applications/:id/logs/conversations/:conversation_id/messages",
+            get(list_application_conversation_messages),
+        )
+        .route(
             "/applications/:id/logs/runs/:run_id/nodes/:node_id",
             get(get_application_run_node_last_run),
         )
@@ -575,7 +615,9 @@ fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
         title: run.title,
         expand_id: run.external_user,
         authorized_account: run.authorized_account,
-        input_text: application_run_input_text(&run.input_payload),
+        external_conversation_id: run.external_conversation_id,
+        query: application_run_query(&run.input_payload),
+        model: application_run_model(&run.input_payload),
         input_payload: run.input_payload,
         output_payload: run.output_payload,
         error_payload: run.error_payload,
@@ -584,6 +626,26 @@ fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
         finished_at: format_optional_time(run.finished_at),
         created_at: format_time(run.created_at),
         updated_at: format_time(run.updated_at),
+    }
+}
+
+fn to_application_conversation_message_response(
+    run: domain::FlowRunRecord,
+    current_run_id: Option<Uuid>,
+) -> ApplicationConversationMessageResponse {
+    ApplicationConversationMessageResponse {
+        run_id: run.id.to_string(),
+        started_at: format_time(run.started_at),
+        finished_at: format_optional_time(run.finished_at),
+        status: run.status.as_str().to_string(),
+        query: application_run_query(&run.input_payload),
+        model: application_run_model(&run.input_payload),
+        answer: application_run_answer(&run.output_payload).or_else(|| {
+            run.error_payload
+                .as_ref()
+                .and_then(|payload| application_run_answer(payload))
+        }),
+        is_current: current_run_id == Some(run.id),
     }
 }
 
@@ -1404,6 +1466,65 @@ pub async fn list_application_runs(
 
 #[utoipa::path(
     get,
+    path = "/api/console/applications/{id}/logs/conversations/{conversation_id}/messages",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("conversation_id" = String, Path, description = "External conversation id"),
+        ("around_run_id" = Option<String>, Query, description = "Flow run id to center the page around"),
+        ("before" = Option<String>, Query, description = "Load runs before this cursor run id"),
+        ("after" = Option<String>, Query, description = "Load runs after this cursor run id"),
+        ("limit" = Option<i64>, Query, description = "Page size, defaults to 5")
+    ),
+    responses(
+        (status = 200, body = ApplicationConversationMessagesPageResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn list_application_conversation_messages(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, conversation_id)): Path<(Uuid, String)>,
+    Query(query): Query<ApplicationConversationMessagesQuery>,
+) -> Result<Json<ApiSuccess<ApplicationConversationMessagesPageResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+
+    let page =
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_conversation_runs_page(
+            &state.store,
+            id,
+            ListApplicationConversationRunsPageInput {
+                external_conversation_id: conversation_id,
+                around_run_id: query.around_run_id,
+                before_run_id: query.before,
+                after_run_id: query.after,
+                limit: query.limit.unwrap_or(5),
+            },
+        )
+        .await?;
+    let current_run_id = query.around_run_id;
+
+    Ok(Json(ApiSuccess::new(
+        ApplicationConversationMessagesPageResponse {
+            items: page
+                .items
+                .into_iter()
+                .map(|run| to_application_conversation_message_response(run, current_run_id))
+                .collect(),
+            page: ApplicationConversationMessagesPageInfoResponse {
+                has_before: page.has_before,
+                has_after: page.has_after,
+                before_cursor: page.before_cursor.map(|value| value.to_string()),
+                after_cursor: page.after_cursor.map(|value| value.to_string()),
+            },
+        },
+    )))
+}
+
+#[utoipa::path(
+    get,
     path = "/api/console/applications/{id}/logs/runs/{run_id}",
     params(
         ("id" = String, Path, description = "Application id"),
@@ -1718,5 +1839,53 @@ mod tests {
             serde_json::json!("read_file")
         );
         assert_eq!(response.output_payload, serde_json::json!({}));
+    }
+
+    #[test]
+    fn flow_run_response_exposes_query_and_model_short_fields() {
+        let run = domain::FlowRunRecord {
+            id: Uuid::now_v7(),
+            application_id: Uuid::now_v7(),
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: None,
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "say hello".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "say hello",
+                    "model": "deepseek-chat"
+                }
+            }),
+            output_payload: serde_json::json!({ "answer": "hello" }),
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: Some("user-1".to_string()),
+            external_conversation_id: Some("conversation-1".to_string()),
+            external_trace_id: None,
+            compatibility_mode: None,
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        let response = to_flow_run_response(run);
+
+        assert_eq!(response.query.as_deref(), Some("say hello"));
+        assert_eq!(response.model.as_deref(), Some("deepseek-chat"));
+        assert_eq!(
+            response.external_conversation_id.as_deref(),
+            Some("conversation-1")
+        );
     }
 }

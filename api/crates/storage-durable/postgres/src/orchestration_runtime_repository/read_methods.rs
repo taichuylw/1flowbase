@@ -382,6 +382,161 @@ impl PgControlPlaneStore {
         })
     }
 
+    async fn list_application_conversation_runs_page(
+        &self,
+        application_id: Uuid,
+        input: control_plane::ports::ListApplicationConversationRunsPageInput,
+    ) -> Result<control_plane::ports::ApplicationConversationRunsPage> {
+        let limit = input.limit.clamp(1, 50);
+        let (start_rn, end_rn, total) = if let Some(anchor_run_id) = input.before_run_id {
+            let Some((anchor_rn, total)) = self
+                .application_conversation_run_position(
+                    application_id,
+                    &input.external_conversation_id,
+                    anchor_run_id,
+                )
+                .await?
+            else {
+                return Ok(empty_application_conversation_runs_page());
+            };
+            ((anchor_rn - limit).max(1), anchor_rn - 1, total)
+        } else if let Some(anchor_run_id) = input.after_run_id {
+            let Some((anchor_rn, total)) = self
+                .application_conversation_run_position(
+                    application_id,
+                    &input.external_conversation_id,
+                    anchor_run_id,
+                )
+                .await?
+            else {
+                return Ok(empty_application_conversation_runs_page());
+            };
+            (anchor_rn + 1, (anchor_rn + limit).min(total), total)
+        } else {
+            let Some(anchor_run_id) = input.around_run_id else {
+                return Ok(empty_application_conversation_runs_page());
+            };
+            let Some((anchor_rn, total)) = self
+                .application_conversation_run_position(
+                    application_id,
+                    &input.external_conversation_id,
+                    anchor_run_id,
+                )
+                .await?
+            else {
+                return Ok(empty_application_conversation_runs_page());
+            };
+            let latest_start = (total - limit + 1).max(1);
+            let centered_start = anchor_rn - (limit / 2);
+            let start_rn = centered_start.max(1).min(latest_start);
+            (start_rn, (start_rn + limit - 1).min(total), total)
+        };
+
+        if start_rn > end_rn || total == 0 {
+            return Ok(empty_application_conversation_runs_page());
+        }
+
+        let rows = sqlx::query(
+            r#"
+            with ordered as (
+                select
+                    id,
+                    application_id,
+                    flow_id,
+                    flow_draft_id,
+                    compiled_plan_id,
+                    debug_session_id,
+                    flow_schema_version,
+                    document_hash,
+                    run_mode,
+                    target_node_id,
+                    title,
+                    status,
+                    input_payload,
+                    output_payload,
+                    error_payload,
+                    created_by,
+                    (
+                        select users.account
+                        from users
+                        where users.id = flow_runs.created_by
+                    ) as authorized_account,
+                    api_key_id,
+                    publication_version_id,
+                    external_user,
+                    external_conversation_id,
+                    external_trace_id,
+                    compatibility_mode,
+                    idempotency_key,
+                    started_at,
+                    finished_at,
+                    created_at,
+                    updated_at,
+                    row_number() over (order by created_at asc, id asc) as rn
+                from flow_runs
+                where application_id = $1
+                  and external_conversation_id = $2
+            )
+            select *
+            from ordered
+            where rn between $3 and $4
+            order by rn asc
+            "#,
+        )
+        .bind(application_id)
+        .bind(&input.external_conversation_id)
+        .bind(start_rn)
+        .bind(end_rn)
+        .fetch_all(self.pool())
+        .await?;
+
+        let items = rows
+            .into_iter()
+            .map(map_flow_run_record)
+            .collect::<Result<Vec<_>>>()?;
+        let before_cursor = items.first().map(|run| run.id);
+        let after_cursor = items.last().map(|run| run.id);
+
+        Ok(control_plane::ports::ApplicationConversationRunsPage {
+            items,
+            has_before: start_rn > 1,
+            has_after: end_rn < total,
+            before_cursor,
+            after_cursor,
+        })
+    }
+
+    async fn application_conversation_run_position(
+        &self,
+        application_id: Uuid,
+        external_conversation_id: &str,
+        flow_run_id: Uuid,
+    ) -> Result<Option<(i64, i64)>> {
+        let row = sqlx::query(
+            r#"
+            with ordered as (
+                select
+                    id,
+                    row_number() over (order by created_at asc, id asc) as rn,
+                    count(*) over () as total
+                from flow_runs
+                where application_id = $1
+                  and external_conversation_id = $2
+            )
+            select rn, total
+            from ordered
+            where id = $3
+            "#,
+        )
+        .bind(application_id)
+        .bind(external_conversation_id)
+        .bind(flow_run_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        Ok(row.map(|row| (row.get("rn"), row.get("total"))))
+    }
+
     fn application_runs_page_order_by(sort_by: Option<&str>, sort_order: Option<&str>) -> String {
         let sort_by = sort_by.unwrap_or("created_at").to_ascii_lowercase();
         let sort_order = sort_order.unwrap_or("desc").to_ascii_lowercase();
@@ -461,5 +616,16 @@ impl PgControlPlaneStore {
             flow_run,
             node_run,
         }))
+    }
+}
+
+fn empty_application_conversation_runs_page(
+) -> control_plane::ports::ApplicationConversationRunsPage {
+    control_plane::ports::ApplicationConversationRunsPage {
+        items: Vec::new(),
+        has_before: false,
+        has_after: false,
+        before_cursor: None,
+        after_cursor: None,
     }
 }

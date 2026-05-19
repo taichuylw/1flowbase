@@ -1,6 +1,7 @@
 import { CloseOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Result, Typography } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
@@ -15,11 +16,14 @@ import {
 } from '../../../agent-flow/lib/debug-console/run-detail-mapper';
 import type { AgentFlowDebugSessionStatus } from '../../../agent-flow/hooks/runtime/useAgentFlowDebugSession';
 import {
+  applicationConversationMessagesQueryKey,
   applicationRunDetailQueryKey,
   completeCallbackTask,
+  fetchApplicationConversationMessages,
   fetchApplicationRunDetail,
   fetchRuntimeDebugArtifact,
   resumeFlowRun,
+  type ApplicationConversationMessagesPage,
   type ApplicationRunDetail
 } from '../../api/runtime';
 import { ApplicationRunResumeCard } from './ApplicationRunResumeCard';
@@ -190,6 +194,7 @@ function mapRunStatusToSessionStatus(
 
 function buildRunContext(detail: ApplicationRunDetail): AgentFlowRunContext {
   const userInput = applicationRunInputText(detail);
+  const model = applicationRunModel(detail);
 
   return {
     environmentLabel: 'draft',
@@ -202,13 +207,25 @@ function buildRunContext(detail: ApplicationRunDetail): AgentFlowRunContext {
         title: '输入',
         valueType: 'string',
         value: userInput
-      }
+      },
+      ...(model
+        ? [
+            {
+              nodeId: detail.flow_run.target_node_id ?? 'flow-run',
+              nodeLabel: '运行输入',
+              key: 'model',
+              title: '模型',
+              valueType: 'string' as const,
+              value: model
+            }
+          ]
+        : [])
     ]
   };
 }
 
 function applicationRunInputText(detail: ApplicationRunDetail): string {
-  const backendInputText = nonEmptyString(detail.flow_run.input_text);
+  const backendInputText = nonEmptyString(detail.flow_run.query);
 
   if (backendInputText) {
     return backendInputText;
@@ -227,6 +244,10 @@ function applicationRunInputText(detail: ApplicationRunDetail): string {
       'input'
     ]) ?? summarizeValue(detail.flow_run.input_payload)
   );
+}
+
+function applicationRunModel(detail: ApplicationRunDetail): string | null {
+  return nonEmptyString(detail.flow_run.model);
 }
 
 function buildConversationMessages(
@@ -264,6 +285,56 @@ function buildConversationMessages(
   ];
 }
 
+function mapConversationItemToMessages(
+  item: ApplicationConversationMessagesPage['items'][number],
+  detail: ApplicationRunDetail
+): AgentFlowDebugMessage[] {
+  const isCurrentRun = item.run_id === detail.flow_run.id;
+  const userContent = nonEmptyString(item.query) ?? '无';
+  const assistantContent =
+    nonEmptyString(item.answer) ??
+    (isCurrentRun ? extractAssistantOutputText(detail) : null) ??
+    '暂无输出';
+
+  return [
+    {
+      id: `conversation-user-${item.run_id}`,
+      role: 'user',
+      content: userContent,
+      status: 'completed',
+      runId: item.run_id,
+      rawOutput: null,
+      traceSummary: []
+    },
+    {
+      id: `conversation-assistant-${item.run_id}`,
+      role: 'assistant',
+      content: assistantContent,
+      status: mapRunStatusToMessageStatus(item.status),
+      runId: item.run_id,
+      rawOutput: isCurrentRun
+        ? Object.keys(detail.flow_run.output_payload).length > 0
+          ? detail.flow_run.output_payload
+          : null
+        : null,
+      traceSummary: isCurrentRun ? mapRunDetailToTrace(detail) : []
+    }
+  ];
+}
+
+function buildConversationPageMessages(
+  detail: ApplicationRunDetail,
+  page: ApplicationConversationMessagesPage | null
+): AgentFlowDebugMessage[] {
+  if (!page || page.items.length === 0) {
+    return buildConversationMessages(detail);
+  }
+
+  return page.items.flatMap((item) =>
+    mapConversationItemToMessages(item, detail)
+  );
+}
+
 function RunConversation({
   detail,
   onClose,
@@ -274,6 +345,88 @@ function RunConversation({
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
 }) {
   const runContext = buildRunContext(detail);
+  const conversationId = nonEmptyString(detail.flow_run.external_conversation_id);
+  const [conversationPage, setConversationPage] =
+    useState<ApplicationConversationMessagesPage | null>(null);
+  const initialConversationQuery = useQuery({
+    queryKey: conversationId
+      ? applicationConversationMessagesQueryKey(
+          detail.flow_run.application_id,
+          conversationId,
+          detail.flow_run.id
+        )
+      : [
+          'applications',
+          detail.flow_run.application_id,
+          'runtime',
+          'conversation',
+          'none'
+        ],
+    queryFn: () =>
+      fetchApplicationConversationMessages(
+        detail.flow_run.application_id,
+        conversationId!,
+        {
+          aroundRunId: detail.flow_run.id,
+          limit: 5
+        }
+      ),
+    enabled: Boolean(conversationId)
+  });
+  const loadPreviousConversationMutation = useMutation({
+    mutationFn: async () => {
+      if (!conversationId || !conversationPage?.page.before_cursor) {
+        throw new Error('missing previous conversation cursor');
+      }
+
+      return fetchApplicationConversationMessages(
+        detail.flow_run.application_id,
+        conversationId,
+        {
+          before: conversationPage.page.before_cursor,
+          limit: 5
+        }
+      );
+    },
+    onSuccess: (page) => {
+      setConversationPage((current) => {
+        if (!current) {
+          return page;
+        }
+
+        const existingRunIds = new Set(
+          current.items.map((item) => item.run_id)
+        );
+        const newItems = page.items.filter(
+          (item) => !existingRunIds.has(item.run_id)
+        );
+
+        return {
+          items: [...newItems, ...current.items],
+          page: {
+            has_before: page.page.has_before,
+            has_after: current.page.has_after,
+            before_cursor: page.page.before_cursor,
+            after_cursor: current.page.after_cursor
+          }
+        };
+      });
+    }
+  });
+  const messages = useMemo(
+    () => buildConversationPageMessages(detail, conversationPage),
+    [conversationPage, detail]
+  );
+
+  useEffect(() => {
+    setConversationPage(null);
+  }, [detail.flow_run.id, conversationId]);
+
+  useEffect(() => {
+    if (initialConversationQuery.data) {
+      setConversationPage(initialConversationQuery.data);
+    }
+  }, [initialConversationQuery.data]);
 
   return (
     <div className="application-run-detail__conversation-pane">
@@ -281,7 +434,7 @@ function RunConversation({
         ariaLabel="运行详情预览"
         closeLabel="关闭运行详情"
         composerUiOnly
-        messages={buildConversationMessages(detail)}
+        messages={messages}
         runContext={runContext}
         showClearAction={false}
         showComposer
@@ -296,6 +449,14 @@ function RunConversation({
           fetchRuntimeDebugArtifact(detail.flow_run.application_id, artifactRef)
         }
         onOpenMessageLog={onOpenMessageLog}
+        onReachConversationTop={() => {
+          if (
+            conversationPage?.page.has_before &&
+            !loadPreviousConversationMutation.isPending
+          ) {
+            loadPreviousConversationMutation.mutate();
+          }
+        }}
         onStopRun={() => {}}
         onSubmitPrompt={() => {}}
       />

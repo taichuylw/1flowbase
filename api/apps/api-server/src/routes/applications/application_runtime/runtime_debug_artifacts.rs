@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use crate::{app_state::ApiState, error_response::ApiError};
 
-const APPLICATION_INPUT_TEXT_KEYS: &[&str] = &["query", "question", "prompt", "message", "input"];
+const APPLICATION_INPUT_QUERY_KEYS: &[&str] = &["query", "question", "prompt", "message", "input"];
 
 struct RuntimeDebugArtifactScope {
     workspace_id: Uuid,
@@ -132,7 +132,8 @@ pub async fn offload_application_run_detail_artifacts(
         node_run_id: None,
         run_event_id: None,
     };
-    let flow_input_text = application_run_input_text(&detail.flow_run.input_payload);
+    let flow_input_query = application_run_query(&detail.flow_run.input_payload);
+    let flow_input_model = application_run_model(&detail.flow_run.input_payload);
     let (flow_input_payload, flow_input_changed) = writer
         .offload_value(
             &flow_scope,
@@ -141,7 +142,11 @@ pub async fn offload_application_run_detail_artifacts(
         )
         .await?;
     let flow_input_payload = if flow_input_changed {
-        with_application_run_input_text(flow_input_payload, flow_input_text.as_deref())
+        with_application_run_input_summary(
+            flow_input_payload,
+            flow_input_query.as_deref(),
+            flow_input_model.as_deref(),
+        )
     } else {
         flow_input_payload
     };
@@ -265,7 +270,11 @@ pub async fn offload_application_run_detail_artifacts(
     Ok(detail)
 }
 
-pub(super) fn application_run_input_text(payload: &Value) -> Option<String> {
+pub(super) fn application_run_query(payload: &Value) -> Option<String> {
+    if let Some(query) = string_field(payload, "query") {
+        return Some(query);
+    }
+
     if let Some(input_text) = string_field(payload, "input_text") {
         return Some(input_text);
     }
@@ -303,9 +312,61 @@ pub(super) fn application_run_input_text(payload: &Value) -> Option<String> {
     None
 }
 
+pub(super) fn application_run_model(payload: &Value) -> Option<String> {
+    if let Some(model) = string_field(payload, "model") {
+        return Some(model);
+    }
+
+    for selector in ["node-start.model", "start.model"] {
+        if let Some(value) = string_field(payload, selector) {
+            return Some(value);
+        }
+    }
+
+    let object = payload.as_object()?;
+    for key in ["node-start", "start"] {
+        if let Some(value) = object.get(key).and_then(immediate_model_value) {
+            return Some(value);
+        }
+    }
+
+    for value in object.values() {
+        if let Some(value) = immediate_model_value(value) {
+            return Some(value);
+        }
+    }
+
+    None
+}
+
+pub(super) fn application_run_answer(payload: &Value) -> Option<String> {
+    for key in ["answer", "text", "content", "message"] {
+        if let Some(value) = string_field(payload, key) {
+            return Some(value);
+        }
+    }
+
+    if is_runtime_debug_artifact_payload(payload) {
+        return string_field(payload, "preview");
+    }
+
+    let object = payload.as_object()?;
+    if let Some(error) = object.get("error").and_then(|value| value.get("message")) {
+        if let Some(error) = error
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(error.to_string());
+        }
+    }
+
+    None
+}
+
 fn immediate_input_text(value: &Value) -> Option<String> {
     let object = value.as_object()?;
-    for key in APPLICATION_INPUT_TEXT_KEYS {
+    for key in APPLICATION_INPUT_QUERY_KEYS {
         if let Some(value) = object
             .get(*key)
             .and_then(Value::as_str)
@@ -318,6 +379,23 @@ fn immediate_input_text(value: &Value) -> Option<String> {
     None
 }
 
+fn immediate_model_value(value: &Value) -> Option<String> {
+    let object = value.as_object()?;
+    object
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn is_runtime_debug_artifact_payload(value: &Value) -> bool {
+    value
+        .get("__runtime_debug_artifact")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
 fn string_field(value: &Value, key: &str) -> Option<String> {
     value
         .get(key)
@@ -327,17 +405,20 @@ fn string_field(value: &Value, key: &str) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn with_application_run_input_text(mut payload: Value, input_text: Option<&str>) -> Value {
-    let Some(input_text) = input_text else {
-        return payload;
-    };
+fn with_application_run_input_summary(
+    mut payload: Value,
+    query: Option<&str>,
+    model: Option<&str>,
+) -> Value {
     let Some(object) = payload.as_object_mut() else {
         return payload;
     };
-    object.insert(
-        "input_text".to_string(),
-        Value::String(input_text.to_string()),
-    );
+    if let Some(query) = query {
+        object.insert("query".to_string(), Value::String(query.to_string()));
+    }
+    if let Some(model) = model {
+        object.insert("model".to_string(), Value::String(model.to_string()));
+    }
     payload
 }
 
@@ -402,10 +483,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn application_input_text_prefers_start_query_over_tool_schema_payload() {
+    fn application_query_prefers_start_query_over_tool_schema_payload() {
         let payload = json!({
             "node-start": {
                 "query": "ping",
+                "model": "gpt-test",
                 "compatibility": {
                     "tools": [
                         {
@@ -425,34 +507,50 @@ mod tests {
             }
         });
 
-        assert_eq!(application_run_input_text(&payload), Some("ping".into()));
+        assert_eq!(application_run_query(&payload), Some("ping".into()));
+        assert_eq!(application_run_model(&payload), Some("gpt-test".into()));
     }
 
     #[test]
-    fn application_input_text_reads_persisted_artifact_preview_summary() {
+    fn application_query_reads_persisted_artifact_preview_summary() {
         let payload = json!({
             "__runtime_debug_artifact": true,
             "artifact_ref": Uuid::now_v7().to_string(),
             "preview": "{\"node-start\":{\"compatibility\":{\"tools\":[]}}}",
-            "input_text": "总结退款政策"
+            "query": "总结退款政策",
+            "model": "deepseek-chat"
         });
 
+        assert_eq!(application_run_query(&payload), Some("总结退款政策".into()));
         assert_eq!(
-            application_run_input_text(&payload),
-            Some("总结退款政策".into())
+            application_run_model(&payload),
+            Some("deepseek-chat".into())
         );
     }
 
     #[test]
-    fn flow_input_artifact_preview_keeps_application_input_text() {
+    fn flow_input_artifact_preview_keeps_application_query_and_model() {
         let preview = json!({
             "__runtime_debug_artifact": true,
             "artifact_ref": Uuid::now_v7().to_string(),
             "preview": "{\"node-start\":{\"compatibility\":{\"tools\":[]}}}"
         });
 
-        let preview = with_application_run_input_text(preview, Some("ping"));
+        let preview = with_application_run_input_summary(preview, Some("ping"), Some("gpt-test"));
 
-        assert_eq!(preview["input_text"], json!("ping"));
+        assert_eq!(preview["query"], json!("ping"));
+        assert_eq!(preview["model"], json!("gpt-test"));
+    }
+
+    #[test]
+    fn application_answer_reads_preferred_output_fields() {
+        let payload = json!({
+            "answer": "退款政策摘要"
+        });
+
+        assert_eq!(
+            application_run_answer(&payload),
+            Some("退款政策摘要".into())
+        );
     }
 }

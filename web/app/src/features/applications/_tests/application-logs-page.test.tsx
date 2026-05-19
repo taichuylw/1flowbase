@@ -33,8 +33,23 @@ const runtimeApi = vi.hoisted(() => ({
     ] as const,
   applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
+  applicationConversationMessagesQueryKey: (
+    applicationId: string,
+    conversationId: string,
+    runId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'conversations',
+      conversationId,
+      'around',
+      runId
+    ] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
+  fetchApplicationConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
@@ -75,7 +90,9 @@ function sampleRunDetail() {
       title: '公开 API 退款总结',
       expand_id: 'customer-42',
       authorized_account: 'root',
-      input_text: '总结退款政策',
+      external_conversation_id: 'conversation-1',
+      query: '总结退款政策',
+      model: 'deepseek-chat',
       input_payload: {
         __runtime_debug_artifact: true,
         artifact_ref: 'artifact-flow-input',
@@ -164,6 +181,7 @@ describe('ApplicationLogsPage', () => {
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
+    runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
 
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
@@ -184,6 +202,36 @@ describe('ApplicationLogsPage', () => {
       ])
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
+    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
+      items: [
+        {
+          run_id: 'run-0',
+          started_at: '2026-04-17T08:59:00Z',
+          finished_at: '2026-04-17T08:59:01Z',
+          status: 'succeeded',
+          query: '上一轮问题',
+          model: 'deepseek-chat',
+          answer: '上一轮回答',
+          is_current: false
+        },
+        {
+          run_id: 'run-1',
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z',
+          status: 'succeeded',
+          query: '总结退款政策',
+          model: 'deepseek-chat',
+          answer: '退款政策摘要',
+          is_current: true
+        }
+      ],
+      page: {
+        has_before: false,
+        has_after: false,
+        before_cursor: 'run-0',
+        after_cursor: 'run-1'
+      }
+    });
   });
 
   afterEach(() => {
@@ -247,6 +295,14 @@ describe('ApplicationLogsPage', () => {
         'run-1'
       );
     });
+    await waitFor(() => {
+      expect(
+        runtimeApi.fetchApplicationConversationMessages
+      ).toHaveBeenCalledWith('app-1', 'conversation-1', {
+        aroundRunId: 'run-1',
+        limit: 5
+      });
+    });
     const detailPane = await screen.findByRole('complementary', {
       name: '运行详情'
     });
@@ -292,7 +348,9 @@ describe('ApplicationLogsPage', () => {
     const conversation = await screen.findByTestId(
       'debug-conversation-messages'
     );
-    expect(within(conversation).getByText('User')).toBeInTheDocument();
+    expect(within(conversation).getAllByText('User')).toHaveLength(2);
+    expect(within(conversation).getByText('上一轮问题')).toBeInTheDocument();
+    expect(within(conversation).getByText('上一轮回答')).toBeInTheDocument();
     expect(within(conversation).getByText('总结退款政策')).toBeInTheDocument();
     expect(within(conversation).getByText('退款政策摘要')).toBeInTheDocument();
     const composerInput = screen.getByPlaceholderText('和 Bot 聊天');
@@ -324,10 +382,11 @@ describe('ApplicationLogsPage', () => {
       '退款政策摘要'
     );
 
-    const openLogButton = screen.getByRole('button', {
+    const openLogButton = screen.getAllByRole('button', {
       name: '查看对话日志'
-    });
-    fireEvent.click(openLogButton);
+    }).at(-1);
+    expect(openLogButton).toBeDefined();
+    fireEvent.click(openLogButton!);
 
     const logPanel = screen.getByRole('complementary', { name: '对话日志' });
     expect(logPanel).toBeInTheDocument();
@@ -811,7 +870,7 @@ describe('ApplicationLogsPage', () => {
 
         if (runId === 'run-refund') {
           detail.flow_run.id = runId;
-          detail.flow_run.input_text = '我想查退款规则';
+          detail.flow_run.query = '我想查退款规则';
           detail.flow_run.input_payload = {
             'node-start.query': '我想查退款规则'
           };
@@ -825,7 +884,7 @@ describe('ApplicationLogsPage', () => {
         }
 
         detail.flow_run.id = runId;
-        detail.flow_run.input_text = '今天天气怎么样';
+        detail.flow_run.query = '今天天气怎么样';
         detail.flow_run.input_payload = {
           'node-start.query': '今天天气怎么样'
         };

@@ -23,10 +23,10 @@ use control_plane::{
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
-        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
-        UpsertDebugVariableCacheEntryInput,
+        ListApplicationConversationRunsPageInput, OrchestrationRuntimeRepository,
+        UpdateFlowRunInput, UpdateFlowRunPayloadsInput, UpdateNodeRunInput,
+        UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput, UpsertCompiledPlanInput,
+        UpsertDataModelSideEffectReceiptInput, UpsertDebugVariableCacheEntryInput,
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -426,6 +426,15 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: control_plane::ports::ListApplicationRunsPageInput,
     ) -> Result<control_plane::ports::ApplicationRunSummaryPage> {
         PgControlPlaneStore::list_application_runs_page(self, application_id, input).await
+    }
+
+    async fn list_application_conversation_runs_page(
+        &self,
+        application_id: Uuid,
+        input: ListApplicationConversationRunsPageInput,
+    ) -> Result<control_plane::ports::ApplicationConversationRunsPage> {
+        PgControlPlaneStore::list_application_conversation_runs_page(self, application_id, input)
+            .await
     }
 
     async fn get_application_run_detail(

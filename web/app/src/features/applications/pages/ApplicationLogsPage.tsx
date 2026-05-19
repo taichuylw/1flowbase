@@ -394,6 +394,12 @@ export function ApplicationLogsPage({
             applicationId={applicationId}
             onClose={() => selectRun(null)}
             onOpenMessageLog={(message) => {
+              if (message.runId && message.runId !== selectedRunId) {
+                selectRun(message.runId);
+                setActiveFloatingWindow('run-detail');
+                return;
+              }
+
               setOpenConversationLogMessage(message);
               setActiveFloatingWindow('conversation-log');
             }}

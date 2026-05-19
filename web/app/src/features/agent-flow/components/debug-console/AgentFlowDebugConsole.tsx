@@ -29,6 +29,7 @@ export function AgentFlowDebugConsole({
   onClose,
   onLoadArtifact,
   onOpenMessageLog,
+  onReachConversationTop,
   onStopRun,
   onSubmitPrompt
 }: {
@@ -52,6 +53,7 @@ export function AgentFlowDebugConsole({
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  onReachConversationTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
 }) {
@@ -105,6 +107,7 @@ export function AgentFlowDebugConsole({
           status={status}
           stopping={stopping}
           onLoadArtifact={onLoadArtifact}
+          onReachTop={onReachConversationTop}
           onOpenMessageLog={(message) => {
             if (onOpenMessageLog) {
               onOpenMessageLog(message);

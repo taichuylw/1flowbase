@@ -1,10 +1,12 @@
 import {
   completeConsoleCallbackTask,
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
   type ConsoleApplicationRunsPage,
+  type ConsoleApplicationConversationMessagesPage,
   resumeConsoleFlowRun,
   type ConsoleApplicationRunDetail,
   type ConsoleApplicationRunSummary,
@@ -16,6 +18,8 @@ import { getApplicationsApiBaseUrl } from './applications';
 export type ApplicationRunSummary = ConsoleApplicationRunSummary;
 export type ApplicationRunsPage = ConsoleApplicationRunsPage;
 export type ApplicationRunDetail = ConsoleApplicationRunDetail;
+export type ApplicationConversationMessagesPage =
+  ConsoleApplicationConversationMessagesPage;
 export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
 export type { RuntimeDebugStreamPart };
 export type ApplicationRunSortField =
@@ -54,6 +58,21 @@ export const applicationRunDetailQueryKey = (
   runId: string
 ) => ['applications', applicationId, 'runtime', 'runs', runId] as const;
 
+export const applicationConversationMessagesQueryKey = (
+  applicationId: string,
+  conversationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'conversations',
+    conversationId,
+    'around',
+    runId
+  ] as const;
+
 export const applicationRuntimeDebugStreamQueryKey = (
   applicationId: string,
   runId: string
@@ -88,6 +107,29 @@ export function fetchApplicationRunDetail(applicationId: string, runId: string) 
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationConversationMessages(
+  applicationId: string,
+  conversationId: string,
+  input: {
+    aroundRunId?: string;
+    before?: string;
+    after?: string;
+    limit?: number;
+  } = {}
+) {
+  return getConsoleApplicationConversationMessages(
+    applicationId,
+    conversationId,
+    {
+      around_run_id: input.aroundRunId,
+      before: input.before,
+      after: input.after,
+      limit: input.limit
+    },
     getApplicationsApiBaseUrl()
   );
 }

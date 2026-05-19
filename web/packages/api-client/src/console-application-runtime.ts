@@ -101,7 +101,9 @@ export interface ConsoleFlowRunDetail {
   title?: string;
   expand_id?: string | null;
   authorized_account?: string | null;
-  input_text?: string | null;
+  external_conversation_id?: string | null;
+  query?: string | null;
+  model?: string | null;
   input_payload: Record<string, unknown>;
   output_payload: Record<string, unknown>;
   error_payload: Record<string, unknown> | null;
@@ -171,6 +173,34 @@ export interface ConsoleApplicationRunDetail {
   checkpoints: ConsoleRunCheckpoint[];
   callback_tasks: ConsoleCallbackTask[];
   events: ConsoleRunEvent[];
+}
+
+export interface ConsoleApplicationConversationMessage {
+  run_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: string;
+  query?: string | null;
+  model?: string | null;
+  answer?: string | null;
+  is_current: boolean;
+}
+
+export interface ConsoleApplicationConversationMessagesPage {
+  items: ConsoleApplicationConversationMessage[];
+  page: {
+    has_before: boolean;
+    has_after: boolean;
+    before_cursor?: string | null;
+    after_cursor?: string | null;
+  };
+}
+
+export interface GetConsoleApplicationConversationMessagesInput {
+  around_run_id?: string;
+  before?: string;
+  after?: string;
+  limit?: number;
 }
 
 export interface ConsoleApplicationRunTypedDetail {
@@ -1047,6 +1077,37 @@ export function getConsoleApplicationRunDetail(
 ) {
   return apiFetch<ConsoleApplicationRunDetail>({
     path: `/api/console/applications/${applicationId}/logs/runs/${runId}`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationConversationMessages(
+  applicationId: string,
+  conversationId: string,
+  input: GetConsoleApplicationConversationMessagesInput = {},
+  baseUrl?: string
+) {
+  const searchParams = new URLSearchParams();
+  if (input.around_run_id !== undefined) {
+    searchParams.set('around_run_id', input.around_run_id);
+  }
+  if (input.before !== undefined) {
+    searchParams.set('before', input.before);
+  }
+  if (input.after !== undefined) {
+    searchParams.set('after', input.after);
+  }
+  if (input.limit !== undefined) {
+    searchParams.set('limit', String(input.limit));
+  }
+
+  const queryString = searchParams.toString();
+
+  return apiFetch<ConsoleApplicationConversationMessagesPage>({
+    path:
+      `/api/console/applications/${applicationId}/logs/conversations/${encodeURIComponent(
+        conversationId
+      )}/messages` + (queryString ? `?${queryString}` : ''),
     baseUrl
   });
 }

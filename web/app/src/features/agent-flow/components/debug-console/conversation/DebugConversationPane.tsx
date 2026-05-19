@@ -22,6 +22,7 @@ export function DebugConversationPane({
   onChangeQuery,
   onLoadArtifact,
   onOpenMessageLog,
+  onReachTop,
   onStopRun,
   onSubmitPrompt,
   showComposer = true
@@ -33,6 +34,7 @@ export function DebugConversationPane({
   onChangeQuery: (value: string) => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  onReachTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
   composerUiOnly?: boolean;
@@ -108,6 +110,14 @@ export function DebugConversationPane({
     }
   }
 
+  function handleMessagesScroll() {
+    const element = messagesRef.current;
+
+    if (element && element.scrollTop <= 16) {
+      onReachTop?.();
+    }
+  }
+
   return (
     <div className="agent-flow-editor__debug-console-pane agent-flow-editor__debug-conversation-pane">
       <div
@@ -115,6 +125,7 @@ export function DebugConversationPane({
         className="agent-flow-editor__debug-messages"
         data-testid="debug-conversation-messages"
         onPointerDown={pauseAutoScroll}
+        onScroll={handleMessagesScroll}
         onTouchMove={pauseAutoScroll}
         onWheel={pauseAutoScroll}
       >

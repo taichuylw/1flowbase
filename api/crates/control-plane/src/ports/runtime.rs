@@ -747,6 +747,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         application_id: Uuid,
         input: ListApplicationRunsPageInput,
     ) -> anyhow::Result<ApplicationRunSummaryPage>;
+    async fn list_application_conversation_runs_page(
+        &self,
+        application_id: Uuid,
+        input: ListApplicationConversationRunsPageInput,
+    ) -> anyhow::Result<ApplicationConversationRunsPage> {
+        let _ = (application_id, input);
+        anyhow::bail!("list_application_conversation_runs_page not implemented")
+    }
     async fn get_application_run_detail(
         &self,
         application_id: Uuid,
@@ -774,6 +782,24 @@ pub struct ApplicationRunSummaryPage {
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListApplicationConversationRunsPageInput {
+    pub external_conversation_id: String,
+    pub around_run_id: Option<Uuid>,
+    pub before_run_id: Option<Uuid>,
+    pub after_run_id: Option<Uuid>,
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationConversationRunsPage {
+    pub items: Vec<domain::FlowRunRecord>,
+    pub has_before: bool,
+    pub has_after: bool,
+    pub before_cursor: Option<Uuid>,
+    pub after_cursor: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
