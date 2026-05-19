@@ -7,9 +7,22 @@ import {
   Table,
   Tabs,
   Tag,
-  Typography
+  Typography,
+  Space
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  LockOutlined,
+  TagOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  CloudServerOutlined,
+  InteractionOutlined,
+  TableOutlined,
+  DeploymentUnitOutlined,
+  PlusOutlined,
+  EditOutlined
+} from '@ant-design/icons';
 
 import type {
   CreateSettingsDataModelFieldInput,
@@ -36,6 +49,39 @@ import { DataModelRecordPreview } from './DataModelRecordPreview';
 const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
   (value) => ({ label: value, value })
 );
+
+function getFieldKindTag(kind: string) {
+  let color = 'default';
+
+  const k = kind.toLowerCase();
+  if (k.includes('string') || k.includes('text') || k.includes('varchar')) {
+    color = 'blue';
+  } else if (
+    k.includes('int') ||
+    k.includes('float') ||
+    k.includes('number') ||
+    k.includes('decimal')
+  ) {
+    color = 'cyan';
+  } else if (k.includes('bool')) {
+    color = 'purple';
+  } else if (k.includes('date') || k.includes('time')) {
+    color = 'orange';
+  } else if (k.includes('relation') || k.includes('ref')) {
+    color = 'magenta';
+  } else if (k.includes('json')) {
+    color = 'geekblue';
+  }
+
+  return (
+    <Tag
+      color={color}
+      style={{ borderRadius: 6, margin: 0, textTransform: 'capitalize' }}
+    >
+      {kind}
+    </Tag>
+  );
+}
 
 export function DataModelDetail({
   model,
@@ -93,55 +139,98 @@ export function DataModelDetail({
       title: '字段标题',
       dataIndex: 'title',
       key: 'title',
-      render: (value: string, field) => (
-        <button
-          type="button"
-          className="data-model-panel__link-button"
-          disabled={field.is_system === true || field.is_writable === false}
-          onClick={() =>
-            setFieldDrawerState({ open: true, mode: 'edit', field })
-          }
-        >
-          <Typography.Text strong>{value}</Typography.Text>
-        </button>
-      )
+      render: (value: string, field) => {
+        const disabled =
+          field.is_system === true || field.is_writable === false;
+        return (
+          <Space size={8}>
+            <button
+              type="button"
+              className={`data-model-panel__field-title-btn ${disabled ? 'disabled' : ''}`}
+              disabled={disabled}
+              onClick={() =>
+                setFieldDrawerState({ open: true, mode: 'edit', field })
+              }
+            >
+              <Typography.Text
+                strong={!disabled}
+                style={{
+                  color: disabled
+                    ? 'var(--ant-color-text-secondary)'
+                    : 'var(--brand-primary)'
+                }}
+              >
+                {value}
+              </Typography.Text>
+            </button>
+            {disabled && (
+              <Tag
+                style={{ borderRadius: 6, margin: 0, fontSize: 10 }}
+                icon={<LockOutlined style={{ fontSize: 10 }} />}
+              >
+                只读
+              </Tag>
+            )}
+          </Space>
+        );
+      }
     },
     {
       title: 'Code',
       dataIndex: 'code',
       key: 'code',
       render: (value: string) => (
-        <Typography.Text type="secondary">{value}</Typography.Text>
+        <code className="data-model-panel__code-badge">{value}</code>
       )
     },
     {
       title: '类型',
       dataIndex: 'field_kind',
       key: 'field_kind',
-      render: (value: string) => <Tag>{value}</Tag>
+      render: (value: string) => getFieldKindTag(value)
     },
     {
       title: '必填',
       dataIndex: 'is_required',
       key: 'is_required',
-      render: (value: boolean) => (value ? '是' : '否')
+      width: 80,
+      render: (value: boolean) =>
+        value ? (
+          <Tag color="error" style={{ borderRadius: 4, margin: 0 }}>
+            必填
+          </Tag>
+        ) : (
+          <span style={{ color: 'var(--text-tertiary)' }}>-</span>
+        )
     },
     {
       title: '唯一',
       dataIndex: 'is_unique',
       key: 'is_unique',
-      render: (value: boolean) => (value ? '是' : '否')
+      width: 80,
+      render: (value: boolean) =>
+        value ? (
+          <Tag color="warning" style={{ borderRadius: 4, margin: 0 }}>
+            唯一
+          </Tag>
+        ) : (
+          <span style={{ color: 'var(--text-tertiary)' }}>-</span>
+        )
     },
     {
       title: '操作',
       key: 'actions',
-      width: 120,
+      width: 100,
       render: (_, field) => (
         <Button
           type="link"
           size="small"
+          icon={<EditOutlined aria-hidden="true" />}
+          style={{ padding: 0 }}
           disabled={
-            !canManage || field.is_system === true || field.is_writable === false
+            !canManage ||
+            field.is_system === true ||
+            field.is_writable === false
           }
           onClick={() =>
             setFieldDrawerState({ open: true, mode: 'edit', field })
@@ -157,44 +246,74 @@ export function DataModelDetail({
     (field) => field.relation_target_model_id
   );
   const summaryItems = [
-    { key: 'title', label: '标题', value: model.title, strong: true },
-    { key: 'code', label: 'Code', value: model.code },
-    { key: 'source', label: '来源', value: model.source_kind },
-    { key: 'runtime', label: 'Runtime', value: model.runtime_availability },
+    {
+      key: 'title',
+      label: '标题',
+      value: model.title,
+      strong: true,
+      icon: <TagOutlined />
+    },
+    { key: 'code', label: 'Code', value: model.code, icon: <CodeOutlined /> },
+    {
+      key: 'source',
+      label: '来源',
+      value: model.source_kind === 'main_source' ? '内建数据源' : '外部数据源',
+      icon:
+        model.source_kind === 'main_source' ? (
+          <DatabaseOutlined />
+        ) : (
+          <CloudServerOutlined />
+        )
+    },
+    {
+      key: 'runtime',
+      label: 'Runtime',
+      value: model.runtime_availability,
+      icon: <InteractionOutlined />
+    },
     ...(model.source_kind === 'external_source'
       ? [
           {
             key: 'external_table_id',
             label: '表 ID',
-            value: model.external_table_id ?? '-'
+            value: model.external_table_id ?? '-',
+            icon: <TableOutlined />
           }
         ]
       : []),
-    { key: 'table', label: '物理表', value: model.physical_table_name }
+    {
+      key: 'table',
+      label: '物理表',
+      value: model.physical_table_name,
+      icon: <DeploymentUnitOutlined />
+    }
   ];
 
   return (
     <section className="data-model-panel__detail" aria-label="Data Model 详情">
       <div
-        className="data-model-panel__detail-summary"
+        className="data-model-panel__meta-grid"
         data-testid="data-model-detail-summary"
       >
         {summaryItems.map((item) => (
-          <span
+          <div
             key={item.key}
-            className="data-model-panel__summary-item"
+            className="data-model-panel__meta-card"
             data-testid="data-model-summary-item"
           >
-            <span className="data-model-panel__summary-label">
-              {item.label}：
-            </span>
+            <div className="data-model-panel__meta-card-header">
+              {item.icon}
+              <span className="data-model-panel__meta-card-label">
+                {item.label}：
+              </span>
+            </div>
             <Typography.Text
-              strong={item.strong}
-              type={item.strong ? undefined : 'secondary'}
+              strong
+              className="data-model-panel__meta-card-value"
             >
               {item.value}
             </Typography.Text>
-          </span>
+          </div>
         ))}
       </div>
 
@@ -237,6 +356,7 @@ export function DataModelDetail({
                 <Flex justify="flex-end">
                   <Button
                     type="primary"
+                    icon={<PlusOutlined aria-hidden="true" />}
                     disabled={!canManage}
                     onClick={() =>
                       setFieldDrawerState({
