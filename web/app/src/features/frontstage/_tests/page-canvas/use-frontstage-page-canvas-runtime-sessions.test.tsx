@@ -6,7 +6,6 @@ import type {
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type {
-  FrontstageRestrictedBlockRuntimeHostOptions,
   FrontstageRestrictedBlockRuntimeSession
 } from '../../lib/frontstage-restricted-block-runtime-host';
 import type {
@@ -16,7 +15,10 @@ import type {
 } from '../../lib/page-canvas/runtime-run-plan';
 import type { RestrictedBlockRunPlan } from '../../lib/restricted-block-loader';
 import type { RestrictedBlockRuntimeHostSnapshot } from '../../lib/restricted-block-runtime-host';
-import { useFrontstagePageCanvasRuntimeSessions } from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
+import {
+  useFrontstagePageCanvasRuntimeSessions,
+  type FrontstagePageCanvasRuntimeSessionFactory
+} from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
 
 function createRunPlan(
   overrides: Partial<RestrictedBlockRunPlan['request']> = {}
@@ -506,8 +508,8 @@ describe('useFrontstagePageCanvasRuntimeSessions', () => {
   test('reports factory errors as stable entries instead of crashing', async () => {
     const failure = new Error('factory failed');
     const runtimeRunPlanState = createRunPlanState([createReadyItem()]);
-    const runtimeSessionFactory = vi.fn(
-      (_options: FrontstageRestrictedBlockRuntimeHostOptions) => {
+    const runtimeSessionFactory: FrontstagePageCanvasRuntimeSessionFactory = vi.fn(
+      () => {
         throw failure;
       }
     );

@@ -24,7 +24,11 @@ vi.mock('@1flowbase/api-client', () => ({
       updated_at: '2026-04-15T09:00:00Z',
       tags: []
     }
-  ])
+  ]),
+  fetchConsoleRuntimeModelRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  createConsoleRuntimeModelRecord: vi.fn().mockResolvedValue({}),
+  updateConsoleRuntimeModelRecord: vi.fn().mockResolvedValue({}),
+  deleteConsoleRuntimeModelRecord: vi.fn().mockResolvedValue({ deleted: true })
 }));
 
 vi.mock('../../features/auth/components/AuthBootstrap', () => ({

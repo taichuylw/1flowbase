@@ -17,8 +17,8 @@ describe('console-file-management client', () => {
     .spyOn(transport, 'apiFetch')
     .mockImplementation(async (input) => input as never);
 
-  test('transport spy is active', () => {
-    expect(apiFetchSpy).toBeDefined();
+  test('file management transport spy is active', () => {
+    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
   });
 
   test('fetchConsoleFileStorages points at the storage collection route', async () => {

@@ -150,7 +150,7 @@ describe('useFrontstagePageContentSave', () => {
     expect(result.current.error).toBeNull();
   });
 
-  test('rejects save without csrf token before calling feature api', async () => {
+  test('page content save rejects missing csrf token before calling feature api', async () => {
     authenticate(null);
     const { result } = setupSave();
     let saveError: unknown;

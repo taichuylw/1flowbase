@@ -19,6 +19,14 @@ test('parseCliArgs defaults to all coverage gates', () => {
   assert.deepEqual(parseCliArgs([]), { help: false, target: 'all' });
 });
 
+test('parseCliArgs accepts a single backend coverage package', () => {
+  assert.deepEqual(parseCliArgs(['backend', 'storage-postgres']), {
+    help: false,
+    target: 'backend',
+    backendKeys: ['storage-postgres'],
+  });
+});
+
 test('buildFrontendCommand runs Vitest coverage through the app package', () => {
   const repoRoot = '/repo-root';
 
@@ -117,6 +125,20 @@ test('buildBackendCommands emits one cargo llvm-cov command per protected packag
       env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
     },
   ]);
+});
+
+test('buildBackendCommands can restrict backend coverage to one package', () => {
+  const repoRoot = '/repo-root';
+
+  assert.deepEqual(
+    buildBackendCommands({
+      repoRoot,
+      cargoParallelism: 4,
+      cargoTestThreads: 2,
+      backendKeys: ['api-server'],
+    }).map((command) => command.label),
+    ['backend-coverage-api-server']
+  );
 });
 
 test('buildBackendCleanupCommands emits cargo llvm-cov clean for workspace artifacts', () => {

@@ -1,3 +1,5 @@
+/* eslint-disable testing-library/no-container, testing-library/no-node-access */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ReactElement } from 'react';
@@ -139,7 +141,7 @@ describe('SectionPageLayout', () => {
       /\.section-page-layout__rail\s*\{[\s\S]*?\n\}/
     )?.[0];
 
-    expect(desktopRailBlock).toBeTruthy();
+    expect(desktopRailBlock).toContain('.section-page-layout__rail');
     expect(desktopRailBlock).not.toContain('min-height: calc(100vh - 56px);');
   });
 

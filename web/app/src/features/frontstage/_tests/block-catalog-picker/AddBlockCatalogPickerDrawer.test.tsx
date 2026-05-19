@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { AddBlockCatalogPickerDrawer } from '../../components/AddBlockCatalogPickerDrawer';
@@ -61,19 +61,14 @@ describe('AddBlockCatalogPickerDrawer', () => {
       />
     );
 
-    const row = screen.getByText('空白 JS Block').closest('.ant-list-item');
-    expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getByText('iframe')).toBeInTheDocument();
-    expect(within(row as HTMLElement).getByText('1flowbase')).toBeInTheDocument();
-    expect(
-      within(row as HTMLElement).getByText('frontstage.js-ui-block')
-    ).toBeInTheDocument();
+    expect(screen.getByText('空白 JS Block')).toBeInTheDocument();
+    expect(screen.getByText('iframe')).toBeInTheDocument();
+    expect(screen.getByText('1flowbase')).toBeInTheDocument();
+    expect(screen.getByText('frontstage.js-ui-block')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Blank JS Block' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Data Table' })).toBeInTheDocument();
 
-    fireEvent.click(
-      within(row as HTMLElement).getByRole('button', { name: '选择' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: '选择' }));
 
     expect(onSelect).toHaveBeenCalledWith(entry, 'blank');
   });

@@ -226,7 +226,7 @@ describe('section shell routing', () => {
   });
 
   test(
-    'redirects /me to /me/profile',
+    'section shell redirects /me to /me/profile',
     async () => {
       authenticateWithPermissions(['route_page.view.all']);
 

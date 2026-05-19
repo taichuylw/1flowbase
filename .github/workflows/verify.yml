@@ -15,8 +15,11 @@ concurrency:
   group: verify-${{ github.ref_name }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  repo-gate:
+  repo-tooling-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,16 +32,74 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm --dir web install --frozen-lockfile
+      - uses: ./.github/actions/quality-gate
+        with:
+          scope: repo-tooling
+          report_type: ci
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-repo-tooling
+          path: tmp/test-governance
+
+  repo-frontend-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - uses: ./.github/actions/quality-gate
+        with:
+          scope: repo-frontend
+          report_type: ci
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-repo-frontend
+          path: tmp/test-governance
+
+  repo-backend-gate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scope:
+          - repo-backend-static
+          - repo-backend-fmt
+          - repo-backend-clippy-core-libs
+          - repo-backend-clippy-runtime-storage
+          - repo-backend-clippy-apps
+          - repo-backend-test-core-libs
+          - repo-backend-test-runtime-storage
+          - repo-backend-test-control-plane
+          - repo-backend-test-api-server
+          - repo-backend-test-plugin-runner
+          - repo-backend-check-core-libs
+          - repo-backend-check-runtime-storage
+          - repo-backend-check-apps
+    steps:
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: ./.github/actions/quality-gate
         with:
-          scope: repo
+          scope: ${{ matrix.scope }}
           report_type: ci
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-repo
+          name: test-governance-${{ matrix.scope }}
           path: tmp/test-governance
 
   backend-consistency-gate:
@@ -57,7 +118,7 @@ jobs:
           name: test-governance-backend-consistency
           path: tmp/test-governance
 
-  coverage-gate:
+  coverage-frontend-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -70,17 +131,40 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm --dir web install --frozen-lockfile
+      - uses: ./.github/actions/quality-gate
+        with:
+          scope: coverage-frontend
+          report_type: ci
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-coverage-frontend
+          path: tmp/test-governance
+
+  coverage-backend-gate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scope:
+          - coverage-backend-control-plane
+          - coverage-backend-storage-postgres
+          - coverage-backend-api-server
+    steps:
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: ./.github/actions/quality-gate
         with:
-          scope: coverage
+          scope: ${{ matrix.scope }}
           report_type: ci
           publish_issue: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: test-governance-coverage
+          name: test-governance-${{ matrix.scope }}
           path: tmp/test-governance
 
   react-doctor-gate:
@@ -91,19 +175,20 @@ jobs:
           fetch-depth: 0
       - name: Prepare React Doctor diff base
         run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
-      - uses: millionco/react-doctor@main
+      - uses: actions/setup-node@v5
         with:
-          directory: web/app
-          diff: main
-          fail-on: warning
-          offline: "true"
           node-version: 24
+      - name: Run React Doctor
+        run: npx react-doctor@latest web/app --diff main --offline --fail-on warning --verbose
 
   verify:
     needs:
-      - repo-gate
+      - repo-tooling-gate
+      - repo-frontend-gate
+      - repo-backend-gate
       - backend-consistency-gate
-      - coverage-gate
+      - coverage-frontend-gate
+      - coverage-backend-gate
       - react-doctor-gate
     if: always()
     runs-on: ubuntu-latest

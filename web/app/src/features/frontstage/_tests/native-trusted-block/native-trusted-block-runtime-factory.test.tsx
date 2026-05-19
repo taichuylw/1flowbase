@@ -171,6 +171,9 @@ export default function Block() {
 
   test('reports component render capability guard failures with structured runtime paths', async () => {
     const onRuntimeError = vi.fn();
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
     const testingRoot = createTestingRoot();
     const adapter = createFrontstageNativeTrustedBlockReactAdapter({
       createRoot: testingRoot.createRoot,
@@ -178,9 +181,10 @@ export default function Block() {
       resolveComponent: createFrontstageNativeTrustedBlockRuntimeFactory()
     });
 
-    await adapter.mount({
-      plan: createPlan({
-        source: `
+    try {
+      await adapter.mount({
+        plan: createPlan({
+          source: `
 import React from 'react';
 
 export default function Block() {
@@ -188,19 +192,22 @@ export default function Block() {
   return React.createElement('div', null, 'Denied');
 }
 `
-      }),
-      root: createBlockRoot()
-    });
-
-    await waitFor(() => {
-      expect(onRuntimeError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          code: 'runtime_error',
-          path: 'runtime.capability.fetch'
         }),
-        expect.objectContaining({ blockId: 'native-block-1' })
-      );
-    });
+        root: createBlockRoot()
+      });
+
+      await waitFor(() => {
+        expect(onRuntimeError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'runtime_error',
+            path: 'runtime.capability.fetch'
+          }),
+          expect.objectContaining({ blockId: 'native-block-1' })
+        );
+      });
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test('scopes module overrides to each created resolver', async () => {
@@ -248,7 +255,7 @@ export default function Block() {
 
   test('does not statically expose API or query clients through the runtime module map', () => {
     const runtimeFactorySource = readFileSync(
-      join(process.cwd(), 'src/features/frontstage/lib/native-trusted-block-runtime-factory.tsx'),
+      join(process.cwd(), 'src/features/frontstage/lib/native-trusted-block-runtime-factory.ts'),
       'utf8'
     );
     const moduleMap = createFrontstageNativeTrustedBlockModuleMap();
@@ -295,7 +302,7 @@ function collectSourceFiles(directories: string[]): string[] {
         continue;
       }
 
-      if (['.ts', '.tsx'].includes(extname(entry.name))) {
+      if (SOURCE_FILE_EXTENSIONS.has(extname(entry.name))) {
         files.push(entryPath);
       }
     }
@@ -303,3 +310,5 @@ function collectSourceFiles(directories: string[]): string[] {
 
   return files;
 }
+
+const SOURCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx']);

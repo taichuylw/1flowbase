@@ -1,3 +1,5 @@
+/* eslint-disable testing-library/render-result-naming-convention */
+
 import { describe, expect, test } from 'vitest';
 
 import type { FrontstagePageContent } from '../../api/page-content';

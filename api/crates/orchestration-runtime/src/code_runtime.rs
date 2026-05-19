@@ -48,17 +48,9 @@ pub trait CodeInvoker: Send + Sync {
     ) -> Result<CodeInvocationOutput>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QuickJsCodeInvoker {
     timeout_override: Option<Duration>,
-}
-
-impl Default for QuickJsCodeInvoker {
-    fn default() -> Self {
-        Self {
-            timeout_override: None,
-        }
-    }
 }
 
 impl QuickJsCodeInvoker {

@@ -496,7 +496,10 @@ describe('AgentFlowCanvas interactions', () => {
       (node) => node.type === 'template_transform'
     );
 
-    expect(insertedNode).toBeDefined();
+    expect(insertedNode).toMatchObject({
+      type: 'template_transform',
+      position: { x: 420, y: 260 }
+    });
     expect(insertedNode?.position).toEqual({ x: 420, y: 260 });
     expect(getState().workingDocument.graph.edges).toEqual(
       expect.arrayContaining([

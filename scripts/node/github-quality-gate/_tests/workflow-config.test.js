@@ -21,6 +21,12 @@ function readGitHubReadme() {
   return fs.readFileSync(path.join(repoRoot, '.github', 'README.md'), 'utf8');
 }
 
+function readReactDoctorConfig() {
+  return JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'web', 'app', 'react-doctor.config.json'), 'utf8')
+  );
+}
+
 function extractPushBranches(workflow) {
   const match = workflow.match(/push:\n\s+branches:\n(?<branches>(?:\s+- .+\n)+)/u);
   assert.ok(match, 'verify workflow must declare push branches');
@@ -46,16 +52,37 @@ test('verify workflow runs on main and latest but only publishes quality reports
 test('verify workflow runs quality gate scopes in parallel before one aggregate report', () => {
   const workflow = readVerifyWorkflow();
 
-  assert.match(workflow, /repo-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /repo-tooling-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /repo-frontend-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /repo-backend-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /fail-fast: false/u);
+  assert.match(workflow, /- repo-backend-static/u);
+  assert.match(workflow, /- repo-backend-clippy-core-libs/u);
+  assert.match(workflow, /- repo-backend-test-control-plane/u);
+  assert.match(workflow, /- repo-backend-test-api-server/u);
+  assert.match(workflow, /- repo-backend-test-plugin-runner/u);
+  assert.doesNotMatch(workflow, /- repo-backend-test-apps/u);
+  assert.match(workflow, /- repo-backend-check-runtime-storage/u);
   assert.match(workflow, /backend-consistency-gate:\n\s+runs-on: ubuntu-latest/u);
-  assert.match(workflow, /coverage-gate:\n\s+runs-on: ubuntu-latest/u);
-  assert.match(workflow, /verify:\n\s+needs:\n\s+- repo-gate\n\s+- backend-consistency-gate\n\s+- coverage-gate/u);
-  assert.match(workflow, /scope: repo/u);
+  assert.match(workflow, /coverage-frontend-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /coverage-backend-gate:\n\s+runs-on: ubuntu-latest/u);
+  assert.match(workflow, /- coverage-backend-control-plane/u);
+  assert.match(workflow, /- coverage-backend-storage-postgres/u);
+  assert.match(workflow, /- coverage-backend-api-server/u);
+  assert.match(
+    workflow,
+    /verify:\n\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u
+  );
+  assert.match(workflow, /scope: repo-tooling/u);
+  assert.match(workflow, /scope: repo-frontend/u);
+  assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /scope: backend-consistency/u);
-  assert.match(workflow, /scope: coverage/u);
-  assert.match(workflow, /name: test-governance-repo/u);
+  assert.match(workflow, /scope: coverage-frontend/u);
+  assert.match(workflow, /name: test-governance-repo-tooling/u);
+  assert.match(workflow, /name: test-governance-repo-frontend/u);
+  assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
-  assert.match(workflow, /name: test-governance-coverage/u);
+  assert.match(workflow, /name: test-governance-coverage-frontend/u);
   assert.match(workflow, /merge-multiple: false/u);
   assert.match(workflow, /node scripts\/node\/github-quality-gate-aggregate\.js/u);
 });
@@ -66,14 +93,39 @@ test('verify workflow runs React Doctor as a frontend quality gate', () => {
   assert.match(workflow, /react-doctor-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(workflow, /fetch-depth: 0/u);
   assert.match(workflow, /git show-ref --verify --quiet refs\/heads\/main \|\| git branch main origin\/main/u);
-  assert.match(workflow, /uses: millionco\/react-doctor@main/u);
-  assert.match(workflow, /directory: web\/app/u);
-  assert.match(workflow, /diff: main/u);
-  assert.match(workflow, /fail-on: warning/u);
-  assert.match(workflow, /offline: "true"/u);
+  assert.match(workflow, /uses: actions\/setup-node@v5/u);
   assert.match(workflow, /node-version: 24/u);
+  assert.match(workflow, /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u);
+  assert.doesNotMatch(workflow, /uses: millionco\/react-doctor@main/u);
   assert.doesNotMatch(workflow, /github-token: \$\{\{ secrets\.GITHUB_TOKEN \}\}/u);
-  assert.match(workflow, /verify:\n\s+needs:\n\s+- repo-gate\n\s+- backend-consistency-gate\n\s+- coverage-gate\n\s+- react-doctor-gate/u);
+  assert.match(
+    workflow,
+    /verify:\n\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate\n\s+- react-doctor-gate/u
+  );
+});
+
+test('React Doctor keeps current frontstage debt as a narrow baseline', () => {
+  const config = readReactDoctorConfig();
+
+  assert.deepEqual(config.ignore.overrides, [
+    {
+      files: ['src/features/frontstage/pages/FrontStagePage.tsx'],
+      rules: [
+        'react-doctor/no-cascading-set-state',
+        'react-doctor/no-effect-chain',
+        'react-doctor/no-prop-callback-in-effect',
+        'react-doctor/no-inline-exhaustive-style',
+        'react-doctor/no-giant-component',
+        'react-doctor/no-many-boolean-props',
+        'react-doctor/prefer-useReducer',
+        'react-doctor/no-derived-state-effect'
+      ]
+    },
+    {
+      files: ['src/features/agent-flow/_tests/editor/agent-flow-canvas-interactions.test.tsx'],
+      rules: ['react-doctor/no-prop-callback-in-effect']
+    }
+  ]);
 });
 
 test('GitHub automation docs describe latest-only issue publishing', () => {
@@ -93,10 +145,9 @@ test('GitHub automation docs describe the React Doctor frontend gate', () => {
   const readme = readGitHubReadme();
 
   assert.match(readme, /React Doctor frontend gates/u);
-  assert.match(readme, /directory: web\/app/u);
-  assert.match(readme, /diff: main/u);
-  assert.match(readme, /fail-on: warning/u);
-  assert.match(readme, /offline: "true"/u);
+  assert.match(readme, /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u);
+  assert.match(readme, /web\/app\/react-doctor\.config\.json/u);
+  assert.match(readme, /explicit baseline/u);
 });
 
 test('quality gate workflow supports dispatch targets and nightly latest CI defaults', () => {
@@ -110,6 +161,7 @@ test('quality gate workflow supports dispatch targets and nightly latest CI defa
   );
   assert.match(workflow, /schedule:\n(?:\s+# .+\n)?\s+- cron: '0 18 \* \* \*'/u);
   assert.match(workflow, /QUALITY_GATE_TARGET_BRANCH: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.target_branch \|\| 'latest' \}\}/u);
+  assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true/u);
   assert.match(workflow, /QUALITY_GATE_SCOPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope \|\| 'ci' \}\}/u);
   assert.match(workflow, /QUALITY_GATE_REPORT_TYPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.report_type \|\| 'ci' \}\}/u);
   assert.match(workflow, /QUALITY_GATE_SCHEDULED_ENVIRONMENT: nightly-latest/u);
@@ -121,20 +173,40 @@ test('quality gate workflow supports dispatch targets and nightly latest CI defa
 test('quality gate workflow runs ci scope as parallel component gates before one published aggregate report', () => {
   const workflow = readQualityGateWorkflow();
 
-  assert.match(workflow, /repo-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /repo-tooling-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /repo-frontend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /repo-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /- repo-backend-static/u);
+  assert.match(workflow, /- repo-backend-clippy-runtime-storage/u);
+  assert.match(workflow, /- repo-backend-test-control-plane/u);
+  assert.match(workflow, /- repo-backend-test-api-server/u);
+  assert.match(workflow, /- repo-backend-test-plugin-runner/u);
+  assert.doesNotMatch(workflow, /- repo-backend-test-apps/u);
+  assert.match(workflow, /- repo-backend-check-apps/u);
   assert.match(workflow, /backend-consistency-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
-  assert.match(workflow, /coverage-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /coverage-frontend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /coverage-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u);
+  assert.match(workflow, /- coverage-backend-control-plane/u);
+  assert.match(workflow, /- coverage-backend-storage-postgres/u);
+  assert.match(workflow, /- coverage-backend-api-server/u);
   assert.match(workflow, /aggregate:\n\s+if: \$\{\{ always\(\) && \(github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\)\) \}\}/u);
-  assert.match(workflow, /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-gate\n\s+- backend-consistency-gate\n\s+- coverage-gate/u);
-  assert.match(workflow, /scope: repo/u);
+  assert.match(
+    workflow,
+    /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u
+  );
+  assert.match(workflow, /scope: repo-tooling/u);
+  assert.match(workflow, /scope: repo-frontend/u);
+  assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /scope: backend-consistency/u);
-  assert.match(workflow, /scope: coverage/u);
+  assert.match(workflow, /scope: coverage-frontend/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
   assert.match(workflow, /node scripts\/node\/github-quality-gate-aggregate\.js/u);
-  assert.match(workflow, /name: test-governance-repo/u);
+  assert.match(workflow, /name: test-governance-repo-tooling/u);
+  assert.match(workflow, /name: test-governance-repo-frontend/u);
+  assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
-  assert.match(workflow, /name: test-governance-coverage/u);
+  assert.match(workflow, /name: test-governance-coverage-frontend/u);
   assert.match(workflow, /name: test-governance-artifacts/u);
 });
 

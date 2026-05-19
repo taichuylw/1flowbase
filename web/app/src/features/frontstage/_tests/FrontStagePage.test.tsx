@@ -256,6 +256,12 @@ function getGroupTreeItem(title: string) {
   return screen.getByTestId(`frontstage-tree-node-group-${title}`);
 }
 
+async function clickAndFlush(element: HTMLElement) {
+  await act(async () => {
+    element.click();
+  });
+}
+
 function mockPageContentSaveState(
   overrides: Partial<FrontstagePageContentSaveState> = {}
 ): FrontstagePageContentSaveState {
@@ -771,19 +777,19 @@ describe('FrontStagePage', () => {
     ).toBeInTheDocument();
   }, 10000);
 
-  test('supports adding and deleting page tree nodes in design mode', () => {
+  test('supports adding and deleting page tree nodes in design mode', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
     expect(screen.getByText('分组 1')).toBeInTheDocument();
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
 
     const pageListItem = getPageTreeItem('页面 新建 1');
-    fireEvent.click(
+    await clickAndFlush(
       within(pageListItem).getByRole('button', { name: /删\s*除/ })
     );
 
@@ -921,24 +927,24 @@ describe('FrontStagePage', () => {
     expect(rows[1]).toHaveTextContent('页面 page-2');
   });
 
-  test('does not delete node when delete confirmation is canceled', () => {
+  test('does not delete node when delete confirmation is canceled', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
     const pageItem = getPageTreeItem('页面 新建 1');
 
     confirmSpy.mockReturnValue(false);
-    fireEvent.click(within(pageItem).getByRole('button', { name: /删\s*除/ }));
+    await clickAndFlush(within(pageItem).getByRole('button', { name: /删\s*除/ }));
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
     expect(screen.getByText('分组 1')).toBeInTheDocument();
   });
 
-  test('generates unique page id when existing page ids conflict', () => {
+  test('generates unique page id when existing page ids conflict', async () => {
     authenticate(['frontstage.page.design']);
 
     renderPageWithInitialTree([
@@ -949,29 +955,29 @@ describe('FrontStagePage', () => {
       }
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
   });
 
-  test('adds page under group in design mode', () => {
+  test('adds page under group in design mode', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
 
     const groupContainer = getGroupTreeItem('分组 1');
 
-    fireEvent.click(
+    await clickAndFlush(
       within(groupContainer).getByRole('button', { name: '组内新增页面' })
     );
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
   });
 
-  test('generates unique group id when existing group ids conflict', () => {
+  test('generates unique group id when existing group ids conflict', async () => {
     authenticate(['frontstage.page.design']);
 
     renderPageWithInitialTree([
@@ -983,8 +989,8 @@ describe('FrontStagePage', () => {
       }
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
 
     expect(screen.getByText('分组 2')).toBeInTheDocument();
   });
@@ -1025,13 +1031,13 @@ describe('FrontStagePage', () => {
     expect(screen.getAllByText('页面 嵌套').length).toBeGreaterThan(0);
   });
 
-  test('supports page order move controls in design mode', () => {
+  test('supports page order move controls in design mode', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
     const initialTreeRows = screen.getAllByRole('button', {
       name: /页面 新建 \d+ 页面节点/
@@ -1049,7 +1055,7 @@ describe('FrontStagePage', () => {
     expect(secondRowUpButton).toBeEnabled();
     expect(firstRowDownButton).toBeEnabled();
 
-    fireEvent.click(secondRowUpButton);
+    await clickAndFlush(secondRowUpButton);
 
     const movedUpRows = screen.getAllByRole('button', {
       name: /页面 新建 \d+ 页面节点/
@@ -1070,7 +1076,7 @@ describe('FrontStagePage', () => {
     const movedDownButton = within(movedUpRows[0]).getByRole('button', {
       name: /下\s*移/
     });
-    fireEvent.click(movedDownButton);
+    await clickAndFlush(movedDownButton);
 
     const movedDownRows = screen.getAllByRole('button', {
       name: /页面 新建 \d+ 页面节点/
@@ -1079,16 +1085,16 @@ describe('FrontStagePage', () => {
     expect(movedDownRows[1]).toHaveTextContent('页面 新建 2');
   });
 
-  test('deletes group and cascades child pages', () => {
+  test('deletes group and cascades child pages', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
 
     const groupItem = getGroupTreeItem('分组 1');
 
-    fireEvent.click(
+    await clickAndFlush(
       within(groupItem).getByRole('button', { name: '组内新增页面' })
     );
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
@@ -1096,7 +1102,7 @@ describe('FrontStagePage', () => {
     const [groupDeleteButton] = within(groupItem).getAllByRole('button', {
       name: /删\s*除/
     });
-    fireEvent.click(groupDeleteButton);
+    await clickAndFlush(groupDeleteButton);
 
     expect(screen.queryByText('分组 1')).not.toBeInTheDocument();
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
@@ -1268,20 +1274,20 @@ describe('FrontStagePage', () => {
     );
   });
 
-  test('falls back to first page when deleting selected page', () => {
+  test('falls back to first page when deleting selected page', async () => {
     authenticate(['frontstage.page.design']);
     const onNavigatePage = vi.fn();
 
     renderPage(undefined, onNavigatePage);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
+    await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
     const firstPageId = onNavigatePage.mock.calls[0]?.[0] as string | undefined;
 
     const secondPageItem = getPageTreeItem('页面 新建 2');
 
-    fireEvent.click(
+    await clickAndFlush(
       within(secondPageItem).getByRole('button', { name: /删\s*除/ })
     );
     expect(screen.getByText('当前页面：页面 新建 1')).toBeInTheDocument();

@@ -28,6 +28,8 @@ export interface UseFrontstagePageCanvasRuntimeSourcesResult {
   errors: Error[];
 }
 
+const EMPTY_BLOCK_CODE_REQUESTS: FrontstagePageCanvasBlockCodeReadRequest[] = [];
+
 function toError(error: unknown): Error {
   return error instanceof Error
     ? error
@@ -90,7 +92,7 @@ export function useFrontstagePageCanvasRuntimeSources({
       renderPlan
     });
   }, [renderPlan, workspaceId]);
-  const requests = readPlan?.requests ?? [];
+  const requests = readPlan?.requests ?? EMPTY_BLOCK_CODE_REQUESTS;
 
   const blockCodeQueries = useQueries({
     queries: requests.map((request) => ({

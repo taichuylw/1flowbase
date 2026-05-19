@@ -1,3 +1,5 @@
+/* eslint-disable testing-library/no-container, testing-library/no-node-access */
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 

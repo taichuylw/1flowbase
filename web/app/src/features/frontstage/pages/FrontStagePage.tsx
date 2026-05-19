@@ -32,7 +32,6 @@ import {
   createFrontstageBlockCompositionState,
   moveFrontstageBlock,
   removeFrontstageBlock,
-  updateFrontstageBlockLayout,
   type FrontstageBlockCompositionInput,
   type FrontstageBlockCompositionState
 } from '../lib/block-composition';
@@ -236,27 +235,6 @@ function getNodeAppendRank(
   return rankForAppendIndex(parentNode?.children?.length ?? 0);
 }
 
-function getNumericLayoutValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-function normalizeLayoutDimension(
-  value: number | string | null
-): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value);
-  }
-
-  if (typeof value === 'string') {
-    const parsedValue = Number(value);
-    return Number.isFinite(parsedValue) ? Math.trunc(parsedValue) : null;
-  }
-
-  return null;
-}
-
 function findMatchingFrontstageBlockCatalogEntry(
   block: FrontstageBlockInstance | null | undefined,
   catalogItems: NormalizedFrontstageBlockCatalogEntry[]
@@ -443,12 +421,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     selectedBlockIndex >= 0
       ? blockCompositionState?.document.blocks[selectedBlockIndex]
       : null;
-  const selectedBlockLayoutWidth = getNumericLayoutValue(
-    selectedBlock?.layout.width
-  );
-  const selectedBlockLayoutHeight = getNumericLayoutValue(
-    selectedBlock?.layout.height
-  );
   const canShowSelectedBlockActions = Boolean(
     canEnterDesignMode &&
     isDesignMode &&
@@ -461,15 +433,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     !isPageContentLoading &&
     !hasPageContentLoadError &&
     !isPageContentSavePending;
-  const canMoveSelectedBlockUp =
-    canRunSelectedBlockAction && selectedBlockIndex > 0;
-  const canMoveSelectedBlockDown =
-    canRunSelectedBlockAction &&
-    Boolean(
-      blockCompositionState &&
-      selectedBlockIndex >= 0 &&
-      selectedBlockIndex < blockCompositionState.document.blocks.length - 1
-    );
   const selectedBlockCode = useFrontstageBlockCode({
     workspaceId: canShowSelectedBlockActions ? workspaceId : null,
     pageId: canShowSelectedBlockActions ? selectedPageId : null,
@@ -988,89 +951,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     }
   };
 
-  const handleDeleteSelectedBlock = () => {
-    const sourceContent = activePageContent;
-    if (
-      !canRunSelectedBlockAction ||
-      !sourceContent ||
-      !blockCompositionState ||
-      !selectedBlock
-    ) {
-      return;
-    }
-
-    const nextCompositionState = removeFrontstageBlock(
-      blockCompositionState,
-      selectedBlock.id
-    );
-    const nextSelectedBlockId =
-      nextCompositionState.selectedBlockId ??
-      nextCompositionState.document.blocks[selectedBlockIndex]?.id ??
-      nextCompositionState.document.blocks[selectedBlockIndex - 1]?.id ??
-      null;
-
-    void saveBlockComposition(sourceContent, {
-      ...nextCompositionState,
-      selectedBlockId: nextSelectedBlockId
-    });
-  };
-
-  const handleMoveSelectedBlock = (direction: -1 | 1) => {
-    const sourceContent = activePageContent;
-    if (
-      !canRunSelectedBlockAction ||
-      !sourceContent ||
-      !blockCompositionState ||
-      !selectedBlock
-    ) {
-      return;
-    }
-
-    if (
-      (direction < 0 && selectedBlockIndex <= 0) ||
-      (direction > 0 &&
-        selectedBlockIndex >= blockCompositionState.document.blocks.length - 1)
-    ) {
-      return;
-    }
-
-    const nextIndex = selectedBlockIndex + direction;
-    const nextCompositionState = moveFrontstageBlock(
-      blockCompositionState,
-      selectedBlock.id,
-      nextIndex
-    );
-
-    void saveBlockComposition(sourceContent, nextCompositionState);
-  };
-
-  const handleSelectedBlockLayoutDimensionChange = (
-    dimension: 'width' | 'height',
-    value: number | string | null
-  ) => {
-    const nextValue = normalizeLayoutDimension(value);
-    const sourceContent = activePageContent;
-    if (
-      nextValue === null ||
-      !canRunSelectedBlockAction ||
-      !sourceContent ||
-      !blockCompositionState ||
-      !selectedBlock
-    ) {
-      return;
-    }
-
-    const nextCompositionState = updateFrontstageBlockLayout(
-      blockCompositionState,
-      selectedBlock.id,
-      {
-        [dimension]: nextValue
-      }
-    );
-
-    void saveBlockComposition(sourceContent, nextCompositionState);
-  };
-
   const handleOpenJsBlockTrialPanel = () => {
     if (!canRunSelectedBlockAction) {
       return;
@@ -1150,7 +1030,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             </Typography.Text>
             <Typography.Text
               type="secondary"
-              style={{ fontSize: 11, display: 'block' }}
+              style={{ fontSize: 12, display: 'block' }}
             >
               {node.kind === 'group' ? '分组节点' : '页面节点'}
             </Typography.Text>

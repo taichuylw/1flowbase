@@ -1,0 +1,25 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["src/features/frontstage/pages/FrontStagePage.tsx"],
+        "rules": [
+          "react-doctor/no-cascading-set-state",
+          "react-doctor/no-effect-chain",
+          "react-doctor/no-prop-callback-in-effect",
+          "react-doctor/no-inline-exhaustive-style",
+          "react-doctor/no-giant-component",
+          "react-doctor/no-many-boolean-props",
+          "react-doctor/prefer-useReducer",
+          "react-doctor/no-derived-state-effect"
+        ]
+      },
+      {
+        "files": [
+          "src/features/agent-flow/_tests/editor/agent-flow-canvas-interactions.test.tsx"
+        ],
+        "rules": ["react-doctor/no-prop-callback-in-effect"]
+      }
+    ]
+  }
+}

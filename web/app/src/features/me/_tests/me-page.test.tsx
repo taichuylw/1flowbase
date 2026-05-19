@@ -73,7 +73,7 @@ describe('MePage', () => {
   });
 
   test(
-    'redirects /me to /me/profile',
+    'me page redirects /me to /me/profile',
     async () => {
       renderApp('/me');
 

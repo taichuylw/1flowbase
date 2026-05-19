@@ -95,7 +95,9 @@ pub fn source_for_run(api_key_id: Option<Uuid>) -> String {
 }
 
 pub fn format_time(value: OffsetDateTime) -> String {
-    value.format(&Rfc3339).unwrap()
+    value
+        .format(&Rfc3339)
+        .expect("OffsetDateTime RFC3339 formatting should be valid for stored run timestamps")
 }
 
 pub fn format_optional_time(value: Option<OffsetDateTime>) -> Option<String> {

@@ -432,7 +432,8 @@ function isErrorEntry(
 function toPublicEntry(
   entry: InternalRuntimeSessionEntry
 ): FrontstagePageCanvasRuntimeSessionEntry {
-  const { sessionKey: _sessionKey, ...publicEntry } = entry;
+  const publicEntry = { ...entry };
+  delete (publicEntry as Partial<InternalRuntimeSessionEntry>).sessionKey;
   return publicEntry;
 }
 

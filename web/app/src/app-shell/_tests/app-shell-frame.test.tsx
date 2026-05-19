@@ -59,7 +59,6 @@ describe('AppShellFrame', () => {
       /@media \(max-width: 767px\) \{[\s\S]*?\.app-shell-actions \{([\s\S]*?)\n {2}\}/
     )?.[1];
 
-    expect(mobileActionsRule).toBeDefined();
     expect(mobileActionsRule).toContain('align-self: flex-end;');
     expect(mobileActionsRule).toContain('width: max-content;');
   });
