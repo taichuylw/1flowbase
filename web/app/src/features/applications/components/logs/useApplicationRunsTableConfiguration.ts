@@ -1,23 +1,15 @@
-import {
-  type DataTableConfiguration,
-  usePersistedDataTableConfiguration
-} from '../../../../shared/ui/data-table/data-table-state';
+import { type DataTableConfiguration } from '../../../../shared/ui/data-table/data-table-state';
+import { useUserPreferenceDataTableConfiguration } from '../../../../shared/ui/data-table/user-preference-data-table';
 import type { ApplicationRunSummary } from '../../api/runtime';
 import { APPLICATION_RUNS_TABLE_COLUMNS } from './application-runs-table-columns';
 
-const LOCAL_STORAGE_PREFIX = 'applicationLogsRunsTableState';
+const USER_PREFERENCE_KEY = 'applications.logs.runs';
 
 export type ApplicationRunsTableConfiguration = DataTableConfiguration;
 
-function getStorageKey(applicationId: string) {
-  return `${LOCAL_STORAGE_PREFIX}:${applicationId}`;
-}
-
-export function useApplicationRunsTableConfiguration(
-  applicationId: string
-): ApplicationRunsTableConfiguration {
-  return usePersistedDataTableConfiguration<ApplicationRunSummary>({
+export function useApplicationRunsTableConfiguration(): ApplicationRunsTableConfiguration {
+  return useUserPreferenceDataTableConfiguration<ApplicationRunSummary>({
     columns: APPLICATION_RUNS_TABLE_COLUMNS,
-    storageKey: getStorageKey(applicationId)
+    preferenceKey: USER_PREFERENCE_KEY
   });
 }

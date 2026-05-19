@@ -57,7 +57,7 @@ export function normalizeVisibleKeys<T extends object>(
   return normalized.length ? normalized : defaultVisibleKeys;
 }
 
-function normalizeColumnWidths<T extends object>(
+export function normalizeColumnWidths<T extends object>(
   columns: Array<DataTableColumn<T>>,
   columnWidths: Record<string, unknown>
 ) {
@@ -76,6 +76,33 @@ function normalizeColumnWidths<T extends object>(
   });
 
   return normalized;
+}
+
+export function normalizeDataTableState<T extends object>(
+  columns: Array<DataTableColumn<T>>,
+  state: Partial<DataTableState> | null | undefined
+): DataTableState {
+  const fallback = {
+    visibleColumnKeys: getDefaultVisibleKeys(columns),
+    columnWidths: getDefaultColumnWidths(columns)
+  };
+
+  if (!state) {
+    return fallback;
+  }
+
+  const visibleColumnKeys = Array.isArray(state.visibleColumnKeys)
+    ? normalizeVisibleKeys(columns, state.visibleColumnKeys)
+    : fallback.visibleColumnKeys;
+  const parsedWidths =
+    state.columnWidths && typeof state.columnWidths === 'object'
+      ? (state.columnWidths as Record<string, unknown>)
+      : {};
+
+  return {
+    visibleColumnKeys,
+    columnWidths: normalizeColumnWidths(columns, parsedWidths)
+  };
 }
 
 function readStoredState<T extends object>(
@@ -98,19 +125,10 @@ function readStoredState<T extends object>(
   }
 
   try {
-    const parsed = JSON.parse(payload) as Partial<DataTableState>;
-    const visibleColumnKeys = Array.isArray(parsed.visibleColumnKeys)
-      ? normalizeVisibleKeys(columns, parsed.visibleColumnKeys)
-      : fallback.visibleColumnKeys;
-    const parsedWidths =
-      parsed.columnWidths && typeof parsed.columnWidths === 'object'
-        ? (parsed.columnWidths as Record<string, unknown>)
-        : {};
-
-    return {
-      visibleColumnKeys,
-      columnWidths: normalizeColumnWidths(columns, parsedWidths)
-    };
+    return normalizeDataTableState(
+      columns,
+      JSON.parse(payload) as Partial<DataTableState>
+    );
   } catch {
     return fallback;
   }

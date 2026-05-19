@@ -58,6 +58,7 @@ const runtimeApi = vi.hoisted(() => ({
 vi.mock('../api/runtime', () => runtimeApi);
 
 import { AppProviders } from '../../../app/AppProviders';
+import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { ApplicationLogsPage } from '../pages/ApplicationLogsPage';
 
 function applicationRunsPage<T>(
@@ -235,6 +236,7 @@ describe('ApplicationLogsPage', () => {
   });
 
   afterEach(() => {
+    resetAuthStore();
     getBoundingClientRectSpy?.mockRestore();
     getBoundingClientRectSpy = undefined;
     innerHeightSpy?.mockRestore();
@@ -382,9 +384,11 @@ describe('ApplicationLogsPage', () => {
       '退款政策摘要'
     );
 
-    const openLogButton = screen.getAllByRole('button', {
-      name: '查看对话日志'
-    }).at(-1);
+    const openLogButton = screen
+      .getAllByRole('button', {
+        name: '查看对话日志'
+      })
+      .at(-1);
     expect(openLogButton).toBeDefined();
     fireEvent.click(openLogButton!);
 
@@ -424,8 +428,73 @@ describe('ApplicationLogsPage', () => {
     ).not.toBeInTheDocument();
   }, 20_000);
 
-  test('persists table column visibility in localStorage', async () => {
-    const { rerender } = render(
+  test('persists table column visibility in user preferences meta', async () => {
+    useAuthStore.getState().setAuthenticated({
+      csrfToken: 'csrf-123',
+      actor: {
+        id: 'user-1',
+        account: 'root',
+        effective_display_role: 'root',
+        current_workspace_id: 'workspace-1'
+      },
+      me: {
+        id: 'user-1',
+        account: 'root',
+        email: 'root@example.com',
+        phone: null,
+        nickname: 'Root',
+        name: 'Root',
+        avatar_url: null,
+        introduction: '',
+        preferred_locale: null,
+        effective_display_role: 'root',
+        permissions: [],
+        meta: {}
+      }
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            id: 'user-1',
+            account: 'root',
+            email: 'root@example.com',
+            phone: null,
+            nickname: 'Root',
+            name: 'Root',
+            avatar_url: null,
+            introduction: '',
+            preferred_locale: null,
+            effective_display_role: 'root',
+            permissions: [],
+            meta: {
+              ui: {
+                data_tables: {
+                  'applications.logs.runs': {
+                    visibleColumnKeys: [
+                      'title',
+                      'status',
+                      'run_mode',
+                      'authorized_account',
+                      'started_at',
+                      'duration',
+                      'action'
+                    ],
+                    columnWidths: {}
+                  }
+                }
+              }
+            }
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+    const { unmount } = render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
       </AppProviders>
@@ -446,27 +515,48 @@ describe('ApplicationLogsPage', () => {
     );
 
     await waitFor(() => {
-      const stored = window.localStorage.getItem(
-        'applicationLogsRunsTableState:app-1'
+      const meta = useAuthStore.getState().me?.meta as
+        | {
+            ui?: {
+              data_tables?: {
+                'applications.logs.runs'?: {
+                  visibleColumnKeys?: string[];
+                };
+              };
+            };
+          }
+        | undefined;
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/console/me/meta'),
+        expect.objectContaining({
+          method: 'PATCH',
+          headers: expect.objectContaining({
+            'x-csrf-token': 'csrf-123'
+          }),
+          body: expect.stringContaining('"applications.logs.runs"')
+        })
       );
-      expect(stored).not.toBeNull();
-      const parsed = JSON.parse(stored ?? '{}') as {
-        visibleColumnKeys?: string[];
-      };
-      expect(parsed.visibleColumnKeys).not.toContain('expand_id');
+      expect(
+        meta?.ui?.data_tables?.['applications.logs.runs']?.visibleColumnKeys
+      ).not.toContain('expand_id');
     });
 
-    rerender(
+    unmount();
+    render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
       </AppProviders>
     );
 
-    expect(
-      screen.queryByRole('columnheader', {
-        name: 'expand_id'
-      })
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('columnheader', {
+          name: 'expand_id'
+        })
+      ).not.toBeInTheDocument();
+    });
+    fetchMock.mockRestore();
   });
 
   test('places table field configuration with the filters', async () => {
