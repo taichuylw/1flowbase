@@ -7,11 +7,11 @@ use argon2::{
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use axum_extra::extract::cookie::CookieJar;
-use control_plane::profile::{ProfileService, UpdateMeCommand};
+use control_plane::profile::{ProfileService, UpdateMeCommand, UpdateMeMetaCommand};
 use control_plane::session_security::{ChangeOwnPasswordCommand, SessionSecurityService};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,7 @@ pub struct MeResponse {
     pub avatar_url: Option<String>,
     pub introduction: String,
     pub preferred_locale: Option<String>,
+    pub meta: serde_json::Value,
     pub effective_display_role: String,
     pub permissions: Vec<String>,
 }
@@ -64,6 +65,11 @@ pub struct PatchMeBody {
     pub preferred_locale: PreferredLocalePatch,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PatchMeMetaBody {
+    pub meta: serde_json::Value,
+}
+
 fn hash_password(password: &str) -> Result<String, ApiError> {
     let salt = SaltString::generate(&mut OsRng);
     Ok(Argon2::default()
@@ -75,6 +81,7 @@ fn hash_password(password: &str) -> Result<String, ApiError> {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/me", get(get_me).patch(patch_me))
+        .route("/me/meta", patch(patch_me_meta))
         .route("/me/actions/change-password", post(change_password))
 }
 
@@ -92,6 +99,7 @@ fn to_me_response(profile: control_plane::profile::MeProfile) -> MeResponse {
         avatar_url: profile.user.avatar_url,
         introduction: profile.user.introduction,
         preferred_locale: profile.user.preferred_locale,
+        meta: profile.user.meta,
         effective_display_role: profile.actor.effective_display_role,
         permissions,
     }
@@ -146,6 +154,32 @@ pub async fn patch_me(
                 PreferredLocalePatch::Value(value) => Some(value),
                 PreferredLocalePatch::Null => None,
             },
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_me_response(profile))))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/console/me/meta",
+    request_body = PatchMeMetaBody,
+    responses((status = 200, body = MeResponse), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn patch_me_meta(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Json(body): Json<PatchMeMetaBody>,
+) -> Result<Json<ApiSuccess<MeResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let profile = ProfileService::new(state.store.clone())
+        .update_me_meta(UpdateMeMetaCommand {
+            actor_user_id: context.user.id,
+            tenant_id: context.session.tenant_id,
+            workspace_id: context.session.current_workspace_id,
+            meta_patch: body.meta,
         })
         .await?;
 

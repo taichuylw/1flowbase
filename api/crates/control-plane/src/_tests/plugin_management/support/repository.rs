@@ -188,6 +188,13 @@ impl AuthRepository for MemoryPluginManagementRepository {
         anyhow::bail!("not implemented")
     }
 
+    async fn update_user_meta(
+        &self,
+        _input: &control_plane::ports::UpdateUserMetaInput,
+    ) -> Result<UserRecord> {
+        anyhow::bail!("not implemented")
+    }
+
     async fn bump_session_version(&self, _user_id: Uuid, _actor_id: Uuid) -> Result<i64> {
         Ok(1)
     }

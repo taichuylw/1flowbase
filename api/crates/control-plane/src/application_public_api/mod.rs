@@ -575,6 +575,13 @@ impl AuthRepository for ApplicationPublicApiTestRepository {
         anyhow::bail!("update_profile not implemented")
     }
 
+    async fn update_user_meta(
+        &self,
+        _input: &control_plane::ports::UpdateUserMetaInput,
+    ) -> Result<domain::UserRecord> {
+        anyhow::bail!("update_user_meta not implemented")
+    }
+
     async fn bump_session_version(&self, _user_id: Uuid, _actor_id: Uuid) -> Result<i64> {
         anyhow::bail!("bump_session_version not implemented")
     }

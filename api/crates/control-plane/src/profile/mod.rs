@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::ControlPlaneError,
-    ports::{AuthRepository, UpdateProfileInput},
+    ports::{AuthRepository, UpdateProfileInput, UpdateUserMetaInput},
 };
 
 pub struct MeProfile {
@@ -24,6 +24,13 @@ pub struct UpdateMeCommand {
     pub avatar_url: Option<String>,
     pub introduction: String,
     pub preferred_locale: Option<String>,
+}
+
+pub struct UpdateMeMetaCommand {
+    pub actor_user_id: Uuid,
+    pub tenant_id: Uuid,
+    pub workspace_id: Uuid,
+    pub meta_patch: serde_json::Value,
 }
 
 pub struct ProfileService<R> {
@@ -91,6 +98,65 @@ where
 
         self.load_profile(user, command.tenant_id, command.workspace_id)
             .await
+    }
+
+    pub async fn update_me_meta(&self, command: UpdateMeMetaCommand) -> Result<MeProfile> {
+        if !command.meta_patch.is_object() {
+            return Err(ControlPlaneError::InvalidInput("meta").into());
+        }
+
+        let current_user = self
+            .repository
+            .find_user_by_id(command.actor_user_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("user"))?;
+        let mut next_meta = current_user.meta;
+        merge_json_patch(&mut next_meta, command.meta_patch);
+
+        let user = self
+            .repository
+            .update_user_meta(&UpdateUserMetaInput {
+                actor_user_id: command.actor_user_id,
+                user_id: command.actor_user_id,
+                meta: next_meta,
+            })
+            .await?;
+
+        self.load_profile(user, command.tenant_id, command.workspace_id)
+            .await
+    }
+}
+
+fn merge_json_patch(target: &mut serde_json::Value, patch: serde_json::Value) {
+    let patch_object = match patch {
+        serde_json::Value::Object(patch_object) => patch_object,
+        value => {
+            *target = value;
+            return;
+        }
+    };
+
+    if !target.is_object() {
+        *target = serde_json::json!({});
+    }
+
+    let target_object = target
+        .as_object_mut()
+        .expect("target was normalized to an object");
+    for (key, value) in patch_object {
+        if value.is_null() {
+            target_object.remove(&key);
+            continue;
+        }
+
+        match target_object.get_mut(&key) {
+            Some(existing) if existing.is_object() && value.is_object() => {
+                merge_json_patch(existing, value);
+            }
+            _ => {
+                target_object.insert(key, value);
+            }
+        }
     }
 }
 

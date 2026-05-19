@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use control_plane::ports::{
     ApiKeyRepository, AuthRepository, BootstrapRepository, CreateApiKeyInput, UpdateProfileInput,
-    UpsertApiKeyDataModelPermissionInput,
+    UpdateUserMetaInput, UpsertApiKeyDataModelPermissionInput,
 };
 use domain::{
     ActorContext, ApiKeyDataModelPermissionRecord, ApiKeyRecord, AuditLogRecord,
@@ -101,6 +101,7 @@ pub(crate) async fn map_user_row(pool: &PgPool, row: sqlx::postgres::PgRow) -> R
         avatar_url: row.get("avatar_url"),
         introduction: row.get("introduction"),
         preferred_locale: row.get("preferred_locale"),
+        meta: row.get("meta"),
         default_display_role: row.get("default_display_role"),
         email_login_enabled: row.get("email_login_enabled"),
         phone_login_enabled: row.get("phone_login_enabled"),
@@ -485,7 +486,7 @@ impl AuthRepository for PgControlPlaneStore {
             r#"
             select
               u.id, u.account, u.email, u.phone, u.password_hash, u.name, u.nickname, u.avatar_url,
-              u.introduction, u.preferred_locale, u.default_display_role, u.email_login_enabled, u.phone_login_enabled,
+              u.introduction, u.preferred_locale, u.meta, u.default_display_role, u.email_login_enabled, u.phone_login_enabled,
               u.status, u.session_version
             from users u
             where lower(u.account) = $1
@@ -508,7 +509,7 @@ impl AuthRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             select id, account, email, phone, password_hash, name, nickname, avatar_url,
-                   introduction, preferred_locale, default_display_role, email_login_enabled, phone_login_enabled,
+                   introduction, preferred_locale, meta, default_display_role, email_login_enabled, phone_login_enabled,
                    status, session_version
             from users where id = $1
             "#,
@@ -659,7 +660,7 @@ impl AuthRepository for PgControlPlaneStore {
                 updated_at = now()
             where id = $1
             returning id, account, email, phone, password_hash, name, nickname, avatar_url,
-                      introduction, preferred_locale, default_display_role, email_login_enabled, phone_login_enabled,
+                      introduction, preferred_locale, meta, default_display_role, email_login_enabled, phone_login_enabled,
                       status, session_version
             "#,
         )
@@ -671,6 +672,28 @@ impl AuthRepository for PgControlPlaneStore {
         .bind(&input.avatar_url)
         .bind(&input.introduction)
         .bind(&input.preferred_locale)
+        .bind(input.actor_user_id)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_user_row(self.pool(), row).await
+    }
+
+    async fn update_user_meta(&self, input: &UpdateUserMetaInput) -> Result<UserRecord> {
+        let row = sqlx::query(
+            r#"
+            update users
+            set meta = $2,
+                updated_by = $3,
+                updated_at = now()
+            where id = $1
+            returning id, account, email, phone, password_hash, name, nickname, avatar_url,
+                      introduction, preferred_locale, meta, default_display_role, email_login_enabled, phone_login_enabled,
+                      status, session_version
+            "#,
+        )
+        .bind(input.user_id)
+        .bind(&input.meta)
         .bind(input.actor_user_id)
         .fetch_one(self.pool())
         .await?;

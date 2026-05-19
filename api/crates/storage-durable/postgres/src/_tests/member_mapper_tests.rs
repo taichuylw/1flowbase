@@ -14,6 +14,7 @@ fn member_mapper_preserves_roles_and_status() {
         nickname: "Manager".into(),
         introduction: String::new(),
         preferred_locale: None,
+        meta: serde_json::json!({}),
         default_display_role: Some("manager".into()),
         avatar_url: None,
         email_login_enabled: true,

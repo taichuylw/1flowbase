@@ -84,6 +84,7 @@ pub trait AuthRepository: Send + Sync {
         actor_id: Uuid,
     ) -> anyhow::Result<i64>;
     async fn update_profile(&self, input: &UpdateProfileInput) -> anyhow::Result<UserRecord>;
+    async fn update_user_meta(&self, input: &UpdateUserMetaInput) -> anyhow::Result<UserRecord>;
     async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> anyhow::Result<i64>;
     async fn list_permissions(&self) -> anyhow::Result<Vec<PermissionDefinition>>;
     async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
@@ -193,6 +194,13 @@ pub struct UpdateProfileInput {
     pub avatar_url: Option<String>,
     pub introduction: String,
     pub preferred_locale: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateUserMetaInput {
+    pub actor_user_id: Uuid,
+    pub user_id: Uuid,
+    pub meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone)]
