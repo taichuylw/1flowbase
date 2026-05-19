@@ -1,3 +1,5 @@
+/* eslint-disable testing-library/no-container, testing-library/no-node-access */
+
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ReactElement } from 'react';

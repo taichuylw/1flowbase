@@ -137,21 +137,6 @@ function createBlockPayload(blockId: string, order: number) {
   };
 }
 
-function createBlockPayloadWithLayout(
-  blockId: string,
-  order: number,
-  layout: Record<string, unknown>
-) {
-  return {
-    ...createBlockPayload(blockId, order),
-    'x-layout': {
-      order,
-      region: 'main',
-      ...layout
-    }
-  };
-}
-
 function createConfigurableBlockPayload() {
   return {
     id: 'hero',

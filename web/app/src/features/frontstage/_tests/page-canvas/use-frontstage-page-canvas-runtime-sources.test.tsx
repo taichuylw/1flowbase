@@ -1,3 +1,5 @@
+/* eslint-disable testing-library/render-result-naming-convention */
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
