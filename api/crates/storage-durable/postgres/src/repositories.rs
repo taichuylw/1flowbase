@@ -114,6 +114,13 @@ impl PgControlPlaneStore {
         AuthRepository::update_profile(self, input).await
     }
 
+    pub async fn update_user_meta(
+        &self,
+        input: &control_plane::ports::UpdateUserMetaInput,
+    ) -> Result<UserRecord> {
+        AuthRepository::update_user_meta(self, input).await
+    }
+
     pub async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> Result<i64> {
         AuthRepository::bump_session_version(self, user_id, actor_id).await
     }

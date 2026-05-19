@@ -1,5 +1,5 @@
 use crate::_tests::support::MemoryAuthRepository;
-use crate::profile::{ProfileService, UpdateMeCommand};
+use crate::profile::{ProfileService, UpdateMeCommand, UpdateMeMetaCommand};
 use domain::{BoundRole, RoleScopeKind, UserRecord, UserStatus};
 use uuid::Uuid;
 
@@ -15,6 +15,7 @@ fn test_user() -> UserRecord {
         avatar_url: Some("https://example.com/avatar.png".to_string()),
         introduction: "before".to_string(),
         preferred_locale: None,
+        meta: serde_json::json!({}),
         default_display_role: Some("root".to_string()),
         email_login_enabled: true,
         phone_login_enabled: true,
@@ -90,4 +91,55 @@ async fn update_me_persists_preferred_locale() {
         .unwrap();
 
     assert_eq!(profile.user.preferred_locale.as_deref(), Some("zh_Hans"));
+}
+
+#[tokio::test]
+async fn update_me_meta_merges_nested_preferences_without_replacing_siblings() {
+    let mut user = test_user();
+    user.meta = serde_json::json!({
+        "ui": {
+            "data_tables": {
+                "applications.logs.runs": {
+                    "visibleColumnKeys": ["title"],
+                    "columnWidths": {
+                        "title": 320
+                    }
+                }
+            }
+        }
+    });
+    let repository = MemoryAuthRepository::new(user);
+    let service = ProfileService::new(repository.clone());
+
+    let profile = service
+        .update_me_meta(UpdateMeMetaCommand {
+            actor_user_id: repository.user().id,
+            tenant_id: Uuid::nil(),
+            workspace_id: Uuid::nil(),
+            meta_patch: serde_json::json!({
+                "ui": {
+                    "data_tables": {
+                        "applications.logs.runs": {
+                            "columnWidths": {
+                                "status": 180
+                            }
+                        }
+                    }
+                }
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        profile.user.meta["ui"]["data_tables"]["applications.logs.runs"]["visibleColumnKeys"],
+        serde_json::json!(["title"])
+    );
+    assert_eq!(
+        profile.user.meta["ui"]["data_tables"]["applications.logs.runs"]["columnWidths"],
+        serde_json::json!({
+            "title": 320,
+            "status": 180
+        })
+    );
 }

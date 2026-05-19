@@ -22,10 +22,10 @@
 ### 2.1 主强调色
 
 ```css
---color-primary:        #00d992;
---color-primary-strong: #00ffaa;
+--color-primary:        #00ab73;
+--color-primary-strong: #00c283;
 --color-primary-muted:  #2fd6a1;
---color-primary-hover:  #00c182;
+--color-primary-hover:  #00c283;
 ```
 
 用途：
@@ -44,7 +44,7 @@
 ### 2.2 状态色
 
 ```css
---status-running:   #00d992;  /* 系统正在执行，最高信号 */
+--status-running:   #00ab73;  /* 系统正在执行，最高信号 */
 --status-waiting:   #ffba00;  /* 等待 / 排队 / 外部回调中 */
 --status-failed:    #fb565b;  /* 失败 / 阻塞 / 需要排查 */
 --status-success:   #19b36b;  /* 成功 / 健康 / 已完成 */
@@ -76,7 +76,7 @@
 
 --border-default:    #d5ddd8;
 --border-strong:     #bcc8c1;
---border-focus:      #00d992;
+--border-focus:      #00ab73;
 --border-selected:   #2bb9b1;
 ```
 
@@ -168,16 +168,16 @@
 
 | 变体 | 背景 | 文字 | 边框 | 高度 | 内边距 | 圆角 |
 |---|---|---|---|---|---|---|
-| primary | `#00d992` | `#06241a` | 无 | 32px | `0 16px` | 6px |
+| primary | `rgba(0, 171, 115, 0.06)` | `#008f5f` | `1px solid rgba(0, 171, 115, 0.24)` | 32px | `0 16px` | 6px |
 | secondary | `#ffffff` | `#16211d` | `1px solid #bcc8c1` | 32px | `0 16px` | 6px |
-| ghost / link | transparent | `#00c182` | 无 | auto | `0 8px` | 6px |
+| ghost / link | transparent | `#00ab73` | 无 | auto | `0 8px` | 6px |
 | danger | `#fb565b` | `#ffffff` | 无 | 32px | `0 16px` | 6px |
 
 **交互状态：**
 
 | 状态 | primary | secondary |
 |---|---|---|
-| hover | 背景 `#00c182`，可加轻微翡翠 halo | 背景 `rgba(0,217,146,0.08)`，边框 `#9fcdb8` |
+| hover | 背景 `rgba(0, 171, 115, 0.12)`，边框 `rgba(0, 171, 115, 0.45)` | 背景 `rgba(0,171,115,0.08)`，边框 `#9fcdb8` |
 | active | `transform: scale(0.98)` | 同左 |
 | focus | `outline: 2px solid rgba(0,217,146,0.55); outline-offset: 2px` | 同左 |
 | disabled | `opacity: 0.4; cursor: not-allowed` | 同左 |
@@ -231,7 +231,7 @@ Shell 表单默认复用 `Ant Design`，视觉应校正为：
 边框：      1px solid #bcc8c1
 圆角：      6px
 hover：     边框 #9fcdb8
-focus：     边框 #00d992 + 轻微 halo
+focus：     边框 #00ab73 + 轻微 halo
 disabled：  背景 #f1f4f2，文字 #9aa6a0
 ```
 
@@ -988,8 +988,8 @@ More Actions Menu：
 |---|---|
 | 页面背景 | `#f4f8f5` |
 | 内容表面 | `#ffffff` |
-| 主强调色 | `#00d992` |
-| 运行中 | `#00d992` |
+| 主强调色 | `#00ab73` |
+| 运行中 | `#00ab73` |
 | 等待中 | `#ffba00` |
 | 失败 | `#fb565b` |
 | 成功 | `#19b36b` |

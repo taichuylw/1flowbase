@@ -130,6 +130,7 @@ impl BootstrapRepository for MemoryBootstrapRepository {
             avatar_url: None,
             introduction: String::new(),
             preferred_locale: None,
+            meta: serde_json::json!({}),
             default_display_role: Some("root".to_string()),
             email_login_enabled: true,
             phone_login_enabled: false,

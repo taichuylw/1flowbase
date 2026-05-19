@@ -12,7 +12,9 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::ports::{AuthRepository, SessionStore, UpdateProfileInput, WorkspaceRepository};
+use crate::ports::{
+    AuthRepository, SessionStore, UpdateProfileInput, UpdateUserMetaInput, WorkspaceRepository,
+};
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
     RoleScopeKind, ScopeContext, SessionRecord, UserRecord, UserStatus, WorkspaceRecord,
@@ -174,6 +176,7 @@ impl MemoryAuthRepository {
             avatar_url: None,
             introduction: String::new(),
             preferred_locale: preferred_locale.map(str::to_string),
+            meta: serde_json::json!({}),
             default_display_role: Some("root".to_string()),
             email_login_enabled: true,
             phone_login_enabled: false,
@@ -199,6 +202,7 @@ impl MemoryAuthRepository {
             avatar_url: None,
             introduction: String::new(),
             preferred_locale: None,
+            meta: serde_json::json!({}),
             default_display_role: Some("manager".to_string()),
             email_login_enabled: true,
             phone_login_enabled: false,
@@ -331,6 +335,13 @@ impl AuthRepository for MemoryAuthRepository {
         user.avatar_url = input.avatar_url.clone();
         user.introduction = input.introduction.clone();
         user.preferred_locale = input.preferred_locale.clone();
+        Ok(user.clone())
+    }
+
+    async fn update_user_meta(&self, input: &UpdateUserMetaInput) -> Result<UserRecord> {
+        let mut user = self.user.write().await;
+        anyhow::ensure!(user.id == input.user_id, "unknown user");
+        user.meta = input.meta.clone();
         Ok(user.clone())
     }
 

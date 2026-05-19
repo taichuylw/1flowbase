@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  DatabaseOutlined,
+  CloudServerOutlined,
+  IdcardOutlined,
+  SyncOutlined,
+  HomeOutlined
+} from '@ant-design/icons';
 import {
   Alert,
   Breadcrumb,
   Button,
   Drawer,
   Flex,
-  Form,
-  Select,
   Tag,
   Typography,
   message
@@ -35,7 +40,6 @@ import {
   updateSettingsDataModelApiExposure,
   updateSettingsDataModelField,
   updateSettingsDataModelScopeGrant,
-  updateSettingsDataSourceDefaults,
   type CreateSettingsDataModelFieldInput,
   type CreateSettingsDataModelInput,
   type SettingsDataModel,
@@ -45,15 +49,9 @@ import {
   type UpdateSettingsDataModelApiExposureInput,
   type UpdateSettingsDataModelFieldInput,
   type UpdateSettingsDataModelInput,
-  type UpdateSettingsDataModelScopeGrantInput,
-  type UpdateSettingsDataSourceDefaultsInput
+  type UpdateSettingsDataModelScopeGrantInput
 } from '../../api/data-models';
 import { DataModelDetail } from '../../components/data-models/DataModelDetail';
-import {
-  DataModelFieldLabel,
-  dataModelStatusHelp,
-  defaultApiExposureStatusHelp
-} from '../../components/data-models/DataModelHelpTooltip';
 import { DataModelTable } from '../../components/data-models/DataModelTable';
 import { DataSourcePanel } from '../../components/data-models/DataSourcePanel';
 import '../../components/data-models/data-model-panel.css';
@@ -65,40 +63,6 @@ function getErrorMessage(error: unknown) {
 
 const emptySources: SettingsDataSourceInstance[] = [];
 const emptyModels: SettingsDataModel[] = [];
-
-type DefaultDataModelStatus =
-  UpdateSettingsDataSourceDefaultsInput['default_data_model_status'];
-type DefaultApiExposureStatus =
-  UpdateSettingsDataSourceDefaultsInput['default_api_exposure_status'];
-
-const dataModelStatusOptions = (
-  [
-    'draft',
-    'published',
-    'disabled',
-    'broken'
-  ] satisfies DefaultDataModelStatus[]
-).map((value) => ({ label: `默认 ${value}`, value }));
-
-const defaultApiExposureStatuses = [
-  'draft',
-  'published_not_exposed',
-  'api_exposed_no_permission'
-] satisfies DefaultApiExposureStatus[];
-
-const apiExposureOptions = defaultApiExposureStatuses.map((value) => ({
-  label: `默认 ${value}`,
-  value
-})) satisfies Array<{
-  label: string;
-  value: DefaultApiExposureStatus;
-}>;
-
-function toDefaultApiExposureStatus(
-  status: SettingsDataSourceInstance['default_api_exposure_status']
-): DefaultApiExposureStatus {
-  return status === 'api_exposed_ready' ? 'published_not_exposed' : status;
-}
 
 function readSourceIdFromLocation() {
   if (typeof window === 'undefined') {
@@ -221,30 +185,6 @@ export function SettingsDataModelsSection({
     queryFn: () =>
       fetchSettingsDataModelRecordPreview(editingModel?.code ?? ''),
     enabled: Boolean(editingModel)
-  });
-
-  const updateDefaultsMutation = useMutation({
-    mutationFn: ({
-      source,
-      patch
-    }: {
-      source: SettingsDataSourceInstance;
-      patch: Pick<
-        UpdateSettingsDataSourceDefaultsInput,
-        'default_data_model_status' | 'default_api_exposure_status'
-      >;
-    }) => {
-      if (!csrfToken) {
-        throw new Error('missing csrf token');
-      }
-      return updateSettingsDataSourceDefaults(source.id, patch, csrfToken);
-    },
-    onSuccess: async () => {
-      messageApi.success('默认状态已保存');
-      await queryClient.invalidateQueries({
-        queryKey: settingsDataSourcesQueryKey
-      });
-    }
   });
 
   const updateModelMutation = useMutation({
@@ -438,7 +378,6 @@ export function SettingsDataModelsSection({
     getErrorMessage(scopeGrantsQuery.error) ??
     getErrorMessage(advisorQuery.error) ??
     getErrorMessage(recordPreviewQuery.error) ??
-    getErrorMessage(updateDefaultsMutation.error) ??
     getErrorMessage(updateModelMutation.error) ??
     getErrorMessage(createModelMutation.error) ??
     getErrorMessage(deleteModelMutation.error) ??
@@ -470,6 +409,7 @@ export function SettingsDataModelsSection({
                     title: (
                       <Button
                         type="link"
+                        icon={<HomeOutlined />}
                         className="data-model-panel__breadcrumb-link"
                         onClick={closeSourceManager}
                       >
@@ -480,10 +420,11 @@ export function SettingsDataModelsSection({
                   { title: selectedSource.display_name }
                 ]}
               />
+
               <Flex
                 align="center"
                 className="data-model-panel__manager-title-row"
-                gap={10}
+                gap={12}
                 wrap="wrap"
               >
                 <Button
@@ -493,103 +434,71 @@ export function SettingsDataModelsSection({
                   onClick={closeSourceManager}
                   type="text"
                 />
+                <div
+                  className={`data-model-panel__source-icon-wrapper ${selectedSource.source_kind} small`}
+                >
+                  {selectedSource.source_kind === 'main_source' ? (
+                    <DatabaseOutlined />
+                  ) : (
+                    <CloudServerOutlined />
+                  )}
+                </div>
                 <Typography.Title
                   level={4}
                   className="data-model-panel__section-title"
+                  style={{ margin: 0, lineHeight: '24px' }}
                 >
                   {selectedSource.display_name}
                 </Typography.Title>
                 <Tag
                   color={
-                    selectedSource.status === 'ready' ? 'green' : 'default'
+                    selectedSource.status === 'ready' ? 'success' : 'default'
                   }
+                  style={{ borderRadius: 12, margin: 0 }}
                 >
-                  {selectedSource.status}
+                  {selectedSource.status === 'ready'
+                    ? '就绪'
+                    : selectedSource.status}
                 </Tag>
-                <Typography.Text type="secondary">
-                  {selectedSource.source_code}
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  <code className="data-model-panel__code-badge">
+                    {selectedSource.source_code}
+                  </code>
                 </Typography.Text>
               </Flex>
 
               <div className="data-model-panel__source-detail">
                 <div className="data-model-panel__source-meta">
                   <span className="data-model-panel__source-meta-item">
+                    <IdcardOutlined className="data-model-panel__source-meta-icon" />
                     <Typography.Text type="secondary">ID:</Typography.Text>
-                    <Typography.Text>{selectedSource.id}</Typography.Text>
+                    <Typography.Text className="data-model-panel__source-meta-value">
+                      {selectedSource.id}
+                    </Typography.Text>
                   </span>
                   <span className="data-model-panel__source-meta-item">
+                    {selectedSource.source_kind === 'main_source' ? (
+                      <DatabaseOutlined className="data-model-panel__source-meta-icon" />
+                    ) : (
+                      <CloudServerOutlined className="data-model-panel__source-meta-icon" />
+                    )}
                     <Typography.Text type="secondary">
                       来源类型:
                     </Typography.Text>
-                    <Typography.Text>{selectedSource.source_kind}</Typography.Text>
+                    <Typography.Text className="data-model-panel__source-meta-value">
+                      {selectedSource.source_kind === 'main_source'
+                        ? '内建数据源'
+                        : '外部数据源'}
+                    </Typography.Text>
                   </span>
                   <span className="data-model-panel__source-meta-item">
+                    <SyncOutlined className="data-model-panel__source-meta-icon" />
                     <Typography.Text type="secondary">Catalog:</Typography.Text>
-                    <Typography.Text>
+                    <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.catalog_refresh_status ?? '-'}
                     </Typography.Text>
                   </span>
                 </div>
-                <Form layout="inline" className="data-model-panel__defaults">
-                  <Form.Item
-                    label={
-                      <DataModelFieldLabel
-                        decorativeHelp
-                        label="默认 Data Model 状态"
-                        title={dataModelStatusHelp}
-                      />
-                    }
-                    htmlFor="data-source-default-model-status"
-                  >
-                    <Select
-                      id="data-source-default-model-status"
-                      value={selectedSource.default_data_model_status}
-                      options={dataModelStatusOptions}
-                      disabled={updateDefaultsMutation.isPending}
-                      onChange={(value) =>
-                        updateDefaultsMutation.mutate({
-                          source: selectedSource,
-                          patch: {
-                            default_data_model_status: value,
-                            default_api_exposure_status:
-                              toDefaultApiExposureStatus(
-                                selectedSource.default_api_exposure_status
-                              )
-                          }
-                        })
-                      }
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    label={
-                      <DataModelFieldLabel
-                        decorativeHelp
-                        label="默认 API 暴露状态"
-                        title={defaultApiExposureStatusHelp}
-                      />
-                    }
-                    htmlFor="data-source-default-api-status"
-                  >
-                    <Select
-                      id="data-source-default-api-status"
-                      value={toDefaultApiExposureStatus(
-                        selectedSource.default_api_exposure_status
-                      )}
-                      options={apiExposureOptions}
-                      disabled={updateDefaultsMutation.isPending}
-                      onChange={(value: DefaultApiExposureStatus) =>
-                        updateDefaultsMutation.mutate({
-                          source: selectedSource,
-                          patch: {
-                            default_data_model_status:
-                              selectedSource.default_data_model_status,
-                            default_api_exposure_status: value
-                          }
-                        })
-                      }
-                    />
-                  </Form.Item>
-                </Form>
               </div>
             </div>
             <DataModelTable

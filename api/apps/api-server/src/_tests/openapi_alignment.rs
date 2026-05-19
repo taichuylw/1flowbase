@@ -229,7 +229,12 @@ async fn openapi_contains_session_csrf_and_patch_me_routes() {
         paths["/api/console/me"]["patch"]["operationId"].as_str(),
         Some("patch_me")
     );
+    assert_eq!(
+        paths["/api/console/me/meta"]["patch"]["operationId"].as_str(),
+        Some("patch_me_meta")
+    );
     assert!(components.contains_key("PatchMeBody"));
+    assert!(components.contains_key("PatchMeMetaBody"));
     assert_eq!(
         components["SessionResponse"]["properties"]["csrf_token"]["type"].as_str(),
         Some("string")

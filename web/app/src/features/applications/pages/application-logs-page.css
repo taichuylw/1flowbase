@@ -90,7 +90,7 @@
 }
 
 .application-runs-table .application-runs-table__row--active > td {
-  background: rgba(0, 217, 146, 0.08);
+  background: rgba(0, 171, 115, 0.08);
 }
 
 .application-logs-page__conversation-log-panel {

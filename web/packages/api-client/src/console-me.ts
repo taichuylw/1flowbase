@@ -1,5 +1,7 @@
 import { apiFetch, apiFetchVoid } from './transport';
 
+export type ConsoleUserMeta = Record<string, unknown>;
+
 export interface ConsoleMe {
   id: string;
   account: string;
@@ -10,6 +12,7 @@ export interface ConsoleMe {
   avatar_url: string | null;
   introduction: string;
   preferred_locale?: string | null;
+  meta?: ConsoleUserMeta;
   effective_display_role: string;
   permissions: string[];
 }
@@ -45,6 +48,20 @@ export function updateConsoleMe(
     path: '/api/console/me',
     method: 'PATCH',
     body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function patchConsoleMeMeta(
+  meta: ConsoleUserMeta,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ConsoleMe> {
+  return apiFetch<ConsoleMe>({
+    path: '/api/console/me/meta',
+    method: 'PATCH',
+    body: { meta },
     csrfToken,
     baseUrl
   });

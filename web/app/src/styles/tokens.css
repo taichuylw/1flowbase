@@ -1,9 +1,9 @@
 :root {
-  --color-primary: #00d992;
-  --color-primary-strong: #00ffaa;
-  --color-primary-hover: #00c182;
+  --color-primary: #00ab73;
+  --color-primary-strong: #00c283;
+  --color-primary-hover: #00c283;
 
-  --status-running: #00d992;
+  --status-running: #00ab73;
   --status-waiting: #ffba00;
   --status-failed: #fb565b;
   --status-success: #19b36b;
@@ -13,7 +13,7 @@
   --bg-page: #f4f8f5;
   --bg-surface: #ffffff;
   --bg-elevated: #f8fcf9;
-  --bg-hover: rgba(0, 217, 146, 0.08);
+  --bg-hover: rgba(0, 171, 115, 0.08);
   --bg-selected: rgba(43, 185, 177, 0.12);
   --bg-code: #0d1713;
 
@@ -25,14 +25,14 @@
   --border-default: #d5ddd8;
   --border-strong: #bcc8c1;
   --border-subtle: #e8edea;
-  --border-focus: #00d992;
+  --border-focus: #00ab73;
   --border-selected: #2bb9b1;
 
   --shadow-card: 0 12px 34px rgba(14, 24, 20, 0.07);
   --shadow-float: 0 20px 60px rgba(14, 24, 20, 0.12);
   --glow-soft:
-    0 0 0 3px rgba(0, 217, 146, 0.12),
-    0 18px 36px rgba(0, 217, 146, 0.12);
+    0 0 0 3px rgba(0, 171, 115, 0.12),
+    0 8px 16px rgba(0, 171, 115, 0.08);
 
   --scrollbar-size: 8px;
   --scrollbar-thumb: rgba(22, 33, 29, 0.25);

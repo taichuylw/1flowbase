@@ -63,7 +63,7 @@ const colorTokens: Record<string, string> = {
   'text.secondary': '#55645d',
   'text.tertiary': '#7b8982',
   'border.default': '#d5ddd8',
-  'accent.primary': '#00d992',
+  'accent.primary': '#00ab73',
   'status.success': '#19b36b',
   'status.warning': '#ffba00',
   'status.error': '#fb565b'

@@ -34,6 +34,7 @@ const PRE_MAIN_INSTANCE_AGGREGATION_MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/20260419143000_add_plugin_version_pointer.sql"),
     include_str!("../../migrations/20260419183000_add_plugin_install_trust_fields.sql"),
     include_str!("../../migrations/20260420120000_add_user_preferred_locale.sql"),
+    include_str!("../../migrations/20260519120000_add_user_meta.sql"),
     include_str!("../../migrations/20260420203000_add_plugin_lifecycle_snapshots.sql"),
     include_str!("../../migrations/20260421113000_create_node_contribution_registry_tables.sql"),
     include_str!("../../migrations/20260421123000_create_plugin_worker_lease_tables.sql"),

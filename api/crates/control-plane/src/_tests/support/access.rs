@@ -86,6 +86,7 @@ impl MemberRepository for MemoryMemberRepository {
             avatar_url: None,
             introduction: String::new(),
             preferred_locale: None,
+            meta: serde_json::json!({}),
             default_display_role: Some(default_role_code.clone()),
             email_login_enabled: true,
             phone_login_enabled: false,

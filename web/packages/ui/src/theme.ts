@@ -4,7 +4,7 @@ import type { ThemeConfig } from 'antd';
 export const emeraldLightTheme: ThemeConfig = {
   algorithm: antdTheme.defaultAlgorithm,
   token: {
-    colorPrimary: '#00d992',
+    colorPrimary: '#00ab73',
     colorSuccess: '#19b36b',
     colorWarning: '#ffba00',
     colorError: '#fb565b',
@@ -40,25 +40,28 @@ export const emeraldLightTheme: ThemeConfig = {
       defaultColor: '#16211d',
       defaultHoverBg: 'rgba(255, 255, 255, 0.88)',
       defaultHoverColor: '#16211d',
-      defaultHoverBorderColor: '#00d992',
-      primaryColor: '#06241a',
-      primaryShadow: '0 0 0 3px rgba(0, 217, 146, 0.12), 0 18px 36px rgba(0, 217, 146, 0.12)'
+      defaultHoverBorderColor: '#00ab73',
+      colorPrimary: 'rgba(0, 171, 115, 0.06)',
+      colorPrimaryHover: 'rgba(0, 171, 115, 0.12)',
+      colorPrimaryActive: 'rgba(0, 171, 115, 0.18)',
+      primaryColor: '#008f5f',
+      primaryShadow: 'none'
     },
     Input: {
       hoverBorderColor: '#bcc8c1',
-      activeBorderColor: '#00d992',
-      activeShadow: '0 0 0 3px rgba(0, 217, 146, 0.12)'
+      activeBorderColor: '#00ab73',
+      activeShadow: '0 0 0 3px rgba(0, 171, 115, 0.12)'
     },
     Select: {
       hoverBorderColor: '#bcc8c1',
-      activeBorderColor: '#00d992',
-      activeOutlineColor: 'rgba(0, 217, 146, 0.12)'
+      activeBorderColor: '#00ab73',
+      activeOutlineColor: 'rgba(0, 171, 115, 0.12)'
     },
     Tabs: {
       itemColor: '#55645d',
       itemHoverColor: '#16211d',
       itemSelectedColor: '#16211d',
-      inkBarColor: '#00d992'
+      inkBarColor: '#00ab73'
     },
     Table: {
       headerBg: '#f8fcf9',

@@ -27,6 +27,7 @@ fn test_user(source_workspace_id: Uuid, target_workspace_id: Uuid) -> UserRecord
         avatar_url: None,
         introduction: String::new(),
         preferred_locale: None,
+        meta: serde_json::json!({}),
         default_display_role: Some("admin".to_string()),
         email_login_enabled: true,
         phone_login_enabled: false,

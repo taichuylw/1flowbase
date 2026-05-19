@@ -34,7 +34,7 @@ function getRelationshipLabel(relationship: string) {
   switch (relationship) {
     case 'same_host':
       return {
-        color: '#00d992' as const,
+        color: '#00ab73' as const,
         label: '同机部署',
         icon: CloudServerOutlined
       };
@@ -61,7 +61,7 @@ function getRelationshipLabel(relationship: string) {
 
 function getReachabilityMeta(reachable: boolean) {
   return reachable
-    ? { color: '#00d992' as const, label: '运行中', icon: CheckCircleFilled }
+    ? { color: '#00ab73' as const, label: '运行中', icon: CheckCircleFilled }
     : { color: '#ff4d4f' as const, label: '不可达', icon: CloseCircleFilled };
 }
 
@@ -154,7 +154,7 @@ const hostColumns: ColumnsType<HostTableRow> = [
                   ? '#ff4d4f'
                   : record.memoryUsage > 0.65
                     ? '#faad14'
-                    : '#00d992',
+                    : '#00ab73',
               borderRadius: 2,
               transition: 'width 0.3s'
             }}
@@ -261,7 +261,7 @@ export function SystemRuntimePanel() {
          ════════════════════════════════════════════════ */}
       <div style={{ marginBottom: 32 }}>
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-          <InfoCircleOutlined style={{ color: '#00d992', fontSize: 15 }} />
+          <InfoCircleOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
             部署概览
           </Typography.Text>
@@ -394,7 +394,7 @@ export function SystemRuntimePanel() {
          ════════════════════════════════════════════════ */}
       <div style={{ marginBottom: 32 }}>
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-          <CloudServerOutlined style={{ color: '#00d992', fontSize: 15 }} />
+          <CloudServerOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
             服务状态
           </Typography.Text>
@@ -403,7 +403,7 @@ export function SystemRuntimePanel() {
         <Flex gap={16} wrap="wrap">
           {servicesToRender.map((svc) => {
             const reachMeta = getReachabilityMeta(svc.data.reachable);
-            const leftBorder = svc.data.reachable ? '#00d992' : '#ff4d4f';
+            const leftBorder = svc.data.reachable ? '#00ab73' : '#ff4d4f';
             return (
               <div
                 key={svc.key}
@@ -494,7 +494,7 @@ export function SystemRuntimePanel() {
          ════════════════════════════════════════════════ */}
       <div>
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-          <ClusterOutlined style={{ color: '#00d992', fontSize: 15 }} />
+          <ClusterOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
             宿主机
           </Typography.Text>

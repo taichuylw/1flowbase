@@ -201,8 +201,7 @@ export function ApplicationLogsPage({
   const [activeFloatingWindow, setActiveFloatingWindow] = useState<
     'conversation-log' | 'run-detail'
   >('run-detail');
-  const runsTableConfiguration =
-    useApplicationRunsTableConfiguration(applicationId);
+  const runsTableConfiguration = useApplicationRunsTableConfiguration();
   const runsQuery = useQuery({
     queryKey: applicationRunsQueryKey(applicationId, {
       page,

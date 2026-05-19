@@ -14,7 +14,7 @@ body {
   color: var(--text-primary);
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(0, 217, 146, 0.16), transparent 26%),
+    radial-gradient(circle at top left, rgba(0, 171, 115, 0.16), transparent 26%),
     radial-gradient(circle at top right, rgba(47, 214, 161, 0.1), transparent 20%),
     linear-gradient(180deg, #f8fcfa 0%, #eef4f0 100%);
 }
@@ -25,7 +25,7 @@ a {
 }
 
 ::selection {
-  background: rgba(0, 217, 146, 0.18);
+  background: rgba(0, 171, 115, 0.18);
 }
 
 /* Whitelisted theme-level Ant Design defaults: keep these as approved global styling baselines, not as strict override violations, unless they cause a concrete page regression or block local fixes. */
@@ -35,6 +35,21 @@ a {
 
 .ant-btn-link {
   padding-inline: 0 !important;
+}
+
+.ant-btn-primary {
+  border: 1px solid rgba(0, 171, 115, 0.24) !important;
+  text-shadow: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.ant-btn-primary:hover,
+.ant-btn-primary:focus-visible {
+  border-color: rgba(0, 171, 115, 0.45) !important;
+}
+
+.ant-btn-primary:active {
+  border-color: rgba(0, 171, 115, 0.58) !important;
 }
 
 .ant-btn-dangerous.ant-btn-default {
