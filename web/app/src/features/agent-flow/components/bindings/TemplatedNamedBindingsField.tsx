@@ -36,7 +36,7 @@ export function TemplatedNamedBindingsField({
             key={`${entry.name}-${index}`}
             className="agent-flow-templated-binding-row"
           >
-            <div className="agent-flow-templated-binding-row__header">
+            <div className="agent-flow-templated-binding-row__name">
               <Input
                 aria-label={`${ariaLabel}-${index}-name`}
                 placeholder="变量名"
@@ -51,35 +51,41 @@ export function TemplatedNamedBindingsField({
                   )
                 }
               />
-              <Button
-                aria-label={`删除变量 ${entry.name || index + 1}`}
-                className="agent-flow-templated-binding-row__delete"
-                danger
-                icon={<DeleteOutlined />}
-                size="small"
-                type="text"
-                onClick={() =>
-                  onChange(value.filter((_, itemIndex) => itemIndex !== index))
+            </div>
+            <div className="agent-flow-templated-binding-row__value">
+              <TemplatedTextField
+                ariaLabel={`${ariaLabel}-${index}-value`}
+                displayMode="input"
+                label={entryLabel}
+                options={options}
+                placeholder="输入文本，或输入 / 引用变量"
+                value={entry.content.value}
+                onChange={(nextValue) =>
+                  onChange(
+                    value.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? {
+                            ...item,
+                            content: {
+                              kind: 'templated_text',
+                              value: nextValue
+                            }
+                          }
+                        : item
+                    )
+                  )
                 }
               />
             </div>
-            <TemplatedTextField
-              ariaLabel={`${ariaLabel}-${index}-value`}
-              label={entryLabel}
-              options={options}
-              placeholder="输入文本，或输入 / 引用变量"
-              value={entry.content.value}
-              onChange={(nextValue) =>
-                onChange(
-                  value.map((item, itemIndex) =>
-                    itemIndex === index
-                      ? {
-                          ...item,
-                          content: { kind: 'templated_text', value: nextValue }
-                        }
-                      : item
-                  )
-                )
+            <Button
+              aria-label={`删除变量 ${entry.name || index + 1}`}
+              className="agent-flow-templated-binding-row__delete"
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              type="text"
+              onClick={() =>
+                onChange(value.filter((_, itemIndex) => itemIndex !== index))
               }
             />
           </div>

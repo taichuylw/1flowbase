@@ -1,10 +1,5 @@
 import type { LexicalEditor } from 'lexical';
-import type {
-  FocusEvent,
-  KeyboardEvent,
-  MutableRefObject,
-  Ref
-} from 'react';
+import type { FocusEvent, KeyboardEvent, MutableRefObject, Ref } from 'react';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -20,7 +15,7 @@ import {
   $insertNodes,
   $isRangeSelection,
   $setSelection,
-  SKIP_DOM_SELECTION_TAG,
+  SKIP_DOM_SELECTION_TAG
 } from 'lexical';
 import {
   forwardRef,
@@ -29,23 +24,21 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from 'react';
 
-import {
-  getTemplateSelectorLabel,
-} from '../../../lib/template-binding';
+import { getTemplateSelectorLabel } from '../../../lib/template-binding';
 import { TemplateVariableReplacementPlugin } from './TemplateVariableReplacementPlugin';
 import {
   $createTemplateVariableNode,
-  TemplateVariableNode,
+  TemplateVariableNode
 } from './TemplateVariableNode';
 import { TemplateVariableTypeaheadPlugin } from './TemplateVariableTypeaheadPlugin';
 import {
   editorStateToText,
   getTriggerContext,
   removeTriggerQueryBeforeSelection,
-  textToEditorState,
+  textToEditorState
 } from './template-editor-utils';
 
 const TRIGGER_CHARACTERS = new Set(['/', '{']);
@@ -77,6 +70,7 @@ interface LexicalTemplatedTextEditorProps {
   placeholder?: string;
   options: FlowSelectorOption[];
   value: string;
+  displayMode?: 'block' | 'input';
   onChange: (value: string) => void;
   onTriggerChange?: (open: boolean) => void;
 }
@@ -99,7 +93,9 @@ function ControlledValuePlugin({
   const [editor] = useLexicalComposerContext();
 
   useLayoutEffect(() => {
-    const currentText = editor.getEditorState().read(() => $getRoot().getTextContent());
+    const currentText = editor
+      .getEditorState()
+      .read(() => $getRoot().getTextContent());
 
     if (currentText === value) {
       return;
@@ -174,7 +170,10 @@ function calculateTypeaheadPosition(container: HTMLElement) {
   const containerRect = container.getBoundingClientRect();
   const width = Math.max(
     240,
-    Math.min(TYPEAHEAD_MAX_WIDTH, containerRect.width - TYPEAHEAD_HORIZONTAL_GUTTER)
+    Math.min(
+      TYPEAHEAD_MAX_WIDTH,
+      containerRect.width - TYPEAHEAD_HORIZONTAL_GUTTER
+    )
   );
 
   if (!selection || selection.rangeCount === 0) {
@@ -186,9 +185,10 @@ function calculateTypeaheadPosition(container: HTMLElement) {
   }
 
   const sourceRange = selection.getRangeAt(0);
-  const range = typeof sourceRange.cloneRange === 'function'
-    ? sourceRange.cloneRange()
-    : sourceRange;
+  const range =
+    typeof sourceRange.cloneRange === 'function'
+      ? sourceRange.cloneRange()
+      : sourceRange;
   const rangeRect = getRangeRect(range);
 
   if (!rangeRect) {
@@ -268,6 +268,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
     ariaLabel,
     options,
     value,
+    displayMode = 'block',
     onChange,
     onTriggerChange,
     placeholder
@@ -324,11 +325,14 @@ export const LexicalTemplatedTextEditor = forwardRef<
     setActiveIndex(filteredOptions.length > 0 ? 0 : -1);
   }, [filteredOptions.length, query, typeaheadOpen]);
 
-  useEffect(() => () => {
-    if (blurCloseTimerRef.current !== null) {
-      window.clearTimeout(blurCloseTimerRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (blurCloseTimerRef.current !== null) {
+        window.clearTimeout(blurCloseTimerRef.current);
+      }
+    },
+    []
+  );
 
   function clearBlurCloseTimer() {
     if (blurCloseTimerRef.current === null) {
@@ -429,7 +433,16 @@ export const LexicalTemplatedTextEditor = forwardRef<
   }
 
   function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (!typeaheadOpen && event.key.length === 1 && TRIGGER_CHARACTERS.has(event.key)) {
+    if (!typeaheadOpen && displayMode === 'input' && event.key === 'Enter') {
+      event.preventDefault();
+      return;
+    }
+
+    if (
+      !typeaheadOpen &&
+      event.key.length === 1 &&
+      TRIGGER_CHARACTERS.has(event.key)
+    ) {
       openTypeaheadAtSelection();
       return;
     }
@@ -517,7 +530,14 @@ export const LexicalTemplatedTextEditor = forwardRef<
       <div
         data-testid="templated-text-editor-shell"
         ref={shellRef}
-        className="agent-flow-templated-text-field__editor-shell"
+        className={[
+          'agent-flow-templated-text-field__editor-shell',
+          displayMode === 'input'
+            ? 'agent-flow-templated-text-field__editor-shell--input'
+            : null
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onBlurCapture={handleBlur}
       >
         <RichTextPlugin
@@ -525,8 +545,15 @@ export const LexicalTemplatedTextEditor = forwardRef<
             <ContentEditable
               aria-label={ariaLabel}
               role="textbox"
-              aria-multiline="true"
-              className="agent-flow-templated-text-field__editor"
+              aria-multiline={displayMode === 'input' ? 'false' : 'true'}
+              className={[
+                'agent-flow-templated-text-field__editor',
+                displayMode === 'input'
+                  ? 'agent-flow-templated-text-field__editor--input'
+                  : null
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onKeyDown={handleEditorKeyDown}
             />
           }

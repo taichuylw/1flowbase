@@ -639,7 +639,19 @@ describe('NodeInspector', () => {
     );
     expect(screen.getByLabelText('输入变量-0-name')).toHaveValue('arg1');
     expect(screen.getByLabelText('输入变量-0-value')).toBeInTheDocument();
-    expect(screen.queryByLabelText('输入变量-0-selector')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('输入变量-0-value')).toHaveAttribute(
+      'aria-multiline',
+      'false'
+    );
+    expect(
+      screen.queryByLabelText('输入变量-0-selector')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '复制arg1' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '放大编辑arg1' })
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '删除变量 arg1' })
     ).toBeInTheDocument();
@@ -809,7 +821,9 @@ describe('NodeInspector', () => {
 
     await openSelect('Data Model');
     await selectDataModelOption('orders');
-    fireEvent.click(await screen.findByRole('button', { name: '新增过滤条件' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '新增过滤条件' })
+    );
     await openSelect('过滤字段 1');
     await selectOption('Status');
     await openSelect('过滤操作符 1');
@@ -819,7 +833,9 @@ describe('NodeInspector', () => {
     await openSelect('过滤变量 1');
     await selectOption('Start');
     await selectOption('query');
-    fireEvent.click(await screen.findByRole('button', { name: '新增过滤条件' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '新增过滤条件' })
+    );
     await openSelect('过滤字段 2');
     await selectOption('Amount');
     await waitFor(() => {
@@ -838,7 +854,9 @@ describe('NodeInspector', () => {
     fireEvent.change(screen.getByLabelText('过滤值 2'), {
       target: { value: '123' }
     });
-    fireEvent.click(await screen.findByRole('button', { name: '新增过滤条件' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '新增过滤条件' })
+    );
     await openSelect('过滤字段 3');
     await selectOption('Approved');
     await waitFor(() => {
@@ -898,20 +916,20 @@ describe('NodeInspector', () => {
               value: {
                 kind: 'selector',
                 selector: ['node-start', 'query']
+              }
+            },
+            {
+              field_code: 'amount',
+              operator: 'eq',
+              value: { kind: 'constant', value: 123 }
+            },
+            {
+              field_code: 'approved',
+              operator: 'eq',
+              value: { kind: 'constant', value: true }
             }
-          },
-          {
-            field_code: 'amount',
-            operator: 'eq',
-            value: { kind: 'constant', value: 123 }
-          },
-          {
-            field_code: 'approved',
-            operator: 'eq',
-            value: { kind: 'constant', value: true }
-          }
-        ],
-        sorts: [{ field_code: 'amount', direction: 'desc' }],
+          ],
+          sorts: [{ field_code: 'amount', direction: 'desc' }],
           expand_relations: ['customer'],
           page: { kind: 'constant', value: 2 },
           page_size: { kind: 'constant', value: 50 }
@@ -948,12 +966,8 @@ describe('NodeInspector', () => {
       expect(screen.getByLabelText('每页数量')).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByRole('button', { name: '新增过滤条件' })
-    ).toBeDisabled();
-    expect(
-      screen.getByRole('button', { name: '新增排序规则' })
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: '新增过滤条件' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '新增排序规则' })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('页码'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('每页数量'), {
@@ -994,9 +1008,9 @@ describe('NodeInspector', () => {
       screen.getByTestId('inspector-field-bindings.payload')
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '新增字段赋值' }));
-    expect(
-      screen.getAllByLabelText('Payload-0-field').length
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Payload-0-field').length).toBeGreaterThan(
+      0
+    );
     expect(
       screen.getAllByLabelText('Payload-0-variable').length
     ).toBeGreaterThan(0);

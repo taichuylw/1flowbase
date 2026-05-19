@@ -99,6 +99,32 @@ describe('TemplatedTextField focus and layout', () => {
     expect(cssSource).toContain('line-height: 18px;');
   });
 
+  test('supports a single-line input mode for compact variable bindings', async () => {
+    render(
+      <TemplatedTextField
+        ariaLabel="Code Arg"
+        displayMode="input"
+        label="Code Arg"
+        options={[startQueryOption]}
+        value="{{node-start.query}}"
+        onChange={vi.fn()}
+      />
+    );
+
+    const codeArg = screen.getByLabelText('Code Arg');
+
+    expect(codeArg).toHaveAttribute('aria-multiline', 'false');
+    expect(
+      screen.queryByRole('button', { name: '复制Code Arg' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '放大编辑Code Arg' })
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByTestId('templated-text-inline-chip')
+    ).toBeInTheDocument();
+  });
+
   test('focuses the matching editor when clicking an embedded field label', async () => {
     render(
       <>
@@ -285,7 +311,9 @@ describe('TemplatedTextField focus and layout', () => {
     systemEditor.focus();
     expect(systemEditor).toHaveFocus();
 
-    fireEvent.mouseDown(await screen.findByTestId('templated-text-inline-chip'));
+    fireEvent.mouseDown(
+      await screen.findByTestId('templated-text-inline-chip')
+    );
 
     await waitFor(() => {
       expect(userEditor).toHaveFocus();

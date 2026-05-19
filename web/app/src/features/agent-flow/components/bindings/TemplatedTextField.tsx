@@ -30,6 +30,7 @@ interface TemplatedTextFieldProps {
   toolbarExtraActions?: ReactNode;
   draggable?: boolean;
   dragLabel?: string;
+  displayMode?: 'block' | 'input';
   ariaLabel: string;
   placeholder?: string;
   options?: FlowSelectorOption[];
@@ -45,6 +46,7 @@ export function TemplatedTextField({
   toolbarExtraActions,
   draggable = false,
   dragLabel,
+  displayMode = 'block',
   ariaLabel,
   placeholder,
   options = [],
@@ -178,97 +180,143 @@ export function TemplatedTextField({
     editorElement.focus();
   }
 
-  return (
-    <div
-      className="agent-flow-templated-text-field"
-      onBlurCapture={handleRootBlur}
-    >
-      <NodeConfigFieldContainer
-        ariaLabel={ariaLabel}
-        classNames={{
-          frame: 'agent-flow-templated-text-field__frame',
-          toolbar: 'agent-flow-templated-text-field__toolbar',
-          label: 'agent-flow-templated-text-field__label',
-          actions: 'agent-flow-templated-text-field__actions'
-        }}
-        draggable={draggable}
-        dragLabel={dragLabel}
-        headerActions={
-          <>
-            {toolbarExtraActions}
-            <span className="agent-flow-templated-text-field__action agent-flow-templated-text-field__counter">
-              {draftValue.length}
-            </span>
-            <Tooltip title="插入变量">
-              <Button
-                className="agent-flow-templated-text-field__action"
-                type="text"
-                size="small"
-                icon={
-                  <span className="agent-flow-templated-text-field__variable-icon">
-                    {'{x}'}
-                  </span>
-                }
-                disabled={options.length === 0}
-                aria-label="插入变量"
-                onClick={() => editorRef.current?.openVariablePicker()}
-              />
-            </Tooltip>
-            <Tooltip title="复制内容">
-              <Button
-                className="agent-flow-templated-text-field__action"
-                type="text"
-                size="small"
-                icon={copied ? <CheckOutlined /> : <CopyOutlined />}
-                aria-label={`复制${label}`}
-                onClick={handleCopy}
-              />
-            </Tooltip>
-            <Tooltip title="放大编辑">
-              <Button
-                className="agent-flow-templated-text-field__action"
-                type="text"
-                size="small"
-                icon={<FullscreenOutlined />}
-                aria-label={`放大编辑${label}`}
-                onClick={() => setExpanded(true)}
-              />
-            </Tooltip>
-          </>
-        }
-        label={label}
-        labelContent={labelContent}
-        onDragEnd={onDragEnd}
-        onDragStart={onDragStart}
-        onFrameMouseDown={handleFrameMouseDown}
+  function renderInputField() {
+    return (
+      <div
+        className="agent-flow-templated-text-field__input-frame"
+        onMouseDown={handleFrameMouseDown}
       >
         <LexicalTemplatedTextEditor
           ref={editorRef}
           value={draftValue}
           options={options}
+          displayMode="input"
           ariaLabel={ariaLabel}
           placeholder={placeholder}
           onChange={scheduleDraftCommit}
         />
-      </NodeConfigFieldContainer>
-      <Modal
-        centered
-        className="agent-flow-templated-text-field__modal"
-        footer={null}
-        onCancel={() => setExpanded(false)}
-        open={expanded}
-        title={label}
-        width="min(880px, calc(100vw - 48px))"
-      >
-        <LexicalTemplatedTextEditor
-          ref={expandedEditorRef}
-          value={draftValue}
-          options={options}
-          ariaLabel={`${ariaLabel} 放大编辑`}
-          placeholder={placeholder}
-          onChange={scheduleDraftCommit}
-        />
-      </Modal>
+        <Tooltip title="插入变量">
+          <Button
+            className="agent-flow-templated-text-field__input-action"
+            type="text"
+            size="small"
+            icon={
+              <span className="agent-flow-templated-text-field__variable-icon">
+                {'{x}'}
+              </span>
+            }
+            disabled={options.length === 0}
+            aria-label="插入变量"
+            onClick={() => editorRef.current?.openVariablePicker()}
+          />
+        </Tooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        'agent-flow-templated-text-field',
+        displayMode === 'input'
+          ? 'agent-flow-templated-text-field--input'
+          : null
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onBlurCapture={handleRootBlur}
+    >
+      {displayMode === 'input' ? renderInputField() : null}
+      {displayMode === 'block' ? (
+        <NodeConfigFieldContainer
+          ariaLabel={ariaLabel}
+          classNames={{
+            frame: 'agent-flow-templated-text-field__frame',
+            toolbar: 'agent-flow-templated-text-field__toolbar',
+            label: 'agent-flow-templated-text-field__label',
+            actions: 'agent-flow-templated-text-field__actions'
+          }}
+          draggable={draggable}
+          dragLabel={dragLabel}
+          headerActions={
+            <>
+              {toolbarExtraActions}
+              <span className="agent-flow-templated-text-field__action agent-flow-templated-text-field__counter">
+                {draftValue.length}
+              </span>
+              <Tooltip title="插入变量">
+                <Button
+                  className="agent-flow-templated-text-field__action"
+                  type="text"
+                  size="small"
+                  icon={
+                    <span className="agent-flow-templated-text-field__variable-icon">
+                      {'{x}'}
+                    </span>
+                  }
+                  disabled={options.length === 0}
+                  aria-label="插入变量"
+                  onClick={() => editorRef.current?.openVariablePicker()}
+                />
+              </Tooltip>
+              <Tooltip title="复制内容">
+                <Button
+                  className="agent-flow-templated-text-field__action"
+                  type="text"
+                  size="small"
+                  icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+                  aria-label={`复制${label}`}
+                  onClick={handleCopy}
+                />
+              </Tooltip>
+              <Tooltip title="放大编辑">
+                <Button
+                  className="agent-flow-templated-text-field__action"
+                  type="text"
+                  size="small"
+                  icon={<FullscreenOutlined />}
+                  aria-label={`放大编辑${label}`}
+                  onClick={() => setExpanded(true)}
+                />
+              </Tooltip>
+            </>
+          }
+          label={label}
+          labelContent={labelContent}
+          onDragEnd={onDragEnd}
+          onDragStart={onDragStart}
+          onFrameMouseDown={handleFrameMouseDown}
+        >
+          <LexicalTemplatedTextEditor
+            ref={editorRef}
+            value={draftValue}
+            options={options}
+            ariaLabel={ariaLabel}
+            placeholder={placeholder}
+            onChange={scheduleDraftCommit}
+          />
+        </NodeConfigFieldContainer>
+      ) : null}
+      {displayMode === 'block' ? (
+        <Modal
+          centered
+          className="agent-flow-templated-text-field__modal"
+          footer={null}
+          onCancel={() => setExpanded(false)}
+          open={expanded}
+          title={label}
+          width="min(880px, calc(100vw - 48px))"
+        >
+          <LexicalTemplatedTextEditor
+            ref={expandedEditorRef}
+            value={draftValue}
+            options={options}
+            ariaLabel={`${ariaLabel} 放大编辑`}
+            placeholder={placeholder}
+            onChange={scheduleDraftCommit}
+          />
+        </Modal>
+      ) : null}
     </div>
   );
 }

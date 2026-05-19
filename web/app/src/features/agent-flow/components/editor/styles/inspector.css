@@ -133,6 +133,10 @@
   gap: 8px;
 }
 
+.agent-flow-templated-text-field--input {
+  gap: 0;
+}
+
 .agent-flow-node-config-field {
   display: grid;
   width: 100%;
@@ -165,6 +169,24 @@
 }
 
 .agent-flow-templated-text-field__frame:focus-within {
+  border-color: #4b8bff;
+  box-shadow: 0 0 0 2px rgba(75, 139, 255, 0.12);
+}
+
+.agent-flow-templated-text-field__input-frame {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #d9e3dc;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.agent-flow-templated-text-field__input-frame:focus-within {
   border-color: #4b8bff;
   box-shadow: 0 0 0 2px rgba(75, 139, 255, 0.12);
 }
@@ -291,6 +313,11 @@
   position: relative;
 }
 
+.agent-flow-templated-text-field__editor-shell--input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .agent-flow-templated-text-field__editor {
   min-height: 104px;
   max-height: 320px;
@@ -302,6 +329,15 @@
   font-size: 13px;
   line-height: 20px;
   outline: none;
+}
+
+.agent-flow-templated-text-field__editor--input {
+  box-sizing: border-box;
+  min-height: 38px;
+  max-height: 38px;
+  overflow: hidden;
+  padding: 9px 40px 9px 12px;
+  white-space: nowrap;
 }
 
 .agent-flow-templated-text-field__editor p {
@@ -325,6 +361,30 @@
   font-size: 13px;
   line-height: 20px;
   pointer-events: none;
+}
+
+.agent-flow-templated-text-field__editor-shell--input
+  .agent-flow-templated-text-field__placeholder {
+  top: 9px;
+  right: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-flow-templated-text-field__input-action {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+}
+
+.agent-flow-templated-text-field__input-action.ant-btn {
+  padding: 0;
 }
 
 .agent-flow-templated-text-field__chip-container {
@@ -469,18 +529,18 @@
 
 .agent-flow-templated-binding-row {
   display: grid;
+  grid-template-columns: minmax(96px, 0.8fr) minmax(132px, 1.4fr) 28px;
+  align-items: center;
   min-width: 0;
   gap: 8px;
 }
 
-.agent-flow-templated-binding-row__header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 8px;
+.agent-flow-templated-binding-row__name,
+.agent-flow-templated-binding-row__value {
+  min-width: 0;
 }
 
-.agent-flow-templated-binding-row__header .ant-input {
+.agent-flow-templated-binding-row__name .ant-input {
   width: 100%;
 }
 
