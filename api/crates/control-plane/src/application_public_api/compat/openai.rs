@@ -2,6 +2,8 @@ use serde_json::Value;
 
 use crate::application_public_api::native::NativeRunRequest;
 
+const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID: &str = "1flowbase";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenAiCompatibleModel {
     pub id: String,
@@ -123,20 +125,20 @@ pub fn extract_model_list_from_start_node(document: &Value) -> Vec<OpenAiCompati
         .and_then(|graph| graph.get("nodes"))
         .and_then(Value::as_array)
     else {
-        return Vec::new();
+        return default_model_list();
     };
     let Some(start_node) = nodes
         .iter()
         .find(|node| node.get("type").and_then(Value::as_str) == Some("start"))
     else {
-        return Vec::new();
+        return default_model_list();
     };
     let Some(model_list) = start_node
         .get("config")
         .and_then(|config| config.get("model_list"))
         .and_then(Value::as_array)
     else {
-        return Vec::new();
+        return default_model_list();
     };
 
     let mut models = Vec::new();
@@ -150,7 +152,18 @@ pub fn extract_model_list_from_start_node(document: &Value) -> Vec<OpenAiCompati
             }
         }
     }
-    models
+    if models.is_empty() {
+        default_model_list()
+    } else {
+        models
+    }
+}
+
+fn default_model_list() -> Vec<OpenAiCompatibleModel> {
+    vec![OpenAiCompatibleModel {
+        id: DEFAULT_OPENAI_COMPATIBLE_MODEL_ID.to_string(),
+        name: Some(DEFAULT_OPENAI_COMPATIBLE_MODEL_ID.to_string()),
+    }]
 }
 
 fn normalize_model_descriptor(value: &Value) -> Option<OpenAiCompatibleModel> {
@@ -295,6 +308,31 @@ mod tests {
                     name: None,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn extracts_default_model_when_start_node_has_no_model_list() {
+        let document = json!({
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "node-start",
+                        "type": "start",
+                        "config": {
+                            "input_fields": []
+                        }
+                    }
+                ]
+            }
+        });
+
+        assert_eq!(
+            extract_model_list_from_start_node(&document),
+            vec![OpenAiCompatibleModel {
+                id: "1flowbase".into(),
+                name: Some("1flowbase".into()),
+            }]
         );
     }
 }
