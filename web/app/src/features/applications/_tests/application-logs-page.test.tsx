@@ -74,7 +74,17 @@ function sampleRunDetail() {
       title: '公开 API 退款总结',
       expand_id: 'customer-42',
       authorized_account: 'root',
-      input_payload: { 'node-start.query': '总结退款政策' },
+      input_text: '总结退款政策',
+      input_payload: {
+        __runtime_debug_artifact: true,
+        artifact_ref: 'artifact-flow-input',
+        content_type: 'application/json',
+        is_truncated: true,
+        original_size_bytes: 54538,
+        preview_size_bytes: 2048,
+        preview:
+          '{"node-start":{"compatibility":{"tools":[{"function":{"description":"path to the file to read."}}]}}}'
+      } as Record<string, unknown>,
       output_payload: {
         answer: '退款政策摘要',
         resolved_inputs: {
@@ -799,6 +809,7 @@ describe('ApplicationLogsPage', () => {
 
         if (runId === 'run-refund') {
           detail.flow_run.id = runId;
+          detail.flow_run.input_text = '我想查退款规则';
           detail.flow_run.input_payload = {
             'node-start.query': '我想查退款规则'
           };
@@ -812,6 +823,7 @@ describe('ApplicationLogsPage', () => {
         }
 
         detail.flow_run.id = runId;
+        detail.flow_run.input_text = '今天天气怎么样';
         detail.flow_run.input_payload = {
           'node-start.query': '今天天气怎么样'
         };

@@ -28,6 +28,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function isRuntimeDebugArtifactPreview(value: unknown) {
+  return (
+    isRecord(value) &&
+    value.__runtime_debug_artifact === true &&
+    typeof value.preview === 'string'
+  );
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value
+    : null;
+}
+
 function summarizeValue(value: unknown): string {
   if (value === null || value === undefined) {
     return '无';
@@ -174,6 +188,8 @@ function mapRunStatusToSessionStatus(
 }
 
 function buildRunContext(detail: ApplicationRunDetail): AgentFlowRunContext {
+  const userInput = applicationRunInputText(detail);
+
   return {
     environmentLabel: 'draft',
     remembered: false,
@@ -184,30 +200,38 @@ function buildRunContext(detail: ApplicationRunDetail): AgentFlowRunContext {
         key: 'query',
         title: '输入',
         valueType: 'string',
-        value:
-          findNamedString(detail.flow_run.input_payload, [
-            'query',
-            'question',
-            'prompt',
-            'message',
-            'input'
-          ]) ?? ''
+        value: userInput
       }
     ]
   };
 }
 
-function buildConversationMessages(
-  detail: ApplicationRunDetail
-): AgentFlowDebugMessage[] {
-  const userContent =
+function applicationRunInputText(detail: ApplicationRunDetail): string {
+  const backendInputText = nonEmptyString(detail.flow_run.input_text);
+
+  if (backendInputText) {
+    return backendInputText;
+  }
+
+  if (isRuntimeDebugArtifactPreview(detail.flow_run.input_payload)) {
+    return detail.flow_run.title ?? '';
+  }
+
+  return (
     findNamedString(detail.flow_run.input_payload, [
       'query',
       'question',
       'prompt',
       'message',
       'input'
-    ]) ?? summarizeValue(detail.flow_run.input_payload);
+    ]) ?? summarizeValue(detail.flow_run.input_payload)
+  );
+}
+
+function buildConversationMessages(
+  detail: ApplicationRunDetail
+): AgentFlowDebugMessage[] {
+  const userContent = applicationRunInputText(detail);
   const assistantContent =
     extractAssistantOutputText(detail) ||
     findFirstString(detail.flow_run.output_payload) ||

@@ -47,7 +47,8 @@ pub use debug_variable_cache::{
 };
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
-    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
+    application_run_input_text, load_runtime_debug_artifact_response,
+    offload_application_run_detail_artifacts,
 };
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
@@ -311,6 +312,7 @@ pub struct FlowRunResponse {
     pub title: String,
     pub expand_id: Option<String>,
     pub authorized_account: Option<String>,
+    pub input_text: Option<String>,
     pub input_payload: serde_json::Value,
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
@@ -573,6 +575,7 @@ fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
         title: run.title,
         expand_id: run.external_user,
         authorized_account: run.authorized_account,
+        input_text: application_run_input_text(&run.input_payload),
         input_payload: run.input_payload,
         output_payload: run.output_payload,
         error_payload: run.error_payload,

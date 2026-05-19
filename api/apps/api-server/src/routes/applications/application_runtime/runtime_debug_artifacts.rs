@@ -23,6 +23,8 @@ use uuid::Uuid;
 
 use crate::{app_state::ApiState, error_response::ApiError};
 
+const APPLICATION_INPUT_TEXT_KEYS: &[&str] = &["query", "question", "prompt", "message", "input"];
+
 struct RuntimeDebugArtifactScope {
     workspace_id: Uuid,
     application_id: Uuid,
@@ -130,6 +132,7 @@ pub async fn offload_application_run_detail_artifacts(
         node_run_id: None,
         run_event_id: None,
     };
+    let flow_input_text = application_run_input_text(&detail.flow_run.input_payload);
     let (flow_input_payload, flow_input_changed) = writer
         .offload_value(
             &flow_scope,
@@ -137,6 +140,11 @@ pub async fn offload_application_run_detail_artifacts(
             detail.flow_run.input_payload.clone(),
         )
         .await?;
+    let flow_input_payload = if flow_input_changed {
+        with_application_run_input_text(flow_input_payload, flow_input_text.as_deref())
+    } else {
+        flow_input_payload
+    };
     let (flow_output_payload, flow_output_changed) = writer
         .offload_value(
             &flow_scope,
@@ -257,6 +265,82 @@ pub async fn offload_application_run_detail_artifacts(
     Ok(detail)
 }
 
+pub(super) fn application_run_input_text(payload: &Value) -> Option<String> {
+    if let Some(input_text) = string_field(payload, "input_text") {
+        return Some(input_text);
+    }
+
+    for selector in [
+        "node-start.query",
+        "node-start.question",
+        "node-start.prompt",
+        "node-start.message",
+        "node-start.input",
+        "start.query",
+        "start.question",
+        "start.prompt",
+        "start.message",
+        "start.input",
+    ] {
+        if let Some(value) = string_field(payload, selector) {
+            return Some(value);
+        }
+    }
+
+    let object = payload.as_object()?;
+    for key in ["node-start", "start"] {
+        if let Some(value) = object.get(key).and_then(immediate_input_text) {
+            return Some(value);
+        }
+    }
+
+    for value in object.values() {
+        if let Some(value) = immediate_input_text(value) {
+            return Some(value);
+        }
+    }
+
+    None
+}
+
+fn immediate_input_text(value: &Value) -> Option<String> {
+    let object = value.as_object()?;
+    for key in APPLICATION_INPUT_TEXT_KEYS {
+        if let Some(value) = object
+            .get(*key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
+fn string_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn with_application_run_input_text(mut payload: Value, input_text: Option<&str>) -> Value {
+    let Some(input_text) = input_text else {
+        return payload;
+    };
+    let Some(object) = payload.as_object_mut() else {
+        return payload;
+    };
+    object.insert(
+        "input_text".to_string(),
+        Value::String(input_text.to_string()),
+    );
+    payload
+}
+
 fn is_safe_to_persist_debug_artifact_previews(status: domain::FlowRunStatus) -> bool {
     matches!(
         status,
@@ -309,4 +393,66 @@ pub async fn load_runtime_debug_artifact_response(
         .header(CONTENT_TYPE, content_type)
         .body(Body::from(object.bytes))
         .unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn application_input_text_prefers_start_query_over_tool_schema_payload() {
+        let payload = json!({
+            "node-start": {
+                "query": "ping",
+                "compatibility": {
+                    "tools": [
+                        {
+                            "function": {
+                                "description": "path to the file to read.",
+                                "parameters": {
+                                    "properties": {
+                                        "file_path": {
+                                            "description": "path to the file to read."
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        });
+
+        assert_eq!(application_run_input_text(&payload), Some("ping".into()));
+    }
+
+    #[test]
+    fn application_input_text_reads_persisted_artifact_preview_summary() {
+        let payload = json!({
+            "__runtime_debug_artifact": true,
+            "artifact_ref": Uuid::now_v7().to_string(),
+            "preview": "{\"node-start\":{\"compatibility\":{\"tools\":[]}}}",
+            "input_text": "总结退款政策"
+        });
+
+        assert_eq!(
+            application_run_input_text(&payload),
+            Some("总结退款政策".into())
+        );
+    }
+
+    #[test]
+    fn flow_input_artifact_preview_keeps_application_input_text() {
+        let preview = json!({
+            "__runtime_debug_artifact": true,
+            "artifact_ref": Uuid::now_v7().to_string(),
+            "preview": "{\"node-start\":{\"compatibility\":{\"tools\":[]}}}"
+        });
+
+        let preview = with_application_run_input_text(preview, Some("ping"));
+
+        assert_eq!(preview["input_text"], json!("ping"));
+    }
 }

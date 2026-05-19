@@ -101,6 +101,7 @@ export interface ConsoleFlowRunDetail {
   title?: string;
   expand_id?: string | null;
   authorized_account?: string | null;
+  input_text?: string | null;
   input_payload: Record<string, unknown>;
   output_payload: Record<string, unknown>;
   error_payload: Record<string, unknown> | null;
