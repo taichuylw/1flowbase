@@ -21,6 +21,12 @@ function readGitHubReadme() {
   return fs.readFileSync(path.join(repoRoot, '.github', 'README.md'), 'utf8');
 }
 
+function readReactDoctorConfig() {
+  return JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'web', 'app', 'react-doctor.config.json'), 'utf8')
+  );
+}
+
 function extractPushBranches(workflow) {
   const match = workflow.match(/push:\n\s+branches:\n(?<branches>(?:\s+- .+\n)+)/u);
   assert.ok(match, 'verify workflow must declare push branches');
@@ -91,6 +97,30 @@ test('verify workflow runs React Doctor as a frontend quality gate', () => {
   );
 });
 
+test('React Doctor keeps current frontstage debt as a narrow baseline', () => {
+  const config = readReactDoctorConfig();
+
+  assert.deepEqual(config.ignore.overrides, [
+    {
+      files: ['src/features/frontstage/pages/FrontStagePage.tsx'],
+      rules: [
+        'react-doctor/no-cascading-set-state',
+        'react-doctor/no-effect-chain',
+        'react-doctor/no-prop-callback-in-effect',
+        'react-doctor/no-inline-exhaustive-style',
+        'react-doctor/no-giant-component',
+        'react-doctor/no-many-boolean-props',
+        'react-doctor/prefer-useReducer',
+        'react-doctor/no-derived-state-effect'
+      ]
+    },
+    {
+      files: ['src/features/agent-flow/_tests/editor/agent-flow-canvas-interactions.test.tsx'],
+      rules: ['react-doctor/no-prop-callback-in-effect']
+    }
+  ]);
+});
+
 test('GitHub automation docs describe latest-only issue publishing', () => {
   const readme = readGitHubReadme();
 
@@ -112,6 +142,8 @@ test('GitHub automation docs describe the React Doctor frontend gate', () => {
   assert.match(readme, /diff: main/u);
   assert.match(readme, /fail-on: warning/u);
   assert.match(readme, /offline: "true"/u);
+  assert.match(readme, /web\/app\/react-doctor\.config\.json/u);
+  assert.match(readme, /explicit baseline/u);
 });
 
 test('quality gate workflow supports dispatch targets and nightly latest CI defaults', () => {

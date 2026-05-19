@@ -1030,7 +1030,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             </Typography.Text>
             <Typography.Text
               type="secondary"
-              style={{ fontSize: 11, display: 'block' }}
+              style={{ fontSize: 12, display: 'block' }}
             >
               {node.kind === 'group' ? '分组节点' : '页面节点'}
             </Typography.Text>

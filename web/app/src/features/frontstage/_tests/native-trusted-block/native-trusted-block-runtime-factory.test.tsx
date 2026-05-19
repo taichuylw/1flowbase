@@ -302,7 +302,7 @@ function collectSourceFiles(directories: string[]): string[] {
         continue;
       }
 
-      if (['.ts', '.tsx'].includes(extname(entry.name))) {
+      if (SOURCE_FILE_EXTENSIONS.has(extname(entry.name))) {
         files.push(entryPath);
       }
     }
@@ -310,3 +310,5 @@ function collectSourceFiles(directories: string[]): string[] {
 
   return files;
 }
+
+const SOURCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx']);

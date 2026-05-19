@@ -44,6 +44,10 @@ fail-on: warning
 offline: "true"
 ```
 
+Current FrontStage structural debt is kept in `web/app/react-doctor.config.json`
+as narrow per-file rule overrides, so React Doctor still blocks new warnings
+outside that explicit baseline.
+
 The final aggregate job downloads the component artifacts and publishes a single
 report with:
 
