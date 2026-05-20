@@ -996,8 +996,8 @@ fn start_input_payload_preview(
         .or_else(|| application_run_model(source))
         .unwrap_or_default();
 
-    preview.insert("query".to_string(), serde_json::Value::String(query));
     preview.insert("model".to_string(), serde_json::Value::String(model));
+    preview.insert("query".to_string(), serde_json::Value::String(query));
     preview.insert(
         "files".to_string(),
         named_array_value(start_payload, &["files", "attachments"])
@@ -2360,6 +2360,16 @@ mod tests {
         assert_eq!(
             response.input_payload_view["preview"]["tools"],
             serde_json::json!(["..."])
+        );
+        let preview_keys: Vec<_> = response.input_payload_view["preview"]
+            .as_object()
+            .expect("start input preview should be an object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            preview_keys,
+            vec!["model", "query", "files", "history", "tools"]
         );
         assert!(response.input_payload_view.get("query").is_none());
     }

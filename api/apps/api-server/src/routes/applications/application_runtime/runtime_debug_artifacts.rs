@@ -440,8 +440,8 @@ fn with_start_node_input_summary(mut payload: Value, full_input: &Value) -> Valu
         .or_else(|| application_run_model(full_input))
         .unwrap_or_default();
 
-    object.insert("query".to_string(), Value::String(query));
     object.insert("model".to_string(), Value::String(model));
+    object.insert("query".to_string(), Value::String(query));
     object.insert(
         "files".to_string(),
         named_array_value(start_payload, &["files", "attachments"])
@@ -643,6 +643,22 @@ mod tests {
         assert_eq!(preview["files"], json!([{ "name": "refund.md" }]));
         assert_eq!(preview["history"], json!(["..."]));
         assert_eq!(preview["tools"], json!(["..."]));
+        let lightweight_keys: Vec<_> = preview
+            .as_object()
+            .expect("start input artifact preview should be an object")
+            .keys()
+            .filter(|key| {
+                matches!(
+                    key.as_str(),
+                    "model" | "query" | "files" | "history" | "tools"
+                )
+            })
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            lightweight_keys,
+            vec!["model", "query", "files", "history", "tools"]
+        );
     }
 
     #[test]
