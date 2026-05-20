@@ -198,7 +198,7 @@ describe('run detail mapper', () => {
     );
   });
 
-  test('uses node input payload view for trace display when backend provides one', () => {
+  test('uses node input payload truth for trace display when backend also provides a view', () => {
     const detail = baseDetail();
     detail.node_runs = [
       {
@@ -209,9 +209,22 @@ describe('run detail mapper', () => {
         node_alias: 'Start',
         status: 'succeeded',
         input_payload: {
-          __runtime_debug_artifact: true,
-          artifact_ref: 'artifact-start-input',
-          preview: '{"history":[{"role":"system","content":"hidden"}]}'
+          query: '总结退款政策',
+          model: 'deepseek-chat',
+          files: [],
+          history: {
+            __runtime_debug_artifact: true,
+            artifact_scope: 'field',
+            field_path: ['history'],
+            artifact_ref: 'artifact-start-history',
+            is_truncated: true,
+            original_size_bytes: 4096,
+            preview_size_bytes: 128,
+            content_type: 'application/json',
+            preview: '[{"role":"system","content":"hidden"}]'
+          },
+          sys: { workflow_run_id: 'flow-run-1' },
+          env: {}
         },
         input_payload_view: {
           kind: 'start_input_summary',
@@ -235,16 +248,22 @@ describe('run detail mapper', () => {
     ];
 
     expect(mapRunDetailToTrace(detail)[0].inputPayload).toEqual({
-      kind: 'start_input_summary',
-      artifact_ref: 'artifact-start-input',
-      is_truncated: true,
-      preview: {
-        query: '总结退款政策',
-        model: 'deepseek-chat',
-        files: [],
-        history: ['...'],
-        tools: ['...']
-      }
+      query: '总结退款政策',
+      model: 'deepseek-chat',
+      files: [],
+      history: {
+        __runtime_debug_artifact: true,
+        artifact_scope: 'field',
+        field_path: ['history'],
+        artifact_ref: 'artifact-start-history',
+        is_truncated: true,
+        original_size_bytes: 4096,
+        preview_size_bytes: 128,
+        content_type: 'application/json',
+        preview: '[{"role":"system","content":"hidden"}]'
+      },
+      sys: { workflow_run_id: 'flow-run-1' },
+      env: {}
     });
   });
 });

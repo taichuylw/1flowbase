@@ -187,7 +187,7 @@ export function mapRunDetailToTrace(
           0
         )
       : null,
-    inputPayload: nodeRun.input_payload_view ?? nodeRun.input_payload,
+    inputPayload: nodeRun.input_payload,
     outputPayload: nodeRun.output_payload,
     errorPayload: nodeRun.error_payload,
     metricsPayload: nodeRun.metrics_payload,

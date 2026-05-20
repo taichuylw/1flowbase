@@ -454,6 +454,8 @@ export interface ConsoleDebugVariableSnapshot {
 
 export interface ConsoleRuntimeDebugArtifactPreview {
   __runtime_debug_artifact: true;
+  artifact_scope?: string;
+  field_path?: string[];
   is_truncated: boolean;
   original_size_bytes: number;
   preview_size_bytes: number;

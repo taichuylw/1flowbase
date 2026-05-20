@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use axum::{
     body::Body,
@@ -17,7 +17,7 @@ use control_plane::{
         UpdateRunEventPayloadInput,
     },
 };
-use serde_json::Value;
+use serde_json::{Map, Value};
 use storage_durable::MainDurableStore;
 use uuid::Uuid;
 
@@ -112,6 +112,50 @@ impl RuntimeDebugArtifactWriter {
 
         Ok((preview.preview_value, true))
     }
+
+    fn offload_payload_fields<'a>(
+        &'a self,
+        scope: &'a RuntimeDebugArtifactScope,
+        artifact_kind: &'a str,
+        value: Value,
+        field_path: Vec<String>,
+    ) -> Pin<Box<dyn Future<Output = Result<(Value, bool), ApiError>> + Send + 'a>> {
+        Box::pin(async move {
+            if is_runtime_debug_artifact_payload(&value)
+                || should_keep_runtime_payload_field_inline(&field_path)
+            {
+                return Ok((value, false));
+            }
+
+            match value {
+                Value::Object(object) => {
+                    let mut changed = false;
+                    let mut next = Map::with_capacity(object.len());
+                    for (key, child) in object {
+                        let mut child_path = field_path.clone();
+                        child_path.push(key.clone());
+                        let (child, child_changed) = self
+                            .offload_payload_fields(scope, artifact_kind, child, child_path)
+                            .await?;
+                        changed |= child_changed;
+                        next.insert(key, child);
+                    }
+                    Ok((Value::Object(next), changed))
+                }
+                Value::Array(_) | Value::String(_) => {
+                    let (payload, changed) =
+                        self.offload_value(scope, artifact_kind, value).await?;
+                    let payload = if changed {
+                        with_debug_artifact_field_path(payload, &field_path)
+                    } else {
+                        payload
+                    };
+                    Ok((payload, changed))
+                }
+                value => Ok((value, false)),
+            }
+        })
+    }
 }
 
 pub async fn offload_application_run_detail_artifacts(
@@ -188,47 +232,50 @@ pub async fn offload_application_run_detail_artifacts(
             node_run_id: Some(node_run.id),
             run_event_id: None,
         };
-        let original_input_payload = node_run.input_payload.clone();
         let (input_payload, input_changed) = writer
-            .offload_value(
+            .offload_payload_fields(
                 &node_scope,
                 "node_input_payload",
-                original_input_payload.clone(),
+                node_run.input_payload.clone(),
+                Vec::new(),
             )
             .await?;
-        let input_payload = if input_changed && node_run.node_type == "start" {
-            with_start_node_input_summary(input_payload, &original_input_payload)
-        } else {
-            input_payload
-        };
         let (output_payload, output_changed) = writer
-            .offload_value(
+            .offload_payload_fields(
                 &node_scope,
                 "node_output_payload",
                 node_run.output_payload.clone(),
+                Vec::new(),
             )
             .await?;
         let (error_payload, error_changed) = match node_run.error_payload.clone() {
             Some(error_payload) => {
                 let (payload, changed) = writer
-                    .offload_value(&node_scope, "node_error_payload", error_payload)
+                    .offload_payload_fields(
+                        &node_scope,
+                        "node_error_payload",
+                        error_payload,
+                        Vec::new(),
+                    )
                     .await?;
                 (Some(payload), changed)
             }
             None => (None, false),
         };
         let (metrics_payload, metrics_changed) = writer
-            .offload_value(
+            .offload_payload_fields(
                 &node_scope,
                 "node_metrics_payload",
                 node_run.metrics_payload.clone(),
+                Vec::new(),
             )
             .await?;
         let (debug_payload, debug_changed) = writer
-            .offload_value(
+            .offload_payload_fields(
                 &node_scope,
                 "node_debug_payload",
                 node_run.debug_payload.clone(),
+                Vec::new(),
             )
             .await?;
 
@@ -350,10 +397,16 @@ pub(super) fn application_run_answer(payload: &Value) -> Option<String> {
         if let Some(value) = string_field(payload, key) {
             return Some(value);
         }
+        if let Some(value) = payload
+            .get(key)
+            .and_then(runtime_debug_artifact_preview_text)
+        {
+            return Some(value);
+        }
     }
 
     if is_runtime_debug_artifact_payload(payload) {
-        return string_field(payload, "preview");
+        return runtime_debug_artifact_preview_text(payload);
     }
 
     let object = payload.as_object()?;
@@ -402,6 +455,44 @@ fn is_runtime_debug_artifact_payload(value: &Value) -> bool {
         .unwrap_or(false)
 }
 
+fn runtime_debug_artifact_preview_text(value: &Value) -> Option<String> {
+    if !is_runtime_debug_artifact_payload(value) {
+        return None;
+    }
+
+    let preview = string_field(value, "preview")?;
+    if let Ok(decoded) = serde_json::from_str::<Value>(&preview) {
+        if let Some(text) = decoded
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(text.to_string());
+        }
+    }
+
+    Some(preview.trim_start_matches('"').to_string())
+}
+
+fn with_debug_artifact_field_path(mut payload: Value, field_path: &[String]) -> Value {
+    let Some(object) = payload.as_object_mut() else {
+        return payload;
+    };
+    if field_path.is_empty() {
+        return payload;
+    }
+
+    object.insert(
+        "artifact_scope".to_string(),
+        Value::String("field".to_string()),
+    );
+    object.insert(
+        "field_path".to_string(),
+        Value::Array(field_path.iter().cloned().map(Value::String).collect()),
+    );
+    payload
+}
+
 fn string_field(value: &Value, key: &str) -> Option<String> {
     value
         .get(key)
@@ -428,71 +519,10 @@ fn with_application_run_input_summary(
     payload
 }
 
-fn with_start_node_input_summary(mut payload: Value, full_input: &Value) -> Value {
-    let Some(object) = payload.as_object_mut() else {
-        return payload;
-    };
-    let start_payload = start_node_input_payload(full_input);
-    let query = immediate_input_text(start_payload)
-        .or_else(|| application_run_query(full_input))
-        .unwrap_or_default();
-    let model = immediate_model_value(start_payload)
-        .or_else(|| application_run_model(full_input))
-        .unwrap_or_default();
-
-    object.insert("model".to_string(), Value::String(model));
-    object.insert("query".to_string(), Value::String(query));
-    object.insert(
-        "files".to_string(),
-        named_array_value(start_payload, &["files", "attachments"])
-            .map(|value| Value::Array(value.clone()))
-            .unwrap_or_else(|| Value::Array(Vec::new())),
-    );
-    object.insert(
-        "history".to_string(),
-        placeholder_array_for_named_array(start_payload, &["history", "messages"]),
-    );
-    object.insert(
-        "tools".to_string(),
-        placeholder_array_for_named_array(
-            start_payload,
-            &["tools", "tool_registry", "tool_definitions"],
-        ),
-    );
-
-    payload
-}
-
-fn start_node_input_payload(payload: &Value) -> &Value {
-    payload
-        .get("node-start")
-        .or_else(|| payload.get("start"))
-        .unwrap_or(payload)
-}
-
-fn placeholder_array_for_named_array(payload: &Value, keys: &[&str]) -> Value {
-    if named_array_value(payload, keys).is_none_or(Vec::is_empty) {
-        return Value::Array(Vec::new());
-    }
-
-    Value::Array(vec![Value::String("...".to_string())])
-}
-
-fn named_array_value<'a>(payload: &'a Value, keys: &[&str]) -> Option<&'a Vec<Value>> {
-    let object = payload.as_object()?;
-    for key in keys {
-        if let Some(array) = object.get(*key).and_then(Value::as_array) {
-            return Some(array);
-        }
-    }
-
-    for value in object.values() {
-        if let Some(array) = named_array_value(value, keys) {
-            return Some(array);
-        }
-    }
-
-    None
+fn should_keep_runtime_payload_field_inline(field_path: &[String]) -> bool {
+    field_path
+        .iter()
+        .any(|key| matches!(key.as_str(), "query" | "model" | "files" | "sys" | "env"))
 }
 
 fn is_safe_to_persist_debug_artifact_previews(status: domain::FlowRunStatus) -> bool {
@@ -616,49 +646,43 @@ mod tests {
     }
 
     #[test]
-    fn start_node_input_artifact_preview_keeps_lightweight_start_fields() {
-        let preview = json!({
+    fn runtime_payload_field_artifact_selection_keeps_truth_fields_inline() {
+        assert!(should_keep_runtime_payload_field_inline(&["query".into()]));
+        assert!(should_keep_runtime_payload_field_inline(&[
+            "node-start".into(),
+            "model".into()
+        ]));
+        assert!(should_keep_runtime_payload_field_inline(&[
+            "input".into(),
+            "sys".into(),
+            "workflow_run_id".into()
+        ]));
+        assert!(should_keep_runtime_payload_field_inline(&[
+            "env".into(),
+            "ApiBaseUrl".into()
+        ]));
+        assert!(should_keep_runtime_payload_field_inline(&["files".into()]));
+        assert!(!should_keep_runtime_payload_field_inline(&[
+            "history".into()
+        ]));
+        assert!(!should_keep_runtime_payload_field_inline(&[
+            "compatibility".into(),
+            "tools".into()
+        ]));
+    }
+
+    #[test]
+    fn runtime_payload_field_artifact_wrapper_keeps_original_field_path() {
+        let payload = json!({
             "__runtime_debug_artifact": true,
             "artifact_ref": Uuid::now_v7().to_string(),
-            "preview": "{\"query\":\"truncated"
-        });
-        let full_input = json!({
-            "query": "总结退款政策",
-            "model": "deepseek-chat",
-            "files": [{ "name": "refund.md" }],
-            "history": [
-                { "role": "user", "content": "旧问题" }
-            ],
-            "compatibility": {
-                "tools": [
-                    { "name": "read_file" }
-                ]
-            }
+            "preview": "[{\"role\":\"user\"}]"
         });
 
-        let preview = with_start_node_input_summary(preview, &full_input);
+        let payload = with_debug_artifact_field_path(payload, &["history".into()]);
 
-        assert_eq!(preview["query"], json!("总结退款政策"));
-        assert_eq!(preview["model"], json!("deepseek-chat"));
-        assert_eq!(preview["files"], json!([{ "name": "refund.md" }]));
-        assert_eq!(preview["history"], json!(["..."]));
-        assert_eq!(preview["tools"], json!(["..."]));
-        let lightweight_keys: Vec<_> = preview
-            .as_object()
-            .expect("start input artifact preview should be an object")
-            .keys()
-            .filter(|key| {
-                matches!(
-                    key.as_str(),
-                    "model" | "query" | "files" | "history" | "tools"
-                )
-            })
-            .map(String::as_str)
-            .collect();
-        assert_eq!(
-            lightweight_keys,
-            vec!["model", "query", "files", "history", "tools"]
-        );
+        assert_eq!(payload["artifact_scope"], json!("field"));
+        assert_eq!(payload["field_path"], json!(["history"]));
     }
 
     #[test]
@@ -670,6 +694,27 @@ mod tests {
         assert_eq!(
             application_run_answer(&payload),
             Some("退款政策摘要".into())
+        );
+    }
+
+    #[test]
+    fn application_answer_reads_field_level_artifact_preview() {
+        let payload = json!({
+            "answer": {
+                "__runtime_debug_artifact": true,
+                "artifact_ref": Uuid::now_v7().to_string(),
+                "field_path": ["answer"],
+                "preview": "退款政策摘要..."
+            },
+            "sys": {
+                "workflow_run_id": "run-1"
+            },
+            "env": {}
+        });
+
+        assert_eq!(
+            application_run_answer(&payload),
+            Some("退款政策摘要...".into())
         );
     }
 }

@@ -528,7 +528,9 @@ describe('useAgentFlowDebugSession', () => {
     expect(
       result.current.getNodePreviewVariableCache()['node-llm']
     ).not.toHaveProperty('user_prompt');
-    expect(result.current.getNodePreviewVariableCache()['node-answer']).toBeUndefined();
+    expect(
+      result.current.getNodePreviewVariableCache()['node-answer']
+    ).toBeUndefined();
     expect(window.localStorage.length).toBe(0);
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['applications', 'app-1', 'runtime']
@@ -621,36 +623,64 @@ describe('useAgentFlowDebugSession', () => {
     );
   });
 
-  test('hydrates truncated start input artifacts before projecting history and tools variables', async () => {
+  test('hydrates truncated start input field artifacts before projecting history and tools variables', async () => {
     const queryClient = createQueryClient();
     const detail = createSucceededRunDetail();
     detail.flow_run.input_payload = {
-      __runtime_debug_artifact: true,
-      is_truncated: true,
-      original_size_bytes: 8192,
-      preview_size_bytes: 256,
-      content_type: 'application/json',
-      artifact_ref: 'artifact-start-input',
-      preview: JSON.stringify({
-        'node-start': {
-          query: '请总结退款政策',
-          model: 'deepseek-chat'
+      'node-start': {
+        query: '请总结退款政策',
+        model: 'deepseek-chat',
+        files: [],
+        history: {
+          __runtime_debug_artifact: true,
+          artifact_scope: 'field',
+          field_path: ['node-start', 'history'],
+          is_truncated: true,
+          original_size_bytes: 8192,
+          preview_size_bytes: 256,
+          content_type: 'application/json',
+          artifact_ref: 'artifact-start-history',
+          preview: '[{"role":"user","content":"之前'
+        },
+        tools: {
+          __runtime_debug_artifact: true,
+          artifact_scope: 'field',
+          field_path: ['node-start', 'tools'],
+          is_truncated: true,
+          original_size_bytes: 8192,
+          preview_size_bytes: 256,
+          content_type: 'application/json',
+          artifact_ref: 'artifact-start-tools',
+          preview: '[{"name":"read'
         }
-      }),
-      query: '请总结退款政策',
-      model: 'deepseek-chat'
+      }
     };
     detail.node_runs[0]!.input_payload = {
-      __runtime_debug_artifact: true,
-      is_truncated: true,
-      original_size_bytes: 4096,
-      preview_size_bytes: 128,
-      content_type: 'application/json',
-      artifact_ref: 'artifact-start-node-input',
-      preview: JSON.stringify({
-        query: '请总结退款政策',
-        model: 'deepseek-chat'
-      })
+      query: '请总结退款政策',
+      model: 'deepseek-chat',
+      files: [],
+      history: {
+        __runtime_debug_artifact: true,
+        artifact_scope: 'field',
+        field_path: ['history'],
+        is_truncated: true,
+        original_size_bytes: 4096,
+        preview_size_bytes: 128,
+        content_type: 'application/json',
+        artifact_ref: 'artifact-start-history',
+        preview: '[{"role":"user","content":"之前'
+      },
+      tools: {
+        __runtime_debug_artifact: true,
+        artifact_scope: 'field',
+        field_path: ['tools'],
+        is_truncated: true,
+        original_size_bytes: 4096,
+        preview_size_bytes: 128,
+        content_type: 'application/json',
+        artifact_ref: 'artifact-start-tools',
+        preview: '[{"name":"read'
+      }
     };
     vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockRejectedValue(
       new Error('stream unavailable')
@@ -658,32 +688,15 @@ describe('useAgentFlowDebugSession', () => {
     vi.spyOn(runtimeApi, 'startFlowDebugRun').mockResolvedValue(detail);
     vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockImplementation(
       async (_applicationId, artifactRef) => {
-        if (artifactRef === 'artifact-start-input') {
-          return {
-            'node-start': {
-              query: '请总结退款政策',
-              model: 'deepseek-chat',
-              history: [
-                { role: 'user', content: '之前的问题' },
-                { role: 'assistant', content: '之前的回答' }
-              ],
-              tools: [{ name: 'read_file' }, { name: 'search' }],
-              files: []
-            }
-          };
+        if (artifactRef === 'artifact-start-history') {
+          return [
+            { role: 'user', content: '之前的问题' },
+            { role: 'assistant', content: '之前的回答' }
+          ];
         }
 
-        if (artifactRef === 'artifact-start-node-input') {
-          return {
-            query: '请总结退款政策',
-            model: 'deepseek-chat',
-            history: [
-              { role: 'user', content: '之前的问题' },
-              { role: 'assistant', content: '之前的回答' }
-            ],
-            tools: [{ name: 'read_file' }, { name: 'search' }],
-            files: []
-          };
+        if (artifactRef === 'artifact-start-tools') {
+          return [{ name: 'read_file' }, { name: 'search' }];
         }
 
         throw new Error(`unexpected artifact: ${artifactRef}`);
@@ -737,6 +750,14 @@ describe('useAgentFlowDebugSession', () => {
         .find((group) => group.title === 'Start')
         ?.items.find((item) => item.key === 'node-start.tools')?.value
     ).toEqual([{ name: 'read_file' }, { name: 'search' }]);
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-start-history'
+    );
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-start-tools'
+    );
   });
 
   test('persists edited variable cache values across editor remounts', async () => {

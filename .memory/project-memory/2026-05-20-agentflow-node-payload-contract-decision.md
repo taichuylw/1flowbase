@@ -11,8 +11,8 @@ keywords:
 match_when:
   - 调整 Agent Flow 运行日志、节点输入输出、debug artifact、Start 节点 sys/env/history/tools 展示或接口 contract 时
 created_at: 2026-05-20 23
-updated_at: 2026-05-20 23
-last_verified_at: 2026-05-20 23
+updated_at: 2026-05-21 00
+last_verified_at: 2026-05-21 00
 decision_policy: verify_before_decision
 scope:
   - api/crates/control-plane/src/orchestration_runtime
@@ -30,7 +30,7 @@ scope:
 
 ## 谁在做什么
 
-用户确认 issue #343 后续按激进方案推进运行日志节点 payload contract：节点运行记录稳定暴露 `input_payload`、`debug_payload`、`output_payload` 三段，展示摘要和 artifact 只能作为独立 view / display metadata，不替代或重塑节点真值。该规则不内联进通用后端 skill 正文，而是放入条件引用的 backend reference。
+用户确认原 issue #343 后续按激进方案推进运行日志节点 payload contract；#343 已因讨论污染关闭，后续以 clean issue tree 的 L1 #355 作为主决策入口。节点运行记录稳定暴露 `input_payload`、`debug_payload`、`output_payload` 三段，展示摘要和 artifact 只能作为独立 view / display metadata，不替代或重塑节点真值。该规则不内联进通用后端 skill 正文，而是放入条件引用的 backend reference。
 
 ## 为什么这样做
 
@@ -52,4 +52,5 @@ scope:
 
 - `.agents/skills/backend-development/SKILL.md`
 - `.agents/skills/backend-development/references/agentflow-runtime-node-payload.md`
-- GitHub issue #343
+- GitHub issue #355（当前主入口）
+- GitHub issue #343（已 superseded）

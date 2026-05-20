@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
@@ -365,10 +365,10 @@ describe('NodeLastRunTab', () => {
     expect(outputJson).toHaveTextContent('text_delta');
   });
 
-  test('loads truncated last-run payload artifact on explicit action', async () => {
-    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockResolvedValue({
-      text: '完整 Last Run 内容'
-    });
+  test('loads truncated last-run field artifact on explicit action', async () => {
+    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockResolvedValue(
+      '完整 Last Run 内容'
+    );
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
@@ -398,13 +398,16 @@ describe('NodeLastRunTab', () => {
         output_payload: {
           text: {
             __runtime_debug_artifact: true,
+            artifact_scope: 'field',
+            field_path: ['text'],
             is_truncated: true,
             original_size_bytes: 4096,
             preview_size_bytes: 128,
             content_type: 'application/json',
             artifact_ref: 'artifact-1',
             preview: '{"text":"preview'
-          }
+          },
+          usage: { total_tokens: 32 }
         },
         error_payload: null,
         metrics_payload: {},
@@ -431,20 +434,25 @@ describe('NodeLastRunTab', () => {
     expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
       '完整 Last Run 内容'
     );
+    expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
+      'total_tokens'
+    );
   });
 
-  test('keeps start input summary shape when loading full history and tools', async () => {
-    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockResolvedValue({
-      'node-start': {
-        query: '总结退款政策',
-        model: 'deepseek-chat',
-        files: [{ name: 'refund.md' }],
-        history: [{ role: 'user', content: '旧问题' }],
-        compatibility: {
-          tools: [{ name: 'read_file' }]
+  test('loads start input field artifacts back into their original fields', async () => {
+    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockImplementation(
+      async (_applicationId, artifactRef) => {
+        if (artifactRef === 'artifact-start-history') {
+          return [{ role: 'user', content: '旧问题' }];
         }
+
+        if (artifactRef === 'artifact-start-tools') {
+          return [{ name: 'read_file' }];
+        }
+
+        throw new Error(`unexpected artifact: ${artifactRef}`);
       }
-    });
+    );
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
@@ -471,26 +479,32 @@ describe('NodeLastRunTab', () => {
         node_alias: 'Start',
         status: 'succeeded',
         input_payload: {
-          __runtime_debug_artifact: true,
-          is_truncated: true,
-          original_size_bytes: 4096,
-          preview_size_bytes: 128,
-          content_type: 'application/json',
-          artifact_ref: 'artifact-start-input',
-          preview: '{"query":"总结'
-        },
-        input_payload_view: {
-          kind: 'start_input_summary',
-          artifact_ref: 'artifact-start-input',
-          is_truncated: true,
-          original_size_bytes: 4096,
-          preview_size_bytes: 128,
-          preview: {
-            query: '总结退款政策',
-            model: 'deepseek-chat',
-            files: [{ name: 'refund.md' }],
-            history: ['...'],
-            tools: ['...']
+          query: '总结退款政策',
+          model: 'deepseek-chat',
+          files: [{ name: 'refund.md' }],
+          sys: { workflow_run_id: 'run-1' },
+          env: { ApiBaseUrl: 'https://api.example.com' },
+          history: {
+            __runtime_debug_artifact: true,
+            artifact_scope: 'field',
+            field_path: ['history'],
+            is_truncated: true,
+            original_size_bytes: 4096,
+            preview_size_bytes: 128,
+            content_type: 'application/json',
+            artifact_ref: 'artifact-start-history',
+            preview: '[{"role":"user","content":"旧'
+          },
+          tools: {
+            __runtime_debug_artifact: true,
+            artifact_scope: 'field',
+            field_path: ['tools'],
+            is_truncated: true,
+            original_size_bytes: 4096,
+            preview_size_bytes: 128,
+            content_type: 'application/json',
+            artifact_ref: 'artifact-start-tools',
+            preview: '[{"name":"read'
           }
         },
         output_payload: {},
@@ -511,24 +525,34 @@ describe('NodeLastRunTab', () => {
     );
 
     const inputJson = await screen.findByLabelText('输入 JSON');
-    expect(inputJson).toHaveTextContent('start_input_summary');
-    expect(inputJson).toHaveTextContent('...');
+    expect(inputJson).toHaveTextContent('总结退款政策');
+    expect(inputJson).toHaveTextContent('ApiBaseUrl');
+    expect(inputJson).not.toHaveTextContent('start_input_summary');
+    expect(inputJson).toHaveTextContent('artifact-start-history');
 
     fireEvent.click(await screen.findByRole('button', { name: '加载完整值' }));
 
     expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
       'app-1',
-      'artifact-start-input'
+      'artifact-start-history'
     );
-    expect(await screen.findByLabelText('输入 JSON')).toHaveTextContent(
-      'start_input_summary'
+    await waitFor(() =>
+      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('旧问题')
     );
-    expect(await screen.findByLabelText('输入 JSON')).toHaveTextContent(
-      '旧问题'
+    expect(screen.getByLabelText('输入 JSON')).toHaveTextContent(
+      'artifact-start-tools'
     );
-    expect(await screen.findByLabelText('输入 JSON')).toHaveTextContent(
-      'read_file'
+
+    fireEvent.click(await screen.findByRole('button', { name: '加载完整值' }));
+
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-start-tools'
     );
+    await waitFor(() =>
+      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('read_file')
+    );
+    expect(screen.queryByRole('button', { name: '加载完整值' })).toBeNull();
   });
 
   test('renders data processing for non-LLM nodes when debug payload exists', async () => {

@@ -5,16 +5,27 @@ import type { NodeLastRun } from '../../../api/runtime';
 import { fetchRuntimeDebugArtifact } from '../../../api/runtime';
 import { JsonPreviewBlock } from '../../../../../shared/ui/json-preview/JsonPreviewBlock';
 
-function findRuntimeDebugArtifactRef(value: unknown): string | null {
+interface RuntimeDebugArtifactLocation {
+  artifactRef: string;
+  path: string[];
+}
+
+function findRuntimeDebugArtifactLocation(
+  value: unknown,
+  path: string[] = []
+): RuntimeDebugArtifactLocation | null {
   if (!value || typeof value !== 'object') {
     return null;
   }
 
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const nestedRef = findRuntimeDebugArtifactRef(item);
-      if (nestedRef) {
-        return nestedRef;
+    for (const [index, item] of value.entries()) {
+      const nestedLocation = findRuntimeDebugArtifactLocation(item, [
+        ...path,
+        String(index)
+      ]);
+      if (nestedLocation) {
+        return nestedLocation;
       }
     }
     return null;
@@ -25,19 +36,19 @@ function findRuntimeDebugArtifactRef(value: unknown): string | null {
     record.__runtime_debug_artifact === true &&
     typeof record.artifact_ref === 'string'
   ) {
-    return record.artifact_ref;
-  }
-  if (
-    record.kind === 'start_input_summary' &&
-    typeof record.artifact_ref === 'string'
-  ) {
-    return record.artifact_ref;
+    return {
+      artifactRef: record.artifact_ref,
+      path
+    };
   }
 
-  for (const nestedValue of Object.values(record)) {
-    const nestedRef = findRuntimeDebugArtifactRef(nestedValue);
-    if (nestedRef) {
-      return nestedRef;
+  for (const [key, nestedValue] of Object.entries(record)) {
+    const nestedLocation = findRuntimeDebugArtifactLocation(nestedValue, [
+      ...path,
+      key
+    ]);
+    if (nestedLocation) {
+      return nestedLocation;
     }
   }
 
@@ -48,92 +59,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function isStartInputSummaryPayload(value: unknown): value is {
-  kind: 'start_input_summary';
-  preview: Record<string, unknown>;
-} & Record<string, unknown> {
-  return (
-    isRecord(value) &&
-    value.kind === 'start_input_summary' &&
-    isRecord(value.preview)
-  );
-}
-
-function pickStartInputPayload(value: unknown) {
-  if (!isRecord(value)) {
-    return value;
-  }
-
-  const nodeStart = value['node-start'];
-  if (isRecord(nodeStart)) {
-    return nodeStart;
-  }
-
-  const start = value.start;
-  if (isRecord(start)) {
-    return start;
-  }
-
-  return value;
-}
-
-function readNamedArray(value: unknown, keys: string[]) {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  for (const key of keys) {
-    const entryValue = value[key];
-    if (Array.isArray(entryValue)) {
-      return [...entryValue];
-    }
-  }
-
-  for (const entryValue of Object.values(value)) {
-    const nestedArray = readNamedArray(entryValue, keys);
-    if (nestedArray) {
-      return nestedArray;
-    }
-  }
-
-  return null;
-}
-
-function mergeLoadedStartInputSummary(
-  summary: { preview: Record<string, unknown> } & Record<string, unknown>,
+function replacePayloadAtPath(
+  currentPayload: unknown,
+  path: string[],
   fullPayload: unknown
-) {
-  const startPayload = pickStartInputPayload(fullPayload);
+): unknown {
+  if (path.length === 0) {
+    return fullPayload;
+  }
+
+  const [head, ...tail] = path;
+
+  if (Array.isArray(currentPayload)) {
+    const index = Number(head);
+
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= currentPayload.length
+    ) {
+      return currentPayload;
+    }
+
+    return currentPayload.map((item, itemIndex) =>
+      itemIndex === index ? replacePayloadAtPath(item, tail, fullPayload) : item
+    );
+  }
+
+  if (!isRecord(currentPayload) || !head) {
+    return currentPayload;
+  }
 
   return {
-    ...summary,
-    preview: {
-      ...summary.preview,
-      history:
-        readNamedArray(startPayload, ['history', 'messages']) ??
-        summary.preview.history ??
-        [],
-      tools:
-        readNamedArray(startPayload, [
-          'tools',
-          'tool_registry',
-          'tool_definitions'
-        ]) ??
-        summary.preview.tools ??
-        []
-    }
+    ...currentPayload,
+    [head]: replacePayloadAtPath(currentPayload[head], tail, fullPayload)
   };
-}
-
-function mergeLoadedArtifactPayload(
-  currentPayload: unknown,
-  fullPayload: unknown
-) {
-  if (isStartInputSummaryPayload(currentPayload)) {
-    return mergeLoadedStartInputSummary(currentPayload, fullPayload);
-  }
-
-  return fullPayload;
 }
 
 type ConsoleLogLevel = 'info' | 'warn' | 'error';
@@ -303,24 +263,30 @@ function NodeRunJsonBlock({
 }) {
   const { message } = App.useApp();
   const [loadedPayload, setLoadedPayload] = useState<unknown>(null);
-  const artifactRef = useMemo(
-    () => findRuntimeDebugArtifactRef(payload),
-    [payload]
-  );
   const displayPayload = loadedPayload ?? payload;
+  const artifactLocation = useMemo(
+    () => findRuntimeDebugArtifactLocation(displayPayload),
+    [displayPayload]
+  );
 
   useEffect(() => {
     setLoadedPayload(null);
   }, [payload]);
 
   const handleLoadFullValue = async () => {
-    if (!artifactRef || !onLoadArtifact) {
+    if (!artifactLocation || !onLoadArtifact) {
       return;
     }
 
     try {
-      const fullPayload = await onLoadArtifact(artifactRef);
-      setLoadedPayload(mergeLoadedArtifactPayload(payload, fullPayload));
+      const fullPayload = await onLoadArtifact(artifactLocation.artifactRef);
+      setLoadedPayload((currentPayload: unknown) =>
+        replacePayloadAtPath(
+          currentPayload ?? payload,
+          artifactLocation.path,
+          fullPayload
+        )
+      );
       message.success('已加载完整值');
     } catch {
       message.error('加载完整值失败');
@@ -330,7 +296,7 @@ function NodeRunJsonBlock({
   return (
     <JsonPreviewBlock
       actions={
-        artifactRef ? (
+        artifactLocation ? (
           <Space size={6} wrap>
             <Tag color="warning">已截断</Tag>
             <Button
@@ -357,10 +323,7 @@ export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
     <Card title="节点输入输出">
       <div className="agent-flow-node-run-json-list">
         <NodeRunPayloadSections
-          inputPayload={
-            lastRun.node_run.input_payload_view ??
-            lastRun.node_run.input_payload
-          }
+          inputPayload={lastRun.node_run.input_payload}
           debugPayload={lastRun.node_run.debug_payload}
           outputPayload={lastRun.node_run.output_payload}
           onLoadArtifact={(artifactRef) =>

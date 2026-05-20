@@ -854,7 +854,7 @@ fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
 
 fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
     let (input_payload, output_payload) = normalize_node_run_payloads_for_logs(&run);
-    let input_payload_view = node_input_payload_view(&run.node_type, &input_payload);
+    let input_payload_view = node_input_payload_view(&input_payload);
 
     NodeRunResponse {
         id: run.id.to_string(),
@@ -898,67 +898,8 @@ fn normalize_node_run_payloads_for_logs(
     (run.input_payload.clone(), run.output_payload.clone())
 }
 
-fn node_input_payload_view(node_type: &str, payload: &serde_json::Value) -> serde_json::Value {
-    if node_type != "start" {
-        return payload.clone();
-    }
-
-    start_input_payload_summary_view(payload)
-}
-
-fn start_input_payload_summary_view(payload: &serde_json::Value) -> serde_json::Value {
-    let decoded_payload = decode_runtime_debug_artifact_preview(payload);
-    let source = decoded_payload.as_ref().unwrap_or(payload);
-    let start_payload = start_input_payload(source);
-    let artifact_object = payload.as_object().filter(|object| {
-        object
-            .get("__runtime_debug_artifact")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
-    });
-    let mut view = serde_json::Map::new();
-
-    view.insert(
-        "kind".to_string(),
-        serde_json::Value::String("start_input_summary".to_string()),
-    );
-
-    if let Some(object) = artifact_object {
-        if let Some(value) = object
-            .get("artifact_ref")
-            .and_then(serde_json::Value::as_str)
-        {
-            view.insert(
-                "artifact_ref".to_string(),
-                serde_json::Value::String(value.to_string()),
-            );
-        }
-        if let Some(value) = object
-            .get("is_truncated")
-            .and_then(serde_json::Value::as_bool)
-        {
-            view.insert("is_truncated".to_string(), serde_json::Value::Bool(value));
-        }
-        if let Some(value) = object
-            .get("original_size_bytes")
-            .and_then(serde_json::Value::as_i64)
-        {
-            view.insert("original_size_bytes".to_string(), value.into());
-        }
-        if let Some(value) = object
-            .get("preview_size_bytes")
-            .and_then(serde_json::Value::as_i64)
-        {
-            view.insert("preview_size_bytes".to_string(), value.into());
-        }
-    }
-
-    view.insert(
-        "preview".to_string(),
-        start_input_payload_preview(source, start_payload),
-    );
-
-    serde_json::Value::Object(view)
+fn node_input_payload_view(payload: &serde_json::Value) -> serde_json::Value {
+    payload.clone()
 }
 
 fn decode_runtime_debug_artifact_preview(payload: &serde_json::Value) -> Option<serde_json::Value> {
@@ -982,101 +923,6 @@ fn start_input_payload(payload: &serde_json::Value) -> &serde_json::Value {
         .get("node-start")
         .or_else(|| payload.get("start"))
         .unwrap_or(payload)
-}
-
-fn start_input_payload_preview(
-    source: &serde_json::Value,
-    start_payload: &serde_json::Value,
-) -> serde_json::Value {
-    let mut preview = serde_json::Map::new();
-    let query = immediate_start_input_text(start_payload)
-        .or_else(|| application_run_query(source))
-        .unwrap_or_default();
-    let model = immediate_start_model_value(start_payload)
-        .or_else(|| application_run_model(source))
-        .unwrap_or_default();
-
-    preview.insert("model".to_string(), serde_json::Value::String(model));
-    preview.insert("query".to_string(), serde_json::Value::String(query));
-    preview.insert(
-        "files".to_string(),
-        named_array_value(start_payload, &["files", "attachments"])
-            .map(|value| serde_json::Value::Array(value.clone()))
-            .unwrap_or_else(|| serde_json::Value::Array(Vec::new())),
-    );
-    preview.insert(
-        "history".to_string(),
-        placeholder_array_for_named_array(start_payload, &["history", "messages"]),
-    );
-    preview.insert(
-        "tools".to_string(),
-        placeholder_array_for_named_array(
-            start_payload,
-            &["tools", "tool_registry", "tool_definitions"],
-        ),
-    );
-
-    serde_json::Value::Object(preview)
-}
-
-fn placeholder_array_for_named_array(
-    payload: &serde_json::Value,
-    keys: &[&str],
-) -> serde_json::Value {
-    if find_named_array_len(payload, keys).unwrap_or_default() == 0 {
-        return serde_json::Value::Array(Vec::new());
-    }
-
-    serde_json::Value::Array(vec![serde_json::Value::String("...".to_string())])
-}
-
-fn immediate_start_input_text(value: &serde_json::Value) -> Option<String> {
-    let object = value.as_object()?;
-    for key in ["query", "question", "prompt", "message", "input"] {
-        if let Some(value) = object
-            .get(key)
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return Some(value.to_string());
-        }
-    }
-    None
-}
-
-fn immediate_start_model_value(value: &serde_json::Value) -> Option<String> {
-    value
-        .as_object()?
-        .get("model")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn find_named_array_len(payload: &serde_json::Value, keys: &[&str]) -> Option<usize> {
-    named_array_value(payload, keys).map(Vec::len)
-}
-
-fn named_array_value<'a>(
-    payload: &'a serde_json::Value,
-    keys: &[&str],
-) -> Option<&'a Vec<serde_json::Value>> {
-    let object = payload.as_object()?;
-    for key in keys {
-        if let Some(array) = object.get(*key).and_then(serde_json::Value::as_array) {
-            return Some(array);
-        }
-    }
-
-    for value in object.values() {
-        if let Some(array) = named_array_value(value, keys) {
-            return Some(array);
-        }
-    }
-
-    None
 }
 
 fn to_checkpoint_response(checkpoint: domain::CheckpointRecord) -> CheckpointResponse {
@@ -2303,7 +2149,7 @@ mod tests {
     }
 
     #[test]
-    fn start_node_response_exposes_input_payload_summary_view() {
+    fn start_node_response_exposes_input_payload_truth_view() {
         let artifact_ref = Uuid::now_v7().to_string();
         let run = domain::NodeRunRecord {
             id: Uuid::now_v7(),
@@ -2313,17 +2159,23 @@ mod tests {
             node_alias: "Start".to_string(),
             status: domain::NodeRunStatus::Succeeded,
             input_payload: serde_json::json!({
-                "__runtime_debug_artifact": true,
-                "artifact_ref": artifact_ref,
-                "is_truncated": true,
-                "original_size_bytes": 12598,
-                "preview_size_bytes": 2048,
-                "preview": "{\"query\":\"say",
                 "query": "say hello",
                 "model": "deepseek-chat",
                 "files": [{ "name": "brief.md" }],
-                "history": ["..."],
-                "tools": ["..."]
+                "sys": {
+                    "workflow_run_id": "run-1"
+                },
+                "env": {
+                    "ApiBaseUrl": "https://api.example.com"
+                },
+                "history": {
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": artifact_ref,
+                    "is_truncated": true,
+                    "field_path": ["history"],
+                    "preview": "[{\"role\":\"user\",\"content\":\"old"
+                },
+                "tools": []
             }),
             output_payload: serde_json::json!({ "query": "say hello" }),
             error_payload: None,
@@ -2335,43 +2187,18 @@ mod tests {
 
         let response = to_node_run_response(run);
 
+        assert_eq!(response.input_payload["query"], "say hello");
+        assert_eq!(response.input_payload["model"], "deepseek-chat");
+        assert_eq!(response.input_payload["sys"]["workflow_run_id"], "run-1");
         assert_eq!(
-            response.input_payload["__runtime_debug_artifact"],
-            serde_json::json!(true)
-        );
-        assert_eq!(response.input_payload_view["kind"], "start_input_summary");
-        assert_eq!(response.input_payload_view["artifact_ref"], artifact_ref);
-        assert_eq!(response.input_payload_view["is_truncated"], true);
-        assert_eq!(response.input_payload_view["original_size_bytes"], 12598);
-        assert_eq!(response.input_payload_view["preview_size_bytes"], 2048);
-        assert_eq!(response.input_payload_view["preview"]["query"], "say hello");
-        assert_eq!(
-            response.input_payload_view["preview"]["model"],
-            "deepseek-chat"
+            response.input_payload["env"]["ApiBaseUrl"],
+            "https://api.example.com"
         );
         assert_eq!(
-            response.input_payload_view["preview"]["files"],
-            serde_json::json!([{ "name": "brief.md" }])
+            response.input_payload["history"]["field_path"],
+            serde_json::json!(["history"])
         );
-        assert_eq!(
-            response.input_payload_view["preview"]["history"],
-            serde_json::json!(["..."])
-        );
-        assert_eq!(
-            response.input_payload_view["preview"]["tools"],
-            serde_json::json!(["..."])
-        );
-        let preview_keys: Vec<_> = response.input_payload_view["preview"]
-            .as_object()
-            .expect("start input preview should be an object")
-            .keys()
-            .map(String::as_str)
-            .collect();
-        assert_eq!(
-            preview_keys,
-            vec!["model", "query", "files", "history", "tools"]
-        );
-        assert!(response.input_payload_view.get("query").is_none());
+        assert_eq!(response.input_payload_view, response.input_payload);
     }
 
     #[test]
