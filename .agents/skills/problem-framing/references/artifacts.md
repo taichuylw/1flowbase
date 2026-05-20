@@ -31,6 +31,7 @@
 
 ```md
 ## Issue Metadata
+- Title: [状态]标题
 - Grade:
 - Labels:
 - Parent issue:
@@ -61,6 +62,7 @@ Rules:
 - `Draft Hypotheses` 必须保持可被挑战，不能写成已决设计。
 - `Open Decisions` 必须是用户需要拍板的真实决策，不是实现杂项。
 - `Issue Metadata` 必须按 `references/issue-lifecycle.md` 填写分级和标签。
+- issue 标题必须使用 `[状态]标题`，并和 `phase:*` 标签同步。
 
 ## ADR Draft
 

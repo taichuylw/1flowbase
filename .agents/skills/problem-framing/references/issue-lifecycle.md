@@ -53,6 +53,27 @@ size:<xs|s|m|l>
 phase:<discussion|ready|implementation|qa|user-acceptance|closed>
 ```
 
+## Issue Title
+
+issue 标题必须使用：
+
+```text
+[状态]标题
+```
+
+状态必须和 `phase:*` 标签同步：
+
+| Phase Label | Title Status | Example |
+| --- | --- | --- |
+| `phase:discussion` | `[讨论]` | `[讨论]给列表增加更新时间排序` |
+| `phase:ready` | `[待开发]` | `[待开发]给列表增加更新时间排序` |
+| `phase:implementation` | `[开发中]` | `[开发中]给列表增加更新时间排序` |
+| `phase:qa` | `[验收中]` | `[验收中]给列表增加更新时间排序` |
+| `phase:user-acceptance` | `[待确认]` | `[待确认]给列表增加更新时间排序` |
+| `phase:closed` | `[已完成]` | `[已完成]给列表增加更新时间排序` |
+
+标题只放状态和可读标题；分级、类型、影响面、父子关系放 labels 和正文，不塞进标题。
+
 ## Optional Labels
 
 按需添加，不要为了凑标签而添加：
@@ -85,6 +106,7 @@ child-issue
 - `risk:*` 表示错误后果；涉及用户数据、migration、contract 默认不低于 `risk:high`。
 - `size:*` 表示 review 和实现规模；超过 `size:m` 时优先拆子 issue。
 - `phase:*` 随流程更新，只保留当前阶段。
+- 更新 `phase:*` 时，同步更新标题前缀 `[状态]`。
 
 ## Lifecycle
 
