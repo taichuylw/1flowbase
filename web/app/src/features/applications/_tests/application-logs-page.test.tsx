@@ -35,15 +35,15 @@ const runtimeApi = vi.hoisted(() => ({
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
-    conversationId: string,
     runId: string
   ) =>
     [
       'applications',
       applicationId,
       'runtime',
-      'conversations',
-      conversationId,
+      'runs',
+      runId,
+      'conversation',
       'around',
       runId
     ] as const,
@@ -300,8 +300,7 @@ describe('ApplicationLogsPage', () => {
     await waitFor(() => {
       expect(
         runtimeApi.fetchApplicationConversationMessages
-      ).toHaveBeenCalledWith('app-1', 'conversation-1', {
-        aroundRunId: 'run-1',
+      ).toHaveBeenCalledWith('app-1', 'run-1', {
         limit: 5
       });
     });

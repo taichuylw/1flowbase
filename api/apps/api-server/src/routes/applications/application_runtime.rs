@@ -328,8 +328,8 @@ pub struct FlowRunResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ApplicationConversationMessagesQuery {
     pub around_run_id: Option<Uuid>,
-    pub before: Option<Uuid>,
-    pub after: Option<Uuid>,
+    pub before: Option<String>,
+    pub after: Option<String>,
     pub limit: Option<i64>,
 }
 
@@ -368,6 +368,7 @@ pub struct NodeRunResponse {
     pub node_alias: String,
     pub status: String,
     pub input_payload: serde_json::Value,
+    pub input_payload_view: serde_json::Value,
     pub output_payload: serde_json::Value,
     pub error_payload: Option<serde_json::Value>,
     pub metrics_payload: serde_json::Value,
@@ -496,6 +497,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/conversations/:conversation_id/messages",
             get(list_application_conversation_messages),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/conversation/messages",
+            get(list_application_run_conversation_messages),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/nodes/:node_id",
@@ -649,8 +654,207 @@ fn to_application_conversation_message_response(
     }
 }
 
+fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
+    value.and_then(|value| Uuid::parse_str(value).ok())
+}
+
+fn fallback_conversation_messages_from_run(
+    run: &domain::FlowRunRecord,
+    query: &ApplicationConversationMessagesQuery,
+) -> ApplicationConversationMessagesPageResponse {
+    let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
+    let mut items = history_conversation_items_from_payload(run);
+
+    items.push(ApplicationConversationMessageResponse {
+        run_id: run.id.to_string(),
+        started_at: format_time(run.started_at),
+        finished_at: format_optional_time(run.finished_at),
+        status: run.status.as_str().to_string(),
+        query: application_run_query(&run.input_payload),
+        model: application_run_model(&run.input_payload),
+        answer: application_run_answer(&run.output_payload).or_else(|| {
+            run.error_payload
+                .as_ref()
+                .and_then(|payload| application_run_answer(payload))
+        }),
+        is_current: true,
+    });
+
+    let total = items.len();
+    let (start, end) = fallback_conversation_window(run.id, total, limit, query);
+    let page_items = items
+        .into_iter()
+        .skip(start)
+        .take(end.saturating_sub(start))
+        .collect::<Vec<_>>();
+
+    ApplicationConversationMessagesPageResponse {
+        items: page_items,
+        page: ApplicationConversationMessagesPageInfoResponse {
+            has_before: start > 0,
+            has_after: end < total,
+            before_cursor: (start > 0).then(|| fallback_conversation_cursor(run.id, start)),
+            after_cursor: (end < total).then(|| fallback_conversation_cursor(run.id, end - 1)),
+        },
+    }
+}
+
+fn fallback_conversation_window(
+    run_id: Uuid,
+    total: usize,
+    limit: usize,
+    query: &ApplicationConversationMessagesQuery,
+) -> (usize, usize) {
+    if total == 0 {
+        return (0, 0);
+    }
+
+    if let Some(before) = query
+        .before
+        .as_deref()
+        .and_then(|cursor| parse_fallback_conversation_cursor(run_id, cursor))
+    {
+        let end = before.min(total);
+        return (end.saturating_sub(limit), end);
+    }
+
+    if let Some(after) = query
+        .after
+        .as_deref()
+        .and_then(|cursor| parse_fallback_conversation_cursor(run_id, cursor))
+    {
+        let start = (after + 1).min(total);
+        return (start, (start + limit).min(total));
+    }
+
+    (total.saturating_sub(limit), total)
+}
+
+fn fallback_conversation_cursor(run_id: Uuid, index: usize) -> String {
+    format!("{run_id}:history:{index}")
+}
+
+fn parse_fallback_conversation_cursor(run_id: Uuid, cursor: &str) -> Option<usize> {
+    let (prefix, index) = cursor.rsplit_once(":history:")?;
+    if prefix != run_id.to_string() {
+        return None;
+    }
+
+    index.parse().ok()
+}
+
+fn history_conversation_items_from_payload(
+    run: &domain::FlowRunRecord,
+) -> Vec<ApplicationConversationMessageResponse> {
+    let decoded_payload = decode_runtime_debug_artifact_preview(&run.input_payload);
+    let source = decoded_payload.as_ref().unwrap_or(&run.input_payload);
+    let start_payload = start_input_payload(source);
+    let Some(history) = start_payload
+        .get("history")
+        .or_else(|| start_payload.get("messages"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Vec::new();
+    };
+    let mut items = Vec::new();
+    let mut pending_user: Option<String> = None;
+
+    for message in history {
+        let role = message
+            .get("role")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        let Some(content) = conversation_message_content(message) else {
+            continue;
+        };
+
+        match role {
+            "user" => {
+                if let Some(query) = pending_user.replace(content) {
+                    items.push(fallback_history_item(run, items.len(), query, None));
+                }
+            }
+            "assistant" => {
+                if let Some(query) = pending_user.take() {
+                    items.push(fallback_history_item(
+                        run,
+                        items.len(),
+                        query,
+                        Some(content),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(query) = pending_user {
+        items.push(fallback_history_item(run, items.len(), query, None));
+    }
+
+    items
+}
+
+fn fallback_history_item(
+    run: &domain::FlowRunRecord,
+    index: usize,
+    query: String,
+    answer: Option<String>,
+) -> ApplicationConversationMessageResponse {
+    ApplicationConversationMessageResponse {
+        run_id: fallback_conversation_cursor(run.id, index),
+        started_at: format_time(run.started_at),
+        finished_at: format_optional_time(run.finished_at),
+        status: "succeeded".to_string(),
+        query: Some(query),
+        model: application_run_model(&run.input_payload),
+        answer,
+        is_current: false,
+    }
+}
+
+fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
+    let content = message.get("content")?;
+    if let Some(text) = content
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(array) = content.as_array() {
+        let text = array
+            .iter()
+            .filter_map(conversation_content_part_text)
+            .collect::<Vec<_>>()
+            .join("");
+        return (!text.is_empty()).then_some(text);
+    }
+
+    conversation_content_part_text(content)
+}
+
+fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
+    if let Some(text) = part
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    part.get("text")
+        .or_else(|| part.get("content"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
     let (input_payload, output_payload) = normalize_node_run_payloads_for_logs(&run);
+    let input_payload_view = node_input_payload_view(&run.node_type, &input_payload);
 
     NodeRunResponse {
         id: run.id.to_string(),
@@ -660,6 +864,7 @@ fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
         node_alias: run.node_alias,
         status: run.status.as_str().to_string(),
         input_payload,
+        input_payload_view,
         output_payload,
         error_payload: run.error_payload,
         metrics_payload: run.metrics_payload,
@@ -672,20 +877,182 @@ fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
 fn normalize_node_run_payloads_for_logs(
     run: &domain::NodeRunRecord,
 ) -> (serde_json::Value, serde_json::Value) {
-    if run.node_type == "start"
-        && run
+    if run.node_type == "start" {
+        let input_payload = if run
             .input_payload
             .as_object()
             .is_some_and(serde_json::Map::is_empty)
-        && run
-            .output_payload
-            .as_object()
-            .is_some_and(|object| !object.is_empty())
-    {
-        return (run.output_payload.clone(), serde_json::json!({}));
+            && run
+                .output_payload
+                .as_object()
+                .is_some_and(|object| !object.is_empty())
+        {
+            run.output_payload.clone()
+        } else {
+            run.input_payload.clone()
+        };
+
+        return (input_payload, serde_json::json!({}));
     }
 
     (run.input_payload.clone(), run.output_payload.clone())
+}
+
+fn node_input_payload_view(node_type: &str, payload: &serde_json::Value) -> serde_json::Value {
+    if node_type != "start" {
+        return payload.clone();
+    }
+
+    start_input_payload_summary_view(payload)
+}
+
+fn start_input_payload_summary_view(payload: &serde_json::Value) -> serde_json::Value {
+    let decoded_payload = decode_runtime_debug_artifact_preview(payload);
+    let source = decoded_payload.as_ref().unwrap_or(payload);
+    let start_payload = start_input_payload(source);
+    let artifact_object = payload.as_object().filter(|object| {
+        object
+            .get("__runtime_debug_artifact")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    });
+    let query = application_run_query(source).or_else(|| immediate_start_input_text(start_payload));
+    let model =
+        application_run_model(source).or_else(|| immediate_start_model_value(start_payload));
+    let history_count = named_array_len(start_payload, &["history", "messages"]);
+    let tools_count = named_array_len(
+        start_payload,
+        &["tools", "tool_registry", "tool_definitions"],
+    );
+    let files_count = named_array_len(start_payload, &["files", "attachments"]);
+    let variables_count = start_payload
+        .as_object()
+        .map(serde_json::Map::len)
+        .unwrap_or_default();
+    let mut view = serde_json::Map::new();
+
+    view.insert(
+        "kind".to_string(),
+        serde_json::Value::String("start_input_summary".to_string()),
+    );
+    view.insert(
+        "query".to_string(),
+        query
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
+    );
+    view.insert(
+        "model".to_string(),
+        model
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
+    );
+    view.insert("history_count".to_string(), history_count.into());
+    view.insert("tools_count".to_string(), tools_count.into());
+    view.insert("tool_registry_count".to_string(), tools_count.into());
+    view.insert("files_count".to_string(), files_count.into());
+    view.insert("variables_count".to_string(), variables_count.into());
+
+    if let Some(object) = artifact_object {
+        if let Some(value) = object
+            .get("artifact_ref")
+            .and_then(serde_json::Value::as_str)
+        {
+            view.insert(
+                "artifact_ref".to_string(),
+                serde_json::Value::String(value.to_string()),
+            );
+        }
+        if let Some(value) = object
+            .get("is_truncated")
+            .and_then(serde_json::Value::as_bool)
+        {
+            view.insert("is_truncated".to_string(), serde_json::Value::Bool(value));
+        }
+        if let Some(value) = object
+            .get("original_size_bytes")
+            .and_then(serde_json::Value::as_i64)
+        {
+            view.insert("original_size_bytes".to_string(), value.into());
+        }
+        if let Some(value) = object
+            .get("preview_size_bytes")
+            .and_then(serde_json::Value::as_i64)
+        {
+            view.insert("preview_size_bytes".to_string(), value.into());
+        }
+    }
+
+    serde_json::Value::Object(view)
+}
+
+fn decode_runtime_debug_artifact_preview(payload: &serde_json::Value) -> Option<serde_json::Value> {
+    let object = payload.as_object()?;
+    if !object
+        .get("__runtime_debug_artifact")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    object
+        .get("preview")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|preview| serde_json::from_str(preview).ok())
+}
+
+fn start_input_payload(payload: &serde_json::Value) -> &serde_json::Value {
+    payload
+        .get("node-start")
+        .or_else(|| payload.get("start"))
+        .unwrap_or(payload)
+}
+
+fn named_array_len(payload: &serde_json::Value, keys: &[&str]) -> i64 {
+    find_named_array_len(payload, keys).unwrap_or_default() as i64
+}
+
+fn immediate_start_input_text(value: &serde_json::Value) -> Option<String> {
+    let object = value.as_object()?;
+    for key in ["query", "question", "prompt", "message", "input"] {
+        if let Some(value) = object
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
+fn immediate_start_model_value(value: &serde_json::Value) -> Option<String> {
+    value
+        .as_object()?
+        .get("model")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn find_named_array_len(payload: &serde_json::Value, keys: &[&str]) -> Option<usize> {
+    let object = payload.as_object()?;
+    for key in keys {
+        if let Some(array) = object.get(*key).and_then(serde_json::Value::as_array) {
+            return Some(array.len());
+        }
+    }
+
+    for value in object.values() {
+        if let Some(len) = find_named_array_len(value, keys) {
+            return Some(len);
+        }
+    }
+
+    None
 }
 
 fn to_checkpoint_response(checkpoint: domain::CheckpointRecord) -> CheckpointResponse {
@@ -1498,8 +1865,8 @@ pub async fn list_application_conversation_messages(
             ListApplicationConversationRunsPageInput {
                 external_conversation_id: conversation_id,
                 around_run_id: query.around_run_id,
-                before_run_id: query.before,
-                after_run_id: query.after,
+                before_run_id: parse_optional_uuid_cursor(query.before.as_deref()),
+                after_run_id: parse_optional_uuid_cursor(query.after.as_deref()),
                 limit: query.limit.unwrap_or(5),
             },
         )
@@ -1520,6 +1887,76 @@ pub async fn list_application_conversation_messages(
                 after_cursor: page.after_cursor.map(|value| value.to_string()),
             },
         },
+    )))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/conversation/messages",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("before" = Option<String>, Query, description = "Load messages before this cursor"),
+        ("after" = Option<String>, Query, description = "Load messages after this cursor"),
+        ("limit" = Option<i64>, Query, description = "Page size, defaults to 5")
+    ),
+    responses(
+        (status = 200, body = ApplicationConversationMessagesPageResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn list_application_run_conversation_messages(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    Query(query): Query<ApplicationConversationMessagesQuery>,
+) -> Result<Json<ApiSuccess<ApplicationConversationMessagesPageResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+
+    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+        &state.store,
+        id,
+        run_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+
+    if let Some(conversation_id) = detail.flow_run.external_conversation_id.clone() {
+        let page = <MainDurableStore as OrchestrationRuntimeRepository>::list_application_conversation_runs_page(
+            &state.store,
+            id,
+            ListApplicationConversationRunsPageInput {
+                external_conversation_id: conversation_id,
+                around_run_id: query.around_run_id.or(Some(run_id)),
+                before_run_id: parse_optional_uuid_cursor(query.before.as_deref()),
+                after_run_id: parse_optional_uuid_cursor(query.after.as_deref()),
+                limit: query.limit.unwrap_or(5),
+            },
+        )
+        .await?;
+
+        return Ok(Json(ApiSuccess::new(
+            ApplicationConversationMessagesPageResponse {
+                items: page
+                    .items
+                    .into_iter()
+                    .map(|run| to_application_conversation_message_response(run, Some(run_id)))
+                    .collect(),
+                page: ApplicationConversationMessagesPageInfoResponse {
+                    has_before: page.has_before,
+                    has_after: page.has_after,
+                    before_cursor: page.before_cursor.map(|value| value.to_string()),
+                    after_cursor: page.after_cursor.map(|value| value.to_string()),
+                },
+            },
+        )));
+    }
+
+    Ok(Json(ApiSuccess::new(
+        fallback_conversation_messages_from_run(&detail.flow_run, &query),
     )))
 }
 
@@ -1842,6 +2279,59 @@ mod tests {
     }
 
     #[test]
+    fn start_node_response_exposes_input_payload_summary_view() {
+        let run = domain::NodeRunRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: Uuid::now_v7(),
+            node_id: "node-start".to_string(),
+            node_type: "start".to_string(),
+            node_alias: "Start".to_string(),
+            status: domain::NodeRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "__runtime_debug_artifact": true,
+                "artifact_ref": Uuid::now_v7().to_string(),
+                "is_truncated": true,
+                "original_size_bytes": 12598,
+                "preview_size_bytes": 2048,
+                "preview": serde_json::json!({
+                    "query": "say hello",
+                    "model": "deepseek-chat",
+                    "history": [
+                        { "role": "user", "content": "old question" },
+                        { "role": "assistant", "content": "old answer" }
+                    ],
+                    "tools": [
+                        { "name": "read_file" },
+                        { "function": { "name": "search" } }
+                    ],
+                    "files": []
+                })
+                .to_string()
+            }),
+            output_payload: serde_json::json!({ "query": "say hello" }),
+            error_payload: None,
+            metrics_payload: serde_json::json!({}),
+            debug_payload: serde_json::json!({}),
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+        };
+
+        let response = to_node_run_response(run);
+
+        assert_eq!(
+            response.input_payload["__runtime_debug_artifact"],
+            serde_json::json!(true)
+        );
+        assert_eq!(response.input_payload_view["kind"], "start_input_summary");
+        assert_eq!(response.input_payload_view["query"], "say hello");
+        assert_eq!(response.input_payload_view["model"], "deepseek-chat");
+        assert_eq!(response.input_payload_view["history_count"], 2);
+        assert_eq!(response.input_payload_view["tools_count"], 2);
+        assert_eq!(response.input_payload_view["files_count"], 0);
+        assert!(response.input_payload_view.get("preview").is_none());
+    }
+
+    #[test]
     fn flow_run_response_exposes_query_and_model_short_fields() {
         let run = domain::FlowRunRecord {
             id: Uuid::now_v7(),
@@ -1887,5 +2377,71 @@ mod tests {
             response.external_conversation_id.as_deref(),
             Some("conversation-1")
         );
+    }
+
+    #[test]
+    fn run_conversation_fallback_reads_recent_history_and_current_turn() {
+        let run_id = Uuid::now_v7();
+        let run = domain::FlowRunRecord {
+            id: run_id,
+            application_id: Uuid::now_v7(),
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: None,
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "current question".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "current question",
+                    "model": "deepseek-chat",
+                    "history": [
+                        { "role": "system", "content": "hidden" },
+                        { "role": "user", "content": "old question 1" },
+                        { "role": "assistant", "content": "old answer 1" },
+                        { "role": "tool", "content": "tool payload" },
+                        { "role": "user", "content": "old question 2" },
+                        { "role": "assistant", "content": "old answer 2" }
+                    ]
+                }
+            }),
+            output_payload: serde_json::json!({ "answer": "current answer" }),
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: None,
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        let page = fallback_conversation_messages_from_run(
+            &run,
+            &ApplicationConversationMessagesQuery {
+                around_run_id: None,
+                before: None,
+                after: None,
+                limit: Some(2),
+            },
+        );
+
+        assert_eq!(page.items.len(), 2);
+        assert!(page.page.has_before);
+        assert_eq!(page.items[0].query.as_deref(), Some("old question 2"));
+        assert_eq!(page.items[0].answer.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[1].run_id, run_id.to_string());
+        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
+        assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
     }
 }

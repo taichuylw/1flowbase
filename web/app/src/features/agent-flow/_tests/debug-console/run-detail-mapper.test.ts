@@ -197,4 +197,46 @@ describe('run detail mapper', () => {
       })
     );
   });
+
+  test('uses node input payload view for trace display when backend provides one', () => {
+    const detail = baseDetail();
+    detail.node_runs = [
+      {
+        id: 'node-run-start',
+        flow_run_id: 'flow-run-1',
+        node_id: 'node-start',
+        node_type: 'start',
+        node_alias: 'Start',
+        status: 'succeeded',
+        input_payload: {
+          __runtime_debug_artifact: true,
+          artifact_ref: 'artifact-start-input',
+          preview: '{"history":[{"role":"system","content":"hidden"}]}'
+        },
+        input_payload_view: {
+          kind: 'start_input_summary',
+          query: '总结退款政策',
+          model: 'deepseek-chat',
+          history_count: 4,
+          tools_count: 2,
+          files_count: 0
+        },
+        output_payload: {},
+        error_payload: null,
+        metrics_payload: {},
+        debug_payload: {},
+        started_at: '2026-04-26T10:00:00Z',
+        finished_at: '2026-04-26T10:00:01Z'
+      }
+    ];
+
+    expect(mapRunDetailToTrace(detail)[0].inputPayload).toEqual({
+      kind: 'start_input_summary',
+      query: '总结退款政策',
+      model: 'deepseek-chat',
+      history_count: 4,
+      tools_count: 2,
+      files_count: 0
+    });
+  });
 });

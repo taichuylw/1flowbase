@@ -1,6 +1,6 @@
 import {
   completeConsoleCallbackTask,
-  getConsoleApplicationConversationMessages,
+  getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugArtifact,
@@ -60,15 +60,15 @@ export const applicationRunDetailQueryKey = (
 
 export const applicationConversationMessagesQueryKey = (
   applicationId: string,
-  conversationId: string,
   runId: string
 ) =>
   [
     'applications',
     applicationId,
     'runtime',
-    'conversations',
-    conversationId,
+    'runs',
+    runId,
+    'conversation',
     'around',
     runId
   ] as const;
@@ -113,19 +113,17 @@ export function fetchApplicationRunDetail(applicationId: string, runId: string) 
 
 export function fetchApplicationConversationMessages(
   applicationId: string,
-  conversationId: string,
+  runId: string,
   input: {
-    aroundRunId?: string;
     before?: string;
     after?: string;
     limit?: number;
   } = {}
 ) {
-  return getConsoleApplicationConversationMessages(
+  return getConsoleApplicationRunConversationMessages(
     applicationId,
-    conversationId,
+    runId,
     {
-      around_run_id: input.aroundRunId,
       before: input.before,
       after: input.after,
       limit: input.limit

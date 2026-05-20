@@ -345,43 +345,31 @@ function RunConversation({
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
 }) {
   const runContext = buildRunContext(detail);
-  const conversationId = nonEmptyString(detail.flow_run.external_conversation_id);
   const [conversationPage, setConversationPage] =
     useState<ApplicationConversationMessagesPage | null>(null);
   const initialConversationQuery = useQuery({
-    queryKey: conversationId
-      ? applicationConversationMessagesQueryKey(
-          detail.flow_run.application_id,
-          conversationId,
-          detail.flow_run.id
-        )
-      : [
-          'applications',
-          detail.flow_run.application_id,
-          'runtime',
-          'conversation',
-          'none'
-        ],
+    queryKey: applicationConversationMessagesQueryKey(
+      detail.flow_run.application_id,
+      detail.flow_run.id
+    ),
     queryFn: () =>
       fetchApplicationConversationMessages(
         detail.flow_run.application_id,
-        conversationId!,
+        detail.flow_run.id,
         {
-          aroundRunId: detail.flow_run.id,
           limit: 5
         }
-      ),
-    enabled: Boolean(conversationId)
+      )
   });
   const loadPreviousConversationMutation = useMutation({
     mutationFn: async () => {
-      if (!conversationId || !conversationPage?.page.before_cursor) {
+      if (!conversationPage?.page.before_cursor) {
         throw new Error('missing previous conversation cursor');
       }
 
       return fetchApplicationConversationMessages(
         detail.flow_run.application_id,
-        conversationId,
+        detail.flow_run.id,
         {
           before: conversationPage.page.before_cursor,
           limit: 5
@@ -420,7 +408,7 @@ function RunConversation({
 
   useEffect(() => {
     setConversationPage(null);
-  }, [detail.flow_run.id, conversationId]);
+  }, [detail.flow_run.id]);
 
   useEffect(() => {
     if (initialConversationQuery.data) {

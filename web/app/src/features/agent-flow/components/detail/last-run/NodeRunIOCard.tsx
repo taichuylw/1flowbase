@@ -27,6 +27,12 @@ function findRuntimeDebugArtifactRef(value: unknown): string | null {
   ) {
     return record.artifact_ref;
   }
+  if (
+    record.kind === 'start_input_summary' &&
+    typeof record.artifact_ref === 'string'
+  ) {
+    return record.artifact_ref;
+  }
 
   for (const nestedValue of Object.values(record)) {
     const nestedRef = findRuntimeDebugArtifactRef(nestedValue);
@@ -267,7 +273,9 @@ export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
     <Card title="节点输入输出">
       <div className="agent-flow-node-run-json-list">
         <NodeRunPayloadSections
-          inputPayload={lastRun.node_run.input_payload}
+          inputPayload={
+            lastRun.node_run.input_payload_view ?? lastRun.node_run.input_payload
+          }
           debugPayload={lastRun.node_run.debug_payload}
           outputPayload={lastRun.node_run.output_payload}
           onLoadArtifact={(artifactRef) =>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunNodeLastRun,
   getConsoleApplicationRuns,
@@ -177,6 +178,32 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/nodes/node-llm',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches conversation messages around an explicit flow run', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { items: [], page: {} } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationRunConversationMessages(
+        'app-1',
+        'run-1',
+        { limit: 5 },
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ items: [], page: {} });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/conversation/messages?limit=5',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
