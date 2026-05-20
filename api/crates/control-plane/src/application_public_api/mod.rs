@@ -94,6 +94,7 @@ struct ApplicationPublicApiTestRepositoryInner {
     flow_runs: HashMap<Uuid, domain::FlowRunRecord>,
     callback_tasks: HashMap<Uuid, domain::CallbackTaskRecord>,
     run_events: HashMap<Uuid, Vec<domain::RunEventRecord>>,
+    application_environment_variables: HashMap<Uuid, Vec<domain::ApplicationEnvironmentVariable>>,
     editor_state_read_count: usize,
     next_flow_ordinal: u128,
     next_flow_version_sequence: i64,
@@ -819,17 +820,62 @@ impl ApplicationRepository for ApplicationPublicApiTestRepository {
 
     async fn list_application_environment_variables(
         &self,
-        _workspace_id: Uuid,
-        _application_id: Uuid,
+        workspace_id: Uuid,
+        application_id: Uuid,
     ) -> Result<Vec<domain::ApplicationEnvironmentVariable>> {
-        Ok(Vec::new())
+        let inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let application = inner
+            .applications
+            .get(&application_id)
+            .filter(|application| application.workspace_id == workspace_id);
+        if application.is_none() {
+            return Err(ControlPlaneError::NotFound("application").into());
+        }
+
+        Ok(inner
+            .application_environment_variables
+            .get(&application_id)
+            .cloned()
+            .unwrap_or_default())
     }
 
     async fn replace_application_environment_variables(
         &self,
-        _input: &ReplaceApplicationEnvironmentVariablesInput,
+        input: &ReplaceApplicationEnvironmentVariablesInput,
     ) -> Result<Vec<domain::ApplicationEnvironmentVariable>> {
-        Ok(Vec::new())
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let application = inner
+            .applications
+            .get(&input.application_id)
+            .filter(|application| application.workspace_id == input.workspace_id);
+        if application.is_none() {
+            return Err(ControlPlaneError::NotFound("application").into());
+        }
+
+        let updated_at = OffsetDateTime::now_utc();
+        let variables = input
+            .variables
+            .iter()
+            .map(|variable| domain::ApplicationEnvironmentVariable {
+                application_id: input.application_id,
+                name: variable.name.clone(),
+                value_type: variable.value_type.clone(),
+                value: variable.value.clone(),
+                description: variable.description.clone(),
+                updated_at,
+            })
+            .collect::<Vec<_>>();
+        inner
+            .application_environment_variables
+            .insert(input.application_id, variables.clone());
+
+        Ok(variables)
     }
 
     async fn append_audit_log(&self, _event: &domain::AuditLogRecord) -> Result<()> {

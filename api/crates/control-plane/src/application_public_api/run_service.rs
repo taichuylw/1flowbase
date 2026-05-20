@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -105,6 +105,11 @@ where
             }
         }
 
+        let environment_variables = self
+            .repository
+            .list_application_environment_variables(actor.workspace_id, actor.application_id)
+            .await
+            .map_err(|_| NativeRunValidationError::InvalidMapping)?;
         let started_at = OffsetDateTime::now_utc();
         let flow_run = self
             .repository
@@ -121,7 +126,10 @@ where
                 target_node_id: None,
                 title: build_flow_run_title(request.title.as_deref(), &request.query),
                 status: domain::FlowRunStatus::Queued,
-                input_payload: mapped.node_input_payload,
+                input_payload: freeze_run_input_environment(
+                    mapped.node_input_payload,
+                    &environment_variables,
+                ),
                 started_at,
                 api_key_id: Some(actor.api_key_id),
                 publication_version_id: Some(publication.id),
@@ -463,6 +471,27 @@ fn extract_usage(output_payload: &Value) -> Option<super::native::NativeUsage> {
 
 fn generate_external_conversation_id() -> String {
     format!("conv_{}", Uuid::now_v7().simple())
+}
+
+fn freeze_run_input_environment(
+    input_payload: Value,
+    variables: &[domain::ApplicationEnvironmentVariable],
+) -> Value {
+    let mut payload = input_payload.as_object().cloned().unwrap_or_default();
+    payload.insert(
+        "env".to_string(),
+        Value::Object(application_environment_variable_payload(variables)),
+    );
+    Value::Object(payload)
+}
+
+fn application_environment_variable_payload(
+    variables: &[domain::ApplicationEnvironmentVariable],
+) -> Map<String, Value> {
+    variables
+        .iter()
+        .map(|variable| (variable.name.clone(), variable.value.clone()))
+        .collect()
 }
 
 fn native_status(status: domain::FlowRunStatus) -> NativeRunStatus {

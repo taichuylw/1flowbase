@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -88,7 +88,7 @@ fn validate_flow_debug_run_shell(
         || flow_run.debug_session_id != command.debug_session_id
         || flow_run.flow_schema_version != flow_schema_version
         || flow_run.document_hash != document_hash
-        || flow_run.input_payload != command.input_payload
+        || user_input_payload(&flow_run.input_payload) != command.input_payload
         || flow_run.flow_id != editor_state.flow.id
         || flow_run.draft_id != editor_state.draft.id
     {
@@ -96,6 +96,16 @@ fn validate_flow_debug_run_shell(
     }
 
     Ok(())
+}
+
+fn user_input_payload(input_payload: &Value) -> Value {
+    let Some(object) = input_payload.as_object() else {
+        return input_payload.clone();
+    };
+    let mut user_input = object.clone();
+    user_input.remove("sys");
+    user_input.remove("env");
+    Value::Object(user_input)
 }
 
 pub(super) async fn open_flow_debug_run_shell<R, H>(
@@ -122,11 +132,15 @@ where
     let editor_state = FlowService::new(service.repository.clone())
         .get_or_create_editor_state(command.actor_user_id, command.application_id)
         .await?;
-    service
+    let application = service
         .repository
         .get_application(actor.current_workspace_id, command.application_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("application"))?;
+    let environment_variables = service
+        .repository
+        .list_application_environment_variables(application.workspace_id, application.id)
+        .await?;
     let debug_document = command
         .document_snapshot
         .as_ref()
@@ -148,7 +162,10 @@ where
             target_node_id: None,
             title: display_flow_run_title("", &command.input_payload),
             status: domain::FlowRunStatus::Queued,
-            input_payload: command.input_payload,
+            input_payload: freeze_run_input_environment(
+                command.input_payload,
+                &environment_variables,
+            ),
             started_at: OffsetDateTime::now_utc(),
             api_key_id: None,
             publication_version_id: None,
@@ -159,6 +176,27 @@ where
             idempotency_key: None,
         })
         .await
+}
+
+fn freeze_run_input_environment(
+    input_payload: Value,
+    variables: &[domain::ApplicationEnvironmentVariable],
+) -> Value {
+    let mut payload = input_payload.as_object().cloned().unwrap_or_default();
+    payload.insert(
+        "env".to_string(),
+        Value::Object(application_environment_variable_payload(variables)),
+    );
+    Value::Object(payload)
+}
+
+fn application_environment_variable_payload(
+    variables: &[domain::ApplicationEnvironmentVariable],
+) -> Map<String, Value> {
+    variables
+        .iter()
+        .map(|variable| (variable.name.clone(), variable.value.clone()))
+        .collect()
 }
 
 pub(super) async fn prepare_flow_debug_run_from_shell<R, H>(

@@ -252,11 +252,13 @@ where
         .as_object()
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
-    let environment_variables = service
-        .repository
-        .list_application_environment_variables(application.workspace_id, application.id)
-        .await?;
-    inject_application_environment_variables(&mut variable_pool, &environment_variables);
+    if !variable_pool.contains_key("env") {
+        let environment_variables = service
+            .repository
+            .list_application_environment_variables(application.workspace_id, application.id)
+            .await?;
+        inject_application_environment_variables(&mut variable_pool, &environment_variables);
+    }
     inject_system_variables(&mut variable_pool, &flow_run);
     let mut last_output_payload = json!({});
     let flow_span = append_host_span(
@@ -294,10 +296,7 @@ where
         );
         let node_started_at = OffsetDateTime::now_utc();
         let node_input_payload = if node.node_type == "start" {
-            variable_pool
-                .get(node_id)
-                .cloned()
-                .unwrap_or_else(|| json!({}))
+            start_node_input_payload(&variable_pool, node_id)
         } else {
             Value::Object(resolved_inputs.clone())
         };
@@ -778,7 +777,8 @@ where
                                 .cloned()
                                 .unwrap_or(Value::Null)
                         });
-                let output_payload = json!({ output_key: output_value });
+                let output_payload =
+                    template_output_payload(node, output_key, output_value, &variable_pool);
                 last_output_payload = output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), output_payload.clone());
                 update_node_run_and_emit(
@@ -1124,10 +1124,16 @@ fn inject_system_variables(
     variable_pool: &mut serde_json::Map<String, Value>,
     flow_run: &domain::FlowRunRecord,
 ) {
+    let conversation_id = flow_run
+        .external_conversation_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&flow_run.debug_session_id);
+
     variable_pool.insert(
         "sys".to_string(),
         json!({
-            "conversation_id": flow_run.debug_session_id,
+            "conversation_id": conversation_id,
             "dialog_count": 0,
             "user_id": flow_run.created_by.to_string(),
             // Public template compatibility: existing flows reference sys.app_id.
@@ -1136,6 +1142,47 @@ fn inject_system_variables(
             "workflow_run_id": flow_run.id.to_string(),
         }),
     );
+}
+
+fn start_node_input_payload(
+    variable_pool: &serde_json::Map<String, Value>,
+    node_id: &str,
+) -> Value {
+    let mut payload = variable_pool
+        .get(node_id)
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+
+    if let Some(sys) = variable_pool.get("sys") {
+        payload.insert("sys".to_string(), sys.clone());
+    }
+    if let Some(env) = variable_pool.get("env") {
+        payload.insert("env".to_string(), env.clone());
+    }
+
+    Value::Object(payload)
+}
+
+fn template_output_payload(
+    node: &orchestration_runtime::compiled_plan::CompiledNode,
+    output_key: String,
+    output_value: Value,
+    variable_pool: &serde_json::Map<String, Value>,
+) -> Value {
+    let mut payload = serde_json::Map::new();
+    payload.insert(output_key, output_value);
+
+    if node.node_type == "answer" {
+        if let Some(sys) = variable_pool.get("sys") {
+            payload.insert("sys".to_string(), sys.clone());
+        }
+        if let Some(env) = variable_pool.get("env") {
+            payload.insert("env".to_string(), env.clone());
+        }
+    }
+
+    Value::Object(payload)
 }
 
 fn inject_application_environment_variables(

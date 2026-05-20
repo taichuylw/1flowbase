@@ -1295,7 +1295,11 @@ async fn start_flow_debug_run_waits_for_human_input() {
 async fn resume_flow_debug_run_completes_answer_after_human_input() {
     let waiting = start_flow_debug_run(
         &base_plan(),
-        &json!({ "node-start": { "query": "退款政策" } }),
+        &json!({
+            "node-start": { "query": "退款政策" },
+            "sys": { "workflow_run_id": "run-1", "conversation_id": "conversation-1" },
+            "env": { "ApiBaseUrl": "https://api.example.com" }
+        }),
         &successful_invoker(),
     )
     .await
@@ -1319,6 +1323,19 @@ async fn resume_flow_debug_run_completes_answer_after_human_input() {
     assert_eq!(
         resumed.variable_pool["node-answer"]["answer"],
         json!("已审核，可继续")
+    );
+    let answer_trace = resumed
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-answer")
+        .expect("answer trace should exist");
+    assert_eq!(
+        answer_trace.output_payload["sys"]["workflow_run_id"],
+        json!("run-1")
+    );
+    assert_eq!(
+        answer_trace.output_payload["env"]["ApiBaseUrl"],
+        json!("https://api.example.com")
     );
 }
 

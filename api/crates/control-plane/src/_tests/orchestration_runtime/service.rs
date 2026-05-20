@@ -643,6 +643,226 @@ async fn flow_debug_run_resolves_application_environment_variables() {
 }
 
 #[tokio::test]
+async fn live_debug_run_persists_start_context_and_answer_final_variables() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service
+        .seed_application_with_flow("Runtime Context Agent")
+        .await;
+    service
+        .replace_application_environment_variables_for_tests(
+            seeded.actor_user_id,
+            seeded.application_id,
+            vec![control_plane::ports::ApplicationEnvironmentVariableInput {
+                name: "ApiBaseUrl".to_string(),
+                value_type: "string".to_string(),
+                value: json!("https://api.example.com"),
+                description: "当前应用 API 地址".to_string(),
+            }],
+        )
+        .await;
+    let mut document = code_to_answer_flow_document(
+        seeded.flow_id,
+        "function main(inputs) { return { result: inputs.query + ' via ' + inputs.base_url }; }",
+    );
+    document["graph"]["nodes"][1]["bindings"]["base_url"] = json!({
+        "kind": "selector",
+        "value": ["env", "ApiBaseUrl"]
+    });
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: Some(document),
+            debug_session_id: Some("debug-session-1".to_string()),
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let start_node = completed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-start")
+        .expect("start node should be persisted");
+    assert_eq!(start_node.input_payload["query"], json!("hello"));
+    assert_eq!(
+        start_node.input_payload["env"]["ApiBaseUrl"],
+        json!("https://api.example.com")
+    );
+    assert_eq!(
+        start_node.input_payload["sys"]["conversation_id"],
+        json!("debug-session-1")
+    );
+    assert_eq!(
+        start_node.input_payload["sys"]["workflow_run_id"],
+        json!(started.flow_run.id.to_string())
+    );
+    assert_eq!(start_node.output_payload, json!({}));
+
+    let code_node = completed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-code")
+        .expect("code node should be persisted");
+    assert_eq!(
+        code_node.input_payload,
+        json!({
+            "query": "hello",
+            "base_url": "https://api.example.com"
+        })
+    );
+
+    let answer_node = completed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-answer")
+        .expect("answer node should be persisted");
+    assert_eq!(
+        answer_node.output_payload["answer"],
+        json!("Code said: hello via https://api.example.com")
+    );
+    assert_eq!(
+        answer_node.output_payload["env"]["ApiBaseUrl"],
+        json!("https://api.example.com")
+    );
+    assert_eq!(
+        answer_node.output_payload["sys"]["workflow_run_id"],
+        json!(started.flow_run.id.to_string())
+    );
+    assert_eq!(
+        completed.flow_run.output_payload,
+        answer_node.output_payload
+    );
+
+    service
+        .replace_application_environment_variables_for_tests(
+            seeded.actor_user_id,
+            seeded.application_id,
+            vec![control_plane::ports::ApplicationEnvironmentVariableInput {
+                name: "ApiBaseUrl".to_string(),
+                value_type: "string".to_string(),
+                value: json!("https://api.changed.example.com"),
+                description: "更新后的应用 API 地址".to_string(),
+            }],
+        )
+        .await;
+    let reloaded = service
+        .application_run_detail(seeded.application_id, completed.flow_run.id)
+        .await;
+    let reloaded_start = reloaded
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-start")
+        .expect("reloaded start node should exist");
+    assert_eq!(
+        reloaded_start.input_payload["env"]["ApiBaseUrl"],
+        json!("https://api.example.com")
+    );
+    assert_eq!(
+        reloaded.flow_run.output_payload["env"]["ApiBaseUrl"],
+        json!("https://api.example.com")
+    );
+}
+
+#[tokio::test]
+async fn live_debug_run_uses_environment_snapshot_from_opened_shell() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service
+        .seed_application_with_flow("Runtime Shell Context Agent")
+        .await;
+    service
+        .replace_application_environment_variables_for_tests(
+            seeded.actor_user_id,
+            seeded.application_id,
+            vec![control_plane::ports::ApplicationEnvironmentVariableInput {
+                name: "ApiBaseUrl".to_string(),
+                value_type: "string".to_string(),
+                value: json!("https://api.at-open.example.com"),
+                description: "打开运行时的 API 地址".to_string(),
+            }],
+        )
+        .await;
+    let mut document = code_to_answer_flow_document(
+        seeded.flow_id,
+        "function main(inputs) { return { result: inputs.base_url }; }",
+    );
+    document["graph"]["nodes"][1]["bindings"]["base_url"] = json!({
+        "kind": "selector",
+        "value": ["env", "ApiBaseUrl"]
+    });
+    let input_payload = json!({ "node-start": { "query": "hello" } });
+    let debug_session_id = "debug-session-shell".to_string();
+
+    let shell = service
+        .open_flow_debug_run_shell(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: input_payload.clone(),
+            document_snapshot: Some(document.clone()),
+            debug_session_id: Some(debug_session_id.clone()),
+        })
+        .await
+        .unwrap();
+
+    service
+        .replace_application_environment_variables_for_tests(
+            seeded.actor_user_id,
+            seeded.application_id,
+            vec![control_plane::ports::ApplicationEnvironmentVariableInput {
+                name: "ApiBaseUrl".to_string(),
+                value_type: "string".to_string(),
+                value: json!("https://api.changed-before-continue.example.com"),
+                description: "继续运行前修改后的 API 地址".to_string(),
+            }],
+        )
+        .await;
+
+    service
+        .prepare_flow_debug_run_from_shell(PrepareFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_run_id: shell.id,
+            input_payload,
+            document_snapshot: Some(document),
+            debug_session_id,
+        })
+        .await
+        .unwrap();
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: shell.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let start_node = completed
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-start")
+        .expect("start node should be persisted");
+    assert_eq!(
+        start_node.input_payload["env"]["ApiBaseUrl"],
+        json!("https://api.at-open.example.com")
+    );
+    assert_eq!(
+        completed.flow_run.output_payload["env"]["ApiBaseUrl"],
+        json!("https://api.at-open.example.com")
+    );
+}
+
+#[tokio::test]
 async fn flow_debug_run_fails_before_provider_when_prompt_template_selector_is_missing() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;

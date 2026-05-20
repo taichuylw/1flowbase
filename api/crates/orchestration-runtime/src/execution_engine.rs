@@ -291,7 +291,8 @@ where
                                 .cloned()
                                 .unwrap_or(Value::Null)
                         });
-                let output_payload = json!({ output_key: output_value });
+                let output_payload =
+                    template_output_payload(node, output_key, output_value, &variable_pool);
                 variable_pool.insert(
                     node.node_id.clone(),
                     project_node_variable_payload(node, &output_payload)?,
@@ -1157,6 +1158,27 @@ fn first_output_key(node: &CompiledNode) -> String {
         .first()
         .map(|output| output.key.clone())
         .unwrap_or_else(|| "result".to_string())
+}
+
+fn template_output_payload(
+    node: &CompiledNode,
+    output_key: String,
+    output_value: Value,
+    variable_pool: &Map<String, Value>,
+) -> Value {
+    let mut payload = Map::new();
+    payload.insert(output_key, output_value);
+
+    if node.node_type == "answer" {
+        if let Some(sys) = variable_pool.get("sys") {
+            payload.insert("sys".to_string(), sys.clone());
+        }
+        if let Some(env) = variable_pool.get("env") {
+            payload.insert("env".to_string(), env.clone());
+        }
+    }
+
+    Value::Object(payload)
 }
 
 fn build_failed_llm_execution(

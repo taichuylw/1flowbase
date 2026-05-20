@@ -352,9 +352,14 @@ async fn live_debug_persists_llm_debug_payload_without_polluting_public_outputs(
         .is_some_and(|events| events.len() >= 4));
 
     assert_eq!(
-        detail.flow_run.output_payload,
-        serde_json::json!({ "answer": "echo:gpt-5.4-mini:请查询订单" })
+        detail.flow_run.output_payload["answer"],
+        serde_json::json!("echo:gpt-5.4-mini:请查询订单")
     );
+    assert_eq!(
+        detail.flow_run.output_payload["sys"]["workflow_run_id"],
+        serde_json::json!(detail.flow_run.id.to_string())
+    );
+    assert_eq!(detail.flow_run.output_payload["env"], serde_json::json!({}));
     for forbidden_key in [
         "node-start",
         "node-llm",
