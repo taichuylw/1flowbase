@@ -15,10 +15,10 @@
   height: 56px;
   gap: 16px;
   padding: 0 var(--app-shell-edge-gap) 0 24px;
-  background: rgba(248, 252, 250, 0.94) !important;
-  border-bottom: 1px solid rgba(213, 221, 216, 0.84);
-  box-shadow: 0 6px 18px rgba(13, 23, 18, 0.035);
-  backdrop-filter: blur(12px);
+  background: rgba(248, 252, 250, 0.45) !important;
+  border-bottom: 1px solid rgba(0, 171, 115, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 171, 115, 0.02);
+  backdrop-filter: blur(20px);
 }
 
 .app-shell-header-main {
