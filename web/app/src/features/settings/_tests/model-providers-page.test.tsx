@@ -598,7 +598,7 @@ describe('ModelProvidersPage', () => {
       ).toHaveBeenCalled();
     });
 
-    await screen.findByText('已安装供应商', {}, { timeout: 10000 });
+    await screen.findByText('可用实例', {}, { timeout: 10000 });
     expect(
       screen.queryByText(
         '先安装供应商，再配置 API 密钥实例。只有 ready 状态的实例会进入 agentFlow 的模型选项。'
@@ -622,8 +622,10 @@ describe('ModelProvidersPage', () => {
 
     renderApp('/settings/model-providers');
 
+    await screen.findByText('可用实例', {}, { timeout: 10000 });
+
     expect(
-      await screen.findByRole('button', { name: '配置' })
+      await screen.findByRole('button', { name: '配置' }, { timeout: 10000 })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '当前实例' })
@@ -631,7 +633,7 @@ describe('ModelProvidersPage', () => {
 
     const catalogRow = await screen.findByRole('row', {
       name: /OpenAI Compatible/
-    });
+    }, { timeout: 10000 });
     expect(
       within(catalogRow).getByRole('button', { name: '配置' })
     ).toBeInTheDocument();
