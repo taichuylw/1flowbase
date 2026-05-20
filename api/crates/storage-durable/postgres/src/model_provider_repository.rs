@@ -236,10 +236,10 @@ impl ModelProviderRepository for PgControlPlaneStore {
                         where workspace_id = $2
                           and provider_code = $4
                     ),
-                    true
+                    $12
                 ),
-                $12,
-                $12
+                $13,
+                $13
             )
             returning
                 id,
@@ -270,6 +270,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
         .bind(serde_json::to_value(&input.configured_models)?)
         .bind(&input.enabled_model_ids)
         .bind(input.included_in_main)
+        .bind(domain::DEFAULT_AUTO_INCLUDE_NEW_PROVIDER_INSTANCES)
         .bind(input.created_by)
         .fetch_one(self.pool())
         .await?;

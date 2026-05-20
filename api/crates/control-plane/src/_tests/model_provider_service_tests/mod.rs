@@ -483,7 +483,7 @@ impl ModelProviderRepository for MemoryModelProviderRepository {
                     &input.provider_code,
                 ))
                 .map(|record| record.auto_include_new_instances)
-                .unwrap_or(true),
+                .unwrap_or(domain::DEFAULT_AUTO_INCLUDE_NEW_PROVIDER_INSTANCES),
         };
         let record = ModelProviderInstanceRecord {
             id: input.instance_id,

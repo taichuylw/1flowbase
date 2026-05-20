@@ -1028,7 +1028,7 @@ fn filter_matches(record: &Value, filter: &domain::ResourceFilterExpr) -> bool {
                 domain::ResourceFilterOperator::NotIncludes => current
                     .as_str()
                     .zip(value.as_str())
-                    .map_or(true, |(current, value)| {
+                    .is_none_or(|(current, value)| {
                         !current.to_lowercase().contains(&value.to_lowercase())
                     }),
                 domain::ResourceFilterOperator::In => value
