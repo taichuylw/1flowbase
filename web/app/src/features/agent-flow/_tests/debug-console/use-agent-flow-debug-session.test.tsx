@@ -465,7 +465,9 @@ describe('useAgentFlowDebugSession', () => {
             files: [],
             history: [],
             model: '',
-            query: '请总结退款政策'
+            query: '请总结退款政策',
+            tool_choice: {},
+            tools: []
           }
         }
       },
@@ -617,6 +619,124 @@ describe('useAgentFlowDebugSession', () => {
       'app-1',
       'artifact-llm-text'
     );
+  });
+
+  test('hydrates truncated start input artifacts before projecting history and tools variables', async () => {
+    const queryClient = createQueryClient();
+    const detail = createSucceededRunDetail();
+    detail.flow_run.input_payload = {
+      __runtime_debug_artifact: true,
+      is_truncated: true,
+      original_size_bytes: 8192,
+      preview_size_bytes: 256,
+      content_type: 'application/json',
+      artifact_ref: 'artifact-start-input',
+      preview: JSON.stringify({
+        'node-start': {
+          query: '请总结退款政策',
+          model: 'deepseek-chat'
+        }
+      }),
+      query: '请总结退款政策',
+      model: 'deepseek-chat'
+    };
+    detail.node_runs[0]!.input_payload = {
+      __runtime_debug_artifact: true,
+      is_truncated: true,
+      original_size_bytes: 4096,
+      preview_size_bytes: 128,
+      content_type: 'application/json',
+      artifact_ref: 'artifact-start-node-input',
+      preview: JSON.stringify({
+        query: '请总结退款政策',
+        model: 'deepseek-chat'
+      })
+    };
+    vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockRejectedValue(
+      new Error('stream unavailable')
+    );
+    vi.spyOn(runtimeApi, 'startFlowDebugRun').mockResolvedValue(detail);
+    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockImplementation(
+      async (_applicationId, artifactRef) => {
+        if (artifactRef === 'artifact-start-input') {
+          return {
+            'node-start': {
+              query: '请总结退款政策',
+              model: 'deepseek-chat',
+              history: [
+                { role: 'user', content: '之前的问题' },
+                { role: 'assistant', content: '之前的回答' }
+              ],
+              tools: [{ name: 'read_file' }, { name: 'search' }],
+              files: []
+            }
+          };
+        }
+
+        if (artifactRef === 'artifact-start-node-input') {
+          return {
+            query: '请总结退款政策',
+            model: 'deepseek-chat',
+            history: [
+              { role: 'user', content: '之前的问题' },
+              { role: 'assistant', content: '之前的回答' }
+            ],
+            tools: [{ name: 'read_file' }, { name: 'search' }],
+            files: []
+          };
+        }
+
+        throw new Error(`unexpected artifact: ${artifactRef}`);
+      }
+    );
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({ variable_cache: {} })
+      .mockResolvedValue({ variable_cache: {} });
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    const { result } = renderHook(
+      () =>
+        useAgentFlowDebugSession({
+          applicationId: 'app-1',
+          draftId: 'draft-1',
+          document
+        }),
+      { wrapper: createWrapper(queryClient) }
+    );
+
+    await act(async () => {
+      await result.current.submitPrompt('请总结退款政策');
+    });
+
+    await waitFor(() => {
+      expect(result.current.getNodePreviewVariableCache()).toEqual(
+        expect.objectContaining({
+          'node-start': expect.objectContaining({
+            query: '请总结退款政策',
+            model: 'deepseek-chat',
+            history: [
+              { role: 'user', content: '之前的问题' },
+              { role: 'assistant', content: '之前的回答' }
+            ],
+            tools: [{ name: 'read_file' }, { name: 'search' }],
+            files: []
+          })
+        })
+      );
+    });
+    expect(
+      result.current.variableGroups
+        .find((group) => group.title === 'Start')
+        ?.items.find((item) => item.key === 'node-start.history')?.value
+    ).toEqual([
+      { role: 'user', content: '之前的问题' },
+      { role: 'assistant', content: '之前的回答' }
+    ]);
+    expect(
+      result.current.variableGroups
+        .find((group) => group.title === 'Start')
+        ?.items.find((item) => item.key === 'node-start.tools')?.value
+    ).toEqual([{ name: 'read_file' }, { name: 'search' }]);
   });
 
   test('persists edited variable cache values across editor remounts', async () => {

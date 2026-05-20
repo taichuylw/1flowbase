@@ -8,7 +8,10 @@ keywords:
   - run detail
   - user input
   - start node input
+  - start input artifact
+  - history
   - tool schema
+  - tools
   - conversation pagination
 match_when:
   - 修改应用日志、运行详情、公开 API 兼容请求映射或 debug artifact 预览时
@@ -30,7 +33,7 @@ scope:
 
 ## 规则
 
-应用日志聊天视图中的用户消息只代表用户原始发言。运行详情顶层字段使用 `query` / `model` 这类业务命名，不使用 `input_text` / `input_model`；历史对话按 `external_conversation_id` 分页读取，并以当前 run 为锚点加载附近消息。工具注册统一归一为 start 节点输入里的稳定变量，例如 `userinput.tools` 和 `userinput.tool_choice`；start 节点输出在日志语义上保持空对象。工具调用、兼容协议透传字段、运行参数和大 payload 预览应作为 start 节点输入、节点详情或运行追踪记录，不应被当作用户聊天内容展示。
+应用日志聊天视图中的用户消息只代表用户原始发言。运行详情顶层字段使用 `query` / `model` 这类业务命名，不使用 `input_text` / `input_model`；历史对话按 `external_conversation_id` 分页读取，并以当前 run 为锚点加载附近消息。工具注册统一归一为 start 节点输入里的稳定变量，例如 `userinput.tools` 和 `userinput.tool_choice`；`userinput.history` / `userinput.tools` 这类数组变量如果被 runtime debug artifact 截断，调试变量面板必须加载完整 artifact 后再投影，不能只依赖 start 节点直接展开出来的 `query` / `model` / `files` 摘要；start 节点输出在日志语义上保持空对象。工具调用、兼容协议透传字段、运行参数和大 payload 预览应作为 start 节点输入、节点详情或运行追踪记录，不应被当作用户聊天内容展示。
 
 ## 原因
 

@@ -255,7 +255,7 @@ async function hydrateRuntimeDebugArtifacts(
   return Object.fromEntries(entries);
 }
 
-async function hydrateRunDetailOutputArtifacts(
+async function hydrateRunDetailArtifacts(
   applicationId: string,
   detail: FlowDebugRunDetail
 ): Promise<FlowDebugRunDetail> {
@@ -272,11 +272,16 @@ async function hydrateRunDetailOutputArtifacts(
     return request;
   };
 
-  const [flowOutputPayload, nodeRuns] = await Promise.all([
+  const [flowInputPayload, flowOutputPayload, nodeRuns] = await Promise.all([
+    hydrateRuntimeDebugArtifacts(detail.flow_run.input_payload, loadArtifact),
     hydrateRuntimeDebugArtifacts(detail.flow_run.output_payload, loadArtifact),
     Promise.all(
       detail.node_runs.map(async (nodeRun) => ({
         ...nodeRun,
+        input_payload: await hydrateRuntimeDebugArtifacts(
+          nodeRun.input_payload,
+          loadArtifact
+        ),
         output_payload: await hydrateRuntimeDebugArtifacts(
           nodeRun.output_payload,
           loadArtifact
@@ -289,10 +294,14 @@ async function hydrateRunDetailOutputArtifacts(
     ...detail,
     flow_run: {
       ...detail.flow_run,
+      input_payload: isRecord(flowInputPayload) ? flowInputPayload : {},
       output_payload: isRecord(flowOutputPayload) ? flowOutputPayload : {}
     },
     node_runs: nodeRuns.map((nodeRun) => ({
       ...nodeRun,
+      input_payload: isRecord(nodeRun.input_payload)
+        ? nodeRun.input_payload
+        : {},
       output_payload: isRecord(nodeRun.output_payload)
         ? nodeRun.output_payload
         : {}
@@ -656,6 +665,7 @@ export function useAgentFlowDebugSession({
         : createDebugSessionState(applicationId, draftId)
     );
     setActiveRunId(null);
+    setNodePreviewInputCache({});
     setVariableOverrides({});
   }, [applicationId, debugSessionScope, draftId]);
 
@@ -685,7 +695,6 @@ export function useAgentFlowDebugSession({
     const restoreGeneration =
       (variableSnapshotRestoreGenerationRef.current += 1);
 
-    setNodePreviewInputCache({});
     setNodePreviewOutputCache({});
     fetchDebugVariableSnapshot(applicationId)
       .then((snapshot) => {
@@ -752,7 +761,7 @@ export function useAgentFlowDebugSession({
       cacheGroups.length > 0
         ? mergeVariableGroupsByTitle([...cacheGroups, ...uncachedGroups])
         : groups,
-      variableOverrides
+      mergeVariableCache(nodePreviewInputCache, variableOverrides)
     );
   }, [
     applicationId,
@@ -762,6 +771,7 @@ export function useAgentFlowDebugSession({
     document.meta.flowId,
     environmentVariables,
     nodeVariableDisplayMetadata,
+    nodePreviewInputCache,
     nodePreviewOutputCache,
     runContext,
     variableOverrides
@@ -852,10 +862,7 @@ export function useAgentFlowDebugSession({
       invalidateRuntime?: boolean;
     }
   ) {
-    const hydratedDetail = await hydrateRunDetailOutputArtifacts(
-      applicationId,
-      detail
-    );
+    const hydratedDetail = await hydrateRunDetailArtifacts(applicationId, detail);
     const assistantMessage = mapRunDetailToConversation(hydratedDetail);
     const inputVariableCache = buildInputVariableCacheFromRunDetail(
       hydratedDetail
@@ -961,6 +968,7 @@ export function useAgentFlowDebugSession({
     setStatus('running');
     setLastDetail(null);
     setStreamTraceItems([]);
+    setNodePreviewInputCache({});
     setMessages((currentMessages) => [
       ...currentMessages,
       createUserMessage(resolvedPrompt),
