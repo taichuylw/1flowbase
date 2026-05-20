@@ -1,6 +1,24 @@
+body:has(.model-provider-panel) {
+  overflow: hidden;
+}
+
+.section-page-layout:has(.model-provider-panel) {
+  height: calc(100vh - var(--section-page-header-height, 56px)) !important;
+  min-height: calc(100vh - var(--section-page-header-height, 56px)) !important;
+  overflow: hidden !important;
+}
+
+.section-page-layout:has(.model-provider-panel) .section-page-layout__content {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+}
+
 .model-provider-panel {
   display: grid;
   gap: 20px;
+  height: 100%;
 }
 
 .model-provider-panel__header {
@@ -16,14 +34,16 @@
   display: flex;
   gap: 24px;
   width: 100%;
+  height: calc(100% - 24px);
   background: transparent;
 }
 
 .model-provider-panel__left {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   background: transparent;
 }
@@ -99,14 +119,25 @@
   min-width: 0;
   width: 100%;
   max-width: 360px;
+  height: 100%;
   background: transparent !important;
 }
 
+.model-provider-panel__sidebar .ant-layout-sider-children {
+  height: 100%;
+}
+
 .model-provider-panel__official {
-  position: sticky;
-  top: 24px;
+  height: 100%;
+  overflow-y: auto;
+  position: static;
   width: 100%;
   box-sizing: border-box;
+}
+
+.model-provider-panel__catalog {
+  height: 100%;
+  overflow-y: auto;
 }
 
 .model-provider-panel__section-head {
