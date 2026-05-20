@@ -17,6 +17,7 @@ pub mod openapi_docs;
 pub mod provider_runtime;
 pub mod response;
 pub mod routes;
+pub mod runtime_data_model_docs;
 pub mod runtime_profile_client;
 pub mod runtime_registry_sync;
 

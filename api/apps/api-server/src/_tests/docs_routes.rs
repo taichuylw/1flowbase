@@ -163,6 +163,41 @@ async fn create_model(app: &axum::Router, cookie: &str, csrf: &str, code: &str) 
     payload["data"]["id"].as_str().unwrap().to_string()
 }
 
+async fn create_model_field(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    model_id: &str,
+    code: &str,
+    field_kind: &str,
+    is_required: bool,
+) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/models/{model_id}/fields"))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": code,
+                        "title": code,
+                        "field_kind": field_kind,
+                        "is_required": is_required
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+}
+
 async fn create_scope_grant(
     app: &axum::Router,
     cookie: &str,
@@ -430,6 +465,26 @@ async fn docs_routes_append_dynamic_data_model_api_category_and_specs() {
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
 
     let ready_model_id = create_model(&app, &cookie, &csrf, "docs_ready_orders").await;
+    create_model_field(
+        &app,
+        &cookie,
+        &csrf,
+        &ready_model_id,
+        "order_title",
+        "string",
+        true,
+    )
+    .await;
+    create_model_field(
+        &app,
+        &cookie,
+        &csrf,
+        &ready_model_id,
+        "paid_at",
+        "datetime",
+        false,
+    )
+    .await;
     create_scope_grant(&app, &cookie, &csrf, &ready_model_id).await;
     create_api_key(&app, &cookie, &csrf, &ready_model_id).await;
 
@@ -564,6 +619,60 @@ async fn docs_routes_append_dynamic_data_model_api_category_and_specs() {
         .is_none());
     assert!(
         operation_spec["paths"]["/api/runtime/models/docs_ready_orders/records"]["post"].is_null()
+    );
+    let create_operation = operations
+        .iter()
+        .find(|operation| {
+            operation["method"] == json!("POST")
+                && operation["path"] == json!("/api/runtime/models/docs_ready_orders/records")
+        })
+        .expect("create operation should exist");
+    let create_operation_id = create_operation["id"].as_str().unwrap();
+
+    let create_spec_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/docs/operations/{create_operation_id}/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_spec_response.status(), StatusCode::OK);
+    let create_spec: Value = serde_json::from_slice(
+        &to_bytes(create_spec_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let create_body_schema = &create_spec["paths"]["/api/runtime/models/docs_ready_orders/records"]
+        ["post"]["requestBody"]["content"]["application/json"]["schema"];
+    assert_eq!(
+        create_body_schema["$ref"],
+        json!("#/components/schemas/DocsReadyOrdersRecordCreateInput")
+    );
+    assert_eq!(
+        create_spec["components"]["schemas"]["DocsReadyOrdersRecordCreateInput"]["required"],
+        json!(["order_title"])
+    );
+    assert_eq!(
+        create_spec["components"]["schemas"]["DocsReadyOrdersRecordCreateInput"]["properties"]
+            ["order_title"]["type"],
+        json!("string")
+    );
+    assert_eq!(
+        create_spec["components"]["schemas"]["DocsReadyOrdersRecordCreateInput"]["properties"]
+            ["paid_at"]["format"],
+        json!("date-time")
+    );
+    assert!(
+        create_spec["components"]["schemas"]["DocsReadyOrdersRecordCreateInput"]["properties"]
+            .get("created_at")
+            .is_none()
     );
     assert_eq!(
         operation_spec["components"]["securitySchemes"]["apiKeyBearer"]["scheme"],

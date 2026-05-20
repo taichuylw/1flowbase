@@ -164,6 +164,35 @@ fn registry_groups_catalog_by_api_prefix_and_singletons_for_non_api_paths() {
 }
 
 #[test]
+fn registry_excludes_generic_runtime_model_crud_from_public_docs_catalog() {
+    let canonical = json!({
+        "openapi": "3.1.0",
+        "info": { "title": "T", "version": "1" },
+        "paths": {
+            "/api/runtime/models/{model_code}/records": {
+                "get": { "operationId": "list_records", "summary": "List runtime model records" },
+                "post": { "operationId": "create_record", "summary": "Create runtime model record" }
+            },
+            "/api/runtime/models/{model_code}/records/{id}": {
+                "get": { "operationId": "get_record", "summary": "Get runtime model record" },
+                "patch": { "operationId": "update_record", "summary": "Update runtime model record" },
+                "delete": { "operationId": "delete_record", "summary": "Delete runtime model record" }
+            },
+            "/api/runtime/jobs": {
+                "get": { "operationId": "list_runtime_jobs", "summary": "List runtime jobs" }
+            }
+        }
+    });
+
+    let registry = build_api_docs_registry(canonical).expect("catalog should build");
+    let runtime_operations = registry.category_operations("runtime").unwrap();
+
+    assert_eq!(runtime_operations.operations.len(), 1);
+    assert_eq!(runtime_operations.operations[0].id, "list_runtime_jobs");
+    assert!(registry.operation_spec("create_record").is_none());
+}
+
+#[test]
 fn category_spec_builder_keeps_all_category_operations_closed() {
     let canonical = json!({
         "openapi": "3.1.0",

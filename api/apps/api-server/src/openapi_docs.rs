@@ -139,6 +139,10 @@ fn build_api_docs_registry_with_cookie_name(
                 continue;
             };
 
+            if should_hide_generic_runtime_model_crud(path) {
+                continue;
+            }
+
             let operation_map = operation
                 .as_object()
                 .with_context(|| format!("operation `{method} {path}` must be an object"))?;
@@ -264,6 +268,14 @@ fn derive_category(path: &str, operation_id: &str) -> (String, String, bool) {
         }
         _ => (format!("single:{operation_id}"), path.to_string(), true),
     }
+}
+
+fn should_hide_generic_runtime_model_crud(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/runtime/models/{model_code}/records"
+            | "/api/runtime/models/{model_code}/records/{id}"
+    )
 }
 
 fn compare_operations(
