@@ -6,6 +6,7 @@ import {
   createConsoleDataModelField,
   createConsoleDataModelScopeGrant,
   createConsoleRuntimeModelRecord,
+  batchDeleteConsoleDataModels,
   deleteConsoleDataModel,
   deleteConsoleDataModelField,
   deleteConsoleRuntimeModelRecord,
@@ -58,11 +59,14 @@ describe('console-data-models client', () => {
     });
   });
 
-  test('fetchConsoleDataModels can filter by data source', async () => {
+  test('fetchConsoleDataModels can filter by data source and resource filter', async () => {
     await expect(
-      fetchConsoleDataModels({ data_source_instance_id: 'main_source' })
+      fetchConsoleDataModels({
+        data_source_instance_id: 'main_source',
+        filter: { code: { $includes: 'customer profile' } }
+      })
     ).resolves.toMatchObject({
-      path: '/api/console/models?data_source_instance_id=main_source'
+      path: '/api/console/models?data_source_instance_id=main_source&filter=%7B%22code%22%3A%7B%22%24includes%22%3A%22customer+profile%22%7D%7D'
     });
   });
 
@@ -127,6 +131,26 @@ describe('console-data-models client', () => {
     ).resolves.toMatchObject({
       path: '/api/console/models/model-1?confirmed=true',
       method: 'DELETE',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('batchDeleteConsoleDataModels posts filterByTk to the model batch delete action', async () => {
+    await expect(
+      batchDeleteConsoleDataModels(
+        {
+          filterByTk: ['model-1', 'model-2'],
+          confirmed: true
+        },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/console/models:batchDelete',
+      method: 'POST',
+      body: {
+        filterByTk: ['model-1', 'model-2'],
+        confirmed: true
+      },
       csrfToken: 'csrf-123'
     });
   });

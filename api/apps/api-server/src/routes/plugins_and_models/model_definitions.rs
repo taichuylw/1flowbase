@@ -7,10 +7,13 @@ use axum::{
     Json, Router,
 };
 use control_plane::model_definition::{
-    AddModelFieldCommand, CreateModelDefinitionCommand, CreateScopeDataModelGrantCommand,
-    DeleteModelDefinitionCommand, DeleteModelFieldCommand, DeleteScopeDataModelGrantCommand,
-    ModelDefinitionService, UpdateModelDefinitionCommand, UpdateModelDefinitionStatusCommand,
-    UpdateModelFieldCommand, UpdateScopeDataModelGrantCommand,
+    AddModelFieldCommand, BatchDeleteModelDefinitionsCommand, CreateModelDefinitionCommand,
+    CreateScopeDataModelGrantCommand, DeleteModelDefinitionCommand, DeleteModelFieldCommand,
+    DeleteScopeDataModelGrantCommand, ModelDefinitionService, UpdateModelDefinitionCommand,
+    UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand, UpdateScopeDataModelGrantCommand,
+};
+use control_plane::resource_crud::{
+    parse_resource_filter, ResourceBatchSelection, ResourceCrudDescriptor,
 };
 use control_plane::runtime_registry_sync::ModelDefinitionMutationService;
 use serde::{Deserialize, Serialize};
@@ -25,6 +28,9 @@ use crate::{
     response::ApiSuccess,
     runtime_registry_sync::ApiRuntimeRegistrySync,
 };
+
+const STATE_MODEL_RESOURCE: ResourceCrudDescriptor =
+    ResourceCrudDescriptor::new("state_model", "id");
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateModelDefinitionBody {
@@ -106,6 +112,18 @@ pub struct ConfirmationQuery {
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListModelsQuery {
     pub data_source_instance_id: Option<String>,
+    pub filter: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct BatchDeleteModelDefinitionsBody {
+    #[serde(rename = "filterByTk")]
+    #[schema(value_type = Object)]
+    pub filter_by_tk: Option<serde_json::Value>,
+    #[schema(value_type = Object)]
+    pub filter: Option<serde_json::Value>,
+    #[serde(default)]
+    pub confirmed: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -180,6 +198,13 @@ pub struct DeletedResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct BatchDeletedResponse {
+    pub deleted: bool,
+    pub deleted_count: usize,
+    pub deleted_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ScopeGrantResponse {
     pub id: String,
     pub scope_kind: String,
@@ -203,6 +228,7 @@ pub struct DataModelAdvisorFindingResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/models", get(list_models).post(create_model))
+        .route("/models:batchDelete", post(batch_delete_models))
         .route("/models/agent-flow-options", get(list_agent_flow_options))
         .route(
             "/models/:id",
@@ -464,6 +490,8 @@ pub async fn list_models(
             });
         }
     }
+    let filter = parse_resource_filter(query.filter.as_deref())?;
+    models = STATE_MODEL_RESOURCE.filter_records(models, filter.as_ref())?;
 
     Ok(Json(ApiSuccess::new(
         models
@@ -702,6 +730,51 @@ pub async fn delete_model(
     Ok(Json(ApiSuccess::new(
         serde_json::json!({ "deleted": true }),
     )))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/models:batchDelete",
+    request_body = BatchDeleteModelDefinitionsBody,
+    responses((status = 200, body = BatchDeletedResponse), (status = 400, body = crate::error_response::ErrorBody), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn batch_delete_models(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Json(body): Json<BatchDeleteModelDefinitionsBody>,
+) -> Result<Json<ApiSuccess<BatchDeletedResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let models = ModelDefinitionService::new(state.store.clone())
+        .list_models(context.user.id)
+        .await?;
+    let model_ids = STATE_MODEL_RESOURCE.select_batch_ids(
+        models,
+        ResourceBatchSelection::new(body.filter_by_tk, body.filter),
+        |value| {
+            Uuid::parse_str(&value)
+                .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput("model_id"))
+        },
+        |model| model.id,
+    )?;
+
+    let deleted_ids = mutation_service(&state)
+        .batch_delete_models(BatchDeleteModelDefinitionsCommand {
+            actor_user_id: context.user.id,
+            model_ids,
+            confirmed: body.confirmed,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(BatchDeletedResponse {
+        deleted: true,
+        deleted_count: deleted_ids.len(),
+        deleted_ids: deleted_ids
+            .into_iter()
+            .map(|model_id| model_id.to_string())
+            .collect(),
+    })))
 }
 
 #[utoipa::path(

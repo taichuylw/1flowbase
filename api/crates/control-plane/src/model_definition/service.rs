@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use access_control::ensure_permission;
 use anyhow::Result;
 use domain::DataModelScopeKind;
@@ -21,10 +23,10 @@ use super::{
         ApiExposureReadinessFacts,
     },
     commands::{
-        AddModelFieldCommand, CreateModelDefinitionCommand, CreateScopeDataModelGrantCommand,
-        DeleteModelDefinitionCommand, DeleteModelFieldCommand, DeleteScopeDataModelGrantCommand,
-        PublishModelCommand, PublishedModel, UpdateModelDefinitionCommand,
-        UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
+        AddModelFieldCommand, BatchDeleteModelDefinitionsCommand, CreateModelDefinitionCommand,
+        CreateScopeDataModelGrantCommand, DeleteModelDefinitionCommand, DeleteModelFieldCommand,
+        DeleteScopeDataModelGrantCommand, PublishModelCommand, PublishedModel,
+        UpdateModelDefinitionCommand, UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
         UpdateScopeDataModelGrantCommand,
     },
     external_keys::{
@@ -591,6 +593,62 @@ where
             .await?;
 
         Ok(())
+    }
+
+    pub async fn batch_delete_models(
+        &self,
+        command: BatchDeleteModelDefinitionsCommand,
+    ) -> Result<Vec<Uuid>> {
+        if !command.confirmed {
+            return Err(ControlPlaneError::InvalidInput("confirmation").into());
+        }
+        if command.model_ids.is_empty() {
+            return Err(ControlPlaneError::InvalidInput("model_ids").into());
+        }
+
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "manage")?;
+
+        let mut seen_model_ids = HashSet::new();
+        let mut model_ids = Vec::with_capacity(command.model_ids.len());
+        for model_id in command.model_ids {
+            if seen_model_ids.insert(model_id) {
+                model_ids.push(model_id);
+            }
+        }
+
+        let mut models = Vec::with_capacity(model_ids.len());
+        for model_id in &model_ids {
+            let model = self
+                .repository
+                .get_model_definition(actor.current_workspace_id, *model_id)
+                .await?
+                .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+            ensure_model_deletable(&model)?;
+            ensure_protected_model_override_authorized(&actor, &model)?;
+            models.push(model);
+        }
+
+        for model in &models {
+            self.repository
+                .delete_model_definition(command.actor_user_id, model.id)
+                .await?;
+            self.repository
+                .append_audit_log(&audit_log(
+                    Some(actor.current_workspace_id),
+                    Some(command.actor_user_id),
+                    "state_model",
+                    Some(model.id),
+                    "state_model.deleted",
+                    serde_json::json!({ "batch": true }),
+                ))
+                .await?;
+        }
+
+        Ok(model_ids)
     }
 
     pub async fn delete_field(&self, command: DeleteModelFieldCommand) -> Result<()> {

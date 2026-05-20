@@ -66,6 +66,12 @@ pub struct DeleteModelDefinitionCommand {
     pub confirmed: bool,
 }
 
+pub struct BatchDeleteModelDefinitionsCommand {
+    pub actor_user_id: Uuid,
+    pub model_ids: Vec<Uuid>,
+    pub confirmed: bool,
+}
+
 pub struct DeleteModelFieldCommand {
     pub actor_user_id: Uuid,
     pub model_id: Uuid,

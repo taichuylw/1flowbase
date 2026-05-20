@@ -1,6 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
 
 vi.mock('@1flowbase/api-client', () => ({
+  batchDeleteConsoleDataModels: vi.fn().mockResolvedValue({
+    deleted: true,
+    deleted_count: 2,
+    deleted_ids: ['model-1', 'model-2']
+  }),
   createConsoleDataModel: vi.fn().mockResolvedValue({ id: 'model-1' }),
   createConsoleDataModelField: vi.fn().mockResolvedValue({ id: 'field-1' }),
   createConsoleDataModelScopeGrant: vi.fn().mockResolvedValue({
@@ -32,6 +37,7 @@ vi.mock('@1flowbase/api-client', () => ({
 }));
 
 import {
+  batchDeleteConsoleDataModels,
   createConsoleDataModel,
   createConsoleDataModelField,
   createConsoleDataModelScopeGrant,
@@ -45,6 +51,7 @@ import {
   updateConsoleDataSourceDefaults
 } from '@1flowbase/api-client';
 import {
+  batchDeleteSettingsDataModels,
   createSettingsDataModel,
   createSettingsDataModelField,
   createSettingsDataModelScopeGrant,
@@ -75,7 +82,8 @@ describe('settings data models API wrappers', () => {
       'settings',
       'data-models',
       'models',
-      'main_source'
+      'main_source',
+      '{}'
     ]);
     expect(settingsDataModelScopeGrantsQueryKey('model-1')).toEqual([
       'settings',
@@ -110,6 +118,14 @@ describe('settings data models API wrappers', () => {
     await fetchSettingsDataModels('source-1');
     expect(fetchConsoleDataModels).toHaveBeenCalledWith({
       data_source_instance_id: 'source-1'
+    });
+
+    await fetchSettingsDataModels('source-1', {
+      code: { $includes: 'orders' }
+    });
+    expect(fetchConsoleDataModels).toHaveBeenCalledWith({
+      data_source_instance_id: 'source-1',
+      filter: { code: { $includes: 'orders' } }
     });
   });
 
@@ -161,6 +177,15 @@ describe('settings data models API wrappers', () => {
 
     await deleteSettingsDataModel('model-1', 'csrf-123');
     expect(deleteConsoleDataModel).toHaveBeenCalledWith('model-1', 'csrf-123');
+
+    await batchDeleteSettingsDataModels(
+      { filterByTk: ['model-1', 'model-2'], confirmed: true },
+      'csrf-123'
+    );
+    expect(batchDeleteConsoleDataModels).toHaveBeenCalledWith(
+      { filterByTk: ['model-1', 'model-2'], confirmed: true },
+      'csrf-123'
+    );
 
     await updateSettingsDataModelApiExposure(
       'model-1',

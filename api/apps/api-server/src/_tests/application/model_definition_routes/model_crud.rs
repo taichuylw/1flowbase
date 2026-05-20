@@ -1,5 +1,40 @@
 use super::*;
 
+async fn create_model(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    code: &str,
+    title: &str,
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models")
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "scope_kind": "workspace",
+                        "code": code,
+                        "title": title
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    payload["data"]["id"].as_str().unwrap().to_string()
+}
+
 #[tokio::test]
 async fn model_definition_routes_manage_models_and_fields_without_publish() {
     let app = test_app().await;
@@ -339,6 +374,129 @@ async fn model_definition_routes_manage_models_and_fields_without_publish() {
     )
     .unwrap();
     assert_eq!(listed_records["data"]["total"], json!(4));
+}
+
+#[tokio::test]
+async fn model_definition_routes_filter_models_by_title_code_or_table_id() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    create_model(&app, &cookie, &csrf, "orders", "Orders").await;
+    create_model(
+        &app,
+        &cookie,
+        &csrf,
+        "customer_profiles",
+        "Customer Profiles",
+    )
+    .await;
+
+    let filter_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/models?data_source_instance_id=main_source&filter=%7B%22code%22%3A%7B%22%24includes%22%3A%22customer%22%7D%7D")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(filter_response.status(), StatusCode::OK);
+    let payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(filter_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let codes = payload["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|model| model["code"].as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(codes, vec!["customer_profiles"]);
+}
+
+#[tokio::test]
+async fn model_definition_routes_batch_delete_models_from_action_endpoint() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let orders_id = create_model(&app, &cookie, &csrf, "orders", "Orders").await;
+    let invoices_id = create_model(&app, &cookie, &csrf, "invoices", "Invoices").await;
+
+    let unconfirmed_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models:batchDelete")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "filterByTk": [orders_id, invoices_id],
+                        "confirmed": false
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(unconfirmed_response.status(), StatusCode::BAD_REQUEST);
+
+    let delete_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/models:batchDelete")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "filterByTk": [orders_id, invoices_id],
+                        "confirmed": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(delete_response.status(), StatusCode::OK);
+    let payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(delete_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(payload["data"]["deleted_count"], json!(2));
+
+    let list_response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/models?data_source_instance_id=main_source&filter=%7B%22code%22%3A%7B%22%24includes%22%3A%22orders%22%7D%7D")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let list_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(list_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(list_payload["data"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

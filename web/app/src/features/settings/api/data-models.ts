@@ -1,4 +1,5 @@
 import {
+  batchDeleteConsoleDataModels,
   createConsoleDataModel,
   createConsoleDataModelField,
   createConsoleDataModelScopeGrant,
@@ -15,6 +16,8 @@ import {
   updateConsoleDataModelField,
   updateConsoleDataModelScopeGrant,
   updateConsoleDataSourceDefaults,
+  type BatchDeleteConsoleDataModelsInput,
+  type BatchDeleteConsoleDataModelsResult,
   type ConsoleDataModel,
   type ConsoleDataModelAdvisorFinding,
   type ConsoleDataModelField,
@@ -39,6 +42,10 @@ export type SettingsDataModelScopeGrant = ConsoleDataModelScopeGrant;
 export type SettingsDataModelAdvisorFinding = ConsoleDataModelAdvisorFinding;
 export type SettingsRuntimeRecordPreview = ConsoleRuntimeRecordPreview;
 export type SettingsDataModelOpenApiDocument = ConsoleDataModelOpenApiDocument;
+export type BatchDeleteSettingsDataModelsInput =
+  BatchDeleteConsoleDataModelsInput;
+export type BatchDeleteSettingsDataModelsResult =
+  BatchDeleteConsoleDataModelsResult;
 export type CreateSettingsDataModelInput = CreateConsoleDataModelInput;
 export type UpdateSettingsDataModelInput = UpdateConsoleDataModelInput;
 export type UpdateSettingsDataModelApiExposureInput =
@@ -60,8 +67,17 @@ export const settingsDataSourcesQueryKey = [
   'sources'
 ] as const;
 
-export function settingsDataModelsQueryKey(sourceId: string) {
-  return ['settings', 'data-models', 'models', sourceId] as const;
+export function settingsDataModelsQueryKey(
+  sourceId: string,
+  filter: Record<string, unknown> = {}
+) {
+  return [
+    'settings',
+    'data-models',
+    'models',
+    sourceId,
+    JSON.stringify(filter)
+  ] as const;
 }
 
 export function settingsDataModelScopeGrantsQueryKey(modelId: string) {
@@ -92,10 +108,15 @@ export function updateSettingsDataSourceDefaults(
   return updateConsoleDataSourceDefaults(instanceId, input, csrfToken);
 }
 
-export function fetchSettingsDataModels(dataSourceInstanceId: string) {
-  return fetchConsoleDataModels({
-    data_source_instance_id: dataSourceInstanceId
-  });
+export function fetchSettingsDataModels(
+  dataSourceInstanceId: string,
+  filter?: Record<string, unknown>
+) {
+  return fetchConsoleDataModels(
+    filter === undefined
+      ? { data_source_instance_id: dataSourceInstanceId }
+      : { data_source_instance_id: dataSourceInstanceId, filter }
+  );
 }
 
 export function createSettingsDataModel(
@@ -115,6 +136,13 @@ export function updateSettingsDataModel(
 
 export function deleteSettingsDataModel(modelId: string, csrfToken: string) {
   return deleteConsoleDataModel(modelId, csrfToken);
+}
+
+export function batchDeleteSettingsDataModels(
+  input: BatchDeleteSettingsDataModelsInput,
+  csrfToken: string
+) {
+  return batchDeleteConsoleDataModels(input, csrfToken);
 }
 
 export function updateSettingsDataModelApiExposure(

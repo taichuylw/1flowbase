@@ -2,9 +2,9 @@ use anyhow::Result;
 
 use crate::{
     model_definition::{
-        AddModelFieldCommand, CreateModelDefinitionCommand, DeleteModelDefinitionCommand,
-        DeleteModelFieldCommand, ModelDefinitionService, UpdateModelDefinitionCommand,
-        UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
+        AddModelFieldCommand, BatchDeleteModelDefinitionsCommand, CreateModelDefinitionCommand,
+        DeleteModelDefinitionCommand, DeleteModelFieldCommand, ModelDefinitionService,
+        UpdateModelDefinitionCommand, UpdateModelDefinitionStatusCommand, UpdateModelFieldCommand,
     },
     ports::{ModelDefinitionRepository, RuntimeRegistrySync},
 };
@@ -75,6 +75,15 @@ where
         self.model_definitions.delete_model(command).await?;
         self.sync.rebuild().await?;
         Ok(())
+    }
+
+    pub async fn batch_delete_models(
+        &self,
+        command: BatchDeleteModelDefinitionsCommand,
+    ) -> Result<Vec<uuid::Uuid>> {
+        let deleted_model_ids = self.model_definitions.batch_delete_models(command).await?;
+        self.sync.rebuild().await?;
+        Ok(deleted_model_ids)
     }
 
     pub async fn delete_field(&self, command: DeleteModelFieldCommand) -> Result<()> {

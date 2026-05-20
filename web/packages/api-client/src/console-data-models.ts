@@ -144,6 +144,7 @@ export interface UpdateConsoleDataSourceDefaultsInput {
 
 export interface FetchConsoleDataModelsInput {
   data_source_instance_id?: string;
+  filter?: Record<string, unknown>;
 }
 
 export interface CreateConsoleDataModelInput {
@@ -160,6 +161,18 @@ export interface UpdateConsoleDataModelInput {
   title?: string;
   status?: ConsoleDataModelStatus;
   external_table_id?: string | null;
+}
+
+export interface BatchDeleteConsoleDataModelsInput {
+  filterByTk?: string | string[];
+  filter?: Record<string, unknown>;
+  confirmed: boolean;
+}
+
+export interface BatchDeleteConsoleDataModelsResult {
+  deleted: boolean;
+  deleted_count: number;
+  deleted_ids: string[];
 }
 
 export interface UpdateConsoleDataModelApiExposureInput {
@@ -337,7 +350,8 @@ export function fetchConsoleDataModels(
 ) {
   return apiFetch<ConsoleDataModel[]>({
     path: appendQuery('/api/console/models', {
-      data_source_instance_id: input.data_source_instance_id
+      data_source_instance_id: input.data_source_instance_id,
+      filter: input.filter ? JSON.stringify(input.filter) : undefined
     }),
     baseUrl
   });
@@ -387,6 +401,20 @@ export function deleteConsoleDataModel(
   return apiFetch<{ deleted: boolean }>({
     path: `/api/console/models/${modelId}?confirmed=true`,
     method: 'DELETE',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function batchDeleteConsoleDataModels(
+  input: BatchDeleteConsoleDataModelsInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<BatchDeleteConsoleDataModelsResult>({
+    path: '/api/console/models:batchDelete',
+    method: 'POST',
+    body: input,
     csrfToken,
     baseUrl
   });

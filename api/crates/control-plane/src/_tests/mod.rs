@@ -27,6 +27,7 @@ mod plugin_isolation_tests;
 mod plugin_management;
 mod profile;
 mod resource_action_tests;
+mod resource_crud_tests;
 mod role;
 mod session_security;
 mod state_transition_tests;
