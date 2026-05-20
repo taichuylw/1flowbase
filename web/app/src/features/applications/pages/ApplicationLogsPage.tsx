@@ -15,6 +15,7 @@ import {
   applicationRunsQueryKey,
   fetchApplicationRunDetail,
   fetchApplicationRuns,
+  fetchRuntimeDebugArtifact,
   type ApplicationRunSortField,
   type ApplicationRunSortOrder,
   type ApplicationRunDetail,
@@ -377,6 +378,9 @@ export function ApplicationLogsPage({
             <ConversationLogPanel
               message={openConversationLogMessage}
               onClose={() => setOpenConversationLogMessage(null)}
+              onLoadArtifact={(artifactRef) =>
+                fetchRuntimeDebugArtifact(applicationId, artifactRef)
+              }
             />
           </div>
         </ApplicationLogsFloatingWindow>

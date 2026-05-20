@@ -57,6 +57,7 @@ const runtimeApi = vi.hoisted(() => ({
 
 vi.mock('../api/runtime', () => runtimeApi);
 
+import type { ApplicationRunDetail } from '../api/runtime';
 import { AppProviders } from '../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { ApplicationLogsPage } from '../pages/ApplicationLogsPage';
@@ -77,7 +78,7 @@ function applicationRunsPage<T>(
   };
 }
 
-function sampleRunDetail() {
+function sampleRunDetail(): ApplicationRunDetail {
   return {
     flow_run: {
       id: 'run-1',
@@ -425,6 +426,105 @@ describe('ApplicationLogsPage', () => {
     expect(
       screen.queryByRole('complementary', { name: '运行详情' })
     ).not.toBeInTheDocument();
+  }, 20_000);
+
+  test('loads conversation log detail and trace artifacts from application logs', async () => {
+    const detail = sampleRunDetail();
+    detail.flow_run.output_payload = {
+      answer: {
+        __runtime_debug_artifact: true,
+        artifact_scope: 'field',
+        field_path: ['answer'],
+        is_truncated: true,
+        original_size_bytes: 4096,
+        preview_size_bytes: 128,
+        content_type: 'application/json',
+        artifact_ref: 'artifact-detail-answer',
+        preview: '详情截断回答'
+      }
+    };
+    detail.node_runs[0]!.output_payload = {
+      answer: {
+        __runtime_debug_artifact: true,
+        artifact_scope: 'field',
+        field_path: ['answer'],
+        is_truncated: true,
+        original_size_bytes: 4096,
+        preview_size_bytes: 128,
+        content_type: 'application/json',
+        artifact_ref: 'artifact-trace-answer',
+        preview: '追踪截断回答'
+      },
+      rendered_templates: {}
+    };
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
+      async (_applicationId: string, artifactRef: string) => {
+        if (artifactRef === 'artifact-detail-answer') {
+          return '详情完整回答';
+        }
+
+        if (artifactRef === 'artifact-trace-answer') {
+          return '追踪完整回答';
+        }
+
+        throw new Error(`unexpected artifact: ${artifactRef}`);
+      }
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const openLogButton = (
+      await screen.findAllByRole('button', { name: '查看对话日志' })
+    ).at(-1);
+    expect(openLogButton).toBeDefined();
+    fireEvent.click(openLogButton!);
+
+    const logPanel = await screen.findByRole('complementary', {
+      name: '对话日志'
+    });
+    const detailLoadButton = within(logPanel).getByRole('button', {
+      name: '加载完整值'
+    });
+    expect(detailLoadButton).not.toBeDisabled();
+    fireEvent.click(detailLoadButton);
+
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-detail-answer'
+    );
+    await waitFor(() =>
+      expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
+        '详情完整回答'
+      )
+    );
+
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+    const traceLoadButton = within(logPanel).getByRole('button', {
+      name: '加载完整值'
+    });
+    expect(traceLoadButton).not.toBeDisabled();
+    fireEvent.click(traceLoadButton);
+
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-trace-answer'
+    );
+    await waitFor(() =>
+      expect(
+        within(logPanel)
+          .getAllByLabelText('输出 JSON')
+          .some((element) => element.textContent?.includes('追踪完整回答'))
+      ).toBe(true)
+    );
   }, 20_000);
 
   test('persists table column visibility in user preferences meta', async () => {
