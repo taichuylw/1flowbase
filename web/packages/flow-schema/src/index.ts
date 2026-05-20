@@ -186,6 +186,15 @@ export const DEFAULT_LLM_NODE_OUTPUTS = [
   { key: 'usage', title: '用量', valueType: 'json' }
 ] satisfies FlowNodeOutputDocument[];
 
+export const DEFAULT_START_NODE_CONFIG = {
+  input_fields: [] as unknown[],
+  model_list: [] as unknown[]
+} satisfies Record<string, unknown>;
+
+export const DEFAULT_ANSWER_NODE_OUTPUTS = [
+  { key: 'answer', title: '对话输出', valueType: 'string' }
+] satisfies FlowNodeOutputDocument[];
+
 export const LLM_STRUCTURED_OUTPUT = {
   key: 'structured_output',
   title: '结构化输出',
@@ -386,7 +395,10 @@ export function createDefaultAgentFlowDocument({
           containerId: null,
           position: { x: 80, y: 220 },
           configVersion: 1,
-          config: { input_fields: [], model_list: [] },
+          config: {
+            input_fields: [...DEFAULT_START_NODE_CONFIG.input_fields],
+            model_list: [...DEFAULT_START_NODE_CONFIG.model_list]
+          },
           bindings: {},
           outputs: []
         },
@@ -453,7 +465,7 @@ export function createDefaultAgentFlowDocument({
               value: '{{node-llm.text}}'
             }
           },
-          outputs: [{ key: 'answer', title: '对话输出', valueType: 'string' }]
+          outputs: DEFAULT_ANSWER_NODE_OUTPUTS.map((output) => ({ ...output }))
         }
       ],
       edges: [
