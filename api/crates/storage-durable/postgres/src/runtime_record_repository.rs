@@ -8,8 +8,7 @@ use runtime_core::{
     runtime_engine::ensure_runtime_model_available,
     runtime_model_registry::RuntimeDataModelAvailability,
     runtime_record_repository::{
-        RuntimeFilterInput, RuntimeListQuery, RuntimeListResult, RuntimeRecordRepository,
-        RuntimeSortInput,
+        RuntimeListQuery, RuntimeListResult, RuntimeRecordRepository, RuntimeSortInput,
     },
 };
 use serde_json::Value;
@@ -259,7 +258,7 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         ));
         append_scope_clause(&mut count_builder, &scope_column_name, query.scope_id);
         append_owner_scope_clause(&mut count_builder, query.owner_user_id);
-        append_filter_clause(&mut count_builder, metadata, &query.filters)?;
+        append_filter_clause(&mut count_builder, metadata, &query.filter)?;
         let total = self
             .run_runtime_query(
                 metadata,
@@ -274,7 +273,7 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         ));
         append_scope_clause(&mut list_builder, &scope_column_name, query.scope_id);
         append_owner_scope_clause(&mut list_builder, query.owner_user_id);
-        append_filter_clause(&mut list_builder, metadata, &query.filters)?;
+        append_filter_clause(&mut list_builder, metadata, &query.filter)?;
         append_sort_clause(&mut list_builder, metadata, &query.sorts)?;
         list_builder.push(" limit ");
         list_builder.push_bind(page_size);
@@ -539,11 +538,11 @@ impl PgControlPlaneStore {
                         RuntimeListQuery {
                             scope_id,
                             owner_user_id,
-                            filters: vec![RuntimeFilterInput {
-                                field_code: mapped_by.to_string(),
-                                operator: "eq".into(),
+                            filter: domain::ResourceFilterExpr::Field {
+                                field: mapped_by.to_string(),
+                                operator: domain::ResourceFilterOperator::Eq,
                                 value: record_id,
-                            }],
+                            },
                             sorts: vec![],
                             expand_relations: vec![],
                             page: 1,
@@ -611,20 +610,103 @@ fn to_runtime_model_metadata(model: domain::ModelDefinitionRecord) -> ModelMetad
 fn append_filter_clause(
     builder: &mut QueryBuilder<Postgres>,
     metadata: &ModelMetadata,
-    filters: &[RuntimeFilterInput],
+    filter: &domain::ResourceFilterExpr,
 ) -> Result<()> {
-    for filter in filters {
-        let field = metadata
-            .field_by_code(&filter.field_code)
-            .ok_or_else(|| anyhow!("undeclared field code: {}", filter.field_code))?;
-        builder.push(" and ");
-        builder.push(quote_identifier(&field.physical_column_name)?);
-        builder.push(" ");
-        builder.push(filter_operator_sql(&filter.operator)?);
-        builder.push(" ");
-        push_field_value(builder, field, &filter.value)?;
+    if matches!(filter, domain::ResourceFilterExpr::All(items) if items.is_empty()) {
+        return Ok(());
     }
 
+    builder.push(" and ");
+    append_filter_expr(builder, metadata, filter)
+}
+
+fn append_filter_expr(
+    builder: &mut QueryBuilder<Postgres>,
+    metadata: &ModelMetadata,
+    filter: &domain::ResourceFilterExpr,
+) -> Result<()> {
+    match filter {
+        domain::ResourceFilterExpr::All(items) => {
+            if items.is_empty() {
+                builder.push("true");
+                return Ok(());
+            }
+            builder.push("(");
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    builder.push(" and ");
+                }
+                append_filter_expr(builder, metadata, item)?;
+            }
+            builder.push(")");
+        }
+        domain::ResourceFilterExpr::Any(items) => {
+            if items.is_empty() {
+                builder.push("false");
+                return Ok(());
+            }
+            builder.push("(");
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    builder.push(" or ");
+                }
+                append_filter_expr(builder, metadata, item)?;
+            }
+            builder.push(")");
+        }
+        domain::ResourceFilterExpr::Field {
+            field,
+            operator,
+            value,
+        } => {
+            let field_record = metadata
+                .field_by_code(field)
+                .ok_or_else(|| anyhow!("undeclared field code: {}", field))?;
+            append_field_filter_expr(builder, field_record, *operator, value)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn append_field_filter_expr(
+    builder: &mut QueryBuilder<Postgres>,
+    field: &domain::ModelFieldRecord,
+    operator: domain::ResourceFilterOperator,
+    value: &Value,
+) -> Result<()> {
+    if operator == domain::ResourceFilterOperator::In {
+        let Some(values) = value.as_array() else {
+            return Err(anyhow!("filter $in value must be an array"));
+        };
+        if values.is_empty() {
+            builder.push("false");
+            return Ok(());
+        }
+        builder.push(quote_identifier(&field.physical_column_name)?);
+        builder.push(" in (");
+        for (index, value) in values.iter().enumerate() {
+            if index > 0 {
+                builder.push(", ");
+            }
+            push_field_value(builder, field, value)?;
+        }
+        builder.push(")");
+        return Ok(());
+    }
+
+    builder.push(quote_identifier(&field.physical_column_name)?);
+    builder.push(" ");
+    builder.push(filter_operator_sql(operator)?);
+    builder.push(" ");
+    if matches!(
+        operator,
+        domain::ResourceFilterOperator::Includes | domain::ResourceFilterOperator::NotIncludes
+    ) {
+        push_string_pattern_value(builder, field, value)?;
+    } else {
+        push_field_value(builder, field, value)?;
+    }
     Ok(())
 }
 
@@ -692,6 +774,24 @@ fn push_field_value(
     Ok(())
 }
 
+fn push_string_pattern_value(
+    builder: &mut QueryBuilder<Postgres>,
+    field: &domain::ModelFieldRecord,
+    value: &Value,
+) -> Result<()> {
+    match field.field_kind {
+        domain::ModelFieldKind::String
+        | domain::ModelFieldKind::Enum
+        | domain::ModelFieldKind::Text => {
+            builder.push_bind(format!("%{}%", json_string(value)?));
+            Ok(())
+        }
+        _ => Err(anyhow!(
+            "$includes filter only supports string, text, or enum fields"
+        )),
+    }
+}
+
 fn normalize_record(metadata: &ModelMetadata, value: Value) -> Value {
     let Value::Object(mut object) = value else {
         return value;
@@ -715,15 +815,17 @@ fn payload_object(payload: Value) -> Result<serde_json::Map<String, Value>> {
     }
 }
 
-fn filter_operator_sql(operator: &str) -> Result<&'static str> {
+fn filter_operator_sql(operator: domain::ResourceFilterOperator) -> Result<&'static str> {
     match operator {
-        "eq" => Ok("="),
-        "ne" => Ok("<>"),
-        "gt" => Ok(">"),
-        "gte" => Ok(">="),
-        "lt" => Ok("<"),
-        "lte" => Ok("<="),
-        _ => Err(anyhow!("unsupported filter operator")),
+        domain::ResourceFilterOperator::Eq => Ok("="),
+        domain::ResourceFilterOperator::Ne => Ok("<>"),
+        domain::ResourceFilterOperator::Gt => Ok(">"),
+        domain::ResourceFilterOperator::Gte => Ok(">="),
+        domain::ResourceFilterOperator::Lt => Ok("<"),
+        domain::ResourceFilterOperator::Lte => Ok("<="),
+        domain::ResourceFilterOperator::Includes => Ok("ilike"),
+        domain::ResourceFilterOperator::NotIncludes => Ok("not ilike"),
+        domain::ResourceFilterOperator::In => Err(anyhow!("$in is handled separately")),
     }
 }
 

@@ -27,16 +27,14 @@ use crate::{
     runtime_record_repository::RuntimeRecordRepository,
 };
 
-pub use crate::runtime_record_repository::{
-    RuntimeFilterInput, RuntimeListQuery, RuntimeListResult, RuntimeSortInput,
-};
+pub use crate::runtime_record_repository::{RuntimeListQuery, RuntimeListResult, RuntimeSortInput};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeListInput {
     pub actor: domain::ActorContext,
     pub model_code: String,
     pub scope_grant: Option<RuntimeScopeGrant>,
-    pub filters: Vec<RuntimeFilterInput>,
+    pub filter: domain::ResourceFilterExpr,
     pub sorts: Vec<RuntimeSortInput>,
     pub expand_relations: Vec<String>,
     pub page: i64,
@@ -239,7 +237,7 @@ impl RuntimeEngine {
         let query = RuntimeListQuery {
             scope_id: access_scope.scope_id,
             owner_user_id: access_scope.owner_user_id,
-            filters: input.filters,
+            filter: input.filter,
             sorts: input.sorts,
             expand_relations: input.expand_relations,
             page: input.page,
@@ -459,7 +457,7 @@ impl RuntimeEngine {
                     connection: DataSourceConfigInput::default(),
                     resource_key: external_resource_key(metadata)?,
                     context: data_source_context(query.scope_id, query.owner_user_id),
-                    filters: external_filters(metadata, query.filters)?,
+                    filters: external_filters(metadata, &query.filter)?,
                     sort: external_sorts(metadata, query.sorts)?,
                     page: Some(data_source_page(query.page, query.page_size)),
                     options_json: serde_json::json!({
@@ -605,18 +603,55 @@ fn external_resource_key(metadata: &ModelMetadata) -> Result<String> {
 
 fn external_filters(
     metadata: &ModelMetadata,
-    filters: Vec<RuntimeFilterInput>,
+    filter: &domain::ResourceFilterExpr,
 ) -> Result<Vec<DataSourceRecordFilter>> {
-    filters
-        .into_iter()
-        .map(|filter| {
-            Ok(DataSourceRecordFilter {
-                field_key: external_field_key(metadata, &filter.field_code)?,
-                operator: filter.operator,
-                value: filter.value,
-            })
-        })
-        .collect()
+    let mut filters = Vec::new();
+    collect_external_filters(metadata, filter, &mut filters)?;
+    Ok(filters)
+}
+
+fn collect_external_filters(
+    metadata: &ModelMetadata,
+    filter: &domain::ResourceFilterExpr,
+    filters: &mut Vec<DataSourceRecordFilter>,
+) -> Result<()> {
+    match filter {
+        domain::ResourceFilterExpr::All(items) => {
+            for item in items {
+                collect_external_filters(metadata, item, filters)?;
+            }
+            Ok(())
+        }
+        domain::ResourceFilterExpr::Any(_) => Err(anyhow!(
+            "external data source filters do not support $or expressions"
+        )),
+        domain::ResourceFilterExpr::Field {
+            field,
+            operator,
+            value,
+        } => {
+            filters.push(DataSourceRecordFilter {
+                field_key: external_field_key(metadata, field)?,
+                operator: runtime_filter_operator_code(*operator)?.to_string(),
+                value: value.clone(),
+            });
+            Ok(())
+        }
+    }
+}
+
+fn runtime_filter_operator_code(operator: domain::ResourceFilterOperator) -> Result<&'static str> {
+    match operator {
+        domain::ResourceFilterOperator::Eq => Ok("eq"),
+        domain::ResourceFilterOperator::Ne => Ok("ne"),
+        domain::ResourceFilterOperator::Gt => Ok("gt"),
+        domain::ResourceFilterOperator::Gte => Ok("gte"),
+        domain::ResourceFilterOperator::Lt => Ok("lt"),
+        domain::ResourceFilterOperator::Lte => Ok("lte"),
+        domain::ResourceFilterOperator::Includes => Ok("includes"),
+        domain::ResourceFilterOperator::NotIncludes => Ok("notIncludes"),
+        domain::ResourceFilterOperator::In => Ok("in"),
+    }
 }
 
 fn external_sorts(
@@ -750,7 +785,7 @@ impl RuntimeRecordRepository for InMemoryRuntimeRecordRepository {
             })
             .unwrap_or_default();
         items.retain(|item| owner_matches(item, query.owner_user_id));
-        items.retain(|item| filter_matches(item, &query.filters));
+        items.retain(|item| filter_matches(item, &query.filter));
         items.sort_by(|left, right| compare_records(left, right, &query.sorts));
         let total = items.len() as i64;
         let offset = ((page - 1) * page_size) as usize;
@@ -953,15 +988,55 @@ fn owner_matches(record: &Value, owner_user_id: Option<Uuid>) -> bool {
     }
 }
 
-fn filter_matches(record: &Value, filters: &[RuntimeFilterInput]) -> bool {
-    filters.iter().all(|filter| {
-        let current = &record[&filter.field_code];
-        match filter.operator.as_str() {
-            "eq" => current == &filter.value,
-            "ne" => current != &filter.value,
-            _ => false,
+fn filter_matches(record: &Value, filter: &domain::ResourceFilterExpr) -> bool {
+    match filter {
+        domain::ResourceFilterExpr::All(items) => {
+            items.iter().all(|item| filter_matches(record, item))
         }
-    })
+        domain::ResourceFilterExpr::Any(items) => {
+            items.iter().any(|item| filter_matches(record, item))
+        }
+        domain::ResourceFilterExpr::Field {
+            field,
+            operator,
+            value,
+        } => {
+            let current = &record[field];
+            match operator {
+                domain::ResourceFilterOperator::Eq => current == value,
+                domain::ResourceFilterOperator::Ne => current != value,
+                domain::ResourceFilterOperator::Gt => {
+                    compare_json_values(current, value) == Ordering::Greater
+                }
+                domain::ResourceFilterOperator::Gte => matches!(
+                    compare_json_values(current, value),
+                    Ordering::Greater | Ordering::Equal
+                ),
+                domain::ResourceFilterOperator::Lt => {
+                    compare_json_values(current, value) == Ordering::Less
+                }
+                domain::ResourceFilterOperator::Lte => matches!(
+                    compare_json_values(current, value),
+                    Ordering::Less | Ordering::Equal
+                ),
+                domain::ResourceFilterOperator::Includes => current
+                    .as_str()
+                    .zip(value.as_str())
+                    .is_some_and(|(current, value)| {
+                        current.to_lowercase().contains(&value.to_lowercase())
+                    }),
+                domain::ResourceFilterOperator::NotIncludes => current
+                    .as_str()
+                    .zip(value.as_str())
+                    .map_or(true, |(current, value)| {
+                        !current.to_lowercase().contains(&value.to_lowercase())
+                    }),
+                domain::ResourceFilterOperator::In => value
+                    .as_array()
+                    .is_some_and(|values| values.iter().any(|value| current == value)),
+            }
+        }
+    }
 }
 
 fn compare_records(left: &Value, right: &Value, sorts: &[RuntimeSortInput]) -> Ordering {

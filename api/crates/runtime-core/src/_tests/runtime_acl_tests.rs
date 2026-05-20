@@ -92,7 +92,7 @@ async fn state_data_view_own_filters_list_by_created_by() {
         .list_records(RuntimeListInput {
             actor: manager,
             model_code: "orders".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -219,7 +219,7 @@ async fn scope_without_grant_cannot_call_runtime_crud() {
         .list_records(RuntimeListInput {
             actor,
             model_code: "orders".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -263,7 +263,7 @@ async fn owner_permission_only_returns_actor_owned_records() {
         .list_records(RuntimeListInput {
             actor: owner,
             model_code: "orders".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -311,7 +311,7 @@ async fn scope_all_returns_all_records_inside_granted_scope_id() {
         .list_records(RuntimeListInput {
             actor: owner,
             model_code: "orders".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -368,7 +368,7 @@ async fn system_all_returns_all_granted_data_for_system_actor_only() {
         .list_records(RuntimeListInput {
             actor: system_actor,
             model_code: "orders".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -383,7 +383,7 @@ async fn system_all_returns_all_granted_data_for_system_actor_only() {
         .list_records(RuntimeListInput {
             actor: non_system_actor,
             model_code: "orders".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,

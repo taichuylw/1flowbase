@@ -297,9 +297,9 @@ describe('console-data-models client', () => {
         page: 2,
         page_size: 50,
         filter: {
-          field: 'status',
-          operator: 'eq',
-          value: 'needs review'
+          status: {
+            $eq: 'needs review'
+          }
         },
         sort: {
           field: 'created_at',
@@ -308,7 +308,7 @@ describe('console-data-models client', () => {
         expand: ['customer', 'line items']
       })
     ).resolves.toMatchObject({
-      path: '/api/runtime/models/sales%2Forders/records?page=2&page_size=50&filter=status%3Aeq%3Aneeds+review&sort=created_at%3Adesc&expand=customer%2Cline+items'
+      path: '/api/runtime/models/sales%2Forders/records?page=2&page_size=50&filter=%7B%22status%22%3A%7B%22%24eq%22%3A%22needs+review%22%7D%7D&sort=created_at%3Adesc&expand=customer%2Cline+items'
     });
   });
 

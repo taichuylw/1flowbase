@@ -17,6 +17,7 @@ pub mod node_contribution;
 pub mod orchestration;
 pub mod plugin_worker;
 pub mod resource;
+pub mod resource_filter;
 pub mod runtime_observability;
 pub mod scope;
 
@@ -83,6 +84,7 @@ pub use orchestration::{
 };
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;
+pub use resource_filter::{ResourceFilterExpr, ResourceFilterOperator};
 pub use runtime_observability::{
     AuditHashRecord, BillingSessionRecord, BillingSessionStatus, CapabilityInvocationRecord,
     ContextProjectionRecord, CostLedgerRecord, CreditLedgerRecord,

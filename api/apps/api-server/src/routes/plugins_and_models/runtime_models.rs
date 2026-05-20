@@ -19,6 +19,7 @@ use crate::{
     },
     response::ApiSuccess,
 };
+use control_plane::resource_crud::parse_resource_filter_expr;
 use control_plane::{audit::audit_log, ports::AuthRepository};
 
 fn map_runtime_error(error: anyhow::Error) -> ApiError {
@@ -93,34 +94,13 @@ pub fn router() -> Router<Arc<ApiState>> {
         )
 }
 
-fn parse_filters(
-    filter: Option<&str>,
-) -> Result<Vec<runtime_core::runtime_engine::RuntimeFilterInput>, ApiError> {
-    let Some(filter) = filter else {
-        return Ok(vec![]);
+fn parse_filter(filter: Option<&str>) -> Result<domain::ResourceFilterExpr, ApiError> {
+    let Some(filter) = filter.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(domain::ResourceFilterExpr::All(vec![]));
     };
-    let mut parts = filter.splitn(3, ':');
-    let field_code = parts
-        .next()
-        .ok_or(control_plane::errors::ControlPlaneError::InvalidInput(
-            "filter",
-        ))?;
-    let operator = parts
-        .next()
-        .ok_or(control_plane::errors::ControlPlaneError::InvalidInput(
-            "filter",
-        ))?;
-    let value = parts
-        .next()
-        .ok_or(control_plane::errors::ControlPlaneError::InvalidInput(
-            "filter",
-        ))?;
-
-    Ok(vec![runtime_core::runtime_engine::RuntimeFilterInput {
-        field_code: field_code.to_string(),
-        operator: operator.to_string(),
-        value: serde_json::json!(value),
-    }])
+    let filter: Value = serde_json::from_str(filter)
+        .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput("filter"))?;
+    parse_resource_filter_expr(&filter).map_err(Into::into)
 }
 
 fn parse_sorts(
@@ -412,7 +392,7 @@ pub async fn list_records(
             actor: credential.actor().clone(),
             model_code: model_code.clone(),
             scope_grant,
-            filters: parse_filters(query.filter.as_deref())?,
+            filter: parse_filter(query.filter.as_deref())?,
             sorts: parse_sorts(query.sort.as_deref())?,
             expand_relations: parse_expand(query.expand.as_deref()),
             page: query.page.unwrap_or(1),

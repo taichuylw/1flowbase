@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use control_plane::resource_crud::{
     filter_by_tk_values, filter_resource_records, matches_resource_filter, parse_resource_filter,
-    ResourceBatchSelection, ResourceCrudDescriptor, ResourceFilterTarget,
+    parse_resource_filter_expr, ResourceBatchSelection, ResourceCrudDescriptor, ResourceFilterExpr,
+    ResourceFilterOperator, ResourceFilterTarget,
 };
 use serde_json::json;
 
@@ -67,6 +68,53 @@ fn parse_resource_filter_accepts_empty_and_json_object() {
         parse_resource_filter(Some(r#"{"status":"published"}"#)).unwrap(),
         Some(json!({ "status": "published" }))
     );
+}
+
+#[test]
+fn parse_resource_filter_expr_builds_shared_ast() {
+    let expr = parse_resource_filter_expr(&json!({
+        "$and": [
+            { "code": { "$includes": "customer" } },
+            { "status.$in": ["draft", "published"] }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        expr,
+        ResourceFilterExpr::All(vec![
+            ResourceFilterExpr::Field {
+                field: "code".to_string(),
+                operator: ResourceFilterOperator::Includes,
+                value: json!("customer"),
+            },
+            ResourceFilterExpr::Field {
+                field: "status".to_string(),
+                operator: ResourceFilterOperator::In,
+                value: json!(["draft", "published"]),
+            },
+        ])
+    );
+}
+
+#[test]
+fn parse_resource_filter_expr_rejects_invalid_logical_operator() {
+    let error = parse_resource_filter_expr(&json!({
+        "$unknown": []
+    }))
+    .unwrap_err();
+
+    assert!(error.to_string().contains("filter"));
+}
+
+#[test]
+fn parse_resource_filter_expr_requires_in_array() {
+    let error = parse_resource_filter_expr(&json!({
+        "status": { "$in": "published" }
+    }))
+    .unwrap_err();
+
+    assert!(error.to_string().contains("filter"));
 }
 
 #[test]

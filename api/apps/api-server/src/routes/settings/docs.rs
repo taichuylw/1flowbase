@@ -602,8 +602,8 @@ fn runtime_list_parameters() -> Value {
             "in": "query",
             "required": false,
             "schema": { "type": "string" },
-            "example": "status:eq:paid",
-            "description": "Single filter expression using field:operator:value."
+            "example": "{\"status\":{\"$eq\":\"paid\"}}",
+            "description": "JSON filter expression. Supports field operators such as $eq, $ne, $gt, $gte, $lt, $lte, $includes, $notIncludes and $in."
         },
         {
             "name": "sort",
@@ -612,6 +612,20 @@ fn runtime_list_parameters() -> Value {
             "schema": { "type": "string" },
             "example": "created_at:desc",
             "description": "Single sort expression using field:asc or field:desc."
+        },
+        {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "default": 1 },
+            "description": "Page number."
+        },
+        {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "default": 20 },
+            "description": "Page size."
         },
         expand_parameter()
     ])

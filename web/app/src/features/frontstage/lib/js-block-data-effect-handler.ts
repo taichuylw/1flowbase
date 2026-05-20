@@ -187,26 +187,13 @@ function readOptionalPositiveInteger(
 }
 
 function readFilter(value: unknown): FetchConsoleRuntimeModelRecordsInput['filter'] {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (
-    !isRecord(value) ||
-    typeof value.field !== 'string' ||
-    typeof value.operator !== 'string' ||
-    !isRuntimeFilterValue(value.value)
-  ) {
+  if (!isRecord(value)) {
     throw new Error(
-      'JS Block data effect payload.filter must be a string or filter object.'
+      'JS Block data effect payload.filter must be a filter object.'
     );
   }
 
-  return {
-    field: value.field,
-    operator: value.operator,
-    value: value.value
-  } satisfies ConsoleRuntimeModelRecordFilterInput;
+  return value satisfies ConsoleRuntimeModelRecordFilterInput;
 }
 
 function readSort(value: unknown): FetchConsoleRuntimeModelRecordsInput['sort'] {
@@ -250,17 +237,6 @@ function requireCsrfToken(value: string | null | undefined): string {
   }
 
   return value;
-}
-
-function isRuntimeFilterValue(
-  value: unknown
-): value is ConsoleRuntimeModelRecordFilterInput['value'] {
-  return (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  );
 }
 
 function isString(value: unknown): value is string {

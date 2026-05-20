@@ -650,7 +650,7 @@ where
                 actor,
                 model_code,
                 scope_grant,
-                filters: options.filters,
+                filter: options.filter,
                 sorts: options.sorts,
                 expand_relations: options.expand_relations,
                 page: options.page,
@@ -804,7 +804,7 @@ where
 
 #[derive(Debug)]
 struct ListOptions {
-    filters: Vec<runtime_core::runtime_engine::RuntimeFilterInput>,
+    filter: domain::ResourceFilterExpr,
     sorts: Vec<runtime_core::runtime_engine::RuntimeSortInput>,
     expand_relations: Vec<String>,
     page: i64,
@@ -824,7 +824,7 @@ impl ListOptions {
             .clamp(1, WORKFLOW_LIST_PAGE_SIZE_MAX);
 
         Ok(Self {
-            filters: parse_filters(object.get("filters"))?,
+            filter: parse_filters(object.get("filters"))?,
             sorts: parse_sorts(object.get("sorts"))?,
             expand_relations: parse_string_list(object.get("expand_relations"))?,
             page,
@@ -833,31 +833,30 @@ impl ListOptions {
     }
 }
 
-fn parse_filters(
-    value: Option<&Value>,
-) -> Result<Vec<runtime_core::runtime_engine::RuntimeFilterInput>> {
+fn parse_filters(value: Option<&Value>) -> Result<domain::ResourceFilterExpr> {
     let Some(value) = value else {
-        return Ok(Vec::new());
+        return Ok(domain::ResourceFilterExpr::All(vec![]));
     };
     let entries = value
         .as_array()
         .ok_or_else(|| anyhow!("data_model list filters must be array"))?;
 
-    entries
+    let filters = entries
         .iter()
         .map(|entry| {
             let object = entry
                 .as_object()
                 .ok_or_else(|| anyhow!("data_model list filter must be object"))?;
             let operator = required_string(object, "operator")?;
-            ensure_supported_filter_operator(&operator)?;
-            Ok(runtime_core::runtime_engine::RuntimeFilterInput {
-                field_code: required_string(object, "field_code")?,
-                operator,
+            Ok(domain::ResourceFilterExpr::Field {
+                field: required_string(object, "field_code")?,
+                operator: parse_workflow_filter_operator(&operator)?,
                 value: object.get("value").cloned().unwrap_or(Value::Null),
             })
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(domain::ResourceFilterExpr::all(filters))
 }
 
 fn parse_sorts(
@@ -922,12 +921,7 @@ fn validate_list_options(
     metadata: &runtime_core::model_metadata::ModelMetadata,
     options: &ListOptions,
 ) -> Result<()> {
-    for filter in &options.filters {
-        if metadata.field_by_code(&filter.field_code).is_none() {
-            return Err(anyhow!("undeclared field code: {}", filter.field_code));
-        }
-        ensure_supported_filter_operator(&filter.operator)?;
-    }
+    validate_filter_fields(metadata, &options.filter)?;
 
     for sort in &options.sorts {
         if metadata.field_by_code(&sort.field_code).is_none() {
@@ -951,11 +945,35 @@ fn validate_list_options(
     Ok(())
 }
 
-fn ensure_supported_filter_operator(operator: &str) -> Result<()> {
+fn parse_workflow_filter_operator(operator: &str) -> Result<domain::ResourceFilterOperator> {
     match operator {
-        "eq" | "ne" | "gt" | "gte" | "lt" | "lte" => Ok(()),
+        "eq" => Ok(domain::ResourceFilterOperator::Eq),
+        "ne" => Ok(domain::ResourceFilterOperator::Ne),
+        "gt" => Ok(domain::ResourceFilterOperator::Gt),
+        "gte" => Ok(domain::ResourceFilterOperator::Gte),
+        "lt" => Ok(domain::ResourceFilterOperator::Lt),
+        "lte" => Ok(domain::ResourceFilterOperator::Lte),
         _ => Err(anyhow!("data_model list filter operator is unsupported")),
     }
+}
+
+fn validate_filter_fields(
+    metadata: &runtime_core::model_metadata::ModelMetadata,
+    filter: &domain::ResourceFilterExpr,
+) -> Result<()> {
+    match filter {
+        domain::ResourceFilterExpr::All(items) | domain::ResourceFilterExpr::Any(items) => {
+            for item in items {
+                validate_filter_fields(metadata, item)?;
+            }
+        }
+        domain::ResourceFilterExpr::Field { field, .. } => {
+            if metadata.field_by_code(field).is_none() {
+                return Err(anyhow!("undeclared field code: {}", field));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn ensure_supported_sort_direction(direction: &str) -> Result<()> {

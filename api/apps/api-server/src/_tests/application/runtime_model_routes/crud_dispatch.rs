@@ -39,7 +39,7 @@ async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/runtime/models/orders/records?filter=status:eq:draft&sort=title:desc")
+                .uri("/api/runtime/models/orders/records?filter=%7B%22status%22%3A%7B%22%24eq%22%3A%22draft%22%7D%7D&sort=title:desc")
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -48,6 +48,21 @@ async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
         .unwrap();
 
     assert_eq!(list_response.status(), StatusCode::OK);
+
+    let invalid_filter_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/runtime/models/orders/records?filter=%7B%22status%22%3A%7B%22%24startsWith%22%3A%22dra%22%7D%7D")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(invalid_filter_response.status(), StatusCode::BAD_REQUEST);
 
     let get_response = app
         .clone()

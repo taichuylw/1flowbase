@@ -220,11 +220,7 @@ export interface UpdateConsoleDataModelScopeGrantInput {
   confirm_unsafe_external_source_system_all: boolean;
 }
 
-export interface ConsoleRuntimeModelRecordFilterInput {
-  field: string;
-  operator: string;
-  value: string | number | boolean | null;
-}
+export type ConsoleRuntimeModelRecordFilterInput = Record<string, unknown>;
 
 export interface ConsoleRuntimeModelRecordSortInput {
   field: string;
@@ -234,7 +230,7 @@ export interface ConsoleRuntimeModelRecordSortInput {
 export interface FetchConsoleRuntimeModelRecordsInput {
   page?: number;
   page_size?: number;
-  filter?: ConsoleRuntimeModelRecordFilterInput | string;
+  filter?: ConsoleRuntimeModelRecordFilterInput;
   sort?: ConsoleRuntimeModelRecordSortInput | string;
   expand?: string | string[];
 }
@@ -270,7 +266,7 @@ function serializeRuntimeRecordFilter(
   if (filter === undefined || typeof filter === 'string') {
     return filter;
   }
-  return `${filter.field}:${filter.operator}:${String(filter.value)}`;
+  return JSON.stringify(filter);
 }
 
 function serializeRuntimeRecordSort(

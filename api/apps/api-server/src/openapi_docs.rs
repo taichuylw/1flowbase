@@ -232,6 +232,7 @@ fn enrich_canonical_openapi(mut canonical: Value, cookie_name: &str) -> Result<V
 
     ensure_docs_server(canonical_map);
     ensure_security_schemes(canonical_map, cookie_name)?;
+    ensure_shared_crud_protocol_components(canonical_map)?;
     annotate_console_operation_security(canonical_map)?;
 
     Ok(canonical)
@@ -342,6 +343,88 @@ fn ensure_security_schemes(
                 "in": "header",
                 "name": CSRF_HEADER_NAME,
                 "description": "CSRF token header required by mutating console operations."
+            })
+        });
+
+    Ok(())
+}
+
+fn ensure_shared_crud_protocol_components(canonical_map: &mut Map<String, Value>) -> Result<()> {
+    let components = canonical_map
+        .entry("components".to_string())
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .context("components must be an object")?;
+    let parameters = components
+        .entry("parameters".to_string())
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .context("components.parameters must be an object")?;
+    parameters
+        .entry("CrudFilter".to_string())
+        .or_insert_with(|| {
+            json!({
+                "name": "filter",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "string" },
+                "description": "JSON filter expression. Supports field operators such as $eq, $ne, $gt, $gte, $lt, $lte, $includes, $notIncludes and $in. URL-encode the JSON string in query parameters."
+            })
+        });
+    parameters.entry("CrudSort".to_string()).or_insert_with(|| {
+        json!({
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Sort expression using field:asc or field:desc."
+        })
+    });
+    parameters.entry("CrudPage".to_string()).or_insert_with(|| {
+        json!({
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "default": 1 },
+            "description": "Page number."
+        })
+    });
+    parameters
+        .entry("CrudPageSize".to_string())
+        .or_insert_with(|| {
+            json!({
+                "name": "page_size",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "integer", "minimum": 1, "default": 20 },
+                "description": "Page size."
+            })
+        });
+
+    let schemas = components
+        .entry("schemas".to_string())
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .context("components.schemas must be an object")?;
+    schemas
+        .entry("CrudBatchSelection".to_string())
+        .or_insert_with(|| {
+            json!({
+                "type": "object",
+                "properties": {
+                    "filterByTk": {
+                        "oneOf": [
+                            { "type": "string" },
+                            { "type": "array", "items": { "type": "string" } }
+                        ],
+                        "description": "Selected primary key value or values."
+                    },
+                    "filter": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "description": "JSON filter expression for conditional batch operations."
+                    }
+                }
             })
         });
 

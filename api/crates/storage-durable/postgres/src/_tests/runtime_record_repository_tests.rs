@@ -4,7 +4,7 @@ use control_plane::ports::{
 use domain::{DataModelScopeKind, ModelFieldKind, DEFAULT_SCOPE_ID};
 use runtime_core::runtime_engine::RuntimeModelError;
 use runtime_core::runtime_record_repository::{
-    RuntimeFilterInput, RuntimeListQuery, RuntimeRecordRepository, RuntimeSortInput,
+    RuntimeListQuery, RuntimeRecordRepository, RuntimeSortInput,
 };
 use serde_json::json;
 use sqlx::PgPool;
@@ -170,7 +170,7 @@ async fn runtime_record_repository_scopes_dynamic_rows_without_workspace_row() {
         RuntimeListQuery {
             scope_id: Some(default_scope_id),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -188,7 +188,7 @@ async fn runtime_record_repository_scopes_dynamic_rows_without_workspace_row() {
         RuntimeListQuery {
             scope_id: Some(alternate_scope_id),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -372,7 +372,7 @@ async fn runtime_record_repository_uses_default_scope_id_without_workspace_row()
         RuntimeListQuery {
             scope_id: Some(DEFAULT_SCOPE_ID),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -390,7 +390,7 @@ async fn runtime_record_repository_uses_default_scope_id_without_workspace_row()
         RuntimeListQuery {
             scope_id: Some(future_scope_id),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -686,11 +686,11 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         RuntimeListQuery {
             scope_id: Some(workspace_id),
             owner_user_id: None,
-            filters: vec![RuntimeFilterInput {
-                field_code: "status".into(),
-                operator: "eq".into(),
+            filter: domain::ResourceFilterExpr::Field {
+                field: "status".into(),
+                operator: domain::ResourceFilterOperator::Eq,
                 value: json!("paid"),
-            }],
+            },
             sorts: vec![RuntimeSortInput {
                 field_code: "title".into(),
                 direction: "desc".into(),
@@ -705,6 +705,35 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
     assert_eq!(listed.total, 1);
     assert_eq!(listed.items[0]["title"], json!("A-002"));
     assert_eq!(listed.items[0]["customer"]["name"], json!("Bob"));
+
+    let filtered_by_ast = RuntimeRecordRepository::list_records(
+        &store,
+        &order_metadata,
+        RuntimeListQuery {
+            scope_id: Some(workspace_id),
+            owner_user_id: None,
+            filter: domain::ResourceFilterExpr::All(vec![
+                domain::ResourceFilterExpr::Field {
+                    field: "title".into(),
+                    operator: domain::ResourceFilterOperator::Includes,
+                    value: json!("A-00"),
+                },
+                domain::ResourceFilterExpr::Field {
+                    field: "status".into(),
+                    operator: domain::ResourceFilterOperator::In,
+                    value: json!(["paid"]),
+                },
+            ]),
+            sorts: vec![],
+            expand_relations: vec![],
+            page: 1,
+            page_size: 20,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(filtered_by_ast.total, 1);
+    assert_eq!(filtered_by_ast.items[0]["title"], json!("A-002"));
 
     let fetched = RuntimeRecordRepository::get_record(
         &store,
@@ -737,7 +766,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         RuntimeListQuery {
             scope_id: Some(workspace_id),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec!["orders".into()],
             page: 1,
@@ -925,7 +954,7 @@ async fn runtime_record_repository_blocks_expanding_draft_relation_targets() {
         RuntimeListQuery {
             scope_id: Some(workspace_id),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec!["customer".into()],
             page: 1,
@@ -1046,7 +1075,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         RuntimeListQuery {
             scope_id: Some(workspace_id),
             owner_user_id: Some(owner_user_id),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -1121,7 +1150,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         RuntimeListQuery {
             scope_id: Some(workspace_id),
             owner_user_id: None,
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,

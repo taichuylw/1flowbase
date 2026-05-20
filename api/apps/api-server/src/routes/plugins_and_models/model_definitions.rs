@@ -26,6 +26,7 @@ use crate::{
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
     response::ApiSuccess,
+    routes::helpers,
     runtime_registry_sync::ApiRuntimeRegistrySync,
 };
 
@@ -400,11 +401,6 @@ fn runtime_availability_for_status(status: domain::DataModelStatus) -> &'static 
     }
 }
 
-fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
-    Uuid::parse_str(raw)
-        .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
-}
-
 fn parse_scope_kind(raw: &str) -> Result<domain::DataModelScopeKind, ApiError> {
     match raw {
         "workspace" => Ok(domain::DataModelScopeKind::Workspace),
@@ -470,7 +466,7 @@ pub async fn list_models(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Query(query): Query<ListModelsQuery>,
-) -> Result<Json<ApiSuccess<Vec<ModelDefinitionResponse>>>, ApiError> {
+) -> Result<helpers::ApiJson<Vec<ModelDefinitionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let mut models = ModelDefinitionService::new(state.store.clone())
         .list_models(context.user.id)
@@ -483,7 +479,7 @@ pub async fn list_models(
             });
         } else {
             let data_source_instance_id =
-                parse_uuid(data_source_instance_id, "data_source_instance_id")?;
+                helpers::parse_uuid(data_source_instance_id, "data_source_instance_id")?;
             models.retain(|model| {
                 model.source_kind == domain::DataModelSourceKind::ExternalSource
                     && model.data_source_instance_id == Some(data_source_instance_id)
@@ -493,12 +489,12 @@ pub async fn list_models(
     let filter = parse_resource_filter(query.filter.as_deref())?;
     models = STATE_MODEL_RESOURCE.filter_records(models, filter.as_ref())?;
 
-    Ok(Json(ApiSuccess::new(
+    Ok(helpers::ok(
         models
             .into_iter()
             .map(to_model_definition_response)
             .collect(),
-    )))
+    ))
 }
 
 #[utoipa::path(
@@ -547,7 +543,7 @@ pub async fn create_model(
             data_source_instance_id: body
                 .data_source_instance_id
                 .as_deref()
-                .map(|value| parse_uuid(value, "data_source_instance_id"))
+                .map(|value| helpers::parse_uuid(value, "data_source_instance_id"))
                 .transpose()?,
             external_resource_key: body.external_resource_key,
             external_table_id: body.external_table_id,
@@ -576,7 +572,7 @@ pub async fn get_model(
 ) -> Result<Json<ApiSuccess<ModelDefinitionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let model = ModelDefinitionService::new(state.store.clone())
-        .get_model(context.user.id, parse_uuid(&model_id, "model_id")?)
+        .get_model(context.user.id, helpers::parse_uuid(&model_id, "model_id")?)
         .await?;
 
     Ok(Json(ApiSuccess::new(to_model_definition_response(model))))
@@ -595,7 +591,7 @@ pub async fn get_advisor_findings(
 ) -> Result<Json<ApiSuccess<Vec<DataModelAdvisorFindingResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let findings = ModelDefinitionService::new(state.store.clone())
-        .advisor_findings(context.user.id, parse_uuid(&model_id, "model_id")?)
+        .advisor_findings(context.user.id, helpers::parse_uuid(&model_id, "model_id")?)
         .await?;
 
     Ok(Json(ApiSuccess::new(
@@ -619,7 +615,7 @@ pub async fn list_scope_grants(
 ) -> Result<Json<ApiSuccess<Vec<ScopeGrantResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let grants = ModelDefinitionService::new(state.store.clone())
-        .list_scope_grants(context.user.id, parse_uuid(&model_id, "model_id")?)
+        .list_scope_grants(context.user.id, helpers::parse_uuid(&model_id, "model_id")?)
         .await?;
 
     Ok(Json(ApiSuccess::new(
@@ -643,7 +639,7 @@ pub async fn update_model(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let model_id = parse_uuid(&model_id, "model_id")?;
+    let model_id = helpers::parse_uuid(&model_id, "model_id")?;
     let requested_status = body.status.as_deref().map(parse_model_status).transpose()?;
     let requested_api_exposure_status = body
         .api_exposure_status
@@ -722,7 +718,7 @@ pub async fn delete_model(
     mutation_service(&state)
         .delete_model(DeleteModelDefinitionCommand {
             actor_user_id: context.user.id,
-            model_id: parse_uuid(&model_id, "model_id")?,
+            model_id: helpers::parse_uuid(&model_id, "model_id")?,
             confirmed: query.confirmed.unwrap_or(false),
         })
         .await?;
@@ -796,7 +792,7 @@ pub async fn create_field(
     let field = mutation_service(&state)
         .add_field(AddModelFieldCommand {
             actor_user_id: context.user.id,
-            model_id: parse_uuid(&model_id, "model_id")?,
+            model_id: helpers::parse_uuid(&model_id, "model_id")?,
             code: body.code,
             title: body.title,
             external_field_key: body.external_field_key,
@@ -809,7 +805,7 @@ pub async fn create_field(
             relation_target_model_id: body
                 .relation_target_model_id
                 .as_deref()
-                .map(|value| parse_uuid(value, "relation_target_model_id"))
+                .map(|value| helpers::parse_uuid(value, "relation_target_model_id"))
                 .transpose()?,
             relation_options: body.relation_options,
         })
@@ -843,8 +839,8 @@ pub async fn update_field(
     let field = mutation_service(&state)
         .update_field(UpdateModelFieldCommand {
             actor_user_id: context.user.id,
-            model_id: parse_uuid(&model_id, "model_id")?,
-            field_id: parse_uuid(&field_id, "field_id")?,
+            model_id: helpers::parse_uuid(&model_id, "model_id")?,
+            field_id: helpers::parse_uuid(&field_id, "field_id")?,
             title: body.title,
             is_required: body.is_required,
             is_unique: body.is_unique,
@@ -880,8 +876,8 @@ pub async fn delete_field(
     mutation_service(&state)
         .delete_field(DeleteModelFieldCommand {
             actor_user_id: context.user.id,
-            model_id: parse_uuid(&model_id, "model_id")?,
-            field_id: parse_uuid(&field_id, "field_id")?,
+            model_id: helpers::parse_uuid(&model_id, "model_id")?,
+            field_id: helpers::parse_uuid(&field_id, "field_id")?,
             confirmed: query.confirmed.unwrap_or(false),
         })
         .await?;
@@ -912,7 +908,7 @@ pub async fn create_scope_grant(
             actor_user_id: context.user.id,
             scope_kind: parse_scope_kind(&body.scope_kind)?,
             scope_id: body.scope_id,
-            data_model_id: parse_uuid(&model_id, "model_id")?,
+            data_model_id: helpers::parse_uuid(&model_id, "model_id")?,
             enabled: body.enabled,
             permission_profile: body.permission_profile,
             confirm_unsafe_external_source_system_all: body
@@ -953,8 +949,8 @@ pub async fn update_scope_grant(
     let grant = ModelDefinitionService::new(state.store.clone())
         .update_scope_grant(UpdateScopeDataModelGrantCommand {
             actor_user_id: context.user.id,
-            data_model_id: parse_uuid(&model_id, "model_id")?,
-            grant_id: parse_uuid(&grant_id, "grant_id")?,
+            data_model_id: helpers::parse_uuid(&model_id, "model_id")?,
+            grant_id: helpers::parse_uuid(&grant_id, "grant_id")?,
             enabled: body.enabled,
             permission_profile: body.permission_profile,
             confirm_unsafe_external_source_system_all: body
@@ -985,8 +981,8 @@ pub async fn delete_scope_grant(
     ModelDefinitionService::new(state.store.clone())
         .delete_scope_grant(DeleteScopeDataModelGrantCommand {
             actor_user_id: context.user.id,
-            data_model_id: parse_uuid(&model_id, "model_id")?,
-            grant_id: parse_uuid(&grant_id, "grant_id")?,
+            data_model_id: helpers::parse_uuid(&model_id, "model_id")?,
+            grant_id: helpers::parse_uuid(&grant_id, "grant_id")?,
         })
         .await?;
 

@@ -1,16 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use domain::ResourceFilterExpr;
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::model_metadata::ModelMetadata;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RuntimeFilterInput {
-    pub field_code: String,
-    pub operator: String,
-    pub value: Value,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeSortInput {
@@ -28,7 +22,7 @@ pub struct RuntimeListResult {
 pub struct RuntimeListQuery {
     pub scope_id: Option<Uuid>,
     pub owner_user_id: Option<Uuid>,
-    pub filters: Vec<RuntimeFilterInput>,
+    pub filter: ResourceFilterExpr,
     pub sorts: Vec<RuntimeSortInput>,
     pub expand_relations: Vec<String>,
     pub page: i64,

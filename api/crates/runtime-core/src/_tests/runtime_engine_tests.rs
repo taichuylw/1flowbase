@@ -8,8 +8,7 @@ use plugin_framework::data_source_contract::{
 use runtime_core::runtime_acl::RuntimeScopeGrant;
 use runtime_core::runtime_engine::{
     DataSourceRuntimeRecordBackend, RuntimeCreateInput, RuntimeDeleteInput, RuntimeEngine,
-    RuntimeFilterInput, RuntimeGetInput, RuntimeListInput, RuntimeModelError, RuntimeSortInput,
-    RuntimeUpdateInput,
+    RuntimeGetInput, RuntimeListInput, RuntimeModelError, RuntimeSortInput, RuntimeUpdateInput,
 };
 use runtime_core::{model_metadata::ModelMetadata, resource_descriptor::ResourceDescriptor};
 use serde_json::json;
@@ -58,11 +57,11 @@ async fn runtime_engine_runs_full_crud_against_repository_and_scope_context() {
         .list_records(RuntimeListInput {
             actor: root.clone(),
             model_code: "orders".into(),
-            filters: vec![RuntimeFilterInput {
-                field_code: "status".into(),
-                operator: "eq".into(),
+            filter: domain::ResourceFilterExpr::Field {
+                field: "status".into(),
+                operator: domain::ResourceFilterOperator::Eq,
                 value: json!("paid"),
-            }],
+            },
             sorts: vec![RuntimeSortInput {
                 field_code: "title".into(),
                 direction: "desc".into(),
@@ -142,11 +141,11 @@ async fn external_source_runtime_crud_dispatches_to_data_source_backend_after_ac
         .list_records(RuntimeListInput {
             actor: actor.clone(),
             model_code: "external_contacts".into(),
-            filters: vec![RuntimeFilterInput {
-                field_code: "email".into(),
-                operator: "eq".into(),
+            filter: domain::ResourceFilterExpr::Field {
+                field: "email".into(),
+                operator: domain::ResourceFilterOperator::Eq,
                 value: json!("ada@example.test"),
-            }],
+            },
             sorts: vec![RuntimeSortInput {
                 field_code: "created_at".into(),
                 direction: "desc".into(),
@@ -329,11 +328,11 @@ async fn external_source_runtime_rejects_unknown_fields_and_invalid_sort_directi
         .list_records(RuntimeListInput {
             actor: actor.clone(),
             model_code: "external_contacts".into(),
-            filters: vec![RuntimeFilterInput {
-                field_code: "unknown".into(),
-                operator: "eq".into(),
+            filter: domain::ResourceFilterExpr::Field {
+                field: "unknown".into(),
+                operator: domain::ResourceFilterOperator::Eq,
                 value: json!("value"),
-            }],
+            },
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -349,7 +348,7 @@ async fn external_source_runtime_rejects_unknown_fields_and_invalid_sort_directi
         .list_records(RuntimeListInput {
             actor,
             model_code: "external_contacts".into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![RuntimeSortInput {
                 field_code: "email".into(),
                 direction: "sideways".into(),
@@ -471,7 +470,7 @@ async fn runtime_engine_prefers_workspace_metadata_before_system_fallback() {
         .list_records(RuntimeListInput {
             actor,
             model_code: model_code.into(),
-            filters: vec![],
+            filter: domain::ResourceFilterExpr::All(vec![]),
             sorts: vec![],
             expand_relations: vec![],
             page: 1,
@@ -789,7 +788,7 @@ async fn assert_crud_blocked_by_model_error(
             .list_records(RuntimeListInput {
                 actor: actor.clone(),
                 model_code: "status_orders".into(),
-                filters: vec![],
+                filter: domain::ResourceFilterExpr::All(vec![]),
                 sorts: vec![],
                 expand_relations: vec![],
                 page: 1,

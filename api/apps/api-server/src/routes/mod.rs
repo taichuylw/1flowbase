@@ -5,6 +5,7 @@ mod applications_group;
 pub mod files;
 #[path = "frontstage/mod.rs"]
 pub mod frontstage;
+pub(crate) mod helpers;
 #[path = "identity/mod.rs"]
 mod identity_group;
 #[path = "plugins_and_models/mod.rs"]

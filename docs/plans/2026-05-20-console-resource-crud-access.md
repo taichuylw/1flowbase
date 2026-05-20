@@ -17,9 +17,14 @@
 
 ## 当前状态
 
-第一版可复用 CRUD 基础层已经落在：
+第一版可复用 CRUD 基础层最初落在：
 
 - `api/crates/control-plane/src/resource_crud.rs`
+
+当前已拆成：
+
+- `api/crates/control-plane/src/resource_crud/`
+- 共享 Filter AST 下沉到 `api/crates/domain/src/resource_filter.rs`
 
 当前第一个接入资源是：
 
@@ -321,13 +326,13 @@ generic_crud.delete("state_model", model_id).await?;
 
 ## 目标模块演进
 
-当前实现先集中在一个文件：
+当前实现已经从单文件拆成目录：
 
 ```text
-api/crates/control-plane/src/resource_crud.rs
+api/crates/control-plane/src/resource_crud/
 ```
 
-如果继续增长，建议拆成目录模块：
+当前模块形态：
 
 ```text
 api/crates/control-plane/src/resource_crud/
@@ -335,18 +340,17 @@ api/crates/control-plane/src/resource_crud/
   descriptor.rs
   filter.rs
   batch.rs
-  ast.rs
 ```
 
 职责建议：
 
 - `descriptor.rs`：资源身份、主键和资源元信息。
 - `filter.rs`：query/body filter 解析与校验。
-- `ast.rs`：结构化 filter expression 类型。
 - `batch.rs`：`filterByTk` 解析和批量目标选择。
 - `mod.rs`：统一导出和 facade。
+- `api/crates/domain/src/resource_filter.rs`：跨 control-plane、runtime-core、storage-postgres 共用的结构化 Filter AST。
 
-拆分时机已经确认：在第二个资源接入前先拆目录。
+拆分决策已经落地：在第二个资源接入前先拆目录。
 
 原因是第二个资源接入时应直接使用稳定模块边界，而不是继续扩大单文件后再迁移。
 
@@ -411,7 +415,7 @@ git diff --check
 
 本轮审计已确认以下方向：
 
-1. `resource_crud.rs` 在第二个资源接入前先拆成目录模块。
+1. `resource_crud.rs` 在第二个资源接入前先拆成目录模块。已落地为 `resource_crud/`。
 2. 下一步优先统一 runtime records 的 `filter` 协议。
 3. `filter`、pagination、`sort` 是平级能力；`filter` 只负责过滤。
 4. `get/create/update/delete` 需要 route-level helper 统一响应形态和 ID 解析。
@@ -424,10 +428,8 @@ git diff --check
 
 推荐下一步是：
 
-1. 先把 `resource_crud.rs` 拆成 `resource_crud/` 目录模块。
-2. 从当前 JSON matcher 中抽出真正的 `Filter AST`。
-3. 保留 `state_model` 作为固定 record 的参考实现。
-4. 给 runtime records 增加接受同一 AST 的 query compiler，并统一公开 `filter` 协议。
-5. 定义全局基础 CRUD 查询协议：`filter`、`sort`、`page`、`page_size` 平级。
-6. 增加 route-level helper，统一 ID 解析和响应形态，但不替代 service command。
-7. 接口协议稳定后，在 OpenAPI 全局描述共享协议，后续基础 CRUD 直接复用。
+1. 保留 `state_model` 作为固定 record 的参考实现。
+2. 持续扩展 runtime records 对同一 AST 的 query compiler 覆盖面。
+3. 定义全局基础 CRUD 查询协议：`filter`、`sort`、`page`、`page_size` 平级。
+4. 增加 route-level helper，统一 ID 解析和响应形态，但不替代 service command。
+5. 接口协议稳定后，在 OpenAPI 全局描述共享协议，后续基础 CRUD 直接复用。

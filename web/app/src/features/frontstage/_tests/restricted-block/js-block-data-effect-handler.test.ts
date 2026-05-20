@@ -50,7 +50,7 @@ describe('createFrontstageJsBlockDataEffectHandler', () => {
           model: 'orders',
           page: 2,
           pageSize: 25,
-          filter: { field: 'status', operator: 'eq', value: 'open' },
+          filter: { status: { $eq: 'open' } },
           sort: { field: 'created_at', direction: 'desc' },
           expand: ['customer', 'items']
         }
@@ -63,7 +63,7 @@ describe('createFrontstageJsBlockDataEffectHandler', () => {
       {
         page: 2,
         page_size: 25,
-        filter: { field: 'status', operator: 'eq', value: 'open' },
+        filter: { status: { $eq: 'open' } },
         sort: { field: 'created_at', direction: 'desc' },
         expand: ['customer', 'items']
       },
@@ -71,7 +71,7 @@ describe('createFrontstageJsBlockDataEffectHandler', () => {
     );
   });
 
-  test('accepts page_size, string filter, string sort, and string expand for query effects', async () => {
+  test('accepts page_size, filter object, string sort, and string expand for query effects', async () => {
     const client = createClient();
     const handler = createFrontstageJsBlockDataEffectHandler({
       baseUrl: 'http://api.test',
@@ -84,7 +84,7 @@ describe('createFrontstageJsBlockDataEffectHandler', () => {
         payload: {
           model: 'orders',
           page_size: 50,
-          filter: 'status:eq:open',
+          filter: { status: { $eq: 'open' } },
           sort: 'created_at:desc',
           expand: 'customer'
         }
@@ -95,7 +95,7 @@ describe('createFrontstageJsBlockDataEffectHandler', () => {
       'orders',
       {
         page_size: 50,
-        filter: 'status:eq:open',
+        filter: { status: { $eq: 'open' } },
         sort: 'created_at:desc',
         expand: 'customer'
       },
