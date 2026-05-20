@@ -36,6 +36,7 @@ description: Use for 1flowbase frontend work in web/: implementing, fixing, refa
 
 ## General Workflow
 
+0. 如果需求仍存在多方向选择、产品拍板、跨前后端边界、架构影响或非局部重构，先回到 `problem-framing` 完成目标、范围、成功标准、方案和拍板点收敛；本 Skill 只承接已收敛或可按既有前端规则直接实现的 UI / frontend 任务。
 1. 先跑 `references/interaction-architecture-gate.md`，判断这次是否包含入口、层级、L0 / L1 / L2 / L3、详情容器或同类对象行为统一等交互架构决策；命中就先做 mini 诊断，必要时升级到 `frontend-logic-design`。
 2. 再回到 `DESIGN.md` 判断任务域边界、L1 模型、状态语义和现有页面 recipe。
 3. 如果属于页面 / UI 开发需求，先走 `references/requirement-refinement.md`；需要提炼方法时读 `references/extraction-framework.md`，需要直接套回复骨架时读 `references/skill-template.md`，需要看实际写法时读 `examples/`。随后输出面向用户的需求整理；至少覆盖页面目标、主要对象、关键动作、页面交互、关键状态和视觉约束。

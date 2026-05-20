@@ -1,0 +1,4 @@
+interface:
+  display_name: "Problem Framing"
+  short_description: "Plan and decide before implementation"
+  default_prompt: "Use $problem-framing to frame the task, compare options, and identify decisions before implementation."

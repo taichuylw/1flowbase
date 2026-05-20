@@ -28,6 +28,7 @@ description: Use for 1flowbase backend work in api/: implementing, fixing, refac
 
 ## Quick Reference
 
+- 非平凡后端需求如果还没有明确目标、范围、成功标准、关键假设、方案和用户拍板点，先使用 `problem-framing`；本 Skill 承接已收敛的后端设计和实现边界。
 - 核心状态机、对外协议、权限策略、插件边界、核心对象定义：先问人
 - 先分清稳定核心和边界适配层，再写代码
 - 能力边界优先使用能力名，具体实现留在 adapter / repository / driver
