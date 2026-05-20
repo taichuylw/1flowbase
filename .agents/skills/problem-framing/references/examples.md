@@ -68,3 +68,28 @@
 建议
 - 建议在矩阵证明 source of truth 和历史影响后，再选择 balanced 方案。
 ```
+
+## Issue Hierarchy Request
+
+用户说：“这个需求要拆 parent / child issue。”
+
+回复形态：
+
+```md
+现状
+- 这个需求需要先区分结构层级和风险分级。
+- `level:*` 表示 issue 在树上的位置，`grade:*` 表示风险和规划强度。
+
+方向
+- L0：项目级总问题，挂多个 L1 决策 issue。
+- L1：架构决策 / ADR，挂多个 L2 workstream。
+- L2：backend / frontend / QA 等工作流，挂多个 L3 执行任务。
+- L3：单个可执行任务，不再继续拆 child。
+
+风险收益
+- 收益：父子关系可检索，验收路径清晰。
+- 风险：跨层挂载会让 parent/child 语义混乱。
+
+建议
+- 建议给每个 issue 同时打 `level:*` 和 `grade:*`，并只挂直接下一层 child issue。
+```

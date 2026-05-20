@@ -1,6 +1,6 @@
 ---
 name: problem-framing
-description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 分级标签、ADR drafting 或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、方案、风险、终止条件和用户拍板点，再进入实现。
+description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting 或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、方案、风险、终止条件和用户拍板点，再进入实现。
 ---
 
 # Problem Framing
