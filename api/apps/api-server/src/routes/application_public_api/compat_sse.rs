@@ -305,14 +305,22 @@ fn openai_delta_chunk_payload(
 
 struct AnthropicStreamMapper {
     model: String,
-    content_started: bool,
+    next_content_index: u32,
+    active_content: Option<AnthropicContentBlockKind>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AnthropicContentBlockKind {
+    Text,
+    Thinking,
 }
 
 impl AnthropicStreamMapper {
     fn new(model: String) -> Self {
         Self {
             model,
-            content_started: false,
+            next_content_index: 0,
+            active_content: None,
         }
     }
 
@@ -337,30 +345,28 @@ impl AnthropicStreamMapper {
                     }
                 }),
             )],
+            "reasoning_delta" => {
+                let mut events =
+                    self.ensure_anthropic_content_block(AnthropicContentBlockKind::Thinking);
+                let (event_name, payload) = anthropic_delta_payload(
+                    self.active_content_index(),
+                    "reasoning_delta",
+                    envelope.text.unwrap_or_default(),
+                )
+                .expect("reasoning_delta should map to Anthropic thinking_delta");
+                events.push(event_json_sse(event_name, payload));
+                events
+            }
             "text_delta" => {
-                let mut events = Vec::new();
-                if !self.content_started {
-                    self.content_started = true;
-                    events.push(event_json_sse(
-                        "content_block_start",
-                        json!({
-                            "type": "content_block_start",
-                            "index": 0,
-                            "content_block": {"type": "text", "text": ""}
-                        }),
-                    ));
-                }
-                events.push(event_json_sse(
-                    "content_block_delta",
-                    json!({
-                        "type": "content_block_delta",
-                        "index": 0,
-                        "delta": {
-                            "type": "text_delta",
-                            "text": envelope.text.unwrap_or_default()
-                        }
-                    }),
-                ));
+                let mut events =
+                    self.ensure_anthropic_content_block(AnthropicContentBlockKind::Text);
+                let (event_name, payload) = anthropic_delta_payload(
+                    self.active_content_index(),
+                    "text_delta",
+                    envelope.text.unwrap_or_default(),
+                )
+                .expect("text_delta should map to Anthropic text_delta");
+                events.push(event_json_sse(event_name, payload));
                 events
             }
             "flow_finished" => self.anthropic_stop_events(),
@@ -391,21 +397,10 @@ impl AnthropicStreamMapper {
 
     fn anthropic_stop_events(&mut self) -> Vec<Result<Event, Infallible>> {
         let mut events = Vec::new();
-        if !self.content_started {
-            self.content_started = true;
-            events.push(event_json_sse(
-                "content_block_start",
-                json!({
-                    "type": "content_block_start",
-                    "index": 0,
-                    "content_block": {"type": "text", "text": ""}
-                }),
-            ));
+        if self.active_content.is_none() && self.next_content_index == 0 {
+            events.extend(self.ensure_anthropic_content_block(AnthropicContentBlockKind::Text));
         }
-        events.push(event_json_sse(
-            "content_block_stop",
-            json!({"type": "content_block_stop", "index": 0}),
-        ));
+        events.extend(self.close_active_anthropic_content_block());
         events.push(event_json_sse(
             "message_delta",
             json!({
@@ -420,6 +415,78 @@ impl AnthropicStreamMapper {
         ));
         events
     }
+
+    fn ensure_anthropic_content_block(
+        &mut self,
+        kind: AnthropicContentBlockKind,
+    ) -> Vec<Result<Event, Infallible>> {
+        if self.active_content == Some(kind) {
+            return Vec::new();
+        }
+
+        let mut events = self.close_active_anthropic_content_block();
+        let index = self.next_content_index;
+        self.next_content_index += 1;
+        self.active_content = Some(kind);
+        let content_block = match kind {
+            AnthropicContentBlockKind::Text => json!({"type": "text", "text": ""}),
+            AnthropicContentBlockKind::Thinking => {
+                json!({"type": "thinking", "thinking": "", "signature": ""})
+            }
+        };
+        events.push(event_json_sse(
+            "content_block_start",
+            json!({
+                "type": "content_block_start",
+                "index": index,
+                "content_block": content_block
+            }),
+        ));
+        events
+    }
+
+    fn close_active_anthropic_content_block(&mut self) -> Vec<Result<Event, Infallible>> {
+        if self.active_content.is_none() {
+            return Vec::new();
+        }
+        let index = self.active_content_index();
+        self.active_content = None;
+        vec![event_json_sse(
+            "content_block_stop",
+            json!({"type": "content_block_stop", "index": index}),
+        )]
+    }
+
+    fn active_content_index(&self) -> u32 {
+        self.next_content_index.saturating_sub(1)
+    }
+}
+
+fn anthropic_delta_payload(
+    index: u32,
+    event_type: &str,
+    text: String,
+) -> Option<(&'static str, Value)> {
+    let delta = match event_type {
+        "text_delta" => json!({
+            "type": "text_delta",
+            "text": text
+        }),
+        "reasoning_delta" => json!({
+            "type": "thinking_delta",
+            "thinking": text
+        }),
+        _ => return None,
+    };
+
+    Some((
+        "content_block_delta",
+        json!({
+            "type": "content_block_delta",
+            "index": index,
+            "delta": delta
+        }),
+    ))
 }
 
 fn runtime_error_message(payload: &Value) -> String {
@@ -489,5 +556,17 @@ mod tests {
             json!("先分析用户问题")
         );
         assert_eq!(payload["choices"][0]["delta"].get("content"), None);
+    }
+
+    #[test]
+    fn anthropic_delta_payload_maps_reasoning_to_thinking_delta() {
+        let (event_name, payload) =
+            anthropic_delta_payload(0, "reasoning_delta", "先分析用户问题".to_string())
+                .expect("reasoning delta should map to an Anthropic thinking delta");
+
+        assert_eq!(event_name, "content_block_delta");
+        assert_eq!(payload["delta"]["type"], json!("thinking_delta"));
+        assert_eq!(payload["delta"]["thinking"], json!("先分析用户问题"));
+        assert_eq!(payload["delta"].get("text"), None);
     }
 }
