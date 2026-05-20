@@ -30,6 +30,12 @@
 ## Issue Draft
 
 ```md
+## Issue Metadata
+- Grade:
+- Labels:
+- Parent issue:
+- Child issues:
+
 ## Observed Facts
 
 ## Suspected Problems
@@ -43,6 +49,10 @@
 ## Bad Solutions
 
 ## Acceptance Evidence
+
+## Lifecycle
+- Current phase:
+- Close condition:
 ```
 
 Rules:
@@ -50,6 +60,7 @@ Rules:
 - `Observed Facts` 必须带证据来源。
 - `Draft Hypotheses` 必须保持可被挑战，不能写成已决设计。
 - `Open Decisions` 必须是用户需要拍板的真实决策，不是实现杂项。
+- `Issue Metadata` 必须按 `references/issue-lifecycle.md` 填写分级和标签。
 
 ## ADR Draft
 
