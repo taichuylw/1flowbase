@@ -1,62 +1,62 @@
 # Options And Red Team
 
-Use this reference when more than one direction is viable or when the task affects architecture, state, contracts, data history, or user-owned content.
+当存在多个可行方向，或任务影响 architecture、state、contracts、data history、user-owned content 时，使用本参考。
 
 ## Three-Option Template
 
-### 方案 A：保守
+### Option A: Conservative
 
 **现状**
-State confirmed facts, unknowns, and why this option exists.
+写清已确认事实、未知点，以及为什么需要这个方案。
 
 **方向**
-Describe the smallest change that protects current behavior.
+描述能保护当前行为的最小改动。
 
 **风险收益**
-Name the upside, downside, hidden maintenance cost, and worst failure mode.
+写清收益、代价、隐藏维护成本和最坏失败模式。
 
 **建议**
-Say when to choose this option and whether you recommend it.
+说明什么情况下选择该方案，以及是否推荐。
 
-### 方案 B：平衡
+### Option B: Balanced
 
 **现状**
-State the facts and uncertainty this option balances.
+写清该方案需要平衡的事实和不确定性。
 
 **方向**
-Describe the focused product or architecture improvement.
+描述聚焦的产品或架构改进。
 
 **风险收益**
-Name the upside, downside, hidden maintenance cost, and worst failure mode.
+写清收益、代价、隐藏维护成本和最坏失败模式。
 
 **建议**
-Say when to choose this option and whether you recommend it.
+说明什么情况下选择该方案，以及是否推荐。
 
-### 方案 C：激进
+### Option C: Aggressive
 
 **现状**
-State what current constraints this option challenges.
+写清该方案会挑战哪些当前约束。
 
 **方向**
-Describe the broader redesign or cleanup.
+描述更大范围的重设计或清理。
 
 **风险收益**
-Name the upside, downside, hidden maintenance cost, and worst failure mode.
+写清收益、代价、隐藏维护成本和最坏失败模式。
 
 **建议**
-Say when to choose this option and whether you recommend it.
+说明什么情况下选择该方案，以及是否推荐。
 
 ## Recommendation Block
 
-End with:
+最后用这个结构收束：
 
 ```md
 我的建议：选择方案 B。
 
 原因：
-- It best protects the critical invariant.
-- It keeps the implementation reviewable.
-- It avoids paying for a broader abstraction before evidence exists.
+- 它最能保护关键不变量。
+- 它让实现范围保持可审阅。
+- 它避免在证据不足时提前支付大抽象成本。
 
 需要你拍板：
 - 选择 A / B / C。
@@ -66,13 +66,13 @@ End with:
 
 ## Red-Team Pass
 
-Before asking for approval, attack the recommended option:
+请求用户批准前，先攻击推荐方案：
 
-- Concept confusion: Are two different things being merged under one name?
-- User data: Could user-owned content be overwritten, reinterpreted, or silently changed?
-- History: Could historical data be migrated without enough evidence?
-- Runtime behavior: Could this create a silent behavior change?
-- Testability: Can the safety claim be proven by tests or preview evidence?
-- Scope: Is this option smuggling in unrelated cleanup or future roadmap work?
+- 概念混淆：是否把两个不同东西合并到同一个名字下？
+- 用户数据：是否可能覆盖、重解释或静默改变用户内容？
+- 历史数据：是否会在证据不足时迁移历史数据？
+- 运行时行为：是否会造成 silent behavior change？
+- 可测试性：安全性声明能否通过测试或 preview 证据证明？
+- 范围：是否夹带了无关清理或未来路线图工作？
 
-If red-team finds a serious issue, revise the option or stop with a decision question.
+如果 red-team 发现严重问题，修订方案或停止并提出决策问题。

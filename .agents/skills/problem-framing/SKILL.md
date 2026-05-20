@@ -1,6 +1,6 @@
 ---
 name: problem-framing
-description: Use before implementation for non-trivial 1flowbase work when requirements are ambiguous, architecture-affecting, cross frontend/backend, or touch contracts, defaults, migrations, historical data, permissions, state ownership, user-owned content, product workflow, issue shaping, ADR drafting, or implementation planning. Frame facts, assumptions, scope, invariants, options, risks, stop conditions, and user decision points before coding.
+description: 非平凡 1flowbase 需求动工前使用：需求模糊、影响架构、跨 frontend/backend，或涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、ADR drafting、implementation planning 时触发。先收敛事实、假设、范围、不变量、方案、风险、终止条件和用户拍板点，再进入实现。
 ---
 
 # Problem Framing
@@ -15,69 +15,69 @@ description: Use before implementation for non-trivial 1flowbase work when requi
 
 ## Entry Gate
 
-Use this Skill before `frontend-development`, `backend-development`, or `test-driven-development` when the request is not a narrow, already-decided change.
+当请求不是狭窄且已经拍板的局部改动时，先使用本 Skill，再进入 `frontend-development`、`backend-development` 或 `test-driven-development`。
 
-Skip only when the request is a pure local fix, copy/style token tweak, mechanical rename, or the user explicitly says to start directly with current assumptions.
+只有纯局部修复、文案 / 样式 token 调整、机械重命名，或用户明确要求按当前假设直接开始时，才跳过本 Skill。
 
 ## Scope Boundary
 
 Allowed:
 
-- Clarify goal, scope, success criteria, assumptions, unknowns, invariants, failure modes, and human decisions.
-- Inspect only the code, docs, issues, tests, and logs needed to confirm direct facts.
-- Produce a discussion brief, decision matrix, three-option comparison, red-team notes, issue draft, ADR draft, or implementation handoff.
+- 收敛目标、范围、成功标准、假设、未知点、不变量、失败模式和需要用户拍板的问题。
+- 只检查确认直接事实所需的代码、文档、issue、测试和日志。
+- 产出讨论 brief、决策矩阵、三方案对比、red-team 评审、issue 草案、ADR 草案或实现交接稿。
 
 Forbidden:
 
-- Do not edit product code, migrations, tests, schemas, or runtime behavior while this Skill is active.
-- Do not invent new abstractions, compatibility layers, rollback systems, provenance, migrations, or repo-wide refactors unless they are explicitly one of the options for user approval.
-- Do not turn a narrow request into a roadmap, platform redesign, or cleanup campaign.
+- 本 Skill 生效期间，不修改产品代码、migration、测试、schema 或运行时行为。
+- 不新增抽象、兼容层、回滚系统、provenance、migration 或仓库级重构，除非它们被明确列为等待用户批准的方案之一。
+- 不把狭窄请求扩展成路线图、平台重设计或清理专项。
 
 ## Convergence Budget
 
-- Read current request, nearest relevant AGENTS / README / docs, and directly implicated code paths only.
-- Trace one layer of adjacent blast radius; stop before second-order roadmap work.
-- Ask at most 3 blocking questions, all in one batch.
-- For any non-trivial decision with multiple viable directions or data / contract / architecture risk, offer exactly 3 options: conservative, balanced, aggressive.
-- Keep recommendations tied to evidence. Mark unsupported claims as assumptions.
+- 只读取当前请求、最近相关的 AGENTS / README / docs，以及直接受影响的代码路径。
+- 只追一层相邻影响面；进入二阶路线图工作前停止。
+- 阻塞问题最多 3 个，并一次性集中提出。
+- 任何存在多方向选择，或涉及数据 / contract / 架构风险的非平凡决策，都必须给出 3 个方案：conservative、balanced、aggressive。
+- 推荐必须绑定证据；无证据支撑的判断标为假设。
 
 ## Workflow
 
-1. Collect facts: separate confirmed facts, assumptions, unknowns, invariants, failure modes, and human decisions.
-2. Split concepts: identify mixed concepts before naming APIs, services, enums, directories, or migrations.
-3. Build a matrix when the task touches defaults, contracts, schema, state, permissions, migration, history, or user content. Use `references/domain-matrix.md`.
-4. Present options when more than one direction is valid or the task has data / contract / architecture risk. Use exactly conservative / balanced / aggressive; do not collapse to a single best answer before user approval.
-5. Red-team the recommended option before asking the user to approve it. Use `references/options-and-red-team.md`.
-6. Stop at a decision artifact. Use `references/artifacts.md` for brief, issue, ADR, or implementation handoff formats.
+1. 整理事实：分离已确认事实、假设、未知点、不变量、失败模式和需要用户决策的问题。
+2. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
+3. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
+4. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
+5. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
+6. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
 
 ## User Decision Format
 
-When asking the user to choose or approve, use this format:
+需要用户选择或批准时，使用这个格式：
 
-- `现状`: What is confirmed, what is uncertain, and why the decision matters.
-- `方向`: The viable direction or option.
-- `风险收益`: Concrete upside, downside, hidden cost, and failure mode.
-- `建议`: Give a clear recommendation first, then list what the user must approve.
+- `现状`: 已确认什么、还有什么不确定、为什么这个决策重要。
+- `方向`: 可执行的方向或方案。
+- `风险收益`: 明确收益、代价、隐藏成本和失败模式。
+- `建议`: 先给清晰推荐，再列出用户必须批准的点。
 
-For three-option decisions, repeat the four-part format for each option and finish with one recommended option.
+三方案决策中，每个方案都重复这四段，最后给出唯一推荐方案。
 
 ## Stop Conditions
 
-Stop and wait for user approval when any condition is met:
+命中任一条件就停止，并等待用户批准：
 
-- A discussion brief, issue draft, ADR draft, or implementation handoff is ready.
-- Three options plus a clear recommendation have been presented.
-- Blocking decisions have been reduced to at most 3 questions.
-- Evidence is insufficient to distinguish options safely.
-- The user rejects or changes a core assumption.
+- discussion brief、issue draft、ADR draft 或 implementation handoff 已经可供审阅。
+- 三个方案和一个清晰推荐已经给出。
+- 阻塞决策已经收敛到最多 3 个问题。
+- 证据不足，无法安全区分方案。
+- 用户否定或修改了核心假设。
 
 ## Handoff Rules
 
-After approval, switch to the relevant implementation Skill:
+用户批准后，再切换到相关实现 Skill：
 
-- Frontend surface, interaction, UI structure: `frontend-development`.
-- Backend API, state, write path, domain boundary: `backend-development`.
-- Testable behavior change: `test-driven-development`.
-- Self-check, regression, delivery evidence: `qa-evaluation`.
+- 前端界面、交互、UI 结构：`frontend-development`。
+- 后端 API、状态、写路径、领域边界：`backend-development`。
+- 可测试行为变化：`test-driven-development`。
+- 自检、回归、交付证据：`qa-evaluation`。
 
-Implementation must follow the approved artifact. Do not expand scope during implementation; unresolved decisions go back through this Skill.
+实现必须遵守已批准的产物。实现阶段不得扩大范围；新出现的未决问题必须回到本 Skill。

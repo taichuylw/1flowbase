@@ -1,30 +1,30 @@
 # Planning Artifacts
 
-Use only the artifact needed for the current request. Keep artifacts short enough for a human to approve in one pass.
+只使用当前请求需要的产物。产物要短到用户能一轮审完并拍板。
 
 ## Discussion Brief
 
 ```md
 # Discussion Brief
 
-## 现状
-- Confirmed facts:
-- Assumptions:
-- Unknowns:
+## Current State
+- 已确认事实：
+- 假设：
+- 未知点：
 
-## 目标
+## Goal
 
-## 范围
-- In scope:
-- Out of scope:
+## Scope
+- 范围内：
+- 范围外：
 
-## 成功标准
+## Success Criteria
 
-## 不变量
+## Invariants
 
-## 风险与失败模式
+## Risks And Failure Modes
 
-## 需要拍板
+## Decisions Needed
 ```
 
 ## Issue Draft
@@ -47,9 +47,9 @@ Use only the artifact needed for the current request. Keep artifacts short enoug
 
 Rules:
 
-- `Observed Facts` require source evidence.
-- `Draft Hypotheses` must remain challengeable.
-- `Open Decisions` must be explicit user decisions, not implementation chores.
+- `Observed Facts` 必须带证据来源。
+- `Draft Hypotheses` 必须保持可被挑战，不能写成已决设计。
+- `Open Decisions` 必须是用户需要拍板的真实决策，不是实现杂项。
 
 ## ADR Draft
 
@@ -100,6 +100,6 @@ Proposed
 
 Rules:
 
-- Handoff is not an implementation plan unless the user asks for one.
-- Each implementation task must map back to an approved scope item or acceptance evidence.
-- If implementation discovers a new decision, return to `problem-framing`.
+- 除非用户明确要求，handoff 不是完整 implementation plan。
+- 每个实现任务都必须能追溯到已批准范围或验收证据。
+- 实现中发现新决策时，回到 `problem-framing`。
