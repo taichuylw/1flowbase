@@ -114,7 +114,7 @@ describe('frontstage page content query route wiring', () => {
       createPageContent('page-1')
     );
 
-    renderApp('/frontstage/workspace-1/page-1');
+    renderApp('/frontstage/pages/page-1');
 
     await waitFor(() => {
       expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
@@ -136,7 +136,7 @@ describe('frontstage page content query route wiring', () => {
       new Promise(() => {})
     );
 
-    renderApp('/frontstage/workspace-1/page-1');
+    renderApp('/frontstage/pages/page-1');
 
     expect(await screen.findByText('页面内容加载中')).toBeInTheDocument();
     expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
@@ -153,7 +153,7 @@ describe('frontstage page content query route wiring', () => {
       new Error('load failed')
     );
 
-    renderApp('/frontstage/workspace-1/page-1');
+    renderApp('/frontstage/pages/page-1');
 
     expect(await screen.findByText('页面内容加载失败')).toBeInTheDocument();
     expect(
@@ -167,9 +167,31 @@ describe('frontstage page content query route wiring', () => {
       createPageContent('page-1')
     );
 
-    renderApp('/frontstage/workspace-1');
+    renderApp('/frontstage');
 
     await screen.findByText('当前未选中页面');
     expect(pageContentApi.fetchFrontstagePageContent).not.toHaveBeenCalled();
+  });
+
+  test('normalizes page-less frontstage routes through clean page URLs', async () => {
+    pageTreeApi.fetchFrontstagePageTree.mockResolvedValue([
+      createPageNode('page-1'),
+      createPageNode('page-2')
+    ]);
+    pageContentApi.fetchFrontstagePageContent.mockImplementation(
+      (_workspaceId: string, pageId: string) =>
+        Promise.resolve(createPageContent(pageId))
+    );
+
+    renderApp('/frontstage');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/frontstage/pages/page-1');
+    });
+    expect(window.location.pathname).not.toContain('workspace-1');
+    expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
+      'workspace-1',
+      'page-1'
+    );
   });
 });

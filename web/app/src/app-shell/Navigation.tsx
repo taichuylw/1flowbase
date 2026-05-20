@@ -4,7 +4,6 @@ import type { MenuProps } from 'antd';
 
 import { getPrimaryNavigationRoutes } from '../routes/route-helpers';
 import { getSelectedRouteId } from '../routes/route-config';
-import { useAuthStore } from '../state/auth-store';
 
 function renderNavigationLink(
   pathname: string,
@@ -42,17 +41,16 @@ export function Navigation({
   pathname: string;
   useRouterLinks: boolean;
 }) {
-  const workspaceId = useAuthStore((state) => state.actor?.current_workspace_id);
   const selectedKey = getSelectedRouteId(pathname);
   const items: MenuProps['items'] = getPrimaryNavigationRoutes().map((route) => {
-    const path =
-      route.id === 'frontstage' && workspaceId
-        ? `/frontstage/${workspaceId}`
-        : route.path;
-
     return {
       key: route.id,
-      label: renderNavigationLink(path, route.navLabel!, useRouterLinks, route.id === selectedKey)
+      label: renderNavigationLink(
+        route.path,
+        route.navLabel!,
+        useRouterLinks,
+        route.id === selectedKey
+      )
     };
   });
 

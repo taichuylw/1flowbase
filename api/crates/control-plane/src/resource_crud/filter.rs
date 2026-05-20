@@ -182,9 +182,9 @@ fn matches_field_operator<T: ResourceFilterTarget>(
         ResourceFilterOperator::Includes => actual
             .as_deref()
             .is_some_and(|value| value.to_lowercase().contains(&expected_text.to_lowercase())),
-        ResourceFilterOperator::NotIncludes => actual.as_deref().map_or(true, |value| {
-            !value.to_lowercase().contains(&expected_text.to_lowercase())
-        }),
+        ResourceFilterOperator::NotIncludes => actual
+            .as_deref()
+            .is_none_or(|value| !value.to_lowercase().contains(&expected_text.to_lowercase())),
         ResourceFilterOperator::In => expected.as_array().is_some_and(|values| {
             values.iter().any(|value| {
                 let value = value_to_filter_text(value);

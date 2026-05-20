@@ -864,14 +864,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   };
 
   const handleSelectPage = (nodeId: string) => {
-    setSelectedPageId((current) => {
-      if (current === nodeId) {
-        return current;
-      }
+    if (selectedPageId === nodeId) {
+      return;
+    }
 
-      onNavigatePage?.(nodeId);
-      return nodeId;
-    });
+    setSelectedPageId(nodeId);
+    onNavigatePage?.(nodeId);
   };
 
   const handleAddBlock = () => {

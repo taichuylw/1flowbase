@@ -54,7 +54,7 @@ impl ResourceCrudDescriptor {
         let Some(filter) = selection.filter else {
             return Err(ControlPlaneError::InvalidInput("filterByTk"));
         };
-        if filter.as_object().map_or(true, |object| object.is_empty()) {
+        if filter.as_object().is_none_or(|object| object.is_empty()) {
             return Err(ControlPlaneError::InvalidInput("filter"));
         }
 

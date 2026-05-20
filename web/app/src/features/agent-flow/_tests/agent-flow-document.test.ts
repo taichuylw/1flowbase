@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  DEFAULT_ANSWER_NODE_OUTPUTS,
+  DEFAULT_LLM_NODE_OUTPUTS,
+  DEFAULT_START_NODE_CONFIG,
   FLOW_SCHEMA_VERSION,
   classifyDocumentChange,
   createDefaultAgentFlowDocument,
@@ -9,8 +12,10 @@ import {
 
 import {
   buildDefaultAgentFlowDocument,
+  createNodeDocument,
   createNextNodeId
 } from '../lib/default-agent-flow-document';
+import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 
 describe('agent flow document helpers', () => {
   test('seeds the default start -> llm -> answer graph', () => {
@@ -118,5 +123,41 @@ describe('agent flow document helpers', () => {
 
     expect(startNode?.config.input_fields).toEqual([]);
     expect(startNode?.outputs).toEqual([]);
+  });
+
+  test('keeps default document node defaults aligned with node factory and runtime contracts', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const startNode = document.graph.nodes.find(
+      (node) => node.id === 'node-start'
+    );
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+    const answerNode = document.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    expect(startNode?.config).toEqual(DEFAULT_START_NODE_CONFIG);
+    expect(startNode?.config).toEqual(
+      createNodeDocument('start', 'node-start').config
+    );
+    expect(startNode?.config).toEqual(
+      getBuiltinNodeRuntimeContract('start')?.defaults.config
+    );
+    expect(startNode?.outputs).toEqual([]);
+
+    expect(llmNode?.outputs).toEqual(DEFAULT_LLM_NODE_OUTPUTS);
+    expect(llmNode?.outputs).toEqual(
+      createNodeDocument('llm', 'node-llm').outputs
+    );
+    expect(llmNode?.outputs).toEqual(
+      getBuiltinNodeRuntimeContract('llm')?.defaults.outputs
+    );
+
+    expect(answerNode?.outputs).toEqual(DEFAULT_ANSWER_NODE_OUTPUTS);
+    expect(answerNode?.outputs).toEqual(
+      createNodeDocument('answer', 'node-answer').outputs
+    );
+    expect(answerNode?.outputs).toEqual(
+      getBuiltinNodeRuntimeContract('answer')?.defaults.outputs
+    );
   });
 });

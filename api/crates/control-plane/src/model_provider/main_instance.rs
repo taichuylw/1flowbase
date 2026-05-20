@@ -53,7 +53,7 @@ pub(super) fn auto_include_new_instances(
 ) -> bool {
     record
         .map(|record| record.auto_include_new_instances)
-        .unwrap_or(true)
+        .unwrap_or(domain::DEFAULT_AUTO_INCLUDE_NEW_PROVIDER_INSTANCES)
 }
 
 fn to_view(
