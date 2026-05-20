@@ -144,6 +144,9 @@ impl DocTextResolver {
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "创建 OpenAI 兼容聊天补全"
             }
+            ("application_public_api.openai.list_models", DocsLocale::ZhHans) => {
+                "拉取 OpenAI 兼容模型列表"
+            }
             ("application_public_api.anthropic.message", DocsLocale::ZhHans) => {
                 "创建 Anthropic 兼容消息"
             }
@@ -162,6 +165,9 @@ impl DocTextResolver {
             }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Create OpenAI-compatible chat completion"
+            }
+            ("application_public_api.openai.list_models", DocsLocale::EnUs) => {
+                "List OpenAI-compatible models"
             }
             ("application_public_api.anthropic.message", DocsLocale::EnUs) => {
                 "Create Anthropic-compatible message"
@@ -190,6 +196,9 @@ impl DocTextResolver {
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "将 OpenAI Chat Completions 请求适配为原生公开运行。"
             }
+            ("application_public_api.openai.list_models", DocsLocale::ZhHans) => {
+                "读取当前应用活跃发布版本中起始节点暴露的 OpenAI 兼容模型列表。"
+            }
             ("application_public_api.anthropic.message", DocsLocale::ZhHans) => {
                 "将 Anthropic Messages 请求适配为原生公开运行。"
             }
@@ -210,6 +219,9 @@ impl DocTextResolver {
             }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Adapts an OpenAI Chat Completions request to a Native public run."
+            }
+            ("application_public_api.openai.list_models", DocsLocale::EnUs) => {
+                "Lists OpenAI-compatible models exposed by the active published application's start node."
             }
             ("application_public_api.anthropic.message", DocsLocale::EnUs) => {
                 "Adapts an Anthropic Messages request to a Native public run."
@@ -348,6 +360,7 @@ impl DocTextResolver {
     fn response_description(&self, key: &str) -> &'static str {
         match (key, self.locale) {
             ("compatible_response", DocsLocale::ZhHans) => "兼容响应",
+            ("compatible_model_list", DocsLocale::ZhHans) => "OpenAI 兼容模型列表",
             ("native_run", DocsLocale::ZhHans) => "原生运行",
             ("native_run_created", DocsLocale::ZhHans) => "原生运行已创建",
             ("file_uploaded", DocsLocale::ZhHans) => "文件已上传",
@@ -359,6 +372,7 @@ impl DocTextResolver {
                 "应用未发布，或运行状态不支持当前操作"
             }
             ("compatible_response", DocsLocale::EnUs) => "Compatible response",
+            ("compatible_model_list", DocsLocale::EnUs) => "OpenAI-compatible model list",
             ("native_run", DocsLocale::EnUs) => "Native run",
             ("native_run_created", DocsLocale::EnUs) => "Native run created",
             ("file_uploaded", DocsLocale::EnUs) => "File uploaded",
@@ -376,22 +390,22 @@ impl DocTextResolver {
     fn unsupported_notes(&self, category_id: &str) -> &'static str {
         match (category_id, self.locale) {
             (OPENAI_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持 tools、tool_choice、function_call 字段进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持 tools、tool_choice、function_call 字段进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量映射到 choices[0].delta.reasoning_content。暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持顶层 tools/tool_choice 进入模型供应商调用，支持 tool_use / tool_result 文本块历史回传；暂不支持 computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持顶层 tools/tool_choice 进入模型供应商调用，支持 tool_use / tool_result 文本块历史回传；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量映射为 thinking_delta。暂不支持 computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (_, DocsLocale::ZhHans) => {
-                "原生 API 支持查看 required_action 并恢复运行。公开路径不会包含 application_id。"
+                "原生 API 支持查看 required_action 并恢复运行。response_mode=streaming 时返回 text/event-stream，并包含心跳、reasoning.delta、message.delta 和终态事件。公开路径不会包含 application_id。"
             }
             (OPENAI_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint forwards tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint forwards tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. stream=true returns text/event-stream with heartbeat text heartbeat and reasoning deltas at choices[0].delta.reasoning_content. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint forwards top-level tools/tool_choice into the model-provider invocation and supports tool_use/tool_result text block history. Unsupported: computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint forwards top-level tools/tool_choice into the model-provider invocation and supports tool_use/tool_result text block history. stream=true returns text/event-stream with heartbeat text heartbeat and reasoning deltas as thinking_delta. Unsupported: computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
             }
             (_, DocsLocale::EnUs) => {
-                "Native API supports required_action inspection and resume. Public paths never include application_id."
+                "Native API supports required_action inspection and resume. response_mode=streaming returns text/event-stream with heartbeat, reasoning.delta, message.delta, and terminal run events. Public paths never include application_id."
             }
         }
     }
@@ -577,30 +591,47 @@ fn operation_request_body(operation: &PublicOperation, docs: &DocTextResolver) -
 
 fn operation_responses(operation: &PublicOperation, docs: &DocTextResolver) -> Value {
     match operation.id {
-        "applicationNativeCreateRun" => native_responses(docs, "201"),
-        "applicationNativeGetRun" | "applicationNativeCancelRun" | "applicationNativeResumeRun" => {
-            native_responses(docs, "200")
+        "applicationNativeCreateRun" => native_responses(docs, "201", true),
+        "applicationNativeGetRun" | "applicationNativeCancelRun" => {
+            native_responses(docs, "200", false)
         }
+        "applicationNativeResumeRun" => native_responses(docs, "200", true),
         "applicationNativeUploadFile" => native_upload_responses(docs),
         "applicationOpenAiCreateChatCompletion" => openai_responses(docs),
+        "applicationOpenAiListModels" => openai_model_list_responses(docs),
         "applicationAnthropicCreateMessage" => anthropic_responses(docs),
         _ => json!({}),
     }
 }
 
-fn native_responses(docs: &DocTextResolver, success_status: &'static str) -> Value {
+fn native_responses(
+    docs: &DocTextResolver,
+    success_status: &'static str,
+    supports_streaming: bool,
+) -> Value {
     let mut responses = serde_json::Map::new();
-    responses.insert(
-        success_status.to_string(),
+    let success_schema = api_success_schema(native_run_response_schema());
+    let success_response = if supports_streaming {
+        json_and_event_stream_response(
+            docs.response_description(if success_status == "201" {
+                "native_run_created"
+            } else {
+                "native_run"
+            }),
+            success_schema,
+            native_streaming_event_schema(),
+        )
+    } else {
         json_response(
             docs.response_description(if success_status == "201" {
                 "native_run_created"
             } else {
                 "native_run"
             }),
-            api_success_schema(native_run_response_schema()),
-        ),
-    );
+            success_schema,
+        )
+    };
+    responses.insert(success_status.to_string(), success_response);
     responses.insert(
         "400".to_string(),
         json_response(
@@ -652,9 +683,10 @@ fn native_upload_responses(docs: &DocTextResolver) -> Value {
 
 fn openai_responses(docs: &DocTextResolver) -> Value {
     json!({
-        "200": json_response(
+        "200": json_and_event_stream_response(
             docs.response_description("compatible_response"),
-            openai_chat_completion_response_schema()
+            openai_chat_completion_response_schema(),
+            openai_streaming_event_schema()
         ),
         "400": json_response(docs.response_description("invalid_request"), openai_error_body_schema()),
         "401": json_response(docs.response_description("invalid_application_api_key"), openai_error_body_schema()),
@@ -666,11 +698,27 @@ fn openai_responses(docs: &DocTextResolver) -> Value {
     })
 }
 
-fn anthropic_responses(docs: &DocTextResolver) -> Value {
+fn openai_model_list_responses(docs: &DocTextResolver) -> Value {
     json!({
         "200": json_response(
+            docs.response_description("compatible_model_list"),
+            openai_model_list_response_schema()
+        ),
+        "401": json_response(docs.response_description("invalid_application_api_key"), openai_error_body_schema()),
+        "403": json_response(docs.response_description("forbidden"), openai_error_body_schema()),
+        "409": json_response(
+            docs.response_description("application_not_published_or_run_state_not_supported"),
+            openai_error_body_schema()
+        )
+    })
+}
+
+fn anthropic_responses(docs: &DocTextResolver) -> Value {
+    json!({
+        "200": json_and_event_stream_response(
             docs.response_description("compatible_response"),
-            anthropic_message_response_schema()
+            anthropic_message_response_schema(),
+            anthropic_streaming_event_schema()
         ),
         "400": json_response(docs.response_description("invalid_request"), anthropic_error_body_schema()),
         "401": json_response(docs.response_description("invalid_application_api_key"), anthropic_error_body_schema()),
@@ -688,6 +736,24 @@ fn json_response(description: &'static str, schema: Value) -> Value {
         "content": {
             "application/json": {
                 "schema": schema
+            }
+        }
+    })
+}
+
+fn json_and_event_stream_response(
+    description: &'static str,
+    json_schema: Value,
+    event_stream_schema: Value,
+) -> Value {
+    json!({
+        "description": description,
+        "content": {
+            "application/json": {
+                "schema": json_schema
+            },
+            "text/event-stream": {
+                "schema": event_stream_schema
             }
         }
     })
@@ -883,6 +949,35 @@ fn openai_chat_completion_response_schema() -> Value {
     })
 }
 
+fn openai_model_list_response_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["object", "data"],
+        "properties": {
+            "object": {"type": "string", "enum": ["list"]},
+            "data": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["id", "object", "created", "owned_by"],
+                    "properties": {
+                        "id": {"type": "string"},
+                        "object": {"type": "string", "enum": ["model"]},
+                        "created": {"type": "integer"},
+                        "owned_by": {"type": "string"},
+                        "name": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "null"}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
 fn openai_error_body_schema() -> Value {
     json!({
         "type": "object",
@@ -950,6 +1045,68 @@ fn anthropic_error_body_schema() -> Value {
                     "type": {"type": "string"},
                     "message": {"type": "string"}
                 }
+            }
+        }
+    })
+}
+
+fn native_streaming_event_schema() -> Value {
+    json!({
+        "type": "string",
+        "format": "event-stream",
+        "description": "Server-Sent Events emitted when response_mode=streaming.",
+        "x-1flowbase-heartbeat": true,
+        "x-1flowbase-events": [
+            "run.started",
+            "reasoning.delta",
+            "message.delta",
+            "workflow.event",
+            "required_action",
+            "run.completed",
+            "run.failed",
+            "run.cancelled"
+        ],
+        "x-1flowbase-reasoning-delta": "event: reasoning.delta",
+        "x-1flowbase-message-delta": "event: message.delta"
+    })
+}
+
+fn openai_streaming_event_schema() -> Value {
+    json!({
+        "type": "string",
+        "format": "event-stream",
+        "description": "OpenAI-compatible chat completion chunks emitted when stream=true.",
+        "x-1flowbase-heartbeat": {
+            "interval_seconds": 10,
+            "text": "heartbeat"
+        },
+        "x-1flowbase-reasoning-delta": "choices[0].delta.reasoning_content",
+        "x-1flowbase-message-delta": "choices[0].delta.content",
+        "x-1flowbase-terminal-data": "[DONE]"
+    })
+}
+
+fn anthropic_streaming_event_schema() -> Value {
+    json!({
+        "type": "string",
+        "format": "event-stream",
+        "description": "Anthropic-compatible message stream events emitted when stream=true.",
+        "x-1flowbase-heartbeat": {
+            "interval_seconds": 10,
+            "text": "heartbeat"
+        },
+        "x-1flowbase-reasoning-delta": {
+            "type": "content_block_delta",
+            "delta": {
+                "type": "thinking_delta",
+                "field": "thinking"
+            }
+        },
+        "x-1flowbase-message-delta": {
+            "type": "content_block_delta",
+            "delta": {
+                "type": "text_delta",
+                "field": "text"
             }
         }
     })
@@ -1350,6 +1507,13 @@ fn public_operations() -> Vec<PublicOperation> {
             path: "/v1/chat/completions",
             category_id: OPENAI_CATEGORY_ID,
             doc_key: "application_public_api.openai.chat_completion",
+        },
+        PublicOperation {
+            id: "applicationOpenAiListModels",
+            method: "GET",
+            path: "/v1/models",
+            category_id: OPENAI_CATEGORY_ID,
+            doc_key: "application_public_api.openai.list_models",
         },
         PublicOperation {
             id: "applicationAnthropicCreateMessage",

@@ -186,6 +186,125 @@ async fn application_api_docs_category_and_operation_specs_use_public_paths_only
 }
 
 #[tokio::test]
+async fn application_api_docs_list_models_and_streaming_contracts() {
+    let app = test_app().await;
+    let (cookie, application_id) = setup_published_app(&app).await;
+
+    let operations = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/categories/openai-compatible-api/operations"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(operations.status(), StatusCode::OK);
+    let operations_payload = response_json(operations).await;
+    let operation_paths = operations_payload["data"]["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|operation| {
+            (
+                operation["method"].as_str().unwrap(),
+                operation["path"].as_str().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(operation_paths.contains(&("GET", "/v1/models")));
+    assert!(operation_paths.contains(&("POST", "/v1/chat/completions")));
+
+    let models_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationOpenAiListModels/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(models_spec.status(), StatusCode::OK);
+    let models_payload = response_json(models_spec).await;
+    let model_list_response = &models_payload["paths"]["/v1/models"]["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"];
+    assert_eq!(model_list_response["required"], json!(["object", "data"]));
+    assert_eq!(
+        model_list_response["properties"]["data"]["items"]["properties"]["id"]["type"],
+        json!("string")
+    );
+
+    let native_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationNativeCreateRun/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(native_spec.status(), StatusCode::OK);
+    let native_payload = response_json(native_spec).await;
+    let native_streaming_schema = &native_payload["paths"]["/api/1flowbase/runs"]["post"]
+        ["responses"]["201"]["content"]["text/event-stream"]["schema"];
+    assert_eq!(
+        native_streaming_schema["x-1flowbase-heartbeat"],
+        json!(true)
+    );
+    assert_eq!(
+        native_streaming_schema["x-1flowbase-events"],
+        json!([
+            "run.started",
+            "reasoning.delta",
+            "message.delta",
+            "workflow.event",
+            "required_action",
+            "run.completed",
+            "run.failed",
+            "run.cancelled"
+        ])
+    );
+
+    let openai_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationOpenAiCreateChatCompletion/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(openai_spec.status(), StatusCode::OK);
+    let openai_payload = response_json(openai_spec).await;
+    let openai_streaming_schema = &openai_payload["paths"]["/v1/chat/completions"]["post"]
+        ["responses"]["200"]["content"]["text/event-stream"]["schema"];
+    assert_eq!(
+        openai_streaming_schema["x-1flowbase-heartbeat"],
+        json!({"interval_seconds": 10, "text": "heartbeat"})
+    );
+    assert_eq!(
+        openai_streaming_schema["x-1flowbase-reasoning-delta"],
+        json!("choices[0].delta.reasoning_content")
+    );
+}
+
+#[tokio::test]
 async fn application_api_docs_anthropic_operation_advertises_x_api_key_auth() {
     let app = test_app().await;
     let (cookie, application_id) = setup_published_app(&app).await;
