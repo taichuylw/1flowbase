@@ -65,10 +65,10 @@ export function useModelProviderData({
   const providerOptions = optionsQuery.data?.providers;
   const officialSourceMeta = officialCatalogQuery.data
     ? {
-        sourceKind: officialCatalogQuery.data.source_kind,
-        sourceLabel: officialCatalogQuery.data.source_label,
-        registryUrl: officialCatalogQuery.data.registry_url
-      }
+      sourceKind: officialCatalogQuery.data.source_kind,
+      sourceLabel: officialCatalogQuery.data.source_label,
+      registryUrl: officialCatalogQuery.data.registry_url
+    }
     : null;
 
   const catalogEntriesByInstallationId = useMemo(() => {
@@ -151,7 +151,7 @@ export function useModelProviderData({
   const drawerDefaultIncludedInMain =
     drawerState?.mode === 'create'
       ? providerOptionsByProviderCode[drawerState.providerCode]?.main_instance
-          .auto_include_new_instances ?? false
+        .auto_include_new_instances ?? false
       : editingInstance?.included_in_main ?? false;
 
   const modalInstances = useMemo(

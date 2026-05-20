@@ -20,7 +20,6 @@ import {
   settingsPluginFamiliesQueryKey
 } from '../../api/plugins';
 import '../../components/model-providers/model-provider-panel.css';
-import { ModelProviderOverviewSummary } from './model-providers/ModelProviderOverviewSummary';
 import {
   getErrorMessage,
   MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX,
@@ -185,9 +184,8 @@ export function SettingsModelProvidersSection({
         <div className="model-provider-panel">
           <Layout className="model-provider-panel__main">
             <Layout.Content className="model-provider-panel__left">
-              <ModelProviderOverviewSummary rows={overviewRows} />
-
               <ModelProviderCatalogPanel
+                overviewRows={overviewRows}
                 entries={families}
                 currentCatalogEntries={currentCatalogEntriesByProviderCode}
                 loading={catalogQuery.isLoading || familiesQuery.isLoading}
@@ -199,13 +197,13 @@ export function SettingsModelProvidersSection({
                 }
                 switchingProviderCode={
                   versionMutation.isPending &&
-                  versionMutation.variables.mode === 'switch'
+                    versionMutation.variables.mode === 'switch'
                     ? versionMutation.variables.providerCode
                     : null
                 }
                 upgradingProviderCode={
                   versionMutation.isPending &&
-                  versionMutation.variables.mode === 'upgrade'
+                    versionMutation.variables.mode === 'upgrade'
                     ? versionMutation.variables.providerCode
                     : null
                 }
@@ -288,7 +286,7 @@ export function SettingsModelProvidersSection({
                 installState={officialInstallState.status}
                 upgradingProviderCode={
                   versionMutation.isPending &&
-                  versionMutation.variables?.mode === 'upgrade'
+                    versionMutation.variables?.mode === 'upgrade'
                     ? (versionMutation.variables.providerCode ?? null)
                     : null
                 }
@@ -387,10 +385,10 @@ export function SettingsModelProvidersSection({
           mainInstanceQuery.data ??
           (modalProviderOption
             ? {
-                provider_code: modalProviderOption.provider_code,
-                auto_include_new_instances:
-                  modalProviderOption.main_instance.auto_include_new_instances
-              }
+              provider_code: modalProviderOption.provider_code,
+              auto_include_new_instances:
+                modalProviderOption.main_instance.auto_include_new_instances
+            }
             : null)
         }
         modelGroups={modalProviderOption?.model_groups ?? []}
@@ -407,13 +405,13 @@ export function SettingsModelProvidersSection({
         canManage={canManage}
         versionSwitchNotice={
           instanceModalState &&
-          recentVersionSwitchNotice?.providerCode ===
+            recentVersionSwitchNotice?.providerCode ===
             instanceModalState.providerCode
             ? {
-                targetVersion: recentVersionSwitchNotice.targetVersion,
-                migratedInstanceCount:
-                  recentVersionSwitchNotice.migratedInstanceCount
-              }
+              targetVersion: recentVersionSwitchNotice.targetVersion,
+              migratedInstanceCount:
+                recentVersionSwitchNotice.migratedInstanceCount
+            }
             : null
         }
         onClose={() => {

@@ -3,6 +3,7 @@ import { Button, Empty, Select, Space, Table, Tag, Typography } from 'antd';
 import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
+import { ModelProviderOverviewSummary } from '../../pages/settings-page/model-providers/ModelProviderOverviewSummary';
 
 
 function getCatalogDescription(
@@ -25,6 +26,7 @@ function compareVersions(left: string, right: string) {
 
 
 export function ModelProviderCatalogPanel({
+  overviewRows,
   entries,
   currentCatalogEntries,
   loading,
@@ -38,6 +40,7 @@ export function ModelProviderCatalogPanel({
   onSwitchVersion,
   onDelete
 }: {
+  overviewRows: { key: string; label: string; value: string }[];
   entries: SettingsPluginFamilyEntry[];
   currentCatalogEntries: Record<
     string,
@@ -60,12 +63,7 @@ export function ModelProviderCatalogPanel({
   return (
     <section className="model-provider-panel__catalog">
       <div className="model-provider-panel__section-head">
-        <div>
-          <Typography.Title level={5}>已安装供应商</Typography.Title>
-          <Typography.Text type="secondary">
-            当前 workspace 已启用的供应商族。先确认版本，再创建或维护对应实例。
-          </Typography.Text>
-        </div>
+        <ModelProviderOverviewSummary rows={overviewRows} />
       </div>
 
       <Table<SettingsPluginFamilyEntry>
@@ -87,36 +85,36 @@ export function ModelProviderCatalogPanel({
         columns={[
           ...(canManage
             ? [
-                {
-                  title: '操作',
-                  key: 'actions',
-                  width: 120,
-                  render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
-                    <Space
-                      size={4}
-                      className="model-provider-panel__catalog-actions"
+              {
+                title: '操作',
+                key: 'actions',
+                width: 120,
+                render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
+                  <Space
+                    size={4}
+                    className="model-provider-panel__catalog-actions"
+                  >
+                    <Button
+                      type="link"
+                      onClick={() => onViewInstances(entry)}
                     >
-                      <Button
-                        type="link"
-                        onClick={() => onViewInstances(entry)}
-                      >
-                        配置
-                      </Button>
-                      <Button type="link" onClick={() => onCreate(entry)}>
-                        添加
-                      </Button>
-                      <Button
-                        danger
-                        type="link"
-                        loading={deletingProviderCode === entry.provider_code}
-                        onClick={() => onDelete(entry)}
-                      >
-                        删除
-                      </Button>
-                    </Space>
-                  )
-                }
-              ]
+                      配置
+                    </Button>
+                    <Button type="link" onClick={() => onCreate(entry)}>
+                      添加
+                    </Button>
+                    <Button
+                      danger
+                      type="link"
+                      loading={deletingProviderCode === entry.provider_code}
+                      onClick={() => onDelete(entry)}
+                    >
+                      删除
+                    </Button>
+                  </Space>
+                )
+              }
+            ]
             : []),
           {
             title: '名称',
