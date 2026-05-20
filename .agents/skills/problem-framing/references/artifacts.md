@@ -52,6 +52,11 @@
 
 ## Acceptance Evidence
 
+## Execution Boundary
+- Main files / modules:
+- Verification:
+- Stop / escalate if:
+
 ## Lifecycle
 - Current phase:
 - Close condition:
@@ -64,6 +69,7 @@ Rules:
 - `Open Decisions` 必须是用户需要拍板的真实决策，不是实现杂项。
 - `Issue Metadata` 必须按 `references/issue-lifecycle.md` 填写层级、分级和标签。
 - `Parent issue` 必须指向上一层 issue；`Child issues` 只列直接下一层 issue。
+- L3 issue 必须填写 `Execution Boundary`；L2 issue 不得直接当实现任务使用。
 - issue 标题必须使用 `[状态]标题`，并和 `phase:*` 标签同步。
 
 ## ADR Draft

@@ -49,8 +49,8 @@
 | --- | --- | --- | --- | --- |
 | L0 | Initiative / Umbrella Issue | 项目级总问题，横跨多个决策、epic 或 workstream | 战略目标、范围边界、总验收 | L1 |
 | L1 | Decision Issue / ADR | 架构决策、contract、source of truth、不可逆方向 | 已批准决策、ADR、约束和停止条件 | L2 |
-| L2 | Epic / Workstream Issue | 按 backend / frontend / QA / migration 等工作流拆分 | 子系统目标、交付边界、验收证据 | L3 |
-| L3 | Execution Task Issue | 单个可执行开发、测试、修复或文档任务 | 具体代码或验证任务 | None |
+| L2 | Epic / Workstream Issue | 按 backend / frontend / QA / migration 等工作流拆分 | 子系统目标、交付边界、验收证据；实现前必须拆 L3 | L3 |
+| L3 | Execution Task Issue | 单个可执行开发、测试、修复或文档任务 | 具体代码或验证任务；AI 实现的最小受控单元 | None |
 
 Rules:
 
@@ -59,6 +59,8 @@ Rules:
 - Child issue 必须在正文写 `Parent issue: #<number>`，并继承必要 `area:*`、`risk:*`、`contract` / `migration` 等语义标签。
 - Parent issue 必须维护 child issue 列表；child 完成不代表 parent 完成。
 - L1 决策 issue 不直接承载大段实现；批准后拆 L2 / L3。
+- L2 workstream 不能直接进入 `phase:implementation`；进入实现前必须有直接 L3 children，或把该 issue 改标为 L3。
+- L3 必须写清单一目标、主要文件/模块、验证命令或证据、停止条件；这是防止 AI 过度抽象、扩大范围或拖长实现时间的控制边界。
 - 没有 L0 时，L1 可以临时作为最高层 parent，但不得改称 L0。
 
 ## Required Labels
@@ -135,7 +137,7 @@ child-issue
 ## Lifecycle
 
 1. `phase:discussion`：需求对齐，输出简短对齐或三方案，等待用户确认。
-2. `phase:ready`：issue 内容、分级、标签、验收证据已确认，可以进入实现。
+2. `phase:ready`：issue 内容、层级、分级、标签、验收证据已确认；L2 ready 只表示可以继续拆 L3，不表示可以直接实现。
 3. `phase:implementation`：按批准范围实现；发现新决策时回到 `problem-framing`。
 4. `phase:qa`：实现完成，进入 `qa-evaluation` 收集证据。
 5. `phase:user-acceptance`：交付用户验收；总 issue 不得在此阶段前关闭。
@@ -147,5 +149,6 @@ child-issue
 - G3 / G4 默认拆 parent issue + child issues；parent 管决策和验收，child 管具体实现。
 - 拆分时优先按 L0 -> L1 -> L2 -> L3 建树；每一层可以有多个 sibling issue。
 - 上一层 issue 对应下一层 child issues：L0 只挂 L1，L1 只挂 L2，L2 只挂 L3；不要跨层挂载，除非中间层确实没有必要并在正文说明。
+- 所有 L2 在实现前必须拆到 L3；只有 L3 是默认可被 agent 直接领取和实现的 issue。
 - 子 issue 必须写清 parent issue，并继承相关 `area:*`、`risk:*` 和 `grade:*`。
 - 子 issue 完成不代表总 issue 完成；总 issue 关闭条件永远是用户验收通过。
