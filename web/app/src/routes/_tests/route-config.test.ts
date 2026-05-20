@@ -21,8 +21,9 @@ describe('route truth layer', () => {
     expect(getSelectedRouteId('/me/profile')).toBe('me');
     expect(getSelectedRouteId('/me/security')).toBe('me');
     expect(getSelectedRouteId('/frontstage')).toBe('frontstage');
-    expect(getSelectedRouteId('/frontstage/workspace-1')).toBe('frontstage');
-    expect(getSelectedRouteId('/frontstage/workspace-1/page-1')).toBe('frontstage');
+    expect(getSelectedRouteId('/frontstage/pages/page-1')).toBe('frontstage');
+    expect(getSelectedRouteId('/frontstage/workspace-1')).toBe('home');
+    expect(getSelectedRouteId('/frontstage/workspace-1/page-1')).toBe('home');
     expect(getSelectedRouteId('/applications/app-1')).toBe('home');
     expect(getSelectedRouteId('/applications/app-1/orchestration')).toBe('home');
     expect(getSelectedRouteId('/applications/app-1/api')).toBe('home');

@@ -28,7 +28,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     selectedMatchers: [
       (pathname) =>
         pathname === '/frontstage' ||
-        /^\/frontstage\/[^/]+(\/[^/]+)?$/.test(pathname)
+        /^\/frontstage\/pages\/[^/]+$/.test(pathname)
     ],
     permissionKey: null,
     guard: 'session-required'

@@ -229,7 +229,7 @@ function renderMeRoute(requestedSectionKey?: MeSectionKey) {
   );
 }
 
-function FrontStageRoute({
+function FrontStageWorkspaceContent({
   workspaceId,
   pageId
 }: {
@@ -267,50 +267,47 @@ function FrontStageRoute({
   });
 
   return (
-    <RouteGuard routeId="frontstage">
-      <LazyRouteBoundary>
-        <FrontStagePage
-          workspaceId={workspaceId}
-          pageId={pageId}
-          initialPageTree={pageTreeFromApi}
-          isPageTreeLoading={pageTreeQuery.isLoading}
-          hasPageTreeLoadError={pageTreeQuery.isError}
-          pageContent={pageContentQuery.data}
-          isPageContentLoading={pageContentQuery.isLoading}
-          hasPageContentLoadError={pageContentQuery.isError}
-          isPageTreeMutating={pageTreeMutations.isPending}
-          pageTreeMutationError={pageTreeMutations.error}
-          onCreateGroupNode={pageTreeMutations.createGroup}
-          onCreatePageNode={pageTreeMutations.createPage}
-          onRenamePageNode={pageTreeMutations.renameNode}
-          onMovePageNode={pageTreeMutations.moveNode}
-          onDeletePageNode={pageTreeMutations.deleteNode}
-          onRetryLoadPageTree={() => {
-            void pageTreeQuery.refetch();
-          }}
-          onRetryLoadPageContent={() => {
-            void pageContentQuery.refetch();
-          }}
-          onNavigatePage={(nextPageId) => {
-            if (nextPageId) {
-              void navigate({
-                to: '/frontstage/$workspaceId/$pageId',
-                params: { workspaceId, pageId: nextPageId }
-              });
-            } else {
-              void navigate({
-                to: '/frontstage/$workspaceId',
-                params: { workspaceId }
-              });
-            }
-          }}
-        />
-      </LazyRouteBoundary>
-    </RouteGuard>
+    <LazyRouteBoundary>
+      <FrontStagePage
+        workspaceId={workspaceId}
+        pageId={pageId}
+        initialPageTree={pageTreeFromApi}
+        isPageTreeLoading={pageTreeQuery.isLoading}
+        hasPageTreeLoadError={pageTreeQuery.isError}
+        pageContent={pageContentQuery.data}
+        isPageContentLoading={pageContentQuery.isLoading}
+        hasPageContentLoadError={pageContentQuery.isError}
+        isPageTreeMutating={pageTreeMutations.isPending}
+        pageTreeMutationError={pageTreeMutations.error}
+        onCreateGroupNode={pageTreeMutations.createGroup}
+        onCreatePageNode={pageTreeMutations.createPage}
+        onRenamePageNode={pageTreeMutations.renameNode}
+        onMovePageNode={pageTreeMutations.moveNode}
+        onDeletePageNode={pageTreeMutations.deleteNode}
+        onRetryLoadPageTree={() => {
+          void pageTreeQuery.refetch();
+        }}
+        onRetryLoadPageContent={() => {
+          void pageContentQuery.refetch();
+        }}
+        onNavigatePage={(nextPageId) => {
+          if (nextPageId) {
+            void navigate({
+              to: '/frontstage/pages/$pageId',
+              params: { pageId: nextPageId }
+            });
+          } else {
+            void navigate({
+              to: '/frontstage'
+            });
+          }
+        }}
+      />
+    </LazyRouteBoundary>
   );
 }
 
-function FrontStageWorkspaceRedirect() {
+function FrontStageRoute({ pageId }: { pageId?: string }) {
   const workspaceId = useAuthStore((state) => state.actor?.current_workspace_id);
 
   if (!workspaceId) {
@@ -318,11 +315,9 @@ function FrontStageWorkspaceRedirect() {
   }
 
   return (
-    <Navigate
-      to="/frontstage/$workspaceId"
-      params={{ workspaceId }}
-      replace
-    />
+    <RouteGuard routeId="frontstage">
+      <FrontStageWorkspaceContent workspaceId={workspaceId} pageId={pageId} />
+    </RouteGuard>
   );
 }
 
@@ -410,36 +405,21 @@ const meSecurityRoute = createRoute({
   component: () => renderMeRoute('security')
 });
 
-const frontstageWorkspaceRootRoute = createRoute({
+const frontstageRootRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/frontstage',
-  component: () => (
-    <RouteGuard routeId="frontstage">
-      <FrontStageWorkspaceRedirect />
-    </RouteGuard>
-  ),
+  component: () => <FrontStageRoute />,
   notFoundComponent: NotFoundPage
 });
 
-const frontstageWorkspaceRoute = createRoute({
+const frontstagePageRoute = createRoute({
   getParentRoute: () => shellRoute,
-  path: '/frontstage/$workspaceId',
+  path: '/frontstage/pages/$pageId',
   notFoundComponent: NotFoundPage,
   component: () => {
-    const { workspaceId } = frontstageWorkspaceRoute.useParams();
+    const { pageId } = frontstagePageRoute.useParams();
 
-    return <FrontStageRoute workspaceId={workspaceId} />;
-  }
-});
-
-const frontstageWorkspacePageRoute = createRoute({
-  getParentRoute: () => shellRoute,
-  path: '/frontstage/$workspaceId/$pageId',
-  notFoundComponent: NotFoundPage,
-  component: () => {
-    const { pageId, workspaceId } = frontstageWorkspacePageRoute.useParams();
-
-    return <FrontStageRoute workspaceId={workspaceId} pageId={pageId} />;
+    return <FrontStageRoute pageId={pageId} />;
   }
 });
 
@@ -475,9 +455,8 @@ const routeTree = rootRoute.addChildren([
     meIndexRoute,
     meProfileRoute,
     meSecurityRoute,
-    frontstageWorkspaceRootRoute,
-    frontstageWorkspaceRoute,
-    frontstageWorkspacePageRoute
+    frontstageRootRoute,
+    frontstagePageRoute
   ]),
   signInRoute
 ]);
