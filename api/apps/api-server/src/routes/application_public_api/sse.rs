@@ -106,8 +106,23 @@ fn runtime_event_to_native_sse(
     envelope: RuntimeEventEnvelope,
 ) -> Option<Result<Event, Infallible>> {
     let event_id = envelope.event_id.clone();
+    let (event_name, payload) =
+        native_sse_payload_for_runtime_event(initial_run, include_workflow_events, envelope)?;
+
+    Some(Ok(Event::default()
+        .id(event_id)
+        .event(event_name)
+        .json_data(payload)
+        .expect("native SSE payload should serialize")))
+}
+
+fn native_sse_payload_for_runtime_event(
+    initial_run: &NativeRunResult,
+    include_workflow_events: IncludeWorkflowEvents,
+    envelope: RuntimeEventEnvelope,
+) -> Option<(&'static str, NativeSsePayload)> {
     let created_at = event_created_at(&envelope);
-    let (event_name, payload) = match envelope.event_type.as_str() {
+    Some(match envelope.event_type.as_str() {
         "flow_started" => (
             "run.started",
             NativeSsePayload {
@@ -125,6 +140,23 @@ fn runtime_event_to_native_sse(
                 usage: None,
                 attachments: None,
                 metadata: Some(initial_run.metadata.clone()),
+                error: None,
+                workflow: None,
+                required_action: None,
+            },
+        ),
+        "reasoning_delta" => (
+            "reasoning.delta",
+            NativeSsePayload {
+                run_id: initial_run.id,
+                status: "running",
+                created_at,
+                delta: envelope.text.clone(),
+                answer: None,
+                conversation: None,
+                usage: None,
+                attachments: None,
+                metadata: None,
                 error: None,
                 workflow: None,
                 required_action: None,
@@ -266,13 +298,7 @@ fn runtime_event_to_native_sse(
             },
         ),
         _ => return None,
-    };
-
-    Some(Ok(Event::default()
-        .id(event_id)
-        .event(event_name)
-        .json_data(payload)
-        .expect("native SSE payload should serialize")))
+    })
 }
 
 fn is_public_terminal_runtime_event(event_type: &str) -> bool {
@@ -316,5 +342,55 @@ pub async fn send_native_runtime_event_stream(
         if is_terminal {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use control_plane::orchestration_runtime::debug_stream_events;
+    use control_plane::ports::RuntimeEventEnvelope;
+    use serde_json::json;
+    use time::OffsetDateTime;
+
+    fn native_run() -> NativeRunResult {
+        NativeRunResult {
+            id: Uuid::from_u128(0x11111111111111111111111111111111),
+            application_id: Uuid::from_u128(0x22222222222222222222222222222222),
+            api_key_id: Uuid::from_u128(0x33333333333333333333333333333333),
+            publication_version_id: Uuid::from_u128(0x44444444444444444444444444444444),
+            status: control_plane::application_public_api::native::NativeRunStatus::Running,
+            node_input_payload: json!({}),
+            metadata: json!({}),
+            answer: None,
+            required_action: None,
+            tool_calls: None,
+            usage: None,
+            error: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+        }
+    }
+
+    #[test]
+    fn native_sse_maps_reasoning_delta_to_public_reasoning_event() {
+        let run = native_run();
+        let event = RuntimeEventEnvelope::new(
+            run.id,
+            1,
+            debug_stream_events::reasoning_delta(
+                "node-llm",
+                Uuid::from_u128(0x55555555555555555555555555555555),
+                "先分析用户问题".to_string(),
+            ),
+        );
+
+        let (event_name, payload) =
+            native_sse_payload_for_runtime_event(&run, IncludeWorkflowEvents::None, event)
+                .expect("reasoning delta should be public native SSE");
+        let payload = serde_json::to_value(payload).expect("payload serializes");
+
+        assert_eq!(event_name, "reasoning.delta");
+        assert_eq!(payload["delta"], json!("先分析用户问题"));
+        assert_eq!(payload.get("workflow"), None);
     }
 }

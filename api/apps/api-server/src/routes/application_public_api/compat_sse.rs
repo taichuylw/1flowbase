@@ -228,17 +228,15 @@ fn openai_runtime_event_to_sse(
                 "finish_reason": null
             }]
         }))],
-        "text_delta" => vec![json_sse(json!({
-            "id": format!("chatcmpl-{}", initial_run.id),
-            "object": "chat.completion.chunk",
-            "created": initial_run.created_at.unix_timestamp(),
-            "model": model,
-            "choices": [{
-                "index": 0,
-                "delta": { "content": envelope.text.unwrap_or_default() },
-                "finish_reason": null
-            }]
-        }))],
+        "text_delta" | "reasoning_delta" => openai_delta_chunk_payload(
+            initial_run,
+            model,
+            envelope.event_type.as_str(),
+            envelope.text.unwrap_or_default(),
+        )
+        .map(json_sse)
+        .into_iter()
+        .collect(),
         "flow_finished" => vec![
             json_sse(json!({
                 "id": format!("chatcmpl-{}", initial_run.id),
@@ -278,6 +276,31 @@ fn openai_runtime_event_to_sse(
         ],
         _ => Vec::new(),
     }
+}
+
+fn openai_delta_chunk_payload(
+    initial_run: &NativeRunResult,
+    model: &str,
+    event_type: &str,
+    text: String,
+) -> Option<Value> {
+    let delta = match event_type {
+        "text_delta" => json!({ "content": text }),
+        "reasoning_delta" => json!({ "reasoning_content": text }),
+        _ => return None,
+    };
+
+    Some(json!({
+        "id": format!("chatcmpl-{}", initial_run.id),
+        "object": "chat.completion.chunk",
+        "created": initial_run.created_at.unix_timestamp(),
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": delta,
+            "finish_reason": null
+        }]
+    }))
 }
 
 struct AnthropicStreamMapper {
@@ -423,4 +446,48 @@ fn event_json_sse(event_name: &'static str, payload: Value) -> Result<Event, Inf
 
 fn done_sse() -> Result<Event, Infallible> {
     Ok(Event::default().data("[DONE]"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use control_plane::application_public_api::native::NativeRunStatus;
+    use serde_json::json;
+    use time::OffsetDateTime;
+    use uuid::Uuid;
+
+    fn native_run() -> NativeRunResult {
+        NativeRunResult {
+            id: Uuid::from_u128(0x11111111111111111111111111111111),
+            application_id: Uuid::from_u128(0x22222222222222222222222222222222),
+            api_key_id: Uuid::from_u128(0x33333333333333333333333333333333),
+            publication_version_id: Uuid::from_u128(0x44444444444444444444444444444444),
+            status: NativeRunStatus::Running,
+            node_input_payload: json!({}),
+            metadata: json!({}),
+            answer: None,
+            required_action: None,
+            tool_calls: None,
+            usage: None,
+            error: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+        }
+    }
+
+    #[test]
+    fn openai_delta_chunk_maps_reasoning_to_reasoning_content() {
+        let payload = openai_delta_chunk_payload(
+            &native_run(),
+            "deepseek-v4-pro",
+            "reasoning_delta",
+            "先分析用户问题".to_string(),
+        )
+        .expect("reasoning delta should map to an OpenAI-compatible chunk");
+
+        assert_eq!(
+            payload["choices"][0]["delta"]["reasoning_content"],
+            json!("先分析用户问题")
+        );
+        assert_eq!(payload["choices"][0]["delta"].get("content"), None);
+    }
 }
