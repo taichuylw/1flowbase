@@ -1,17 +1,17 @@
 ---
 name: problem-framing
-description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting 或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、方案、风险、终止条件和用户拍板点，再进入实现。
+description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；需要落地开发计划时默认走 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task 四层规划。涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting 或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、方案、风险、终止条件和用户拍板点，再进入实现。
 ---
 
 # Problem Framing
 
 ## Overview
 
-本 Skill 是 1flowbase 的动工前规划闸门。它只负责把需求、证据、边界和拍板点收敛清楚，不负责直接实现。
+本 Skill 是 1flowbase 的动工前规划闸门。它只负责把需求、证据、边界和拍板点收敛清楚，不负责直接实现。需要落地开发计划时，默认按 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task 走完整四层；只有 L3 是进入实现的最小受控单元。
 
 ## Iron Law
 
-需求类请求未完成对齐和用户确认前，不进入代码实现。影响数据、contract、架构或用户内容的请求，未完成事实整理、范围收敛和用户拍板前，不进入迁移设计或大规模重构计划。
+需求类请求未完成对齐和用户确认前，不进入代码实现。影响数据、contract、架构或用户内容的请求，未完成事实整理、范围收敛和用户拍板前，不进入迁移设计或大规模重构计划。需要开发计划时，不跳过 L0 事实、L1 决策、L2 工作流和 L3 执行边界；实现阶段不得用 L3 修改 L1 已定架构边界。
 
 ## Entry Gate
 
@@ -25,7 +25,7 @@ Allowed:
 
 - 收敛目标、范围、成功标准、假设、未知点、不变量、失败模式和需要用户拍板的问题。
 - 只检查确认直接事实所需的代码、文档、issue、测试和日志。
-- 产出简短对齐、讨论 brief、决策矩阵、三方案对比、red-team 评审、issue 草案、issue 分级标签、ADR 草案或实现交接稿。
+- 产出简短对齐、讨论 brief、决策矩阵、三方案对比、red-team 评审、L0/L1/L2/L3 issue 草案、issue 分级标签、ADR 草案或实现交接稿。
 
 Forbidden:
 
@@ -39,6 +39,7 @@ Forbidden:
 - 只追一层相邻影响面；进入二阶路线图工作前停止。
 - 阻塞问题最多 3 个，并一次性集中提出。
 - 普通需求必须至少给出简短对齐：现状、2-3 个轻量方向、风险收益、明确建议，并等待用户确认。
+- 需要落地开发计划时，默认产出 L0 -> L1 -> L2 -> L3 四层；纯查询、机械精确改动或用户明确跳过规划除外。
 - 任何存在多方向选择，或涉及数据 / contract / 架构风险的决策，都必须给出 3 个方案：conservative、balanced、aggressive。
 - 推荐必须绑定证据；无证据支撑的判断标为假设。
 
@@ -46,12 +47,13 @@ Forbidden:
 
 1. 整理事实：分离已确认事实、假设、未知点、不变量、失败模式和需要用户决策的问题。
 2. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认。
-3. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
-4. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
-5. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
-6. 管理 issue：需要落地开发时，使用 `references/issue-lifecycle.md` 分级、打标签、明确阶段和关闭条件。
-7. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
-8. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
+3. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
+4. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
+5. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
+6. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
+7. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件。
+8. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
+9. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
 
 ## User Decision Format
 
