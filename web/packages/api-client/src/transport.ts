@@ -34,10 +34,19 @@ export function getDefaultApiBaseUrl(
   locationLike: ApiBaseUrlLocation | undefined =
     typeof window !== 'undefined' ? window.location : undefined
 ): string {
+  if (!locationLike) {
+    return '';
+  }
+
+  if (locationLike.origin) {
+    return locationLike.origin;
+  }
+
   const protocol = locationLike?.protocol === 'https:' ? 'https:' : 'http:';
   const hostname = locationLike?.hostname || '127.0.0.1';
+  const port = locationLike?.port;
 
-  return `${protocol}//${hostname}:7800`;
+  return port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
 }
 
 export function unwrapApiSuccess<T>(payload: ApiSuccessEnvelope<T>): T {

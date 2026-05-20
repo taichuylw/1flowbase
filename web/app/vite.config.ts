@@ -32,7 +32,11 @@ function manualChunks(id: string) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiProxyTarget = (env.VITE_API_BASE_URL || 'http://127.0.0.1:7800').replace(/\/$/, '');
+  const apiProxyTarget = (
+    env.VITE_API_PROXY_TARGET ||
+    env.VITE_API_BASE_URL ||
+    'http://127.0.0.1:7800'
+  ).replace(/\/$/, '');
 
   return {
     plugins: [react()],

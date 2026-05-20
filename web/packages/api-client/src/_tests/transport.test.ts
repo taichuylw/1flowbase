@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { apiFetch } from '../transport';
+import { apiFetch, getDefaultApiBaseUrl } from '../transport';
 
 describe('apiFetch', () => {
   afterEach(() => {
@@ -94,5 +94,22 @@ describe('apiFetch', () => {
         headers: {}
       })
     );
+  });
+});
+
+describe('getDefaultApiBaseUrl', () => {
+  test('defaults browser callers to the current frontend origin', () => {
+    expect(
+      getDefaultApiBaseUrl({
+        protocol: 'http:',
+        hostname: '127.0.0.1',
+        port: '3100',
+        origin: 'http://127.0.0.1:3100'
+      })
+    ).toBe('http://127.0.0.1:3100');
+  });
+
+  test('falls back to a relative base when no browser location is available', () => {
+    expect(getDefaultApiBaseUrl(undefined)).toBe('');
   });
 });

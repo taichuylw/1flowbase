@@ -7,6 +7,7 @@ describe('vite config', () => {
   test('proxies API and health routes to the backend for same-origin docs requests', async () => {
     const source = await readFile(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
 
+    expect(source).toContain('VITE_API_PROXY_TARGET');
     expect(source).toContain("'/api'");
     expect(source).toContain("'/health'");
     expect(source).toContain("'/openapi.json'");
