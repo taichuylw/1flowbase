@@ -19,6 +19,7 @@ scope:
   - api/apps/api-server/src/routes/applications/application_runtime
   - web/app/src/features/agent-flow
   - .agents/skills/backend-development/SKILL.md
+  - .agents/skills/backend-development/references/agentflow-runtime-node-payload.md
 ---
 
 # Agent Flow Node Payload Contract Decision
@@ -29,7 +30,7 @@ scope:
 
 ## 谁在做什么
 
-用户确认 issue #343 后续按激进方案推进运行日志节点 payload contract：节点运行记录稳定暴露 `input_payload`、`debug_payload`、`output_payload` 三段，展示摘要和 artifact 只能作为独立 view / display metadata，不替代或重塑节点真值。
+用户确认 issue #343 后续按激进方案推进运行日志节点 payload contract：节点运行记录稳定暴露 `input_payload`、`debug_payload`、`output_payload` 三段，展示摘要和 artifact 只能作为独立 view / display metadata，不替代或重塑节点真值。该规则不内联进通用后端 skill 正文，而是放入条件引用的 backend reference。
 
 ## 为什么这样做
 
@@ -50,4 +51,5 @@ scope:
 ## 关联文档
 
 - `.agents/skills/backend-development/SKILL.md`
+- `.agents/skills/backend-development/references/agentflow-runtime-node-payload.md`
 - GitHub issue #343
