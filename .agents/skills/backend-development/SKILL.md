@@ -36,6 +36,8 @@ description: Use for 1flowbase backend work in api/: implementing, fixing, refac
 - Redis、队列、锁、event bus 等基础设施只作为 HostExtension provider 实现 host contract，不进业务代码直连
 - native HostExtension v1 是可信 in-process、restart-scoped；启停升级写 desired state，不设计 Rust 热卸载
 - API 输入保持短、平、单动作
+- 运行日志节点必须稳定暴露 `input_payload` / `debug_payload` / `output_payload` 三段；接口层不得把节点真实 payload 强制重塑成摘要结构
+- 运行日志大字段按字段路径做 preview / artifact，不按整节点 payload 无脑压缩
 - 状态必须写清：状态集合、流转规则、动作约束
 - 多个模块都能改同一关键状态：立即收口
 - Rust 后端实现要用类型表达核心不变量、显式传播错误、封装状态转换，并把阻塞 IO、锁、事务和外部副作用放在清晰边界内
@@ -52,6 +54,17 @@ description: Use for 1flowbase backend work in api/: implementing, fixing, refac
 - Anti-decay patterns: `references/anti-patterns.md`
 - Pressure scenarios: `references/examples.md`
 
+## Runtime Node Payload Contract
+
+- 节点运行记录的真值边界是 `input_payload`、`debug_payload`、`output_payload`；展示摘要只能作为独立 view / display metadata，不能替代或改写节点语义。
+- `input_payload` 记录节点实际消费的输入；`debug_payload` 记录数据处理、变量变更、console logs、外部调用过程证据；`output_payload` 记录节点真实产出。
+- Start 节点输入必须完整保留 `query`、`model`、`files`、`sys`、`env`；`env` 不脱敏，`files` 先保留完整数组。
+- Start 节点的 `history`、`tools` 属于明显可能超长字段，允许字段级 preview / artifact；不能因为它们超长而把整个 Start 输入压成 `start_input_summary`。
+- 其他节点同理：短标量、已解析配置、实际消费值和状态快照优先保留真值；大数组、大文本、raw provider response、长 history / tools / console logs 使用字段级 artifact wrapper。
+- 字段级 artifact 必须保留原字段路径、预览值、`artifact_ref`、大小信息和是否截断；加载完整值时恢复到原字段位置。
+- 查询接口可以返回额外 `payload_view` 或 display metadata，但前端默认展示的三段结构必须仍能反映节点真实输入、数据处理和输出。
+- 测试要覆盖：Start 真值字段不丢失、长字段单独截断、非 Start 节点不会被整包摘要、artifact 加载能恢复字段完整值。
+
 ## Common Mistakes
 
 - 业务规则直接依赖外部协议格式
@@ -59,3 +72,4 @@ description: Use for 1flowbase backend work in api/: implementing, fixing, refac
 - 一个接口塞进多个动作语义
 - 为了“一次查全”造出深层嵌套结构
 - 用隐式副作用完成状态变化
+- 用整包 preview / summary 替代节点运行 payload，导致历史日志无法说明节点实际消费、处理和产出
