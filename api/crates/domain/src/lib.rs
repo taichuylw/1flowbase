@@ -20,6 +20,7 @@ pub mod resource;
 pub mod resource_filter;
 pub mod runtime_observability;
 pub mod scope;
+pub mod system_defaults;
 
 pub use application::{
     ApplicationApiSection, ApplicationEnvironmentVariable, ApplicationLogsSection,
@@ -94,6 +95,10 @@ pub use runtime_observability::{
     RuntimeTrustLevel, UsageLedgerRecord, UsageLedgerStatus,
 };
 pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord, DEFAULT_SCOPE_ID, SYSTEM_SCOPE_ID};
+pub use system_defaults::{
+    DefaultUpgradePolicy, DEFAULT_AUTO_INCLUDE_NEW_PROVIDER_INSTANCES,
+    DEFAULT_CODE_ISOLATION_TIMEOUT_MS,
+};
 
 pub fn crate_name() -> &'static str {
     "domain"

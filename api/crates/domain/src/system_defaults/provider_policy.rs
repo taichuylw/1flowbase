@@ -1,0 +1,1 @@
+pub const DEFAULT_AUTO_INCLUDE_NEW_PROVIDER_INSTANCES: bool = true;
