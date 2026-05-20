@@ -175,7 +175,7 @@ export function SettingsModelProvidersSection({
       {modalContextHolder}
       <SettingsSectionSurface
         title="模型供应商"
-        description="先安装供应商，再配置 API 密钥实例。只有 ready 状态的实例会进入 agentFlow 的模型选项。"
+        hideHeader
         status={
           errorMessage ? (
             <Alert type="error" showIcon message={errorMessage} />

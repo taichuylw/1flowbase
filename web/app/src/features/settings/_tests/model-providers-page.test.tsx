@@ -598,13 +598,12 @@ describe('ModelProvidersPage', () => {
       ).toHaveBeenCalled();
     });
 
+    await screen.findByText('已安装供应商', {}, { timeout: 10000 });
     expect(
-      await screen.findByRole(
-        'heading',
-        { name: '模型供应商', level: 3 },
-        { timeout: 10000 }
+      screen.queryByText(
+        '先安装供应商，再配置 API 密钥实例。只有 ready 状态的实例会进入 agentFlow 的模型选项。'
       )
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(
       (await screen.findAllByText('OpenAI Compatible', {}, { timeout: 10000 }))
         .length
