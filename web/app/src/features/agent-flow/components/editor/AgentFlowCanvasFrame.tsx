@@ -36,9 +36,15 @@ import {
 } from '../../api/runtime';
 import { orchestrationQueryKey, updateVersion } from '../../api/orchestration';
 import {
+  applicationDetailQueryKey,
   applicationEnvironmentVariablesQueryKey,
   replaceApplicationEnvironmentVariables
 } from '../../../applications/api/applications';
+import {
+  applicationApiPublicationQueryKey,
+  fetchApplicationApiMapping,
+  publishApplicationApiVersion
+} from '../../../applications/api/public-api';
 import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
 import {
   fetchModelProviderOptions,
@@ -231,6 +237,28 @@ export function AgentFlowCanvasFrame({
     },
     onError() {
       message.error('环境变量保存失败');
+    }
+  });
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      const mapping = await fetchApplicationApiMapping(applicationId);
+      return publishApplicationApiVersion(applicationId, mapping, csrfToken);
+    },
+    onSuccess() {
+      void queryClient.invalidateQueries({
+        queryKey: applicationApiPublicationQueryKey(applicationId)
+      });
+      void queryClient.invalidateQueries({
+        queryKey: applicationDetailQueryKey(applicationId)
+      });
+      message.success('发布成功');
+    },
+    onError() {
+      message.error('发布失败');
     }
   });
   const versionMetadataMutation = useMutation({
@@ -1046,8 +1074,8 @@ export function AgentFlowCanvasFrame({
         onOpenHistory={openHistory}
         onOpenEnvironmentVariables={openEnvironmentVariables}
         onOpenSystemVariables={openSystemVariables}
-        onOpenPublish={() => undefined}
-        publishDisabled={false}
+        onOpenPublish={() => publishMutation.mutate()}
+        publishDisabled={publishMutation.isPending}
       />
       {activeContainerId ? (
         <div className="agent-flow-editor__breadcrumb">

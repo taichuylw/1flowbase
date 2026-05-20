@@ -38,6 +38,7 @@ import * as orchestrationApi from '../../api/orchestration';
 import * as nodeContributionsApi from '../../api/node-contributions';
 import * as runtimeApi from '../../api/runtime';
 import * as applicationsApi from '../../../applications/api/applications';
+import * as publicApi from '../../../applications/api/public-api';
 import { VersionHistoryPanel } from '../../components/history/VersionHistoryPanel';
 import { AgentFlowEditorShell } from '../../components/editor/AgentFlowEditorShell';
 import { NODE_DETAIL_DEFAULT_WIDTH } from '../../lib/detail-panel-width';
@@ -90,6 +91,22 @@ const readyContribution: ConsoleNodeContributionEntry = {
   visibility: 'public',
   dependency_installation_kind: 'model_provider',
   dependency_plugin_version_range: '^0.1.0'
+};
+
+const apiMapping = {
+  input: {
+    query_target: 'node-start.query',
+    model_target: 'node-start.model',
+    inputs_target: 'node-start',
+    history_target: 'node-start.history',
+    attachments_target: 'node-start.files'
+  },
+  output: {
+    answer_selector: 'node-answer.answer',
+    usage_selector: null,
+    files_selector: null,
+    error_selector: null
+  }
 };
 
 function renderShell(ui: ReactNode) {
@@ -154,6 +171,23 @@ beforeEach(() => {
     applicationsApi,
     'fetchApplicationEnvironmentVariables'
   ).mockResolvedValue([]);
+  vi.spyOn(publicApi, 'fetchApplicationApiMapping').mockResolvedValue(
+    apiMapping
+  );
+  vi.spyOn(publicApi, 'publishApplicationApiVersion').mockResolvedValue({
+    id: 'publication-1',
+    application_id: 'app-1',
+    flow_id: 'flow-1',
+    flow_version_id: 'version-1',
+    compiled_plan_id: 'plan-1',
+    version_sequence: 1,
+    active: true,
+    api_enabled: true,
+    mapping_snapshot: apiMapping,
+    public_url: '/api/1flowbase/runs',
+    created_by: 'user-1',
+    created_at: '2026-05-20T09:00:00Z'
+  });
   vi.spyOn(nodeContributionsApi, 'fetchNodeContributions').mockResolvedValue(
     []
   );
@@ -304,6 +338,27 @@ describe('AgentFlowEditorShell', () => {
       '发布',
       '历史版本'
     ]);
+  }, 20_000);
+
+  test('publishes the current application API from the canvas overlay', async () => {
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '发布' }));
+
+    await waitFor(() => {
+      expect(publicApi.publishApplicationApiVersion).toHaveBeenCalledWith(
+        'app-1',
+        apiMapping,
+        'csrf-123'
+      );
+    });
+    expect(publicApi.fetchApplicationApiMapping).toHaveBeenCalledWith('app-1');
   }, 20_000);
 
   test('opens readonly system variables from the canvas overlay', async () => {
