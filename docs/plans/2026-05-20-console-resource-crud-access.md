@@ -267,6 +267,58 @@ JSON filter
 - 前端和外部调用方看到同一套 `filter` 形态。
 - 后端执行方式仍然按资源类型区分。
 
+## 查询协议边界
+
+`filter`、pagination 和 `sort` 是平级查询能力，不应该互相嵌套。
+
+推荐共享查询协议保持这个形态：
+
+```http
+GET /api/console/resources?filter={...}&sort=created_at:desc&page=1&page_size=20
+```
+
+职责边界：
+
+- `filter`：只表达过滤条件。
+- `sort`：只表达排序字段和方向。
+- `page` / `page_size`：只表达分页位置和分页大小。
+
+基础 CRUD 模块可以统一解析这些参数，但语义上它们是并列的 query contract，不把 pagination 或 sort 放进 `filter`。
+
+## Route Helper 与 Service Command 边界
+
+`get/create/update/delete` 可以有 route-level helper，用来统一协议层样板。
+
+route-level helper 可以负责：
+
+- 统一 ID 解析。
+- 统一 query/body 参数解析。
+- 统一 `filter/filterByTk/sort/page/page_size` 解析。
+- 统一成功响应形态。
+- 统一常见错误字段名称。
+
+但 helper 不应该替代资源自己的 service command。
+
+“保持 service command 显式”的意思是：业务写入口仍然必须是明确命名的 command，而不是 route helper 直接对 repository 或物理表做泛型写入。
+
+应该保留这种形态：
+
+```rust
+mutation_service.delete_model(DeleteModelDefinitionCommand {
+    actor_user_id,
+    model_id,
+    confirmed,
+}).await?;
+```
+
+而不是变成：
+
+```rust
+generic_crud.delete("state_model", model_id).await?;
+```
+
+这样可以确保权限、审计、状态流转、保护记录、runtime registry rebuild 等领域规则不会被协议层 helper 绕开。
+
 ## 目标模块演进
 
 当前实现先集中在一个文件：
@@ -294,7 +346,9 @@ api/crates/control-plane/src/resource_crud/
 - `batch.rs`：`filterByTk` 解析和批量目标选择。
 - `mod.rs`：统一导出和 facade。
 
-拆分时机建议：当 runtime records 或第二个 Console 资源接入后，当前单文件开始承载多个执行后端时再拆。
+拆分时机已经确认：在第二个资源接入前先拆目录。
+
+原因是第二个资源接入时应直接使用稳定模块边界，而不是继续扩大单文件后再迁移。
 
 ## 前端契约
 
@@ -353,15 +407,16 @@ git diff --check
 - 前端 API client 请求形态
 - settings feature API wrapper 请求形态
 
-## 待审计问题
+## 已确认决策
 
-这些是刻意保留给总体审计的问题：
+本轮审计已确认以下方向：
 
-1. `resource_crud.rs` 是在第二个资源接入前先拆目录，还是等 runtime records 需要 AST 时再拆？
-2. 下一步优先迁移另一个固定 Console 资源，还是先统一 runtime records 的 filter？
-3. `filter` 基础层是否现在就纳入 pagination 和 sort，还是等具体资源需要时再加入？
-4. `get/create/update/delete` 是否需要 route-level helper 统一响应形态和 ID 解析，同时保持 service command 显式？
-5. OpenAPI 是否要先全局描述一次共享 `filter` 协议，还是在协议稳定前继续按资源分别写？
+1. `resource_crud.rs` 在第二个资源接入前先拆成目录模块。
+2. 下一步优先统一 runtime records 的 `filter` 协议。
+3. `filter`、pagination、`sort` 是平级能力；`filter` 只负责过滤。
+4. `get/create/update/delete` 需要 route-level helper 统一响应形态和 ID 解析。
+5. route-level helper 只处理协议样板，业务写入口仍保持 service command 显式。
+6. OpenAPI 在接口协议稳定后全局描述共享 `filter` 协议，基础 CRUD 直接复用这一套。
 
 ## 推荐下一步
 
@@ -369,9 +424,10 @@ git diff --check
 
 推荐下一步是：
 
-1. 从当前 JSON matcher 中抽出真正的 `Filter AST`。
-2. 保留 `state_model` 作为固定 record 的参考实现。
-3. 给 runtime records 增加接受同一 AST 的 query compiler。
-4. 再选择一个 Console 资源按 descriptor 模式接入，验证复用形态。
-5. 当模块开始承载多个执行后端时，再把 `resource_crud.rs` 拆成聚焦文件。
-
+1. 先把 `resource_crud.rs` 拆成 `resource_crud/` 目录模块。
+2. 从当前 JSON matcher 中抽出真正的 `Filter AST`。
+3. 保留 `state_model` 作为固定 record 的参考实现。
+4. 给 runtime records 增加接受同一 AST 的 query compiler，并统一公开 `filter` 协议。
+5. 定义全局基础 CRUD 查询协议：`filter`、`sort`、`page`、`page_size` 平级。
+6. 增加 route-level helper，统一 ID 解析和响应形态，但不替代 service command。
+7. 接口协议稳定后，在 OpenAPI 全局描述共享协议，后续基础 CRUD 直接复用。
