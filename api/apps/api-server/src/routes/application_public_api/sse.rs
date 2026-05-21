@@ -2,14 +2,22 @@ use std::{convert::Infallible, sync::Arc};
 
 use axum::response::sse::Event;
 use control_plane::{
-    application_public_api::native::NativeRunResult,
-    ports::{RuntimeEventEnvelope, RuntimeEventStream},
+    application_public_api::native::NativeRunResult, orchestration_runtime::debug_stream_events,
+    ports::RuntimeEventEnvelope,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
 use time::format_description::well_known::Rfc3339;
 use tokio::sync::mpsc;
+use tracing::{debug, warn};
 use uuid::Uuid;
+
+use crate::{
+    app_state::ApiState,
+    routes::application_public_api::stream_terminal_fallback::{
+        load_latest_native_run_for_terminal_fallback, terminal_runtime_event_from_native_run,
+    },
+};
 
 pub type NativeRunSseStream = tokio_stream::wrappers::ReceiverStream<Result<Event, Infallible>>;
 
@@ -322,22 +330,23 @@ fn is_public_terminal_runtime_event(event_type: &str) -> bool {
 }
 
 pub async fn send_native_runtime_event_stream(
-    stream: Arc<dyn RuntimeEventStream>,
+    state: Arc<ApiState>,
     initial_run: NativeRunResult,
     include_workflow_events: IncludeWorkflowEvents,
     sender: mpsc::Sender<Result<Event, Infallible>>,
 ) {
+    let stream = state.runtime_event_stream.clone();
     let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
         return;
     };
 
+    let mut emitted_public_event = false;
     for event in subscription.replay {
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
-        if let Some(sse) = runtime_event_to_native_sse(&initial_run, include_workflow_events, event)
-        {
-            if sender.send(sse).await.is_err() {
-                return;
-            }
+        let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
+        emitted_public_event |= sse.is_some();
+        if !send_native_sse_event(&sender, sse).await {
+            return;
         }
         if is_terminal {
             return;
@@ -346,16 +355,86 @@ pub async fn send_native_runtime_event_stream(
 
     while let Some(event) = subscription.live_events.recv().await {
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
-        if let Some(sse) = runtime_event_to_native_sse(&initial_run, include_workflow_events, event)
-        {
-            if sender.send(sse).await.is_err() {
-                return;
-            }
+        let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
+        emitted_public_event |= sse.is_some();
+        if !send_native_sse_event(&sender, sse).await {
+            return;
         }
         if is_terminal {
             return;
         }
     }
+
+    emit_native_terminal_fallback(
+        &state,
+        &initial_run,
+        include_workflow_events,
+        &sender,
+        emitted_public_event,
+    )
+    .await;
+}
+
+async fn send_native_sse_event(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    event: Option<Result<Event, Infallible>>,
+) -> bool {
+    let Some(event) = event else {
+        return true;
+    };
+    sender.send(event).await.is_ok()
+}
+
+async fn emit_native_terminal_fallback(
+    state: &ApiState,
+    initial_run: &NativeRunResult,
+    include_workflow_events: IncludeWorkflowEvents,
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    emitted_public_event: bool,
+) {
+    let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
+    let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
+        warn!(
+            flow_run_id = %initial_run.id,
+            application_id = %initial_run.application_id,
+            status = ?latest_run.status,
+            "native stream closed without terminal event before durable run reached a terminal state"
+        );
+        return;
+    };
+
+    warn!(
+        flow_run_id = %initial_run.id,
+        application_id = %initial_run.application_id,
+        status = ?latest_run.status,
+        "native stream closed without terminal event; emitting durable terminal fallback"
+    );
+
+    if !emitted_public_event {
+        let started_event = RuntimeEventEnvelope::new(
+            latest_run.id,
+            0,
+            debug_stream_events::flow_started(latest_run.id),
+        );
+        if !send_native_sse_event(
+            sender,
+            runtime_event_to_native_sse(&latest_run, include_workflow_events, started_event),
+        )
+        .await
+        {
+            debug!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                "native stream client disconnected before terminal fallback"
+            );
+            return;
+        }
+    }
+    let _ = send_native_sse_event(
+        sender,
+        runtime_event_to_native_sse(&latest_run, include_workflow_events, terminal_event),
+    )
+    .await;
 }
 
 #[cfg(test)]

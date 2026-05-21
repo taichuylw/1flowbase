@@ -9,7 +9,7 @@ use control_plane::{
     orchestration_runtime::{
         debug_stream_events, OrchestrationRuntimeService, StartPublishedFlowRunCommand,
     },
-    ports::{RuntimeEventEnvelope, RuntimeEventStream},
+    ports::RuntimeEventEnvelope,
 };
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
@@ -20,6 +20,9 @@ use crate::{
     provider_runtime::ApiProviderRuntime,
     routes::application_public_api::{
         native::{service_error, NativeApiError},
+        stream_terminal_fallback::{
+            load_latest_native_run_for_terminal_fallback, terminal_runtime_event_from_native_run,
+        },
         tool_callback_ids::{
             encode_anthropic_callback_tool_use_id, encode_openai_callback_tool_call_id,
         },
@@ -131,7 +134,7 @@ where
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(send_compatible_runtime_event_stream(
-        state.runtime_event_stream.clone(),
+        state.clone(),
         run.clone(),
         sender,
         move |run, envelope| mapper(run, envelope),
@@ -197,13 +200,14 @@ where
 }
 
 async fn send_compatible_runtime_event_stream<F>(
-    stream: Arc<dyn RuntimeEventStream>,
+    state: Arc<ApiState>,
     initial_run: NativeRunResult,
     sender: mpsc::Sender<Result<Event, Infallible>>,
     mut mapper: F,
 ) where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
+    let stream = state.runtime_event_stream.clone();
     let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
         warn!(
             flow_run_id = %initial_run.id,
@@ -213,17 +217,18 @@ async fn send_compatible_runtime_event_stream<F>(
         return;
     };
 
+    let mut emitted_public_event = false;
     for event in subscription.replay {
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
-        for sse in mapper(&initial_run, event) {
-            if sender.send(sse).await.is_err() {
-                debug!(
-                    flow_run_id = %initial_run.id,
-                    application_id = %initial_run.application_id,
-                    "compatible public API stream client disconnected during replay"
-                );
-                return;
-            }
+        let events = mapper(&initial_run, event);
+        emitted_public_event |= !events.is_empty();
+        if !send_compatible_sse_events(&sender, events).await {
+            debug!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                "compatible public API stream client disconnected during replay"
+            );
+            return;
         }
         if is_terminal {
             debug!(
@@ -238,15 +243,15 @@ async fn send_compatible_runtime_event_stream<F>(
     while let Some(event) = subscription.live_events.recv().await {
         let event_type = event.event_type.clone();
         let is_terminal = is_public_terminal_runtime_event(&event_type);
-        for sse in mapper(&initial_run, event) {
-            if sender.send(sse).await.is_err() {
-                debug!(
-                    flow_run_id = %initial_run.id,
-                    application_id = %initial_run.application_id,
-                    "compatible public API stream client disconnected"
-                );
-                return;
-            }
+        let events = mapper(&initial_run, event);
+        emitted_public_event |= !events.is_empty();
+        if !send_compatible_sse_events(&sender, events).await {
+            debug!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                "compatible public API stream client disconnected"
+            );
+            return;
         }
         if is_terminal {
             debug!(
@@ -258,6 +263,67 @@ async fn send_compatible_runtime_event_stream<F>(
             return;
         }
     }
+
+    emit_compatible_terminal_fallback(
+        &state,
+        &initial_run,
+        &sender,
+        &mut mapper,
+        emitted_public_event,
+    )
+    .await;
+}
+
+async fn send_compatible_sse_events(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    events: Vec<Result<Event, Infallible>>,
+) -> bool {
+    for sse in events {
+        if sender.send(sse).await.is_err() {
+            return false;
+        }
+    }
+    true
+}
+
+async fn emit_compatible_terminal_fallback<F>(
+    state: &ApiState,
+    initial_run: &NativeRunResult,
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    mapper: &mut F,
+    emitted_public_event: bool,
+) where
+    F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
+{
+    let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
+    let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
+        warn!(
+            flow_run_id = %initial_run.id,
+            application_id = %initial_run.application_id,
+            status = ?latest_run.status,
+            "compatible public API stream closed without terminal event before durable run reached a terminal state"
+        );
+        return;
+    };
+
+    warn!(
+        flow_run_id = %initial_run.id,
+        application_id = %initial_run.application_id,
+        status = ?latest_run.status,
+        "compatible public API stream closed without terminal event; emitting durable terminal fallback"
+    );
+
+    if !emitted_public_event {
+        let started_event = RuntimeEventEnvelope::new(
+            latest_run.id,
+            0,
+            debug_stream_events::flow_started(latest_run.id),
+        );
+        if !send_compatible_sse_events(sender, mapper(&latest_run, started_event)).await {
+            return;
+        }
+    }
+    let _ = send_compatible_sse_events(sender, mapper(&latest_run, terminal_event)).await;
 }
 
 fn is_public_terminal_runtime_event(event_type: &str) -> bool {

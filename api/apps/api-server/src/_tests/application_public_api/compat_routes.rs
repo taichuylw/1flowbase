@@ -2,8 +2,11 @@ use crate::{
     _tests::support::{
         login_and_capture_cookie, test_api_state_with_database_url, test_app, test_config,
     },
+    app_state::ApiState,
+    host_infrastructure::LocalRuntimeEventStream,
     routes::application_public_api::tool_callback_ids::encode_openai_callback_tool_call_id,
 };
+use async_trait::async_trait;
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
@@ -11,12 +14,87 @@ use axum::{
 };
 use control_plane::{
     application_public_api::compat::openai::run_id_from_response_id,
-    ports::{CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository},
+    ports::{
+        CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
+        RuntimeEventCloseReason, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventStream,
+        RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
+    },
 };
 use serde_json::{json, Value};
+use std::sync::Arc;
 use time::OffsetDateTime;
 use tokio::time::{timeout, Duration};
 use tower::ServiceExt;
+
+struct DropTerminalRuntimeEventStream {
+    inner: LocalRuntimeEventStream,
+}
+
+impl DropTerminalRuntimeEventStream {
+    fn new() -> Self {
+        Self {
+            inner: LocalRuntimeEventStream::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl RuntimeEventStream for DropTerminalRuntimeEventStream {
+    async fn open_run(
+        &self,
+        run_id: uuid::Uuid,
+        policy: RuntimeEventStreamPolicy,
+    ) -> anyhow::Result<()> {
+        self.inner.open_run(run_id, policy).await
+    }
+
+    async fn append(
+        &self,
+        run_id: uuid::Uuid,
+        event: RuntimeEventPayload,
+    ) -> anyhow::Result<RuntimeEventEnvelope> {
+        if is_terminal_runtime_event(&event.event_type) {
+            return Ok(RuntimeEventEnvelope::new(run_id, 0, event));
+        }
+        self.inner.append(run_id, event).await
+    }
+
+    async fn subscribe(
+        &self,
+        run_id: uuid::Uuid,
+        from_sequence: Option<i64>,
+    ) -> anyhow::Result<RuntimeEventSubscription> {
+        self.inner.subscribe(run_id, from_sequence).await
+    }
+
+    async fn replay(
+        &self,
+        run_id: uuid::Uuid,
+        from_sequence: Option<i64>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<RuntimeEventEnvelope>> {
+        self.inner.replay(run_id, from_sequence, limit).await
+    }
+
+    async fn close_run(
+        &self,
+        run_id: uuid::Uuid,
+        reason: RuntimeEventCloseReason,
+    ) -> anyhow::Result<()> {
+        self.inner.close_run(run_id, reason).await
+    }
+
+    async fn trim(&self, run_id: uuid::Uuid, policy: RuntimeEventTrimPolicy) -> anyhow::Result<()> {
+        self.inner.trim(run_id, policy).await
+    }
+}
+
+fn is_terminal_runtime_event(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "flow_finished" | "flow_failed" | "flow_cancelled" | "waiting_human" | "waiting_callback"
+    )
+}
 
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -202,6 +280,37 @@ async fn setup_unpublished_app_key(app: &Router, name: &str) -> String {
 async fn test_app_with_state() -> (Router, std::sync::Arc<crate::app_state::ApiState>) {
     let (state, _) = test_api_state_with_database_url().await;
     let config = test_config();
+    let app = crate::app_with_state_and_config(state.clone(), &config);
+    (app, state)
+}
+
+async fn test_app_with_runtime_event_stream(
+    runtime_event_stream: Arc<dyn RuntimeEventStream>,
+) -> (Router, Arc<ApiState>) {
+    let (base_state, _) = test_api_state_with_database_url().await;
+    let config = test_config();
+    let state = Arc::new(ApiState {
+        store: base_state.store.clone(),
+        infrastructure: base_state.infrastructure.clone(),
+        file_storage_registry: base_state.file_storage_registry.clone(),
+        runtime_engine: base_state.runtime_engine.clone(),
+        provider_runtime: base_state.provider_runtime.clone(),
+        process_started_at: base_state.process_started_at,
+        api_runtime_profile: base_state.api_runtime_profile.clone(),
+        plugin_runner_system: base_state.plugin_runner_system.clone(),
+        official_plugin_source: base_state.official_plugin_source.clone(),
+        provider_install_root: base_state.provider_install_root.clone(),
+        provider_secret_master_key: base_state.provider_secret_master_key.clone(),
+        host_extension_dropin_root: base_state.host_extension_dropin_root.clone(),
+        allow_unverified_filesystem_dropins: base_state.allow_unverified_filesystem_dropins,
+        allow_uploaded_host_extensions: base_state.allow_uploaded_host_extensions,
+        session_store: base_state.session_store.clone(),
+        runtime_event_stream,
+        api_docs: base_state.api_docs.clone(),
+        cookie_name: base_state.cookie_name.clone(),
+        session_ttl_days: base_state.session_ttl_days,
+        bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
+    });
     let app = crate::app_with_state_and_config(state.clone(), &config);
     (app, state)
 }
@@ -805,4 +914,31 @@ async fn compatible_streaming_routes_return_protocol_sse() {
         !anthropic_body.contains("event: workflow.event"),
         "{anthropic_body}"
     );
+}
+
+#[tokio::test]
+async fn compatible_streaming_routes_emit_terminal_fallback_after_runtime_stream_closes() {
+    let (app, _) =
+        test_app_with_runtime_event_stream(Arc::new(DropTerminalRuntimeEventStream::new())).await;
+    let token = setup_published_app(&app, "Compatible Terminal Fallback Route App").await;
+
+    let openai = post_json(
+        &app,
+        "/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        openai_body(true),
+    )
+    .await;
+    assert_eq!(openai.status(), StatusCode::OK);
+
+    let openai_body = timeout(
+        Duration::from_secs(5),
+        to_bytes(openai.into_body(), usize::MAX),
+    )
+    .await
+    .expect("OpenAI compatible SSE should finish from durable terminal fallback")
+    .unwrap();
+    let openai_body = String::from_utf8(openai_body.to_vec()).unwrap();
+
+    assert!(openai_body.contains("[DONE]"), "{openai_body}");
 }
