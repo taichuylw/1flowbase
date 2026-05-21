@@ -28,7 +28,7 @@ const assistantMessage: AgentFlowDebugMessage = {
   role: 'assistant',
   status: 'running',
   runId: 'run-1',
-  protocolLabel: 'OpenAI Responses',
+  compatibilityModeLabel: 'OpenAI Responses',
   content: '你好，我可以帮你。',
   rawOutput: {
     answer: '你好，我可以帮你。'

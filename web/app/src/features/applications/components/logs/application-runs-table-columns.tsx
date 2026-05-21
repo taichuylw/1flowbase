@@ -1,8 +1,8 @@
 import { Tag } from 'antd';
 
 import type { DataTableColumn } from '../../../../shared/ui/data-table/DataTable';
-import { formatApplicationRunProtocol } from '../../lib/run-protocol';
 import type { ApplicationRunSummary } from '../../api/runtime';
+import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 
 const STATUS_COLOR: Record<string, string> = {
   succeeded: 'green',
@@ -61,13 +61,15 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
     width: 180
   },
   {
-    key: 'protocol',
+    key: 'compatibility_mode',
     title: '协议',
-    dataIndex: 'protocol',
+    dataIndex: 'compatibility_mode',
     width: 170,
     ellipsis: true,
     render: (value) =>
-      formatApplicationRunProtocol(typeof value === 'string' ? value : null)
+      formatApplicationRunCompatibilityMode(
+        typeof value === 'string' ? value : null
+      )
   },
   {
     key: 'target_node_id',

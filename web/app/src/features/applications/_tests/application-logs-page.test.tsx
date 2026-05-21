@@ -89,7 +89,7 @@ function sampleRunDetail(): ApplicationRunDetail {
       status: 'succeeded',
       title: '公开 API 退款总结',
       source: 'api_key',
-      protocol: 'openai-responses-v1',
+      compatibility_mode: 'openai-responses-v1',
       subject: {
         kind: 'agent_flow',
         id: 'flow-1',
@@ -225,7 +225,7 @@ describe('ApplicationLogsPage', () => {
           title: '公开 API 退款总结',
           expand_id: 'customer-42',
           authorized_account: 'root',
-          protocol: 'openai-responses-v1',
+          compatibility_mode: 'openai-responses-v1',
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z',

@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: application-log-protocol-status-boundary
-summary: 应用日志补协议可展示在日志表格和对话日志元数据；运行状态文案暂不处理，后续前端多语言统一接管。
+summary: 应用日志可把 compatibility_mode 展示为协议；运行状态文案暂不处理，后续前端多语言统一接管。
 keywords:
   - application logs
   - conversation log
@@ -22,7 +22,7 @@ scope:
 
 ## 规则
 
-应用运行协议字段需要展示时，优先放在 `/applications/:id/logs` 表格列和对话日志 `详情 -> 元数据` 中。不要顺手调整运行状态文案或 `completed` 这类状态映射，状态多语言后续由前端国际化统一处理。
+应用运行 `compatibility_mode` 字段需要展示时，UI 文案可叫“协议”，但前后端接口和代码字段名应保持 `compatibility_mode`。展示位置优先放在 `/applications/:id/logs` 表格列和对话日志 `详情 -> 元数据` 中。不要顺手调整运行状态文案或 `completed` 这类状态映射，状态多语言后续由前端国际化统一处理。
 
 ## 原因
 

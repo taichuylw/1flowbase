@@ -44,7 +44,7 @@ export interface ConsoleApplicationRunLog {
   status: string;
   title: string;
   source: string;
-  protocol?: string | null;
+  compatibility_mode?: string | null;
   subject: ConsoleApplicationRunSubject;
   actor: ConsoleApplicationRunActor;
   correlation: ConsoleApplicationRunCorrelation;
@@ -67,7 +67,7 @@ export interface ConsoleApplicationRunSummary {
   expand_id?: string | null;
   authorized_account?: string | null;
   source?: string;
-  protocol?: string | null;
+  compatibility_mode?: string | null;
   subject?: ConsoleApplicationRunSubject;
   actor?: ConsoleApplicationRunActor;
   correlation?: ConsoleApplicationRunCorrelation;

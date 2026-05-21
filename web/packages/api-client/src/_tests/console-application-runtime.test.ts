@@ -228,7 +228,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
                 target_node_id: null,
                 title: '退款总结',
                 source: 'console',
-                protocol: null,
+                compatibility_mode: null,
                 subject: { kind: 'agent_flow', id: 'app-1' },
                 actor: { kind: 'user', id: 'user-1', display_name: 'root' },
                 correlation: {},
@@ -254,6 +254,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         {
           application_type: 'agent_flow',
           run_object_kind: 'application_run',
+          compatibility_mode: null,
           subject: { kind: 'agent_flow' }
         }
       ]

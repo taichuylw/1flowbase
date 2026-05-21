@@ -55,7 +55,7 @@ pub struct ApplicationRunLogResponse {
     pub title: String,
     pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<String>,
+    pub compatibility_mode: Option<String>,
     pub subject: ApplicationRunSubjectResponse,
     pub actor: ApplicationRunActorResponse,
     pub correlation: ApplicationRunCorrelationResponse,

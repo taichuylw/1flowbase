@@ -20,7 +20,7 @@ import {
   type ApplicationConversationMessagesPage,
   type ApplicationRunDetail
 } from '../../api/runtime';
-import { formatApplicationRunProtocol } from '../../lib/run-protocol';
+import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 import './application-run-detail-panel.css';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -109,9 +109,9 @@ const runConversationContext: AgentFlowRunContext = {
   fields: []
 };
 
-function runDetailProtocol(detail: ApplicationRunDetail) {
+function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
   return (
-    detail.run?.protocol ??
+    detail.run?.compatibility_mode ??
     detail.run?.correlation?.compatibility_mode ??
     null
   );
@@ -128,7 +128,7 @@ function buildConversationLogMessage(
     Object.keys(detail.flow_run.output_payload).length > 0
       ? detail.flow_run.output_payload
       : null;
-  const protocol = runDetailProtocol(detail);
+  const compatibilityMode = runDetailCompatibilityMode(detail);
 
   return {
     id: `conversation-log-${detail.flow_run.id}`,
@@ -138,8 +138,9 @@ function buildConversationLogMessage(
     runId: detail.flow_run.id,
     detailRunId: detail.flow_run.id,
     canOpenDetail: true,
-    protocol,
-    protocolLabel: formatApplicationRunProtocol(protocol),
+    compatibilityMode,
+    compatibilityModeLabel:
+      formatApplicationRunCompatibilityMode(compatibilityMode),
     rawOutput,
     traceSummary: mapRunDetailToTrace(detail)
   };

@@ -1264,6 +1264,7 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
                         "query": "请总结退款政策",
                         "title": "公开 API 退款总结",
                         "expand_id": "customer-42",
+                        "compatibility_mode": "native-v1",
                         "response_mode": "queued"
                     })
                     .to_string(),
@@ -1324,6 +1325,14 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
         Some("public_api")
     );
     assert_eq!(
+        list_payload["data"]["items"][0]["compatibility_mode"].as_str(),
+        Some("native-v1")
+    );
+    assert!(!list_payload["data"]["items"][0]
+        .as_object()
+        .unwrap()
+        .contains_key("protocol"));
+    assert_eq!(
         list_payload["data"]["items"][0]["correlation"]["external_user"].as_str(),
         Some("customer-42")
     );
@@ -1363,6 +1372,14 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
         detail_payload["data"]["run"]["source"].as_str(),
         Some("public_api")
     );
+    assert_eq!(
+        detail_payload["data"]["run"]["compatibility_mode"].as_str(),
+        Some("native-v1")
+    );
+    assert!(!detail_payload["data"]["run"]
+        .as_object()
+        .unwrap()
+        .contains_key("protocol"));
     assert_eq!(
         detail_payload["data"]["run"]["correlation"]["external_user"].as_str(),
         Some("customer-42")

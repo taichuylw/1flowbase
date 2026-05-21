@@ -49,8 +49,8 @@ function formatTimestamp(value: string | null | undefined) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
-function messageProtocolLabel(message: AgentFlowDebugMessage) {
-  return message.protocolLabel ?? message.protocol ?? '—';
+function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
+  return message.compatibilityModeLabel ?? message.compatibilityMode ?? '—';
 }
 
 function ConversationLogDetail({
@@ -93,9 +93,9 @@ function ConversationLogDetail({
               children: message.status
             },
             {
-              key: 'protocol',
+              key: 'compatibilityMode',
               label: '协议',
-              children: messageProtocolLabel(message)
+              children: messageCompatibilityModeLabel(message)
             },
             {
               key: 'nodeCount',
