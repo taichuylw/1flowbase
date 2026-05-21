@@ -218,6 +218,8 @@ async fn application_api_docs_list_models_and_streaming_contracts() {
         .collect::<Vec<_>>();
     assert!(operation_paths.contains(&("GET", "/v1/models")));
     assert!(operation_paths.contains(&("POST", "/v1/chat/completions")));
+    assert!(operation_paths.contains(&("POST", "/openai/v1/chat/completions")));
+    assert!(operation_paths.contains(&("POST", "/v1/responses")));
 
     let models_spec = app
         .clone()
@@ -301,6 +303,29 @@ async fn application_api_docs_list_models_and_streaming_contracts() {
     assert_eq!(
         openai_streaming_schema["x-1flowbase-reasoning-delta"],
         json!("choices[0].delta.reasoning_content")
+    );
+
+    let responses_spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationOpenAiCreateResponse/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(responses_spec.status(), StatusCode::OK);
+    let responses_payload = response_json(responses_spec).await;
+    assert!(responses_payload["paths"].get("/v1/responses").is_some());
+    let responses_streaming_schema = &responses_payload["paths"]["/v1/responses"]["post"]
+        ["responses"]["200"]["content"]["text/event-stream"]["schema"];
+    assert_eq!(
+        responses_streaming_schema["x-1flowbase-message-delta"],
+        json!("response.output_text.delta")
     );
 }
 

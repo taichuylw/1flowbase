@@ -1,8 +1,11 @@
-use serde_json::Value;
+use serde_json::{Map, Value};
+use uuid::Uuid;
 
 use crate::application_public_api::native::NativeRunRequest;
 
 const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID: &str = "1flowbase";
+const OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_MODE: &str = "openai-chat-completions-v1";
+const OPENAI_RESPONSES_COMPATIBILITY_MODE: &str = "openai-responses-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenAiCompatibleModel {
@@ -16,6 +19,14 @@ pub struct OpenAiCompatError {
     pub error_type: String,
     pub param: Option<String>,
     pub code: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenAiPreviousResponseContext {
+    pub response_id: String,
+    pub external_user: Option<String>,
+    pub external_conversation_id: Option<String>,
+    pub answer: Option<String>,
 }
 
 impl OpenAiCompatError {
@@ -106,7 +117,7 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
         "conversation": conversation,
         "response_mode": response_mode,
         "metadata": metadata,
-        "compatibility_mode": "openai-chat-completions-v1"
+        "compatibility_mode": OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_MODE
     });
     if response_mode.is_none() {
         native
@@ -117,6 +128,86 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
 
     serde_json::from_value(native)
         .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))
+}
+
+pub fn map_response_request(
+    request: Value,
+    previous_response: Option<OpenAiPreviousResponseContext>,
+) -> Result<NativeRunRequest, OpenAiCompatError> {
+    reject_unsupported(&request)?;
+    let object = request
+        .as_object()
+        .ok_or_else(|| OpenAiCompatError::invalid("body", "request body must be an object"))?;
+    let model = object
+        .get("model")
+        .and_then(Value::as_str)
+        .ok_or_else(|| OpenAiCompatError::invalid("model", "model is required"))?;
+    let input = object
+        .get("input")
+        .ok_or_else(|| OpenAiCompatError::invalid("input", "input is required"))?;
+    let (query, input_history) = responses_input_to_query_and_history(input)?;
+    let mut history = responses_previous_history(previous_response.as_ref());
+    history.extend(input_history);
+    if let Some(instructions) = object
+        .get("instructions")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        history.insert(
+            0,
+            serde_json::json!({ "role": "system", "content": instructions }),
+        );
+    }
+
+    let response_mode = object
+        .get("stream")
+        .and_then(Value::as_bool)
+        .filter(|stream| *stream)
+        .map(|_| "streaming".to_string());
+    let conversation = responses_conversation(object, previous_response.as_ref());
+    let metadata = object
+        .get("metadata")
+        .filter(|value| value.is_object())
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let compatibility = responses_compatibility_payload(object, previous_response.as_ref());
+    let mut metadata = metadata;
+    if !compatibility.is_null() {
+        metadata["compatibility"] = compatibility.clone();
+    }
+
+    let mut native = serde_json::json!({
+        "query": query,
+        "model": model,
+        "inputs": compatibility_inputs(compatibility),
+        "history": history,
+        "conversation": conversation,
+        "response_mode": response_mode,
+        "metadata": metadata,
+        "compatibility_mode": OPENAI_RESPONSES_COMPATIBILITY_MODE
+    });
+    if response_mode.is_none() {
+        native
+            .as_object_mut()
+            .expect("native request object")
+            .remove("response_mode");
+    }
+
+    serde_json::from_value(native)
+        .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))
+}
+
+pub fn response_id_from_run_id(run_id: Uuid) -> String {
+    format!("resp_{run_id}")
+}
+
+pub fn run_id_from_response_id(response_id: &str) -> Result<Uuid, OpenAiCompatError> {
+    let run_id = response_id
+        .strip_prefix("resp_")
+        .ok_or_else(|| OpenAiCompatError::invalid("previous_response_id", "invalid response id"))?;
+    Uuid::parse_str(run_id)
+        .map_err(|_| OpenAiCompatError::invalid("previous_response_id", "invalid response id"))
 }
 
 pub fn extract_model_list_from_start_node(document: &Value) -> Vec<OpenAiCompatibleModel> {
@@ -214,6 +305,137 @@ fn compatibility_payload(object: &serde_json::Map<String, Value>) -> Value {
     } else {
         Value::Object(compatibility)
     }
+}
+
+fn responses_compatibility_payload(
+    object: &Map<String, Value>,
+    previous_response: Option<&OpenAiPreviousResponseContext>,
+) -> Value {
+    let mut compatibility = serde_json::Map::new();
+    for key in [
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "response_format",
+        "text",
+        "reasoning",
+    ] {
+        if let Some(value) = object.get(key) {
+            compatibility.insert(key.to_string(), value.clone());
+        }
+    }
+    if let Some(previous_response) = previous_response {
+        compatibility.insert(
+            "previous_response_id".to_string(),
+            Value::String(previous_response.response_id.clone()),
+        );
+    }
+    if compatibility.is_empty() {
+        Value::Null
+    } else {
+        Value::Object(compatibility)
+    }
+}
+
+fn responses_conversation(
+    object: &Map<String, Value>,
+    previous_response: Option<&OpenAiPreviousResponseContext>,
+) -> Value {
+    let mut conversation = serde_json::Map::new();
+    if let Some(user) = object
+        .get("user")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        conversation.insert("user".to_string(), Value::String(user.to_string()));
+    }
+    if let Some(previous_response) = previous_response {
+        if !conversation.contains_key("user") {
+            if let Some(user) = previous_response.external_user.as_ref() {
+                conversation.insert("user".to_string(), Value::String(user.clone()));
+            }
+        }
+        if let Some(conversation_id) = previous_response.external_conversation_id.as_ref() {
+            conversation.insert("id".to_string(), Value::String(conversation_id.clone()));
+        }
+    }
+    Value::Object(conversation)
+}
+
+fn responses_previous_history(
+    previous_response: Option<&OpenAiPreviousResponseContext>,
+) -> Vec<Value> {
+    previous_response
+        .and_then(|previous_response| {
+            previous_response.answer.as_ref().map(|answer| {
+                serde_json::json!({
+                    "role": "assistant",
+                    "content": answer,
+                    "response_id": previous_response.response_id,
+                })
+            })
+        })
+        .into_iter()
+        .collect()
+}
+
+fn responses_input_to_query_and_history(
+    input: &Value,
+) -> Result<(String, Vec<Value>), OpenAiCompatError> {
+    if let Some(text) = input.as_str() {
+        return Ok((text.to_string(), Vec::new()));
+    }
+    let items = input
+        .as_array()
+        .ok_or_else(|| OpenAiCompatError::invalid("input", "input must be text or messages"))?;
+    let messages = items
+        .iter()
+        .map(responses_input_message)
+        .collect::<Result<Vec<_>, _>>()?;
+    let last_user_index = messages
+        .iter()
+        .rposition(|message| message.role == "user")
+        .ok_or_else(|| OpenAiCompatError::invalid("input", "user input is required"))?;
+    let mut history = Vec::new();
+    for (index, message) in messages.into_iter().enumerate() {
+        if index == last_user_index {
+            return Ok((message.content, history));
+        }
+        history.push(serde_json::json!({
+            "role": message.role,
+            "content": message.content
+        }));
+    }
+    Err(OpenAiCompatError::invalid(
+        "input",
+        "user input is required",
+    ))
+}
+
+struct ResponsesInputMessage {
+    role: String,
+    content: String,
+}
+
+fn responses_input_message(item: &Value) -> Result<ResponsesInputMessage, OpenAiCompatError> {
+    let object = item
+        .as_object()
+        .ok_or_else(|| OpenAiCompatError::invalid("input", "input message must be an object"))?;
+    let role = object
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("user")
+        .to_string();
+    let content = match object.get("content") {
+        Some(content) => openai_text_content(content)?,
+        None => object
+            .get("text")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .ok_or_else(|| OpenAiCompatError::invalid("input", "input content is required"))?,
+    };
+    Ok(ResponsesInputMessage { role, content })
 }
 
 fn compatibility_inputs(compatibility: Value) -> Value {
@@ -437,5 +659,64 @@ mod tests {
         assert_eq!(inputs["tool_choice"], json!({ "name": "read_file" }));
         assert!(inputs.get("function_call").is_none());
         assert!(inputs.get("compatibility").is_none());
+    }
+
+    #[test]
+    fn maps_responses_text_input_into_native_run() {
+        let request = map_response_request(
+            json!({
+                "model": "deepseek-v4-flash",
+                "input": "Summarize the incident",
+                "user": "external-user-1",
+                "metadata": {"trace_id": "trace-responses"},
+                "stream": true
+            }),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(request.query, "Summarize the incident");
+        assert_eq!(request.model.as_deref(), Some("deepseek-v4-flash"));
+        assert_eq!(request.response_mode.as_deref(), Some("streaming"));
+        assert_eq!(
+            request.compatibility_mode.as_deref(),
+            Some("openai-responses-v1")
+        );
+        assert_eq!(request.conversation["user"], json!("external-user-1"));
+        assert_eq!(request.metadata["trace_id"], json!("trace-responses"));
+    }
+
+    #[test]
+    fn maps_previous_response_context_into_native_conversation_and_history() {
+        let request = map_response_request(
+            json!({
+                "model": "deepseek-v4-flash",
+                "input": [{"role": "user", "content": [{"type": "input_text", "text": "Continue"}]}],
+                "previous_response_id": "resp_11111111-1111-1111-1111-111111111111"
+            }),
+            Some(OpenAiPreviousResponseContext {
+                response_id: "resp_11111111-1111-1111-1111-111111111111".to_string(),
+                external_user: Some("external-user-1".to_string()),
+                external_conversation_id: Some("conv_123".to_string()),
+                answer: Some("Earlier answer".to_string()),
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(request.query, "Continue");
+        assert_eq!(request.conversation["user"], json!("external-user-1"));
+        assert_eq!(request.conversation["id"], json!("conv_123"));
+        assert_eq!(
+            request.history,
+            vec![json!({
+                "role": "assistant",
+                "content": "Earlier answer",
+                "response_id": "resp_11111111-1111-1111-1111-111111111111"
+            })]
+        );
+        assert_eq!(
+            request.metadata["compatibility"]["previous_response_id"],
+            json!("resp_11111111-1111-1111-1111-111111111111")
+        );
     }
 }

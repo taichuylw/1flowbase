@@ -5,7 +5,7 @@ use axum::response::{
     IntoResponse, Response,
 };
 use control_plane::{
-    application_public_api::native::NativeRunResult,
+    application_public_api::{compat::openai::response_id_from_run_id, native::NativeRunResult},
     orchestration_runtime::{
         debug_stream_events, OrchestrationRuntimeService, StartPublishedFlowRunCommand,
     },
@@ -30,6 +30,18 @@ pub(crate) async fn start_openai_run_stream(
 ) -> Result<Response, NativeApiError> {
     start_compatible_run_stream(state, run, move |run, envelope| {
         openai_runtime_event_to_sse(run, &model, envelope)
+    })
+    .await
+}
+
+pub(crate) async fn start_openai_response_stream(
+    state: Arc<ApiState>,
+    run: NativeRunResult,
+    model: String,
+    previous_response_id: Option<String>,
+) -> Result<Response, NativeApiError> {
+    start_compatible_run_stream(state, run, move |run, envelope| {
+        openai_response_runtime_event_to_sse(run, &model, previous_response_id.as_deref(), envelope)
     })
     .await
 }
@@ -276,6 +288,135 @@ fn openai_runtime_event_to_sse(
         ],
         _ => Vec::new(),
     }
+}
+
+fn openai_response_runtime_event_to_sse(
+    initial_run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+    envelope: RuntimeEventEnvelope,
+) -> Vec<Result<Event, Infallible>> {
+    match envelope.event_type.as_str() {
+        "flow_started" => vec![event_json_sse(
+            "response.created",
+            json!({
+                "type": "response.created",
+                "response": openai_response_stream_snapshot(
+                    initial_run,
+                    model,
+                    previous_response_id,
+                    "in_progress"
+                )
+            }),
+        )],
+        "text_delta" => vec![event_json_sse(
+            "response.output_text.delta",
+            json!({
+                "type": "response.output_text.delta",
+                "response_id": response_id_from_run_id(initial_run.id),
+                "item_id": format!("msg_{}", initial_run.id),
+                "output_index": 0,
+                "content_index": 0,
+                "delta": envelope.text.unwrap_or_default()
+            }),
+        )],
+        "reasoning_delta" => vec![event_json_sse(
+            "response.reasoning_text.delta",
+            json!({
+                "type": "response.reasoning_text.delta",
+                "response_id": response_id_from_run_id(initial_run.id),
+                "item_id": format!("msg_{}", initial_run.id),
+                "output_index": 0,
+                "content_index": 0,
+                "delta": envelope.text.unwrap_or_default()
+            }),
+        )],
+        "flow_finished" => vec![event_json_sse(
+            "response.completed",
+            json!({
+                "type": "response.completed",
+                "response": openai_response_stream_snapshot(
+                    initial_run,
+                    model,
+                    previous_response_id,
+                    "completed"
+                )
+            }),
+        )],
+        "flow_failed" => vec![event_json_sse(
+            "response.failed",
+            json!({
+                "type": "response.failed",
+                "response": openai_response_stream_snapshot(
+                    initial_run,
+                    model,
+                    previous_response_id,
+                    "failed"
+                ),
+                "error": {
+                    "message": runtime_error_message(&envelope.payload),
+                    "type": "server_error",
+                    "param": null,
+                    "code": "runtime_error"
+                }
+            }),
+        )],
+        "flow_cancelled" => vec![event_json_sse(
+            "response.failed",
+            json!({
+                "type": "response.failed",
+                "response": openai_response_stream_snapshot(
+                    initial_run,
+                    model,
+                    previous_response_id,
+                    "failed"
+                ),
+                "error": {
+                    "message": "published run cancelled",
+                    "type": "invalid_request_error",
+                    "param": null,
+                    "code": "run_cancelled"
+                }
+            }),
+        )],
+        "waiting_human" | "waiting_callback" => vec![event_json_sse(
+            "response.failed",
+            json!({
+                "type": "response.failed",
+                "response": openai_response_stream_snapshot(
+                    initial_run,
+                    model,
+                    previous_response_id,
+                    "failed"
+                ),
+                "error": {
+                    "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs",
+                    "type": "invalid_request_error",
+                    "param": null,
+                    "code": "required_action_not_supported"
+                }
+            }),
+        )],
+        _ => Vec::new(),
+    }
+}
+
+fn openai_response_stream_snapshot(
+    initial_run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+    status: &'static str,
+) -> Value {
+    json!({
+        "id": response_id_from_run_id(initial_run.id),
+        "object": "response",
+        "created_at": initial_run.created_at.unix_timestamp(),
+        "status": status,
+        "model": model,
+        "output": [],
+        "output_text": "",
+        "previous_response_id": previous_response_id
+    })
 }
 
 fn openai_delta_chunk_payload(

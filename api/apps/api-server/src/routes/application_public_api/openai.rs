@@ -10,12 +10,13 @@ use axum::{
 use control_plane::application_public_api::{
     api_keys::ApplicationApiKeyService,
     compat::openai::{
-        extract_model_list_from_start_node, map_chat_completion_request, OpenAiCompatError,
-        OpenAiCompatibleModel,
+        extract_model_list_from_start_node, map_chat_completion_request, map_response_request,
+        response_id_from_run_id, run_id_from_response_id, OpenAiCompatError, OpenAiCompatibleModel,
+        OpenAiPreviousResponseContext,
     },
     native::{
-        ApplicationNativeRunService, CreateNativeRunCommand, NativeRunRequest, NativeRunResult,
-        NativeRunValidationError,
+        ApplicationNativeRunService, CreateNativeRunCommand, GetNativeRunCommand, NativeRunRequest,
+        NativeRunResult, NativeRunValidationError,
     },
     publications::{ApplicationPublicationService, LoadActiveApplicationPublicationCommand},
 };
@@ -159,6 +160,45 @@ pub struct OpenAiModelObject {
     pub name: Option<String>,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OpenAiResponsesObject {
+    pub id: String,
+    pub object: &'static str,
+    pub created_at: i64,
+    pub status: &'static str,
+    pub model: String,
+    pub output: Vec<OpenAiResponseOutputItem>,
+    pub output_text: String,
+    pub usage: OpenAiResponsesUsage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_response_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OpenAiResponseOutputItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub item_type: &'static str,
+    pub status: &'static str,
+    pub role: &'static str,
+    pub content: Vec<OpenAiResponseContentPart>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OpenAiResponseContentPart {
+    #[serde(rename = "type")]
+    pub part_type: &'static str,
+    pub text: String,
+    pub annotations: Vec<Value>,
+}
+
+#[derive(Debug, Default, Serialize, ToSchema)]
+pub struct OpenAiResponsesUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+}
+
 struct OpenAiCredential {
     token: String,
     source: &'static str,
@@ -247,6 +287,136 @@ pub async fn create_chat_completion(
         return Err(OpenAiRouteError::RequiredAction);
     }
     Ok(Json(to_openai_response(run, model)).into_response())
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/responses",
+    request_body = Value,
+    responses(
+        (status = 200, body = OpenAiResponsesObject),
+        (status = 400, body = OpenAiErrorBody),
+        (status = 401, body = OpenAiErrorBody),
+        (status = 403, body = OpenAiErrorBody),
+        (status = 409, body = OpenAiErrorBody)
+    )
+)]
+pub async fn create_response(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, OpenAiRouteError> {
+    let credential = match openai_credential(&headers) {
+        Ok(credential) => credential,
+        Err(error) => {
+            warn!(
+                route = "responses",
+                status = error.status.as_u16(),
+                code = error.code,
+                "openai responses compatible authentication failed"
+            );
+            return Err(error.into());
+        }
+    };
+    let value = match parse_openai_json_body(body) {
+        Ok(value) => value,
+        Err(error) => {
+            warn_openai_route_error(
+                "responses",
+                &error,
+                "openai responses compatible JSON validation failed",
+            );
+            return Err(error);
+        }
+    };
+    let previous_response_id = match optional_string_field(&value, "previous_response_id") {
+        Ok(previous_response_id) => previous_response_id,
+        Err(error) => {
+            warn_openai_route_error(
+                "responses",
+                &error,
+                "openai responses previous_response_id validation failed",
+            );
+            return Err(error);
+        }
+    };
+    let previous_response = match load_previous_response_context(
+        state.clone(),
+        &credential.token,
+        previous_response_id.as_deref(),
+    )
+    .await
+    {
+        Ok(previous_response) => previous_response,
+        Err(error) => {
+            warn_openai_route_error(
+                "responses",
+                &error,
+                "openai responses previous_response_id lookup failed",
+            );
+            return Err(error);
+        }
+    };
+    let request = match map_response_request(value, previous_response) {
+        Ok(request) => request,
+        Err(error) => {
+            let route_error = OpenAiRouteError::from(error);
+            warn_openai_route_error(
+                "responses",
+                &route_error,
+                "openai responses compatible request validation failed",
+            );
+            return Err(route_error);
+        }
+    };
+    let model = request.model.clone().unwrap_or_default();
+    let response_mode = request.response_mode.clone();
+    let run = match create_native_run(state.clone(), credential.token.clone(), request).await {
+        Ok(run) => run,
+        Err(error) => {
+            warn!(
+                route = "responses",
+                auth_source = credential.source,
+                status = error.status.as_u16(),
+                code = error.code,
+                "openai responses compatible native run validation failed"
+            );
+            return Err(error.into());
+        }
+    };
+
+    info!(
+        route = "responses",
+        auth_source = credential.source,
+        application_id = %run.application_id,
+        flow_run_id = %run.id,
+        response_mode = response_mode.as_deref().unwrap_or("blocking"),
+        model = %model,
+        "openai responses compatible request accepted"
+    );
+
+    if response_mode.as_deref() == Some("streaming") {
+        return compat_sse::start_openai_response_stream(state, run, model, previous_response_id)
+            .await
+            .map_err(Into::into);
+    }
+
+    let run = native::execute_blocking_native_run(state, credential.token, run).await?;
+    if run.required_action.is_some() {
+        warn!(
+            route = "responses",
+            application_id = %run.application_id,
+            flow_run_id = %run.id,
+            "openai responses compatible blocking run reached unsupported required_action state"
+        );
+        return Err(OpenAiRouteError::RequiredAction);
+    }
+    Ok(Json(to_openai_responses_response(
+        run,
+        model,
+        previous_response_id,
+    ))
+    .into_response())
 }
 
 #[utoipa::path(
@@ -356,13 +526,37 @@ fn openai_credential(headers: &HeaderMap) -> Result<OpenAiCredential, native::Na
 }
 
 fn parse_openai_request(body: Bytes) -> Result<NativeRunRequest, OpenAiRouteError> {
-    let value = serde_json::from_slice::<Value>(&body).map_err(|_| OpenAiCompatError {
-        message: "invalid JSON body".to_string(),
-        error_type: "invalid_request_error".to_string(),
-        param: Some("body".to_string()),
-        code: "invalid_request".to_string(),
-    })?;
+    let value = parse_openai_json_body(body)?;
     map_chat_completion_request(value).map_err(Into::into)
+}
+
+fn parse_openai_json_body(body: Bytes) -> Result<Value, OpenAiRouteError> {
+    serde_json::from_slice::<Value>(&body).map_err(|_| {
+        OpenAiCompatError {
+            message: "invalid JSON body".to_string(),
+            error_type: "invalid_request_error".to_string(),
+            param: Some("body".to_string()),
+            code: "invalid_request".to_string(),
+        }
+        .into()
+    })
+}
+
+fn optional_string_field(
+    value: &Value,
+    field: &'static str,
+) -> Result<Option<String>, OpenAiRouteError> {
+    match value.get(field) {
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(OpenAiCompatError {
+            message: format!("{field} must be a string"),
+            error_type: "invalid_request_error".to_string(),
+            param: Some(field.to_string()),
+            code: "invalid_request".to_string(),
+        }
+        .into()),
+        None => Ok(None),
+    }
 }
 
 fn warn_openai_route_error(route: &'static str, error: &OpenAiRouteError, message: &'static str) {
@@ -419,6 +613,37 @@ async fn create_native_run(
         .map_err(native::native_error)
 }
 
+async fn load_previous_response_context(
+    state: Arc<ApiState>,
+    bearer_token: &str,
+    previous_response_id: Option<&str>,
+) -> Result<Option<OpenAiPreviousResponseContext>, OpenAiRouteError> {
+    let Some(response_id) = previous_response_id else {
+        return Ok(None);
+    };
+    let run_id = run_id_from_response_id(response_id)?;
+    let run = ApplicationNativeRunService::new(state.store.clone())
+        .get_native_run(GetNativeRunCommand {
+            bearer_token: bearer_token.to_string(),
+            run_id,
+        })
+        .await
+        .map_err(native::native_error)?;
+    Ok(Some(OpenAiPreviousResponseContext {
+        response_id: response_id.to_string(),
+        external_user: string_value(&run.metadata, "external_user"),
+        external_conversation_id: string_value(&run.metadata, "external_conversation_id"),
+        answer: run.answer,
+    }))
+}
+
+fn string_value(value: &Value, field: &str) -> Option<String> {
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
 fn to_openai_response(run: NativeRunResult, model: String) -> OpenAiChatCompletionResponse {
     let tool_calls = openai_tool_calls(run.tool_calls.as_ref());
     let finish_reason = if tool_calls.is_some() {
@@ -445,6 +670,35 @@ fn to_openai_response(run: NativeRunResult, model: String) -> OpenAiChatCompleti
             finish_reason,
         }],
         usage: openai_usage(run.usage),
+    }
+}
+
+fn to_openai_responses_response(
+    run: NativeRunResult,
+    model: String,
+    previous_response_id: Option<String>,
+) -> OpenAiResponsesObject {
+    let output_text = run.answer.unwrap_or_default();
+    OpenAiResponsesObject {
+        id: response_id_from_run_id(run.id),
+        object: "response",
+        created_at: run.created_at.unix_timestamp(),
+        status: "completed",
+        model,
+        output: vec![OpenAiResponseOutputItem {
+            id: format!("msg_{}", run.id),
+            item_type: "message",
+            status: "completed",
+            role: "assistant",
+            content: vec![OpenAiResponseContentPart {
+                part_type: "output_text",
+                text: output_text.clone(),
+                annotations: Vec::new(),
+            }],
+        }],
+        output_text,
+        usage: openai_responses_usage(run.usage),
+        previous_response_id,
     }
 }
 
@@ -485,6 +739,19 @@ fn openai_usage(
     OpenAiUsage {
         prompt_tokens: usage.prompt_tokens.unwrap_or_default(),
         completion_tokens: usage.completion_tokens.unwrap_or_default(),
+        total_tokens: usage.total_tokens.unwrap_or_default(),
+    }
+}
+
+fn openai_responses_usage(
+    usage: Option<control_plane::application_public_api::native::NativeUsage>,
+) -> OpenAiResponsesUsage {
+    let Some(usage) = usage else {
+        return OpenAiResponsesUsage::default();
+    };
+    OpenAiResponsesUsage {
+        input_tokens: usage.prompt_tokens.unwrap_or_default(),
+        output_tokens: usage.completion_tokens.unwrap_or_default(),
         total_tokens: usage.total_tokens.unwrap_or_default(),
     }
 }

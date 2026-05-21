@@ -144,6 +144,9 @@ impl DocTextResolver {
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "创建 OpenAI 兼容聊天补全"
             }
+            ("application_public_api.openai.response", DocsLocale::ZhHans) => {
+                "创建 OpenAI 兼容响应"
+            }
             ("application_public_api.openai.list_models", DocsLocale::ZhHans) => {
                 "拉取 OpenAI 兼容模型列表"
             }
@@ -165,6 +168,9 @@ impl DocTextResolver {
             }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Create OpenAI-compatible chat completion"
+            }
+            ("application_public_api.openai.response", DocsLocale::EnUs) => {
+                "Create OpenAI-compatible response"
             }
             ("application_public_api.openai.list_models", DocsLocale::EnUs) => {
                 "List OpenAI-compatible models"
@@ -196,6 +202,9 @@ impl DocTextResolver {
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "将 OpenAI Chat Completions 请求适配为原生公开运行。"
             }
+            ("application_public_api.openai.response", DocsLocale::ZhHans) => {
+                "将 OpenAI Responses 请求适配为原生公开运行，previous_response_id 会解析回原生公开运行。"
+            }
             ("application_public_api.openai.list_models", DocsLocale::ZhHans) => {
                 "读取当前应用活跃发布版本中起始节点暴露的 OpenAI 兼容模型列表。"
             }
@@ -219,6 +228,9 @@ impl DocTextResolver {
             }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Adapts an OpenAI Chat Completions request to a Native public run."
+            }
+            ("application_public_api.openai.response", DocsLocale::EnUs) => {
+                "Adapts an OpenAI Responses request to a Native public run and resolves previous_response_id back to a Native public run."
             }
             ("application_public_api.openai.list_models", DocsLocale::EnUs) => {
                 "Lists OpenAI-compatible models exposed by the active published application's start node."
@@ -291,6 +303,10 @@ impl DocTextResolver {
                 "application_public_api.openai.chat_completion.request.stream",
                 DocsLocale::ZhHans,
             )
+            | (
+                "application_public_api.openai.response.request.stream",
+                DocsLocale::ZhHans,
+            )
             | ("application_public_api.anthropic.message.request.stream", DocsLocale::ZhHans) => {
                 "true 会将请求映射为流式响应模式。"
             }
@@ -350,6 +366,7 @@ impl DocTextResolver {
                 "File binary content."
             }
             ("application_public_api.openai.chat_completion.request.stream", DocsLocale::EnUs)
+            | ("application_public_api.openai.response.request.stream", DocsLocale::EnUs)
             | ("application_public_api.anthropic.message.request.stream", DocsLocale::EnUs) => {
                 "true maps the request to streaming response mode."
             }
@@ -390,7 +407,7 @@ impl DocTextResolver {
     fn unsupported_notes(&self, category_id: &str) -> &'static str {
         match (category_id, self.locale) {
             (OPENAI_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持 tools、tool_choice、function_call 字段进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量映射到 choices[0].delta.reasoning_content。暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持 Chat Completions 和 Responses 外层协议适配，tools、tool_choice、function_call 字段进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量会投影为对应协议事件。暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::ZhHans) => {
                 "此 v1 兼容端点支持顶层 tools/tool_choice 进入模型供应商调用，支持 tool_use / tool_result 文本块历史回传；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量映射为 thinking_delta。暂不支持 computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
@@ -399,7 +416,7 @@ impl DocTextResolver {
                 "原生 API 支持查看 required_action 并恢复运行。response_mode=streaming 时返回 text/event-stream，并包含心跳、reasoning.delta、message.delta 和终态事件。公开路径不会包含 application_id。"
             }
             (OPENAI_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint forwards tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. stream=true returns text/event-stream with heartbeat text heartbeat and reasoning deltas at choices[0].delta.reasoning_content. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint adapts Chat Completions and Responses protocol shapes, forwards tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. stream=true returns text/event-stream with heartbeat text heartbeat and protocol-shaped events. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::EnUs) => {
                 "This v1 compatible endpoint forwards top-level tools/tool_choice into the model-provider invocation and supports tool_use/tool_result text block history. stream=true returns text/event-stream with heartbeat text heartbeat and reasoning deltas as thinking_delta. Unsupported: computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
@@ -567,11 +584,21 @@ fn operation_request_body(operation: &PublicOperation, docs: &DocTextResolver) -
                 }
             }
         })),
-        "applicationOpenAiCreateChatCompletion" => Some(json_request_body(
+        "applicationOpenAiCreateChatCompletion"
+        | "applicationOpenAiCreateChatCompletionPrefixed" => Some(json_request_body(
             openai_chat_completion_schema(docs),
             json!({
                 "model": "provider/model",
                 "messages": [{"role": "user", "content": "Hello"}],
+                "stream": false
+            }),
+        )),
+        "applicationOpenAiCreateResponse" => Some(json_request_body(
+            openai_response_create_schema(docs),
+            json!({
+                "model": "provider/model",
+                "input": "Hello",
+                "previous_response_id": "resp_00000000-0000-0000-0000-000000000000",
                 "stream": false
             }),
         )),
@@ -597,7 +624,9 @@ fn operation_responses(operation: &PublicOperation, docs: &DocTextResolver) -> V
         }
         "applicationNativeResumeRun" => native_responses(docs, "200", true),
         "applicationNativeUploadFile" => native_upload_responses(docs),
-        "applicationOpenAiCreateChatCompletion" => openai_responses(docs),
+        "applicationOpenAiCreateChatCompletion"
+        | "applicationOpenAiCreateChatCompletionPrefixed" => openai_responses(docs),
+        "applicationOpenAiCreateResponse" => openai_response_responses(docs),
         "applicationOpenAiListModels" => openai_model_list_responses(docs),
         "applicationAnthropicCreateMessage" => anthropic_responses(docs),
         _ => json!({}),
@@ -704,6 +733,23 @@ fn openai_model_list_responses(docs: &DocTextResolver) -> Value {
             docs.response_description("compatible_model_list"),
             openai_model_list_response_schema()
         ),
+        "401": json_response(docs.response_description("invalid_application_api_key"), openai_error_body_schema()),
+        "403": json_response(docs.response_description("forbidden"), openai_error_body_schema()),
+        "409": json_response(
+            docs.response_description("application_not_published_or_run_state_not_supported"),
+            openai_error_body_schema()
+        )
+    })
+}
+
+fn openai_response_responses(docs: &DocTextResolver) -> Value {
+    json!({
+        "200": json_and_event_stream_response(
+            docs.response_description("compatible_response"),
+            openai_response_response_schema(),
+            openai_response_streaming_event_schema()
+        ),
+        "400": json_response(docs.response_description("invalid_request"), openai_error_body_schema()),
         "401": json_response(docs.response_description("invalid_application_api_key"), openai_error_body_schema()),
         "403": json_response(docs.response_description("forbidden"), openai_error_body_schema()),
         "409": json_response(
@@ -978,6 +1024,60 @@ fn openai_model_list_response_schema() -> Value {
     })
 }
 
+fn openai_response_response_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["id", "object", "created_at", "status", "model", "output", "output_text", "usage"],
+        "properties": {
+            "id": {"type": "string"},
+            "object": {"type": "string", "enum": ["response"]},
+            "created_at": {"type": "integer"},
+            "status": {"type": "string", "enum": ["completed"]},
+            "model": {"type": "string"},
+            "previous_response_id": {
+                "oneOf": [
+                    {"type": "string"},
+                    {"type": "null"}
+                ]
+            },
+            "output": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["id", "type", "status", "role", "content"],
+                    "properties": {
+                        "id": {"type": "string"},
+                        "type": {"type": "string", "enum": ["message"]},
+                        "status": {"type": "string", "enum": ["completed"]},
+                        "role": {"type": "string", "enum": ["assistant"]},
+                        "content": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["type", "text", "annotations"],
+                                "properties": {
+                                    "type": {"type": "string", "enum": ["output_text"]},
+                                    "text": {"type": "string"},
+                                    "annotations": {"type": "array", "items": {"type": "object", "additionalProperties": true}}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "output_text": {"type": "string"},
+            "usage": {
+                "type": "object",
+                "properties": {
+                    "input_tokens": {"type": "integer"},
+                    "output_tokens": {"type": "integer"},
+                    "total_tokens": {"type": "integer"}
+                }
+            }
+        }
+    })
+}
+
 fn openai_error_body_schema() -> Value {
     json!({
         "type": "object",
@@ -1083,6 +1183,25 @@ fn openai_streaming_event_schema() -> Value {
         "x-1flowbase-reasoning-delta": "choices[0].delta.reasoning_content",
         "x-1flowbase-message-delta": "choices[0].delta.content",
         "x-1flowbase-terminal-data": "[DONE]"
+    })
+}
+
+fn openai_response_streaming_event_schema() -> Value {
+    json!({
+        "type": "string",
+        "format": "event-stream",
+        "description": "OpenAI Responses-compatible events emitted when stream=true.",
+        "x-1flowbase-heartbeat": {
+            "interval_seconds": 10,
+            "text": "heartbeat"
+        },
+        "x-1flowbase-created": "response.created",
+        "x-1flowbase-message-delta": "response.output_text.delta",
+        "x-1flowbase-reasoning-delta": "response.reasoning_text.delta",
+        "x-1flowbase-terminal-events": [
+            "response.completed",
+            "response.failed"
+        ]
     })
 }
 
@@ -1305,6 +1424,64 @@ fn openai_chat_completion_schema(docs: &DocTextResolver) -> Value {
     })
 }
 
+fn openai_response_create_schema(docs: &DocTextResolver) -> Value {
+    json!({
+        "type": "object",
+        "required": ["model", "input"],
+        "properties": {
+            "model": {"type": "string"},
+            "input": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "role": {"type": "string", "enum": ["system", "user", "assistant"]},
+                                "content": {
+                                    "oneOf": [
+                                        {"type": "string"},
+                                        {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "type": {"type": "string", "enum": ["input_text", "text"]},
+                                                    "text": {"type": "string"}
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "additionalProperties": true
+                        }
+                    }
+                ]
+            },
+            "instructions": {"type": "string"},
+            "previous_response_id": {"type": "string"},
+            "stream": {
+                "type": "boolean",
+                "description": docs.field_description("application_public_api.openai.response.request.stream")
+            },
+            "user": {"type": "string"},
+            "tools": {
+                "type": "array",
+                "items": openai_tool_schema()
+            },
+            "tool_choice": {
+                "oneOf": [
+                    {"type": "string", "enum": ["none", "auto", "required"]},
+                    {"type": "object", "additionalProperties": true}
+                ]
+            },
+            "metadata": {"type": "object", "additionalProperties": true}
+        }
+    })
+}
+
 fn anthropic_message_schema(docs: &DocTextResolver) -> Value {
     json!({
         "type": "object",
@@ -1507,6 +1684,20 @@ fn public_operations() -> Vec<PublicOperation> {
             path: "/v1/chat/completions",
             category_id: OPENAI_CATEGORY_ID,
             doc_key: "application_public_api.openai.chat_completion",
+        },
+        PublicOperation {
+            id: "applicationOpenAiCreateChatCompletionPrefixed",
+            method: "POST",
+            path: "/openai/v1/chat/completions",
+            category_id: OPENAI_CATEGORY_ID,
+            doc_key: "application_public_api.openai.chat_completion",
+        },
+        PublicOperation {
+            id: "applicationOpenAiCreateResponse",
+            method: "POST",
+            path: "/v1/responses",
+            category_id: OPENAI_CATEGORY_ID,
+            doc_key: "application_public_api.openai.response",
         },
         PublicOperation {
             id: "applicationOpenAiListModels",
