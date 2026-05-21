@@ -1588,7 +1588,7 @@ fn build_failed_llm_execution(
         executor_output: Map::new(),
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
-        debug_facts: build_llm_debug_facts(node, runtime, None, invocation_messages),
+        debug_facts: build_llm_debug_facts(runtime, None, invocation_messages),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1673,7 +1673,7 @@ fn build_successful_llm_execution(
         executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: Map::new(),
-        debug_facts: build_llm_debug_facts(node, runtime, Some(result), invocation_messages),
+        debug_facts: build_llm_debug_facts(runtime, Some(result), invocation_messages),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1716,33 +1716,22 @@ fn build_llm_provider_route_payload(runtime: &CompiledLlmRuntime) -> Value {
 }
 
 fn build_llm_debug_facts(
-    node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
     result: Option<&ProviderInvocationResult>,
     invocation_messages: &[ProviderMessage],
 ) -> Map<String, Value> {
-    let attempt_ref = format!("pending_attempt_id:{}", node.node_id);
     let mut debug = Map::new();
+    let assistant_content = result
+        .and_then(|result| result.final_content.as_deref())
+        .unwrap_or_default();
 
     debug.insert(
         "assistant_message".to_string(),
         json!({
             "role": "assistant",
-            "content": result
-                .and_then(|result| result.final_content.as_deref())
-                .unwrap_or_default(),
+            "content": assistant_content,
         }),
     );
-    debug.insert("raw_response_ref".to_string(), Value::Null);
-    debug.insert(
-        "context_projection_ref".to_string(),
-        Value::String(format!("pending_projection_id:{}", node.node_id)),
-    );
-    debug.insert(
-        "attempt_refs".to_string(),
-        Value::Array(vec![Value::String(attempt_ref.clone())]),
-    );
-    debug.insert("winner_attempt_ref".to_string(), Value::String(attempt_ref));
     let llm_rounds = build_llm_round_timeline(invocation_messages, result);
     if !llm_rounds.is_empty() {
         debug.insert("llm_rounds".to_string(), Value::Array(llm_rounds));

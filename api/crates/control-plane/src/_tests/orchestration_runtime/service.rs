@@ -2100,6 +2100,19 @@ async fn successful_live_debug_run_emits_flow_lifecycle_and_closes_runtime_strea
     assert!(event_types
         .iter()
         .any(|event_type| event_type == "flow_finished"));
+    let node_finished_events = stream
+        .events()
+        .into_iter()
+        .filter(|event| event.event_type == "node_finished")
+        .collect::<Vec<_>>();
+    assert!(!node_finished_events.is_empty());
+    for event in node_finished_events {
+        assert!(
+            event.payload.get("debug_payload").is_none(),
+            "runtime stream must not expose persisted debug payload"
+        );
+        assert_no_pending_debug_ref(&event.payload);
+    }
     assert_eq!(
         stream.close_calls(),
         vec![(

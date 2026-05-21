@@ -210,7 +210,6 @@ pub fn node_finished(node_run: &domain::NodeRunRecord) -> RuntimeEventPayload {
             "output_payload": node_run.output_payload,
             "error_payload": node_run.error_payload,
             "metrics_payload": node_run.metrics_payload,
-            "debug_payload": node_run.debug_payload,
             "started_at": node_run.started_at,
             "finished_at": node_run.finished_at,
         }),
