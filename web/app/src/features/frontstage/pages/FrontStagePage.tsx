@@ -817,6 +817,50 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     });
   };
 
+  const handleAddNodeAtPosition = (
+    kind: 'page' | 'group',
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => {
+    const siblingContext = findSiblingContext(pageTree, targetNodeId);
+    if (!siblingContext) {
+      return;
+    }
+
+    const { parentId, siblings, index } = siblingContext;
+    let rank = '';
+    if (position === 'before') {
+      rank = rankForMoveTarget(index, -1);
+    } else {
+      if (index === siblings.length - 1) {
+        rank = getNodeAppendRank(pageTree, parentId);
+      } else {
+        rank = rankForMoveTarget(index, 1);
+      }
+    }
+
+    const titleIndex = kind === 'page' ? getNextPageTitleIndex(pageTree) : getNextGroupTitleIndex(pageTree);
+    const title = kind === 'page' ? `页面 新建 ${titleIndex}` : `分组 ${titleIndex}`;
+
+    const input = {
+      title,
+      parentId,
+      rank
+    };
+
+    void runPageTreeOperation(async () => {
+      if (kind === 'page') {
+        const createdNode = await onCreatePageNode?.(input);
+        if (createdNode?.kind === 'page') {
+          setSelectedPageId(createdNode.id);
+          onNavigatePage?.(createdNode.id);
+        }
+      } else {
+        await onCreateGroupNode?.(input);
+      }
+    });
+  };
+
   const handleDeleteNode = (nodeId: string) => {
     const node = findNodeById(pageTree, nodeId);
     if (!node) {
