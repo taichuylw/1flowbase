@@ -33,11 +33,11 @@ scope:
 
 ## 规则
 
-应用日志聊天视图中的用户消息只代表用户原始发言。运行详情顶层字段使用 `query` / `model` 这类业务命名，不使用 `input_text` / `input_model`；历史对话按真实 `external_conversation_id` 分页读取，并以当前 run 为锚点加载附近消息。当前 run 的 `input_payload.history` / `input_payload.messages` 是模型输入上下文快照，不是平台会话状态；即使这些字段被 runtime debug artifact 截断或 offload，也不能作为运行详情的历史对话 fallback 来源。工具注册统一归一为 start 节点输入里的稳定变量，例如 `userinput.tools` 和 `userinput.tool_choice`；`userinput.history` / `userinput.tools` 这类数组变量如果被 runtime debug artifact 截断，调试变量面板必须加载完整 artifact 后再投影，不能只依赖 start 节点直接展开出来的 `query` / `model` / `files` 摘要；start 节点输出在日志语义上保持空对象。工具调用、兼容协议透传字段、运行参数和大 payload 预览应作为 start 节点输入、节点详情或运行追踪记录，不应被当作用户聊天内容展示。
+应用日志聊天视图中的用户消息只代表用户原始发言。运行详情顶层字段使用 `query` / `model` 这类业务命名，不使用 `input_text` / `input_model`；历史对话按真实 `external_conversation_id` 分页读取，并以当前 run 为锚点加载附近消息。当前 run 的 `input_payload.history` / `input_payload.messages` 是模型输入上下文快照，不是平台会话状态；有真实会话 id 时不能用它替代同会话 run 分页，但没有会话 id 时可以作为 imported context fallback 展示，且这些上下文消息必须 `can_open_detail=false`、`detail_run_id=null`。如果这些输入上下文被 runtime debug artifact 截断或 offload，后端可为还原本次输入上下文读取 artifact，但仍不能把它们标成真实运行历史。工具注册统一归一为 start 节点输入里的稳定变量，例如 `userinput.tools` 和 `userinput.tool_choice`；`userinput.history` / `userinput.tools` 这类数组变量如果被 runtime debug artifact 截断，调试变量面板必须加载完整 artifact 后再投影，不能只依赖 start 节点直接展开出来的 `query` / `model` / `files` 摘要；start 节点输出在日志语义上保持空对象。工具调用、兼容协议透传字段、运行参数和大 payload 预览应作为 start 节点输入、节点详情或运行追踪记录，不应被当作用户聊天内容展示。
 
 ## 原因
 
-用户打开聊天记录时预期看到的是自己说的一句话和对应真实运行；把工具 schema、compatibility payload 或本次请求携带的 imported history 放进用户气泡会误导排查，也会把开始节点输入、模型上下文和平台会话分页三个职责混在一起。
+用户打开聊天记录时预期看到的是自己说的一句话和对应上下文。真实会话 id 存在时，历史应来自真实 run；没有会话 id 时，调用方传入的 history 是唯一可见上下文，应该展示但不能伪装成可下钻的运行历史。把工具 schema 或 compatibility payload 放进用户气泡会误导排查，也会把开始节点输入、模型上下文和平台会话分页三个职责混在一起。
 
 ## 适用场景
 

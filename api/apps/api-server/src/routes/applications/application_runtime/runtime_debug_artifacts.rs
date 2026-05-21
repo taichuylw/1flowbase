@@ -579,6 +579,47 @@ pub async fn load_runtime_debug_artifact_response(
         .unwrap())
 }
 
+pub(super) async fn load_runtime_debug_artifact_json_value(
+    state: Arc<ApiState>,
+    workspace_id: Uuid,
+    application_id: Uuid,
+    artifact_id: Uuid,
+) -> Result<Value, ApiError> {
+    let artifact =
+        <MainDurableStore as OrchestrationRuntimeRepository>::get_runtime_debug_artifact(
+            &state.store,
+            &GetRuntimeDebugArtifactInput {
+                workspace_id,
+                application_id,
+                artifact_id,
+            },
+        )
+        .await?
+        .ok_or(ControlPlaneError::NotFound("runtime_debug_artifact"))?;
+    let storage = <MainDurableStore as FileManagementRepository>::get_file_storage(
+        &state.store,
+        artifact.storage_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("file_storage"))?;
+    if !storage.enabled {
+        return Err(ControlPlaneError::Conflict("file_storage_disabled").into());
+    }
+    let driver = state
+        .file_storage_registry
+        .get(&storage.driver_type)
+        .ok_or(ControlPlaneError::Conflict("storage_driver_not_registered"))?;
+    let object = driver
+        .open_read(storage_object::OpenReadInput {
+            config_json: &storage.config_json,
+            object_path: &artifact.storage_ref,
+        })
+        .await?;
+
+    serde_json::from_slice(&object.bytes)
+        .map_err(|_| ControlPlaneError::Conflict("runtime_debug_artifact_not_json").into())
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;

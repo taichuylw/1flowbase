@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
@@ -48,7 +48,8 @@ pub use debug_variable_cache::{
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
     application_run_answer, application_run_model, application_run_query,
-    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
+    load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
+    offload_application_run_detail_artifacts,
 };
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
@@ -664,22 +665,239 @@ fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
     value.and_then(|value| Uuid::parse_str(value).ok())
 }
 
-fn conversation_messages_from_single_run(
+async fn conversation_messages_from_single_run<F, Fut>(
     run: &domain::FlowRunRecord,
-    _query: &ApplicationConversationMessagesQuery,
-) -> ApplicationConversationMessagesPageResponse {
+    query: &ApplicationConversationMessagesQuery,
+    load_debug_artifact: F,
+) -> ApplicationConversationMessagesPageResponse
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
+    let mut items = imported_context_messages_from_run(run, load_debug_artifact).await;
+    items.push(to_application_conversation_message_response(
+        run.clone(),
+        Some(run.id),
+    ));
+
+    let total = items.len();
+    let (start, end) = imported_context_window(run.id, total, limit, query);
+
     ApplicationConversationMessagesPageResponse {
-        items: vec![to_application_conversation_message_response(
-            run.clone(),
-            Some(run.id),
-        )],
+        items: items
+            .into_iter()
+            .skip(start)
+            .take(end.saturating_sub(start))
+            .collect(),
         page: ApplicationConversationMessagesPageInfoResponse {
-            has_before: false,
-            has_after: false,
-            before_cursor: None,
-            after_cursor: None,
+            has_before: start > 0,
+            has_after: end < total,
+            before_cursor: (start > 0).then(|| imported_context_cursor(run.id, start)),
+            after_cursor: (end < total).then(|| imported_context_cursor(run.id, end - 1)),
         },
     }
+}
+
+async fn imported_context_messages_from_run<F, Fut>(
+    run: &domain::FlowRunRecord,
+    load_debug_artifact: F,
+) -> Vec<ApplicationConversationMessageResponse>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let source = resolve_runtime_debug_artifact_value(&run.input_payload, &load_debug_artifact)
+        .await
+        .unwrap_or_else(|| run.input_payload.clone());
+    let start_payload = start_input_payload(&source);
+    let Some(history_value) = start_payload
+        .get("history")
+        .or_else(|| start_payload.get("messages"))
+    else {
+        return Vec::new();
+    };
+    let history_source =
+        match resolve_runtime_debug_artifact_value(history_value, &load_debug_artifact).await {
+            Some(value) => value,
+            None => history_value.clone(),
+        };
+    let Some(history) = history_source.as_array() else {
+        return Vec::new();
+    };
+
+    let mut items = Vec::new();
+    let mut pending_user: Option<String> = None;
+
+    for message in history {
+        let role = message
+            .get("role")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        let Some(content) = conversation_message_content(message) else {
+            continue;
+        };
+
+        match role {
+            "user" => {
+                if let Some(query) = pending_user.replace(content) {
+                    items.push(imported_context_item(run, items.len(), query, None));
+                }
+            }
+            "assistant" => {
+                if let Some(query) = pending_user.take() {
+                    items.push(imported_context_item(
+                        run,
+                        items.len(),
+                        query,
+                        Some(content),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(query) = pending_user {
+        items.push(imported_context_item(run, items.len(), query, None));
+    }
+
+    items
+}
+
+async fn resolve_runtime_debug_artifact_value<F, Fut>(
+    value: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<serde_json::Value>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let Some(artifact_id) = runtime_debug_artifact_id(value) else {
+        return None;
+    };
+
+    load_debug_artifact(artifact_id)
+        .await
+        .or_else(|| decode_runtime_debug_artifact_preview(value))
+}
+
+fn runtime_debug_artifact_id(value: &serde_json::Value) -> Option<Uuid> {
+    if !value
+        .get("__runtime_debug_artifact")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    value
+        .get("artifact_ref")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+}
+
+fn imported_context_window(
+    run_id: Uuid,
+    total: usize,
+    limit: usize,
+    query: &ApplicationConversationMessagesQuery,
+) -> (usize, usize) {
+    if total == 0 {
+        return (0, 0);
+    }
+
+    if let Some(before) = query
+        .before
+        .as_deref()
+        .and_then(|cursor| parse_imported_context_cursor(run_id, cursor))
+    {
+        let end = before.min(total);
+        return (end.saturating_sub(limit), end);
+    }
+
+    if let Some(after) = query
+        .after
+        .as_deref()
+        .and_then(|cursor| parse_imported_context_cursor(run_id, cursor))
+    {
+        let start = (after + 1).min(total);
+        return (start, (start + limit).min(total));
+    }
+
+    (total.saturating_sub(limit), total)
+}
+
+fn imported_context_cursor(run_id: Uuid, index: usize) -> String {
+    format!("{run_id}:context:{index}")
+}
+
+fn parse_imported_context_cursor(run_id: Uuid, cursor: &str) -> Option<usize> {
+    let (prefix, index) = cursor.rsplit_once(":context:")?;
+    if prefix != run_id.to_string() {
+        return None;
+    }
+
+    index.parse().ok()
+}
+
+fn imported_context_item(
+    run: &domain::FlowRunRecord,
+    index: usize,
+    query: String,
+    answer: Option<String>,
+) -> ApplicationConversationMessageResponse {
+    ApplicationConversationMessageResponse {
+        run_id: imported_context_cursor(run.id, index),
+        detail_run_id: None,
+        can_open_detail: false,
+        started_at: format_time(run.started_at),
+        finished_at: format_optional_time(run.finished_at),
+        status: "succeeded".to_string(),
+        query: Some(query),
+        model: application_run_model(&run.input_payload),
+        answer,
+        is_current: false,
+    }
+}
+
+fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
+    let content = message.get("content")?;
+    if let Some(text) = content
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(array) = content.as_array() {
+        let text = array
+            .iter()
+            .filter_map(conversation_content_part_text)
+            .collect::<Vec<_>>()
+            .join("");
+        return (!text.is_empty()).then_some(text);
+    }
+
+    conversation_content_part_text(content)
+}
+
+fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
+    if let Some(text) = part
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    part.get("text")
+        .or_else(|| part.get("content"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn to_node_run_response(run: domain::NodeRunRecord) -> NodeRunResponse {
@@ -730,6 +948,29 @@ fn normalize_node_run_payloads_for_logs(
 
 fn node_input_payload_view(payload: &serde_json::Value) -> serde_json::Value {
     payload.clone()
+}
+
+fn decode_runtime_debug_artifact_preview(payload: &serde_json::Value) -> Option<serde_json::Value> {
+    let object = payload.as_object()?;
+    if !object
+        .get("__runtime_debug_artifact")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    object
+        .get("preview")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|preview| serde_json::from_str(preview).ok())
+}
+
+fn start_input_payload(payload: &serde_json::Value) -> &serde_json::Value {
+    payload
+        .get("node-start")
+        .or_else(|| payload.get("start"))
+        .unwrap_or(payload)
 }
 
 fn to_checkpoint_response(checkpoint: domain::CheckpointRecord) -> CheckpointResponse {
@@ -1632,7 +1873,18 @@ pub async fn list_application_run_conversation_messages(
         )));
     }
 
-    let fallback_page = conversation_messages_from_single_run(&detail.flow_run, &query);
+    let workspace_id = context.actor.current_workspace_id;
+    let fallback_page =
+        conversation_messages_from_single_run(&detail.flow_run, &query, |artifact_id| {
+            let state = state.clone();
+
+            async move {
+                load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
+                    .await
+                    .ok()
+            }
+        })
+        .await;
 
     Ok(Json(ApiSuccess::new(fallback_page)))
 }
@@ -2056,8 +2308,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn run_conversation_without_external_conversation_id_returns_current_run_only() {
+    #[tokio::test]
+    async fn run_conversation_without_external_conversation_id_reads_imported_history_and_current_turn(
+    ) {
         let run_id = Uuid::now_v7();
         let run = domain::FlowRunRecord {
             id: run_id,
@@ -2111,24 +2364,31 @@ mod tests {
                 after: None,
                 limit: Some(2),
             },
-        );
+            |_| async { None::<serde_json::Value> },
+        )
+        .await;
 
-        assert_eq!(page.items.len(), 1);
-        assert!(!page.page.has_before);
+        assert_eq!(page.items.len(), 2);
+        assert!(page.page.has_before);
         assert!(!page.page.has_after);
-        assert_eq!(page.items[0].run_id, run_id.to_string());
-        assert_eq!(page.items[0].query.as_deref(), Some("current question"));
-        assert_eq!(page.items[0].answer.as_deref(), Some("current answer"));
-        assert!(page.items[0].can_open_detail);
+        assert_eq!(page.items[0].query.as_deref(), Some("old question 2"));
+        assert_eq!(page.items[0].answer.as_deref(), Some("old answer 2"));
+        assert!(!page.items[0].can_open_detail);
+        assert_eq!(page.items[0].detail_run_id, None);
+        assert_eq!(page.items[1].run_id, run_id.to_string());
+        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
+        assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
+        assert!(page.items[1].can_open_detail);
         let run_id_string = run_id.to_string();
         assert_eq!(
-            page.items[0].detail_run_id.as_deref(),
+            page.items[1].detail_run_id.as_deref(),
             Some(run_id_string.as_str())
         );
     }
 
-    #[test]
-    fn run_conversation_without_external_conversation_id_ignores_history_debug_artifact() {
+    #[tokio::test]
+    async fn run_conversation_without_external_conversation_id_reads_artifact_backed_imported_history(
+    ) {
         let run_id = Uuid::now_v7();
         let artifact_id = Uuid::now_v7();
         let run = domain::FlowRunRecord {
@@ -2145,16 +2405,12 @@ mod tests {
             title: "current question".to_string(),
             status: domain::FlowRunStatus::Succeeded,
             input_payload: serde_json::json!({
-                "node-start": {
-                    "query": "current question",
-                    "model": "deepseek-chat",
-                    "history": {
-                        "__runtime_debug_artifact": true,
-                        "artifact_ref": artifact_id.to_string(),
-                        "is_truncated": true,
-                        "preview": "[{\"role\":\"user\""
-                    }
-                }
+                "__runtime_debug_artifact": true,
+                "artifact_ref": artifact_id.to_string(),
+                "is_truncated": true,
+                "query": "current question",
+                "model": "deepseek-chat",
+                "preview": "{\"node-start\":{\"query\":\"current question\""
             }),
             output_payload: serde_json::json!({ "answer": "current answer" }),
             error_payload: None,
@@ -2181,11 +2437,30 @@ mod tests {
                 after: None,
                 limit: Some(5),
             },
-        );
+            move |requested_artifact_id: Uuid| async move {
+                (requested_artifact_id == artifact_id).then(|| {
+                    serde_json::json!({
+                        "node-start": {
+                            "query": "current question",
+                            "model": "deepseek-chat",
+                            "history": [
+                                { "role": "system", "content": "hidden" },
+                                { "role": "user", "content": "old question" },
+                                { "role": "assistant", "content": "old answer" }
+                            ]
+                        }
+                    })
+                })
+            },
+        )
+        .await;
 
-        assert_eq!(page.items.len(), 1);
-        assert_eq!(page.items[0].run_id, run_id.to_string());
-        assert_eq!(page.items[0].query.as_deref(), Some("current question"));
-        assert!(page.items[0].can_open_detail);
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items[0].query.as_deref(), Some("old question"));
+        assert_eq!(page.items[0].answer.as_deref(), Some("old answer"));
+        assert!(!page.items[0].can_open_detail);
+        assert_eq!(page.items[1].run_id, run_id.to_string());
+        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
+        assert!(page.items[1].can_open_detail);
     }
 }
