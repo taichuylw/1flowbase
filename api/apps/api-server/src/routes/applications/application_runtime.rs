@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
@@ -48,7 +48,8 @@ pub use debug_variable_cache::{
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
     application_run_answer, application_run_model, application_run_query,
-    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
+    load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
+    offload_application_run_detail_artifacts,
 };
 
 fn is_terminal_runtime_event(event_type: &str) -> bool {
@@ -664,12 +665,17 @@ fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
     value.and_then(|value| Uuid::parse_str(value).ok())
 }
 
-fn fallback_conversation_messages_from_run(
+async fn fallback_conversation_messages_from_run<F, Fut>(
     run: &domain::FlowRunRecord,
     query: &ApplicationConversationMessagesQuery,
-) -> ApplicationConversationMessagesPageResponse {
+    load_debug_artifact: F,
+) -> ApplicationConversationMessagesPageResponse
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
     let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
-    let mut items = history_conversation_items_from_payload(run);
+    let mut items = history_conversation_items_from_payload(run, load_debug_artifact).await;
 
     items.push(ApplicationConversationMessageResponse {
         run_id: run.id.to_string(),
@@ -751,17 +757,30 @@ fn parse_fallback_conversation_cursor(run_id: Uuid, cursor: &str) -> Option<usiz
     index.parse().ok()
 }
 
-fn history_conversation_items_from_payload(
+async fn history_conversation_items_from_payload<F, Fut>(
     run: &domain::FlowRunRecord,
-) -> Vec<ApplicationConversationMessageResponse> {
-    let decoded_payload = decode_runtime_debug_artifact_preview(&run.input_payload);
-    let source = decoded_payload.as_ref().unwrap_or(&run.input_payload);
-    let start_payload = start_input_payload(source);
-    let Some(history) = start_payload
+    load_debug_artifact: F,
+) -> Vec<ApplicationConversationMessageResponse>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let source = resolve_runtime_debug_artifact_value(&run.input_payload, &load_debug_artifact)
+        .await
+        .unwrap_or_else(|| run.input_payload.clone());
+    let start_payload = start_input_payload(&source);
+    let Some(history_value) = start_payload
         .get("history")
         .or_else(|| start_payload.get("messages"))
-        .and_then(serde_json::Value::as_array)
     else {
+        return Vec::new();
+    };
+    let history_source =
+        match resolve_runtime_debug_artifact_value(history_value, &load_debug_artifact).await {
+            Some(value) => value,
+            None => history_value.clone(),
+        };
+    let Some(history) = history_source.as_array() else {
         return Vec::new();
     };
     let mut items = Vec::new();
@@ -801,6 +820,38 @@ fn history_conversation_items_from_payload(
     }
 
     items
+}
+
+async fn resolve_runtime_debug_artifact_value<F, Fut>(
+    value: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<serde_json::Value>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let Some(artifact_id) = runtime_debug_artifact_id(value) else {
+        return None;
+    };
+
+    load_debug_artifact(artifact_id)
+        .await
+        .or_else(|| decode_runtime_debug_artifact_preview(value))
+}
+
+fn runtime_debug_artifact_id(value: &serde_json::Value) -> Option<Uuid> {
+    if !value
+        .get("__runtime_debug_artifact")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    value
+        .get("artifact_ref")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
 }
 
 fn fallback_history_item(
@@ -1835,9 +1886,20 @@ pub async fn list_application_run_conversation_messages(
         )));
     }
 
-    Ok(Json(ApiSuccess::new(
-        fallback_conversation_messages_from_run(&detail.flow_run, &query),
-    )))
+    let workspace_id = context.actor.current_workspace_id;
+    let fallback_page =
+        fallback_conversation_messages_from_run(&detail.flow_run, &query, |artifact_id| {
+            let state = state.clone();
+
+            async move {
+                load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
+                    .await
+                    .ok()
+            }
+        })
+        .await;
+
+    Ok(Json(ApiSuccess::new(fallback_page)))
 }
 
 #[utoipa::path(
@@ -2259,8 +2321,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn run_conversation_fallback_reads_recent_history_and_current_turn() {
+    #[tokio::test]
+    async fn run_conversation_fallback_reads_recent_history_and_current_turn() {
         let run_id = Uuid::now_v7();
         let run = domain::FlowRunRecord {
             id: run_id,
@@ -2314,7 +2376,9 @@ mod tests {
                 after: None,
                 limit: Some(2),
             },
-        );
+            |_| async { None::<serde_json::Value> },
+        )
+        .await;
 
         assert_eq!(page.items.len(), 2);
         assert!(page.page.has_before);
@@ -2331,5 +2395,79 @@ mod tests {
             page.items[1].detail_run_id.as_deref(),
             Some(run_id_string.as_str())
         );
+    }
+
+    #[tokio::test]
+    async fn run_conversation_fallback_loads_history_debug_artifact() {
+        let run_id = Uuid::now_v7();
+        let artifact_id = Uuid::now_v7();
+        let run = domain::FlowRunRecord {
+            id: run_id,
+            application_id: Uuid::now_v7(),
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: None,
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "current question".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "current question",
+                    "model": "deepseek-chat",
+                    "history": {
+                        "__runtime_debug_artifact": true,
+                        "artifact_ref": artifact_id.to_string(),
+                        "is_truncated": true,
+                        "preview": "[{\"role\":\"user\""
+                    }
+                }
+            }),
+            output_payload: serde_json::json!({ "answer": "current answer" }),
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: None,
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        let page = fallback_conversation_messages_from_run(
+            &run,
+            &ApplicationConversationMessagesQuery {
+                around_run_id: None,
+                before: None,
+                after: None,
+                limit: Some(5),
+            },
+            move |requested_artifact_id: Uuid| async move {
+                (requested_artifact_id == artifact_id).then(|| {
+                    serde_json::json!([
+                        { "role": "system", "content": "hidden" },
+                        { "role": "user", "content": "old question" },
+                        { "role": "assistant", "content": "old answer" }
+                    ])
+                })
+            },
+        )
+        .await;
+
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items[0].query.as_deref(), Some("old question"));
+        assert_eq!(page.items[0].answer.as_deref(), Some("old answer"));
+        assert!(!page.items[0].can_open_detail);
+        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
+        assert!(page.items[1].can_open_detail);
     }
 }
