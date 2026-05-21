@@ -728,13 +728,20 @@ fn openai_chat_tool_resume_request(
     let Some(messages) = request.get("messages").and_then(Value::as_array) else {
         return Ok(None);
     };
+    let mut trailing_tool_messages = messages
+        .iter()
+        .rev()
+        .take_while(|message| message.get("role").and_then(Value::as_str) == Some("tool"))
+        .collect::<Vec<_>>();
+    if trailing_tool_messages.is_empty() {
+        return Ok(None);
+    }
+    trailing_tool_messages.reverse();
+
     let mut callback_task_id = None;
     let mut tool_results = Vec::new();
 
-    for message in messages {
-        if message.get("role").and_then(Value::as_str) != Some("tool") {
-            continue;
-        }
+    for message in trailing_tool_messages {
         let Some(external_tool_call_id) = message.get("tool_call_id").and_then(Value::as_str)
         else {
             continue;
@@ -1208,6 +1215,66 @@ mod tests {
             resume.tool_results[0]["content"],
             json!("{\"temperature\":21}")
         );
+    }
+
+    #[test]
+    fn openai_chat_tool_resume_request_uses_latest_trailing_tool_messages() {
+        let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+        let previous_tool_call_id =
+            encode_openai_callback_tool_call_id(previous_callback_task_id, "call_previous");
+        let current_tool_call_id =
+            encode_openai_callback_tool_call_id(current_callback_task_id, "call_current");
+
+        let resume = openai_chat_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": previous_tool_call_id, "type": "function", "function": {"name": "lookup_previous", "arguments": "{}"}}
+                ]},
+                {"role": "tool", "tool_call_id": previous_tool_call_id, "content": "old result"},
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": current_tool_call_id, "type": "function", "function": {"name": "lookup_current", "arguments": "{}"}}
+                ]},
+                {"role": "tool", "tool_call_id": current_tool_call_id, "content": "new result"}
+            ]
+        }))
+        .expect("resume request should parse")
+        .expect("trailing tool messages should resume callback");
+
+        assert_eq!(resume.callback_task_id, current_callback_task_id);
+        assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
+        assert_eq!(
+            resume.tool_results[0]["tool_call_id"],
+            json!("call_current")
+        );
+        assert_eq!(resume.tool_results[0]["content"], json!("new result"));
+    }
+
+    #[test]
+    fn openai_chat_tool_resume_request_ignores_historical_tool_messages() {
+        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let external_tool_call_id =
+            encode_openai_callback_tool_call_id(callback_task_id, "call_previous");
+
+        let resume = openai_chat_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": external_tool_call_id, "type": "function", "function": {"name": "lookup_previous", "arguments": "{}"}}
+                ]},
+                {"role": "tool", "tool_call_id": external_tool_call_id, "content": "old result"},
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next question"}
+            ]
+        }))
+        .expect("historical tool messages should parse");
+
+        assert!(resume.is_none());
     }
 
     #[test]
