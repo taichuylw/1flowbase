@@ -23,6 +23,7 @@ export interface SectionPageLayoutProps {
   sidebarFooter?: ReactNode;
   emptyState?: ReactNode;
   contentWidth?: 'wide' | 'narrow' | 'full';
+  heightMode?: 'natural' | 'viewport';
 }
 
 export function SectionPageLayout({
@@ -32,13 +33,20 @@ export function SectionPageLayout({
   children,
   sidebarFooter,
   emptyState,
-  contentWidth = 'wide'
+  contentWidth = 'wide',
+  heightMode = 'natural'
 }: SectionPageLayoutProps) {
   const screens = Grid.useBreakpoint();
   const visibleItems = navItems.filter((item) => item.visible !== false);
   const compactMode = !screens.lg;
   const compactVariant = visibleItems.length <= 4 ? 'tabs' : 'drawer';
-  const layoutClassName = `section-page-layout section-page-layout--${contentWidth}`;
+  const layoutClassName = [
+    'section-page-layout',
+    `section-page-layout--${contentWidth}`,
+    heightMode === 'viewport' ? 'section-page-layout--viewport' : null
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <Layout className={layoutClassName} data-testid="section-page-layout">

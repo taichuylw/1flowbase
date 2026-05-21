@@ -5,6 +5,13 @@
   animation: settings-section-surface-fade-in 0.3s ease-out;
 }
 
+.settings-section-surface--fill {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 @keyframes settings-section-surface-fade-in {
   from {
     opacity: 0;
@@ -107,6 +114,16 @@
 
 .settings-section-surface__body > * {
   min-width: 0;
+}
+
+.settings-section-surface--fill .settings-section-surface__body {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-section-surface--fill .settings-section-surface__body > * {
+  min-height: 0;
 }
 
 @media (max-width: 991px) {

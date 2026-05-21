@@ -1,5 +1,6 @@
 import { Button, Empty, Select, Space, Table, Tag, Typography } from 'antd';
 
+import { ScrollableSurface } from '../../../../shared/ui/scrollable-surface/ScrollableSurface';
 import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
@@ -61,7 +62,7 @@ export function ModelProviderCatalogPanel({
   onDelete: (entry: SettingsPluginFamilyEntry) => void;
 }) {
   return (
-    <section className="model-provider-panel__catalog">
+    <ScrollableSurface className="model-provider-panel__catalog">
       <div className="model-provider-panel__section-head">
         <ModelProviderOverviewSummary rows={overviewRows} />
       </div>
@@ -232,6 +233,6 @@ export function ModelProviderCatalogPanel({
           }
         ]}
       />
-    </section>
+    </ScrollableSurface>
   );
 }

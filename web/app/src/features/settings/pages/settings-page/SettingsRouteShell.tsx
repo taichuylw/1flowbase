@@ -34,7 +34,13 @@ export function SettingsRouteShell({
   }
 
   return (
-    <SettingsNavigation activeKey={activeSectionKey} navItems={visibleSections}>
+    <SettingsNavigation
+      activeKey={activeSectionKey}
+      navItems={visibleSections}
+      heightMode={
+        activeSectionKey === 'model-providers' ? 'viewport' : 'natural'
+      }
+    >
       {children}
     </SettingsNavigation>
   );

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {
   fireEvent,
   render,
@@ -1244,6 +1247,37 @@ describe('ModelProvidersPage', () => {
     expect(
       screen.queryByText('1flowbase.openai_compatible')
     ).not.toBeInTheDocument();
+  });
+
+  test('uses explicit viewport section layout without page-private height selectors', async () => {
+    authenticateAsModelProviderManager();
+
+    renderApp('/settings/model-providers');
+
+    expect(await screen.findByText('OpenAI Compatible')).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toHaveClass(
+      'section-page-layout--wide',
+      'section-page-layout--viewport'
+    );
+    expect(screen.getByTestId('section-page-layout')).not.toHaveClass(
+      'section-page-layout--full'
+    );
+  });
+
+  test('keeps fixed-height ownership out of the model provider panel stylesheet', () => {
+    const cssSource = fs.readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        '../components/model-providers/model-provider-panel.css'
+      ),
+      'utf8'
+    );
+
+    expect(cssSource).not.toContain('body:has(.model-provider-panel)');
+    expect(cssSource).not.toContain(
+      '.section-page-layout:has(.model-provider-panel)'
+    );
+    expect(cssSource).not.toContain('overflow: hidden !important');
   });
 
   test('deduplicates official install cards for the same provider and keeps only one latest entry', async () => {

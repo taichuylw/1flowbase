@@ -175,6 +175,7 @@ export function SettingsModelProvidersSection({
       <SettingsSectionSurface
         title="模型供应商"
         hideHeader
+        heightMode="fill"
         status={
           errorMessage ? (
             <Alert type="error" showIcon message={errorMessage} />

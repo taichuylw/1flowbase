@@ -12,7 +12,8 @@ export function SettingsSectionSurface({
   hideHeader = false,
   headerActions,
   toolbar,
-  status
+  status,
+  heightMode = 'auto'
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -22,10 +23,16 @@ export function SettingsSectionSurface({
   headerActions?: ReactNode;
   toolbar?: ReactNode;
   status?: ReactNode;
+  heightMode?: 'auto' | 'fill';
 }) {
   return (
     <section
-      className="settings-section-surface"
+      className={[
+        'settings-section-surface',
+        heightMode === 'fill' ? 'settings-section-surface--fill' : null
+      ]
+        .filter(Boolean)
+        .join(' ')}
       data-testid="settings-section-surface"
     >
       {!hideHeader ? (

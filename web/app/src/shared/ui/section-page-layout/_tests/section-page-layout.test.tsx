@@ -118,6 +118,29 @@ describe('SectionPageLayout', () => {
     view.unmount();
   });
 
+  test('supports viewport height without changing the content width variant', async () => {
+    renderInRouter(
+      <SectionPageLayout
+        pageTitle="设置"
+        navItems={navItems.slice(0, 2)}
+        activeKey="profile"
+        contentWidth="wide"
+        heightMode="viewport"
+      >
+        <section>固定高度内容</section>
+      </SectionPageLayout>
+    );
+
+    expect(await screen.findByText('固定高度内容')).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toHaveClass(
+      'section-page-layout--wide',
+      'section-page-layout--viewport'
+    );
+    expect(screen.getByTestId('section-page-layout')).not.toHaveClass(
+      'section-page-layout--full'
+    );
+  });
+
   test('does not couple the content offset to the old centered 1200px shell width', () => {
     const sectionLayoutCss = fs.readFileSync(
       path.resolve(import.meta.dirname, '../section-page-layout.css'),
@@ -199,6 +222,43 @@ describe('SectionPageLayout', () => {
     expect(fullContentBlock).toContain('overflow: hidden;');
   });
 
+  test('bounds explicit viewport section layouts while preserving normal spacing', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+    const viewportLayoutBlock = sectionLayoutCss.match(
+      /\.section-page-layout--viewport\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const viewportShellBlock = sectionLayoutCss.match(
+      /\.section-page-layout--viewport \.section-page-layout__shell\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const viewportContentBlock = sectionLayoutCss.match(
+      /\.section-page-layout--viewport \.section-page-layout__content\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const viewportRailBlock = sectionLayoutCss.match(
+      /\.section-page-layout--viewport \.section-page-layout__rail\s*\{[\s\S]*?\n\}/
+    )?.[0];
+
+    expect(viewportLayoutBlock).toContain(
+      'height: calc(100vh - var(--section-page-header-height));'
+    );
+    expect(viewportLayoutBlock).toContain('overflow: hidden;');
+    expect(viewportShellBlock).toContain('height: 100%;');
+    expect(viewportShellBlock).toContain('min-height: 0;');
+    expect(viewportContentBlock).toContain('height: 100%;');
+    expect(viewportContentBlock).toContain('min-height: 0;');
+    expect(viewportContentBlock).toContain('overflow: hidden;');
+    expect(viewportContentBlock).toContain('box-sizing: border-box;');
+    expect(viewportContentBlock).toContain(
+      'padding-inline-end: var(--section-page-viewport-inline-end-gap, 3px);'
+    );
+    expect(viewportContentBlock).toContain(
+      'padding-bottom: var(--section-page-viewport-bottom-gap, 3px);'
+    );
+    expect(viewportRailBlock ?? '').not.toContain('top: 0;');
+  });
+
   test('lets full section layouts return to natural height on mobile', () => {
     const sectionLayoutCss = fs.readFileSync(
       path.resolve(import.meta.dirname, '../section-page-layout.css'),
@@ -211,6 +271,21 @@ describe('SectionPageLayout', () => {
     expect(mobileBlock).toContain('.section-page-layout--full');
     expect(mobileBlock).toContain('height: auto;');
     expect(mobileBlock).toContain('overflow: visible;');
+  });
+
+  test('lets explicit viewport section layouts return to natural height on mobile', () => {
+    const sectionLayoutCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../section-page-layout.css'),
+      'utf8'
+    );
+    const mobileBlock = sectionLayoutCss.slice(
+      sectionLayoutCss.indexOf('@media (max-width: 991px)')
+    );
+
+    expect(mobileBlock).toContain('.section-page-layout--viewport');
+    expect(mobileBlock).toContain('height: auto;');
+    expect(mobileBlock).toContain('overflow: visible;');
+    expect(mobileBlock).toContain('padding: var(--section-page-top-padding) 0;');
   });
 
   test('renders empty state instead of broken navigation when navItems is empty', async () => {

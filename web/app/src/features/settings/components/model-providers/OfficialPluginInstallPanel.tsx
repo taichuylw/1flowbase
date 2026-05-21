@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { Button, Empty, Modal, Select, Tag, Tooltip, Typography } from 'antd';
 
+import { ScrollableSurface } from '../../../../shared/ui/scrollable-surface/ScrollableSurface';
 import type {
   SettingsOfficialPluginCatalogEntry,
   SettingsPluginFamilyEntry
@@ -250,7 +251,7 @@ export function OfficialPluginInstallPanel({
   };
 
   return (
-    <section className="model-provider-panel__official">
+    <ScrollableSurface className="model-provider-panel__official">
       {contextHolder}
       <div className="model-provider-panel__section-head">
         <div>
@@ -435,6 +436,6 @@ export function OfficialPluginInstallPanel({
           })}
         </div>
       )}
-    </section>
+    </ScrollableSurface>
   );
 }

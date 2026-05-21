@@ -10,11 +10,13 @@ export const SETTINGS_PAGE_DESCRIPTION =
 export function SettingsNavigation({
   activeKey,
   navItems,
-  children
+  children,
+  heightMode = 'natural'
 }: {
   activeKey: string;
   navItems: SectionNavItem[];
   children: ReactNode;
+  heightMode?: 'natural' | 'viewport';
 }) {
   return (
     <SectionPageLayout
@@ -23,6 +25,7 @@ export function SettingsNavigation({
       navItems={navItems}
       activeKey={activeKey}
       contentWidth="wide"
+      heightMode={heightMode}
     >
       {children}
     </SectionPageLayout>

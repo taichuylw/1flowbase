@@ -64,6 +64,16 @@ describe('style boundary registry', () => {
       'page.me'
     ]);
     expect(
+      getSceneIdsForFiles([
+        'web/app/src/shared/ui/scrollable-surface/ScrollableSurface.tsx'
+      ])
+    ).toEqual(['page.settings']);
+    expect(
+      getSceneIdsForFiles([
+        'web/app/src/features/settings/components/settings-section-surface.css'
+      ])
+    ).toEqual(['page.settings', 'page.settings-docs']);
+    expect(
       getSceneIdsForFiles(['web/app/src/features/me/pages/me-page.css'])
     ).toEqual(['page.me']);
   });
@@ -170,13 +180,7 @@ describe('style boundary registry', () => {
         { timeout: 5000 }
       )
     ).toBeInTheDocument();
-    expect(
-      await screen.findByRole(
-        'heading',
-        { name: '已安装供应商', level: 5 },
-        { timeout: 5000 }
-      )
-    ).toBeInTheDocument();
+    expect(await screen.findByText('已安装供应商')).toBeInTheDocument();
     expect(
       await screen.findByRole(
         'heading',

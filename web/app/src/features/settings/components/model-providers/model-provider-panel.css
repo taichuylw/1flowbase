@@ -1,24 +1,8 @@
-body:has(.model-provider-panel) {
-  overflow: hidden;
-}
-
-.section-page-layout:has(.model-provider-panel) {
-  height: calc(100vh - var(--section-page-header-height, 56px)) !important;
-  min-height: calc(100vh - var(--section-page-header-height, 56px)) !important;
-  overflow: hidden !important;
-}
-
-.section-page-layout:has(.model-provider-panel) .section-page-layout__content {
-  height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  padding-bottom: 0 !important;
-}
-
 .model-provider-panel {
   display: grid;
   gap: 20px;
   height: 100%;
+  min-height: 0;
 }
 
 .model-provider-panel__header {
@@ -34,7 +18,8 @@ body:has(.model-provider-panel) {
   display: flex;
   gap: 24px;
   width: 100%;
-  height: calc(100% - 24px);
+  height: 100%;
+  min-height: 0;
   background: transparent;
 }
 
@@ -44,14 +29,13 @@ body:has(.model-provider-panel) {
   flex: 1;
   min-width: 0;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: transparent;
 }
 
-.model-provider-panel__catalog,
 .model-provider-panel__instances,
-.model-provider-panel__instances-shell,
-.model-provider-panel__official {
+.model-provider-panel__instances-shell {
   background: rgba(255, 255, 255, 0.45);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -61,7 +45,6 @@ body:has(.model-provider-panel) {
   box-shadow: 0 8px 32px -4px rgba(15, 23, 42, 0.02);
 }
 
-.model-provider-panel__catalog,
 .model-provider-panel__instances,
 .model-provider-panel__instances-shell {
   overflow: hidden;
@@ -125,19 +108,11 @@ body:has(.model-provider-panel) {
 
 .model-provider-panel__sidebar .ant-layout-sider-children {
   height: 100%;
+  min-height: 0;
 }
 
 .model-provider-panel__official {
-  height: 100%;
-  overflow-y: auto;
   position: static;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.model-provider-panel__catalog {
-  height: 100%;
-  overflow-y: auto;
 }
 
 .model-provider-panel__section-head {
@@ -788,6 +763,22 @@ body:has(.model-provider-panel) {
 }
 
 @media (max-width: 768px) {
+  .model-provider-panel,
+  .model-provider-panel__main,
+  .model-provider-panel__left,
+  .model-provider-panel__sidebar .ant-layout-sider-children {
+    height: auto;
+  }
+
+  .model-provider-panel__left {
+    overflow: visible;
+  }
+
+  .model-provider-panel__catalog,
+  .model-provider-panel__official {
+    height: auto;
+    overflow-y: visible;
+  }
 
   .model-provider-panel__summary-table,
   .model-provider-panel__catalog,
