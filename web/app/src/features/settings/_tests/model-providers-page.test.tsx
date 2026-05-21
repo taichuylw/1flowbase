@@ -1278,6 +1278,7 @@ describe('ModelProvidersPage', () => {
       '.section-page-layout:has(.model-provider-panel)'
     );
     expect(cssSource).not.toContain('overflow: hidden !important');
+    expect(cssSource).toContain('height: calc(100% - 24px);');
   });
 
   test('deduplicates official install cards for the same provider and keeps only one latest entry', async () => {

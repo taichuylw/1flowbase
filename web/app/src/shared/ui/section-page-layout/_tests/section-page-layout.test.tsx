@@ -251,7 +251,7 @@ describe('SectionPageLayout', () => {
     expect(viewportContentBlock).toContain('overflow: hidden;');
     expect(viewportContentBlock).toContain('box-sizing: border-box;');
     expect(viewportContentBlock).toContain(
-      'padding-inline-end: var(--section-page-viewport-inline-end-gap, 3px);'
+      'padding-inline-end: var(--section-page-viewport-inline-end-gap, 16px);'
     );
     expect(viewportContentBlock).toContain(
       'padding-bottom: var(--section-page-viewport-bottom-gap, 3px);'

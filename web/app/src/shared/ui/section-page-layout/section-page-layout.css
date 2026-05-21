@@ -94,7 +94,7 @@
   min-height: 0;
   overflow: hidden;
   box-sizing: border-box;
-  padding-inline-end: var(--section-page-viewport-inline-end-gap, 3px);
+  padding-inline-end: var(--section-page-viewport-inline-end-gap, 16px);
   padding-bottom: var(--section-page-viewport-bottom-gap, 3px);
 }
 
