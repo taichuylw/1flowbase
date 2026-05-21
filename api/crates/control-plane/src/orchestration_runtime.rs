@@ -36,6 +36,7 @@ pub mod debug_stream_events;
 mod debug_variable_cache;
 pub(crate) mod inputs;
 mod live_debug_run;
+mod llm_observability_refs;
 mod payloads;
 mod persistence;
 mod runtime_event_persister;

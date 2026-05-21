@@ -23,7 +23,10 @@ use crate::{
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
-use super::payloads::persisted_node_output_payload;
+use super::{
+    llm_observability_refs::{apply_llm_debug_observability_refs, LlmDebugObservabilityRefs},
+    payloads::persisted_node_output_payload,
+};
 
 pub(super) struct WaitingNodeResumeUpdate {
     pub(super) node_run_id: Uuid,
@@ -465,7 +468,7 @@ async fn persist_llm_context_observability<R>(
     node_run_id: Uuid,
     span_id: Uuid,
     trace: &orchestration_runtime::execution_state::NodeExecutionTrace,
-) -> Result<()>
+) -> Result<LlmDebugObservabilityRefs>
 where
     R: OrchestrationRuntimeRepository,
 {
@@ -565,7 +568,10 @@ where
             .await?;
     }
 
-    Ok(())
+    Ok(LlmDebugObservabilityRefs::from_records(
+        &projection,
+        &attempts,
+    ))
 }
 
 async fn append_model_attempts_from_metrics<R>(
@@ -775,6 +781,18 @@ where
             status,
             "persist_flow_debug_node_trace",
         )?;
+        let mut debug_payload = trace.debug_payload.clone();
+        if trace.node_type == "llm" {
+            let refs = persist_llm_context_observability(
+                repository,
+                flow_run_id,
+                node_run.id,
+                node_span.id,
+                trace,
+            )
+            .await?;
+            apply_llm_debug_observability_refs(&mut debug_payload, &refs);
+        }
         let node_run = repository
             .update_node_run(&UpdateNodeRunInput {
                 node_run_id: node_run.id,
@@ -787,20 +805,10 @@ where
                 ),
                 error_payload: trace.error_payload.clone(),
                 metrics_payload: trace.metrics_payload.clone(),
-                debug_payload: trace.debug_payload.clone(),
+                debug_payload,
                 finished_at,
             })
             .await?;
-        if trace.node_type == "llm" {
-            persist_llm_context_observability(
-                repository,
-                flow_run_id,
-                node_run.id,
-                node_span.id,
-                trace,
-            )
-            .await?;
-        }
         append_provider_stream_events(
             repository,
             flow_run_id,

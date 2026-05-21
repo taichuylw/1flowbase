@@ -1663,6 +1663,18 @@ async fn live_llm_tool_calls_create_callback_task_and_pause_downstream() {
         llm_node.output_payload["tool_calls"][0]["id"],
         "call_weather"
     );
+    let projections = service
+        .list_context_projections(waiting_detail.flow_run.id)
+        .await;
+    let attempts = service
+        .list_model_failover_attempt_ledger(waiting_detail.flow_run.id)
+        .await;
+    assert_resolved_llm_debug_refs(
+        &llm_node.debug_payload,
+        &projections,
+        &attempts,
+        llm_node.id,
+    );
     assert!(waiting_detail
         .node_runs
         .iter()
@@ -1686,6 +1698,117 @@ async fn live_llm_tool_calls_create_callback_task_and_pause_downstream() {
         checkpoint.variable_snapshot["node-llm"]["__llm_tool_callback"]["pending_tool_calls"][0]
             ["id"],
         "call_weather"
+    );
+}
+
+#[tokio::test]
+async fn complete_llm_tool_callback_resolves_final_llm_debug_refs() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderInvocationResult, ProviderToolCall, ProviderUsage,
+    };
+
+    let service = OrchestrationRuntimeService::for_tests_with_provider_results(vec![
+        ProviderInvocationResult {
+            final_content: Some("need tool".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_weather".to_string(),
+                name: "lookup_weather".to_string(),
+                arguments: json!({ "city": "Shanghai" }),
+            }],
+            usage: ProviderUsage {
+                input_tokens: Some(8),
+                output_tokens: Some(4),
+                total_tokens: Some(12),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        ProviderInvocationResult {
+            final_content: Some("Shanghai is sunny".to_string()),
+            usage: ProviderUsage {
+                input_tokens: Some(11),
+                output_tokens: Some(5),
+                total_tokens: Some(16),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::Stop),
+            ..ProviderInvocationResult::default()
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "天气？" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let waiting_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: waiting_detail.callback_tasks[0].id,
+            response_payload: json!({
+                "tool_results": [
+                    {
+                        "tool_call_id": "call_weather",
+                        "content": "sunny"
+                    }
+                ]
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(
+        completed.flow_run.output_payload["answer"],
+        json!("Shanghai is sunny")
+    );
+
+    let projections = service
+        .list_context_projections(completed.flow_run.id)
+        .await;
+    let attempts = service
+        .list_model_failover_attempt_ledger(completed.flow_run.id)
+        .await;
+    let llm_nodes = completed
+        .node_runs
+        .iter()
+        .filter(|node_run| node_run.node_id == "node-llm")
+        .collect::<Vec<_>>();
+
+    assert_eq!(llm_nodes.len(), 2);
+    for llm_node in llm_nodes {
+        assert_no_pending_debug_ref(&llm_node.debug_payload);
+    }
+    let final_llm_node = completed
+        .node_runs
+        .iter()
+        .filter(|node_run| node_run.node_id == "node-llm")
+        .find(|node_run| node_run.output_payload["finish_reason"] == json!("stop"))
+        .expect("final llm node run should be persisted");
+    assert_resolved_llm_debug_refs(
+        &final_llm_node.debug_payload,
+        &projections,
+        &attempts,
+        final_llm_node.id,
     );
 }
 
@@ -2868,6 +2991,72 @@ fn node_run<'a>(
         .iter()
         .find(|node_run| node_run.node_id == node_id)
         .unwrap_or_else(|| panic!("node run {node_id} should exist"))
+}
+
+fn assert_resolved_llm_debug_refs(
+    debug_payload: &Value,
+    projections: &[domain::ContextProjectionRecord],
+    attempts: &[domain::ModelFailoverAttemptLedgerRecord],
+    node_run_id: Uuid,
+) {
+    let projection = projections
+        .iter()
+        .find(|projection| projection.node_run_id == Some(node_run_id))
+        .unwrap_or_else(|| panic!("projection for node run {node_run_id} should exist"));
+    let node_attempts = attempts
+        .iter()
+        .filter(|attempt| attempt.node_run_id == Some(node_run_id))
+        .collect::<Vec<_>>();
+    let winner = node_attempts
+        .iter()
+        .find(|attempt| attempt.status == "succeeded");
+    let expected_attempt_refs = node_attempts
+        .iter()
+        .map(|attempt| json!(format!("model_failover_attempt:{}", attempt.id)))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        debug_payload["context_projection_ref"],
+        json!(format!("runtime_context_projection:{}", projection.id))
+    );
+    assert_eq!(
+        debug_payload["attempt_refs"],
+        Value::Array(expected_attempt_refs)
+    );
+    if let Some(winner) = winner {
+        assert_eq!(
+            debug_payload["winner_attempt_ref"],
+            json!(format!("model_failover_attempt:{}", winner.id))
+        );
+    } else {
+        assert!(debug_payload
+            .get("winner_attempt_ref")
+            .map_or(true, Value::is_null));
+    }
+    assert_no_pending_debug_ref(debug_payload);
+}
+
+fn assert_no_pending_debug_ref(value: &Value) {
+    match value {
+        Value::String(text) => {
+            assert!(
+                !text.starts_with("pending_attempt_id:")
+                    && !text.starts_with("pending_projection_id:"),
+                "debug payload kept unresolved observability ref: {text}"
+            );
+        }
+        Value::Array(items) => {
+            for item in items {
+                assert_no_pending_debug_ref(item);
+            }
+        }
+        Value::Object(object) => {
+            for item in object.values() {
+                assert_no_pending_debug_ref(item);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
 }
 
 fn data_model_flow_document(

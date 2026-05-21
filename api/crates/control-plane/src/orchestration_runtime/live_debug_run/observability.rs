@@ -24,6 +24,8 @@ use crate::{
     },
 };
 
+use super::super::llm_observability_refs::LlmDebugObservabilityRefs;
+
 pub(super) async fn run_live_event_persister<R>(
     repository: R,
     flow_run_id: Uuid,
@@ -128,7 +130,7 @@ pub(super) async fn persist_llm_context_observability<R>(
     node_input: Value,
     metrics_payload: &Value,
     error_payload: Option<&Value>,
-) -> Result<()>
+) -> Result<LlmDebugObservabilityRefs>
 where
     R: OrchestrationRuntimeRepository,
 {
@@ -225,7 +227,10 @@ where
             .await?;
     }
 
-    Ok(())
+    Ok(LlmDebugObservabilityRefs::from_records(
+        &projection,
+        &attempts,
+    ))
 }
 
 async fn append_model_attempts_from_metrics<R>(

@@ -20,6 +20,7 @@ use super::super::{
 };
 use super::super::{
     debug_variable_cache::{persist_debug_variable_cache_entries, public_node_variable_cache},
+    llm_observability_refs::apply_llm_debug_observability_refs,
     payloads::persisted_node_output_payload,
 };
 use super::{
@@ -390,6 +391,7 @@ where
                     .await
                     .map_err(|e| anyhow!("persist task panicked: {e}"))??;
                 let execution = execution_result?;
+                let mut debug_payload = execution.debug_payload.clone();
 
                 let public_output_payload = persisted_node_output_payload(
                     &execution.output_payload,
@@ -398,7 +400,7 @@ where
                     &execution.debug_payload,
                 );
                 last_output_payload = public_output_payload.clone();
-                persist_llm_context_observability(
+                let refs = persist_llm_context_observability(
                     &service.repository,
                     flow_run.id,
                     node_run.id,
@@ -408,8 +410,9 @@ where
                     execution.error_payload.as_ref(),
                 )
                 .await?;
+                apply_llm_debug_observability_refs(&mut debug_payload, &refs);
 
-                if let Some(error_payload) = execution.error_payload {
+                if let Some(error_payload) = execution.error_payload.clone() {
                     ensure_node_run_transition(
                         domain::NodeRunStatus::Running,
                         domain::NodeRunStatus::Failed,
@@ -424,7 +427,7 @@ where
                             output_payload: public_output_payload.clone(),
                             error_payload: Some(error_payload.clone()),
                             metrics_payload: execution.metrics_payload.clone(),
-                            debug_payload: execution.debug_payload.clone(),
+                            debug_payload: debug_payload.clone(),
                             finished_at: Some(OffsetDateTime::now_utc()),
                         },
                     )
@@ -484,7 +487,7 @@ where
                             output_payload: public_output_payload,
                             error_payload: None,
                             metrics_payload: execution.metrics_payload.clone(),
-                            debug_payload: execution.debug_payload.clone(),
+                            debug_payload: debug_payload.clone(),
                             finished_at: None,
                         },
                     )
@@ -580,7 +583,7 @@ where
                         output_payload: public_output_payload.clone(),
                         error_payload: None,
                         metrics_payload: execution.metrics_payload.clone(),
-                        debug_payload: execution.debug_payload.clone(),
+                        debug_payload: debug_payload.clone(),
                         finished_at: Some(OffsetDateTime::now_utc()),
                     },
                 )
