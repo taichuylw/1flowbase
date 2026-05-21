@@ -927,6 +927,58 @@ describe('FrontStagePage', () => {
     expect(rows[1]).toHaveTextContent('页面 page-2');
   });
 
+  test('shows selected page group dropdown and moves the page without an extra action click', async () => {
+    authenticate(['frontstage.page.design']);
+    const onMovePageNode = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={[
+            {
+              id: 'group-1',
+              title: '分组 1',
+              kind: 'group',
+              children: [createBackendPage('page-1')]
+            },
+            {
+              id: 'group-2',
+              title: '分组 2',
+              kind: 'group',
+              children: []
+            }
+          ]}
+          onMovePageNode={onMovePageNode}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+
+    const selectedPageItem = getPageTreeItem('页面 page-1');
+    const groupSelect = within(selectedPageItem).getByRole('combobox', {
+      name: /页面分组/
+    });
+
+    expect(groupSelect).toBeInTheDocument();
+
+    fireEvent.mouseDown(groupSelect);
+    fireEvent.click(
+      await screen.findByText('分组 2', {
+        selector: '.ant-select-item-option-content'
+      })
+    );
+
+    await waitFor(() => {
+      expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
+        parentId: 'group-2',
+        rank: '001000'
+      });
+    });
+  });
+
   test('does not delete node when delete confirmation is canceled', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();

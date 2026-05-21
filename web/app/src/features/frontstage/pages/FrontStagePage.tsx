@@ -7,6 +7,7 @@ import {
   Flex,
   Grid,
   Layout,
+  Select,
   Space,
   Typography
 } from 'antd';
@@ -63,6 +64,7 @@ import type { FrontStageTreeNode } from '../lib/page-tree';
 import type { RestrictedBlockLoaderLimits } from '../lib/restricted-block-loader';
 
 const DESIGN_MODE_PERMISSION = 'frontstage.page.design';
+const ROOT_PAGE_GROUP_VALUE = '__frontstage_root__';
 const DEFAULT_JS_BLOCK_TRIAL_LIMITS: RestrictedBlockLoaderLimits = {
   timeoutMs: 1000,
   maxRenderDepth: 8,
@@ -863,6 +865,23 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     });
   };
 
+  const handleMovePageToGroup = (
+    nodeId: string,
+    currentParentId: string | null,
+    nextParentId: string | null
+  ) => {
+    if (currentParentId === nextParentId) {
+      return;
+    }
+
+    void runPageTreeOperation(async () => {
+      await onMovePageNode?.(nodeId, {
+        parentId: nextParentId,
+        rank: getNodeAppendRank(pageTree, nextParentId)
+      });
+    });
+  };
+
   const handleSelectPage = (nodeId: string) => {
     if (selectedPageId === nodeId) {
       return;
@@ -968,6 +987,20 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     const isSelected = selectedPageId === node.id;
     const canAddPageToGroup = node.kind === 'group' && level === 0;
     const { canMoveUp, canMoveDown } = canMoveNode(parentNodes, node.id);
+    const topLevelGroups = pageTree.filter(
+      (candidate) => candidate.kind === 'group'
+    );
+    const currentParentId =
+      findSiblingContext(pageTree, node.id)?.parentId ?? null;
+    const canShowPageGroupSelect =
+      isPageNode && isSelected && topLevelGroups.length > 0;
+    const pageGroupOptions = [
+      { label: '不分组', value: ROOT_PAGE_GROUP_VALUE },
+      ...topLevelGroups.map((groupNode) => ({
+        label: groupNode.title || '未命名分组',
+        value: groupNode.id
+      }))
+    ];
     const rowStyle = {
       padding: '8px',
       borderRadius: 6,
@@ -1056,6 +1089,29 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                 >
                   组内新增页面
                 </Button>
+              ) : null}
+              {canShowPageGroupSelect ? (
+                <Select
+                  size="small"
+                  aria-label={`页面分组 ${node.title || node.id}`}
+                  value={currentParentId ?? ROOT_PAGE_GROUP_VALUE}
+                  style={{ width: 112 }}
+                  disabled={isOperationPending}
+                  options={pageGroupOptions}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onChange={(value) => {
+                    handleMovePageToGroup(
+                      node.id,
+                      currentParentId,
+                      value === ROOT_PAGE_GROUP_VALUE ? null : value
+                    );
+                  }}
+                />
               ) : null}
               <Button
                 size="small"
