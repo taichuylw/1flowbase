@@ -148,6 +148,14 @@ child-issue
 
 ## Lifecycle
 
+Phase order is strict. Current phase output must not include the next phase artifact:
+
+- `phase:discussion`: align facts, boundaries, options and recommendation only; do not draft L3 implementation content until the user confirms the direction.
+- `phase:ready`: issue content, labels and acceptance are confirmed; do not start tests or implementation.
+- `phase:implementation`: implement only the confirmed L3 scope; new decisions return to discussion.
+- `phase:qa`: report evidence and residual risk only; do not mark user acceptance.
+- `phase:user-acceptance`: wait for explicit user acceptance before closing parent issues.
+
 1. `phase:discussion`：需求对齐，输出简短对齐或三方案，等待用户确认。
 2. `phase:ready`：issue 内容、层级、分级、标签、验收证据已确认；L2 ready 只表示可以继续拆 L3，不表示可以直接实现。
 3. `phase:implementation`：按批准范围实现；发现新决策时回到 `problem-framing`。
