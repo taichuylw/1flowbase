@@ -111,6 +111,10 @@ issue 标题必须使用：
 
 标题只放状态和可读标题；分级、类型、影响面、父子关系放 labels 和正文，不塞进标题。
 
+## Issue Language
+
+GitHub issue 标题和正文默认使用中文。labels、代码标识符、API 路径、文件路径、命令、错误码和外部协议字段保持原文。`Implementation Handoff` 可以按用户偏好使用英文；不要因此把 issue 正文改成英文。
+
 ## Optional Labels
 
 按需添加，不要为了凑标签而添加：

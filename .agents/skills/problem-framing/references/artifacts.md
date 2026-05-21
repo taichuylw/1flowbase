@@ -30,48 +30,49 @@
 ## Issue Draft
 
 ```md
-## Issue Metadata
-- Title: [状态]标题
-- Level:
-- Grade:
-- Labels:
-- Parent issue:
-- Child issues:
+## Issue 元数据
+- 标题：[状态]标题
+- 层级：
+- 分级：
+- 标签：
+- 父 issue：
+- 子 issue：
 
-## Observed Facts
+## 已确认事实
 
-## Suspected Problems
+## 疑似问题
 
-## Non-negotiable Invariants
+## 不可协商不变量
 
-## Draft Hypotheses
+## 待验证假设
 
-## Open Decisions
+## 待决策事项
 
-## Bad Solutions
+## 不采用方案
 
-## Acceptance Evidence
+## 验收证据
 
-## Execution Boundary
-- Main files / modules:
-- Verification:
-- Stop / escalate if:
+## 执行边界
+- 主要文件 / 模块：
+- 验证：
+- 停止 / 升级条件：
 
-## Lifecycle
-- Current phase:
-- Close condition:
+## 生命周期
+- 当前阶段：
+- 关闭条件：
 ```
 
 Rules:
 
-- `Observed Facts` 必须带证据来源。
-- `Draft Hypotheses` 必须保持可被挑战，不能写成已决设计。
-- `Open Decisions` 必须是用户需要拍板的真实决策，不是实现杂项。
-- `Issue Metadata` 必须按 `references/issue-lifecycle.md` 填写层级、分级和标签。
-- `Parent issue` 必须指向上一层 issue；`Child issues` 只列直接下一层 issue。
+- GitHub issue 标题和正文默认中文；labels、代码标识符、API 路径、文件路径和命令保持原文。
+- `已确认事实` 必须带证据来源。
+- `待验证假设` 必须保持可被挑战，不能写成已决设计。
+- `待决策事项` 必须是用户需要拍板的真实决策，不是实现杂项。
+- `Issue 元数据` 必须按 `references/issue-lifecycle.md` 填写层级、分级和标签。
+- `父 issue` 必须指向上一层 issue；`子 issue` 只列直接下一层 issue。
 - 开展开发计划时默认形成 L0 -> L1 -> L2 -> L3；小需求可以压缩展示，但不能省略 L3 执行边界。
 - L0 记录事实、冲突和总清单；L1 记录用户批准的决策；L2 记录工作流和依赖顺序；L3 记录单一执行任务。
-- L3 issue 必须填写 `Execution Boundary`；L2 issue 不得直接当实现任务使用。
+- L3 issue 必须填写 `执行边界`；L2 issue 不得直接当实现任务使用。
 - issue 标题必须使用 `[状态]标题`，并和 `phase:*` 标签同步。
 
 ## ADR Draft
