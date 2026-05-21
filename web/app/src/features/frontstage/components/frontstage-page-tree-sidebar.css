@@ -230,11 +230,6 @@
   color: #1d4ed8 !important;
 }
 
-.frontstage-page-tree-sidebar__add-item-caret {
-  margin-left: auto;
-  font-size: 10px !important;
-}
-
 .frontstage-page-tree-sidebar__add-menu {
   z-index: 20;
   display: grid;

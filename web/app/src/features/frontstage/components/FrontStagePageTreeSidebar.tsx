@@ -579,7 +579,6 @@ export function FrontStagePageTreeSidebar({
             size="small"
           >
             添加菜单
-            <DownOutlined className="frontstage-page-tree-sidebar__add-item-caret" />
           </Button>
           {isAddMenuOpen ? (
             <div className="frontstage-page-tree-sidebar__add-menu" role="menu">
