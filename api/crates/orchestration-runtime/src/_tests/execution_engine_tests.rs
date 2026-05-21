@@ -1690,6 +1690,76 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
 }
 
 #[tokio::test]
+async fn resume_llm_tool_results_passes_native_response_cursor_and_delta_messages() {
+    let mut waiting_response = tool_call_response(vec![ProviderToolCall {
+        id: "call_weather".to_string(),
+        name: "lookup_weather".to_string(),
+        arguments: json!({ "city": "Shanghai" }),
+    }]);
+    waiting_response.response_id = Some("resp_previous".to_string());
+    let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![waiting_response]);
+    let plan = llm_answer_plan();
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "weather?" } }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+
+    match waiting.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(
+                pending.request_payload["response_id"],
+                json!("resp_previous")
+            );
+        }
+        other => panic!("expected llm tool callback wait, got {other:?}"),
+    }
+
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("llm tool wait should have checkpoint");
+    let (resume_invoker, resumed_inputs) =
+        sequential_tool_invoker(vec![final_llm_response("weather is clear")]);
+
+    resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_weather",
+                    "content": "{\"temperature\":21}"
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured = resumed_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 1);
+    assert_eq!(
+        captured[0].previous_response_id.as_deref(),
+        Some("resp_previous")
+    );
+    assert_eq!(captured[0].messages.len(), 1);
+    assert_eq!(captured[0].messages[0].role, ProviderMessageRole::Tool);
+    assert_eq!(
+        captured[0].messages[0].tool_call_id.as_deref(),
+        Some("call_weather")
+    );
+}
+
+#[tokio::test]
 async fn multi_round_llm_tool_callbacks_keep_previous_round_debug_evidence() {
     let first_call = ProviderToolCall {
         id: "call_weather".to_string(),

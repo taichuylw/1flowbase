@@ -21,7 +21,8 @@ mod tests {
             "text": "<think>先分析</think>正式回答",
             "finish_reason": "stop",
             "provider_route": { "provider_code": "openai_compatible" },
-            "provider_metadata": { "response_id": "chatcmpl-1" },
+            "response_id": "resp_1",
+            "provider_metadata": { "raw_id": "chatcmpl-1" },
         });
         let metrics_payload = json!({
             "finish_reason": "stop",
@@ -40,7 +41,8 @@ mod tests {
                 "text": "<think>先分析</think>正式回答",
                 "finish_reason": "stop",
                 "provider_route": { "provider_code": "openai_compatible" },
-                "provider_metadata": { "response_id": "chatcmpl-1" },
+                "response_id": "resp_1",
+                "provider_metadata": { "raw_id": "chatcmpl-1" },
             })
         );
     }

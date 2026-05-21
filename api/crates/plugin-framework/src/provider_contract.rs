@@ -297,6 +297,8 @@ pub struct ProviderInvocationInput {
     pub provider_code: String,
     pub protocol: String,
     pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_response_id: Option<String>,
     #[serde(default)]
     pub provider_config: Value,
     #[serde(default)]
@@ -318,6 +320,8 @@ pub struct ProviderInvocationInput {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProviderInvocationResult {
     pub final_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_id: Option<String>,
     #[serde(default)]
     pub tool_calls: Vec<ProviderToolCall>,
     #[serde(default)]

@@ -502,7 +502,13 @@ where
             rendered_templates,
             variable_pool,
         );
-        let invocation_messages = invocation_input.messages.clone();
+        let invocation_messages = build_llm_debug_invocation_messages(
+            node,
+            resolved_inputs,
+            rendered_templates,
+            variable_pool,
+            &invocation_input,
+        );
         if invocation_input.messages.is_empty() {
             let error_payload = build_empty_prompt_messages_error_payload(attempt_runtime);
             let attempt = build_attempt_metric(
@@ -885,12 +891,16 @@ fn build_provider_invocation_input(
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
 ) -> ProviderInvocationInput {
-    let (system, messages) = provider_messages_from_prompt_messages(binding_prompt_messages(
-        node,
-        rendered_templates,
-        resolved_inputs,
-        variable_pool,
-    ));
+    let previous_response_id =
+        pending_llm_tool_callback_previous_response_id(node, runtime, variable_pool);
+    let prompt_messages = if previous_response_id.is_some() {
+        pending_llm_tool_callback_delta_messages(node, variable_pool).unwrap_or_else(|| {
+            binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+        })
+    } else {
+        binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+    };
+    let (system, messages) = provider_messages_from_prompt_messages(prompt_messages);
 
     let trace_context = BTreeMap::from([
         ("node_id".to_string(), node.node_id.clone()),
@@ -902,6 +912,7 @@ fn build_provider_invocation_input(
         provider_code: runtime.provider_code.clone(),
         protocol: runtime.protocol.clone(),
         model: runtime.model.clone(),
+        previous_response_id,
         provider_config: Value::Null,
         messages,
         system,
@@ -915,6 +926,26 @@ fn build_provider_invocation_input(
             Value::Object(resolved_inputs.clone()),
         )]),
     }
+}
+
+fn build_llm_debug_invocation_messages(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    invocation_input: &ProviderInvocationInput,
+) -> Vec<ProviderMessage> {
+    if invocation_input.previous_response_id.is_some() {
+        let (_, messages) = provider_messages_from_prompt_messages(binding_prompt_messages(
+            node,
+            rendered_templates,
+            resolved_inputs,
+            variable_pool,
+        ));
+        return messages;
+    }
+
+    invocation_input.messages.clone()
 }
 
 fn has_pending_tool_calls(output_payload: &Value) -> bool {
@@ -966,6 +997,7 @@ fn build_llm_tool_callback_request_payload(
         "finish_reason",
         "usage",
         "provider_route",
+        "response_id",
         "provider_metadata",
     ] {
         if let Some(value) = output_payload.get(key) {
@@ -994,19 +1026,38 @@ fn variable_pool_with_pending_llm_tool_callback(
         variable_pool,
         output_payload,
     );
-    checkpoint_variable_pool.insert(
-        node.node_id.clone(),
-        json!({
-            LLM_TOOL_CALLBACK_STATE_KEY: {
-                "callback_kind": LLM_TOOL_CALLBACK_KIND,
-                "pending_tool_calls": output_payload
-                    .get("tool_calls")
-                    .cloned()
-                    .unwrap_or_else(|| Value::Array(Vec::new())),
-                "history": history,
-            }
-        }),
+    let mut callback_state = Map::new();
+    callback_state.insert(
+        "callback_kind".to_string(),
+        Value::String(LLM_TOOL_CALLBACK_KIND.to_string()),
     );
+    callback_state.insert(
+        "pending_tool_calls".to_string(),
+        output_payload
+            .get("tool_calls")
+            .cloned()
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    );
+    callback_state.insert("history".to_string(), Value::Array(history));
+    if let Some(response_id) = output_payload
+        .get("response_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+    {
+        callback_state.insert(
+            "response_id".to_string(),
+            Value::String(response_id.to_string()),
+        );
+    }
+    if let Some(provider_route) = output_payload.get("provider_route") {
+        callback_state.insert("provider_route".to_string(), provider_route.clone());
+    }
+    let mut node_state = Map::new();
+    node_state.insert(
+        LLM_TOOL_CALLBACK_STATE_KEY.to_string(),
+        Value::Object(callback_state),
+    );
+    checkpoint_variable_pool.insert(node.node_id.clone(), Value::Object(node_state));
     checkpoint_variable_pool
 }
 
@@ -1038,6 +1089,12 @@ fn append_llm_tool_result_messages(
 ) -> Result<()> {
     let state = pending_llm_tool_callback_state(variable_pool, waiting_node_id)
         .ok_or_else(|| anyhow!("llm tool callback state not found for {waiting_node_id}"))?;
+    let response_id = state
+        .get("response_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned);
+    let provider_route = state.get("provider_route").cloned();
     let pending_tool_calls = state
         .get("pending_tool_calls")
         .and_then(Value::as_array)
@@ -1053,6 +1110,7 @@ fn append_llm_tool_result_messages(
         .ok_or_else(|| anyhow!("llm tool callback state is missing history"))?;
     let mut expected_ids = BTreeSet::new();
     let mut ordered_ids = Vec::new();
+    let mut delta_messages = Vec::new();
 
     for tool_call in pending_tool_calls {
         let id = tool_call
@@ -1106,18 +1164,32 @@ fn append_llm_tool_result_messages(
         if let Some(name) = result.get("name").and_then(Value::as_str) {
             message.insert("name".to_string(), Value::String(name.to_string()));
         }
-        history.push(Value::Object(message));
+        let message = Value::Object(message);
+        history.push(message.clone());
+        delta_messages.push(message);
     }
 
-    variable_pool.insert(
-        waiting_node_id.to_string(),
-        json!({
-            LLM_TOOL_CALLBACK_STATE_KEY: {
-                "callback_kind": LLM_TOOL_CALLBACK_KIND,
-                "history": history,
-            }
-        }),
+    let mut callback_state = Map::new();
+    callback_state.insert(
+        "callback_kind".to_string(),
+        Value::String(LLM_TOOL_CALLBACK_KIND.to_string()),
     );
+    callback_state.insert("history".to_string(), Value::Array(history));
+    if let Some(response_id) = response_id {
+        callback_state.insert("response_id".to_string(), Value::String(response_id));
+    }
+    if let Some(provider_route) = provider_route {
+        callback_state.insert("provider_route".to_string(), provider_route);
+    }
+    if !delta_messages.is_empty() {
+        callback_state.insert("delta_messages".to_string(), Value::Array(delta_messages));
+    }
+    let mut node_state = Map::new();
+    node_state.insert(
+        LLM_TOOL_CALLBACK_STATE_KEY.to_string(),
+        Value::Object(callback_state),
+    );
+    variable_pool.insert(waiting_node_id.to_string(), Value::Object(node_state));
 
     Ok(())
 }
@@ -1147,6 +1219,50 @@ fn pending_llm_tool_callback_history(
         .get("history")?
         .as_array()
         .cloned()
+}
+
+fn pending_llm_tool_callback_delta_messages(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> Option<Vec<Value>> {
+    pending_llm_tool_callback_state(variable_pool, &node.node_id)?
+        .get("delta_messages")?
+        .as_array()
+        .cloned()
+}
+
+fn pending_llm_tool_callback_previous_response_id(
+    node: &CompiledNode,
+    runtime: &CompiledLlmRuntime,
+    variable_pool: &Map<String, Value>,
+) -> Option<String> {
+    let state = pending_llm_tool_callback_state(variable_pool, &node.node_id)?;
+    if !pending_llm_tool_callback_route_matches(runtime, state.get("provider_route")?) {
+        return None;
+    }
+    state
+        .get("response_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn pending_llm_tool_callback_route_matches(
+    runtime: &CompiledLlmRuntime,
+    provider_route: &Value,
+) -> bool {
+    let Some(provider_route) = provider_route.as_object() else {
+        return false;
+    };
+
+    provider_route
+        .get("provider_instance_id")
+        .and_then(Value::as_str)
+        == Some(runtime.provider_instance_id.as_str())
+        && provider_route.get("provider_code").and_then(Value::as_str)
+            == Some(runtime.provider_code.as_str())
+        && provider_route.get("protocol").and_then(Value::as_str) == Some(runtime.protocol.as_str())
+        && provider_route.get("model").and_then(Value::as_str) == Some(runtime.model.as_str())
 }
 
 fn build_empty_prompt_messages_error_payload(runtime: &CompiledLlmRuntime) -> Value {
@@ -1532,6 +1648,16 @@ fn build_successful_llm_execution(
         executor_output.insert(
             "provider_metadata".to_string(),
             result.provider_metadata.clone(),
+        );
+    }
+    if let Some(response_id) = result
+        .response_id
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        executor_output.insert(
+            "response_id".to_string(),
+            Value::String(response_id.to_string()),
         );
     }
     if declares_public_output(node, "structured_output")

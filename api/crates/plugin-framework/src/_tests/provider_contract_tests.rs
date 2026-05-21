@@ -143,6 +143,7 @@ fn provider_balance_stdio_method_serializes_balance() {
 #[test]
 fn provider_invocation_input_preserves_tool_message_metadata() {
     let input = ProviderInvocationInput {
+        previous_response_id: Some("resp_previous".to_string()),
         messages: vec![
             ProviderMessage {
                 role: ProviderMessageRole::Assistant,
@@ -180,9 +181,25 @@ fn provider_invocation_input_preserves_tool_message_metadata() {
     let payload = serde_json::to_value(input).unwrap();
 
     assert_eq!(payload["tools"][0]["function"]["name"], "lookup_order");
+    assert_eq!(payload["previous_response_id"], "resp_previous");
     assert_eq!(payload["messages"][0]["tool_calls"][0]["id"], "call-1");
     assert_eq!(payload["messages"][1]["role"], "tool");
     assert_eq!(payload["messages"][1]["tool_call_id"], "call-1");
+}
+
+#[test]
+fn provider_invocation_result_exposes_native_response_cursor() {
+    let result = ProviderInvocationResult {
+        final_content: Some("hello".to_string()),
+        response_id: Some("resp_current".to_string()),
+        ..ProviderInvocationResult::default()
+    };
+
+    let payload = serde_json::to_value(result).unwrap();
+    let decoded: ProviderInvocationResult = serde_json::from_value(payload.clone()).unwrap();
+
+    assert_eq!(payload["response_id"], "resp_current");
+    assert_eq!(decoded.response_id.as_deref(), Some("resp_current"));
 }
 
 #[test]
