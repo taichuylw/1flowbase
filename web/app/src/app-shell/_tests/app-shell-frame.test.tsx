@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fs from 'node:fs';
 import path from 'node:path';
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 import {
@@ -80,6 +80,44 @@ describe('AppShellFrame', () => {
       'aria-pressed',
       'true'
     );
+  });
+
+  test('renders frontstage design mode button globally on non-frontstage pages and navigates', async () => {
+    const locationSpy = vi.fn();
+    const originalLocation = window.location;
+    
+    // Mock window.location
+    delete (window as any).location;
+    window.location = {
+      ...originalLocation,
+      assign: vi.fn(),
+      replace: vi.fn(),
+      get href() {
+        return 'http://localhost/';
+      },
+      set href(val: string) {
+        locationSpy(val);
+      },
+      search: ''
+    } as any;
+
+    render(
+      <AppShellFrame pathname="/">
+        <main>Content</main>
+      </AppShellFrame>
+    );
+
+    await waitFor(() => {
+      const designButton = screen.getByLabelText('进入设计模式');
+      expect(designButton).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('进入设计模式'));
+
+    expect(locationSpy).toHaveBeenCalledWith('/frontstage?design=true');
+
+    // restore
+    window.location = originalLocation;
   });
 
   test('keeps the top header to a single horizontally scrollable row', () => {

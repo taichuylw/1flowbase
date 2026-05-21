@@ -72,7 +72,10 @@ export function AppShellFrame({
                 )}
               </span>
             ))}
-            <FrontstageDesignModeAction pathname={pathname} />
+            <FrontstageDesignModeAction
+              pathname={pathname}
+              useRouterNavigation={useRouterLinks}
+            />
           </span>
         </Space>
       }
