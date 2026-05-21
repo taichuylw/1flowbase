@@ -80,6 +80,35 @@ function applicationRunsPage<T>(
 
 function sampleRunDetail(): ApplicationRunDetail {
   return {
+    run: {
+      id: 'run-1',
+      application_id: 'app-1',
+      application_type: 'agent_flow',
+      run_object_kind: 'flow_run',
+      run_kind: 'published_api_run',
+      status: 'succeeded',
+      title: '公开 API 退款总结',
+      source: 'api_key',
+      protocol: 'openai-responses-v1',
+      subject: {
+        kind: 'agent_flow',
+        id: 'flow-1',
+        draft_id: 'draft-1',
+        target_node_id: 'node-llm'
+      },
+      actor: {
+        kind: 'user',
+        id: 'user-1',
+        display_name: 'root'
+      },
+      correlation: {
+        compatibility_mode: 'openai-responses-v1'
+      },
+      started_at: '2026-04-17T09:00:00Z',
+      finished_at: '2026-04-17T09:00:01Z',
+      created_at: '2026-04-17T09:00:00Z',
+      updated_at: '2026-04-17T09:00:01Z'
+    },
     flow_run: {
       id: 'run-1',
       application_id: 'app-1',
@@ -196,6 +225,7 @@ describe('ApplicationLogsPage', () => {
           title: '公开 API 退款总结',
           expand_id: 'customer-42',
           authorized_account: 'root',
+          protocol: 'openai-responses-v1',
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z',
@@ -263,6 +293,12 @@ describe('ApplicationLogsPage', () => {
     expect(screen.getByText('公开 API 退款总结')).toBeInTheDocument();
     expect(screen.getByText('customer-42')).toBeInTheDocument();
     expect(screen.getByText('root')).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', {
+        name: '协议'
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByText('OpenAI Responses')).toBeInTheDocument();
     expect(
       screen.getByRole('columnheader', {
         name: 'expand_id'
@@ -414,6 +450,8 @@ describe('ApplicationLogsPage', () => {
     expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
       '退款政策摘要'
     );
+    expect(within(logPanel).getByText('协议')).toBeInTheDocument();
+    expect(within(logPanel).getByText('OpenAI Responses')).toBeInTheDocument();
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
     const logTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });

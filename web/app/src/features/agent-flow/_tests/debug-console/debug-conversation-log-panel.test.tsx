@@ -28,6 +28,7 @@ const assistantMessage: AgentFlowDebugMessage = {
   role: 'assistant',
   status: 'running',
   runId: 'run-1',
+  protocolLabel: 'OpenAI Responses',
   content: '你好，我可以帮你。',
   rawOutput: {
     answer: '你好，我可以帮你。'
@@ -132,6 +133,8 @@ describe('debug conversation log panel', () => {
     );
     expect(within(panel).getByText('元数据')).toBeInTheDocument();
     expect(within(panel).getByText('run-1')).toBeInTheDocument();
+    expect(within(panel).getByText('协议')).toBeInTheDocument();
+    expect(within(panel).getByText('OpenAI Responses')).toBeInTheDocument();
     expect(within(panel).queryByText('数据处理')).not.toBeInTheDocument();
     expect(within(panel).queryByText('provider')).not.toBeInTheDocument();
   });

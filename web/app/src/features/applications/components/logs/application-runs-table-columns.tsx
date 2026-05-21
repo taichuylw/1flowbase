@@ -1,6 +1,7 @@
 import { Tag } from 'antd';
 
 import type { DataTableColumn } from '../../../../shared/ui/data-table/DataTable';
+import { formatApplicationRunProtocol } from '../../lib/run-protocol';
 import type { ApplicationRunSummary } from '../../api/runtime';
 
 const STATUS_COLOR: Record<string, string> = {
@@ -58,6 +59,15 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
     title: '模式',
     dataIndex: 'run_mode',
     width: 180
+  },
+  {
+    key: 'protocol',
+    title: '协议',
+    dataIndex: 'protocol',
+    width: 170,
+    ellipsis: true,
+    render: (value) =>
+      formatApplicationRunProtocol(typeof value === 'string' ? value : null)
   },
   {
     key: 'target_node_id',

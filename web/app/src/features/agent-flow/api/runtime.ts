@@ -90,6 +90,8 @@ export interface AgentFlowDebugMessage {
   runId: string | null;
   detailRunId?: string | null;
   canOpenDetail?: boolean;
+  protocol?: string | null;
+  protocolLabel?: string | null;
   rawOutput: Record<string, unknown> | null;
   traceSummary: AgentFlowTraceItem[];
 }

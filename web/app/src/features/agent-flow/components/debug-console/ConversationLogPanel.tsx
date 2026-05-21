@@ -49,6 +49,10 @@ function formatTimestamp(value: string | null | undefined) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
+function messageProtocolLabel(message: AgentFlowDebugMessage) {
+  return message.protocolLabel ?? message.protocol ?? '—';
+}
+
 function ConversationLogDetail({
   message,
   onLoadArtifact
@@ -87,6 +91,11 @@ function ConversationLogDetail({
               key: 'status',
               label: '状态',
               children: message.status
+            },
+            {
+              key: 'protocol',
+              label: '协议',
+              children: messageProtocolLabel(message)
             },
             {
               key: 'nodeCount',
