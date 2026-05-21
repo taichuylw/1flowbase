@@ -50,7 +50,7 @@ describe('AppShellFrame', () => {
 
       expect(
         accountLabel.compareDocumentPosition(settingsTrigger) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     });
   });
@@ -68,7 +68,7 @@ describe('AppShellFrame', () => {
 
       expect(
         settingsTrigger.compareDocumentPosition(designButton) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
     });
@@ -85,7 +85,7 @@ describe('AppShellFrame', () => {
   test('renders frontstage design mode button globally on non-frontstage pages and navigates', async () => {
     const locationSpy = vi.fn();
     const originalLocation = window.location;
-    
+
     // Mock window.location
     delete (window as any).location;
     window.location = {
@@ -117,7 +117,11 @@ describe('AppShellFrame', () => {
     expect(locationSpy).toHaveBeenCalledWith('/frontstage?design=true');
 
     // restore
-    window.location = originalLocation;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: originalLocation
+    });
   });
 
   test('keeps the top header to a single horizontally scrollable row', () => {
