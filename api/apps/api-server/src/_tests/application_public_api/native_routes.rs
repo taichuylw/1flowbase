@@ -1,11 +1,18 @@
-use crate::_tests::support::{login_and_capture_cookie, test_app};
+use crate::_tests::support::{
+    login_and_capture_cookie, test_api_state_with_database_url, test_app, test_config,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
     Router,
 };
+use control_plane::ports::{
+    CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+};
 use serde_json::{json, Value};
+use time::OffsetDateTime;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -198,6 +205,73 @@ async fn setup_published_native_app(app: &Router, name: &str) -> String {
     token
 }
 
+async fn test_app_with_state() -> (Router, std::sync::Arc<crate::app_state::ApiState>) {
+    let (state, _) = test_api_state_with_database_url().await;
+    let config = test_config();
+    let app = crate::app_with_state_and_config(state.clone(), &config);
+    (app, state)
+}
+
+async fn seed_pending_llm_callback(
+    state: &crate::app_state::ApiState,
+    flow_run_id: Uuid,
+) -> domain::CallbackTaskRecord {
+    state
+        .store
+        .update_flow_run(&UpdateFlowRunInput {
+            flow_run_id,
+            status: domain::FlowRunStatus::WaitingCallback,
+            output_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": "call_weather",
+                        "name": "lookup_weather",
+                        "arguments": { "city": "Shanghai" }
+                    }
+                ]
+            }),
+            error_payload: None,
+            finished_at: None,
+        })
+        .await
+        .unwrap();
+    let node_run = state
+        .store
+        .create_node_run(&CreateNodeRunInput {
+            flow_run_id,
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "LLM".to_string(),
+            status: domain::NodeRunStatus::WaitingCallback,
+            input_payload: json!({}),
+            debug_payload: json!({ "llm_rounds": [] }),
+            started_at: OffsetDateTime::now_utc(),
+        })
+        .await
+        .unwrap();
+
+    state
+        .store
+        .create_callback_task(&CreateCallbackTaskInput {
+            flow_run_id,
+            node_run_id: node_run.id,
+            callback_kind: "llm_tool_calls".to_string(),
+            request_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": "call_weather",
+                        "name": "lookup_weather",
+                        "arguments": { "city": "Shanghai" }
+                    }
+                ],
+                "finish_reason": "tool_call"
+            }),
+            external_ref_payload: None,
+        })
+        .await
+        .unwrap()
+}
+
 #[tokio::test]
 async fn native_run_route_accepts_any_string_model_and_preserves_metadata_without_node_input_model()
 {
@@ -228,6 +302,100 @@ async fn native_run_route_accepts_any_string_model_and_preserves_metadata_withou
     assert!(payload["data"]["node_input_payload"]["node-start"]
         .get("model")
         .is_none());
+}
+
+#[tokio::test]
+async fn native_get_run_exposes_pending_llm_required_action() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_native_app(&app, "Native Required Action Route App").await;
+    let mut body = native_run_body(json!("provider/model:any-public-string"));
+    body["response_mode"] = json!("manual");
+
+    let created = post_native_run(&app, &token, body).await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_payload = response_json(created).await;
+    let run_id = Uuid::parse_str(created_payload["data"]["id"].as_str().unwrap()).unwrap();
+    let callback_task = seed_pending_llm_callback(state.as_ref(), run_id).await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/1flowbase/runs/{run_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["data"]["status"], json!("waiting"));
+    assert_eq!(
+        payload["data"]["required_action"]["action_type"],
+        json!("submit_tool_outputs")
+    );
+    assert_eq!(
+        payload["data"]["required_action"]["payload"]["callback_task_id"],
+        json!(callback_task.id.to_string())
+    );
+    assert_eq!(
+        payload["data"]["required_action"]["payload"]["callback_kind"],
+        json!("llm_tool_calls")
+    );
+    assert_eq!(
+        payload["data"]["tool_calls"][0]["id"],
+        json!("call_weather")
+    );
+}
+
+#[tokio::test]
+async fn native_resume_rejects_missing_llm_tool_result_without_consuming_task() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_native_app(&app, "Native Resume Missing Tool Result App").await;
+    let mut body = native_run_body(json!("provider/model:any-public-string"));
+    body["response_mode"] = json!("manual");
+
+    let created = post_native_run(&app, &token, body).await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_payload = response_json(created).await;
+    let run_id = Uuid::parse_str(created_payload["data"]["id"].as_str().unwrap()).unwrap();
+    let callback_task = seed_pending_llm_callback(state.as_ref(), run_id).await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/1flowbase/runs/{run_id}/resume"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "callback_task_id": callback_task.id,
+                        "response_payload": {
+                            "tool_results": []
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let payload = response_json(response).await;
+    assert_eq!(payload["code"], json!("tool_results"));
+    let stored_task = state
+        .store
+        .get_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored_task.status, domain::CallbackTaskStatus::Pending);
 }
 
 #[tokio::test]

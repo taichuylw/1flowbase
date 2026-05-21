@@ -79,6 +79,64 @@ const assistantMessage: AgentFlowDebugMessage = {
   ]
 };
 
+const llmRoundAssistantMessage: AgentFlowDebugMessage = {
+  ...assistantMessage,
+  traceSummary: assistantMessage.traceSummary.map((item) =>
+    item.nodeId === 'node-llm'
+      ? {
+          ...item,
+          outputPayload: {
+            answer: 'weather is clear'
+          },
+          debugPayload: {
+            provider: 'openai',
+            llm_rounds: [
+              {
+                round_index: 0,
+                assistant: {
+                  role: 'assistant',
+                  content: 'need tool',
+                  tool_calls: [
+                    {
+                      id: 'call_weather',
+                      name: 'lookup_weather',
+                      arguments: {
+                        city: 'Shanghai'
+                      }
+                    }
+                  ]
+                },
+                finish_reason: 'tool_call'
+              },
+              {
+                round_index: 1,
+                assistant: {
+                  role: 'assistant',
+                  content: 'need tool'
+                },
+                tool_results: [
+                  {
+                    role: 'tool',
+                    tool_call_id: 'call_weather',
+                    content: '{"temperature":21}'
+                  }
+                ]
+              },
+              {
+                round_index: 2,
+                assistant: {
+                  role: 'assistant',
+                  content: 'weather is clear'
+                },
+                finish_reason: 'stop'
+              }
+            ]
+          }
+        }
+      : item
+  )
+};
+
 function renderConsole(
   props: Partial<ComponentProps<typeof AgentFlowDebugConsole>> = {}
 ) {
@@ -176,6 +234,46 @@ describe('debug conversation log panel', () => {
     expect(
       within(panel).getAllByTestId('debug-workflow-node-row')
     ).toHaveLength(2);
+  });
+
+  test('shows LLM tool callback rounds inside trace node detail', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '天气?',
+          rawOutput: null,
+          traceSummary: []
+        },
+        llmRoundAssistantMessage
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
+
+    const nodeDetail = within(panel).getByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    const rounds = within(nodeDetail).getByLabelText('LLM 回合');
+
+    expect(within(rounds).getByText('Round #1')).toBeInTheDocument();
+    expect(within(rounds).getByText('Tool Callback #1')).toBeInTheDocument();
+    expect(within(rounds).getByText('Final Answer')).toBeInTheDocument();
+    expect(rounds).toHaveTextContent('lookup_weather');
+    expect(rounds).toHaveTextContent('call_weather');
+    expect(rounds).toHaveTextContent('temperature');
+    expect(rounds).toHaveTextContent('weather is clear');
+    within(nodeDetail)
+      .getAllByLabelText('数据处理 JSON')
+      .forEach((block) => {
+        expect(block).not.toHaveTextContent('llm_rounds');
+      });
   });
 
   test('delegates log opening when the canvas shell controls the log panel', () => {

@@ -1765,6 +1765,73 @@ async fn complete_llm_tool_callback_rejects_partial_results_without_consuming_ta
 }
 
 #[tokio::test]
+async fn complete_llm_tool_callback_rejects_wrong_application_without_consuming_task() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderInvocationResult, ProviderToolCall, ProviderUsage,
+    };
+
+    let service =
+        OrchestrationRuntimeService::for_tests_with_provider_result(ProviderInvocationResult {
+            final_content: Some("need tool".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_weather".to_string(),
+                name: "lookup_weather".to_string(),
+                arguments: json!({ "city": "Shanghai" }),
+            }],
+            usage: ProviderUsage {
+                total_tokens: Some(12),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        });
+    let owner = service.seed_application_with_flow("Owner Agent").await;
+    let intruder = service.seed_application_with_flow("Intruder Agent").await;
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: owner.actor_user_id,
+            application_id: owner.application_id,
+            input_payload: json!({
+                "node-start": { "query": "天气？" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+    let waiting_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: owner.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+    let callback_task_id = waiting_detail.callback_tasks[0].id;
+
+    let error = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: intruder.actor_user_id,
+            application_id: intruder.application_id,
+            callback_task_id,
+            response_payload: json!({
+                "tool_results": [
+                    {
+                        "tool_call_id": "call_weather",
+                        "content": "{\"temperature\":21}"
+                    }
+                ]
+            }),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("flow run not found"));
+    let callback_task = service.callback_task_for_tests(callback_task_id).await;
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Pending);
+}
+
+#[tokio::test]
 async fn live_debug_checkpoint_snapshot_stores_llm_output_metrics_without_process_events() {
     use plugin_framework::provider_contract::{
         ProviderFinishReason, ProviderStreamEvent, ProviderToolCall, ProviderUsage,

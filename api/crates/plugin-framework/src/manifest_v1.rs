@@ -12,6 +12,7 @@ use crate::{
 pub enum PluginExecutionMode {
     InProcess,
     ProcessPerCall,
+    StatefulProviderWorker,
     DeclarativeOnly,
 }
 
@@ -20,6 +21,7 @@ impl PluginExecutionMode {
         match self {
             Self::InProcess => "in_process",
             Self::ProcessPerCall => "process_per_call",
+            Self::StatefulProviderWorker => "stateful_provider_worker",
             Self::DeclarativeOnly => "declarative_only",
         }
     }
@@ -253,8 +255,9 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
     validate_allowed(
         &manifest.runtime.protocol,
         "runtime.protocol",
-        &["stdio_json", "native_host"],
+        &["stdio_json", "stdio_json_worker", "native_host"],
     )?;
+    validate_execution_runtime_pair(manifest)?;
     validate_permission_values(&manifest.permissions)?;
     validate_binding_targets(&manifest.binding_targets)?;
     validate_slot_codes(manifest)?;
@@ -396,6 +399,26 @@ fn validate_plugin_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> 
         .any(|slot| slot == "frontend_block")
     {
         validate_frontend_block_contributions(&manifest.block_contributions)?;
+    }
+
+    Ok(())
+}
+
+fn validate_execution_runtime_pair(manifest: &PluginManifestV1) -> FrameworkResult<()> {
+    if manifest.execution_mode == PluginExecutionMode::StatefulProviderWorker
+        && manifest.runtime.protocol != "stdio_json_worker"
+    {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "stateful_provider_worker execution_mode requires runtime.protocol=stdio_json_worker",
+        ));
+    }
+
+    if manifest.runtime.protocol == "stdio_json_worker"
+        && manifest.execution_mode != PluginExecutionMode::StatefulProviderWorker
+    {
+        return Err(PluginFrameworkError::invalid_provider_package(
+            "stdio_json_worker runtime.protocol requires execution_mode=stateful_provider_worker",
+        ));
     }
 
     Ok(())

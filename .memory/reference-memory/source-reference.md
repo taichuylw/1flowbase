@@ -14,8 +14,8 @@ match_when:
   - 需要查找上层相邻项目源码
   - 需要确认前端技术边界参考文档
 created_at: 2026-04-12 19
-updated_at: 2026-05-07 23
-last_verified_at: 2026-05-07 23
+updated_at: 2026-05-21 18
+last_verified_at: 2026-05-21 18
 decision_policy: index_only
 scope:
   - ../1flowbase-latest
@@ -84,6 +84,8 @@ scope:
   - 相邻平台源码参考入口。
 - `../openai-agents-js`
   - OpenAI Agents JavaScript SDK 参考入口。
+- `../codex`
+  - OpenAI Responses API / Codex 风格请求、SSE 解析、工具调用返回和流式错误处理参考入口；优先看 `codex-rs/codex-api/src/endpoint/responses.rs`、`codex-rs/codex-api/src/sse/responses.rs`、`codex-rs/codex-api/src/common.rs`、`codex-rs/core/src/client.rs`。
 - `../scalar`
   - API 文档和接口浏览体验参考入口。
 - `../supabase`
@@ -101,7 +103,6 @@ scope:
 - `../awesome-design-md`
 - `../bird`
 - `../cc-switch`
-- `../codex`
 - `../css-modules`
 - `../ds2api`
 - `../hermes-agent`

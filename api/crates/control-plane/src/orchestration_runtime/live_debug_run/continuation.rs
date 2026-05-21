@@ -521,7 +521,7 @@ where
                             external_ref_payload: Some(wait.request_payload.clone()),
                         })
                         .await?;
-                    service
+                    let callback_task = service
                         .repository
                         .create_callback_task(&CreateCallbackTaskInput {
                             flow_run_id: flow_run.id,
@@ -544,10 +544,11 @@ where
                     append_runtime_event(
                         service,
                         flow_run.id,
-                        debug_stream_events::waiting_callback(
+                        debug_stream_events::waiting_callback_with_task(
                             flow_run.id,
                             node_run.id,
                             &node.node_id,
+                            &callback_task,
                         ),
                     )
                     .await;
@@ -768,7 +769,7 @@ where
                             external_ref_payload: Some(confirmation_payload.clone()),
                         })
                         .await?;
-                    service
+                    let callback_task = service
                         .repository
                         .create_callback_task(&CreateCallbackTaskInput {
                             flow_run_id: flow_run.id,
@@ -791,10 +792,11 @@ where
                     append_runtime_event(
                         service,
                         flow_run.id,
-                        debug_stream_events::waiting_callback(
+                        debug_stream_events::waiting_callback_with_task(
                             flow_run.id,
                             node_run.id,
                             &node.node_id,
+                            &callback_task,
                         ),
                     )
                     .await;
@@ -1036,7 +1038,7 @@ where
                         external_ref_payload: Some(request_payload.clone()),
                     })
                     .await?;
-                service
+                let callback_task = service
                     .repository
                     .create_callback_task(&CreateCallbackTaskInput {
                         flow_run_id: flow_run.id,
@@ -1059,7 +1061,12 @@ where
                 append_runtime_event(
                     service,
                     flow_run.id,
-                    debug_stream_events::waiting_callback(flow_run.id, node_run.id, &node.node_id),
+                    debug_stream_events::waiting_callback_with_task(
+                        flow_run.id,
+                        node_run.id,
+                        &node.node_id,
+                        &callback_task,
+                    ),
                 )
                 .await;
                 close_runtime_event_stream(

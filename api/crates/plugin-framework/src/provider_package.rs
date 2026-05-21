@@ -241,15 +241,16 @@ fn validate_manifest(manifest: &PluginManifestV1) -> FrameworkResult<()> {
             "model provider package must declare slot_codes including model_provider",
         ));
     }
-    if manifest.execution_mode != crate::PluginExecutionMode::ProcessPerCall {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "model provider package must declare execution_mode=process_per_call",
-        ));
-    }
-    if manifest.runtime.protocol != "stdio_json" {
-        return Err(PluginFrameworkError::invalid_provider_package(
-            "model provider package must declare runtime.protocol=stdio_json",
-        ));
+    match manifest.execution_mode {
+        crate::PluginExecutionMode::ProcessPerCall if manifest.runtime.protocol == "stdio_json" => {
+        }
+        crate::PluginExecutionMode::StatefulProviderWorker
+            if manifest.runtime.protocol == "stdio_json_worker" => {}
+        _ => {
+            return Err(PluginFrameworkError::invalid_provider_package(
+                "model provider package must declare execution_mode=process_per_call with runtime.protocol=stdio_json or execution_mode=stateful_provider_worker with runtime.protocol=stdio_json_worker",
+            ));
+        }
     }
     Ok(())
 }

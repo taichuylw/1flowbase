@@ -90,3 +90,32 @@ printf '%s\n' '{not-json'
 
     assert!(error.to_string().contains("invalid provider ndjson"));
 }
+
+#[tokio::test]
+async fn provider_worker_stdio_reuses_process_across_streaming_invocations() {
+    let script = write_script(
+        "worker-reuse",
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+count=0
+while IFS= read -r _request; do
+  count=$((count + 1))
+  printf '%s\n' "{\"type\":\"text_delta\",\"delta\":\"turn-${count}\"}"
+  printf '%s\n' "{\"type\":\"result\",\"result\":{\"final_content\":\"turn-${count}\",\"finish_reason\":\"stop\"}}"
+done
+"#,
+    );
+    let mut worker = plugin_runner::stdio_runtime::ProviderWorker::new(script, limits());
+
+    let first = worker
+        .call_streaming(&invoke_request(), None)
+        .await
+        .expect("first worker invoke should succeed");
+    let second = worker
+        .call_streaming(&invoke_request(), None)
+        .await
+        .expect("second worker invoke should reuse process");
+
+    assert_eq!(first.result.final_content.as_deref(), Some("turn-1"));
+    assert_eq!(second.result.final_content.as_deref(), Some("turn-2"));
+}

@@ -1579,6 +1579,24 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
         .iter()
         .all(|trace| trace.node_id != "node-answer"));
     assert!(outcome.variable_pool.get("node-answer").is_none());
+
+    let llm_trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["content"],
+        json!("need tools")
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
+        json!("call_weather")
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["finish_reason"],
+        json!("tool_call")
+    );
 }
 
 #[tokio::test]
@@ -1647,6 +1665,105 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert_eq!(messages[1]["role"], json!("tool"));
     assert_eq!(messages[1]["tool_call_id"], json!("call_weather"));
     assert_eq!(messages[2]["role"], json!("user"));
+
+    let resumed_llm_trace = resumed
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("resumed llm trace should exist");
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
+        json!("call_weather")
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["tool_call_id"],
+        json!("call_weather")
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][1]["assistant"]["content"],
+        json!("weather is clear")
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][1]["finish_reason"],
+        json!("stop")
+    );
+}
+
+#[tokio::test]
+async fn multi_round_llm_tool_callbacks_keep_previous_round_debug_evidence() {
+    let first_call = ProviderToolCall {
+        id: "call_weather".to_string(),
+        name: "lookup_weather".to_string(),
+        arguments: json!({ "city": "Shanghai" }),
+    };
+    let second_call = ProviderToolCall {
+        id: "call_time".to_string(),
+        name: "lookup_time".to_string(),
+        arguments: json!({ "city": "Shanghai" }),
+    };
+    let plan = llm_answer_plan();
+    let (waiting_invoker, _waiting_inputs) =
+        sequential_tool_invoker(vec![tool_call_response(vec![first_call])]);
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "weather and time?" } }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+    let first_checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("first tool wait should have checkpoint");
+
+    let (second_wait_invoker, _second_inputs) =
+        sequential_tool_invoker(vec![tool_call_response(vec![second_call])]);
+    let second_wait = resume_flow_debug_run(
+        &plan,
+        &first_checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_weather",
+                    "content": "{\"temperature\":21}"
+                }
+            ]
+        }),
+        &second_wait_invoker,
+    )
+    .await
+    .unwrap();
+
+    match second_wait.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(pending.node_id, "node-llm");
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["id"],
+                json!("call_time")
+            );
+        }
+        other => panic!("expected second llm tool callback wait, got {other:?}"),
+    }
+
+    let llm_trace = second_wait
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("second wait llm trace should exist");
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
+        json!("call_weather")
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["tool_call_id"],
+        json!("call_weather")
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][1]["assistant"]["tool_calls"][0]["id"],
+        json!("call_time")
+    );
 }
 
 #[tokio::test]

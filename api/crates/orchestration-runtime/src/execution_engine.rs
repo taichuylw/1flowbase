@@ -502,6 +502,7 @@ where
             rendered_templates,
             variable_pool,
         );
+        let invocation_messages = invocation_input.messages.clone();
         if invocation_input.messages.is_empty() {
             let error_payload = build_empty_prompt_messages_error_payload(attempt_runtime);
             let attempt = build_attempt_metric(
@@ -528,6 +529,7 @@ where
                 ),
                 Vec::new(),
                 false,
+                &invocation_messages,
             );
         }
         let output = match invoker.invoke_llm(attempt_runtime, invocation_input).await {
@@ -563,6 +565,7 @@ where
                     ),
                     Vec::new(),
                     true,
+                    &invocation_messages,
                 );
             }
         };
@@ -628,6 +631,7 @@ where
                 ),
                 output.events,
                 true,
+                &invocation_messages,
             );
         }
 
@@ -644,6 +648,7 @@ where
                 attempt_metrics,
             ),
             output.events,
+            &invocation_messages,
         );
     }
 
@@ -665,6 +670,7 @@ where
         ),
         Vec::new(),
         true,
+        &[],
     )
 }
 
@@ -1460,12 +1466,13 @@ fn build_failed_llm_execution(
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
     include_output_payload: bool,
+    invocation_messages: &[ProviderMessage],
 ) -> Result<LlmNodeExecution> {
     let raw = RawNodeExecutionResult {
         executor_output: Map::new(),
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
-        debug_facts: build_llm_debug_facts(node, runtime, None),
+        debug_facts: build_llm_debug_facts(node, runtime, None, invocation_messages),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1490,6 +1497,7 @@ fn build_successful_llm_execution(
     final_content: Option<String>,
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
+    invocation_messages: &[ProviderMessage],
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
     let answer_text = strip_llm_think_tags(&raw_text);
@@ -1539,7 +1547,7 @@ fn build_successful_llm_execution(
         executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: Map::new(),
-        debug_facts: build_llm_debug_facts(node, runtime, Some(result)),
+        debug_facts: build_llm_debug_facts(node, runtime, Some(result), invocation_messages),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1585,6 +1593,7 @@ fn build_llm_debug_facts(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
     result: Option<&ProviderInvocationResult>,
+    invocation_messages: &[ProviderMessage],
 ) -> Map<String, Value> {
     let attempt_ref = format!("pending_attempt_id:{}", node.node_id);
     let mut debug = Map::new();
@@ -1608,6 +1617,10 @@ fn build_llm_debug_facts(
         Value::Array(vec![Value::String(attempt_ref.clone())]),
     );
     debug.insert("winner_attempt_ref".to_string(), Value::String(attempt_ref));
+    let llm_rounds = build_llm_round_timeline(invocation_messages, result);
+    if !llm_rounds.is_empty() {
+        debug.insert("llm_rounds".to_string(), Value::Array(llm_rounds));
+    }
     if result.is_none() {
         debug.insert(
             "provider_route".to_string(),
@@ -1616,6 +1629,99 @@ fn build_llm_debug_facts(
     }
 
     debug
+}
+
+fn build_llm_round_timeline(
+    invocation_messages: &[ProviderMessage],
+    result: Option<&ProviderInvocationResult>,
+) -> Vec<Value> {
+    let mut rounds = Vec::new();
+
+    for message in invocation_messages {
+        match message.role {
+            ProviderMessageRole::Assistant => {
+                rounds.push(json!({
+                    "round_index": rounds.len(),
+                    "assistant": provider_message_debug_payload(message),
+                    "tool_results": [],
+                }));
+            }
+            ProviderMessageRole::Tool => {
+                if let Some(round) = rounds.last_mut().and_then(Value::as_object_mut) {
+                    if let Some(tool_results) =
+                        round.get_mut("tool_results").and_then(Value::as_array_mut)
+                    {
+                        tool_results.push(provider_message_debug_payload(message));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(result) = result {
+        let mut round = Map::new();
+        round.insert("round_index".to_string(), json!(rounds.len()));
+        round.insert(
+            "assistant".to_string(),
+            provider_result_assistant_debug_payload(result),
+        );
+        if let Some(finish_reason) = result.finish_reason.as_ref() {
+            round.insert(
+                "finish_reason".to_string(),
+                serde_json::to_value(finish_reason).unwrap_or(Value::Null),
+            );
+        }
+        rounds.push(Value::Object(round));
+    }
+
+    rounds
+}
+
+fn provider_message_debug_payload(message: &ProviderMessage) -> Value {
+    let mut payload = Map::new();
+    payload.insert(
+        "role".to_string(),
+        serde_json::to_value(&message.role).unwrap_or(Value::Null),
+    );
+    payload.insert(
+        "content".to_string(),
+        Value::String(message.content.clone()),
+    );
+    if let Some(name) = &message.name {
+        payload.insert("name".to_string(), Value::String(name.clone()));
+    }
+    if let Some(tool_call_id) = &message.tool_call_id {
+        payload.insert(
+            "tool_call_id".to_string(),
+            Value::String(tool_call_id.clone()),
+        );
+    }
+    if let Some(tool_calls) = &message.tool_calls {
+        payload.insert("tool_calls".to_string(), tool_calls.clone());
+    }
+    if let Some(content_blocks) = &message.content_blocks {
+        payload.insert("content_blocks".to_string(), content_blocks.clone());
+    }
+
+    Value::Object(payload)
+}
+
+fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) -> Value {
+    let mut payload = Map::new();
+    payload.insert("role".to_string(), Value::String("assistant".to_string()));
+    payload.insert(
+        "content".to_string(),
+        Value::String(result.final_content.clone().unwrap_or_default()),
+    );
+    if !result.tool_calls.is_empty() {
+        payload.insert(
+            "tool_calls".to_string(),
+            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+        );
+    }
+
+    Value::Object(payload)
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {

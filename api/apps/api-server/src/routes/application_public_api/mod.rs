@@ -3,6 +3,7 @@ pub mod compat_sse;
 pub mod native;
 pub mod openai;
 pub mod sse;
+pub(crate) mod tool_callback_ids;
 
 use std::sync::Arc;
 

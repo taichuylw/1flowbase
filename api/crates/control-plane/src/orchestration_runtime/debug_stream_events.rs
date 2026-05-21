@@ -1,5 +1,5 @@
 use crate::ports::{RuntimeEventDurability, RuntimeEventPayload, RuntimeEventSource};
-use serde_json::json;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 pub fn flow_accepted(run_id: Uuid) -> RuntimeEventPayload {
@@ -123,6 +123,54 @@ pub fn waiting_callback(run_id: Uuid, node_run_id: Uuid, node_id: &str) -> Runti
             "node_run_id": node_run_id,
             "node_id": node_id,
             "status": "waiting_callback",
+        }),
+    }
+}
+
+pub fn waiting_callback_with_task(
+    run_id: Uuid,
+    node_run_id: Uuid,
+    node_id: &str,
+    task: &domain::CallbackTaskRecord,
+) -> RuntimeEventPayload {
+    let action_type = if task.callback_kind == "llm_tool_calls" {
+        "submit_tool_outputs"
+    } else {
+        "callback"
+    };
+    let tool_calls = task
+        .request_payload
+        .get("tool_calls")
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    RuntimeEventPayload {
+        event_type: "waiting_callback".to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: json!({
+            "type": "waiting_callback",
+            "run_id": run_id,
+            "node_run_id": node_run_id,
+            "node_id": node_id,
+            "status": "waiting_callback",
+            "callback_task_id": task.id,
+            "callback_kind": task.callback_kind,
+            "request_payload": task.request_payload,
+            "tool_calls": tool_calls,
+            "required_action": {
+                "action_type": action_type,
+                "payload": {
+                    "callback_task_id": task.id,
+                    "callback_kind": task.callback_kind,
+                    "flow_run_id": task.flow_run_id,
+                    "node_run_id": task.node_run_id,
+                    "request_payload": task.request_payload,
+                    "tool_calls": tool_calls,
+                }
+            }
         }),
     }
 }

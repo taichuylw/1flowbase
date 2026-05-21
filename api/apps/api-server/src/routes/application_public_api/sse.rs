@@ -219,10 +219,7 @@ fn native_sse_payload_for_runtime_event(
                 metadata: Some(initial_run.metadata.clone()),
                 error: None,
                 workflow: None,
-                required_action: Some(json!({
-                    "type": envelope.event_type,
-                    "run_id": initial_run.id,
-                })),
+                required_action: Some(native_required_action_payload(initial_run, &envelope)),
             },
         ),
         "flow_finished" => (
@@ -299,6 +296,22 @@ fn native_sse_payload_for_runtime_event(
         ),
         _ => return None,
     })
+}
+
+fn native_required_action_payload(
+    initial_run: &NativeRunResult,
+    envelope: &RuntimeEventEnvelope,
+) -> Value {
+    envelope
+        .payload
+        .get("required_action")
+        .cloned()
+        .unwrap_or_else(|| {
+            json!({
+                "type": envelope.event_type,
+                "run_id": initial_run.id,
+            })
+        })
 }
 
 fn is_public_terminal_runtime_event(event_type: &str) -> bool {
@@ -392,5 +405,60 @@ mod tests {
         assert_eq!(event_name, "reasoning.delta");
         assert_eq!(payload["delta"], json!("先分析用户问题"));
         assert_eq!(payload.get("workflow"), None);
+    }
+
+    #[test]
+    fn native_sse_includes_waiting_callback_required_action_payload() {
+        let run = native_run();
+        let callback_task = domain::CallbackTaskRecord {
+            id: Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),
+            flow_run_id: run.id,
+            node_run_id: Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb),
+            callback_kind: "llm_tool_calls".to_string(),
+            status: domain::CallbackTaskStatus::Pending,
+            request_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": "call_weather",
+                        "name": "lookup_weather",
+                        "arguments": {"city": "Hangzhou"}
+                    }
+                ]
+            }),
+            response_payload: None,
+            external_ref_payload: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            completed_at: None,
+        };
+        let event = RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            debug_stream_events::waiting_callback_with_task(
+                run.id,
+                callback_task.node_run_id,
+                "node-llm",
+                &callback_task,
+            ),
+        );
+
+        let (event_name, payload) =
+            native_sse_payload_for_runtime_event(&run, IncludeWorkflowEvents::None, event)
+                .expect("waiting callback should be public native SSE");
+        let payload = serde_json::to_value(payload).expect("payload serializes");
+
+        assert_eq!(event_name, "required_action");
+        assert_eq!(payload["status"], json!("waiting"));
+        assert_eq!(
+            payload["required_action"]["action_type"],
+            json!("submit_tool_outputs")
+        );
+        assert_eq!(
+            payload["required_action"]["payload"]["callback_task_id"],
+            json!(callback_task.id)
+        );
+        assert_eq!(
+            payload["required_action"]["payload"]["tool_calls"][0]["name"],
+            json!("lookup_weather")
+        );
     }
 }

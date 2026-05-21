@@ -188,11 +188,23 @@ pub(crate) fn service_error(error: anyhow::Error) -> NativeApiError {
     {
         return NativeApiError::new(StatusCode::FORBIDDEN, reason, error.to_string());
     }
-    NativeApiError::new(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "internal_error",
-        error.to_string(),
-    )
+    let message = error.to_string();
+    if is_llm_tool_result_validation_error(&message) {
+        return NativeApiError::new(StatusCode::BAD_REQUEST, "tool_results", message);
+    }
+    NativeApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", message)
+}
+
+fn is_llm_tool_result_validation_error(message: &str) -> bool {
+    [
+        "llm tool callback response requires tool_results",
+        "llm tool callback result is missing tool_call_id",
+        "unexpected tool result for ",
+        "duplicate tool result for ",
+        "missing tool result for ",
+    ]
+    .iter()
+    .any(|prefix| message.starts_with(prefix))
 }
 
 fn parse_native_run_request(bytes: Bytes) -> Result<NativeRunRequest, NativeApiError> {

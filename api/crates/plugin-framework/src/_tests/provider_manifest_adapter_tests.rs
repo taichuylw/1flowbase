@@ -190,6 +190,25 @@ node_contributions: []
 }
 
 #[test]
+fn provider_package_accepts_stateful_provider_worker_runtime() {
+    let fixture = make_package_fixture(
+        "acme_openai_compatible",
+        &["model_provider"],
+        "stateful_provider_worker",
+        "stdio_json_worker",
+    );
+
+    let package = ProviderPackage::load_from_dir(fixture.path()).unwrap();
+
+    assert_eq!(package.provider.provider_code, "acme_openai_compatible");
+    assert_eq!(
+        package.manifest.execution_mode.as_str(),
+        "stateful_provider_worker"
+    );
+    assert_eq!(package.manifest.runtime.protocol, "stdio_json_worker");
+}
+
+#[test]
 fn provider_package_rejects_non_process_per_call_execution_mode() {
     let fixture = make_package_fixture(
         "acme_openai_compatible",
@@ -218,5 +237,5 @@ fn provider_package_rejects_non_stdio_runtime_protocol() {
 
     assert!(error
         .to_string()
-        .contains("model provider package must declare runtime.protocol=stdio_json"));
+        .contains("model provider package must declare execution_mode=process_per_call"));
 }

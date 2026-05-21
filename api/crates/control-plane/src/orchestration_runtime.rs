@@ -736,17 +736,9 @@ where
                 &command.response_payload,
             )?;
         }
-        let callback_task = self
-            .repository
-            .complete_callback_task(&CompleteCallbackTaskInput {
-                callback_task_id: command.callback_task_id,
-                response_payload: command.response_payload.clone(),
-                completed_at: OffsetDateTime::now_utc(),
-            })
-            .await?;
         let detail = self
             .repository
-            .get_application_run_detail(command.application_id, callback_task.flow_run_id)
+            .get_application_run_detail(command.application_id, pending_callback_task.flow_run_id)
             .await?
             .ok_or_else(|| anyhow!("flow run not found for callback task"))?;
         let application = self
@@ -758,7 +750,7 @@ where
             .checkpoints
             .iter()
             .rev()
-            .find(|record| record.node_run_id == Some(callback_task.node_run_id))
+            .find(|record| record.node_run_id == Some(pending_callback_task.node_run_id))
             .cloned()
             .ok_or_else(|| anyhow!("checkpoint not found for callback task"))?;
         let flow_run = detail.flow_run.clone();
@@ -772,6 +764,14 @@ where
             .ok_or_else(|| anyhow!("compiled plan not found"))?;
         let compiled_plan: orchestration_runtime::compiled_plan::CompiledPlan =
             serde_json::from_value(compiled_record.plan.clone())?;
+        let callback_task = self
+            .repository
+            .complete_callback_task(&CompleteCallbackTaskInput {
+                callback_task_id: command.callback_task_id,
+                response_payload: command.response_payload.clone(),
+                completed_at: OffsetDateTime::now_utc(),
+            })
+            .await?;
         if callback_task.callback_kind == "data_model_side_effect_confirmation" {
             return self
                 .complete_data_model_side_effect_callback(

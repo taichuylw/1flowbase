@@ -5,6 +5,7 @@ import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { NodeRunPayloadSections } from '../detail/last-run/NodeRunIOCard';
 import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
+import { LlmRoundTimeline } from './conversation/DebugWorkflowProcess';
 import {
   getTraceItemKey,
   nodeDisplayName
@@ -51,6 +52,20 @@ function formatTimestamp(value: string | null | undefined) {
 
 function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
   return message.compatibilityModeLabel ?? message.compatibilityMode ?? '—';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function debugPayloadWithoutLlmRounds(debugPayload: unknown) {
+  if (!isRecord(debugPayload) || !Array.isArray(debugPayload.llm_rounds)) {
+    return debugPayload;
+  }
+
+  return Object.fromEntries(
+    Object.entries(debugPayload).filter(([key]) => key !== 'llm_rounds')
+  );
 }
 
 function ConversationLogDetail({
@@ -170,8 +185,14 @@ function ConversationTrace({
                 className="agent-flow-editor__conversation-log-node-detail"
               >
                 <div className="agent-flow-editor__conversation-log-json-list">
+                  <LlmRoundTimeline
+                    debugPayload={item.debugPayload}
+                    onLoadArtifact={onLoadArtifact}
+                  />
                   <NodeRunPayloadSections
-                    debugPayload={item.debugPayload ?? {}}
+                    debugPayload={debugPayloadWithoutLlmRounds(
+                      item.debugPayload ?? {}
+                    )}
                     inputPayload={item.inputPayload}
                     outputPayload={item.outputPayload}
                     onLoadArtifact={onLoadArtifact}

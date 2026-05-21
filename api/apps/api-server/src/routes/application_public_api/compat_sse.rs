@@ -18,7 +18,12 @@ use tracing::{debug, info, warn};
 use crate::{
     app_state::ApiState,
     provider_runtime::ApiProviderRuntime,
-    routes::application_public_api::native::{service_error, NativeApiError},
+    routes::application_public_api::{
+        native::{service_error, NativeApiError},
+        tool_callback_ids::{
+            encode_anthropic_callback_tool_use_id, encode_openai_callback_tool_call_id,
+        },
+    },
 };
 
 type CompatRunSseStream = tokio_stream::wrappers::ReceiverStream<Result<Event, Infallible>>;
@@ -56,6 +61,36 @@ pub(crate) async fn start_anthropic_run_stream(
         stateful_mapper.runtime_event_to_sse(run, envelope)
     })
     .await
+}
+
+pub(crate) fn completed_openai_chat_stream(run: NativeRunResult, model: String) -> Response {
+    completed_compatible_stream(openai_completed_run_to_sse(&run, &model))
+}
+
+pub(crate) fn completed_openai_response_stream(
+    run: NativeRunResult,
+    model: String,
+    previous_response_id: Option<String>,
+) -> Response {
+    completed_compatible_stream(openai_response_completed_run_to_sse(
+        &run,
+        &model,
+        previous_response_id.as_deref(),
+    ))
+}
+
+pub(crate) fn completed_anthropic_stream(run: NativeRunResult, model: String) -> Response {
+    completed_compatible_stream(anthropic_completed_run_to_sse(&run, &model))
+}
+
+fn completed_compatible_stream(events: Vec<Result<Event, Infallible>>) -> Response {
+    Sse::new(tokio_stream::iter(events))
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(10))
+                .text("heartbeat"),
+        )
+        .into_response()
 }
 
 async fn start_compatible_run_stream<F>(
@@ -275,17 +310,20 @@ fn openai_runtime_event_to_sse(
             done_sse(),
         ],
         "flow_cancelled" => vec![done_sse()],
-        "waiting_human" | "waiting_callback" => vec![
-            json_sse(json!({
-                "error": {
-                    "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs",
-                    "type": "invalid_request_error",
-                    "param": null,
-                    "code": "required_action_not_supported"
-                }
-            })),
-            done_sse(),
-        ],
+        "waiting_callback" => openai_tool_call_chunk_payload(initial_run, model, &envelope.payload)
+            .map(|payload| {
+                vec![
+                    json_sse(payload),
+                    json_sse(openai_finish_chunk_payload(
+                        initial_run,
+                        model,
+                        "tool_calls",
+                    )),
+                    done_sse(),
+                ]
+            })
+            .unwrap_or_else(required_action_not_supported_openai_sse),
+        "waiting_human" => required_action_not_supported_openai_sse(),
         _ => Vec::new(),
     }
 }
@@ -379,24 +417,22 @@ fn openai_response_runtime_event_to_sse(
                 }
             }),
         )],
-        "waiting_human" | "waiting_callback" => vec![event_json_sse(
-            "response.failed",
-            json!({
-                "type": "response.failed",
-                "response": openai_response_stream_snapshot(
+        "waiting_callback" => openai_response_function_call_output_items(&envelope.payload)
+            .map(|items| {
+                openai_response_function_call_sse(initial_run, model, previous_response_id, items)
+            })
+            .unwrap_or_else(|| {
+                required_action_not_supported_openai_response_sse(
                     initial_run,
                     model,
                     previous_response_id,
-                    "failed"
-                ),
-                "error": {
-                    "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs",
-                    "type": "invalid_request_error",
-                    "param": null,
-                    "code": "required_action_not_supported"
-                }
+                )
             }),
-        )],
+        "waiting_human" => required_action_not_supported_openai_response_sse(
+            initial_run,
+            model,
+            previous_response_id,
+        ),
         _ => Vec::new(),
     }
 }
@@ -442,6 +478,390 @@ fn openai_delta_chunk_payload(
             "finish_reason": null
         }]
     }))
+}
+
+fn openai_tool_call_chunk_payload(
+    initial_run: &NativeRunResult,
+    model: &str,
+    payload: &Value,
+) -> Option<Value> {
+    let callback_task_id = llm_tool_callback_task_id(payload)?;
+    let calls = llm_tool_calls(payload)?;
+    let tool_calls = calls
+        .iter()
+        .enumerate()
+        .filter_map(|(index, call)| {
+            let name = call.get("name").and_then(Value::as_str)?;
+            let original_id = call
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("tool_call")
+                .to_string();
+            let arguments = call.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            Some(json!({
+                "index": index,
+                "id": encode_openai_callback_tool_call_id(callback_task_id, &original_id),
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": tool_call_arguments_string(arguments)
+                }
+            }))
+        })
+        .collect::<Vec<_>>();
+    if tool_calls.is_empty() {
+        return None;
+    }
+
+    Some(json!({
+        "id": format!("chatcmpl-{}", initial_run.id),
+        "object": "chat.completion.chunk",
+        "created": initial_run.created_at.unix_timestamp(),
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": { "tool_calls": tool_calls },
+            "finish_reason": null
+        }]
+    }))
+}
+
+fn openai_finish_chunk_payload(
+    initial_run: &NativeRunResult,
+    model: &str,
+    finish_reason: &'static str,
+) -> Value {
+    json!({
+        "id": format!("chatcmpl-{}", initial_run.id),
+        "object": "chat.completion.chunk",
+        "created": initial_run.created_at.unix_timestamp(),
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": {},
+            "finish_reason": finish_reason
+        }]
+    })
+}
+
+fn openai_response_function_call_output_items(payload: &Value) -> Option<Vec<Value>> {
+    let callback_task_id = llm_tool_callback_task_id(payload)?;
+    let calls = llm_tool_calls(payload)?;
+    let output = calls
+        .iter()
+        .filter_map(|call| {
+            let name = call.get("name").and_then(Value::as_str)?;
+            let original_id = call
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("tool_call")
+                .to_string();
+            let arguments = call.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            Some(json!({
+                "id": format!("fc_{}", original_id),
+                "type": "function_call",
+                "call_id": encode_openai_callback_tool_call_id(callback_task_id, &original_id),
+                "name": name,
+                "arguments": tool_call_arguments_string(arguments),
+                "status": "completed"
+            }))
+        })
+        .collect::<Vec<_>>();
+    (!output.is_empty()).then_some(output)
+}
+
+fn openai_response_function_call_sse(
+    initial_run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+    output: Vec<Value>,
+) -> Vec<Result<Event, Infallible>> {
+    let mut events = output
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            event_json_sse(
+                "response.output_item.added",
+                json!({
+                    "type": "response.output_item.added",
+                    "response_id": response_id_from_run_id(initial_run.id),
+                    "output_index": index,
+                    "item": item
+                }),
+            )
+        })
+        .collect::<Vec<_>>();
+    events.push(event_json_sse(
+        "response.completed",
+        json!({
+            "type": "response.completed",
+            "response": openai_response_stream_snapshot_with_output(
+                initial_run,
+                model,
+                previous_response_id,
+                "completed",
+                output
+            )
+        }),
+    ));
+    events
+}
+
+fn openai_response_stream_snapshot_with_output(
+    initial_run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+    status: &'static str,
+    output: Vec<Value>,
+) -> Value {
+    json!({
+        "id": response_id_from_run_id(initial_run.id),
+        "object": "response",
+        "created_at": initial_run.created_at.unix_timestamp(),
+        "status": status,
+        "model": model,
+        "output": output,
+        "output_text": "",
+        "previous_response_id": previous_response_id
+    })
+}
+
+fn openai_completed_run_to_sse(
+    run: &NativeRunResult,
+    model: &str,
+) -> Vec<Result<Event, Infallible>> {
+    let mut events = vec![json_sse(json!({
+        "id": format!("chatcmpl-{}", run.id),
+        "object": "chat.completion.chunk",
+        "created": run.created_at.unix_timestamp(),
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": { "role": "assistant" },
+            "finish_reason": null
+        }]
+    }))];
+    if let Some(payload) = waiting_payload_from_run(run) {
+        if let Some(tool_call_payload) = openai_tool_call_chunk_payload(run, model, &payload) {
+            events.push(json_sse(tool_call_payload));
+            events.push(json_sse(openai_finish_chunk_payload(
+                run,
+                model,
+                "tool_calls",
+            )));
+            events.push(done_sse());
+            return events;
+        }
+    }
+    if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
+        if let Some(payload) = openai_delta_chunk_payload(run, model, "text_delta", answer.clone())
+        {
+            events.push(json_sse(payload));
+        }
+    }
+    events.push(json_sse(openai_finish_chunk_payload(run, model, "stop")));
+    events.push(done_sse());
+    events
+}
+
+fn openai_response_completed_run_to_sse(
+    run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+) -> Vec<Result<Event, Infallible>> {
+    let mut events = vec![event_json_sse(
+        "response.created",
+        json!({
+            "type": "response.created",
+            "response": openai_response_stream_snapshot(
+                run,
+                model,
+                previous_response_id,
+                "in_progress"
+            )
+        }),
+    )];
+    if let Some(payload) = waiting_payload_from_run(run) {
+        if let Some(output) = openai_response_function_call_output_items(&payload) {
+            events.extend(openai_response_function_call_sse(
+                run,
+                model,
+                previous_response_id,
+                output,
+            ));
+            return events;
+        }
+    }
+    if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
+        events.push(event_json_sse(
+            "response.output_text.delta",
+            json!({
+                "type": "response.output_text.delta",
+                "response_id": response_id_from_run_id(run.id),
+                "item_id": format!("msg_{}", run.id),
+                "output_index": 0,
+                "content_index": 0,
+                "delta": answer
+            }),
+        ));
+    }
+    events.push(event_json_sse(
+        "response.completed",
+        json!({
+            "type": "response.completed",
+            "response": openai_response_stream_snapshot(
+                run,
+                model,
+                previous_response_id,
+                "completed"
+            )
+        }),
+    ));
+    events
+}
+
+fn anthropic_tool_use_blocks_from_waiting_payload(payload: &Value) -> Option<Vec<Value>> {
+    let callback_task_id = llm_tool_callback_task_id(payload)?;
+    let calls = llm_tool_calls(payload)?;
+    let blocks = calls
+        .iter()
+        .filter_map(|call| {
+            let name = call.get("name").and_then(Value::as_str)?;
+            let original_id = call
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("toolu_call")
+                .to_string();
+            let input = call.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            Some(json!({
+                "type": "tool_use",
+                "id": encode_anthropic_callback_tool_use_id(callback_task_id, &original_id),
+                "name": name,
+                "input": input
+            }))
+        })
+        .collect::<Vec<_>>();
+    (!blocks.is_empty()).then_some(blocks)
+}
+
+fn anthropic_completed_run_to_sse(
+    run: &NativeRunResult,
+    model: &str,
+) -> Vec<Result<Event, Infallible>> {
+    let mut mapper = AnthropicStreamMapper::new(model.to_string());
+    let mut events = mapper.runtime_event_to_sse(
+        run,
+        RuntimeEventEnvelope::new(run.id, 0, debug_stream_events::flow_started(run.id)),
+    );
+    if let Some(payload) = waiting_payload_from_run(run) {
+        if let Some(tool_events) = mapper.anthropic_tool_use_events(&payload) {
+            events.extend(tool_events);
+            return events;
+        }
+    }
+    if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
+        events.extend(mapper.runtime_event_to_sse(
+            run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::text_delta("assistant", run.id, answer.clone()),
+            ),
+        ));
+    }
+    events.extend(mapper.anthropic_stop_events());
+    events
+}
+
+fn waiting_payload_from_run(run: &NativeRunResult) -> Option<Value> {
+    let action = run.required_action.as_ref()?;
+    Some(json!({
+        "callback_kind": action.payload.get("callback_kind").cloned().unwrap_or(Value::Null),
+        "callback_task_id": action.payload.get("callback_task_id").cloned().unwrap_or(Value::Null),
+        "tool_calls": run.tool_calls.clone().unwrap_or(Value::Null),
+    }))
+}
+
+fn llm_tool_callback_task_id(payload: &Value) -> Option<uuid::Uuid> {
+    if payload.get("callback_kind").and_then(Value::as_str) != Some("llm_tool_calls") {
+        return None;
+    }
+    payload
+        .get("callback_task_id")
+        .and_then(Value::as_str)
+        .and_then(|value| uuid::Uuid::parse_str(value).ok())
+}
+
+fn llm_tool_calls(payload: &Value) -> Option<&Vec<Value>> {
+    payload
+        .get("tool_calls")
+        .and_then(Value::as_array)
+        .or_else(|| {
+            payload
+                .get("request_payload")
+                .and_then(|request| request.get("tool_calls"))
+                .and_then(Value::as_array)
+        })
+        .filter(|calls| !calls.is_empty())
+}
+
+fn tool_call_arguments_string(arguments: Value) -> String {
+    match arguments {
+        Value::String(value) => value,
+        value => value.to_string(),
+    }
+}
+
+fn required_action_not_supported_openai_sse() -> Vec<Result<Event, Infallible>> {
+    vec![
+        json_sse(json!({
+            "error": {
+                "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs",
+                "type": "invalid_request_error",
+                "param": null,
+                "code": "required_action_not_supported"
+            }
+        })),
+        done_sse(),
+    ]
+}
+
+fn required_action_not_supported_openai_response_sse(
+    initial_run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+) -> Vec<Result<Event, Infallible>> {
+    vec![event_json_sse(
+        "response.failed",
+        json!({
+            "type": "response.failed",
+            "response": openai_response_stream_snapshot(
+                initial_run,
+                model,
+                previous_response_id,
+                "failed"
+            ),
+            "error": {
+                "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs",
+                "type": "invalid_request_error",
+                "param": null,
+                "code": "required_action_not_supported"
+            }
+        }),
+    )]
+}
+
+fn required_action_not_supported_anthropic_sse() -> Vec<Result<Event, Infallible>> {
+    vec![event_json_sse(
+        "error",
+        json!({
+            "type": "error",
+            "error": {
+                "type": "required_action_not_supported",
+                "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs"
+            }
+        }),
+    )]
 }
 
 struct AnthropicStreamMapper {
@@ -511,16 +931,10 @@ impl AnthropicStreamMapper {
                 events
             }
             "flow_finished" => self.anthropic_stop_events(),
-            "waiting_human" | "waiting_callback" => vec![event_json_sse(
-                "error",
-                json!({
-                    "type": "error",
-                    "error": {
-                        "type": "required_action_not_supported",
-                        "message": "waiting states are not supported by compatible endpoints; use the Native API to inspect and resume required_action runs"
-                    }
-                }),
-            )],
+            "waiting_callback" => self
+                .anthropic_tool_use_events(&envelope.payload)
+                .unwrap_or_else(required_action_not_supported_anthropic_sse),
+            "waiting_human" => required_action_not_supported_anthropic_sse(),
             "flow_failed" => vec![event_json_sse(
                 "error",
                 json!({
@@ -555,6 +969,43 @@ impl AnthropicStreamMapper {
             json!({"type": "message_stop"}),
         ));
         events
+    }
+
+    fn anthropic_tool_use_events(
+        &mut self,
+        payload: &Value,
+    ) -> Option<Vec<Result<Event, Infallible>>> {
+        let blocks = anthropic_tool_use_blocks_from_waiting_payload(payload)?;
+        let mut events = self.close_active_anthropic_content_block();
+        for block in blocks {
+            let index = self.next_content_index;
+            self.next_content_index += 1;
+            events.push(event_json_sse(
+                "content_block_start",
+                json!({
+                    "type": "content_block_start",
+                    "index": index,
+                    "content_block": block
+                }),
+            ));
+            events.push(event_json_sse(
+                "content_block_stop",
+                json!({"type": "content_block_stop", "index": index}),
+            ));
+        }
+        events.push(event_json_sse(
+            "message_delta",
+            json!({
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use"},
+                "usage": {"output_tokens": 0}
+            }),
+        ));
+        events.push(event_json_sse(
+            "message_stop",
+            json!({"type": "message_stop"}),
+        ));
+        Some(events)
     }
 
     fn ensure_anthropic_content_block(
@@ -709,5 +1160,89 @@ mod tests {
         assert_eq!(payload["delta"]["type"], json!("thinking_delta"));
         assert_eq!(payload["delta"]["thinking"], json!("先分析用户问题"));
         assert_eq!(payload["delta"].get("text"), None);
+    }
+
+    #[test]
+    fn openai_waiting_callback_maps_to_tool_call_chunk() {
+        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let payload = openai_tool_call_chunk_payload(
+            &native_run(),
+            "1flowbase",
+            &json!({
+                "callback_kind": "llm_tool_calls",
+                "callback_task_id": callback_task_id,
+                "tool_calls": [
+                    {
+                        "id": "call_weather",
+                        "name": "lookup_weather",
+                        "arguments": {"city": "Hangzhou"}
+                    }
+                ]
+            }),
+        )
+        .expect("LLM callback should map to OpenAI tool call chunk");
+
+        assert_eq!(
+            payload["choices"][0]["delta"]["tool_calls"][0]["function"]["name"],
+            json!("lookup_weather")
+        );
+        assert_eq!(
+            payload["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"],
+            json!("{\"city\":\"Hangzhou\"}")
+        );
+        let call_id = payload["choices"][0]["delta"]["tool_calls"][0]["id"]
+            .as_str()
+            .expect("tool call id should be encoded");
+        assert!(call_id.contains("call_weather"));
+    }
+
+    #[test]
+    fn openai_responses_waiting_callback_maps_to_function_call_item() {
+        let callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+        let output = openai_response_function_call_output_items(&json!({
+            "callback_kind": "llm_tool_calls",
+            "callback_task_id": callback_task_id,
+            "tool_calls": [
+                {
+                    "id": "call_inventory",
+                    "name": "lookup_inventory",
+                    "arguments": {"sku": "sku_123"}
+                }
+            ]
+        }))
+        .expect("LLM callback should map to Responses function_call output");
+
+        assert_eq!(output[0]["type"], json!("function_call"));
+        assert_eq!(output[0]["name"], json!("lookup_inventory"));
+        assert_eq!(output[0]["arguments"], json!("{\"sku\":\"sku_123\"}"));
+        assert!(output[0]["call_id"]
+            .as_str()
+            .expect("call id should be encoded")
+            .contains("call_inventory"));
+    }
+
+    #[test]
+    fn anthropic_waiting_callback_maps_to_tool_use_block() {
+        let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
+        let blocks = anthropic_tool_use_blocks_from_waiting_payload(&json!({
+            "callback_kind": "llm_tool_calls",
+            "callback_task_id": callback_task_id,
+            "tool_calls": [
+                {
+                    "id": "toolu_weather",
+                    "name": "lookup_weather",
+                    "arguments": {"city": "Hangzhou"}
+                }
+            ]
+        }))
+        .expect("LLM callback should map to Anthropic tool_use blocks");
+
+        assert_eq!(blocks[0]["type"], json!("tool_use"));
+        assert_eq!(blocks[0]["name"], json!("lookup_weather"));
+        assert_eq!(blocks[0]["input"]["city"], json!("Hangzhou"));
+        assert!(blocks[0]["id"]
+            .as_str()
+            .expect("tool_use id should be encoded")
+            .contains("toolu_weather"));
     }
 }

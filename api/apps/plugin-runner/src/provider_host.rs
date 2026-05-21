@@ -6,6 +6,7 @@ use std::{
 
 use plugin_framework::{
     error::{FrameworkResult, PluginFrameworkError},
+    manifest_v1::PluginExecutionMode,
     provider_contract::{
         ModelDiscoveryMode, ProviderBalanceResult, ProviderInvocationInput,
         ProviderInvocationResult, ProviderModelDescriptor, ProviderStdioMethod,
@@ -14,9 +15,10 @@ use plugin_framework::{
 };
 use serde::Serialize;
 use serde_json::Value;
+use tokio::sync::Mutex;
 
 use crate::package_loader::{LoadedProviderPackage, PackageLoader};
-use crate::stdio_runtime::{call_executable, call_executable_streaming};
+use crate::stdio_runtime::{call_executable, call_executable_streaming, ProviderWorker};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -84,10 +86,21 @@ pub struct ProviderInvokeStreamOutput {
     pub result: ProviderInvocationResult,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ProviderHost {
     loaded_packages: HashMap<String, LoadedProviderPackage>,
     loaded_sources: HashMap<String, LoadedProviderSource>,
+    provider_workers: Mutex<HashMap<String, ProviderWorker>>,
+}
+
+impl Default for ProviderHost {
+    fn default() -> Self {
+        Self {
+            loaded_packages: HashMap::new(),
+            loaded_sources: HashMap::new(),
+            provider_workers: Mutex::new(HashMap::new()),
+        }
+    }
 }
 
 impl ProviderHost {
@@ -123,6 +136,7 @@ impl ProviderHost {
             .insert(summary.plugin_id.clone(), loaded);
         self.loaded_sources
             .insert(summary.plugin_id.clone(), source);
+        self.provider_workers.get_mut().remove(&summary.plugin_id);
         Ok(summary)
     }
 
@@ -249,13 +263,32 @@ impl ProviderHost {
             method: ProviderStdioMethod::Invoke,
             input: serde_json::to_value(input).unwrap(),
         };
-        let output = call_executable_streaming(
-            &loaded.runtime_executable,
-            &request,
-            &loaded.package.manifest.runtime.limits,
-            live_events,
-        )
-        .await?;
+        let output = match loaded.package.manifest.execution_mode {
+            PluginExecutionMode::ProcessPerCall => {
+                call_executable_streaming(
+                    &loaded.runtime_executable,
+                    &request,
+                    &loaded.package.manifest.runtime.limits,
+                    live_events,
+                )
+                .await?
+            }
+            PluginExecutionMode::StatefulProviderWorker => {
+                let mut workers = self.provider_workers.lock().await;
+                let worker = workers.entry(plugin_id.to_string()).or_insert_with(|| {
+                    ProviderWorker::new(
+                        loaded.runtime_executable.clone(),
+                        loaded.package.manifest.runtime.limits.clone(),
+                    )
+                });
+                worker.call_streaming(&request, live_events).await?
+            }
+            _ => {
+                return Err(PluginFrameworkError::invalid_provider_package(
+                    "model provider package declares unsupported execution_mode",
+                ));
+            }
+        };
         Ok(ProviderInvokeStreamOutput {
             events: output.events,
             result: output.result,
@@ -277,12 +310,30 @@ impl ProviderHost {
         input: Value,
     ) -> FrameworkResult<Value> {
         let request = ProviderStdioRequest { method, input };
-        call_executable(
-            &loaded.runtime_executable,
-            &request,
-            &loaded.package.manifest.runtime.limits,
-        )
-        .await
+        match loaded.package.manifest.execution_mode {
+            PluginExecutionMode::ProcessPerCall => {
+                call_executable(
+                    &loaded.runtime_executable,
+                    &request,
+                    &loaded.package.manifest.runtime.limits,
+                )
+                .await
+            }
+            PluginExecutionMode::StatefulProviderWorker => {
+                let plugin_id = loaded.package.identifier();
+                let mut workers = self.provider_workers.lock().await;
+                let worker = workers.entry(plugin_id).or_insert_with(|| {
+                    ProviderWorker::new(
+                        loaded.runtime_executable.clone(),
+                        loaded.package.manifest.runtime.limits.clone(),
+                    )
+                });
+                worker.call(&request).await
+            }
+            _ => Err(PluginFrameworkError::invalid_provider_package(
+                "model provider package declares unsupported execution_mode",
+            )),
+        }
     }
 }
 

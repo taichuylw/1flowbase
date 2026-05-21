@@ -1,10 +1,20 @@
-use crate::_tests::support::{login_and_capture_cookie, test_app};
+use crate::{
+    _tests::support::{
+        login_and_capture_cookie, test_api_state_with_database_url, test_app, test_config,
+    },
+    routes::application_public_api::tool_callback_ids::encode_openai_callback_tool_call_id,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
     Router,
 };
+use control_plane::{
+    application_public_api::compat::openai::run_id_from_response_id,
+    ports::{CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository},
+};
 use serde_json::{json, Value};
+use time::OffsetDateTime;
 use tokio::time::{timeout, Duration};
 use tower::ServiceExt;
 
@@ -187,6 +197,54 @@ async fn setup_unpublished_app_key(app: &Router, name: &str) -> String {
     let (cookie, csrf) = login_and_capture_cookie(app, "root", "change-me").await;
     let application_id = create_application(app, &cookie, &csrf, name).await;
     create_application_key(app, &cookie, &csrf, &application_id).await
+}
+
+async fn test_app_with_state() -> (Router, std::sync::Arc<crate::app_state::ApiState>) {
+    let (state, _) = test_api_state_with_database_url().await;
+    let config = test_config();
+    let app = crate::app_with_state_and_config(state.clone(), &config);
+    (app, state)
+}
+
+async fn seed_llm_callback_for_response_run(
+    state: &crate::app_state::ApiState,
+    flow_run_id: uuid::Uuid,
+) -> domain::CallbackTaskRecord {
+    let node_run = state
+        .store
+        .create_node_run(&CreateNodeRunInput {
+            flow_run_id,
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "LLM".to_string(),
+            status: domain::NodeRunStatus::WaitingCallback,
+            input_payload: json!({}),
+            debug_payload: json!({ "llm_rounds": [] }),
+            started_at: OffsetDateTime::now_utc(),
+        })
+        .await
+        .unwrap();
+
+    state
+        .store
+        .create_callback_task(&CreateCallbackTaskInput {
+            flow_run_id,
+            node_run_id: node_run.id,
+            callback_kind: "llm_tool_calls".to_string(),
+            request_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": "call_inventory",
+                        "name": "lookup_inventory",
+                        "arguments": { "sku": "sku_123" }
+                    }
+                ],
+                "finish_reason": "tool_call"
+            }),
+            external_ref_payload: None,
+        })
+        .await
+        .unwrap()
 }
 
 async fn post_json(
@@ -493,6 +551,68 @@ async fn openai_responses_rejects_previous_response_from_another_api_key() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let payload = response_json(response).await;
     assert_eq!(payload["error"]["code"], json!("application_run_forbidden"));
+}
+
+#[tokio::test]
+async fn openai_responses_rejects_function_call_output_when_previous_response_mismatches_callback_run(
+) {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "OpenAI Responses Callback Binding App").await;
+
+    let first = post_json(
+        &app,
+        "/v1/responses",
+        ("authorization", format!("Bearer {token}")),
+        responses_body(false),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_payload = response_json(first).await;
+    let first_run_id = run_id_from_response_id(first_payload["id"].as_str().unwrap()).unwrap();
+    let callback_task = seed_llm_callback_for_response_run(state.as_ref(), first_run_id).await;
+
+    let mut second_body = responses_body(false);
+    second_body["input"] = json!("Different response");
+    let second = post_json(
+        &app,
+        "/v1/responses",
+        ("authorization", format!("Bearer {token}")),
+        second_body,
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_payload = response_json(second).await;
+
+    let body = json!({
+        "model": "provider/custom-model:latest",
+        "previous_response_id": second_payload["id"],
+        "input": [
+            {
+                "type": "function_call_output",
+                "call_id": encode_openai_callback_tool_call_id(callback_task.id, "call_inventory"),
+                "output": { "stock": 7 }
+            }
+        ]
+    });
+    let response = post_json(
+        &app,
+        "/v1/responses",
+        ("authorization", format!("Bearer {token}")),
+        body,
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let payload = response_json(response).await;
+    assert_eq!(payload["error"]["param"], json!("previous_response_id"));
+    assert_eq!(payload["error"]["code"], json!("invalid_request"));
+    let stored_task = state
+        .store
+        .get_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored_task.status, domain::CallbackTaskStatus::Pending);
 }
 
 #[tokio::test]

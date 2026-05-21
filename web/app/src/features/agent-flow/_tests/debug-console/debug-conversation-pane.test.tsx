@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import type {
@@ -118,5 +118,67 @@ describe('DebugConversationPane auto scroll', () => {
     );
 
     expect(scrollIntoViewSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DebugConversationPane workflow trace', () => {
+  test('renders LLM tool callback rounds from trace debug payload', () => {
+    renderPane([
+      {
+        ...assistantMessage('等待工具结果'),
+        status: 'waiting_callback',
+        traceSummary: [
+          {
+            nodeId: 'node-llm',
+            nodeRunId: 'node-run-llm',
+            nodeAlias: 'LLM',
+            nodeType: 'llm',
+            status: 'waiting_callback',
+            startedAt: '2026-04-25T10:00:01Z',
+            finishedAt: null,
+            durationMs: null,
+            inputPayload: {
+              prompt: '天气?'
+            },
+            outputPayload: {
+              tool_calls: [
+                {
+                  id: 'call_weather',
+                  name: 'lookup_weather'
+                }
+              ]
+            },
+            errorPayload: null,
+            metricsPayload: {},
+            debugPayload: {
+              llm_rounds: [
+                {
+                  round_index: 0,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'need tool',
+                    tool_calls: [
+                      {
+                        id: 'call_weather',
+                        name: 'lookup_weather'
+                      }
+                    ]
+                  },
+                  finish_reason: 'tool_call'
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]);
+
+    expect(screen.getByText('工作流')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /LLM/ }));
+
+    expect(screen.getByText('Round #1')).toBeInTheDocument();
+    expect(screen.getByLabelText('LLM 回合')).toHaveTextContent(
+      'lookup_weather'
+    );
   });
 });

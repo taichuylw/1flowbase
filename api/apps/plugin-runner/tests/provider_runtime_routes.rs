@@ -347,6 +347,101 @@ max_output_tokens: 2048
     package
 }
 
+fn make_stateful_fixture_package() -> TempProviderPackage {
+    let package = TempProviderPackage::new();
+    package.write(
+        "manifest.yaml",
+        r#"manifest_version: 1
+plugin_id: fixture_provider@0.1.0
+version: 0.1.0
+vendor: taichuy
+display_name: Fixture Provider
+description: Fixture Provider
+icon: icon.svg
+source_kind: uploaded
+trust_level: unverified
+consumption_kind: runtime_extension
+execution_mode: stateful_provider_worker
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json_worker
+  entry: bin/fixture_provider
+  limits:
+    memory_bytes: 134217728
+    timeout_ms: 5000
+"#,
+    );
+    package.write(
+        "provider/fixture_provider.yaml",
+        r#"provider_code: fixture_provider
+display_name: Fixture Provider
+protocol: openai_compatible
+model_discovery: static
+config_schema:
+  - key: api_key
+    type: secret
+    required: true
+"#,
+    );
+    package.write(
+        "bin/fixture_provider",
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+count=0
+while IFS= read -r payload; do
+  case "${payload}" in
+    *'"method":"validate"'*)
+      printf '%s\n' '{"ok":true,"result":{"ok":true,"sanitized":{"api_key":"***"}}}'
+      ;;
+    *'"method":"list_models"'*)
+      printf '%s\n' '{"ok":true,"result":[]}'
+      ;;
+    *'"method":"invoke"'*)
+      count=$((count + 1))
+      printf '%s\n' "{\"type\":\"text_delta\",\"delta\":\"worker-turn-${count}\"}"
+      printf '%s\n' "{\"type\":\"finish\",\"reason\":\"stop\"}"
+      printf '%s\n' "{\"type\":\"result\",\"result\":{\"final_content\":\"worker-turn-${count}\",\"finish_reason\":\"stop\",\"provider_metadata\":{\"worker_turn\":${count}}}}"
+      ;;
+    *)
+      printf '%s\n' '{"ok":false,"error":{"kind":"provider_invalid_response","message":"unknown method"}}'
+      ;;
+  esac
+done
+"#,
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = package.path().join("bin/fixture_provider");
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+    package.write(
+        "i18n/en_US.json",
+        r#"{
+  "plugin": { "label": "Fixture Provider" },
+  "provider": { "label": "Fixture Provider" }
+}
+"#,
+    );
+    package
+}
+
 async fn request_json(app: &Router, method: Method, uri: &str, body: Value) -> (StatusCode, Value) {
     let response = app
         .clone()
@@ -372,6 +467,58 @@ fn find_model<'a>(models: &'a [Value], model_id: &str) -> &'a Value {
         .iter()
         .find(|model| model["model_id"] == model_id)
         .unwrap()
+}
+
+#[tokio::test]
+async fn stateful_provider_runtime_route_reuses_worker_process_between_invokes() {
+    let package = make_stateful_fixture_package();
+    let app = app();
+
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/load",
+        json!({
+            "package_root": package.path(),
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let invoke_body = json!({
+        "plugin_id": load_payload["plugin_id"],
+        "input": {
+            "provider_instance_id": "instance-1",
+            "provider_code": "fixture_provider",
+            "protocol": "openai_compatible",
+            "model": "fixture_static",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello",
+                }
+            ]
+        }
+    });
+
+    let (status, first_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/invoke-stream",
+        invoke_body.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, second_payload) =
+        request_json(&app, Method::POST, "/providers/invoke-stream", invoke_body).await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert_eq!(first_payload["result"]["final_content"], "worker-turn-1");
+    assert_eq!(second_payload["result"]["final_content"], "worker-turn-2");
+    assert_eq!(
+        second_payload["result"]["provider_metadata"]["worker_turn"],
+        2
+    );
 }
 
 #[tokio::test]
