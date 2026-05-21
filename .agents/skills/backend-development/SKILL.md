@@ -29,6 +29,7 @@ description: "Use for 1flowbase backend work in api/: implementing, fixing, refa
 ## Quick Reference
 
 - 非平凡后端需求如果还没有明确目标、范围、成功标准、关键假设、方案和用户拍板点，先使用 `problem-framing`；本 Skill 承接已收敛的后端设计和实现边界。
+- 实现前检查 `problem-framing/references/design-rules.md`；如果要新增抽象、公共接口、bool/flag 参数、helper/manager/utils、pass-through service 或重复 defensive check，命中规则就回到 `problem-framing` 给更小 redesign。
 - 核心状态机、对外协议、权限策略、插件边界、核心对象定义：先问人
 - 先分清稳定核心和边界适配层，再写代码
 - 能力边界优先使用能力名，具体实现留在 adapter / repository / driver
@@ -36,6 +37,7 @@ description: "Use for 1flowbase backend work in api/: implementing, fixing, refa
 - Redis、队列、锁、event bus 等基础设施只作为 HostExtension provider 实现 host contract，不进业务代码直连
 - native HostExtension v1 是可信 in-process、restart-scoped；启停升级写 desired state，不设计 Rust 热卸载
 - API 输入保持短、平、单动作
+- 新接口、service、repository 方法必须命名具体，避免 `handler/manager/process/utils/helper/do_*/*_impl`
 - 状态必须写清：状态集合、流转规则、动作约束
 - 多个模块都能改同一关键状态：立即收口
 - Rust 后端实现要用类型表达核心不变量、显式传播错误、封装状态转换，并把阻塞 IO、锁、事务和外部副作用放在清晰边界内
@@ -60,3 +62,4 @@ description: "Use for 1flowbase backend work in api/: implementing, fixing, refa
 - 一个接口塞进多个动作语义
 - 为了“一次查全”造出深层嵌套结构
 - 用隐式副作用完成状态变化
+- 用 bool 参数、重复空值校验或 pass-through service 处理特殊 case

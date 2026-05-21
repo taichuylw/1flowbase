@@ -45,17 +45,22 @@ Forbidden:
 - 任何存在多方向选择，或涉及数据 / contract / 架构风险的决策，都必须给出 3 个方案：conservative、balanced、aggressive。
 - 推荐必须绑定证据；无证据支撑的判断标为假设。
 
+## Design Rules Gate
+
+方案进入 issue gate 或实现 handoff 前，若会新增抽象、公共接口、bool/flag 参数、通用 helper/manager/utils、重复校验、pass-through 层或非显然注释，先读取 `references/design-rules.md`。命中规则时停止，先给更小 redesign，不创建实现 issue、不进入实现。
+
 ## Workflow
 
 1. 整理事实：分离已确认事实、假设、未知点、不变量、失败模式和需要用户决策的问题。
 2. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认。
-3. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
-4. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
-5. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
-6. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
-7. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件；用户未确认 issue 前停止。
-8. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
-9. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
+3. 检查设计规则：方案可能引入抽象、接口、flag、helper、重复校验或 pass-through 时，读取 `references/design-rules.md`；违反时先输出更小 redesign。
+4. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
+5. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
+6. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
+7. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
+8. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件；用户未确认 issue 前停止。
+9. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
+10. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
 
 ## User Decision Format
 
@@ -75,6 +80,7 @@ Forbidden:
 - discussion brief、issue draft、ADR draft 或 implementation handoff 已经可供审阅。
 - 普通需求的简短对齐已经可供用户确认。
 - 用户已确认方案，但 L3 issue 草案尚未创建或尚未确认。
+- 方案触发 `references/design-rules.md`，需要先给更小 redesign。
 - 三个方案和一个清晰推荐已经给出。
 - 阻塞决策已经收敛到最多 3 个问题。
 - 证据不足，无法安全区分方案。

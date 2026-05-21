@@ -41,9 +41,10 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 2. 再回到 `DESIGN.md` 判断任务域边界、L1 模型、状态语义和现有页面 recipe。
 3. 如果属于页面 / UI 开发需求，先走 `references/requirement-refinement.md`；需要提炼方法时读 `references/extraction-framework.md`，需要直接套回复骨架时读 `references/skill-template.md`，需要看实际写法时读 `examples/`。随后输出面向用户的需求整理；至少覆盖页面目标、主要对象、关键动作、页面交互、关键状态和视觉约束。
 4. 用 `references/communication-gate.md` 判断是默认直接实现，还是先集中提阻塞性产品分歧。
-5. 落实现前先核对数据真值：页面字段、排序、筛选、状态、计数、权限和关联对象必须能追到后端 DTO / API client / route response；缺数据就联动 `backend-development` 补接口或聚合接口，不在前端用其他字段推断。
-6. 再落实现：先定主路径、详情规则、反馈位置和模块协作，再拆组件、落结构、补样式。
-7. 结束前按 `references/review-checklist.md` 做复查；涉及样式边界、浏览器运行态或共享 slot 时，走项目既有验证链路。
+5. 落实现前检查 `problem-framing/references/design-rules.md`；如果要新增抽象、公共 props、bool/flag 分支、helper/manager/utils、pass-through 组件或重复 defensive check，命中规则就回到 `problem-framing` 给更小 redesign。
+6. 落实现前先核对数据真值：页面字段、排序、筛选、状态、计数、权限和关联对象必须能追到后端 DTO / API client / route response；缺数据就联动 `backend-development` 补接口或聚合接口，不在前端用其他字段推断。
+7. 再落实现：先定主路径、详情规则、反馈位置和模块协作，再拆组件、落结构、补样式。
+8. 结束前按 `references/review-checklist.md` 做复查；涉及样式边界、浏览器运行态或共享 slot 时，走项目既有验证链路。
 
 ## Quick Reference
 
@@ -57,6 +58,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - 视觉基线与风格边界：`references/visual-baseline.md`
 - 浏览器级验证与运行态证据：`references/browser-verification.md`
 - 复查清单与反模式：`references/review-checklist.md`、`references/anti-patterns.md`
+- 实现前设计规则：`problem-framing/references/design-rules.md`
 - 缺业务字段、聚合数据、排序字段或筛选字段时：先联动 `backend-development` 补后端唯一真值，再改前端消费层
 - 示例与压力场景：`examples/`
 - 命中结构性问题后的完整信息架构诊断：`frontend-logic-design`
@@ -82,6 +84,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 ## Common Mistakes
 
 - 为了“统一”过早抽组件或 hooks
+- 为了“方便”新增 bool prop、通用 helper、manager 或只转发 props 的组件层
 - 把外部灵感稿直接当成当前项目规范
 - 页面根组件堆满状态、请求、弹窗和协议转换逻辑
 - 把协议拼装、数据转换、渲染混写

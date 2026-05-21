@@ -28,6 +28,7 @@ description: Use when implementing 1flowbase features, bug fixes, refactors, or 
 - 1flowbase 功能、缺陷、重构或行为变化：必须已有用户确认的 L3 implementation issue。
 - 可接受替代证据：用户在当前任务中明确说跳过 issue、直接实现或无需确认。
 - 没有 issue 或跳过证据时，停止；回到 `problem-framing` 创建 / 更新 issue 并等待用户确认。
+- 改产品代码前检查 `problem-framing/references/design-rules.md`；命中规则时停止，回到 `problem-framing` 给更小 redesign。
 
 ## Workflow
 
@@ -52,6 +53,7 @@ warning 与 coverage 产物统一落到 `tmp/test-governance/`。
 
 - 测试和实现一起写，没看过红灯。
 - 方案确认后直接进入实现，没检查 issue gate。
+- 实现前没检查 design rules，顺手新增模糊 helper、bool 分支或 pass-through 层。
 - 只测 mock 调用次数，不测真实行为。
 - 为了通过测试扩大实现范围。
 - 跳过 TDD 但没有说明原因和替代验证。
