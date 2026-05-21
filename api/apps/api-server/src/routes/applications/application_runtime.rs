@@ -336,6 +336,8 @@ pub struct ApplicationConversationMessagesQuery {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationConversationMessageResponse {
     pub run_id: String,
+    pub detail_run_id: Option<String>,
+    pub can_open_detail: bool,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub status: String,
@@ -638,8 +640,12 @@ fn to_application_conversation_message_response(
     run: domain::FlowRunRecord,
     current_run_id: Option<Uuid>,
 ) -> ApplicationConversationMessageResponse {
+    let run_id = run.id.to_string();
+
     ApplicationConversationMessageResponse {
-        run_id: run.id.to_string(),
+        run_id: run_id.clone(),
+        detail_run_id: Some(run_id),
+        can_open_detail: true,
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
         status: run.status.as_str().to_string(),
@@ -667,6 +673,8 @@ fn fallback_conversation_messages_from_run(
 
     items.push(ApplicationConversationMessageResponse {
         run_id: run.id.to_string(),
+        detail_run_id: Some(run.id.to_string()),
+        can_open_detail: true,
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
         status: run.status.as_str().to_string(),
@@ -803,6 +811,8 @@ fn fallback_history_item(
 ) -> ApplicationConversationMessageResponse {
     ApplicationConversationMessageResponse {
         run_id: fallback_conversation_cursor(run.id, index),
+        detail_run_id: None,
+        can_open_detail: false,
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
         status: "succeeded".to_string(),
@@ -2310,8 +2320,16 @@ mod tests {
         assert!(page.page.has_before);
         assert_eq!(page.items[0].query.as_deref(), Some("old question 2"));
         assert_eq!(page.items[0].answer.as_deref(), Some("old answer 2"));
+        assert!(!page.items[0].can_open_detail);
+        assert_eq!(page.items[0].detail_run_id, None);
         assert_eq!(page.items[1].run_id, run_id.to_string());
         assert_eq!(page.items[1].query.as_deref(), Some("current question"));
         assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
+        assert!(page.items[1].can_open_detail);
+        let run_id_string = run_id.to_string();
+        assert_eq!(
+            page.items[1].detail_run_id.as_deref(),
+            Some(run_id_string.as_str())
+        );
     }
 }

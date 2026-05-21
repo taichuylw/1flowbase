@@ -109,6 +109,7 @@ export function DebugAssistantMessage({
   const parsedFullContent = parseAssistantContent(message.content);
   const hasReasoning = Boolean(parsedContent.reasoningText.trim());
   const hasAnswer = Boolean(parsedContent.answerText.trim());
+  const canOpenLog = message.canOpenDetail !== false;
 
   async function handleCopyOutput() {
     if (!parsedFullContent.answerText) {
@@ -184,7 +185,7 @@ export function DebugAssistantMessage({
               }}
             />
           </Tooltip>
-          {onOpenLog ? (
+          {onOpenLog && canOpenLog ? (
             <Tooltip title="查看对话日志">
               <Button
                 aria-label="查看对话日志"

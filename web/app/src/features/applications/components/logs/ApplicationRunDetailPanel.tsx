@@ -1,9 +1,6 @@
-import { CloseOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Result, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
-import { useAuthStore } from '../../../../state/auth-store';
 import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
 import type {
   AgentFlowDebugMessage,
@@ -18,67 +15,21 @@ import type { AgentFlowDebugSessionStatus } from '../../../agent-flow/hooks/runt
 import {
   applicationConversationMessagesQueryKey,
   applicationRunDetailQueryKey,
-  completeCallbackTask,
   fetchApplicationConversationMessages,
   fetchApplicationRunDetail,
-  fetchRuntimeDebugArtifact,
-  resumeFlowRun,
   type ApplicationConversationMessagesPage,
   type ApplicationRunDetail
 } from '../../api/runtime';
-import { ApplicationRunResumeCard } from './ApplicationRunResumeCard';
 import './application-run-detail-panel.css';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function isRuntimeDebugArtifactPreview(value: unknown) {
-  return (
-    isRecord(value) &&
-    value.__runtime_debug_artifact === true &&
-    typeof value.preview === 'string'
-  );
-}
-
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0
     ? value
     : null;
-}
-
-function summarizeValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '无';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.length === 0
-      ? '空列表'
-      : value.map((entry) => summarizeValue(entry)).join('、');
-  }
-
-  if (isRecord(value)) {
-    const entries = Object.entries(value);
-
-    if (entries.length === 0) {
-      return '空对象';
-    }
-
-    return entries
-      .map(([key, entryValue]) => `${key}: ${summarizeValue(entryValue)}`)
-      .join(' · ');
-  }
-
-  return String(value);
 }
 
 function findFirstString(value: unknown): string | null {
@@ -105,47 +56,6 @@ function findFirstString(value: unknown): string | null {
       if (firstString) {
         return firstString;
       }
-    }
-  }
-
-  return null;
-}
-
-function findNamedString(
-  value: unknown,
-  preferredKeys: readonly string[]
-): string | null {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const nestedValue = findNamedString(entry, preferredKeys);
-
-      if (nestedValue) {
-        return nestedValue;
-      }
-    }
-
-    return null;
-  }
-
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  for (const [key, entryValue] of Object.entries(value)) {
-    if (
-      typeof entryValue === 'string' &&
-      preferredKeys.some((preferredKey) => key.includes(preferredKey)) &&
-      entryValue.trim().length > 0
-    ) {
-      return entryValue;
-    }
-  }
-
-  for (const entryValue of Object.values(value)) {
-    const nestedValue = findNamedString(entryValue, preferredKeys);
-
-    if (nestedValue) {
-      return nestedValue;
     }
   }
 
@@ -192,68 +102,15 @@ function mapRunStatusToSessionStatus(
   }
 }
 
-function buildRunContext(detail: ApplicationRunDetail): AgentFlowRunContext {
-  const userInput = applicationRunInputText(detail);
-  const model = applicationRunModel(detail);
+const runConversationContext: AgentFlowRunContext = {
+  environmentLabel: 'draft',
+  remembered: false,
+  fields: []
+};
 
-  return {
-    environmentLabel: 'draft',
-    remembered: false,
-    fields: [
-      {
-        nodeId: detail.flow_run.target_node_id ?? 'flow-run',
-        nodeLabel: '运行输入',
-        key: 'query',
-        title: '输入',
-        valueType: 'string',
-        value: userInput
-      },
-      ...(model
-        ? [
-            {
-              nodeId: detail.flow_run.target_node_id ?? 'flow-run',
-              nodeLabel: '运行输入',
-              key: 'model',
-              title: '模型',
-              valueType: 'string' as const,
-              value: model
-            }
-          ]
-        : [])
-    ]
-  };
-}
-
-function applicationRunInputText(detail: ApplicationRunDetail): string {
-  const backendInputText = nonEmptyString(detail.flow_run.query);
-
-  if (backendInputText) {
-    return backendInputText;
-  }
-
-  if (isRuntimeDebugArtifactPreview(detail.flow_run.input_payload)) {
-    return detail.flow_run.title ?? '';
-  }
-
-  return (
-    findNamedString(detail.flow_run.input_payload, [
-      'query',
-      'question',
-      'prompt',
-      'message',
-      'input'
-    ]) ?? summarizeValue(detail.flow_run.input_payload)
-  );
-}
-
-function applicationRunModel(detail: ApplicationRunDetail): string | null {
-  return nonEmptyString(detail.flow_run.model);
-}
-
-function buildConversationMessages(
+function buildConversationLogMessage(
   detail: ApplicationRunDetail
-): AgentFlowDebugMessage[] {
-  const userContent = applicationRunInputText(detail);
+): AgentFlowDebugMessage {
   const assistantContent =
     extractAssistantOutputText(detail) ||
     findFirstString(detail.flow_run.output_payload) ||
@@ -263,38 +120,36 @@ function buildConversationMessages(
       ? detail.flow_run.output_payload
       : null;
 
-  return [
-    {
-      id: `user-${detail.flow_run.id}`,
-      role: 'user',
-      content: userContent,
-      status: 'completed',
-      runId: detail.flow_run.id,
-      rawOutput: null,
-      traceSummary: []
-    },
-    {
-      id: `assistant-${detail.flow_run.id}`,
-      role: 'assistant',
-      content: assistantContent,
-      status: mapRunStatusToMessageStatus(detail.flow_run.status),
-      runId: detail.flow_run.id,
-      rawOutput,
-      traceSummary: mapRunDetailToTrace(detail)
-    }
-  ];
+  return {
+    id: `conversation-log-${detail.flow_run.id}`,
+    role: 'assistant',
+    content: assistantContent,
+    status: mapRunStatusToMessageStatus(detail.flow_run.status),
+    runId: detail.flow_run.id,
+    detailRunId: detail.flow_run.id,
+    canOpenDetail: true,
+    rawOutput,
+    traceSummary: mapRunDetailToTrace(detail)
+  };
+}
+
+function conversationItemDetailRunId(
+  item: ApplicationConversationMessagesPage['items'][number]
+): string | null {
+  if (item.can_open_detail === false) {
+    return null;
+  }
+
+  return nonEmptyString(item.detail_run_id) ?? nonEmptyString(item.run_id);
 }
 
 function mapConversationItemToMessages(
-  item: ApplicationConversationMessagesPage['items'][number],
-  detail: ApplicationRunDetail
+  item: ApplicationConversationMessagesPage['items'][number]
 ): AgentFlowDebugMessage[] {
-  const isCurrentRun = item.run_id === detail.flow_run.id;
+  const detailRunId = conversationItemDetailRunId(item);
+  const canOpenDetail = Boolean(detailRunId) && item.can_open_detail !== false;
   const userContent = nonEmptyString(item.query) ?? '无';
-  const assistantContent =
-    nonEmptyString(item.answer) ??
-    (isCurrentRun ? extractAssistantOutputText(detail) : null) ??
-    '暂无输出';
+  const assistantContent = nonEmptyString(item.answer) ?? '暂无输出';
 
   return [
     {
@@ -303,6 +158,8 @@ function mapConversationItemToMessages(
       content: userContent,
       status: 'completed',
       runId: item.run_id,
+      detailRunId,
+      canOpenDetail,
       rawOutput: null,
       traceSummary: []
     },
@@ -312,54 +169,53 @@ function mapConversationItemToMessages(
       content: assistantContent,
       status: mapRunStatusToMessageStatus(item.status),
       runId: item.run_id,
-      rawOutput: isCurrentRun
-        ? Object.keys(detail.flow_run.output_payload).length > 0
-          ? detail.flow_run.output_payload
-          : null
-        : null,
-      traceSummary: isCurrentRun ? mapRunDetailToTrace(detail) : []
+      detailRunId,
+      canOpenDetail,
+      rawOutput: null,
+      traceSummary: []
     }
   ];
 }
 
 function buildConversationPageMessages(
-  detail: ApplicationRunDetail,
   page: ApplicationConversationMessagesPage | null
 ): AgentFlowDebugMessage[] {
   if (!page || page.items.length === 0) {
-    return buildConversationMessages(detail);
+    return [];
   }
 
-  return page.items.flatMap((item) =>
-    mapConversationItemToMessages(item, detail)
-  );
+  return page.items.flatMap((item) => mapConversationItemToMessages(item));
+}
+
+function conversationSessionStatus(
+  page: ApplicationConversationMessagesPage | null
+): AgentFlowDebugSessionStatus {
+  const currentItem =
+    page?.items.find((item) => item.is_current) ?? page?.items.at(-1) ?? null;
+
+  return mapRunStatusToSessionStatus(currentItem?.status ?? 'succeeded');
 }
 
 function RunConversation({
-  detail,
+  applicationId,
   onClose,
-  onOpenMessageLog
+  onOpenMessageLog,
+  runId
 }: {
-  detail: ApplicationRunDetail;
+  applicationId: string;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  runId: string;
 }) {
-  const runContext = buildRunContext(detail);
+  const queryClient = useQueryClient();
   const [conversationPage, setConversationPage] =
     useState<ApplicationConversationMessagesPage | null>(null);
   const initialConversationQuery = useQuery({
-    queryKey: applicationConversationMessagesQueryKey(
-      detail.flow_run.application_id,
-      detail.flow_run.id
-    ),
+    queryKey: applicationConversationMessagesQueryKey(applicationId, runId),
     queryFn: () =>
-      fetchApplicationConversationMessages(
-        detail.flow_run.application_id,
-        detail.flow_run.id,
-        {
-          limit: 5
-        }
-      )
+      fetchApplicationConversationMessages(applicationId, runId, {
+        limit: 5
+      })
   });
   const loadPreviousConversationMutation = useMutation({
     mutationFn: async () => {
@@ -367,14 +223,10 @@ function RunConversation({
         throw new Error('missing previous conversation cursor');
       }
 
-      return fetchApplicationConversationMessages(
-        detail.flow_run.application_id,
-        detail.flow_run.id,
-        {
-          before: conversationPage.page.before_cursor,
-          limit: 5
-        }
-      );
+      return fetchApplicationConversationMessages(applicationId, runId, {
+        before: conversationPage.page.before_cursor,
+        limit: 5
+      });
     },
     onSuccess: (page) => {
       setConversationPage((current) => {
@@ -402,19 +254,36 @@ function RunConversation({
     }
   });
   const messages = useMemo(
-    () => buildConversationPageMessages(detail, conversationPage),
-    [conversationPage, detail]
+    () => buildConversationPageMessages(conversationPage),
+    [conversationPage]
   );
 
   useEffect(() => {
     setConversationPage(null);
-  }, [detail.flow_run.id]);
+  }, [runId]);
 
   useEffect(() => {
     if (initialConversationQuery.data) {
       setConversationPage(initialConversationQuery.data);
     }
   }, [initialConversationQuery.data]);
+
+  async function handleOpenMessageLog(message: AgentFlowDebugMessage) {
+    const detailRunId =
+      nonEmptyString(message.detailRunId) ??
+      (message.canOpenDetail === false ? null : nonEmptyString(message.runId));
+
+    if (!detailRunId) {
+      return;
+    }
+
+    const detail = await queryClient.fetchQuery({
+      queryKey: applicationRunDetailQueryKey(applicationId, detailRunId),
+      queryFn: () => fetchApplicationRunDetail(applicationId, detailRunId)
+    });
+
+    onOpenMessageLog?.(buildConversationLogMessage(detail));
+  }
 
   return (
     <div className="application-run-detail__conversation-pane">
@@ -423,20 +292,19 @@ function RunConversation({
         closeLabel="关闭运行详情"
         composerUiOnly
         messages={messages}
-        runContext={runContext}
+        runContext={runConversationContext}
         showClearAction={false}
         showComposer
-        status={mapRunStatusToSessionStatus(detail.flow_run.status)}
+        status={conversationSessionStatus(conversationPage)}
         stopping={false}
-        subtitle={detail.flow_run.id}
+        subtitle={runId}
         title="运行详情"
         onChangeRunContextValue={() => {}}
         onClearSession={() => {}}
         onClose={onClose}
-        onLoadArtifact={(artifactRef) =>
-          fetchRuntimeDebugArtifact(detail.flow_run.application_id, artifactRef)
-        }
-        onOpenMessageLog={onOpenMessageLog}
+        onOpenMessageLog={(message) => {
+          void handleOpenMessageLog(message);
+        }}
         onReachConversationTop={() => {
           if (
             conversationPage?.page.has_before &&
@@ -453,20 +321,23 @@ function RunConversation({
 }
 
 function renderDetail({
-  detail,
+  applicationId,
   onClose,
-  onOpenMessageLog
+  onOpenMessageLog,
+  runId
 }: {
-  detail: ApplicationRunDetail;
+  applicationId: string;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  runId: string;
 }) {
   return (
     <div className="application-run-detail__content">
       <RunConversation
-        detail={detail}
+        applicationId={applicationId}
         onClose={onClose}
         onOpenMessageLog={onOpenMessageLog}
+        runId={runId}
       />
     </div>
   );
@@ -483,137 +354,23 @@ export function ApplicationRunDetailPanel({
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   runId: string | null;
 }) {
-  const queryClient = useQueryClient();
-  const csrfToken = useAuthStore((state) => state.csrfToken);
-  const detailQuery = useQuery({
-    queryKey: applicationRunDetailQueryKey(applicationId, runId ?? 'pending'),
-    queryFn: () => fetchApplicationRunDetail(applicationId, runId!),
-    enabled: Boolean(runId)
-  });
-  const resumeMutation = useMutation({
-    mutationFn: async ({
-      checkpointId,
-      inputPayload
-    }: {
-      checkpointId: string;
-      inputPayload: Record<string, unknown>;
-    }) => {
-      if (!runId || !csrfToken) {
-        throw new Error('missing runtime resume context');
-      }
-
-      return resumeFlowRun(
-        applicationId,
-        runId,
-        checkpointId,
-        inputPayload,
-        csrfToken
-      );
-    },
-    onSuccess: async (detail) => {
-      if (!runId) {
-        return;
-      }
-
-      queryClient.setQueryData(
-        applicationRunDetailQueryKey(applicationId, runId),
-        detail
-      );
-      await queryClient.invalidateQueries({
-        queryKey: ['applications', applicationId, 'runtime']
-      });
-    }
-  });
-  const callbackMutation = useMutation({
-    mutationFn: async ({
-      callbackTaskId,
-      responsePayload
-    }: {
-      callbackTaskId: string;
-      responsePayload: Record<string, unknown>;
-    }) => {
-      if (!csrfToken) {
-        throw new Error('missing callback context');
-      }
-
-      return completeCallbackTask(
-        applicationId,
-        callbackTaskId,
-        responsePayload,
-        csrfToken
-      );
-    },
-    onSuccess: async (detail) => {
-      if (!runId) {
-        return;
-      }
-
-      queryClient.setQueryData(
-        applicationRunDetailQueryKey(applicationId, runId),
-        detail
-      );
-      await queryClient.invalidateQueries({
-        queryKey: ['applications', applicationId, 'runtime']
-      });
-    }
-  });
-
   if (!runId) {
     return null;
-  }
-
-  let content = <Result status="info" title="正在加载运行详情" />;
-
-  if (runId && detailQuery.isPending) {
-    content = <Result status="info" title="正在加载运行详情" />;
-  } else if (runId && detailQuery.isError) {
-    content = <Result status="error" title="运行详情加载失败" />;
-  } else if (runId && detailQuery.data) {
-    content = (
-      <div className="application-run-detail__body">
-        {renderDetail({
-          detail: detailQuery.data,
-          onClose,
-          onOpenMessageLog
-        })}
-        <ApplicationRunResumeCard
-          detail={detailQuery.data}
-          onCompleteCallback={(callbackTaskId, responsePayload) =>
-            callbackMutation.mutateAsync({ callbackTaskId, responsePayload })
-          }
-          onResume={(checkpointId, inputPayload) =>
-            resumeMutation.mutateAsync({ checkpointId, inputPayload })
-          }
-        />
-      </div>
-    );
   }
 
   return (
     <aside
       aria-label="运行详情"
-      className={[
-        'application-run-detail',
-        detailQuery.data ? 'application-run-detail--loaded' : null
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      className="application-run-detail application-run-detail--loaded"
     >
-      {detailQuery.data ? null : (
-        <div className="application-run-detail__header">
-          <div>
-            <Typography.Title level={4}>运行详情</Typography.Title>
-            <Typography.Text type="secondary">{runId}</Typography.Text>
-          </div>
-          <Button
-            aria-label="关闭运行详情"
-            icon={<CloseOutlined />}
-            onClick={onClose}
-            type="text"
-          />
-        </div>
-      )}
-      {content}
+      <div className="application-run-detail__body">
+        {renderDetail({
+          applicationId,
+          onClose,
+          onOpenMessageLog,
+          runId
+        })}
+      </div>
     </aside>
   );
 }

@@ -182,6 +182,8 @@ export interface ConsoleApplicationRunDetail {
 
 export interface ConsoleApplicationConversationMessage {
   run_id: string;
+  detail_run_id?: string | null;
+  can_open_detail?: boolean;
   started_at: string;
   finished_at: string | null;
   status: string;

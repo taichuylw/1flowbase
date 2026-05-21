@@ -208,6 +208,8 @@ describe('ApplicationLogsPage', () => {
       items: [
         {
           run_id: 'run-0',
+          detail_run_id: 'run-0',
+          can_open_detail: true,
           started_at: '2026-04-17T08:59:00Z',
           finished_at: '2026-04-17T08:59:01Z',
           status: 'succeeded',
@@ -218,6 +220,8 @@ describe('ApplicationLogsPage', () => {
         },
         {
           run_id: 'run-1',
+          detail_run_id: 'run-1',
+          can_open_detail: true,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           status: 'succeeded',
@@ -293,18 +297,13 @@ describe('ApplicationLogsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
     await waitFor(() => {
-      expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
-        'app-1',
-        'run-1'
-      );
-    });
-    await waitFor(() => {
       expect(
         runtimeApi.fetchApplicationConversationMessages
       ).toHaveBeenCalledWith('app-1', 'run-1', {
         limit: 5
       });
     });
+    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
     const detailPane = await screen.findByRole('complementary', {
       name: '运行详情'
     });
@@ -373,16 +372,12 @@ describe('ApplicationLogsPage', () => {
     expect(screen.queryByText('运行输入输出')).not.toBeInTheDocument();
     expect(screen.queryByText('事件时间线')).not.toBeInTheDocument();
 
-    const nodeButton = screen.getByRole('button', { name: /LLM.*llm/ });
-    expect(nodeButton).toHaveAttribute('aria-expanded', 'false');
-
-    fireEvent.click(nodeButton);
-
-    expect(nodeButton).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('user_prompt');
-    expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
-      '退款政策摘要'
-    );
+    expect(
+      within(detailPane).queryByRole('button', { name: /LLM.*llm/ })
+    ).not.toBeInTheDocument();
+    expect(
+      within(detailPane).queryByLabelText('输入 JSON')
+    ).not.toBeInTheDocument();
 
     const openLogButton = screen
       .getAllByRole('button', {
@@ -391,6 +386,13 @@ describe('ApplicationLogsPage', () => {
       .at(-1);
     expect(openLogButton).toBeDefined();
     fireEvent.click(openLogButton!);
+
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+        'app-1',
+        'run-1'
+      );
+    });
 
     const logPanel = screen.getByRole('complementary', { name: '对话日志' });
     expect(logPanel).toBeInTheDocument();
@@ -525,6 +527,65 @@ describe('ApplicationLogsPage', () => {
           .some((element) => element.textContent?.includes('追踪完整回答'))
       ).toBe(true)
     );
+  }, 20_000);
+
+  test('does not offer run log details for imported context messages', async () => {
+    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
+      items: [
+        {
+          run_id: 'run-1:history:0',
+          detail_run_id: null,
+          can_open_detail: false,
+          started_at: '2026-04-17T08:59:00Z',
+          finished_at: '2026-04-17T08:59:01Z',
+          status: 'succeeded',
+          query: '外部传入的问题',
+          model: 'deepseek-chat',
+          answer: '外部传入的回答',
+          is_current: false
+        },
+        {
+          run_id: 'run-1',
+          detail_run_id: 'run-1',
+          can_open_detail: true,
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z',
+          status: 'succeeded',
+          query: '总结退款政策',
+          model: 'deepseek-chat',
+          answer: '退款政策摘要',
+          is_current: true
+        }
+      ],
+      page: {
+        has_before: false,
+        has_after: false,
+        before_cursor: null,
+        after_cursor: 'run-1'
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const conversation = await screen.findByTestId(
+      'debug-conversation-messages'
+    );
+    expect(
+      await within(conversation).findByText('外部传入的问题')
+    ).toBeInTheDocument();
+    expect(within(conversation).getByText('外部传入的回答')).toBeInTheDocument();
+    expect(
+      within(conversation).getAllByRole('button', {
+        name: '查看对话日志'
+      })
+    ).toHaveLength(1);
   }, 20_000);
 
   test('persists table column visibility in user preferences meta', async () => {
