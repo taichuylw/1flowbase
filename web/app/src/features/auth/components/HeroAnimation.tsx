@@ -59,7 +59,7 @@ export function HeroAnimation() {
       <div className="hero-text-block" style={{ zIndex: 1, textAlign: 'center', padding: `0 clamp(12px, 6vw, 80px)`, width: '100%', marginTop: '-15vh' }}>
         <div className="hero-tagline" aria-label="brand name and slogan">
           <div className="hero-text-line hero-title-line">1flowbase</div>
-          <div className="hero-text-line hero-slogan-line">你的故事，从此开始</div>
+          <div className="hero-text-line hero-slogan-line">AI原生应用底座，对话即是护城河</div>
         </div>
       </div>
 
