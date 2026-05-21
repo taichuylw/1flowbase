@@ -34,6 +34,24 @@ test('scanSourceFile reports debt markers and weak assertions without failing th
   assert.equal(findings.every((finding) => finding.severity === 'warning'), true);
 });
 
+test('scanSourceFile reports front-back field contract compatibility markers as warnings', () => {
+  const findings = scanSourceFile({
+    relativePath: 'web/app/src/features/example/api/example.ts',
+    content: [
+      'export function adaptExample(payload) {',
+      '  // @field-contract-compat source=display_name alias=displayName remove_by=2026-06-30',
+      '  return { displayName: payload.display_name };',
+      '}',
+    ].join('\n'),
+  });
+
+  assert.deepEqual(
+    findings.map((finding) => finding.rule),
+    ['field-contract-compat-marker']
+  );
+  assert.equal(findings[0].severity, 'warning');
+});
+
 test('collectRepoHygieneFindings reports duplicate test titles and oversized files', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-'));
   writeFile(

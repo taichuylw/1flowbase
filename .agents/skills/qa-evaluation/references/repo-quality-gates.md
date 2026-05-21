@@ -14,7 +14,7 @@
 | `node scripts/node/test-contracts.js` | 共享 DTO / consumer contract / style-boundary contract consumer | 改共享 console API DTO、settings / agent-flow provider consumer、`style-boundary` registry 或其他跨消费者契约 | 不替代页面质量和后端分层回归 |
 | `node scripts/node/test-frontend.js fast` | 前端快速回归 | 需要仓库级前端快检，但还没到 full gate | 不替代移动端/真实运行态证据 |
 | `node scripts/node/test-frontend.js full` | 前端 lint、test、build、style-boundary full gate | 要给前端结论兜底，或 `verify-repo` 前置确认 | 不替代具体页面走查和截图证据 |
-| `node scripts/node/tooling.js repo-hygiene` | 废弃标记、弱断言、重复测试标题、超大文件和目录压力，报告写入 `tmp/test-governance/repo-hygiene.json` | 全量审计、热点预防、判断旧逻辑和测试重复是否已进入 QA 证据层 | 不替代业务正确性、覆盖率和人工架构审查 |
+| `node scripts/node/tooling.js repo-hygiene` | 废弃标记、前后端字段兼容标记、弱断言、重复测试标题、超大文件和目录压力，报告写入 `tmp/test-governance/repo-hygiene.json` | 全量审计、热点预防、判断旧逻辑、字段兼容 alias 和测试重复是否已进入 QA 证据层 | 不替代业务正确性、覆盖率和人工架构审查 |
 | `node scripts/node/tooling.js check-rust-backend` | Rust 后端静态质量门禁，报告写入 `tmp/test-governance/rust-backend-static-gate.json` | 需要快速检查新增 Rust 后端坏味道，或定位 `test-backend` / `verify-backend` 前置静态门禁失败 | 不替代 cargo 编译、测试、clippy 和业务语义审查 |
 | `node scripts/node/test-backend.js` | Rust 静态门禁 + 后端测试聚合入口 | 改后端实现，需要仓库根统一触发后端最小回归 | 不替代后端分层审查和 route/service blast radius 判断 |
 | `node scripts/node/verify-repo.js` | 仓库级 full gate | 需要判断“当前改动是否达到仓库级可合入基线” | 不替代 coverage 结论与运行态页面证据 |
@@ -34,6 +34,7 @@
 - 只改局部前端页面时，先满足 `web/AGENTS.md` 的局部验证，再决定是否升级到仓库级 `test-frontend` 或 `verify-repo`。
 - 只改后端局部实现时，先满足 `api/AGENTS.md` 的局部验证，再决定是否升级到 `test-backend` 或 `verify-repo`。
 - 命中共享契约、共享 DTO、共享样式场景注册、跨消费者协议时，优先补 `test-contracts`。
+- 命中前后端字段兼容 alias 时，必须补 `repo-hygiene` 并在 QA 报告中列出 `@field-contract-compat` warning、废弃计划和测试证据。
 - 需要给“仓库级基线是否通过”下结论时，优先 `verify-repo`；需要给“CI 是否可过”下结论时，优先 `verify-ci`。
 - 需要讨论覆盖率缺口时，再补 `verify-coverage`；不要拿 coverage 结果替代功能结论。
 - 需要运行态页面证据时，优先 `runtime-gate` 或直接 `page-debug`，不要只靠静态阅读代码。
