@@ -32,6 +32,7 @@
 
 ## Local Truths
 - `apps/api-server/src/routes` 是协议层：参数解析、上下文提取、调用 service / action、响应与错误映射、OpenAPI 暴露。
+- API DTO 字段名优先跟领域模型 / 持久化语义一致；不要为了前端展示创建新的语义别名字段。
 - `apps/api-server/src/middleware` 是请求链路约束层。
 - `crates/control-plane` 是业务边界；关键写动作从命名明确的 service command 或 `Resource Action Kernel` action 进入。
 - `crates/control-plane/src/ports` 定义 repository trait 与外部端口。
