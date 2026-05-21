@@ -5,6 +5,7 @@ import { Link } from '@tanstack/react-router';
 import { Space } from 'antd';
 
 import { AccountMenu } from './AccountMenu';
+import { FrontstageDesignModeAction } from './FrontstageDesignModeAction';
 import { Navigation } from './Navigation';
 import { SettingsChromeMenu } from './SettingsChromeMenu';
 import { getSecondaryChromeRoutes } from '../routes/route-helpers';
@@ -51,22 +52,28 @@ export function AppShellFrame({
       title="1flowbase"
       navigation={<Navigation pathname={pathname} useRouterLinks={useRouterLinks} />}
       actions={
-        <Space size={20}>
+        <Space className="app-shell-action-row" size={20}>
           <AccountMenu useRouterNavigation={useRouterLinks} />
-          {secondaryActions.map((route) => (
-            <span key={route.id}>
-              {route.id === 'settings' ? (
-                <SettingsChromeMenu pathname={pathname} useRouterLinks={useRouterLinks} />
-              ) : (
-                renderActionLink(
-                  route.path,
-                  route.navLabel!,
-                  useRouterLinks,
-                  route.selectedMatchers.some((match) => match(pathname))
-                )
-              )}
-            </span>
-          ))}
+          <span className="app-shell-secondary-actions">
+            {secondaryActions.map((route) => (
+              <span key={route.id}>
+                {route.id === 'settings' ? (
+                  <SettingsChromeMenu
+                    pathname={pathname}
+                    useRouterLinks={useRouterLinks}
+                  />
+                ) : (
+                  renderActionLink(
+                    route.path,
+                    route.navLabel!,
+                    useRouterLinks,
+                    route.selectedMatchers.some((match) => match(pathname))
+                  )
+                )}
+              </span>
+            ))}
+            <FrontstageDesignModeAction pathname={pathname} />
+          </span>
         </Space>
       }
     >

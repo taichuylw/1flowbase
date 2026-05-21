@@ -11,6 +11,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
+import {
+  resetFrontstageDesignModeStore,
+  useFrontstageDesignModeStore
+} from '../../../state/frontstage-design-mode-store';
 import type {
   FrontstagePageContent,
   SaveFrontstagePageContentInput
@@ -262,6 +266,18 @@ async function clickAndFlush(element: HTMLElement) {
   });
 }
 
+function activateDesignMode() {
+  act(() => {
+    useFrontstageDesignModeStore.getState().setDesignMode(true);
+  });
+}
+
+function exitDesignMode() {
+  act(() => {
+    useFrontstageDesignModeStore.getState().setDesignMode(false);
+  });
+}
+
 function mockPageContentSaveState(
   overrides: Partial<FrontstagePageContentSaveState> = {}
 ): FrontstagePageContentSaveState {
@@ -399,6 +415,7 @@ describe('FrontStagePage', () => {
 
   beforeEach(() => {
     resetAuthStore();
+    resetFrontstageDesignModeStore();
     vi.clearAllMocks();
     mockPageContentSaveState();
     mockFrontstageBlockCatalog();
@@ -430,11 +447,10 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('当前页面：页面 page-1')).toBeInTheDocument();
   });
 
-  test('toggles design mode button only when frontstage.page.design is granted', () => {
+  test('shows design controls from shared design mode state', () => {
     authenticate(['frontstage.page.design']);
     renderPage('page-1');
 
-    const designButton = screen.getByRole('button', { name: '进入设计模式' });
     expect(
       screen.queryByRole('button', { name: '创建区块' })
     ).not.toBeInTheDocument();
@@ -443,10 +459,7 @@ describe('FrontStagePage', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText('页面树已同步')).not.toBeInTheDocument();
 
-    fireEvent.click(designButton);
-    expect(
-      screen.getByRole('button', { name: '退出设计模式' })
-    ).toBeInTheDocument();
+    activateDesignMode();
     expect(
       screen.getByRole('button', { name: '创建区块' })
     ).toBeInTheDocument();
@@ -460,10 +473,7 @@ describe('FrontStagePage', () => {
     expect(
       screen.getByRole('button', { name: '新建页面' })
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
-    expect(
-      screen.getByRole('button', { name: '进入设计模式' })
-    ).toBeInTheDocument();
+    exitDesignMode();
     expect(
       screen.queryByRole('button', { name: '创建区块' })
     ).not.toBeInTheDocument();
@@ -487,7 +497,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     expect(screen.getByText('页面树已同步')).toBeInTheDocument();
     expect(screen.queryByText(/本地草稿/)).not.toBeInTheDocument();
 
@@ -526,13 +536,12 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    const designButton = screen.getByRole('button', { name: '进入设计模式' });
-    fireEvent.click(designButton);
+    activateDesignMode();
     expect(screen.getByText('保存中')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    exitDesignMode();
     expect(screen.queryByText('保存中')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
 
     expect(screen.getByText('保存中')).toBeInTheDocument();
   });
@@ -552,7 +561,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '创建区块' }));
     fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
@@ -627,7 +636,7 @@ describe('FrontStagePage', () => {
           />
         </AppProviders>
       );
-      fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+      activateDesignMode();
       fireEvent.click(screen.getByRole('button', { name: '创建区块' }));
       fireEvent.click(await screen.findByRole('radio', { name: templateName }));
       fireEvent.click(screen.getByRole('button', { name: '选择' }));
@@ -666,7 +675,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
 
     expect(screen.getByRole('button', { name: '创建区块' })).toBeDisabled();
     expect(screen.getByText('区块保存中')).toBeInTheDocument();
@@ -689,7 +698,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '创建区块' }));
     fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
@@ -715,7 +724,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '创建区块' }));
     fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
@@ -732,7 +741,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     expect(screen.getByRole('button', { name: '创建区块' })).toBeDisabled();
 
     view.rerender(
@@ -762,7 +771,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '创建区块' }));
     fireEvent.click(await screen.findByRole('button', { name: '选择' }));
 
@@ -781,7 +790,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
@@ -814,7 +823,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
 
     await waitFor(() => {
@@ -853,7 +862,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
 
     const promptSpy = vi
       .spyOn(window, 'prompt')
@@ -906,7 +915,7 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
 
     const secondPageItem = getPageTreeItem('页面 page-2');
     fireEvent.click(
@@ -931,7 +940,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
@@ -955,7 +964,7 @@ describe('FrontStagePage', () => {
       }
     ]);
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
@@ -965,7 +974,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
 
     const groupContainer = getGroupTreeItem('分组 1');
@@ -989,7 +998,7 @@ describe('FrontStagePage', () => {
       }
     ]);
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
 
     expect(screen.getByText('分组 2')).toBeInTheDocument();
@@ -1020,7 +1029,7 @@ describe('FrontStagePage', () => {
       }
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
 
     const rootGroupItem = getGroupTreeItem('分组 一级');
 
@@ -1035,7 +1044,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
 
@@ -1089,7 +1098,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建分组' }));
 
     const groupItem = getGroupTreeItem('分组 1');
@@ -1114,7 +1123,7 @@ describe('FrontStagePage', () => {
 
     renderPage(undefined, onNavigatePage);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '新建分组' }));
 
     const groupItem = getGroupTreeItem('分组 1');
@@ -1178,7 +1187,7 @@ describe('FrontStagePage', () => {
       onNavigatePage
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
 
     const rootGroup = getGroupTreeItem('分组 一级');
 
@@ -1196,7 +1205,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
 
     const promptSpy = vi
@@ -1217,7 +1226,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
 
     const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('');
@@ -1237,7 +1246,7 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
 
     const promptSpy = vi
@@ -1264,7 +1273,7 @@ describe('FrontStagePage', () => {
 
     renderPage(undefined, onNavigatePage);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '新建页面' }));
 
     expect(onNavigatePage).toHaveBeenLastCalledWith(
@@ -1280,7 +1289,7 @@ describe('FrontStagePage', () => {
 
     renderPage(undefined, onNavigatePage);
 
-    await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
     await clickAndFlush(screen.getByRole('button', { name: '新建页面' }));
     const firstPageId = onNavigatePage.mock.calls[0]?.[0] as string | undefined;
@@ -1300,7 +1309,7 @@ describe('FrontStagePage', () => {
 
     renderPage('page-1', onNavigatePage);
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     const pageItem = getPageTreeItem('页面 page-1');
     fireEvent.click(within(pageItem).getByRole('button', { name: /删\s*除/ }));
 
@@ -1406,7 +1415,8 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage('page-1');
 
-    expect(screen.getByRole('heading', { name: '分组' })).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '前台' })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '页面 page-1' })
     ).toBeInTheDocument();

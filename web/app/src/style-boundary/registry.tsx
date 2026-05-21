@@ -10,6 +10,7 @@ import { AgentFlowCanvasFrame } from '../features/agent-flow/components/editor/A
 import '../features/agent-flow/components/editor/styles/index.css';
 import { AgentFlowEditorStoreProvider } from '../features/agent-flow/store/editor/AgentFlowEditorStoreProvider';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
+import { FrontStagePage } from '../features/frontstage/pages/FrontStagePage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { useAuthStore } from '../state/auth-store';
 import {
@@ -232,6 +233,7 @@ function seedStyleBoundaryAuth() {
         'file_table.view.all',
         'file_object.view.all',
         'file_storage.view.all',
+        'frontstage.page.design',
         'user.view.all',
         'user.manage.all',
         'role_permission.view.all',
@@ -1003,6 +1005,54 @@ function seedStyleBoundaryApplicationFetch() {
   };
 }
 
+function seedStyleBoundaryFrontstageFetch() {
+  if (typeof globalThis.fetch !== 'function') {
+    return;
+  }
+
+  styleBoundaryOriginalFetch ??= globalThis.fetch.bind(globalThis);
+  const originalFetch = styleBoundaryOriginalFetch;
+
+  globalThis.fetch = async (input, init) => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof Request
+          ? input.url
+          : String(input);
+
+    if (url.endsWith('/api/console/frontend-blocks')) {
+      return new Response(JSON.stringify({ data: [], meta: null }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    return originalFetch(input as RequestInfo, init);
+  };
+}
+
+function createStyleBoundaryFrontstagePageContent() {
+  return {
+    page: {
+      id: 'page-1',
+      title: 'Landing',
+      kind: 'page' as const,
+      parentId: null,
+      rank: '001000',
+      schemaRootUid: 'root-1'
+    },
+    schema: {
+      rootUid: 'root-1',
+      payload: { blocks: [] }
+    },
+    root: {
+      uid: 'root-1',
+      payload: { blocks: [] }
+    }
+  };
+}
+
 const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'component.agent-flow-node-detail': () => {
     seedStyleBoundaryAuth();
@@ -1044,6 +1094,19 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.home': () => {
     seedStyleBoundaryApplicationFetch();
     return renderRouterScene('/');
+  },
+  'page.frontstage': () => {
+    seedStyleBoundaryFrontstageFetch();
+
+    return renderShellScene(
+      '/frontstage',
+      <FrontStagePage
+        workspaceId="workspace-1"
+        pageId="page-1"
+        initialPageTree={[{ id: 'page-1', title: 'Landing', kind: 'page' }]}
+        pageContent={createStyleBoundaryFrontstagePageContent()}
+      />
+    );
   },
   'page.application-detail': () => {
     seedStyleBoundaryApplicationFetch();

@@ -4,21 +4,20 @@ import {
   Divider,
   Drawer,
   Empty,
-  Flex,
-  Grid,
-  Layout,
-  Space,
   Typography
 } from 'antd';
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
 import { useAuthStore } from '../../../state/auth-store';
+import { useFrontstageDesignModeStore } from '../../../state/frontstage-design-mode-store';
 import { saveFrontstageBlockCode } from '../api/block-code';
 import type { FrontstagePageContent } from '../api/page-content';
 import { AddBlockCatalogPickerDrawer } from '../components/AddBlockCatalogPickerDrawer';
 import { BlockCodeEditorDrawer } from '../components/BlockCodeEditorDrawer';
 import { BlockConfigurationDrawer } from '../components/BlockConfigurationDrawer';
+import { FrontStagePageTreeSidebar } from '../components/FrontStagePageTreeSidebar';
 import { JsBlockTrialPanel } from '../components/JsBlockTrialPanel';
 import { PageCanvas } from '../components/PageCanvas';
 import { useFrontstageBlockCatalog } from '../hooks/use-frontstage-block-catalog';
@@ -49,7 +48,6 @@ import {
 import { createFrontstagePageRenderPlan } from '../lib/page-canvas/render-plan';
 import { createFrontstagePageCanvasRuntimeRunPlanState } from '../lib/page-canvas/runtime-run-plan';
 import {
-  canMoveNode,
   findNodeById,
   getDeleteConfirmMessage,
   getNextGroupTitleIndex,
@@ -61,6 +59,7 @@ import {
 } from '../lib/page-tree';
 import type { FrontStageTreeNode } from '../lib/page-tree';
 import type { RestrictedBlockLoaderLimits } from '../lib/restricted-block-loader';
+import './frontstage-page.css';
 
 const DESIGN_MODE_PERMISSION = 'frontstage.page.design';
 const DEFAULT_JS_BLOCK_TRIAL_LIMITS: RestrictedBlockLoaderLimits = {
@@ -278,7 +277,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
-  const [isDesignMode, setIsDesignMode] = useState(false);
+  const isDesignMode = useFrontstageDesignModeStore(
+    (state) => state.isDesignMode
+  );
+  const setDesignMode = useFrontstageDesignModeStore(
+    (state) => state.setDesignMode
+  );
   const [operationStatus, setOperationStatus] =
     useState<PageTreeOperationStatus>('idle');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -305,9 +309,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         pageTree: normalizePageTree(initialPageTree ?? [])
       }).selectedPageId
   );
-  const screens = Grid.useBreakpoint();
-  const { Sider, Content } = Layout;
-  const isCompactLayout = screens.md === false;
   const blockCatalog = useFrontstageBlockCatalog();
   const pageContentSave = useFrontstagePageContentSave({
     workspaceId,
@@ -538,7 +539,17 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   }, [canShowSelectedBlockActions]);
 
   useEffect(() => {
+    if (!canEnterDesignMode && isDesignMode) {
+      setDesignMode(false);
+    }
+  }, [canEnterDesignMode, isDesignMode, setDesignMode]);
+
+  useEffect(() => {
     if (!canEnterDesignMode || !isDesignMode) {
+      setSelectedBlockId(null);
+      setIsBlockCodeEditorOpen(false);
+      setIsBlockConfigurationOpen(false);
+      setIsJsBlockTrialPanelOpen(false);
       setIsAddBlockPickerOpen(false);
     }
   }, [canEnterDesignMode, isDesignMode]);
@@ -657,76 +668,76 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
 
   if (initialPageTree === undefined && isPageTreeLoading) {
     return (
-      <div
-        style={{
-          width: '100%',
-          padding: '24px 0',
-          maxWidth: 1240,
-          margin: '0 auto'
-        }}
+      <SectionPageLayout
+        pageTitle="前台"
+        navItems={[]}
+        activeKey=""
+        sidebarContent={
+          <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
+            页面树加载中
+          </Typography.Text>
+        }
       >
-        <Flex
-          justify="space-between"
-          align="center"
-          style={{ marginBottom: 12 }}
-        >
-          <Space direction="vertical" size={0}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              前台
-            </Typography.Text>
-            <Typography.Title level={4} style={{ margin: 0 }}>
+        <section className="frontstage-page-workspace">
+          <header className="frontstage-page-workspace__header">
+            <Typography.Title
+              className="frontstage-page-workspace__title"
+              level={3}
+            >
               页面树加载中…
             </Typography.Title>
-          </Space>
-        </Flex>
-        <Divider style={{ margin: '0 0 16px' }} />
-        <Empty
-          description={
-            <Typography.Text>正在加载页面树，请稍后...</Typography.Text>
-          }
-        />
-      </div>
+          </header>
+          <Divider style={{ margin: 0 }} />
+          <div className="frontstage-page-workspace__body">
+            <Empty
+              description={
+                <Typography.Text>正在加载页面树，请稍后...</Typography.Text>
+              }
+            />
+          </div>
+        </section>
+      </SectionPageLayout>
     );
   }
 
   if (initialPageTree === undefined && hasPageTreeLoadError) {
     return (
-      <div
-        style={{
-          width: '100%',
-          padding: '24px 0',
-          maxWidth: 1240,
-          margin: '0 auto'
-        }}
+      <SectionPageLayout
+        pageTitle="前台"
+        navItems={[]}
+        activeKey=""
+        sidebarContent={
+          <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
+            页面树不可用
+          </Typography.Text>
+        }
       >
-        <Flex
-          justify="space-between"
-          align="center"
-          style={{ marginBottom: 12 }}
-        >
-          <Space direction="vertical" size={0}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              前台
-            </Typography.Text>
-            <Typography.Title level={4} style={{ margin: 0 }}>
+        <section className="frontstage-page-workspace">
+          <header className="frontstage-page-workspace__header">
+            <Typography.Title
+              className="frontstage-page-workspace__title"
+              level={3}
+            >
               页面树加载失败
             </Typography.Title>
-          </Space>
-        </Flex>
-        <Divider style={{ margin: '0 0 16px' }} />
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <Typography.Text>
-              页面树加载失败，请检查网络后重试。点击“重试”按钮重新发起加载。
-            </Typography.Text>
-          }
-        >
-          <Button type="primary" onClick={onRetryLoadPageTree}>
-            重试
-          </Button>
-        </Empty>
-      </div>
+          </header>
+          <Divider style={{ margin: 0 }} />
+          <div className="frontstage-page-workspace__body">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <Typography.Text>
+                  页面树加载失败，请检查网络后重试。点击“重试”按钮重新发起加载。
+                </Typography.Text>
+              }
+            >
+              <Button type="primary" onClick={onRetryLoadPageTree}>
+                重试
+              </Button>
+            </Empty>
+          </div>
+        </section>
+      </SectionPageLayout>
     );
   }
 
@@ -959,296 +970,43 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setIsJsBlockTrialPanelOpen(true);
   };
 
-  const renderTreeNode = (
-    node: FrontStageTreeNode,
-    level: number = 0,
-    parentNodes: FrontStageTreeNode[] = pageTree
-  ) => {
-    const isPageNode = node.kind === 'page';
-    const isSelected = selectedPageId === node.id;
-    const canAddPageToGroup = node.kind === 'group' && level === 0;
-    const { canMoveUp, canMoveDown } = canMoveNode(parentNodes, node.id);
-    const rowStyle = {
-      padding: '8px',
-      borderRadius: 6,
-      marginTop: 4,
-      marginBottom: 4,
-      marginLeft: `${level * 16}px`,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      border: isSelected ? '1px solid #91caff' : '1px solid transparent',
-      background: isSelected ? '#e6f7ff' : 'transparent',
-      cursor: isPageNode ? 'pointer' : 'default'
-    } as const;
-
-    const childNodes = node.children ?? [];
-
-    return (
-      <li
-        key={node.id}
-        data-testid={`frontstage-tree-node-${node.kind}-${node.title || node.id}`}
-        style={{ listStyle: 'none' }}
-        onClick={() => {
-          if (isPageNode) {
-            handleSelectPage(node.id);
-          }
-        }}
-        role={isPageNode ? 'button' : undefined}
-        tabIndex={isPageNode ? 0 : -1}
-        onKeyDown={(event) => {
-          if (!isPageNode) {
-            return;
-          }
-
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            handleSelectPage(node.id);
-          }
-        }}
-      >
-        <div style={rowStyle}>
-          <div
-            style={{
-              minWidth: 0,
-              flex: '1 1 96px',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            <Typography.Text style={{ fontSize: 12 }} ellipsis>
-              {node.title
-                ? node.title
-                : node.kind === 'group'
-                  ? '未命名分组'
-                  : '未命名页面'}
-            </Typography.Text>
-            <Typography.Text
-              type="secondary"
-              style={{ fontSize: 12, display: 'block' }}
-            >
-              {node.kind === 'group' ? '分组节点' : '页面节点'}
-            </Typography.Text>
-          </div>
-          {canEnterDesignMode && isDesignMode ? (
-            <Space size={6} wrap>
-              <Button
-                size="small"
-                disabled={isOperationPending}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleRenameNode(node.id, node.title);
-                }}
-              >
-                重命名
-              </Button>
-              {canAddPageToGroup ? (
-                <Button
-                  size="small"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleAddPageInGroup(node.id);
-                  }}
-                  disabled={isOperationPending}
-                >
-                  组内新增页面
-                </Button>
-              ) : null}
-              <Button
-                size="small"
-                disabled={!canMoveUp || isOperationPending}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleMoveNode(node.id, -1);
-                }}
-              >
-                上移
-              </Button>
-              <Button
-                size="small"
-                disabled={!canMoveDown || isOperationPending}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleMoveNode(node.id, 1);
-                }}
-              >
-                下移
-              </Button>
-              <Button
-                size="small"
-                danger
-                disabled={isOperationPending}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleDeleteNode(node.id);
-                }}
-              >
-                删除
-              </Button>
-            </Space>
-          ) : null}
-        </div>
-        {childNodes.length > 0 ? (
-          <ul style={{ listStyle: 'none', margin: 0, paddingLeft: 0 }}>
-            {childNodes.map((childNode) =>
-              renderTreeNode(childNode, level + 1, childNodes)
-            )}
-          </ul>
-        ) : null}
-      </li>
-    );
-  };
+  const canEditPageTree = canEnterDesignMode && isDesignMode;
+  const frontstageSidebar = (
+    <FrontStagePageTreeSidebar
+      pageTree={pageTree}
+      selectedPageId={selectedPageId}
+      pageNodeTitle={pageNodeTitle}
+      canEdit={canEditPageTree}
+      isOperationPending={isOperationPending}
+      onAddGroup={handleAddGroup}
+      onAddPage={handleAddPage}
+      onAddPageInGroup={handleAddPageInGroup}
+      onRenameNode={handleRenameNode}
+      onMoveNode={handleMoveNode}
+      onDeleteNode={handleDeleteNode}
+      onSelectPage={handleSelectPage}
+    />
+  );
 
   return (
-    <div
-      style={{
-        width: '100%',
-        minHeight: 'calc(100vh - 96px)',
-        padding: isCompactLayout ? 12 : 18,
-        maxWidth: 1480,
-        margin: '0 auto',
-        background:
-          'linear-gradient(180deg, rgba(240, 253, 248, 0.95) 0%, rgba(246, 252, 249, 0.95) 100%)'
-      }}
+    <SectionPageLayout
+      pageTitle="前台"
+      navItems={[]}
+      activeKey=""
+      sidebarContent={frontstageSidebar}
     >
-      <Layout
-        style={{
-          background: 'transparent',
-          gap: isCompactLayout ? 12 : 20,
-          flexDirection: isCompactLayout ? 'column' : 'row'
-        }}
-      >
-        <Sider
-          width={isCompactLayout ? '100%' : 280}
-          theme="light"
-          style={{
-            background: 'white',
-            border: '1px solid #edf7f1',
-            borderRadius: 8,
-            boxShadow: '0 18px 45px rgba(15, 118, 110, 0.08)',
-            padding: isCompactLayout ? 16 : 18,
-            overflow: 'hidden',
-            flex: isCompactLayout ? '0 0 auto' : undefined,
-            maxWidth: '100%',
-            minWidth: 0
-          }}
-        >
-          <Flex justify="space-between" align="center">
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              分组
-            </Typography.Title>
-            <Typography.Text type="secondary">⌃</Typography.Text>
-          </Flex>
-          <Divider style={{ margin: '16px 0' }} />
-          <Typography.Text
-            type="secondary"
-            style={{ marginBottom: 10, display: 'block', fontSize: 12 }}
-          >
-            {pageNodeTitle}
-          </Typography.Text>
-          {canEnterDesignMode && isDesignMode ? (
-            <Space size={8} wrap style={{ marginBottom: 14 }}>
-              <Button
-                size="small"
-                onClick={handleAddGroup}
-                disabled={isOperationPending}
-              >
-                新建分组
-              </Button>
-              <Button
-                size="small"
-                aria-label="新建页面"
-                onClick={handleAddPage}
-                disabled={isOperationPending}
-                style={{
-                  borderStyle: 'dashed',
-                  borderColor: '#20d48a',
-                  color: '#00a86b'
-                }}
-              >
-                添加菜单项
-              </Button>
-            </Space>
-          ) : null}
-          {pageTree.length > 0 ? (
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {pageTree.map((node) => renderTreeNode(node, 0, pageTree))}
-            </ul>
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              styles={{ image: { height: 48 } }}
-              description={
-                <Typography.Text type="secondary">
-                  当前工作区页面树为空。请在设计态创建页面后将显示树结构。
-                </Typography.Text>
-              }
-            />
-          )}
-        </Sider>
-        <Content
-          style={{
-            background: 'white',
-            border: '1px solid #edf7f1',
-            borderRadius: 8,
-            boxShadow: '0 18px 45px rgba(15, 118, 110, 0.08)',
-            minHeight: 720,
-            overflow: 'hidden',
-            minWidth: 0,
-            width: '100%'
-          }}
-        >
-          <Flex
-            justify="space-between"
-            align="center"
-            gap={16}
-            wrap
-            style={{
-              padding: isCompactLayout ? '18px 16px 16px' : '24px 34px 20px'
-            }}
-          >
+      <>
+        <section className="frontstage-page-workspace">
+          <header className="frontstage-page-workspace__header">
             <Typography.Title
+              className="frontstage-page-workspace__title"
               level={3}
-              style={{ margin: 0, overflowWrap: 'anywhere' }}
             >
               {pageLabel}
             </Typography.Title>
-            {canEnterDesignMode ? (
-              <Button
-                type={isDesignMode ? 'default' : 'primary'}
-                style={
-                  isDesignMode
-                    ? undefined
-                    : {
-                        background: '#00c875',
-                        borderColor: '#00c875',
-                        boxShadow: '0 8px 20px rgba(0, 200, 117, 0.22)'
-                      }
-                }
-                onClick={() => {
-                  if (isDesignMode) {
-                    setSelectedBlockId(null);
-                    setIsBlockCodeEditorOpen(false);
-                    setIsBlockConfigurationOpen(false);
-                    setIsJsBlockTrialPanelOpen(false);
-                  }
-
-                  setIsDesignMode((current) => !current);
-                }}
-              >
-                {isDesignMode ? '退出设计模式' : '进入设计模式'}
-              </Button>
-            ) : null}
-          </Flex>
+          </header>
           <Divider style={{ margin: 0 }} />
-          <div
-            style={{
-              padding: isCompactLayout ? '24px 14px 24px' : '76px 36px 28px'
-            }}
-          >
+          <div className="frontstage-page-workspace__body">
             {renderPageTreeErrorBanner}
 
             {canEnterDesignMode && isDesignMode && isPageContentSavePending ? (
@@ -1322,7 +1080,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               </Button>
             ) : null}
           </div>
-          {/* Block actions moved to BlockHoverToolbar inside PageCanvas */}
           <Drawer
             title="JS 区块试运行"
             open={isJsBlockTrialPanelOpen}
@@ -1344,36 +1101,36 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               />
             )}
           </Drawer>
-        </Content>
-      </Layout>
-      {canEnterDesignMode && isDesignMode ? (
-        <AddBlockCatalogPickerDrawer
-          open={isAddBlockPickerOpen}
-          items={blockCatalog.items}
-          loading={blockCatalog.loading}
-          error={blockCatalog.error}
-          saving={isPageContentSavePending}
-          onSelect={(entry, templateId) => {
-            void handleSelectBlockCatalogEntry(entry, templateId);
-          }}
-          onClose={() => setIsAddBlockPickerOpen(false)}
+        </section>
+        {canEnterDesignMode && isDesignMode ? (
+          <AddBlockCatalogPickerDrawer
+            open={isAddBlockPickerOpen}
+            items={blockCatalog.items}
+            loading={blockCatalog.loading}
+            error={blockCatalog.error}
+            saving={isPageContentSavePending}
+            onSelect={(entry, templateId) => {
+              void handleSelectBlockCatalogEntry(entry, templateId);
+            }}
+            onClose={() => setIsAddBlockPickerOpen(false)}
+          />
+        ) : null}
+        <BlockCodeEditorDrawer
+          open={isBlockCodeEditorOpen && canShowSelectedBlockActions}
+          onClose={() => setIsBlockCodeEditorOpen(false)}
+          onOpenTrialPanel={handleOpenJsBlockTrialPanel}
+          workspaceId={workspaceId}
+          pageId={selectedPageId}
+          block={canShowSelectedBlockActions ? selectedBlock : null}
         />
-      ) : null}
-      <BlockCodeEditorDrawer
-        open={isBlockCodeEditorOpen && canShowSelectedBlockActions}
-        onClose={() => setIsBlockCodeEditorOpen(false)}
-        onOpenTrialPanel={handleOpenJsBlockTrialPanel}
-        workspaceId={workspaceId}
-        pageId={selectedPageId}
-        block={canShowSelectedBlockActions ? selectedBlock : null}
-      />
-      <BlockConfigurationDrawer
-        open={isBlockConfigurationOpen && canShowSelectedBlockActions}
-        onClose={() => setIsBlockConfigurationOpen(false)}
-        model={
-          canShowSelectedBlockActions ? selectedBlockConfigurationModel : null
-        }
-      />
-    </div>
+        <BlockConfigurationDrawer
+          open={isBlockConfigurationOpen && canShowSelectedBlockActions}
+          onClose={() => setIsBlockConfigurationOpen(false)}
+          model={
+            canShowSelectedBlockActions ? selectedBlockConfigurationModel : null
+          }
+        />
+      </>
+    </SectionPageLayout>
   );
 };

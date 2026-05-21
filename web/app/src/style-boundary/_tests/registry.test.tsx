@@ -44,6 +44,7 @@ describe('style boundary registry', () => {
       'component.account-popup',
       'component.account-trigger',
       'page.home',
+      'page.frontstage',
       'page.application-detail',
       'page.application-api',
       'page.embedded-apps',
@@ -57,6 +58,7 @@ describe('style boundary registry', () => {
         'web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx'
       ])
     ).toEqual([
+      'page.frontstage',
       'page.application-detail',
       'page.application-api',
       'page.settings',
@@ -94,6 +96,22 @@ describe('style boundary registry', () => {
     expect(
       screen.getByRole('navigation', { name: 'Primary' })
     ).toBeInTheDocument();
+  }, 15_000);
+
+  test('renders the frontstage page scene with the shared section layout', async () => {
+    const scene = getRuntimeScene('page.frontstage');
+
+    render(
+      <AppProviders>
+        <StyleBoundaryHarness scene={scene} />
+      </AppProviders>
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: '1flowbase' })
+    ).toBeInTheDocument();
+    expect(await screen.findByText('当前页面：Landing')).toBeInTheDocument();
+    expect(screen.getByLabelText('进入设计模式')).toBeInTheDocument();
   }, 15_000);
 
   test('application detail scene save mock echoes the latest draft document', async () => {
