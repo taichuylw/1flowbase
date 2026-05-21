@@ -1,6 +1,6 @@
 ---
 name: frontend-development
-description: Use for 1flowbase frontend work in web/: implementing, fixing, refactoring, reviewing, or planning UI pages, app shell, routes, navigation, workspace flows, node UI, schema UI, components, interactions, responsive layout, visual structure, or frontend state boundaries. Also use when a request mentions UI/UX, page改版, 样式, 交互, 前端, React, Ant Design, screenshot/image-led changes, vague page requirements, or requirement refinement before implementation.
+description: "Use for 1flowbase frontend work in web/: implementing, fixing, refactoring, reviewing, or planning UI pages, app shell, routes, navigation, workspace flows, node UI, schema UI, components, interactions, responsive layout, visual structure, or frontend state boundaries. Also use when a request mentions UI/UX, page改版, 样式, 交互, 前端, React, Ant Design, screenshot/image-led changes, vague page requirements, or requirement refinement before implementation."
 ---
 
 # Frontend Development
