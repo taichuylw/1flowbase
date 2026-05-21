@@ -12,7 +12,7 @@ use control_plane::ports::{
     RuntimeEventOverflowBehavior, RuntimeEventPayload, RuntimeEventStream,
     RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
 };
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, watch};
 use uuid::Uuid;
 
 const DEFAULT_BROADCAST_CAPACITY: usize = 1024;
@@ -27,6 +27,7 @@ struct LocalRunEventStream {
     next_sequence: AtomicI64,
     ring: Mutex<VecDeque<RuntimeEventEnvelope>>,
     broadcaster: broadcast::Sender<RuntimeEventEnvelope>,
+    closed_sender: watch::Sender<bool>,
     policy: RuntimeEventStreamPolicy,
     closed: AtomicBool,
 }
@@ -66,10 +67,12 @@ impl LocalRuntimeEventStream {
 impl LocalRunEventStream {
     fn new(policy: RuntimeEventStreamPolicy, broadcast_capacity: usize) -> Self {
         let (broadcaster, _) = broadcast::channel(broadcast_capacity);
+        let (closed_sender, _) = watch::channel(false);
         Self {
             next_sequence: AtomicI64::new(1),
             ring: Mutex::new(VecDeque::new()),
             broadcaster,
+            closed_sender,
             policy,
             closed: AtomicBool::new(false),
         }
@@ -195,7 +198,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             .unwrap_or_else(|| from_sequence.unwrap_or(0));
         let (sender, live_events) = mpsc::unbounded_channel();
 
-        if replay.is_empty() && run.closed.load(Ordering::SeqCst) {
+        if run.closed.load(Ordering::SeqCst) {
             drop(sender);
             return Ok(RuntimeEventSubscription {
                 replay,
@@ -204,38 +207,60 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         }
 
         let live_run = Arc::clone(&run);
+        let mut closed_receiver = run.closed_sender.subscribe();
+        if *closed_receiver.borrow() {
+            drop(sender);
+            return Ok(RuntimeEventSubscription {
+                replay,
+                live_events,
+            });
+        }
 
         tokio::spawn(async move {
             loop {
-                match live_receiver.recv().await {
-                    Ok(event) if event.sequence <= last_sent_sequence => {}
-                    Ok(event) => {
-                        if !send_retained_after_sequence(
-                            &live_run,
-                            &sender,
-                            &mut last_sent_sequence,
-                        ) {
-                            break;
-                        }
-                        if event.sequence <= last_sent_sequence {
-                            continue;
-                        }
-                        let sequence = event.sequence;
-                        if sender.send(event).is_err() {
-                            break;
-                        }
-                        last_sent_sequence = sequence;
-                    }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {
-                        if !send_retained_after_sequence(
-                            &live_run,
-                            &sender,
-                            &mut last_sent_sequence,
-                        ) {
+                tokio::select! {
+                    changed = closed_receiver.changed() => {
+                        if changed.is_err() || *closed_receiver.borrow() {
+                            let _ = send_retained_after_sequence(
+                                &live_run,
+                                &sender,
+                                &mut last_sent_sequence,
+                            );
                             break;
                         }
                     }
-                    Err(broadcast::error::RecvError::Closed) => break,
+                    received = live_receiver.recv() => {
+                        match received {
+                            Ok(event) if event.sequence <= last_sent_sequence => {}
+                            Ok(event) => {
+                                if !send_retained_after_sequence(
+                                    &live_run,
+                                    &sender,
+                                    &mut last_sent_sequence,
+                                ) {
+                                    break;
+                                }
+                                if event.sequence <= last_sent_sequence {
+                                    continue;
+                                }
+                                let sequence = event.sequence;
+                                if sender.send(event).is_err() {
+                                    break;
+                                }
+                                last_sent_sequence = sequence;
+                            }
+                            Err(broadcast::error::RecvError::Lagged(_)) => {
+                                if !send_retained_after_sequence(
+                                    &live_run,
+                                    &sender,
+                                    &mut last_sent_sequence,
+                                ) {
+                                    break;
+                                }
+                            }
+                            Err(broadcast::error::RecvError::Closed) => break,
+                        }
+                    }
                 }
             }
         });
@@ -258,7 +283,9 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
     async fn close_run(&self, run_id: Uuid, _reason: RuntimeEventCloseReason) -> Result<()> {
         let run = self.run(run_id)?;
         let _ring = run.ring.lock().expect("runtime event ring lock poisoned");
-        run.closed.store(true, Ordering::SeqCst);
+        if !run.closed.swap(true, Ordering::SeqCst) {
+            let _ = run.closed_sender.send(true);
+        }
         Ok(())
     }
 
