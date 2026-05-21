@@ -348,6 +348,19 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         )
     }
 
+    pub fn for_tests_with_provider_result(provider_result: ProviderInvocationResult) -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
+        Self::new(
+            repository,
+            InMemoryProviderRuntime::with_provider_result(provider_result),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
+            "test-master-key",
+        )
+    }
+
     pub fn for_tests_with_live_events_then_error(live_events: Vec<ProviderStreamEvent>) -> Self {
         let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
             "application.view.all",
@@ -645,6 +658,16 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
 
     pub fn list_run_events(&self, flow_run_id: Uuid) -> Vec<domain::RunEventRecord> {
         self.repository.events_for_flow_run(flow_run_id)
+    }
+
+    pub async fn callback_task_for_tests(
+        &self,
+        callback_task_id: Uuid,
+    ) -> domain::CallbackTaskRecord {
+        OrchestrationRuntimeRepository::get_callback_task(&self.repository, callback_task_id)
+            .await
+            .expect("callback task should be readable")
+            .expect("callback task should exist")
     }
 
     pub async fn list_runtime_items(&self, flow_run_id: Uuid) -> Vec<domain::RuntimeItemRecord> {

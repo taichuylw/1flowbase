@@ -3,6 +3,7 @@ use super::*;
 pub(crate) struct InMemoryProviderRuntime {
     invoke_delay: Option<std::time::Duration>,
     provider_events: Option<Vec<ProviderStreamEvent>>,
+    provider_result: Option<ProviderInvocationResult>,
     live_events_then_error: Option<Vec<ProviderStreamEvent>>,
     fail_before_token_models: Vec<String>,
 }
@@ -12,6 +13,7 @@ impl InMemoryProviderRuntime {
         Self {
             invoke_delay: Some(invoke_delay),
             provider_events: None,
+            provider_result: None,
             live_events_then_error: None,
             fail_before_token_models: Vec::new(),
         }
@@ -21,6 +23,17 @@ impl InMemoryProviderRuntime {
         Self {
             invoke_delay: None,
             provider_events: Some(provider_events),
+            provider_result: None,
+            live_events_then_error: None,
+            fail_before_token_models: Vec::new(),
+        }
+    }
+
+    pub(crate) fn with_provider_result(provider_result: ProviderInvocationResult) -> Self {
+        Self {
+            invoke_delay: None,
+            provider_events: None,
+            provider_result: Some(provider_result),
             live_events_then_error: None,
             fail_before_token_models: Vec::new(),
         }
@@ -30,6 +43,7 @@ impl InMemoryProviderRuntime {
         Self {
             invoke_delay: None,
             provider_events: None,
+            provider_result: None,
             live_events_then_error: Some(live_events),
             fail_before_token_models: Vec::new(),
         }
@@ -39,6 +53,7 @@ impl InMemoryProviderRuntime {
         Self {
             invoke_delay: None,
             provider_events: None,
+            provider_result: None,
             live_events_then_error: None,
             fail_before_token_models: models.into_iter().map(str::to_string).collect(),
         }
@@ -104,21 +119,20 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
                 reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
             },
         ];
+        let default_result = plugin_framework::provider_contract::ProviderInvocationResult {
+            final_content: Some(format!("echo:{}:{}", input.model, prompt)),
+            usage: plugin_framework::provider_contract::ProviderUsage {
+                input_tokens: Some(5),
+                output_tokens: Some(7),
+                total_tokens: Some(12),
+                ..plugin_framework::provider_contract::ProviderUsage::default()
+            },
+            finish_reason: Some(plugin_framework::provider_contract::ProviderFinishReason::Stop),
+            ..plugin_framework::provider_contract::ProviderInvocationResult::default()
+        };
         Ok(crate::ports::ProviderRuntimeInvocationOutput {
             events: self.provider_events.clone().unwrap_or(default_events),
-            result: plugin_framework::provider_contract::ProviderInvocationResult {
-                final_content: Some(format!("echo:{}:{}", input.model, prompt)),
-                usage: plugin_framework::provider_contract::ProviderUsage {
-                    input_tokens: Some(5),
-                    output_tokens: Some(7),
-                    total_tokens: Some(12),
-                    ..plugin_framework::provider_contract::ProviderUsage::default()
-                },
-                finish_reason: Some(
-                    plugin_framework::provider_contract::ProviderFinishReason::Stop,
-                ),
-                ..plugin_framework::provider_contract::ProviderInvocationResult::default()
-            },
+            result: self.provider_result.clone().unwrap_or(default_result),
         })
     }
 

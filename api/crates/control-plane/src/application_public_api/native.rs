@@ -337,9 +337,20 @@ where
             return Err(NativeRunValidationError::Forbidden);
         }
 
+        let metadata = durable_metadata_from_flow_run(&flow_run);
+        if let Some(detail) = self
+            .repository
+            .get_published_run_detail(actor.application_id, flow_run.id)
+            .await
+            .map_err(|_| NativeRunValidationError::NotFound)?
+        {
+            return Ok(super::run_service::native_result_from_run_detail(
+                &detail, metadata,
+            ));
+        }
+
         Ok(super::run_service::native_result_from_flow_run(
-            &flow_run,
-            durable_metadata_from_flow_run(&flow_run),
+            &flow_run, metadata,
         ))
     }
 

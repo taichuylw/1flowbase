@@ -140,6 +140,51 @@ async fn native_resume_validates_ownership_before_execution_continuation_boundar
 }
 
 #[tokio::test]
+async fn native_get_run_exposes_pending_callback_required_action() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Required Action App");
+    let token = issue_key(&harness, application.id, actor_user_id()).await;
+    publish_application(&harness, application.id, actor_user_id()).await;
+    let repository = harness.repository();
+    let service = ApplicationNativeRunService::new(repository.clone());
+    let run = service
+        .create_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(run.id);
+
+    let result = service
+        .get_native_run(
+            control_plane::application_public_api::native::GetNativeRunCommand {
+                bearer_token: token,
+                run_id: run.id,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result.status,
+        control_plane::application_public_api::native::NativeRunStatus::Waiting
+    );
+    let required_action = result
+        .required_action
+        .expect("pending callback should be exposed");
+    assert_eq!(required_action.action_type, "callback");
+    assert_eq!(
+        required_action.payload["callback_task_id"],
+        json!(callback_task.id)
+    );
+    assert_eq!(
+        required_action.payload["request_payload"],
+        callback_task.request_payload
+    );
+}
+
+#[tokio::test]
 async fn native_resume_owned_callback_stops_at_explicit_continuation_todo_boundary() {
     let harness = ApplicationPublicApiTestHarness::new();
     let application = harness.seed_application(actor_user_id(), "Resume TODO App");

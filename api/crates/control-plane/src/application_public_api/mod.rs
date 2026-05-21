@@ -1069,6 +1069,9 @@ impl ApplicationPublicApiTestRepository {
             .lock()
             .expect("application public api test repo mutex poisoned");
         let node_run_id = Uuid::now_v7();
+        if let Some(flow_run) = inner.flow_runs.get_mut(&flow_run_id) {
+            flow_run.status = domain::FlowRunStatus::WaitingCallback;
+        }
         let task = domain::CallbackTaskRecord {
             id: Uuid::now_v7(),
             flow_run_id,
@@ -1505,6 +1508,51 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
             .callback_tasks
             .get(&callback_task_id)
             .cloned())
+    }
+
+    async fn get_published_run_detail(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunDetail>> {
+        let inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let Some(flow_run) = inner
+            .flow_runs
+            .get(&flow_run_id)
+            .filter(|run| {
+                run.application_id == application_id
+                    && run.run_mode == domain::FlowRunMode::PublishedApiRun
+            })
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        let mut callback_tasks = inner
+            .callback_tasks
+            .values()
+            .filter(|task| task.flow_run_id == flow_run_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        callback_tasks.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then(left.id.cmp(&right.id))
+        });
+
+        Ok(Some(domain::ApplicationRunDetail {
+            flow_run,
+            node_runs: Vec::new(),
+            checkpoints: Vec::new(),
+            callback_tasks,
+            events: inner
+                .run_events
+                .get(&flow_run_id)
+                .cloned()
+                .unwrap_or_default(),
+        }))
     }
 }
 

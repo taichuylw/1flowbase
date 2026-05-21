@@ -279,7 +279,7 @@ where
     )
     .await?;
 
-    for node_id in &compiled_plan.topological_order {
+    for (node_index, node_id) in compiled_plan.topological_order.iter().enumerate() {
         if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
             return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
         }
@@ -398,30 +398,6 @@ where
                     &execution.debug_payload,
                 );
                 last_output_payload = public_output_payload.clone();
-                let node_status = if execution.error_payload.is_some() {
-                    domain::NodeRunStatus::Failed
-                } else {
-                    domain::NodeRunStatus::Succeeded
-                };
-                ensure_node_run_transition(
-                    domain::NodeRunStatus::Running,
-                    node_status,
-                    "continue_flow_debug_run",
-                )?;
-                update_node_run_and_emit(
-                    service,
-                    flow_run.id,
-                    &UpdateNodeRunInput {
-                        node_run_id: node_run.id,
-                        status: node_status,
-                        output_payload: public_output_payload.clone(),
-                        error_payload: execution.error_payload.clone(),
-                        metrics_payload: execution.metrics_payload.clone(),
-                        debug_payload: execution.debug_payload.clone(),
-                        finished_at: Some(OffsetDateTime::now_utc()),
-                    },
-                )
-                .await?;
                 persist_llm_context_observability(
                     &service.repository,
                     flow_run.id,
@@ -433,18 +409,26 @@ where
                 )
                 .await?;
 
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
-                    .await?
-                {
-                    return load_run_detail(
-                        &service.repository,
-                        command.application_id,
-                        flow_run.id,
-                    )
-                    .await;
-                }
-
                 if let Some(error_payload) = execution.error_payload {
+                    ensure_node_run_transition(
+                        domain::NodeRunStatus::Running,
+                        domain::NodeRunStatus::Failed,
+                        "continue_flow_debug_run",
+                    )?;
+                    update_node_run_and_emit(
+                        service,
+                        flow_run.id,
+                        &UpdateNodeRunInput {
+                            node_run_id: node_run.id,
+                            status: domain::NodeRunStatus::Failed,
+                            output_payload: public_output_payload.clone(),
+                            error_payload: Some(error_payload.clone()),
+                            metrics_payload: execution.metrics_payload.clone(),
+                            debug_payload: execution.debug_payload.clone(),
+                            finished_at: Some(OffsetDateTime::now_utc()),
+                        },
+                    )
+                    .await?;
                     ensure_flow_run_transition(
                         domain::FlowRunStatus::Running,
                         domain::FlowRunStatus::Failed,
@@ -478,6 +462,138 @@ where
                     .await;
                 }
 
+                if let Some(wait) =
+                    orchestration_runtime::execution_engine::build_llm_tool_callback_wait(
+                        node,
+                        &resolved_inputs,
+                        &variable_pool,
+                        &execution.output_payload,
+                    )
+                {
+                    ensure_node_run_transition(
+                        domain::NodeRunStatus::Running,
+                        domain::NodeRunStatus::WaitingCallback,
+                        "continue_flow_debug_run",
+                    )?;
+                    update_node_run_and_emit(
+                        service,
+                        flow_run.id,
+                        &UpdateNodeRunInput {
+                            node_run_id: node_run.id,
+                            status: domain::NodeRunStatus::WaitingCallback,
+                            output_payload: public_output_payload,
+                            error_payload: None,
+                            metrics_payload: execution.metrics_payload.clone(),
+                            debug_payload: execution.debug_payload.clone(),
+                            finished_at: None,
+                        },
+                    )
+                    .await?;
+
+                    if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                        .await?
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
+
+                    ensure_flow_run_transition(
+                        domain::FlowRunStatus::Running,
+                        domain::FlowRunStatus::WaitingCallback,
+                        "continue_flow_debug_run",
+                    )?;
+                    service
+                        .repository
+                        .create_checkpoint(&CreateCheckpointInput {
+                            flow_run_id: flow_run.id,
+                            node_run_id: Some(node_run.id),
+                            status: "waiting_callback".to_string(),
+                            reason: "等待 LLM 工具回调".to_string(),
+                            locator_payload: json!({
+                                "node_id": node.node_id,
+                                "next_node_index": node_index,
+                            }),
+                            variable_snapshot: Value::Object(wait.checkpoint_variable_pool),
+                            external_ref_payload: Some(wait.request_payload.clone()),
+                        })
+                        .await?;
+                    service
+                        .repository
+                        .create_callback_task(&CreateCallbackTaskInput {
+                            flow_run_id: flow_run.id,
+                            node_run_id: node_run.id,
+                            callback_kind: "llm_tool_calls".to_string(),
+                            request_payload: wait.request_payload.clone(),
+                            external_ref_payload: Some(wait.request_payload),
+                        })
+                        .await?;
+                    service
+                        .repository
+                        .update_flow_run(&UpdateFlowRunInput {
+                            flow_run_id: flow_run.id,
+                            status: domain::FlowRunStatus::WaitingCallback,
+                            output_payload: json!({}),
+                            error_payload: None,
+                            finished_at: None,
+                        })
+                        .await?;
+                    append_runtime_event(
+                        service,
+                        flow_run.id,
+                        debug_stream_events::waiting_callback(
+                            flow_run.id,
+                            node_run.id,
+                            &node.node_id,
+                        ),
+                    )
+                    .await;
+                    close_runtime_event_stream(
+                        service,
+                        flow_run.id,
+                        RuntimeEventCloseReason::WaitingCallback,
+                    )
+                    .await;
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
+
+                ensure_node_run_transition(
+                    domain::NodeRunStatus::Running,
+                    domain::NodeRunStatus::Succeeded,
+                    "continue_flow_debug_run",
+                )?;
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
+                        node_run_id: node_run.id,
+                        status: domain::NodeRunStatus::Succeeded,
+                        output_payload: public_output_payload.clone(),
+                        error_payload: None,
+                        metrics_payload: execution.metrics_payload.clone(),
+                        debug_payload: execution.debug_payload.clone(),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    },
+                )
+                .await?;
+                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                    .await?
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
                 variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "plugin_node" => {

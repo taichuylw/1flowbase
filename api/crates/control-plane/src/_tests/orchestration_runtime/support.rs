@@ -22,7 +22,7 @@ use crate::ports::{
     UpdateScopeDataModelGrantInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
     UpsertDebugVariableCacheEntryInput,
 };
-use plugin_framework::provider_contract::ProviderStreamEvent;
+use plugin_framework::provider_contract::{ProviderInvocationResult, ProviderStreamEvent};
 
 use crate::{
     flow::InMemoryFlowRepository,

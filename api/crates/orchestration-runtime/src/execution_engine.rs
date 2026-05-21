@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -30,6 +30,9 @@ use crate::{
 pub use crate::code_runtime::{
     execute_code_node, CodeInvocationOutput, CodeInvoker, QuickJsCodeInvoker,
 };
+
+const LLM_TOOL_CALLBACK_KIND: &str = "llm_tool_calls";
+const LLM_TOOL_CALLBACK_STATE_KEY: &str = "__llm_tool_callback";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderInvocationOutput {
@@ -78,6 +81,12 @@ pub struct CapabilityNodeExecution {
     pub debug_payload: Value,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LlmToolCallbackWait {
+    pub request_payload: Value,
+    pub checkpoint_variable_pool: Map<String, Value>,
+}
+
 pub async fn start_flow_debug_run<I>(
     plan: &CompiledPlan,
     input_payload: &Value,
@@ -104,13 +113,20 @@ pub async fn resume_flow_debug_run<I>(
 where
     I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
-    let patch = resume_payload
-        .as_object()
-        .ok_or_else(|| anyhow!("resume payload must be an object"))?;
     let waiting_node = plan
         .nodes
         .get(waiting_node_id)
         .ok_or_else(|| anyhow!("waiting node not found: {waiting_node_id}"))?;
+    let mut variable_pool = checkpoint.variable_pool.clone();
+
+    if pending_llm_tool_callback_state(&variable_pool, waiting_node_id).is_some() {
+        append_llm_tool_result_messages(&mut variable_pool, waiting_node_id, resume_payload)?;
+        return execute_from(plan, checkpoint.next_node_index, variable_pool, invoker).await;
+    }
+
+    let patch = resume_payload
+        .as_object()
+        .ok_or_else(|| anyhow!("resume payload must be an object"))?;
     let allowed_output_keys = waiting_node
         .outputs
         .iter()
@@ -123,8 +139,6 @@ where
             ));
         }
     }
-    let mut variable_pool = checkpoint.variable_pool.clone();
-
     variable_pool.insert(waiting_node_id.to_string(), Value::Object(patch.clone()));
 
     execute_from(plan, checkpoint.next_node_index, variable_pool, invoker).await
@@ -211,7 +225,7 @@ where
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
                     node_alias: node.alias.clone(),
-                    input_payload: Value::Object(resolved_inputs),
+                    input_payload: Value::Object(resolved_inputs.clone()),
                     output_payload: execution.output_payload.clone(),
                     error_payload: execution.error_payload.clone(),
                     metrics_payload: execution.metrics_payload.clone(),
@@ -229,6 +243,28 @@ where
                         }),
                         variable_pool,
                         checkpoint_snapshot: None,
+                        node_traces,
+                    });
+                }
+
+                if let Some(wait) = build_llm_tool_callback_wait(
+                    node,
+                    &resolved_inputs,
+                    &variable_pool,
+                    &execution.output_payload,
+                ) {
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
+                            node_id: node.node_id.clone(),
+                            node_alias: node.alias.clone(),
+                            callback_kind: LLM_TOOL_CALLBACK_KIND.to_string(),
+                            request_payload: wait.request_payload,
+                        }),
+                        variable_pool,
+                        checkpoint_snapshot: Some(CheckpointSnapshot {
+                            next_node_index: index,
+                            variable_pool: wait.checkpoint_variable_pool,
+                        }),
                         node_traces,
                     });
                 }
@@ -875,6 +911,238 @@ fn build_provider_invocation_input(
     }
 }
 
+fn has_pending_tool_calls(output_payload: &Value) -> bool {
+    output_payload
+        .get("tool_calls")
+        .and_then(Value::as_array)
+        .is_some_and(|tool_calls| !tool_calls.is_empty())
+}
+
+pub fn build_llm_tool_callback_wait(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    output_payload: &Value,
+) -> Option<LlmToolCallbackWait> {
+    has_pending_tool_calls(output_payload).then(|| LlmToolCallbackWait {
+        request_payload: build_llm_tool_callback_request_payload(
+            node,
+            resolved_inputs,
+            variable_pool,
+            output_payload,
+        ),
+        checkpoint_variable_pool: variable_pool_with_pending_llm_tool_callback(
+            node,
+            resolved_inputs,
+            variable_pool,
+            output_payload,
+        ),
+    })
+}
+
+fn build_llm_tool_callback_request_payload(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    output_payload: &Value,
+) -> Value {
+    let history = llm_callback_history_after_assistant_tool_call(
+        node,
+        resolved_inputs,
+        variable_pool,
+        output_payload,
+    );
+    let mut payload = Map::new();
+
+    for key in [
+        "text",
+        "tool_calls",
+        "finish_reason",
+        "usage",
+        "provider_route",
+        "provider_metadata",
+    ] {
+        if let Some(value) = output_payload.get(key) {
+            payload.insert(key.to_string(), value.clone());
+        }
+    }
+    payload.insert(
+        "callback_kind".to_string(),
+        Value::String(LLM_TOOL_CALLBACK_KIND.to_string()),
+    );
+    payload.insert("history".to_string(), Value::Array(history));
+
+    Value::Object(payload)
+}
+
+fn variable_pool_with_pending_llm_tool_callback(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    output_payload: &Value,
+) -> Map<String, Value> {
+    let mut checkpoint_variable_pool = variable_pool.clone();
+    let history = llm_callback_history_after_assistant_tool_call(
+        node,
+        resolved_inputs,
+        variable_pool,
+        output_payload,
+    );
+    checkpoint_variable_pool.insert(
+        node.node_id.clone(),
+        json!({
+            LLM_TOOL_CALLBACK_STATE_KEY: {
+                "callback_kind": LLM_TOOL_CALLBACK_KIND,
+                "pending_tool_calls": output_payload
+                    .get("tool_calls")
+                    .cloned()
+                    .unwrap_or_else(|| Value::Array(Vec::new())),
+                "history": history,
+            }
+        }),
+    );
+    checkpoint_variable_pool
+}
+
+fn llm_callback_history_after_assistant_tool_call(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    output_payload: &Value,
+) -> Vec<Value> {
+    let mut history = compatible_history_messages(node, resolved_inputs, variable_pool);
+    history.push(json!({
+        "role": "assistant",
+        "content": output_payload
+            .get("text")
+            .and_then(Value::as_str)
+            .unwrap_or_default(),
+        "tool_calls": output_payload
+            .get("tool_calls")
+            .cloned()
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    }));
+    history
+}
+
+fn append_llm_tool_result_messages(
+    variable_pool: &mut Map<String, Value>,
+    waiting_node_id: &str,
+    resume_payload: &Value,
+) -> Result<()> {
+    let state = pending_llm_tool_callback_state(variable_pool, waiting_node_id)
+        .ok_or_else(|| anyhow!("llm tool callback state not found for {waiting_node_id}"))?;
+    let pending_tool_calls = state
+        .get("pending_tool_calls")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("llm tool callback state is missing pending_tool_calls"))?;
+    let tool_results = resume_payload
+        .get("tool_results")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("llm tool callback resume payload requires tool_results"))?;
+    let mut history = state
+        .get("history")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or_else(|| anyhow!("llm tool callback state is missing history"))?;
+    let mut expected_ids = BTreeSet::new();
+    let mut ordered_ids = Vec::new();
+
+    for tool_call in pending_tool_calls {
+        let id = tool_call
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("pending tool call is missing id"))?;
+        expected_ids.insert(id.to_string());
+        ordered_ids.push(id.to_string());
+    }
+
+    let mut results_by_id = BTreeMap::new();
+    for tool_result in tool_results {
+        let object = tool_result
+            .as_object()
+            .ok_or_else(|| anyhow!("tool result must be an object"))?;
+        let tool_call_id = object
+            .get("tool_call_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("tool result is missing tool_call_id"))?;
+        if !expected_ids.contains(tool_call_id) {
+            return Err(anyhow!("unexpected tool result for {tool_call_id}"));
+        }
+        if results_by_id
+            .insert(tool_call_id.to_string(), object.clone())
+            .is_some()
+        {
+            return Err(anyhow!("duplicate tool result for {tool_call_id}"));
+        }
+    }
+    for expected_id in &ordered_ids {
+        if !results_by_id.contains_key(expected_id) {
+            return Err(anyhow!("missing tool result for {expected_id}"));
+        }
+    }
+
+    for tool_call_id in ordered_ids {
+        let result = results_by_id
+            .remove(&tool_call_id)
+            .ok_or_else(|| anyhow!("missing tool result for {tool_call_id}"))?;
+        let mut message = Map::new();
+        message.insert("role".to_string(), Value::String("tool".to_string()));
+        message.insert("tool_call_id".to_string(), Value::String(tool_call_id));
+        message.insert(
+            "content".to_string(),
+            result
+                .get("content")
+                .cloned()
+                .map(tool_result_content_value)
+                .unwrap_or_else(|| Value::String(String::new())),
+        );
+        if let Some(name) = result.get("name").and_then(Value::as_str) {
+            message.insert("name".to_string(), Value::String(name.to_string()));
+        }
+        history.push(Value::Object(message));
+    }
+
+    variable_pool.insert(
+        waiting_node_id.to_string(),
+        json!({
+            LLM_TOOL_CALLBACK_STATE_KEY: {
+                "callback_kind": LLM_TOOL_CALLBACK_KIND,
+                "history": history,
+            }
+        }),
+    );
+
+    Ok(())
+}
+
+fn tool_result_content_value(value: Value) -> Value {
+    match value {
+        Value::String(_) => value,
+        other => Value::String(other.to_string()),
+    }
+}
+
+fn pending_llm_tool_callback_state<'a>(
+    variable_pool: &'a Map<String, Value>,
+    node_id: &str,
+) -> Option<&'a Map<String, Value>> {
+    variable_pool
+        .get(node_id)?
+        .get(LLM_TOOL_CALLBACK_STATE_KEY)?
+        .as_object()
+}
+
+fn pending_llm_tool_callback_history(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> Option<Vec<Value>> {
+    pending_llm_tool_callback_state(variable_pool, &node.node_id)?
+        .get("history")?
+        .as_array()
+        .cloned()
+}
+
 fn build_empty_prompt_messages_error_payload(runtime: &CompiledLlmRuntime) -> Value {
     json!({
         "provider_instance_id": runtime.provider_instance_id,
@@ -994,6 +1262,10 @@ fn compatible_history_messages(
     resolved_inputs: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
 ) -> Vec<Value> {
+    if let Some(history) = pending_llm_tool_callback_history(node, variable_pool) {
+        return history;
+    }
+
     let direct_history = resolved_inputs
         .get("history")
         .and_then(Value::as_array)

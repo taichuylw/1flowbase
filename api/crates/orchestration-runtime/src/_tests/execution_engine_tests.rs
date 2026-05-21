@@ -199,6 +199,7 @@ impl_noop_code_invoker!(
     FailFirstFailoverInvoker,
     FailAfterTokenFinishErrorFailoverInvoker,
     ReasoningDeltaProviderInvoker,
+    SequentialLlmToolCallInvoker,
 );
 
 struct RuntimeContractErrorInvoker;
@@ -371,6 +372,53 @@ impl CapabilityInvoker for ToolMcpMetadataInvoker {
         _input_payload: serde_json::Value,
     ) -> Result<CapabilityInvocationOutput> {
         unreachable!("base plan does not execute capability nodes")
+    }
+}
+
+struct SequentialLlmToolCallInvoker {
+    responses: Arc<Mutex<Vec<ProviderInvocationResult>>>,
+    captured_inputs: Arc<Mutex<Vec<ProviderInvocationInput>>>,
+}
+
+#[async_trait]
+impl ProviderInvoker for SequentialLlmToolCallInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        self.captured_inputs
+            .lock()
+            .expect("captured inputs mutex poisoned")
+            .push(input);
+        let result = self
+            .responses
+            .lock()
+            .expect("responses mutex poisoned")
+            .pop()
+            .expect("provider response should exist");
+
+        Ok(ProviderInvocationOutput {
+            events: result
+                .finish_reason
+                .clone()
+                .map(|reason| ProviderStreamEvent::Finish { reason })
+                .into_iter()
+                .collect(),
+            result,
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for SequentialLlmToolCallInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("llm tool callback tests do not execute capability nodes")
     }
 }
 
@@ -654,6 +702,80 @@ fn base_plan() -> CompiledPlan {
         nodes,
         compile_issues: Vec::new(),
     }
+}
+
+fn llm_answer_plan() -> CompiledPlan {
+    let mut plan = base_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-llm".to_string(),
+        "node-answer".to_string(),
+    ];
+    plan.nodes.remove("node-human");
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.downstream_node_ids = vec!["node-answer".to_string()];
+    let answer = plan
+        .nodes
+        .get_mut("node-answer")
+        .expect("answer node should exist");
+    answer.dependency_node_ids = vec!["node-llm".to_string()];
+    answer.bindings = BTreeMap::from([(
+        "answer_template".to_string(),
+        CompiledBinding {
+            kind: "selector".to_string(),
+            selector_paths: vec![vec!["node-llm".to_string(), "text".to_string()]],
+            raw_value: json!(["node-llm", "text"]),
+        },
+    )]);
+    plan
+}
+
+fn tool_call_response(tool_calls: Vec<ProviderToolCall>) -> ProviderInvocationResult {
+    ProviderInvocationResult {
+        final_content: Some("need tools".to_string()),
+        tool_calls,
+        finish_reason: Some(ProviderFinishReason::ToolCall),
+        usage: ProviderUsage {
+            input_tokens: Some(11),
+            output_tokens: Some(3),
+            total_tokens: Some(14),
+            ..ProviderUsage::default()
+        },
+        ..ProviderInvocationResult::default()
+    }
+}
+
+fn final_llm_response(text: &str) -> ProviderInvocationResult {
+    ProviderInvocationResult {
+        final_content: Some(text.to_string()),
+        finish_reason: Some(ProviderFinishReason::Stop),
+        usage: ProviderUsage {
+            input_tokens: Some(20),
+            output_tokens: Some(4),
+            total_tokens: Some(24),
+            ..ProviderUsage::default()
+        },
+        ..ProviderInvocationResult::default()
+    }
+}
+
+fn sequential_tool_invoker(
+    responses_in_call_order: Vec<ProviderInvocationResult>,
+) -> (
+    SequentialLlmToolCallInvoker,
+    Arc<Mutex<Vec<ProviderInvocationInput>>>,
+) {
+    let captured_inputs = Arc::new(Mutex::new(Vec::new()));
+    let invoker = SequentialLlmToolCallInvoker {
+        responses: Arc::new(Mutex::new(
+            responses_in_call_order.into_iter().rev().collect(),
+        )),
+        captured_inputs: captured_inputs.clone(),
+    };
+    (invoker, captured_inputs)
 }
 
 #[tokio::test]
@@ -1413,6 +1535,170 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
         }
         other => panic!("expected waiting_callback, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
+    let (invoker, _captured_inputs) =
+        sequential_tool_invoker(vec![tool_call_response(vec![ProviderToolCall {
+            id: "call_weather".to_string(),
+            name: "lookup_weather".to_string(),
+            arguments: json!({ "city": "Shanghai" }),
+        }])]);
+
+    let outcome = start_flow_debug_run(
+        &llm_answer_plan(),
+        &json!({ "node-start": { "query": "weather?" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(pending.node_id, "node-llm");
+            assert_eq!(pending.callback_kind, "llm_tool_calls");
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["id"],
+                json!("call_weather")
+            );
+            assert_eq!(pending.request_payload["finish_reason"], json!("tool_call"));
+            assert_eq!(pending.request_payload["text"], json!("need tools"));
+            assert_eq!(
+                pending.request_payload["provider_route"]["provider_code"],
+                json!("fixture_provider")
+            );
+            assert_eq!(pending.request_payload["usage"]["total_tokens"], json!(14));
+        }
+        other => panic!("expected llm tool callback wait, got {other:?}"),
+    }
+
+    assert_eq!(outcome.node_traces.len(), 2);
+    assert!(outcome
+        .node_traces
+        .iter()
+        .all(|trace| trace.node_id != "node-answer"));
+    assert!(outcome.variable_pool.get("node-answer").is_none());
+}
+
+#[tokio::test]
+async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
+    let (waiting_invoker, _waiting_inputs) =
+        sequential_tool_invoker(vec![tool_call_response(vec![ProviderToolCall {
+            id: "call_weather".to_string(),
+            name: "lookup_weather".to_string(),
+            arguments: json!({ "city": "Shanghai" }),
+        }])]);
+    let plan = llm_answer_plan();
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "weather?" } }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("llm tool wait should have checkpoint");
+
+    let (resume_invoker, resumed_inputs) =
+        sequential_tool_invoker(vec![final_llm_response("weather is clear")]);
+    let resumed = resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_weather",
+                    "content": "{\"temperature\":21}"
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        resumed.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(
+        resumed.variable_pool["node-answer"]["answer"],
+        json!("weather is clear")
+    );
+    assert_eq!(resumed.node_traces[0].node_id, "node-llm");
+    assert!(resumed
+        .node_traces
+        .iter()
+        .any(|trace| trace.node_id == "node-answer"));
+
+    let captured = resumed_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 1);
+    let messages = serde_json::to_value(&captured[0].messages).expect("messages serialize");
+    assert_eq!(messages[0]["role"], json!("assistant"));
+    assert_eq!(messages[0]["tool_calls"][0]["id"], json!("call_weather"));
+    assert_eq!(messages[1]["role"], json!("tool"));
+    assert_eq!(messages[1]["tool_call_id"], json!("call_weather"));
+    assert_eq!(messages[2]["role"], json!("user"));
+}
+
+#[tokio::test]
+async fn resume_llm_tool_results_rejects_missing_tool_results() {
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![tool_call_response(vec![
+        ProviderToolCall {
+            id: "call_weather".to_string(),
+            name: "lookup_weather".to_string(),
+            arguments: json!({ "city": "Shanghai" }),
+        },
+        ProviderToolCall {
+            id: "call_time".to_string(),
+            name: "lookup_time".to_string(),
+            arguments: json!({ "city": "Shanghai" }),
+        },
+    ])]);
+    let plan = llm_answer_plan();
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "weather and time?" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("llm tool wait should have checkpoint");
+
+    let (resume_invoker, _resume_inputs) =
+        sequential_tool_invoker(vec![final_llm_response("should not be called")]);
+    let error = resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_weather",
+                    "content": "{\"temperature\":21}"
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("missing tool result for call_time"));
 }
 
 #[tokio::test]

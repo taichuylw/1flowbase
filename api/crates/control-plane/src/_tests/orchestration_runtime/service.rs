@@ -1608,6 +1608,163 @@ async fn provider_error_after_live_delta_keeps_partial_output_out_of_run_state()
 }
 
 #[tokio::test]
+async fn live_llm_tool_calls_create_callback_task_and_pause_downstream() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderInvocationResult, ProviderToolCall, ProviderUsage,
+    };
+
+    let service =
+        OrchestrationRuntimeService::for_tests_with_provider_result(ProviderInvocationResult {
+            final_content: Some("need tool".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_weather".to_string(),
+                name: "lookup_weather".to_string(),
+                arguments: json!({ "city": "Shanghai" }),
+            }],
+            usage: ProviderUsage {
+                input_tokens: Some(8),
+                output_tokens: Some(4),
+                total_tokens: Some(12),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        });
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "天气？" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let waiting_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        waiting_detail.flow_run.status,
+        domain::FlowRunStatus::WaitingCallback
+    );
+    let llm_node = node_run(&waiting_detail, "node-llm");
+    assert_eq!(llm_node.status, domain::NodeRunStatus::WaitingCallback);
+    assert_eq!(
+        llm_node.output_payload["tool_calls"][0]["id"],
+        "call_weather"
+    );
+    assert!(waiting_detail
+        .node_runs
+        .iter()
+        .all(|node_run| node_run.node_id != "node-answer"));
+    assert_eq!(waiting_detail.callback_tasks.len(), 1);
+    assert_eq!(
+        waiting_detail.callback_tasks[0].callback_kind,
+        "llm_tool_calls"
+    );
+    assert_eq!(
+        waiting_detail.callback_tasks[0].request_payload["tool_calls"][0]["id"],
+        "call_weather"
+    );
+    let checkpoint = waiting_detail
+        .checkpoints
+        .last()
+        .expect("llm tool wait should store checkpoint");
+    assert_eq!(checkpoint.locator_payload["node_id"], "node-llm");
+    assert_eq!(checkpoint.locator_payload["next_node_index"], json!(1));
+    assert_eq!(
+        checkpoint.variable_snapshot["node-llm"]["__llm_tool_callback"]["pending_tool_calls"][0]
+            ["id"],
+        "call_weather"
+    );
+}
+
+#[tokio::test]
+async fn complete_llm_tool_callback_rejects_partial_results_without_consuming_task() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderInvocationResult, ProviderToolCall, ProviderUsage,
+    };
+
+    let service =
+        OrchestrationRuntimeService::for_tests_with_provider_result(ProviderInvocationResult {
+            final_content: Some("need tools".to_string()),
+            tool_calls: vec![
+                ProviderToolCall {
+                    id: "call_weather".to_string(),
+                    name: "lookup_weather".to_string(),
+                    arguments: json!({ "city": "Shanghai" }),
+                },
+                ProviderToolCall {
+                    id: "call_time".to_string(),
+                    name: "lookup_time".to_string(),
+                    arguments: json!({ "city": "Shanghai" }),
+                },
+            ],
+            usage: ProviderUsage {
+                total_tokens: Some(12),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        });
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+    let detail = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "天气和时间？" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+    let waiting_detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: detail.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+    let callback_task_id = waiting_detail.callback_tasks[0].id;
+
+    let error = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id,
+            response_payload: json!({
+                "tool_results": [
+                    {
+                        "tool_call_id": "call_weather",
+                        "content": "{\"temperature\":21}"
+                    }
+                ]
+            }),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("missing tool result for call_time"));
+    let callback_task = service.callback_task_for_tests(callback_task_id).await;
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Pending);
+}
+
+#[tokio::test]
 async fn live_debug_checkpoint_snapshot_stores_llm_output_metrics_without_process_events() {
     use plugin_framework::provider_contract::{
         ProviderFinishReason, ProviderStreamEvent, ProviderToolCall, ProviderUsage,

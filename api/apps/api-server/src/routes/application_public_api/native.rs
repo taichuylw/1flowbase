@@ -18,7 +18,7 @@ use control_plane::{
             GetNativeRunCommand, NativeRunRequest, NativeRunResult, NativeRunValidationError,
             ResumeNativeRunCommand,
         },
-        run_service::native_result_from_flow_run,
+        run_service::native_result_from_run_detail,
     },
     file_management::{FileUploadService, UploadFileCommand},
     orchestration_runtime::{
@@ -300,10 +300,7 @@ pub(crate) async fn execute_blocking_native_run(
         })
         .await;
     match execution_result {
-        Ok(detail) => Ok(native_result_from_flow_run(
-            &detail.flow_run,
-            run.metadata.clone(),
-        )),
+        Ok(detail) => Ok(native_result_from_run_detail(&detail, run.metadata.clone())),
         Err(error) => {
             error!(
                 application_id = %run.application_id,
@@ -587,8 +584,8 @@ pub async fn resume_native_run(
             })
             .await
             .map_err(service_error)?;
-            native_result_from_flow_run(
-                &detail.flow_run,
+            native_result_from_run_detail(
+                &detail,
                 serde_json::json!({
                     "external_user": detail.flow_run.external_user,
                     "external_conversation_id": detail.flow_run.external_conversation_id,

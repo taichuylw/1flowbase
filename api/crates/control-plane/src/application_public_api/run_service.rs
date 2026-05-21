@@ -404,6 +404,12 @@ pub trait ApplicationPublishedRunControlRepository: Send + Sync {
         &self,
         callback_task_id: Uuid,
     ) -> Result<Option<domain::CallbackTaskRecord>>;
+
+    async fn get_published_run_detail(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunDetail>>;
 }
 
 pub fn native_result_from_flow_run(
@@ -441,6 +447,58 @@ pub fn native_result_from_flow_run(
         usage: extract_usage(&flow_run.output_payload),
         error,
         created_at: flow_run.created_at,
+    }
+}
+
+pub fn native_result_from_run_detail(
+    detail: &domain::ApplicationRunDetail,
+    metadata: Value,
+) -> NativeRunResult {
+    let mut result = native_result_from_flow_run(&detail.flow_run, metadata);
+    if let Some(task) = latest_pending_callback_task(&detail.callback_tasks) {
+        result.required_action = Some(native_required_action_from_callback_task(task));
+        if task.callback_kind == "llm_tool_calls" {
+            result.tool_calls = task
+                .request_payload
+                .get("tool_calls")
+                .filter(|value| value.is_array())
+                .cloned();
+        }
+    }
+    result
+}
+
+fn latest_pending_callback_task(
+    tasks: &[domain::CallbackTaskRecord],
+) -> Option<&domain::CallbackTaskRecord> {
+    tasks
+        .iter()
+        .rev()
+        .find(|task| task.status == domain::CallbackTaskStatus::Pending)
+}
+
+fn native_required_action_from_callback_task(
+    task: &domain::CallbackTaskRecord,
+) -> super::native::NativeRequiredAction {
+    let action_type = if task.callback_kind == "llm_tool_calls" {
+        "submit_tool_outputs"
+    } else {
+        "callback"
+    };
+    super::native::NativeRequiredAction {
+        action_type: action_type.to_string(),
+        payload: json!({
+            "callback_task_id": task.id,
+            "callback_kind": task.callback_kind,
+            "flow_run_id": task.flow_run_id,
+            "node_run_id": task.node_run_id,
+            "request_payload": task.request_payload,
+            "tool_calls": task
+                .request_payload
+                .get("tool_calls")
+                .cloned()
+                .unwrap_or(Value::Null),
+        }),
     }
 }
 

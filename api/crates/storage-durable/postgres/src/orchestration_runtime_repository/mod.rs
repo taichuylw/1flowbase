@@ -559,6 +559,21 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
     ) -> Result<Option<domain::CallbackTaskRecord>> {
         PgControlPlaneStore::get_callback_task(self, callback_task_id).await
     }
+
+    async fn get_published_run_detail(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunDetail>> {
+        let detail =
+            PgControlPlaneStore::get_application_run_detail(self, application_id, flow_run_id)
+                .await?;
+
+        Ok(
+            detail
+                .filter(|detail| detail.flow_run.run_mode == domain::FlowRunMode::PublishedApiRun),
+        )
+    }
 }
 
 #[async_trait]
