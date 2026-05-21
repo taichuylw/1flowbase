@@ -570,10 +570,23 @@ where
                 }),
             })
             .await?;
+        let flow_started_event = debug_stream_events::flow_started(running.id);
+        if let Err(error) = runtime_event_persister::persist_runtime_event_payload(
+            &self.repository,
+            running.id,
+            &flow_started_event,
+        )
+        .await
+        {
+            tracing::warn!(
+                flow_run_id = %running.id,
+                event_type = %flow_started_event.event_type,
+                error = %error,
+                "failed to persist published flow runtime start event"
+            );
+        }
         if let Some(stream) = &self.runtime_event_stream {
-            let _ = stream
-                .append(running.id, debug_stream_events::flow_started(running.id))
-                .await;
+            let _ = stream.append(running.id, flow_started_event).await;
         }
 
         let result = self

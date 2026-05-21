@@ -240,27 +240,51 @@ async fn send_compatible_runtime_event_stream<F>(
         }
     }
 
-    while let Some(event) = subscription.live_events.recv().await {
-        let event_type = event.event_type.clone();
-        let is_terminal = is_public_terminal_runtime_event(&event_type);
-        let events = mapper(&initial_run, event);
-        emitted_public_event |= !events.is_empty();
-        if !send_compatible_sse_events(&sender, events).await {
-            debug!(
-                flow_run_id = %initial_run.id,
-                application_id = %initial_run.application_id,
-                "compatible public API stream client disconnected"
-            );
-            return;
-        }
-        if is_terminal {
-            debug!(
-                flow_run_id = %initial_run.id,
-                application_id = %initial_run.application_id,
-                event_type = %event_type,
-                "compatible public API stream reached terminal event"
-            );
-            return;
+    let mut durable_terminal_check = tokio::time::interval(Duration::from_millis(500));
+    durable_terminal_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            maybe_event = subscription.live_events.recv() => {
+                let Some(event) = maybe_event else {
+                    break;
+                };
+                let event_type = event.event_type.clone();
+                let is_terminal = is_public_terminal_runtime_event(&event_type);
+                let events = mapper(&initial_run, event);
+                emitted_public_event |= !events.is_empty();
+                if !send_compatible_sse_events(&sender, events).await {
+                    debug!(
+                        flow_run_id = %initial_run.id,
+                        application_id = %initial_run.application_id,
+                        "compatible public API stream client disconnected"
+                    );
+                    return;
+                }
+                if is_terminal {
+                    debug!(
+                        flow_run_id = %initial_run.id,
+                        application_id = %initial_run.application_id,
+                        event_type = %event_type,
+                        "compatible public API stream reached terminal event"
+                    );
+                    return;
+                }
+            }
+            _ = durable_terminal_check.tick() => {
+                if emit_compatible_terminal_fallback(
+                    &state,
+                    &initial_run,
+                    &sender,
+                    &mut mapper,
+                    emitted_public_event,
+                    "durable_poll",
+                    false,
+                )
+                .await
+                {
+                    return;
+                }
+            }
         }
     }
 
@@ -270,6 +294,8 @@ async fn send_compatible_runtime_event_stream<F>(
         &sender,
         &mut mapper,
         emitted_public_event,
+        "stream_closed",
+        true,
     )
     .await;
 }
@@ -292,25 +318,32 @@ async fn emit_compatible_terminal_fallback<F>(
     sender: &mpsc::Sender<Result<Event, Infallible>>,
     mapper: &mut F,
     emitted_public_event: bool,
-) where
+    trigger: &'static str,
+    warn_if_not_terminal: bool,
+) -> bool
+where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
     let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
     let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
-        warn!(
-            flow_run_id = %initial_run.id,
-            application_id = %initial_run.application_id,
-            status = ?latest_run.status,
-            "compatible public API stream closed without terminal event before durable run reached a terminal state"
-        );
-        return;
+        if warn_if_not_terminal {
+            warn!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                status = ?latest_run.status,
+                trigger = %trigger,
+                "compatible public API stream ended before durable run reached a terminal state"
+            );
+        }
+        return false;
     };
 
     warn!(
         flow_run_id = %initial_run.id,
         application_id = %initial_run.application_id,
         status = ?latest_run.status,
-        "compatible public API stream closed without terminal event; emitting durable terminal fallback"
+        trigger = %trigger,
+        "compatible public API stream missing runtime terminal event; emitting durable terminal fallback"
     );
 
     if !emitted_public_event {
@@ -320,10 +353,11 @@ async fn emit_compatible_terminal_fallback<F>(
             debug_stream_events::flow_started(latest_run.id),
         );
         if !send_compatible_sse_events(sender, mapper(&latest_run, started_event)).await {
-            return;
+            return true;
         }
     }
     let _ = send_compatible_sse_events(sender, mapper(&latest_run, terminal_event)).await;
+    true
 }
 
 fn is_public_terminal_runtime_event(event_type: &str) -> bool {

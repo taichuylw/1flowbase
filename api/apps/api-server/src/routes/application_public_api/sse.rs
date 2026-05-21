@@ -1,4 +1,4 @@
-use std::{convert::Infallible, sync::Arc};
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use axum::response::sse::Event;
 use control_plane::{
@@ -353,15 +353,39 @@ pub async fn send_native_runtime_event_stream(
         }
     }
 
-    while let Some(event) = subscription.live_events.recv().await {
-        let is_terminal = is_public_terminal_runtime_event(&event.event_type);
-        let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
-        emitted_public_event |= sse.is_some();
-        if !send_native_sse_event(&sender, sse).await {
-            return;
-        }
-        if is_terminal {
-            return;
+    let mut durable_terminal_check = tokio::time::interval(Duration::from_millis(500));
+    durable_terminal_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            maybe_event = subscription.live_events.recv() => {
+                let Some(event) = maybe_event else {
+                    break;
+                };
+                let is_terminal = is_public_terminal_runtime_event(&event.event_type);
+                let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
+                emitted_public_event |= sse.is_some();
+                if !send_native_sse_event(&sender, sse).await {
+                    return;
+                }
+                if is_terminal {
+                    return;
+                }
+            }
+            _ = durable_terminal_check.tick() => {
+                if emit_native_terminal_fallback(
+                    &state,
+                    &initial_run,
+                    include_workflow_events,
+                    &sender,
+                    emitted_public_event,
+                    "durable_poll",
+                    false,
+                )
+                .await
+                {
+                    return;
+                }
+            }
         }
     }
 
@@ -371,6 +395,8 @@ pub async fn send_native_runtime_event_stream(
         include_workflow_events,
         &sender,
         emitted_public_event,
+        "stream_closed",
+        true,
     )
     .await;
 }
@@ -391,23 +417,29 @@ async fn emit_native_terminal_fallback(
     include_workflow_events: IncludeWorkflowEvents,
     sender: &mpsc::Sender<Result<Event, Infallible>>,
     emitted_public_event: bool,
-) {
+    trigger: &'static str,
+    warn_if_not_terminal: bool,
+) -> bool {
     let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
     let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
-        warn!(
-            flow_run_id = %initial_run.id,
-            application_id = %initial_run.application_id,
-            status = ?latest_run.status,
-            "native stream closed without terminal event before durable run reached a terminal state"
-        );
-        return;
+        if warn_if_not_terminal {
+            warn!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                status = ?latest_run.status,
+                trigger = %trigger,
+                "native stream ended before durable run reached a terminal state"
+            );
+        }
+        return false;
     };
 
     warn!(
         flow_run_id = %initial_run.id,
         application_id = %initial_run.application_id,
         status = ?latest_run.status,
-        "native stream closed without terminal event; emitting durable terminal fallback"
+        trigger = %trigger,
+        "native stream missing runtime terminal event; emitting durable terminal fallback"
     );
 
     if !emitted_public_event {
@@ -427,7 +459,7 @@ async fn emit_native_terminal_fallback(
                 application_id = %initial_run.application_id,
                 "native stream client disconnected before terminal fallback"
             );
-            return;
+            return true;
         }
     }
     let _ = send_native_sse_event(
@@ -435,6 +467,7 @@ async fn emit_native_terminal_fallback(
         runtime_event_to_native_sse(&latest_run, include_workflow_events, terminal_event),
     )
     .await;
+    true
 }
 
 #[cfg(test)]

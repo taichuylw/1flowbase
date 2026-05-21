@@ -83,6 +83,18 @@ async fn complete_callback_task_updates_task_and_requeues_waiting_run() {
 
     assert_eq!(detail.callback_tasks[0].status.as_str(), "completed");
     assert_eq!(detail.flow_run.status.as_str(), "succeeded");
+    let runtime_event_types = service
+        .list_runtime_events(detail.flow_run.id, 0)
+        .await
+        .into_iter()
+        .map(|event| event.event_type)
+        .collect::<Vec<_>>();
+    assert!(
+        runtime_event_types
+            .iter()
+            .any(|event_type| event_type == "flow_finished"),
+        "callback resume completion should be durable: {runtime_event_types:?}"
+    );
 }
 
 #[tokio::test]

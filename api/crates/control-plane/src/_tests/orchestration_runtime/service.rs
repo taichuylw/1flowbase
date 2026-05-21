@@ -2100,6 +2100,24 @@ async fn successful_live_debug_run_emits_flow_lifecycle_and_closes_runtime_strea
     assert!(event_types
         .iter()
         .any(|event_type| event_type == "flow_finished"));
+    let durable_event_types = service
+        .list_runtime_events(detail.flow_run.id, 0)
+        .await
+        .into_iter()
+        .map(|event| event.event_type)
+        .collect::<Vec<_>>();
+    assert!(
+        durable_event_types
+            .iter()
+            .any(|event_type| event_type == "flow_started"),
+        "flow lifecycle should be durable: {durable_event_types:?}"
+    );
+    assert!(
+        durable_event_types
+            .iter()
+            .any(|event_type| event_type == "flow_finished"),
+        "flow lifecycle should be durable: {durable_event_types:?}"
+    );
     let node_finished_events = stream
         .events()
         .into_iter()

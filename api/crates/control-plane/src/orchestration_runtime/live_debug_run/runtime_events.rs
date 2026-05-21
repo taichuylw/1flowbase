@@ -5,14 +5,32 @@ use uuid::Uuid;
 use crate::ports::{OrchestrationRuntimeRepository, RuntimeEventCloseReason, UpdateNodeRunInput};
 
 use super::super::{
-    debug_stream_events, is_expected_runtime_event_stream_closed_error, OrchestrationRuntimeService,
+    debug_stream_events, is_expected_runtime_event_stream_closed_error, runtime_event_persister,
+    OrchestrationRuntimeService,
 };
 
 pub(super) async fn append_runtime_event<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     flow_run_id: Uuid,
     event: crate::ports::RuntimeEventPayload,
-) {
+) where
+    R: OrchestrationRuntimeRepository,
+{
+    if let Err(error) = runtime_event_persister::persist_runtime_event_payload(
+        &service.repository,
+        flow_run_id,
+        &event,
+    )
+    .await
+    {
+        tracing::warn!(
+            flow_run_id = %flow_run_id,
+            event_type = %event.event_type,
+            source = ?event.source,
+            error = %error,
+            "failed to persist runtime event"
+        );
+    }
     if let Some(stream) = &service.runtime_event_stream {
         let event_type = event.event_type.clone();
         let source = event.source;
@@ -68,7 +86,9 @@ pub(super) async fn emit_flow_failed_and_close<R, H>(
     service: &OrchestrationRuntimeService<R, H>,
     flow_run_id: Uuid,
     error_payload: Value,
-) {
+) where
+    R: OrchestrationRuntimeRepository,
+{
     emit_flow_failed_and_close_with_reason(
         service,
         flow_run_id,
@@ -83,7 +103,9 @@ async fn emit_flow_failed_and_close_with_reason<R, H>(
     flow_run_id: Uuid,
     error_payload: Value,
     reason: RuntimeEventCloseReason,
-) {
+) where
+    R: OrchestrationRuntimeRepository,
+{
     append_runtime_event(
         service,
         flow_run_id,

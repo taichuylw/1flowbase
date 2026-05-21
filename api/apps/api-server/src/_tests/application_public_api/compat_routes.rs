@@ -30,10 +30,22 @@ struct DropTerminalRuntimeEventStream {
     inner: LocalRuntimeEventStream,
 }
 
+struct NeverCloseDropTerminalRuntimeEventStream {
+    inner: DropTerminalRuntimeEventStream,
+}
+
 impl DropTerminalRuntimeEventStream {
     fn new() -> Self {
         Self {
             inner: LocalRuntimeEventStream::new(),
+        }
+    }
+}
+
+impl NeverCloseDropTerminalRuntimeEventStream {
+    fn new() -> Self {
+        Self {
+            inner: DropTerminalRuntimeEventStream::new(),
         }
     }
 }
@@ -82,6 +94,54 @@ impl RuntimeEventStream for DropTerminalRuntimeEventStream {
         reason: RuntimeEventCloseReason,
     ) -> anyhow::Result<()> {
         self.inner.close_run(run_id, reason).await
+    }
+
+    async fn trim(&self, run_id: uuid::Uuid, policy: RuntimeEventTrimPolicy) -> anyhow::Result<()> {
+        self.inner.trim(run_id, policy).await
+    }
+}
+
+#[async_trait]
+impl RuntimeEventStream for NeverCloseDropTerminalRuntimeEventStream {
+    async fn open_run(
+        &self,
+        run_id: uuid::Uuid,
+        policy: RuntimeEventStreamPolicy,
+    ) -> anyhow::Result<()> {
+        self.inner.open_run(run_id, policy).await
+    }
+
+    async fn append(
+        &self,
+        run_id: uuid::Uuid,
+        event: RuntimeEventPayload,
+    ) -> anyhow::Result<RuntimeEventEnvelope> {
+        self.inner.append(run_id, event).await
+    }
+
+    async fn subscribe(
+        &self,
+        run_id: uuid::Uuid,
+        from_sequence: Option<i64>,
+    ) -> anyhow::Result<RuntimeEventSubscription> {
+        self.inner.subscribe(run_id, from_sequence).await
+    }
+
+    async fn replay(
+        &self,
+        run_id: uuid::Uuid,
+        from_sequence: Option<i64>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<RuntimeEventEnvelope>> {
+        self.inner.replay(run_id, from_sequence, limit).await
+    }
+
+    async fn close_run(
+        &self,
+        _run_id: uuid::Uuid,
+        _reason: RuntimeEventCloseReason,
+    ) -> anyhow::Result<()> {
+        Ok(())
     }
 
     async fn trim(&self, run_id: uuid::Uuid, policy: RuntimeEventTrimPolicy) -> anyhow::Result<()> {
@@ -937,6 +997,35 @@ async fn compatible_streaming_routes_emit_terminal_fallback_after_runtime_stream
     )
     .await
     .expect("OpenAI compatible SSE should finish from durable terminal fallback")
+    .unwrap();
+    let openai_body = String::from_utf8(openai_body.to_vec()).unwrap();
+
+    assert!(openai_body.contains("[DONE]"), "{openai_body}");
+}
+
+#[tokio::test]
+async fn compatible_streaming_routes_emit_terminal_fallback_when_runtime_stream_stays_open() {
+    let (app, _) = test_app_with_runtime_event_stream(Arc::new(
+        NeverCloseDropTerminalRuntimeEventStream::new(),
+    ))
+    .await;
+    let token = setup_published_app(&app, "Compatible Stuck Runtime Stream Route App").await;
+
+    let openai = post_json(
+        &app,
+        "/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        openai_body(true),
+    )
+    .await;
+    assert_eq!(openai.status(), StatusCode::OK);
+
+    let openai_body = timeout(
+        Duration::from_secs(5),
+        to_bytes(openai.into_body(), usize::MAX),
+    )
+    .await
+    .expect("OpenAI compatible SSE should finish from durable terminal polling")
     .unwrap();
     let openai_body = String::from_utf8(openai_body.to_vec()).unwrap();
 
