@@ -571,9 +571,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const pageLabel = selectedPageLabel
     ? selectedPageLabel
     : '未选择 pageId（将使用默认首页）';
-  const pageNodeTitle = selectedPageLabel
-    ? `当前页面：${selectedPageLabel}`
-    : '当前未选中页面';
 
   const saveBlockComposition = useCallback(
     async (
@@ -1019,7 +1016,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     <FrontStagePageTreeSidebar
       pageTree={pageTree}
       selectedPageId={selectedPageId}
-      pageNodeTitle={pageNodeTitle}
       canEdit={canEditPageTree}
       isOperationPending={isOperationPending}
       onAddGroup={handleAddGroup}
@@ -1034,7 +1030,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
 
   return (
     <SectionPageLayout
-      pageTitle="前台"
       navItems={[]}
       activeKey=""
       sidebarContent={frontstageSidebar}

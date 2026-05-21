@@ -110,7 +110,7 @@ describe('style boundary registry', () => {
     expect(
       await screen.findByRole('heading', { name: '1flowbase' })
     ).toBeInTheDocument();
-    expect(await screen.findByText('当前页面：Landing')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Landing' })).toBeInTheDocument();
     expect(screen.getByLabelText('进入设计模式')).toBeInTheDocument();
   }, 15_000);
 

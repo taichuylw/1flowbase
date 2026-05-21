@@ -16,7 +16,7 @@ import {
   RightOutlined,
   DownOutlined
 } from '@ant-design/icons';
-import { Button, Empty, Space, Typography, Dropdown, Tooltip, Switch } from 'antd';
+import { Button, Empty, Typography, Dropdown, Tooltip, Switch } from 'antd';
 import { useState } from 'react';
 import type { MenuProps } from 'antd';
 
@@ -26,7 +26,6 @@ import './frontstage-page-tree-sidebar.css';
 type FrontStagePageTreeSidebarProps = {
   pageTree: FrontStageTreeNode[];
   selectedPageId: string | null;
-  pageNodeTitle: string;
   canEdit: boolean;
   isOperationPending: boolean;
   onAddGroup: () => void;
@@ -437,21 +436,6 @@ function renderTreeNode({
               onSelectPage
             })
           )}
-          {canEdit && node.kind === 'group' && level === 0 ? (
-            <li className="frontstage-page-tree-sidebar__add-item-container" style={{ paddingLeft: 8 + (level + 1) * 16 }}>
-              <Button
-                className="frontstage-page-tree-sidebar__add-item-btn"
-                icon={<PlusOutlined />}
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddPageInGroup(node.id);
-                }}
-              >
-                添加菜单项
-              </Button>
-            </li>
-          ) : null}
         </ul>
       ) : null}
     </li>
@@ -461,7 +445,6 @@ function renderTreeNode({
 export function FrontStagePageTreeSidebar({
   pageTree,
   selectedPageId,
-  pageNodeTitle,
   canEdit,
   isOperationPending,
   onAddGroup,
@@ -499,6 +482,7 @@ export function FrontStagePageTreeSidebar({
       return {};
     }
   });
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
   const toggleGroupCollapse = (groupId: string) => {
     setCollapsedGroupIds((prev) => {
@@ -534,36 +518,18 @@ export function FrontStagePageTreeSidebar({
     });
   };
 
+  const handleAddGroup = () => {
+    setIsAddMenuOpen(false);
+    onAddGroup();
+  };
+
+  const handleAddPage = () => {
+    setIsAddMenuOpen(false);
+    onAddPage();
+  };
+
   return (
     <div className="frontstage-page-tree-sidebar">
-      <Typography.Text
-        className="frontstage-page-tree-sidebar__context"
-        type="secondary"
-      >
-        {pageNodeTitle}
-      </Typography.Text>
-      {canEdit ? (
-        <Space className="frontstage-page-tree-sidebar__actions" size={8} wrap>
-          <Button
-            aria-label="新建分组"
-            disabled={isOperationPending}
-            icon={<FolderAddOutlined />}
-            onClick={onAddGroup}
-            size="small"
-          >
-            新建分组
-          </Button>
-          <Button
-            aria-label="新建页面"
-            disabled={isOperationPending}
-            icon={<PlusOutlined />}
-            onClick={onAddPage}
-            size="small"
-          >
-            新建页面
-          </Button>
-        </Space>
-      ) : null}
       {pageTree.length > 0 ? (
         <ul className="frontstage-page-tree-sidebar__tree">
           {pageTree.map((node) =>
@@ -588,21 +554,6 @@ export function FrontStagePageTreeSidebar({
               onSelectPage
             })
           )}
-          {canEdit && (
-            <li className="frontstage-page-tree-sidebar__add-item-container" style={{ paddingLeft: 8 }}>
-              <Button
-                className="frontstage-page-tree-sidebar__add-item-btn"
-                icon={<PlusOutlined />}
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddPage();
-                }}
-              >
-                添加菜单项
-              </Button>
-            </li>
-          )}
         </ul>
       ) : (
         <Empty
@@ -615,6 +566,45 @@ export function FrontStagePageTreeSidebar({
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       )}
+      {canEdit ? (
+        <div className="frontstage-page-tree-sidebar__actions">
+          <Button
+            aria-expanded={isAddMenuOpen}
+            aria-haspopup="menu"
+            aria-label="添加菜单"
+            className="frontstage-page-tree-sidebar__add-item-btn"
+            disabled={isOperationPending}
+            icon={<PlusOutlined />}
+            onClick={() => setIsAddMenuOpen((open) => !open)}
+            size="small"
+          >
+            添加菜单
+            <DownOutlined className="frontstage-page-tree-sidebar__add-item-caret" />
+          </Button>
+          {isAddMenuOpen ? (
+            <div className="frontstage-page-tree-sidebar__add-menu" role="menu">
+              <button
+                className="frontstage-page-tree-sidebar__add-menu-item"
+                onClick={handleAddGroup}
+                role="menuitem"
+                type="button"
+              >
+                <FolderAddOutlined aria-hidden />
+                新增分组
+              </button>
+              <button
+                className="frontstage-page-tree-sidebar__add-menu-item"
+                onClick={handleAddPage}
+                role="menuitem"
+                type="button"
+              >
+                <FileAddOutlined aria-hidden />
+                新增页面
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

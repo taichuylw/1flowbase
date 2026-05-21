@@ -269,16 +269,16 @@
 }
 
 .app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-selected {
-  color: #00a86b !important;
-  background: rgba(24, 144, 255, 0.12) !important;
+  color: #2563eb !important;
+  background: rgba(59, 130, 246, 0.12) !important;
 }
 
 .app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-selected:hover {
-  background: rgba(24, 144, 255, 0.18) !important;
+  background: rgba(59, 130, 246, 0.16) !important;
 }
 
 .app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-selected::after {
-  border-bottom-color: #00a86b !important;
+  border-bottom-color: rgba(59, 130, 246, 0.4) !important;
 }
 
 .app-shell-design-block {

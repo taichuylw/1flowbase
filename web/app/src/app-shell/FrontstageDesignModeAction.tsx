@@ -87,7 +87,9 @@ function FrontstageDesignModeActionBase({
         items={[
           {
             key: 'design-mode',
-            className: isDesignMode ? 'ant-menu-item-selected' : '',
+            className: isDesignMode
+              ? 'app-shell-design-mode-button ant-menu-item-selected'
+              : 'app-shell-design-mode-button',
             label: (
               <span
                 className="app-shell-design-block"
