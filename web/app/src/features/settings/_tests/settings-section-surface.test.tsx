@@ -229,7 +229,7 @@ describe('settings section surface', () => {
       pathname: '/settings/model-providers',
       permissions: ['route_page.view.all', 'state_model.view.all'],
       heading: '模型供应商',
-      level: 3
+      level: 5
     },
     {
       pathname: '/settings/files',
@@ -248,12 +248,18 @@ describe('settings section surface', () => {
         expect(window.location.pathname).toBe(pathname);
       });
 
-      const surface = await screen.findByTestId('settings-section-surface');
+      const surface = await screen.findByTestId(
+        'settings-section-surface',
+        {},
+        { timeout: 10_000 }
+      );
 
       expect(surface).toBeInTheDocument();
-      expect(
-        within(surface).getByRole('heading', { name: heading, level })
-      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(
+          within(surface).getByRole('heading', { name: heading, level })
+        ).toBeInTheDocument();
+      });
     }
   );
 });

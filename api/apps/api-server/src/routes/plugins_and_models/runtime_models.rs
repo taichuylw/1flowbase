@@ -174,8 +174,8 @@ fn resolve_runtime_model(
 }
 
 enum RuntimeCredential {
-    Session(RequestContext),
-    ApiKey(control_plane::auth::ApiKeyActor),
+    Session(Box<RequestContext>),
+    ApiKey(Box<control_plane::auth::ApiKeyActor>),
 }
 
 impl RuntimeCredential {
@@ -203,12 +203,12 @@ async fn authenticate_runtime_request(
         let api_key = control_plane::auth::ApiKeyService::new(state.store.clone())
             .authenticate_bearer_token(token)
             .await?;
-        return Ok(RuntimeCredential::ApiKey(api_key));
+        return Ok(RuntimeCredential::ApiKey(Box::new(api_key)));
     }
 
-    Ok(RuntimeCredential::Session(
+    Ok(RuntimeCredential::Session(Box::new(
         require_session(state, headers).await?,
-    ))
+    )))
 }
 
 fn ensure_api_key_action_allowed(

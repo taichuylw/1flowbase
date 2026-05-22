@@ -30,15 +30,32 @@ import {
 } from '../lib/page-tree';
 import { FrontStagePage } from '../pages/FrontStagePage';
 
-const pageContentSaveHook = vi.hoisted(() => ({ useFrontstagePageContentSave: vi.fn() }));
-const blockCatalogHook = vi.hoisted(() => ({ useFrontstageBlockCatalog: vi.fn() }));
+const pageContentSaveHook = vi.hoisted(() => ({
+  useFrontstagePageContentSave: vi.fn()
+}));
+const blockCatalogHook = vi.hoisted(() => ({
+  useFrontstageBlockCatalog: vi.fn()
+}));
 const blockCodeHook = vi.hoisted(() => ({ useFrontstageBlockCode: vi.fn() }));
 const runtimeSessionsHook = vi.hoisted(() => ({
   useFrontstagePageCanvasRuntimeSessions: vi.fn()
 }));
 const blockCodeApi = vi.hoisted(() => ({
-  fetchFrontstageBlockCode: vi.fn((_workspaceId: string, pageId: string, codeRef: string) => Promise.resolve({ pageId, codeRef, code: 'export default {}' })),
-  frontstageBlockCodeQueryKey: vi.fn((workspaceId: string, pageId: string, codeRef: string) => ['frontstage', workspaceId, 'pages', pageId, 'block-code', codeRef] as const),
+  fetchFrontstageBlockCode: vi.fn(
+    (_workspaceId: string, pageId: string, codeRef: string) =>
+      Promise.resolve({ pageId, codeRef, code: 'export default {}' })
+  ),
+  frontstageBlockCodeQueryKey: vi.fn(
+    (workspaceId: string, pageId: string, codeRef: string) =>
+      [
+        'frontstage',
+        workspaceId,
+        'pages',
+        pageId,
+        'block-code',
+        codeRef
+      ] as const
+  ),
   saveFrontstageBlockCode: vi.fn()
 }));
 
@@ -267,9 +284,7 @@ async function clickAndFlush(element: HTMLElement) {
 }
 
 async function hoverAddMenuAndFlush() {
-  await act(async () => {
-    fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
-  });
+  fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
 }
 
 async function clickAddMenuItemAndFlush(label: '新增分组' | '新增页面') {
@@ -459,7 +474,9 @@ describe('FrontStagePage', () => {
     expect(
       screen.queryByRole('button', { name: '创建区块' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '页面 page-1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 page-1' })
+    ).toBeInTheDocument();
   });
 
   test('shows design controls from shared design mode state', async () => {
@@ -482,20 +499,24 @@ describe('FrontStagePage', () => {
       screen.queryByRole('button', { name: 'JS Block 试运行' })
     ).not.toBeInTheDocument();
     expect(screen.getByText('页面树已同步')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '添加菜单' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '添加菜单' })
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '添加菜单' })).toHaveLength(1);
-    expect(screen.queryByRole('menuitem', { name: '新增分组' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: '新增分组' })
+    ).not.toBeInTheDocument();
     await hoverAddMenuAndFlush();
-    expect(await screen.findByRole('menuitem', { name: '新增分组' })).toBeInTheDocument();
-    expect(await screen.findByRole('menuitem', { name: '新增页面' })).toBeInTheDocument();
-    const addMenuActions = screen
-      .getByRole('button', { name: '添加菜单' })
-      .closest('.frontstage-page-tree-sidebar__actions');
-    expect(addMenuActions).not.toBeNull();
-    await act(async () => {
-      fireEvent.mouseLeave(addMenuActions as HTMLElement);
-    });
-    expect(screen.queryByRole('menuitem', { name: '新增分组' })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('menuitem', { name: '新增分组' })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('menuitem', { name: '新增页面' })
+    ).toBeInTheDocument();
+    fireEvent.mouseLeave(screen.getByRole('button', { name: '添加菜单' }));
+    expect(
+      screen.queryByRole('menuitem', { name: '新增分组' })
+    ).not.toBeInTheDocument();
     exitDesignMode();
     expect(
       screen.queryByRole('button', { name: '创建区块' })
@@ -641,7 +662,10 @@ describe('FrontStagePage', () => {
     );
   });
 
-  test.each([['Data Table', 'data-table'], ['Create Form', 'create-form']] as const)(
+  test.each([
+    ['Data Table', 'data-table'],
+    ['Create Form', 'create-form']
+  ] as const)(
     'writes the selected %s JS template code when adding a block',
     async (templateName, templateId) => {
       authenticate(['frontstage.page.design']);
@@ -956,6 +980,54 @@ describe('FrontStagePage', () => {
     expect(rows[1]).toHaveTextContent('页面 page-2');
   });
 
+  test('shows selected page group hover panel and moves the page from a group click', async () => {
+    authenticate(['frontstage.page.design']);
+    const onMovePageNode = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={[
+            {
+              id: 'group-1',
+              title: '分组 1',
+              kind: 'group',
+              children: [createBackendPage('page-1')]
+            },
+            {
+              id: 'group-2',
+              title: '分组 2',
+              kind: 'group',
+              children: []
+            }
+          ]}
+          onMovePageNode={onMovePageNode}
+        />
+      </AppProviders>
+    );
+
+    activateDesignMode();
+
+    const selectedPageItem = getPageTreeItem('页面 page-1');
+    const groupHoverTrigger = within(selectedPageItem).getByRole('button', {
+      name: /移动到页面分组/
+    });
+
+    expect(groupHoverTrigger).toBeInTheDocument();
+
+    fireEvent.mouseEnter(groupHoverTrigger);
+    fireEvent.click(await screen.findByRole('button', { name: '分组 2' }));
+
+    await waitFor(() => {
+      expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
+        parentId: 'group-2',
+        rank: '001000'
+      });
+    });
+  });
+
   test('does not delete node when delete confirmation is canceled', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
@@ -967,7 +1039,9 @@ describe('FrontStagePage', () => {
     const pageItem = getPageTreeItem('页面 新建 1');
 
     confirmSpy.mockReturnValue(false);
-    await clickAndFlush(within(pageItem).getByRole('button', { name: /删\s*除/ }));
+    await clickAndFlush(
+      within(pageItem).getByRole('button', { name: /删\s*除/ })
+    );
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
     expect(screen.getByText('分组 1')).toBeInTheDocument();
@@ -1154,7 +1228,9 @@ describe('FrontStagePage', () => {
     await clickAddMenuItem('新增页面');
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: '页面 新建 2' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: '页面 新建 2' })
+      ).toBeInTheDocument();
     });
     const rootPageId = onNavigatePage.mock.calls.at(-1)?.[0] as
       | string
@@ -1172,7 +1248,9 @@ describe('FrontStagePage', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: '页面 新建 2' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: '页面 新建 2' })
+      ).toBeInTheDocument();
       expect(onNavigatePage).toHaveBeenLastCalledWith(rootPageId);
     });
   });
@@ -1217,7 +1295,9 @@ describe('FrontStagePage', () => {
     fireEvent.click(rootGroupDeleteButton);
 
     expect(screen.queryByText('页面 嵌套')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(undefined);
   });
 
@@ -1319,7 +1399,9 @@ describe('FrontStagePage', () => {
     await clickAndFlush(
       within(secondPageItem).getByRole('button', { name: /删\s*除/ })
     );
-    expect(screen.getByRole('heading', { name: '页面 新建 1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 新建 1' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(firstPageId);
   });
 
@@ -1364,7 +1446,9 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    expect(screen.getByRole('heading', { name: '页面 page-1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 page-1' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith('page-1');
   });
 
@@ -1374,7 +1458,9 @@ describe('FrontStagePage', () => {
 
     renderPageWithInitialTree([], 'invalid-page-id', onNavigatePage);
 
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(undefined);
   });
 
@@ -1390,7 +1476,9 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('分组 一级')).not.toBeInTheDocument();
     expect(onNavigatePage).not.toHaveBeenCalled();
 
@@ -1427,7 +1515,9 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('分组 一级')).toBeInTheDocument();
     expect(screen.queryByText('分组 二级')).not.toBeInTheDocument();
     expect(screen.getAllByText('页面 内页').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: '页面 内页' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 内页' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith('page-1');
   });
 
@@ -1436,7 +1526,9 @@ describe('FrontStagePage', () => {
     renderPage('page-1');
 
     expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '前台' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '前台' })
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '页面 page-1' })
     ).toBeInTheDocument();
@@ -1507,7 +1599,9 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         '当前工作区页面树为空。请在设计态创建页面后将显示树结构。'
@@ -1541,7 +1635,9 @@ describe('FrontStagePage', () => {
     ]);
 
     expect(screen.getByRole('list')).toHaveTextContent('我的自定义主页');
-    expect(screen.getByRole('heading', { name: '我的自定义主页' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '我的自定义主页' })
+    ).toBeInTheDocument();
     expect(screen.getAllByText('我的自定义主页').length).toBeGreaterThan(0);
   });
 
@@ -1613,7 +1709,9 @@ describe('FrontStagePage', () => {
         '页面树加载失败，当前页面树仍可查看；请点击“重试”恢复最新数据。'
       )
     ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '页面 内页' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 内页' })
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
     expect(onRetryLoadPageTree).toHaveBeenCalledTimes(1);

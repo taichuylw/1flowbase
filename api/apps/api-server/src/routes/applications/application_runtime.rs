@@ -652,11 +652,8 @@ fn to_application_conversation_message_response(
         status: run.status.as_str().to_string(),
         query: application_run_query(&run.input_payload),
         model: application_run_model(&run.input_payload),
-        answer: application_run_answer(&run.output_payload).or_else(|| {
-            run.error_payload
-                .as_ref()
-                .and_then(|payload| application_run_answer(payload))
-        }),
+        answer: application_run_answer(&run.output_payload)
+            .or_else(|| run.error_payload.as_ref().and_then(application_run_answer)),
         is_current: current_run_id == Some(run.id),
     }
 }
@@ -773,9 +770,7 @@ where
     F: Fn(Uuid) -> Fut,
     Fut: Future<Output = Option<serde_json::Value>>,
 {
-    let Some(artifact_id) = runtime_debug_artifact_id(value) else {
-        return None;
-    };
+    let artifact_id = runtime_debug_artifact_id(value)?;
 
     load_debug_artifact(artifact_id)
         .await

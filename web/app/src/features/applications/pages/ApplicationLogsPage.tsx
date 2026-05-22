@@ -5,7 +5,7 @@ import {
 } from '@ant-design/icons';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Button, Empty, Input } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelect';
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
@@ -222,8 +222,9 @@ export function ApplicationLogsPage({
         sortOrder
       })
   });
+  const refetchRuns = runsQuery.refetch;
   const runsPage = runsQuery.data;
-  const runs = runsPage?.items ?? [];
+  const runs = useMemo(() => runsPage?.items ?? [], [runsPage?.items]);
   const total = runsPage?.total ?? 0;
   const normalizedKeyword = keywordSearch.trim().toLowerCase();
   const runDetailQueries = useQueries({
@@ -269,11 +270,11 @@ export function ApplicationLogsPage({
     }
 
     const intervalId = window.setInterval(() => {
-      void runsQuery.refetch();
+      void refetchRuns();
     }, ACTIVE_RUNS_REFETCH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [runs, runsQuery.refetch]);
+  }, [runs, refetchRuns]);
 
   function selectRun(runId: string | null) {
     setSelectedRunId(runId);

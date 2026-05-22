@@ -30,11 +30,14 @@ const SKIPPED_FILES = new Set([
   'web/pnpm-lock.yaml',
 ]);
 const DEBT_MARKER_PATTERN = /\b(TODO|FIXME|HACK|legacy|compat(?:ibility)?|deprecated|obsolete)\b/iu;
+const FIELD_CONTRACT_COMPAT_MARKER_TEXT = /@field-contract-compat\b/u;
+const FIELD_CONTRACT_COMPAT_MARKER_PATTERN = /(?:\/\/|#|\/\*|\*)\s*@field-contract-compat\b/u;
 const BENIGN_MARKER_PATTERNS = [
   /\bdeprecated:\s*false\b/u,
   /\bdeprecated:\s*bool\b/u,
   /\bdeprecated:\s*boolean\b/u,
   /\bcompat-data\b/u,
+  FIELD_CONTRACT_COMPAT_MARKER_TEXT,
 ];
 const FOCUSED_TEST_PATTERN = /\b(?:describe|it|test)\.only\s*\(/u;
 const SKIPPED_TEST_PATTERN = /\b(?:describe|it|test)\.(?:skip|todo)\s*\(|\bx(?:describe|it)\s*\(/u;
@@ -140,7 +143,20 @@ function scanSourceFile({ relativePath, content }) {
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
 
-    if (DEBT_MARKER_PATTERN.test(line) && !isBenignMarkerLine(line)) {
+    if (
+      !testPath
+      && isCodeFile(relativePath)
+      && !line.includes('FIELD_CONTRACT_COMPAT_MARKER')
+      && FIELD_CONTRACT_COMPAT_MARKER_PATTERN.test(line)
+    ) {
+      findings.push(createFinding({
+        rule: 'field-contract-compat-marker',
+        file: relativePath,
+        line: lineNumber,
+        message: 'front-back field compatibility alias must stay visible in QA reports until removed',
+        snippet: line,
+      }));
+    } else if (DEBT_MARKER_PATTERN.test(line) && !isBenignMarkerLine(line)) {
       findings.push(createFinding({
         rule: 'source-debt-marker',
         file: relativePath,
@@ -370,7 +386,7 @@ function writeReport({ repoRoot, findings, maxFindings }) {
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/tooling.js repo-hygiene [--max-findings <n>]\n'
-      + 'Scans repository hygiene signals: debt markers, weak assertions, duplicate tests, file and directory pressure.\n'
+      + 'Scans repository hygiene signals: debt markers, field contract compatibility markers, weak assertions, duplicate tests, file and directory pressure.\n'
   );
 }
 

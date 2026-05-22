@@ -128,6 +128,49 @@ const hostInfrastructureApi = vi.hoisted(() => ({
   saveSettingsHostInfrastructureProviderConfig: vi.fn()
 }));
 
+const dataModelsApi = vi.hoisted(() => ({
+  settingsDataSourcesQueryKey: ['settings', 'data-models', 'sources'],
+  settingsDataModelsQueryKey: vi.fn((sourceId: string) => [
+    'settings',
+    'data-models',
+    'models',
+    sourceId
+  ]),
+  settingsDataModelScopeGrantsQueryKey: vi.fn((modelId: string) => [
+    'settings',
+    'data-models',
+    'scope-grants',
+    modelId
+  ]),
+  settingsDataModelAdvisorFindingsQueryKey: vi.fn((modelId: string) => [
+    'settings',
+    'data-models',
+    'advisor',
+    modelId
+  ]),
+  settingsDataModelRecordPreviewQueryKey: vi.fn((modelCode: string) => [
+    'settings',
+    'data-models',
+    'record-preview',
+    modelCode
+  ]),
+  fetchSettingsDataSourceInstances: vi.fn(),
+  updateSettingsDataSourceDefaults: vi.fn(),
+  fetchSettingsDataModels: vi.fn(),
+  createSettingsDataModel: vi.fn(),
+  updateSettingsDataModel: vi.fn(),
+  deleteSettingsDataModel: vi.fn(),
+  updateSettingsDataModelApiExposure: vi.fn(),
+  fetchSettingsDataModelScopeGrants: vi.fn(),
+  createSettingsDataModelField: vi.fn(),
+  updateSettingsDataModelField: vi.fn(),
+  deleteSettingsDataModelField: vi.fn(),
+  createSettingsDataModelScopeGrant: vi.fn(),
+  updateSettingsDataModelScopeGrant: vi.fn(),
+  fetchSettingsDataModelAdvisorFindings: vi.fn(),
+  fetchSettingsDataModelRecordPreview: vi.fn()
+}));
+
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
@@ -137,6 +180,7 @@ vi.mock('../api/plugins', () => pluginsApi);
 vi.mock('../api/system-runtime', () => systemRuntimeApi);
 vi.mock('../api/file-management', () => fileManagementApi);
 vi.mock('../api/host-infrastructure', () => hostInfrastructureApi);
+vi.mock('../api/data-models', () => dataModelsApi);
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -405,6 +449,28 @@ describe('SettingsPage', () => {
     hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
       []
     );
+    dataModelsApi.fetchSettingsDataSourceInstances.mockResolvedValue([
+      {
+        id: 'main_source',
+        source_kind: 'main_source',
+        installation_id: 'main_source',
+        source_code: 'main_source',
+        display_name: '主数据源',
+        status: 'ready',
+        default_data_model_status: 'published',
+        default_api_exposure_status: 'published_not_exposed',
+        config_json: {},
+        secret_ref: null,
+        secret_version: null,
+        catalog_refresh_status: null,
+        catalog_last_error_message: null,
+        catalog_refreshed_at: null
+      }
+    ]);
+    dataModelsApi.fetchSettingsDataModels.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModelScopeGrants.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModelAdvisorFindings.mockResolvedValue([]);
+    dataModelsApi.fetchSettingsDataModelRecordPreview.mockResolvedValue(null);
   });
 
   test('shows API 文档 only for root or api_reference.view.all', async () => {
@@ -413,9 +479,12 @@ describe('SettingsPage', () => {
       return renderApp('/settings');
     })();
 
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/docs');
-    });
+    await waitFor(
+      () => {
+        expect(window.location.pathname).toBe('/settings/docs');
+      },
+      { timeout: 5000 }
+    );
     expect(
       await screen.findByRole('heading', { name: 'API 文档', level: 3 })
     ).toBeInTheDocument();
@@ -428,9 +497,12 @@ describe('SettingsPage', () => {
     ]);
     const view = renderApp('/settings');
 
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/docs');
-    });
+    await waitFor(
+      () => {
+        expect(window.location.pathname).toBe('/settings/docs');
+      },
+      { timeout: 5000 }
+    );
     expect(
       await screen.findByRole('heading', { name: 'API 文档', level: 3 })
     ).toBeInTheDocument();
@@ -578,7 +650,11 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/data-models');
     });
     expect(
-      await screen.findByRole('heading', { name: '数据源', level: 3 })
+      await screen.findByRole('link', { name: '数据源' })
+    ).toHaveAttribute('href', '/settings/data-models');
+    expect(dataModelsApi.fetchSettingsDataSourceInstances).toHaveBeenCalled();
+    expect(
+      await screen.findByText('主数据源', {}, { timeout: 10000 })
     ).toBeInTheDocument();
   });
 

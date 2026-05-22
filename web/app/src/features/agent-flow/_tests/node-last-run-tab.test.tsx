@@ -552,7 +552,9 @@ describe('NodeLastRunTab', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('read_file')
     );
-    expect(screen.queryByRole('button', { name: '加载完整值' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: '加载完整值' })
+    ).not.toBeInTheDocument();
   });
 
   test('renders data processing for non-LLM nodes when debug payload exists', async () => {

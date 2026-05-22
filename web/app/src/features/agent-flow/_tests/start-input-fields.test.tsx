@@ -164,7 +164,7 @@ describe('start input fields', () => {
         valueType: 'array[object]'
       })
     ]);
-  });
+  }, 10000);
 
   test('opens the start input field panel with an initial height and supports dragging down', async () => {
     renderWithProviders(

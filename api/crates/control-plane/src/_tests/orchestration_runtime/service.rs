@@ -3069,7 +3069,7 @@ fn assert_resolved_llm_debug_refs(
     } else {
         assert!(debug_payload
             .get("winner_attempt_ref")
-            .map_or(true, Value::is_null));
+            .is_none_or(Value::is_null));
     }
     assert_no_pending_debug_ref(debug_payload);
 }

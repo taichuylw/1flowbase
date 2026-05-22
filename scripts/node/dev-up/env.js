@@ -1,34 +1,62 @@
-const fs = require('node:fs');
-const path = require('node:path');
+const fs = require("node:fs");
+const path = require("node:path");
 
-const { log } = require('./cli.js');
+const { log } = require("./cli.js");
 
-const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '127.0.0.0/8', '::1'];
+const LOOPBACK_NO_PROXY_ENTRIES = [
+  "localhost",
+  "127.0.0.1",
+  "127.0.0.0/8",
+  "::1",
+];
 
 function commandExists(commandName) {
   return resolveCommandPath(commandName) !== null;
 }
 
-function resolveCommandPath(commandName, { platform = process.platform, sourceEnv = process.env } = {}) {
+function resolveCommandPath(
+  commandName,
+  { platform = process.platform, sourceEnv = process.env } = {},
+) {
   if (!commandName || path.isAbsolute(commandName)) {
     return commandName || null;
   }
 
-  const pathValue = sourceEnv.PATH || '';
+  const pathValue = sourceEnv.PATH || "";
   const directories = pathValue.split(path.delimiter).filter(Boolean);
   const extensions =
-    platform === 'win32' ? ['.cmd', '.exe', '.bat', '', '.ps1'] : [''];
+    platform === "win32" ? [".cmd", ".exe", ".bat", "", ".ps1"] : [""];
 
   for (const directory of directories) {
     for (const extension of extensions) {
       const fullPath = path.join(directory, `${commandName}${extension}`);
-      if (fs.existsSync(fullPath)) {
+      if (
+        fs.existsSync(fullPath) ||
+        pathExistsCaseInsensitive(fullPath, platform)
+      ) {
         return fullPath;
       }
     }
   }
 
   return null;
+}
+
+function pathExistsCaseInsensitive(filePath, platform) {
+  if (platform !== "win32") {
+    return false;
+  }
+
+  try {
+    const directory = path.dirname(filePath);
+    const expectedName = path.basename(filePath).toLocaleLowerCase("en-US");
+
+    return fs
+      .readdirSync(directory)
+      .some((entry) => entry.toLocaleLowerCase("en-US") === expectedName);
+  } catch {
+    return false;
+  }
 }
 
 function requireCommand(commandName) {
@@ -38,8 +66,8 @@ function requireCommand(commandName) {
 }
 
 function parseNoProxyEntries(envValue) {
-  return String(envValue || '')
-    .split(',')
+  return String(envValue || "")
+    .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
@@ -50,7 +78,7 @@ function buildLocalLoopbackEnv(sourceEnv) {
     ...parseNoProxyEntries(sourceEnv.no_proxy),
     ...LOOPBACK_NO_PROXY_ENTRIES,
   ]);
-  const noProxyValue = [...noProxyEntries].join(',');
+  const noProxyValue = [...noProxyEntries].join(",");
 
   return {
     ...sourceEnv,
@@ -65,14 +93,14 @@ function parseEnvFile(filePath) {
   }
 
   const env = {};
-  const content = fs.readFileSync(filePath, 'utf8');
+  const content = fs.readFileSync(filePath, "utf8");
   for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
+    if (!trimmed || trimmed.startsWith("#")) {
       continue;
     }
 
-    const separatorIndex = trimmed.indexOf('=');
+    const separatorIndex = trimmed.indexOf("=");
     if (separatorIndex <= 0) {
       continue;
     }
@@ -97,13 +125,18 @@ function ensureServiceEnvFile(service, { logImpl = log } = {}) {
     return false;
   }
 
-  if (fs.existsSync(service.envFile) || !fs.existsSync(service.envExampleFile)) {
+  if (
+    fs.existsSync(service.envFile) ||
+    !fs.existsSync(service.envExampleFile)
+  ) {
     return false;
   }
 
   fs.mkdirSync(path.dirname(service.envFile), { recursive: true });
   fs.copyFileSync(service.envExampleFile, service.envFile);
-  logImpl(`已创建 ${path.relative(service.repoRoot || process.cwd(), service.envFile)}`);
+  logImpl(
+    `已创建 ${path.relative(service.repoRoot || process.cwd(), service.envFile)}`,
+  );
   return true;
 }
 
@@ -116,36 +149,40 @@ function buildServiceEnv(service, sourceEnv = process.env) {
 }
 
 function parseApiEnvironment(value) {
-  const normalized = String(value || 'development')
+  const normalized = String(value || "development")
     .trim()
     .toLowerCase();
 
-  if (normalized === 'development' || normalized === 'dev' || normalized === 'local') {
-    return 'development';
+  if (
+    normalized === "development" ||
+    normalized === "dev" ||
+    normalized === "local"
+  ) {
+    return "development";
   }
 
-  if (normalized === 'production' || normalized === 'prod') {
-    return 'production';
+  if (normalized === "production" || normalized === "prod") {
+    return "production";
   }
 
   throw new Error(`无效的 API_ENV：${value}`);
 }
 
 function getServicePrestartCommands(service, sourceEnv = process.env) {
-  if (!service || service.key !== 'api-server') {
+  if (!service || service.key !== "api-server") {
     return [];
   }
 
   const env = buildServiceEnv(service, sourceEnv);
-  if (parseApiEnvironment(env.API_ENV) === 'production') {
+  if (parseApiEnvironment(env.API_ENV) === "production") {
     return [];
   }
 
   return [
     {
-      description: 'api-server 开发态重置 root 密码',
+      description: "api-server 开发态重置 root 密码",
       command: service.command,
-      args: ['run', '-p', 'api-server', '--bin', 'reset_root_password'],
+      args: ["run", "-p", "api-server", "--bin", "reset_root_password"],
       cwd: service.cwd,
       env,
     },

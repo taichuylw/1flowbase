@@ -41,17 +41,19 @@ export function Navigation({
   useRouterLinks: boolean;
 }) {
   const selectedKey = getSelectedRouteId(pathname);
-  const items: MenuProps['items'] = getPrimaryNavigationRoutes().map((route) => {
-    return {
-      key: route.id,
-      label: renderNavigationLink(
-        route.path,
-        route.navLabel!,
-        useRouterLinks,
-        route.id === selectedKey
-      )
-    };
-  });
+  const items: MenuProps['items'] = getPrimaryNavigationRoutes().map(
+    (route) => {
+      return {
+        key: route.id,
+        label: renderNavigationLink(
+          route.path,
+          route.navLabel!,
+          useRouterLinks,
+          route.id === selectedKey
+        )
+      };
+    }
+  );
 
   return (
     <nav className="app-shell-navigation" aria-label="Primary">
@@ -65,4 +67,3 @@ export function Navigation({
     </nav>
   );
 }
-

@@ -1,11 +1,4 @@
-import {
-  Alert,
-  Button,
-  Divider,
-  Drawer,
-  Empty,
-  Typography
-} from 'antd';
+import { Alert, Button, Divider, Drawer, Empty, Typography } from 'antd';
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -470,7 +463,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     [jsBlockTrialLimits, matchingJsBlockCatalogEntry, selectedBlock]
   );
   useEffect(() => {
-
     const resolution = resolveSelectedPageId({
       currentSelectedPageId: selectedPageId,
       pageId,
@@ -608,9 +600,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
 
     return {
       onMoveUp: (blockId: string) => {
-        const idx = renderItems.findIndex(
-          (item) => item.blockId === blockId
-        );
+        const idx = renderItems.findIndex((item) => item.blockId === blockId);
         if (idx <= 0 || !blockCompositionState || !activePageContent) return;
         const next = moveFrontstageBlock(
           blockCompositionState,
@@ -620,9 +610,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         void saveBlockComposition(activePageContent, next);
       },
       onMoveDown: (blockId: string) => {
-        const idx = renderItems.findIndex(
-          (item) => item.blockId === blockId
-        );
+        const idx = renderItems.findIndex((item) => item.blockId === blockId);
         if (
           idx < 0 ||
           idx >= renderItems.length - 1 ||
@@ -836,8 +824,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }
     }
 
-    const titleIndex = kind === 'page' ? getNextPageTitleIndex(pageTree) : getNextGroupTitleIndex(pageTree);
-    const title = kind === 'page' ? `页面 新建 ${titleIndex}` : `分组 ${titleIndex}`;
+    const titleIndex =
+      kind === 'page'
+        ? getNextPageTitleIndex(pageTree)
+        : getNextGroupTitleIndex(pageTree);
+    const title =
+      kind === 'page' ? `页面 新建 ${titleIndex}` : `分组 ${titleIndex}`;
 
     const input = {
       title,
@@ -911,6 +903,23 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       await onMovePageNode?.(nodeId, {
         parentId: siblingContext.parentId,
         rank: rankForMoveTarget(targetIndex, direction)
+      });
+    });
+  };
+
+  const handleMovePageToGroup = (
+    nodeId: string,
+    currentParentId: string | null,
+    nextParentId: string | null
+  ) => {
+    if (currentParentId === nextParentId) {
+      return;
+    }
+
+    void runPageTreeOperation(async () => {
+      await onMovePageNode?.(nodeId, {
+        parentId: nextParentId,
+        rank: getNodeAppendRank(pageTree, nextParentId)
       });
     });
   };
@@ -1023,6 +1032,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onAddPageInGroup={handleAddPageInGroup}
       onRenameNode={handleRenameNode}
       onMoveNode={handleMoveNode}
+      onAddNodeAtPosition={handleAddNodeAtPosition}
+      onMovePageToGroup={handleMovePageToGroup}
       onDeleteNode={handleDeleteNode}
       onSelectPage={handleSelectPage}
     />

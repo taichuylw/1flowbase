@@ -54,7 +54,7 @@ export function HeroAnimation() {
     if (!ctx) return;
 
     let animationFrameId: number;
-    let leaves: Leaf[] = [];
+    const leaves: Leaf[] = [];
     let ripples: Ripple[] = [];
     const leafCount = 55;
 
@@ -75,14 +75,14 @@ export function HeroAnimation() {
     // Fluorescent green theme colors matching login button (#00d084)
     const leafColors = [
       { r: 0, g: 208, b: 132, a: 0.28 },
-      { r: 0, g: 208, b: 132, a: 0.20 },
+      { r: 0, g: 208, b: 132, a: 0.2 },
       { r: 52, g: 211, b: 153, a: 0.24 },
       { r: 209, g: 250, b: 229, a: 0.35 }
     ];
     const veinColors = [
       { r: 0, g: 208, b: 132, a: 0.45 },
       { r: 0, g: 208, b: 132, a: 0.35 },
-      { r: 52, g: 211, b: 153, a: 0.40 },
+      { r: 52, g: 211, b: 153, a: 0.4 },
       { r: 16, g: 185, b: 129, a: 0.38 }
     ];
 
@@ -90,18 +90,20 @@ export function HeroAnimation() {
       const rect = container.getBoundingClientRect();
       const width = rect.width || 800;
       const height = rect.height || 600;
-      
+
       const idx = Math.floor(Math.random() * leafColors.length);
       const leafColor = leafColors[idx];
       const veinColor = veinColors[idx];
-      
+
       const z = Math.random() * 0.95 + 0.05; // Depth from 0.05 (far) to 1.0 (near)
       const waterHorizon = height * 0.75;
       const waterY = waterHorizon + z * (height * 0.25);
-      
+
       return {
         x: Math.random() * width,
-        y: initYRandom ? Math.random() * (waterY - 30) : -20 - Math.random() * 50,
+        y: initYRandom
+          ? Math.random() * (waterY - 30)
+          : -20 - Math.random() * 50,
         z,
         vx: Math.random() * 0.4 - 0.2,
         vy: Math.random() * 0.8 + 0.4,
@@ -123,7 +125,7 @@ export function HeroAnimation() {
         flutterPhase: Math.random() * Math.PI * 2,
         flutterSpeed: Math.random() * 0.012 + 0.004,
         isSinking: false,
-        opacity: 1.0,
+        opacity: 1.0
       };
     };
 
@@ -136,15 +138,13 @@ export function HeroAnimation() {
 
     const animate = () => {
       time += 1;
-      
+
       const rect = container.getBoundingClientRect();
       const width = rect.width;
       const height = rect.height;
       const waterHorizon = height * 0.75; // Define water surface horizon (occupying bottom 25% height)
 
       ctx.clearRect(0, 0, width, height);
-
-
 
       // Decay mouse velocity
       mouseRef.current.vx *= 0.94;
@@ -158,19 +158,19 @@ export function HeroAnimation() {
         if (ripple.alpha <= 0) return false;
 
         ctx.save();
-        
+
         // Depth-based parameters: radius scale and Y-axis perspective compression
         const r_scale = 0.3 + 0.7 * ripple.z;
         const perspectiveY = 0.12 + 0.18 * ripple.z; // Flatter at horizon (z=0), rounder at foreground (z=1)
-        
+
         // Draw 3 concentric wave rings representing a wave packet
         const waveCount = 3;
         const waveSpacing = 10; // distance between consecutive wave crests
-        
+
         for (let w = 0; w < waveCount; w++) {
           const r = ripple.radius - w * waveSpacing;
           if (r <= 0) continue;
-          
+
           // Local alpha for this wave ring, decaying as it gets closer to maxRadius
           const localAlpha = (1 - r / ripple.maxRadius) * ripple.alpha;
           if (localAlpha <= 0) continue;
@@ -182,19 +182,19 @@ export function HeroAnimation() {
           ctx.beginPath();
           // Draw a perfect ellipse on the XZ horizontal plane projected to screen XY
           ctx.ellipse(ripple.x, ripple.y, finalRx, finalRy, 0, 0, Math.PI * 2);
-          
+
           // Outer ring is brightest, inner rings are softer
           const ringIntensity = w === 0 ? 0.45 : w === 1 ? 0.25 : 0.12;
           ctx.strokeStyle = `rgba(0, 208, 132, ${localAlpha * ringIntensity})`;
           ctx.lineWidth = (w === 0 ? 1.0 : w === 1 ? 0.8 : 0.6) * r_scale;
-          
+
           if (w === 0) {
             ctx.shadowColor = 'rgba(0, 208, 132, 0.25)';
             ctx.shadowBlur = 4 * r_scale;
           } else {
             ctx.shadowBlur = 0;
           }
-          
+
           ctx.stroke();
         }
 
@@ -212,7 +212,7 @@ export function HeroAnimation() {
           leaf.isSinking = true;
           leaf.vy = 0.08; // Sinking speed
           leaf.vx *= 0.5; // Drag reduction on impact
-          
+
           // Generate a ripple proportional to leaf size and depth
           ripples.push({
             x: leaf.x,
@@ -221,7 +221,7 @@ export function HeroAnimation() {
             radius: 1,
             maxRadius: leaf.size * 3.8,
             alpha: 0.5,
-            speed: 0.65,
+            speed: 0.65
           });
         }
 
@@ -230,10 +230,10 @@ export function HeroAnimation() {
           leaf.vx *= 0.93;
           leaf.vy = 0.08;
           leaf.rotationSpeed *= 0.9;
-          
+
           // Fade out the leaf slowly
           leaf.opacity -= 0.015;
-          
+
           if (leaf.opacity <= 0) {
             // Respawn at top once faded out
             Object.assign(leaf, createLeaf(false));
@@ -244,7 +244,8 @@ export function HeroAnimation() {
           leaf.vx += (leaf.baseVx - leaf.vx) * 0.04;
 
           // Sway (fluttering) using sine wave
-          const sway = Math.sin(time * leaf.flutterSpeed + leaf.flutterPhase) * 0.25;
+          const sway =
+            Math.sin(time * leaf.flutterSpeed + leaf.flutterPhase) * 0.25;
           leaf.vx += sway * 0.15;
           leaf.rotation += leaf.rotationSpeed + sway * 0.003;
           leaf.scaleX = Math.sin(time * leaf.scaleXSpeed + leaf.flutterPhase);
@@ -356,7 +357,7 @@ export function HeroAnimation() {
     if (lastMousePos.current) {
       const vx = x - lastMousePos.current.x;
       const vy = y - lastMousePos.current.y;
-      
+
       mouseRef.current.vx = vx;
       mouseRef.current.vy = vy;
     }
@@ -388,7 +389,7 @@ export function HeroAnimation() {
         alignItems: 'center',
         justifyContent: 'center',
         backgroundImage: `radial-gradient(rgba(0, 208, 132, 0.05) 1px, transparent 1px)`,
-        backgroundSize: '24px 24px',
+        backgroundSize: '24px 24px'
       }}
     >
       <canvas
@@ -400,7 +401,7 @@ export function HeroAnimation() {
           width: '100%',
           height: '100%',
           pointerEvents: 'none',
-          zIndex: 0,
+          zIndex: 0
         }}
       />
 
@@ -411,11 +412,12 @@ export function HeroAnimation() {
           width: '600px',
           height: '600px',
           borderRadius: '50%',
-          background: 'radial-gradient(circle at center, rgba(0, 208, 132, 0.14) 0%, transparent 70%)',
+          background:
+            'radial-gradient(circle at center, rgba(0, 208, 132, 0.14) 0%, transparent 70%)',
           top: '-10%',
           left: '-10%',
           filter: 'blur(60px)',
-          pointerEvents: 'none',
+          pointerEvents: 'none'
         }}
       />
       <div
@@ -425,11 +427,12 @@ export function HeroAnimation() {
           width: '800px',
           height: '800px',
           borderRadius: '50%',
-          background: 'radial-gradient(circle at center, rgba(0, 162, 255, 0.12) 0%, transparent 70%)',
+          background:
+            'radial-gradient(circle at center, rgba(0, 162, 255, 0.12) 0%, transparent 70%)',
           bottom: '-20%',
           right: '-10%',
           filter: 'blur(80px)',
-          pointerEvents: 'none',
+          pointerEvents: 'none'
         }}
       />
       <div
@@ -439,18 +442,31 @@ export function HeroAnimation() {
           width: '400px',
           height: '400px',
           borderRadius: '50%',
-          background: 'radial-gradient(circle at center, rgba(52, 211, 153, 0.07) 0%, transparent 70%)',
+          background:
+            'radial-gradient(circle at center, rgba(52, 211, 153, 0.07) 0%, transparent 70%)',
           top: '40%',
           left: '60%',
           filter: 'blur(50px)',
-          pointerEvents: 'none',
+          pointerEvents: 'none'
         }}
       />
 
-      <div className="hero-text-block" style={{ zIndex: 1, textAlign: 'center', padding: `0 clamp(12px, 6vw, 80px)`, width: '100%', marginTop: '-15vh', pointerEvents: 'none' }}>
+      <div
+        className="hero-text-block"
+        style={{
+          zIndex: 1,
+          textAlign: 'center',
+          padding: `0 clamp(12px, 6vw, 80px)`,
+          width: '100%',
+          marginTop: '-15vh',
+          pointerEvents: 'none'
+        }}
+      >
         <div className="hero-tagline" aria-label="brand name and slogan">
           <div className="hero-text-line hero-title-line">1flowbase</div>
-          <div className="hero-text-line hero-slogan-line">对话即是壁垒，AI应用原生底座</div>
+          <div className="hero-text-line hero-slogan-line">
+            对话即是壁垒，AI应用原生底座
+          </div>
         </div>
       </div>
 

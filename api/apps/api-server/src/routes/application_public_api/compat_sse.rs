@@ -242,7 +242,7 @@ where
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
-        Some(resume_started.sequence - 1),
+        Some(resume_started.sequence.saturating_sub(1)),
         Some(command.callback_task_id),
         sender,
         move |run, envelope| mapper(run, envelope),

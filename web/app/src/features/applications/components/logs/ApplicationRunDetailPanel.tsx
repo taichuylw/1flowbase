@@ -31,9 +31,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function nonEmptyString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0
-    ? value
-    : null;
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function findFirstString(value: unknown): string | null {
@@ -239,6 +237,7 @@ function RunConversation({
         limit: 5
       })
   });
+  const refetchInitialConversation = initialConversationQuery.refetch;
   const loadPreviousConversationMutation = useMutation({
     mutationFn: async () => {
       if (!conversationPage?.page.before_cursor) {
@@ -296,11 +295,11 @@ function RunConversation({
     }
 
     const intervalId = window.setInterval(() => {
-      void initialConversationQuery.refetch();
+      void refetchInitialConversation();
     }, ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [conversationPage, initialConversationQuery.refetch]);
+  }, [conversationPage, refetchInitialConversation]);
 
   async function handleOpenMessageLog(message: AgentFlowDebugMessage) {
     const detailRunId =
