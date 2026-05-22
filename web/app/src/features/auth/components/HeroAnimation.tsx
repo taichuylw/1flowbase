@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 interface Leaf {
   x: number;
   y: number;
+  z: number; // 3D depth: 0.05 (far) to 1.0 (near)
   vx: number;
   vy: number;
   baseVx: number;
@@ -30,6 +31,7 @@ interface Leaf {
 interface Ripple {
   x: number;
   y: number;
+  z: number; // 3D depth mapping
   radius: number;
   maxRadius: number;
   alpha: number;
@@ -93,9 +95,14 @@ export function HeroAnimation() {
       const leafColor = leafColors[idx];
       const veinColor = veinColors[idx];
       
+      const z = Math.random() * 0.95 + 0.05; // Depth from 0.05 (far) to 1.0 (near)
+      const waterHorizon = height * 0.75;
+      const waterY = waterHorizon + z * (height * 0.25);
+      
       return {
         x: Math.random() * width,
-        y: initYRandom ? Math.random() * (height - 30) : -20 - Math.random() * 50,
+        y: initYRandom ? Math.random() * (waterY - 30) : -20 - Math.random() * 50,
+        z,
         vx: Math.random() * 0.4 - 0.2,
         vy: Math.random() * 0.8 + 0.4,
         baseVx: Math.random() * 0.2 + 0.05, // Slight drift to the right
@@ -133,9 +140,24 @@ export function HeroAnimation() {
       const rect = container.getBoundingClientRect();
       const width = rect.width;
       const height = rect.height;
-      const waterLevel = height - 25; // Define water surface height
+      const waterHorizon = height * 0.75; // Define water surface horizon (occupying bottom 25% height)
 
       ctx.clearRect(0, 0, width, height);
+
+      // Draw lake water background surface
+      const grad = ctx.createLinearGradient(0, waterHorizon, 0, height);
+      grad.addColorStop(0, 'rgba(230, 247, 242, 0.25)');   // Horizon: light misty green
+      grad.addColorStop(1, 'rgba(0, 208, 132, 0.07)');    // Foreground: subtle glowing emerald tint
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, waterHorizon, width, height);
+
+      // Draw a subtle horizon line separating air space from lake space
+      ctx.beginPath();
+      ctx.moveTo(0, waterHorizon);
+      ctx.lineTo(width, waterHorizon);
+      ctx.strokeStyle = 'rgba(0, 208, 132, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
       // Decay mouse velocity
       mouseRef.current.vx *= 0.94;
@@ -150,8 +172,9 @@ export function HeroAnimation() {
 
         ctx.save();
         
-        // 3D perspective Y-axis compression factor (XZ horizontal water surface)
-        const perspectiveY = 0.22;
+        // Depth-based parameters: radius scale and Y-axis perspective compression
+        const r_scale = 0.3 + 0.7 * ripple.z;
+        const perspectiveY = 0.12 + 0.18 * ripple.z; // Flatter at horizon (z=0), rounder at foreground (z=1)
         
         // Draw 3 concentric wave rings representing a wave packet
         const waveCount = 3;
@@ -165,18 +188,22 @@ export function HeroAnimation() {
           const localAlpha = (1 - r / ripple.maxRadius) * ripple.alpha;
           if (localAlpha <= 0) continue;
 
+          // Scale radius by depth scale
+          const finalRx = r * r_scale;
+          const finalRy = r * r_scale * perspectiveY;
+
           ctx.beginPath();
           // Draw a perfect ellipse on the XZ horizontal plane projected to screen XY
-          ctx.ellipse(ripple.x, ripple.y, r, r * perspectiveY, 0, 0, Math.PI * 2);
+          ctx.ellipse(ripple.x, ripple.y, finalRx, finalRy, 0, 0, Math.PI * 2);
           
           // Outer ring is brightest, inner rings are softer
           const ringIntensity = w === 0 ? 0.45 : w === 1 ? 0.25 : 0.12;
           ctx.strokeStyle = `rgba(0, 208, 132, ${localAlpha * ringIntensity})`;
-          ctx.lineWidth = w === 0 ? 1.0 : w === 1 ? 0.8 : 0.6;
+          ctx.lineWidth = (w === 0 ? 1.0 : w === 1 ? 0.8 : 0.6) * r_scale;
           
           if (w === 0) {
             ctx.shadowColor = 'rgba(0, 208, 132, 0.25)';
-            ctx.shadowBlur = 4;
+            ctx.shadowBlur = 4 * r_scale;
           } else {
             ctx.shadowBlur = 0;
           }
@@ -188,18 +215,22 @@ export function HeroAnimation() {
         return true;
       });
 
-      // 2. Update and draw leaves
+      // 2. Update leaves coordinates & states
       leaves.forEach((leaf) => {
+        const renderScale = 0.3 + 0.7 * leaf.z;
+        const waterY = waterHorizon + leaf.z * (height * 0.25);
+
         // Water level check (trigger sinking state)
-        if (!leaf.isSinking && leaf.y >= waterLevel) {
+        if (!leaf.isSinking && leaf.y >= waterY) {
           leaf.isSinking = true;
           leaf.vy = 0.08; // Sinking speed
           leaf.vx *= 0.5; // Drag reduction on impact
           
-          // Generate a ripple proportional to leaf size
+          // Generate a ripple proportional to leaf size and depth
           ripples.push({
             x: leaf.x,
-            y: waterLevel,
+            y: waterY,
+            z: leaf.z,
             radius: 1,
             maxRadius: leaf.size * 3.8,
             alpha: 0.5,
@@ -235,11 +266,11 @@ export function HeroAnimation() {
           const dx = leaf.x - mouseRef.current.x;
           const dy = leaf.y - mouseRef.current.y;
           const distSq = dx * dx + dy * dy;
-          const radius = 150;
+          const radius = 150 * renderScale;
 
           if (distSq < radius * radius) {
             const dist = Math.sqrt(distSq);
-            const force = 1 - dist / radius; // 0 to 1
+            const force = (1 - dist / radius) * renderScale; // 0 to 1
 
             // Mouse motion drag
             leaf.vx += mouseRef.current.vx * force * 0.6;
@@ -266,9 +297,9 @@ export function HeroAnimation() {
           }
         }
 
-        // Apply velocities to coordinates
-        leaf.x += leaf.vx;
-        leaf.y += leaf.vy;
+        // Apply velocities to coordinates (movement speed matches perspective scale)
+        leaf.x += leaf.vx * renderScale;
+        leaf.y += leaf.vy * renderScale;
 
         // Sideways boundary wrap-around
         if (leaf.x < -20) {
@@ -276,23 +307,32 @@ export function HeroAnimation() {
         } else if (leaf.x > width + 20) {
           leaf.x = -10;
         }
+      });
+
+      // 3. Draw leaves sorted by depth z (Painters Algorithm for correct 3D occlusion)
+      const sortedLeaves = [...leaves].sort((a, b) => a.z - b.z);
+
+      sortedLeaves.forEach((leaf) => {
+        const renderScale = 0.3 + 0.7 * leaf.z;
 
         // Draw leaf
         ctx.save();
         ctx.translate(leaf.x, leaf.y);
         ctx.rotate(leaf.rotation);
-        ctx.scale(leaf.scaleX, 1);
+        ctx.scale(leaf.scaleX * renderScale, renderScale);
 
         // Glowing fluorescent shadow effect
         ctx.shadowColor = 'rgba(0, 208, 132, 0.4)';
-        ctx.shadowBlur = 5;
+        ctx.shadowBlur = 5 * renderScale;
 
         // Draw leaf path
         ctx.beginPath();
         ctx.moveTo(0, -leaf.size);
         ctx.quadraticCurveTo(-leaf.size * 0.7, -leaf.size * 0.2, 0, leaf.size);
         ctx.quadraticCurveTo(leaf.size * 0.7, -leaf.size * 0.2, 0, -leaf.size);
-        ctx.fillStyle = `rgba(${leaf.r}, ${leaf.g}, ${leaf.b}, ${leaf.opacity * leaf.baseAlpha})`;
+        // Alpha decays slightly with depth to create atmospheric haze
+        const depthAlpha = 0.4 + 0.6 * leaf.z;
+        ctx.fillStyle = `rgba(${leaf.r}, ${leaf.g}, ${leaf.b}, ${leaf.opacity * leaf.baseAlpha * depthAlpha})`;
         ctx.fill();
 
         // Draw center vein
@@ -300,8 +340,8 @@ export function HeroAnimation() {
         ctx.beginPath();
         ctx.moveTo(0, -leaf.size);
         ctx.lineTo(0, leaf.size * 0.8);
-        ctx.strokeStyle = `rgba(${leaf.veinR}, ${leaf.veinG}, ${leaf.veinB}, ${leaf.opacity * leaf.veinAlpha})`;
-        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = `rgba(${leaf.veinR}, ${leaf.veinG}, ${leaf.veinB}, ${leaf.opacity * leaf.veinAlpha * depthAlpha})`;
+        ctx.lineWidth = 0.8 * renderScale;
         ctx.stroke();
 
         ctx.restore();
