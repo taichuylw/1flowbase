@@ -23,7 +23,7 @@
 ## Quick Start
 
 本地全量启动优先使用统一开发脚本：
-
+2
 ```bash
 node scripts/node/dev-up.js
 ```
