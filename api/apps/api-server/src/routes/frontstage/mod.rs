@@ -10,8 +10,9 @@ use control_plane::frontstage::{
     CreateFrontstageGroupCommand, CreateFrontstagePageCommand, DeleteFrontstagePageCommand,
     FrontstagePageService, GetFrontstageBlockCodeCommand, GetFrontstagePageDetailCommand,
     MoveFrontstagePageCommand, SaveFrontstageBlockCodeCommand, SaveFrontstagePageContentCommand,
-    UpdateFrontstagePageTitleCommand,
+    UpdateFrontstagePageMetadataCommand,
 };
+use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -35,6 +36,8 @@ pub enum FrontstagePageTreeNodeKind {
 pub struct FrontstagePageTreeNodeResponse {
     pub id: String,
     pub title: Option<String>,
+    pub tooltip: Option<String>,
+    pub is_hidden: bool,
     pub kind: FrontstagePageTreeNodeKind,
     #[serde(default)]
     #[schema(no_recursion)]
@@ -45,6 +48,8 @@ pub struct FrontstagePageTreeNodeResponse {
 pub struct FrontstagePageResponse {
     pub id: String,
     title: Option<String>,
+    pub tooltip: Option<String>,
+    pub is_hidden: bool,
     pub kind: FrontstagePageTreeNodeKind,
     pub parent_id: Option<String>,
     pub rank: String,
@@ -92,8 +97,12 @@ pub struct CreateFrontstagePageBody {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdateFrontstagePageTitleBody {
-    pub title: Option<String>,
+pub struct UpdateFrontstagePageMetadataBody {
+    #[serde(default, deserialize_with = "deserialize_present_optional")]
+    pub title: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_optional")]
+    pub tooltip: Option<Option<String>>,
+    pub is_hidden: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -116,6 +125,14 @@ pub struct SaveFrontstagePageContentBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SaveFrontstageBlockCodeBody {
     pub code: String,
+}
+
+fn deserialize_present_optional<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
@@ -293,7 +310,7 @@ pub async fn get_frontstage_page_detail(
 #[utoipa::path(
     patch,
     path = "/api/console/frontstage/{workspace_id}/pages/{page_id}",
-    request_body = UpdateFrontstagePageTitleBody,
+    request_body = UpdateFrontstagePageMetadataBody,
     params(
         ("workspace_id" = String, Path, description = "Workspace id"),
         ("page_id" = String, Path, description = "Page or group id")
@@ -310,7 +327,7 @@ pub async fn update_frontstage_page_title(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path((workspace_id, page_id)): Path<(String, String)>,
-    Json(body): Json<UpdateFrontstagePageTitleBody>,
+    Json(body): Json<UpdateFrontstagePageMetadataBody>,
 ) -> Result<Json<ApiSuccess<FrontstagePageResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
@@ -318,11 +335,13 @@ pub async fn update_frontstage_page_title(
     let page_id = parse_uuid(&page_id, "page_id")?;
 
     let page = FrontstagePageService::new(state.store.clone())
-        .update_title(UpdateFrontstagePageTitleCommand {
+        .update_metadata(UpdateFrontstagePageMetadataCommand {
             actor_user_id: context.user.id,
             workspace_id,
             page_id,
             title: body.title,
+            tooltip: body.tooltip,
+            is_hidden: body.is_hidden,
         })
         .await?;
 
@@ -544,6 +563,8 @@ fn to_page_response(page: domain::FrontstagePageRecord) -> FrontstagePageRespons
     FrontstagePageResponse {
         id: page.id.to_string(),
         title: page.title,
+        tooltip: page.tooltip,
+        is_hidden: page.is_hidden,
         kind: to_kind_response(page.kind),
         parent_id: page.parent_id.map(|id| id.to_string()),
         rank: page.rank,
@@ -581,6 +602,8 @@ fn to_tree_node_response(node: domain::FrontstagePageTreeNode) -> FrontstagePage
     FrontstagePageTreeNodeResponse {
         id: node.page.id.to_string(),
         title: node.page.title,
+        tooltip: node.page.tooltip,
+        is_hidden: node.page.is_hidden,
         kind: to_kind_response(node.page.kind),
         children: node
             .children

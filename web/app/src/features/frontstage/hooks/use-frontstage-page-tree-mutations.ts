@@ -9,9 +9,11 @@ import {
   frontstagePageTreeQueryKey,
   moveFrontstageNode,
   renameFrontstagePageNode,
+  updateFrontstagePageNodeMetadata,
   type CreateFrontstageNodeInput,
   type MoveFrontstageNodeInput,
-  type RenameFrontstageNodeInput
+  type RenameFrontstageNodeInput,
+  type UpdateFrontstageNodeMetadataInput
 } from '../api/page-tree';
 
 function requireCsrfToken(csrfToken: string | null): string {
@@ -104,6 +106,25 @@ export function useFrontstagePageTreeMutations(workspaceId: string) {
     onSuccess: invalidatePageTree
   });
 
+  const metadataMutation = useMutation({
+    mutationFn: ({
+      pageNodeId,
+      input
+    }: {
+      pageNodeId: string;
+      input: UpdateFrontstageNodeMetadataInput;
+    }) =>
+      updateFrontstagePageNodeMetadata(
+        workspaceId,
+        pageNodeId,
+        input,
+        requireCsrfToken(csrfToken)
+      ),
+    onMutate: clearMutationError,
+    onError: captureMutationError,
+    onSuccess: invalidatePageTree
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (pageNodeId: string) =>
       deleteFrontstageNode(
@@ -122,6 +143,7 @@ export function useFrontstagePageTreeMutations(workspaceId: string) {
       createPageMutation.isPending ||
       renameMutation.isPending ||
       moveMutation.isPending ||
+      metadataMutation.isPending ||
       deleteMutation.isPending,
     error: mutationError,
     createGroup: createGroupMutation.mutateAsync,
@@ -130,6 +152,10 @@ export function useFrontstagePageTreeMutations(workspaceId: string) {
       renameMutation.mutateAsync({ pageNodeId, input }),
     moveNode: (pageNodeId: string, input: MoveFrontstageNodeInput) =>
       moveMutation.mutateAsync({ pageNodeId, input }),
+    updateNodeMetadata: (
+      pageNodeId: string,
+      input: UpdateFrontstageNodeMetadataInput
+    ) => metadataMutation.mutateAsync({ pageNodeId, input }),
     deleteNode: deleteMutation.mutateAsync
   };
 }

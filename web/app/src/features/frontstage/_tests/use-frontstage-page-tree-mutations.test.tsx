@@ -16,7 +16,8 @@ const frontstageApi = vi.hoisted(() => ({
     'page-tree'
   ]),
   moveFrontstageNode: vi.fn(),
-  renameFrontstagePageNode: vi.fn()
+  renameFrontstagePageNode: vi.fn(),
+  updateFrontstagePageNodeMetadata: vi.fn()
 }));
 
 vi.mock('../api/page-tree', () => frontstageApi);
@@ -82,6 +83,10 @@ describe('useFrontstagePageTreeMutations', () => {
       id: 'page-1',
       kind: 'page'
     });
+    frontstageApi.updateFrontstagePageNodeMetadata.mockResolvedValue({
+      id: 'page-1',
+      kind: 'page'
+    });
     frontstageApi.moveFrontstageNode.mockResolvedValue({
       id: 'page-1',
       kind: 'page'
@@ -104,6 +109,10 @@ describe('useFrontstagePageTreeMutations', () => {
         rank: '001000'
       });
       await result.current.renameNode('page-1', { title: '页面 新名' });
+      await result.current.updateNodeMetadata('page-1', {
+        tooltip: '展示在页面树',
+        isHidden: true
+      });
       await result.current.moveNode('page-1', {
         parentId: null,
         rank: '000000'
@@ -127,6 +136,12 @@ describe('useFrontstagePageTreeMutations', () => {
       { title: '页面 新名' },
       'csrf-123'
     );
+    expect(frontstageApi.updateFrontstagePageNodeMetadata).toHaveBeenCalledWith(
+      'workspace-1',
+      'page-1',
+      { tooltip: '展示在页面树', isHidden: true },
+      'csrf-123'
+    );
     expect(frontstageApi.moveFrontstageNode).toHaveBeenCalledWith(
       'workspace-1',
       'page-1',
@@ -138,7 +153,7 @@ describe('useFrontstagePageTreeMutations', () => {
       'page-1',
       'csrf-123'
     );
-    expect(invalidateQueriesSpy).toHaveBeenCalledTimes(5);
+    expect(invalidateQueriesSpy).toHaveBeenCalledTimes(6);
     expect(invalidateQueriesSpy).toHaveBeenLastCalledWith({
       queryKey: ['frontstage', 'workspace-1', 'page-tree'],
       refetchType: 'active'

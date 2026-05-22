@@ -13,11 +13,13 @@ pub struct CreateFrontstagePageInput {
 }
 
 #[derive(Debug, Clone)]
-pub struct UpdateFrontstagePageTitleInput {
+pub struct UpdateFrontstagePageMetadataInput {
     pub workspace_id: Uuid,
     pub actor_user_id: Uuid,
     pub page_id: Uuid,
-    pub title: Option<String>,
+    pub title: Option<Option<String>>,
+    pub tooltip: Option<Option<String>>,
+    pub is_hidden: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,9 +77,9 @@ pub trait FrontstagePageRepository: Send + Sync {
         input: &CreateFrontstagePageInput,
     ) -> anyhow::Result<domain::FrontstagePageRecord>;
 
-    async fn update_frontstage_page_title(
+    async fn update_frontstage_page_metadata(
         &self,
-        input: &UpdateFrontstagePageTitleInput,
+        input: &UpdateFrontstagePageMetadataInput,
     ) -> anyhow::Result<domain::FrontstagePageRecord>;
 
     async fn move_frontstage_page(

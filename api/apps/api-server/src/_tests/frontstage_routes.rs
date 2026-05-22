@@ -409,6 +409,61 @@ async fn rename_allows_empty_title() {
 }
 
 #[tokio::test]
+async fn patch_page_metadata_persists_tooltip_and_hidden_state() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let workspace_id = current_workspace_id(&app, &cookie).await;
+    let (status, payload) = create_page(
+        &app,
+        &cookie,
+        &csrf,
+        &workspace_id,
+        Some("Named"),
+        None,
+        "a",
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let page_id = payload["data"]["id"].as_str().unwrap();
+
+    let (patch_status, patch_payload) = send_json(
+        &app,
+        "PATCH",
+        &format!("/api/console/frontstage/{workspace_id}/pages/{page_id}"),
+        &cookie,
+        &csrf,
+        json!({
+            "tooltip": "展示在页面树",
+            "is_hidden": true
+        }),
+    )
+    .await;
+
+    assert_eq!(patch_status, StatusCode::OK);
+    assert_eq!(patch_payload["data"]["title"], json!("Named"));
+    assert_eq!(patch_payload["data"]["tooltip"], json!("展示在页面树"));
+    assert_eq!(patch_payload["data"]["is_hidden"], json!(true));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/console/frontstage/{workspace_id}/pages"))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(payload["data"][0]["title"], json!("Named"));
+    assert_eq!(payload["data"][0]["tooltip"], json!("展示在页面树"));
+    assert_eq!(payload["data"][0]["is_hidden"], json!(true));
+}
+
+#[tokio::test]
 async fn group_under_group_is_rejected() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

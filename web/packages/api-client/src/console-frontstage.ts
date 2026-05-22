@@ -3,6 +3,8 @@ import { apiFetch } from './transport';
 export interface ConsoleFrontstagePageTreeNode {
   id: string;
   title: string | null;
+  tooltip?: string | null;
+  is_hidden?: boolean;
   kind: 'group' | 'page';
   children: ConsoleFrontstagePageTreeNode[];
 }
@@ -10,6 +12,8 @@ export interface ConsoleFrontstagePageTreeNode {
 export interface ConsoleFrontstagePageNode {
   id: string;
   title: string | null;
+  tooltip?: string | null;
+  is_hidden?: boolean;
   kind: 'group' | 'page';
   parent_id: string | null;
   rank: string;
@@ -46,6 +50,8 @@ export interface CreateFrontstagePageNodeInput {
 
 export interface UpdateFrontstagePageNodeTitleInput {
   title?: string | null;
+  tooltip?: string | null;
+  is_hidden?: boolean;
 }
 
 export interface MoveFrontstagePageNodeInput {

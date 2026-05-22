@@ -347,7 +347,7 @@ use utoipa::OpenApi;
         crate::routes::frontstage::SaveFrontstageBlockCodeBody,
         crate::routes::frontstage::SaveFrontstagePageContentBody,
         crate::routes::frontstage::SaveFrontstagePageContentPayloadBody,
-        crate::routes::frontstage::UpdateFrontstagePageTitleBody,
+        crate::routes::frontstage::UpdateFrontstagePageMetadataBody,
         crate::routes::system::LocaleMetaResponse,
         crate::routes::system::LocaleSourceResponse,
         crate::routes::system::SystemRuntimeCpuResponse,

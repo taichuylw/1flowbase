@@ -13,7 +13,7 @@ use crate::{
     ports::{
         CreateFrontstagePageInput, FrontstagePageRepository, MoveFrontstagePageInput,
         SaveFrontstageBlockCodeInput, SaveFrontstagePageContentInput,
-        UpdateFrontstagePageTitleInput,
+        UpdateFrontstagePageMetadataInput,
     },
 };
 
@@ -33,11 +33,13 @@ pub struct CreateFrontstagePageCommand {
     pub rank: Option<String>,
 }
 
-pub struct UpdateFrontstagePageTitleCommand {
+pub struct UpdateFrontstagePageMetadataCommand {
     pub actor_user_id: Uuid,
     pub workspace_id: Uuid,
     pub page_id: Uuid,
-    pub title: Option<String>,
+    pub title: Option<Option<String>>,
+    pub tooltip: Option<Option<String>>,
+    pub is_hidden: Option<bool>,
 }
 
 pub struct MoveFrontstagePageCommand {
@@ -191,9 +193,9 @@ where
         Ok(detail)
     }
 
-    pub async fn update_title(
+    pub async fn update_metadata(
         &self,
-        command: UpdateFrontstagePageTitleCommand,
+        command: UpdateFrontstagePageMetadataCommand,
     ) -> Result<domain::FrontstagePageRecord> {
         let actor = self
             .repository
@@ -203,14 +205,16 @@ where
 
         let updated = self
             .repository
-            .update_frontstage_page_title(&UpdateFrontstagePageTitleInput {
+            .update_frontstage_page_metadata(&UpdateFrontstagePageMetadataInput {
                 workspace_id: command.workspace_id,
                 actor_user_id: command.actor_user_id,
                 page_id: command.page_id,
                 title: command.title,
+                tooltip: command.tooltip,
+                is_hidden: command.is_hidden,
             })
             .await?;
-        self.audit(&actor, &updated, "frontstage.page_title_updated")
+        self.audit(&actor, &updated, "frontstage.page_metadata_updated")
             .await?;
 
         Ok(updated)
@@ -545,6 +549,8 @@ mod tests {
             parent_id,
             kind,
             title: None,
+            tooltip: None,
+            is_hidden: false,
             slug: None,
             schema_root_uid: (kind == FrontstagePageKind::Page)
                 .then(|| format!("schema-root:{id}")),

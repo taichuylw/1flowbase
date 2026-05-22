@@ -282,6 +282,7 @@ function FrontStageWorkspaceContent({
         onCreateGroupNode={pageTreeMutations.createGroup}
         onCreatePageNode={pageTreeMutations.createPage}
         onRenamePageNode={pageTreeMutations.renameNode}
+        onUpdatePageNodeMetadata={pageTreeMutations.updateNodeMetadata}
         onMovePageNode={pageTreeMutations.moveNode}
         onDeletePageNode={pageTreeMutations.deleteNode}
         onRetryLoadPageTree={() => {

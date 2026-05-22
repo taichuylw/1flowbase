@@ -24,6 +24,12 @@ export interface RenameFrontstageNodeInput {
   title: string | null;
 }
 
+export interface UpdateFrontstageNodeMetadataInput {
+  title?: string | null;
+  tooltip?: string | null;
+  isHidden?: boolean;
+}
+
 export interface MoveFrontstageNodeInput {
   parentId: string | null;
   rank: string;
@@ -92,6 +98,25 @@ export function renameFrontstagePageNode(
     workspaceId,
     pageNodeId,
     { title: input.title },
+    csrfToken,
+    getFrontstageApiBaseUrl()
+  );
+}
+
+export function updateFrontstagePageNodeMetadata(
+  workspaceId: string,
+  pageNodeId: string,
+  input: UpdateFrontstageNodeMetadataInput,
+  csrfToken: string
+): Promise<FrontstagePageNode> {
+  return updateFrontstagePageNodeTitle(
+    workspaceId,
+    pageNodeId,
+    {
+      title: input.title,
+      tooltip: input.tooltip,
+      is_hidden: input.isHidden
+    },
     csrfToken,
     getFrontstageApiBaseUrl()
   );

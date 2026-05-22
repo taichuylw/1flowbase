@@ -60,6 +60,10 @@
   background: rgba(59, 130, 246, 0.05);
 }
 
+.frontstage-page-tree-sidebar__node-row--dragging {
+  opacity: 0.55;
+}
+
 /* Default / View mode selected styling (Green) */
 .frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--selected {
   border-color: transparent !important;
