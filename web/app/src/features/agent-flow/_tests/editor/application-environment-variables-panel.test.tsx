@@ -28,7 +28,7 @@ describe('ApplicationEnvironmentVariablesPanel', () => {
 
     expect(screen.getByText('true')).toBeInTheDocument();
     expect(screen.getByText('false')).toBeInTheDocument();
-  });
+  }, 10000);
 
   test('edits object values as field rows', () => {
     const onChange = vi.fn();

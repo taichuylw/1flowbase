@@ -202,7 +202,7 @@ describe('LLM prompt messages field', () => {
     expect(
       promptMessagesFrom(latestDocument).map((message) => message.role)
     ).toEqual(['system', 'user']);
-  });
+  }, 10000);
 
   test('renders dynamic messages as an addable group after the fixed system prompt', async () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

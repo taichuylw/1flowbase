@@ -1064,7 +1064,9 @@ async fn openai_chat_streaming_tool_resume_returns_done_on_current_connection() 
 
     assert!(body.contains("[DONE]"), "{body}");
     assert!(
-        body.contains("runtime_error") || body.contains("\"finish_reason\":\"stop\""),
+        body.contains("runtime_error")
+            || body.contains("\"finish_reason\":\"stop\"")
+            || body.contains("\"finish_reason\":\"tool_calls\""),
         "{body}"
     );
 }

@@ -143,6 +143,7 @@ where
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
+        None,
         sender,
         move |run, envelope| mapper(run, envelope),
     ));
@@ -225,15 +226,18 @@ where
         )
         .await
         .map_err(service_error)?;
-    let _ = state
+    let resume_start_sequence = state
         .runtime_event_stream
         .append(run.id, debug_stream_events::flow_started(run.id))
-        .await;
+        .await
+        .map(|event| event.sequence.saturating_sub(1))
+        .unwrap_or(0);
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
+        Some(resume_start_sequence),
         sender,
         move |run, envelope| mapper(run, envelope),
     ));
@@ -285,13 +289,14 @@ where
 async fn send_compatible_runtime_event_stream<F>(
     state: Arc<ApiState>,
     initial_run: NativeRunResult,
+    from_sequence: Option<i64>,
     sender: mpsc::Sender<Result<Event, Infallible>>,
     mut mapper: F,
 ) where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
     let stream = state.runtime_event_stream.clone();
-    let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
+    let Ok(mut subscription) = stream.subscribe(initial_run.id, from_sequence).await else {
         warn!(
             flow_run_id = %initial_run.id,
             application_id = %initial_run.application_id,
