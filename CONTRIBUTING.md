@@ -5,7 +5,7 @@ Thanks for your interest in contributing to 1flowbase.
 ## Contributor License Agreement
 
 Before a pull request can be merged, each contributor must accept the
-1flowbase Individual Contributor License Agreement in [CLA.md](CLA.md).
+taichuy Individual Contributor License Agreement in [CLA.md](CLA.md).
 
 The repository uses CLA Assistant as the signing gate. When you open a pull
 request, CLA Assistant will comment with a link to review and accept the CLA if
@@ -27,9 +27,9 @@ organization, make sure you have permission before opening a pull request.
 
 ## Maintainer Setup
 
-Maintainers should configure CLA Assistant for this repository and point it to
-the published version of `CLA.md`, such as the file URL on the default branch or
-a dedicated Gist.
+Maintainers should configure CLA Assistant for the `taichuy` organization or
+account and point it to the published organization-wide version of `CLA.md`,
+such as a dedicated public Gist.
 
 After CLA Assistant is enabled, protect the target branch and require the CLA
 Assistant status check before pull requests can be merged.

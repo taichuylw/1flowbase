@@ -1,9 +1,9 @@
-# 1flowbase Individual Contributor License Agreement
+# taichuy Individual Contributor License Agreement
 
-Thank you for contributing to 1flowbase.
+Thank you for contributing to taichuy projects.
 
 This Individual Contributor License Agreement ("Agreement") documents the rights
-you grant to the 1flowbase project maintainers when you submit a contribution.
+you grant to the taichuy project maintainers when you submit a contribution.
 It is intended to let the project use, maintain, distribute, sublicense, and
 relicense contributions while confirming that contributors are authorized to
 submit their work.
@@ -12,10 +12,11 @@ submit their work.
 
 "You" means the individual who accepts this Agreement.
 
-"Project" means the 1flowbase repository and related project materials.
+"Project" means any taichuy repository or related project material that uses
+this Agreement.
 
 "Maintainers" means the individuals or organization that own or administer the
-Project repository.
+applicable taichuy Project repository.
 
 "Contribution" means any original work of authorship, code, documentation,
 configuration, design, issue content, pull request content, or other material
@@ -34,8 +35,8 @@ sublicense, and distribute your Contributions and derivative works based on your
 Contributions.
 
 This license allows the Maintainers to use your Contributions in open source,
-source-available, commercial, hosted, internal, or other distributions of the
-Project, unless a separate written agreement says otherwise.
+source-available, commercial, hosted, internal, or other distributions of
+taichuy Projects, unless a separate written agreement says otherwise.
 
 ## 3. Patent License
 
