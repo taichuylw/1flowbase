@@ -266,8 +266,14 @@ async function clickAndFlush(element: HTMLElement) {
   });
 }
 
+async function hoverAddMenuAndFlush() {
+  await act(async () => {
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
+  });
+}
+
 async function clickAddMenuItemAndFlush(label: '新增分组' | '新增页面') {
-  await clickAndFlush(screen.getByRole('button', { name: '添加菜单' }));
+  await hoverAddMenuAndFlush();
   await clickAndFlush(await screen.findByRole('menuitem', { name: label }));
 }
 
@@ -478,9 +484,18 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('页面树已同步')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加菜单' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '添加菜单' })).toHaveLength(1);
-    await clickAndFlush(screen.getByRole('button', { name: '添加菜单' }));
+    expect(screen.queryByRole('menuitem', { name: '新增分组' })).not.toBeInTheDocument();
+    await hoverAddMenuAndFlush();
     expect(await screen.findByRole('menuitem', { name: '新增分组' })).toBeInTheDocument();
     expect(await screen.findByRole('menuitem', { name: '新增页面' })).toBeInTheDocument();
+    const addMenuActions = screen
+      .getByRole('button', { name: '添加菜单' })
+      .closest('.frontstage-page-tree-sidebar__actions');
+    expect(addMenuActions).not.toBeNull();
+    await act(async () => {
+      fireEvent.mouseLeave(addMenuActions as HTMLElement);
+    });
+    expect(screen.queryByRole('menuitem', { name: '新增分组' })).not.toBeInTheDocument();
     exitDesignMode();
     expect(
       screen.queryByRole('button', { name: '创建区块' })

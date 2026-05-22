@@ -6,21 +6,29 @@ const { log } = require('./cli.js');
 const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '127.0.0.0/8', '::1'];
 
 function commandExists(commandName) {
-  const pathValue = process.env.PATH || '';
+  return resolveCommandPath(commandName) !== null;
+}
+
+function resolveCommandPath(commandName, { platform = process.platform, sourceEnv = process.env } = {}) {
+  if (!commandName || path.isAbsolute(commandName)) {
+    return commandName || null;
+  }
+
+  const pathValue = sourceEnv.PATH || '';
   const directories = pathValue.split(path.delimiter).filter(Boolean);
   const extensions =
-    process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat', '.ps1'] : [''];
+    platform === 'win32' ? ['.cmd', '.exe', '.bat', '', '.ps1'] : [''];
 
   for (const directory of directories) {
     for (const extension of extensions) {
       const fullPath = path.join(directory, `${commandName}${extension}`);
       if (fs.existsSync(fullPath)) {
-        return true;
+        return fullPath;
       }
     }
   }
 
-  return false;
+  return null;
 }
 
 function requireCommand(commandName) {
@@ -153,4 +161,5 @@ module.exports = {
   parseApiEnvironment,
   parseEnvFile,
   requireCommand,
+  resolveCommandPath,
 };

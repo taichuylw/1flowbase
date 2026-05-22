@@ -18,6 +18,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Empty, Typography, Dropdown, Tooltip, Switch } from 'antd';
 import { useState } from 'react';
+import type { FocusEvent } from 'react';
 import type { MenuProps } from 'antd';
 
 import { canMoveNode, type FrontStageTreeNode } from '../lib/page-tree';
@@ -528,6 +529,15 @@ export function FrontStagePageTreeSidebar({
     onAddPage();
   };
 
+  const handleAddMenuBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const nextFocusTarget = event.relatedTarget;
+    if (nextFocusTarget instanceof Node && event.currentTarget.contains(nextFocusTarget)) {
+      return;
+    }
+
+    setIsAddMenuOpen(false);
+  };
+
   return (
     <div className="frontstage-page-tree-sidebar">
       {pageTree.length > 0 ? (
@@ -567,7 +577,12 @@ export function FrontStagePageTreeSidebar({
         />
       )}
       {canEdit ? (
-        <div className="frontstage-page-tree-sidebar__actions">
+        <div
+          className="frontstage-page-tree-sidebar__actions"
+          onBlur={handleAddMenuBlur}
+          onMouseEnter={() => setIsAddMenuOpen(true)}
+          onMouseLeave={() => setIsAddMenuOpen(false)}
+        >
           <Button
             aria-expanded={isAddMenuOpen}
             aria-haspopup="menu"
@@ -575,7 +590,8 @@ export function FrontStagePageTreeSidebar({
             className="frontstage-page-tree-sidebar__add-item-btn"
             disabled={isOperationPending}
             icon={<PlusOutlined />}
-            onClick={() => setIsAddMenuOpen((open) => !open)}
+            onClick={() => setIsAddMenuOpen(true)}
+            onFocus={() => setIsAddMenuOpen(true)}
             size="small"
           >
             添加菜单

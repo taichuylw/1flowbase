@@ -59,14 +59,14 @@ export function HeroAnimation() {
       <div className="hero-text-block" style={{ zIndex: 1, textAlign: 'center', padding: `0 clamp(12px, 6vw, 80px)`, width: '100%', marginTop: '-15vh' }}>
         <div className="hero-tagline" aria-label="brand name and slogan">
           <div className="hero-text-line hero-title-line">1flowbase</div>
-          <div className="hero-text-line hero-slogan-line">AI原生应用底座，对话即是护城河</div>
+          <div className="hero-text-line hero-slogan-line">对话即是壁垒，AI应用原生底座</div>
         </div>
       </div>
 
       <style>
         {`
           .hero-text-block {
-            animation: reveal 1.5s cubic-bezier(0.2, 0, 0, 1) forwards;
+            animation: fadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
           }
 
           .hero-tagline {
@@ -75,54 +75,58 @@ export function HeroAnimation() {
             display: inline-flex;
             flex-direction: column;
             align-items: center;
-            gap: clamp(0.1rem, 0.45vw, 0.6rem);
-            line-height: 1.05;
-            animation: reveal 1.5s cubic-bezier(0.2, 0, 0, 1) forwards;
-            font-weight: 500;
+            gap: clamp(0.2rem, 0.8vw, 1.2rem);
+            line-height: 1.2;
+            font-family: ${token.fontFamily};
           }
 
           .hero-text-line {
             background: linear-gradient(
-              120deg,
-              var(--hero-from-color) 40%,
-              var(--hero-mid-color) 50%,
-              var(--hero-to-color) 60%
+              115deg,
+              var(--hero-color-blue) 0%,
+              var(--hero-color-blue) 25%,
+              var(--hero-color-glow) 30%,
+              var(--hero-color-green) 35%,
+              var(--hero-color-green) 65%,
+              var(--hero-color-glow) 70%,
+              var(--hero-color-blue) 75%,
+              var(--hero-color-blue) 100%
             );
-            background-size: 240% auto;
+            background-size: 500% 100%;
+            background-repeat: no-repeat;
             color: transparent;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            animation: shine 20s linear infinite;
-            font-weight: 900;
+            animation: shine 12s linear infinite;
             margin: 0;
-            line-height: 1.05;
-            letter-spacing: -0.02em;
-            --hero-from-color: ${token.colorPrimary};
-            --hero-mid-color: rgba(255, 255, 255, 1);
-            --hero-to-color: rgba(105, 177, 255, 0.9);
+            line-height: 1.15;
+            --hero-color-blue: rgba(59, 130, 246, 0.8);
+            --hero-color-glow: #e6f7f2;
+            --hero-color-green: ${token.colorPrimary};
           }
 
           .hero-title-line {
             font-size: var(--hero-title-size);
+            font-weight: 800;
+            letter-spacing: -0.03em;
           }
 
           .hero-slogan-line {
             font-size: var(--hero-slogan-size);
             font-weight: 500;
-            --hero-mid-color: rgba(255, 255, 255, 0.95);
-            --hero-to-color: ${token.colorInfo};
+            letter-spacing: 0.08em;
           }
 
-          @keyframes reveal {
-            0% { clip-path: inset(0 100% 0 0); opacity: 0; }
-            5% { opacity: 0.1; }
-            100% { clip-path: inset(0 0 0 0); opacity: 0.7; }
+          @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(15px); }
+            100% { opacity: 1; transform: translateY(0); }
           }
 
           @keyframes shine {
-            0% { background-position: 200% center; }
-            100% { background-position: -200% center; }
+            0%, 5% { background-position: 100% center; }
+            50%, 55% { background-position: 50% center; }
+            100% { background-position: 0% center; }
           }
 
           .hero-shape {

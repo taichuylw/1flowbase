@@ -1,7 +1,19 @@
 const { parseCliArgs, selectServiceKeys, shouldManageDocker, usage } = require('./cli.js');
-const { buildServiceEnv, ensureServiceEnvFile, getServicePrestartCommands } = require('./env.js');
+const {
+  buildServiceEnv,
+  ensureServiceEnvFile,
+  getServicePrestartCommands,
+  resolveCommandPath,
+} = require('./env.js');
 const { manageDocker, resolveComposeCommand } = require('./middleware.js');
-const { manageServices, startService, waitForServicePort } = require('./process.js');
+const {
+  listPortOccupantPids,
+  manageServices,
+  parseWindowsNetstatPortOccupants,
+  startService,
+  waitForPortToClose,
+  waitForServicePort,
+} = require('./process.js');
 const { runServicePrestartCommands } = require('./postgres-reset.js');
 const {
   DEFAULT_STARTUP_TIMEOUT_MS,
@@ -44,14 +56,18 @@ module.exports = {
   getRuntimePaths,
   getServiceDefinitions,
   getServicePrestartCommands,
+  listPortOccupantPids,
   main,
   manageDocker,
   manageServices,
+  parseWindowsNetstatPortOccupants,
   parseCliArgs,
   resolveComposeCommand,
+  resolveCommandPath,
   runServicePrestartCommands,
   selectServiceKeys,
   shouldManageDocker,
   startService,
+  waitForPortToClose,
   waitForServicePort,
 };

@@ -10,14 +10,18 @@ const {
   shouldManageDocker,
   selectServiceKeys,
   getServiceDefinitions,
+  listPortOccupantPids,
   manageDocker,
   startService,
   manageServices,
   ensureServiceEnvFile,
   buildServiceEnv,
   getServicePrestartCommands,
+  parseWindowsNetstatPortOccupants,
+  resolveCommandPath,
   runServicePrestartCommands,
   resolveComposeCommand,
+  waitForPortToClose,
   waitForServicePort,
 } = require('../core.js');
 
@@ -105,6 +109,64 @@ test('waitForServicePort honors per-service startup timeout overrides', async ()
   ]);
 });
 
+test('waitForPortToClose waits until a cleared port stops accepting connections', async () => {
+  const probes = [true, true, false];
+  const closed = await waitForPortToClose('127.0.0.1', 3100, 1000, async () => probes.shift());
+
+  assert.equal(closed, true);
+});
+
+test('parseWindowsNetstatPortOccupants extracts unique listening pids for a port', () => {
+  const output = [
+    '  Proto  Local Address          Foreign Address        State           PID',
+    '  TCP    0.0.0.0:3100           0.0.0.0:0              LISTENING       31856',
+    '  TCP    127.0.0.1:3100         127.0.0.1:14248        TIME_WAIT       0',
+    '  TCP    127.0.0.1:3100         127.0.0.1:16943        ESTABLISHED     31856',
+    '  TCP    [::]:3100              [::]:0                 LISTENING       31856',
+    '  TCP    0.0.0.0:7800           0.0.0.0:0              LISTENING       7800',
+  ].join('\n');
+
+  assert.deepEqual(parseWindowsNetstatPortOccupants(output, 3100), [31856]);
+});
+
+test('listPortOccupantPids uses netstat on Windows', () => {
+  const calls = [];
+  const occupants = listPortOccupantPids(3100, {
+    platform: 'win32',
+    runCommandImpl(command, args, options) {
+      calls.push({ command, args, captureOutput: options.captureOutput });
+      return {
+        status: 0,
+        stdout: 'TCP    0.0.0.0:3100           0.0.0.0:0              LISTENING       31856',
+        stderr: '',
+      };
+    },
+  });
+
+  assert.deepEqual(occupants, [31856]);
+  assert.deepEqual(calls, [
+    {
+      command: 'netstat',
+      args: ['-ano'],
+      captureOutput: true,
+    },
+  ]);
+});
+
+test('resolveCommandPath prefers Windows command shims that spawn can execute', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-command-path-'));
+  fs.writeFileSync(path.join(tempRoot, 'pnpm'), '');
+  fs.writeFileSync(path.join(tempRoot, 'pnpm.CMD'), '');
+
+  assert.equal(
+    resolveCommandPath('pnpm', {
+      platform: 'win32',
+      sourceEnv: { PATH: tempRoot },
+    }),
+    path.join(tempRoot, 'pnpm.cmd')
+  );
+});
+
 test('startService fails fast when the frontend port is occupied by another process', async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-port-occupied-'));
   const service = {
@@ -165,6 +227,7 @@ test('startService reclaims an occupied service port during restart takeover bef
     pidFile: path.join(tempRoot, 'api-server.json'),
   };
   const clearCalls = [];
+  const waitForCloseCalls = [];
   let portOccupied = true;
   let spawned = false;
   let recordedPid = null;
@@ -188,6 +251,10 @@ test('startService reclaims an occupied service port during restart takeover bef
       clearCalls.push({ label, ports });
       portOccupied = false;
     },
+    async waitForPortToCloseImpl(host, port, timeoutMs) {
+      waitForCloseCalls.push({ host, port, timeoutMs });
+      return true;
+    },
     logImpl() {},
     spawnImpl() {
       spawned = true;
@@ -202,6 +269,9 @@ test('startService reclaims an occupied service port during restart takeover bef
     writePidRecordImpl(_service, pid) {
       recordedPid = pid;
     },
+    listPortOccupantPidsImpl() {
+      return [];
+    },
     async waitForServicePortImpl() {
       return true;
     },
@@ -214,8 +284,137 @@ test('startService reclaims an occupied service port during restart takeover bef
       ports: [7800],
     },
   ]);
+  assert.deepEqual(waitForCloseCalls, [
+    {
+      host: '127.0.0.1',
+      port: 7800,
+      timeoutMs: 5000,
+    },
+  ]);
   assert.equal(spawned, true);
   assert.equal(recordedPid, 4242);
+});
+
+test('startService resolves the command path before spawning', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-spawn-command-'));
+  const service = {
+    key: 'web',
+    label: 'frontend',
+    cwd: path.join(tempRoot, 'web'),
+    command: 'pnpm',
+    args: ['--filter', '@1flowbase/web', 'dev'],
+    bindHost: '0.0.0.0',
+    probeHost: '127.0.0.1',
+    port: 3100,
+    startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
+    logFile: path.join(tempRoot, 'web.log'),
+    pidFile: path.join(tempRoot, 'web.json'),
+  };
+  let spawnedCommand = null;
+  let spawnedOptions = null;
+
+  await startService(service, {
+    ensureServiceEnvFileImpl() {
+      return false;
+    },
+    requireCommandImpl() {},
+    runServicePrestartCommandsImpl() {},
+    readPidRecordImpl() {
+      return null;
+    },
+    isProcessAliveImpl() {
+      return false;
+    },
+    async isPortOpenImpl() {
+      return false;
+    },
+    logImpl() {},
+    spawnImpl(command, _args, options) {
+      spawnedCommand = command;
+      spawnedOptions = options;
+      return {
+        pid: 4244,
+        unref() {},
+      };
+    },
+    buildServiceEnvImpl() {
+      return {};
+    },
+    resolveCommandPathImpl() {
+      return 'C:\\tools\\pnpm.cmd';
+    },
+    writePidRecordImpl() {},
+    async waitForServicePortImpl() {
+      return true;
+    },
+    platform: 'win32',
+    takeOverPortOwnership: true,
+  });
+
+  assert.equal(spawnedCommand, 'C:\\tools\\pnpm.cmd');
+  assert.equal(spawnedOptions.shell, true);
+  assert.equal(spawnedOptions.detached, false);
+});
+
+test('startService records the listener pid when it differs from the spawned shell pid', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-listener-pid-'));
+  const service = {
+    key: 'web',
+    label: 'frontend',
+    cwd: path.join(tempRoot, 'web'),
+    command: 'pnpm',
+    args: ['--filter', '@1flowbase/web', 'dev'],
+    bindHost: '0.0.0.0',
+    probeHost: '127.0.0.1',
+    port: 3100,
+    startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
+    logFile: path.join(tempRoot, 'web.log'),
+    pidFile: path.join(tempRoot, 'web.json'),
+  };
+  const recordedPids = [];
+
+  await startService(service, {
+    ensureServiceEnvFileImpl() {
+      return false;
+    },
+    requireCommandImpl() {},
+    runServicePrestartCommandsImpl() {},
+    readPidRecordImpl() {
+      return null;
+    },
+    isProcessAliveImpl() {
+      return false;
+    },
+    async isPortOpenImpl() {
+      return false;
+    },
+    logImpl() {},
+    spawnImpl() {
+      return {
+        pid: 1111,
+        unref() {},
+      };
+    },
+    buildServiceEnvImpl() {
+      return {};
+    },
+    resolveCommandPathImpl() {
+      return 'C:\\tools\\pnpm.cmd';
+    },
+    writePidRecordImpl(_service, pid) {
+      recordedPids.push(pid);
+    },
+    async waitForServicePortImpl() {
+      return true;
+    },
+    listPortOccupantPidsImpl() {
+      return [2222];
+    },
+    platform: 'win32',
+    takeOverPortOwnership: true,
+  });
+
+  assert.deepEqual(recordedPids, [1111, 2222]);
 });
 
 test('startService restarts a running managed service when takeover is requested', async () => {
@@ -270,6 +469,9 @@ test('startService restarts a running managed service when takeover is requested
     },
     writePidRecordImpl(_service, pid) {
       recordedPid = pid;
+    },
+    listPortOccupantPidsImpl() {
+      return [];
     },
     async waitForServicePortImpl() {
       return true;
