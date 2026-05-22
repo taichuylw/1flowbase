@@ -50,7 +50,7 @@ describe('AppShellFrame', () => {
 
       expect(
         accountLabel.compareDocumentPosition(settingsTrigger) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+          Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     });
   });
@@ -68,7 +68,7 @@ describe('AppShellFrame', () => {
 
       expect(
         settingsTrigger.compareDocumentPosition(designButton) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+          Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
     });
@@ -87,19 +87,24 @@ describe('AppShellFrame', () => {
     const originalLocation = window.location;
 
     // Mock window.location
-    delete (window as any).location;
-    window.location = {
-      ...originalLocation,
-      assign: vi.fn(),
-      replace: vi.fn(),
-      get href() {
-        return 'http://localhost/';
-      },
-      set href(val: string) {
-        locationSpy(val);
-      },
-      search: ''
-    } as any;
+    const mutableWindow = window as unknown as { location?: Location };
+    delete mutableWindow.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: {
+        ...originalLocation,
+        assign: vi.fn(),
+        replace: vi.fn(),
+        get href() {
+          return 'http://localhost/';
+        },
+        set href(val: string) {
+          locationSpy(val);
+        },
+        search: ''
+      } as Location
+    });
 
     render(
       <AppShellFrame pathname="/">

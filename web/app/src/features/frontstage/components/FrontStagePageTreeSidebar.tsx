@@ -58,6 +58,8 @@ type FrontStagePageTreeSidebarProps = {
 
 const ROOT_PAGE_GROUP_VALUE = '__frontstage_root__';
 
+type MenuClickInfo = Parameters<NonNullable<MenuProps['onClick']>>[0];
+
 function getNodeTitle(node: FrontStageTreeNode) {
   if (node.title) {
     return node.title;
@@ -202,7 +204,7 @@ function renderTreeNode({
               label: option.label,
               disabled:
                 optionParentId === currentParentId || isOperationPending,
-              onClick: ({ domEvent }: { domEvent: any }) => {
+              onClick: ({ domEvent }: MenuClickInfo) => {
                 domEvent.stopPropagation();
                 onMovePageToGroup(node.id, currentParentId, optionParentId);
               }
@@ -218,7 +220,7 @@ function renderTreeNode({
       key: 'rename',
       label: '编辑',
       icon: <EditOutlined />,
-      onClick: ({ domEvent }: { domEvent: any }) => {
+      onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
         onRenameNode(node.id, node.title);
       }
@@ -227,7 +229,7 @@ function renderTreeNode({
       key: 'tooltip',
       label: '编辑提示信息',
       icon: <InfoCircleOutlined />,
-      onClick: ({ domEvent }: { domEvent: any }) => {
+      onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
         const currentTooltip = nodeTooltips[node.id] ?? '';
         const promptInfo = window.prompt('编辑节点提示信息', currentTooltip);
@@ -271,7 +273,7 @@ function renderTreeNode({
           label: '上移',
           icon: <ArrowUpOutlined />,
           disabled: !canMoveUp,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onMoveNode(node.id, -1);
           }
@@ -281,7 +283,7 @@ function renderTreeNode({
           label: '下移',
           icon: <ArrowDownOutlined />,
           disabled: !canMoveDown,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onMoveNode(node.id, 1);
           }
@@ -298,7 +300,7 @@ function renderTreeNode({
           key: 'insert-before-page',
           label: '页面',
           icon: <FileTextOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onAddNodeAtPosition?.('page', node.id, 'before');
           }
@@ -307,7 +309,7 @@ function renderTreeNode({
           key: 'insert-before-group',
           label: '分组',
           icon: <FolderOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onAddNodeAtPosition?.('group', node.id, 'before');
           }
@@ -323,7 +325,7 @@ function renderTreeNode({
           key: 'insert-after-page',
           label: '页面',
           icon: <FileTextOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onAddNodeAtPosition?.('page', node.id, 'after');
           }
@@ -332,7 +334,7 @@ function renderTreeNode({
           key: 'insert-after-group',
           label: '分组',
           icon: <FolderOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onAddNodeAtPosition?.('group', node.id, 'after');
           }
@@ -347,7 +349,7 @@ function renderTreeNode({
       label: '删除',
       icon: <DeleteOutlined />,
       danger: true,
-      onClick: ({ domEvent }: { domEvent: any }) => {
+      onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
         onDeleteNode(node.id);
       }

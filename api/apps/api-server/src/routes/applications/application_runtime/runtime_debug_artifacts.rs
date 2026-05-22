@@ -23,6 +23,9 @@ use uuid::Uuid;
 
 use crate::{app_state::ApiState, error_response::ApiError};
 
+type RuntimeDebugArtifactOffloadFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<(Value, bool), ApiError>> + Send + 'a>>;
+
 const APPLICATION_INPUT_QUERY_KEYS: &[&str] = &["query", "question", "prompt", "message", "input"];
 
 struct RuntimeDebugArtifactScope {
@@ -119,7 +122,7 @@ impl RuntimeDebugArtifactWriter {
         artifact_kind: &'a str,
         value: Value,
         field_path: Vec<String>,
-    ) -> Pin<Box<dyn Future<Output = Result<(Value, bool), ApiError>> + Send + 'a>> {
+    ) -> RuntimeDebugArtifactOffloadFuture<'a> {
         Box::pin(async move {
             if is_runtime_debug_artifact_payload(&value)
                 || should_keep_runtime_payload_field_inline(&field_path)

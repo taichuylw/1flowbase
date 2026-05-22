@@ -1032,6 +1032,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onAddPageInGroup={handleAddPageInGroup}
       onRenameNode={handleRenameNode}
       onMoveNode={handleMoveNode}
+      onAddNodeAtPosition={handleAddNodeAtPosition}
       onMovePageToGroup={handleMovePageToGroup}
       onDeleteNode={handleDeleteNode}
       onSelectPage={handleSelectPage}

@@ -108,21 +108,21 @@ pub fn operation_id(model_id: uuid::Uuid, kind: RuntimeDataModelDocsOperationKin
 
 pub fn parse_operation_id(
     operation_id: &str,
-) -> Result<Option<(uuid::Uuid, RuntimeDataModelDocsOperationKind)>, ()> {
+) -> Result<Option<(uuid::Uuid, RuntimeDataModelDocsOperationKind)>, &'static str> {
     let Some(rest) = operation_id.strip_prefix(DATA_MODEL_OPERATION_ID_PREFIX) else {
         return Ok(None);
     };
     let Some((model_id, suffix)) = rest.split_once("__") else {
-        return Err(());
+        return Err("missing operation suffix");
     };
-    let model_id = uuid::Uuid::parse_str(model_id).map_err(|_| ())?;
+    let model_id = uuid::Uuid::parse_str(model_id).map_err(|_| "invalid model id")?;
     let kind = match suffix {
         "list_records" => RuntimeDataModelDocsOperationKind::ListRecords,
         "create_record" => RuntimeDataModelDocsOperationKind::CreateRecord,
         "get_record" => RuntimeDataModelDocsOperationKind::GetRecord,
         "update_record" => RuntimeDataModelDocsOperationKind::UpdateRecord,
         "delete_record" => RuntimeDataModelDocsOperationKind::DeleteRecord,
-        _ => return Err(()),
+        _ => return Err("unknown operation kind"),
     };
     Ok(Some((model_id, kind)))
 }

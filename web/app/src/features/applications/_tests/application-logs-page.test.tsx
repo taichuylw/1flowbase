@@ -621,7 +621,7 @@ describe('ApplicationLogsPage', () => {
     const detailLoadButton = within(logPanel).getByRole('button', {
       name: '加载完整值'
     });
-    expect(detailLoadButton).not.toBeDisabled();
+    expect(detailLoadButton).toBeEnabled();
     fireEvent.click(detailLoadButton);
 
     expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
@@ -639,7 +639,7 @@ describe('ApplicationLogsPage', () => {
     const traceLoadButton = within(logPanel).getByRole('button', {
       name: '加载完整值'
     });
-    expect(traceLoadButton).not.toBeDisabled();
+    expect(traceLoadButton).toBeEnabled();
     fireEvent.click(traceLoadButton);
 
     expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
@@ -706,7 +706,9 @@ describe('ApplicationLogsPage', () => {
     expect(
       await within(conversation).findByText('外部传入的问题')
     ).toBeInTheDocument();
-    expect(within(conversation).getByText('外部传入的回答')).toBeInTheDocument();
+    expect(
+      within(conversation).getByText('外部传入的回答')
+    ).toBeInTheDocument();
     expect(
       within(conversation).getAllByRole('button', {
         name: '查看对话日志'

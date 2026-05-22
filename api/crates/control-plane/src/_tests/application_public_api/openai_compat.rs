@@ -132,11 +132,11 @@ fn tools_map_to_native_compatibility_inputs_and_metadata() {
     let native = map_chat_completion_request(request).unwrap();
 
     assert_eq!(
-        native.inputs.as_value()["compatibility"]["tools"][0]["function"]["name"],
+        native.inputs.as_value()["tools"][0]["name"],
         json!("lookup_order")
     );
     assert_eq!(
-        native.inputs.as_value()["compatibility"]["tool_choice"]["function"]["name"],
+        native.inputs.as_value()["tool_choice"]["function"]["name"],
         json!("lookup_order")
     );
     assert_eq!(
@@ -198,7 +198,7 @@ fn legacy_function_call_maps_to_native_compatibility_inputs() {
     let native = map_chat_completion_request(request).unwrap();
 
     assert_eq!(
-        native.inputs.as_value()["compatibility"]["function_call"]["name"],
+        native.inputs.as_value()["tool_choice"]["name"],
         json!("lookup_order")
     );
 }

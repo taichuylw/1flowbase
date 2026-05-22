@@ -113,7 +113,7 @@ fn tools_are_accepted_for_agent_framework_compatibility() {
     assert_eq!(native.query, "Final question");
     assert_eq!(native.model.as_deref(), Some("claude-compatible-custom"));
     assert_eq!(
-        native.inputs.as_value()["compatibility"]["tools"][0]["name"],
+        native.inputs.as_value()["tools"][0]["name"],
         json!("lookup_order")
     );
 }
@@ -130,7 +130,7 @@ fn tool_choice_is_accepted_for_agent_framework_compatibility() {
 
     assert_eq!(native.query, "Final question");
     assert_eq!(
-        native.inputs.as_value()["compatibility"]["tool_choice"]["name"],
+        native.inputs.as_value()["tool_choice"]["name"],
         json!("lookup_order")
     );
 }

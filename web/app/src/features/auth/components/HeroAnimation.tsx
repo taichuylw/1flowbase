@@ -54,7 +54,7 @@ export function HeroAnimation() {
     if (!ctx) return;
 
     let animationFrameId: number;
-    let leaves: Leaf[] = [];
+    const leaves: Leaf[] = [];
     let ripples: Ripple[] = [];
     const leafCount = 55;
 

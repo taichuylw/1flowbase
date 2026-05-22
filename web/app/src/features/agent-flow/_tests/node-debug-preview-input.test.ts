@@ -17,7 +17,9 @@ describe('node debug preview input', () => {
           query: '',
           model: '',
           history: [],
-          files: []
+          files: [],
+          tools: [],
+          tool_choice: {}
         }
       },
       missing_fields: [
@@ -47,7 +49,9 @@ describe('node debug preview input', () => {
           query: '请总结退款政策',
           model: '',
           history: [],
-          files: [{ filename: 'policy.pdf' }]
+          files: [{ filename: 'policy.pdf' }],
+          tools: [],
+          tool_choice: {}
         }
       },
       missing_fields: []
