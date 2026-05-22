@@ -13,6 +13,18 @@ use tracing::warn;
 
 use crate::app_state::ApiState;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TerminalAnswerDeltaKind {
+    Reasoning,
+    Text,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TerminalAnswerDelta {
+    pub kind: TerminalAnswerDeltaKind,
+    pub text: String,
+}
+
 pub(crate) async fn load_latest_native_run_for_terminal_fallback(
     state: &ApiState,
     initial_run: &NativeRunResult,
@@ -123,6 +135,51 @@ fn waiting_callback_payload(run: &NativeRunResult) -> Option<RuntimeEventPayload
     })
 }
 
+pub(crate) fn terminal_answer_deltas_from_payload(payload: &Value) -> Vec<TerminalAnswerDelta> {
+    payload
+        .get("output")
+        .and_then(|output| output.get("answer"))
+        .or_else(|| payload.get("answer"))
+        .and_then(Value::as_str)
+        .filter(|answer| !answer.is_empty())
+        .map(split_terminal_answer_deltas)
+        .unwrap_or_default()
+}
+
+pub(crate) fn split_terminal_answer_deltas(answer: &str) -> Vec<TerminalAnswerDelta> {
+    let mut remaining = answer;
+    let mut inside_think = false;
+    let mut deltas = Vec::new();
+
+    while !remaining.is_empty() {
+        let tag = if inside_think { "</think>" } else { "<think>" };
+        let Some(tag_index) = remaining.find(tag) else {
+            push_terminal_answer_delta(&mut deltas, inside_think, remaining);
+            break;
+        };
+
+        push_terminal_answer_delta(&mut deltas, inside_think, &remaining[..tag_index]);
+        remaining = &remaining[tag_index + tag.len()..];
+        inside_think = !inside_think;
+    }
+
+    deltas
+}
+
+fn push_terminal_answer_delta(deltas: &mut Vec<TerminalAnswerDelta>, reasoning: bool, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    deltas.push(TerminalAnswerDelta {
+        kind: if reasoning {
+            TerminalAnswerDeltaKind::Reasoning
+        } else {
+            TerminalAnswerDeltaKind::Text
+        },
+        text: text.to_string(),
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use control_plane::application_public_api::native::{
@@ -132,7 +189,10 @@ mod tests {
     use time::OffsetDateTime;
     use uuid::Uuid;
 
-    use super::terminal_runtime_event_from_native_run;
+    use super::{
+        split_terminal_answer_deltas, terminal_runtime_event_from_native_run,
+        TerminalAnswerDeltaKind,
+    };
 
     fn native_run(status: NativeRunStatus) -> NativeRunResult {
         NativeRunResult {
@@ -188,5 +248,18 @@ mod tests {
         assert_eq!(event.event_type, "waiting_callback");
         assert_eq!(event.payload["callback_kind"], json!("llm_tool_calls"));
         assert_eq!(event.payload["tool_calls"][0]["name"], json!("Read"));
+    }
+
+    #[test]
+    fn split_terminal_answer_deltas_recovers_native_reasoning_and_text() {
+        let deltas = split_terminal_answer_deltas("开头<think>先分析</think>\n最终回答");
+
+        assert_eq!(deltas.len(), 3);
+        assert_eq!(deltas[0].kind, TerminalAnswerDeltaKind::Text);
+        assert_eq!(deltas[0].text, "开头");
+        assert_eq!(deltas[1].kind, TerminalAnswerDeltaKind::Reasoning);
+        assert_eq!(deltas[1].text, "先分析");
+        assert_eq!(deltas[2].kind, TerminalAnswerDeltaKind::Text);
+        assert_eq!(deltas[2].text, "\n最终回答");
     }
 }

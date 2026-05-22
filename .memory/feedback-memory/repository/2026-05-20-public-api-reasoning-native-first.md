@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: public-api-reasoning-native-first
-summary: 应用接入 API 以 1flowbase Native API / runtime event 为唯一真值层，思考内容是用户可见结果；从持久化 answer 兜底或 completed 投影时，`<think>` 保持在正文里由客户端处理，不在服务端解析拆分。
+summary: 应用接入 API 以 1flowbase Native API / runtime event 为唯一真值层，思考内容是用户可见结果；持久化 answer 保持 `<think>` 原文，流式兜底和 completed 投影按 Native delta 语义恢复 reasoning/text。
 keywords:
   - application public api
   - application api docs
@@ -28,11 +28,11 @@ scope:
 
 ## 规则
 
-修改应用接入 API 的思考过程、流式输出、会话续接或兼容协议映射时，先确认 1flowbase Native API / runtime event stream 是否表达了真实语义；`reasoning_delta` / `<think>` 是用户可见结果的一部分，不能被当成内部噪音删除。从持久化 `answer` 做终端兜底或 completed 投影时，`<think>...</think>` 必须作为正文原样输出，由客户端决定如何展示或过滤，不在服务端解析拆成 reasoning/content。OpenAI Chat Completions、OpenAI Responses、Anthropic 等兼容接口只能作为 Native 请求与事件的协议投影同步维护。
+修改应用接入 API 的思考过程、流式输出、会话续接或兼容协议映射时，先确认 1flowbase Native API / runtime event stream 是否表达了真实语义；`reasoning_delta` / `<think>` 是用户可见结果的一部分，不能被当成内部噪音删除。持久化 `answer`、Native terminal snapshot 和 blocking 响应保留 `<think>...</think>` 原文；如果流式终端兜底或 completed 投影只能从持久化 `answer` 重建事件，则按 Native runtime 已有语义恢复为 `reasoning_delta` + `text_delta`，再由 OpenAI Chat Completions、OpenAI Responses、Anthropic 等兼容接口投影成各自协议字段。兼容接口只能作为 Native 请求与事件的协议投影同步维护。
 
 ## 原因
 
-用户纠正过：思考过程和会话能力都不是 OpenAI 专属能力，应用接入 API 应该以 1flowbase 原生接口为基础，再分别映射 OpenAI Chat Completions、OpenAI Responses 和 Anthropic。用户也明确纠正过，思考过程是结果的一部分，必须给到用户；如果只补一个兼容接口、把 `previous_response_id` 等外部协议字段当成内部真值、在兜底重建流时丢弃思考内容，或服务端擅自把 `<think>` 从正文拆出去，都会造成不同接入方式行为不一致并污染状态边界。
+用户纠正过：思考过程和会话能力都不是 OpenAI 专属能力，应用接入 API 应该以 1flowbase 原生接口为基础，再分别映射 OpenAI Chat Completions、OpenAI Responses 和 Anthropic。用户也明确纠正过，思考过程是结果的一部分，必须给到用户；如果只补一个兼容接口、把 `previous_response_id` 等外部协议字段当成内部真值、在兜底重建流时丢弃思考内容，或把 persisted answer 原文和 stream delta 投影混为一谈，都会造成不同接入方式行为不一致并污染状态边界。
 
 ## 适用场景
 

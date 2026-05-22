@@ -15,7 +15,8 @@ use uuid::Uuid;
 use crate::{
     app_state::ApiState,
     routes::application_public_api::stream_terminal_fallback::{
-        load_latest_native_run_for_terminal_fallback, terminal_runtime_event_from_native_run,
+        load_latest_native_run_for_terminal_fallback, terminal_answer_deltas_from_payload,
+        terminal_runtime_event_from_native_run, TerminalAnswerDelta, TerminalAnswerDeltaKind,
     },
 };
 
@@ -329,6 +330,10 @@ fn is_public_terminal_runtime_event(event_type: &str) -> bool {
     )
 }
 
+fn is_public_answer_delta_runtime_event(event_type: &str) -> bool {
+    matches!(event_type, "reasoning_delta" | "text_delta")
+}
+
 pub async fn send_native_runtime_event_stream(
     state: Arc<ApiState>,
     initial_run: NativeRunResult,
@@ -343,13 +348,25 @@ pub async fn send_native_runtime_event_stream(
     };
 
     let mut emitted_public_event = false;
+    let mut emitted_answer_delta = false;
     for event in subscription.replay {
         if is_ignored_waiting_callback(&event, ignored_waiting_callback_task_id) {
             continue;
         }
-        let is_terminal = is_public_terminal_runtime_event(&event.event_type);
+        let event_type = event.event_type.clone();
+        let is_terminal = is_public_terminal_runtime_event(&event_type);
+        let is_answer_delta = is_public_answer_delta_runtime_event(&event_type);
+        if is_terminal && !emitted_answer_delta {
+            let answer_events =
+                terminal_answer_delta_sse_events(&initial_run, include_workflow_events, &event);
+            emitted_answer_delta |= !answer_events.is_empty();
+            if !send_native_sse_events(&sender, answer_events).await {
+                return;
+            }
+        }
         let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
         emitted_public_event |= sse.is_some();
+        emitted_answer_delta |= is_answer_delta && sse.is_some();
         if !send_native_sse_event(&sender, sse).await {
             return;
         }
@@ -369,9 +386,20 @@ pub async fn send_native_runtime_event_stream(
                 if is_ignored_waiting_callback(&event, ignored_waiting_callback_task_id) {
                     continue;
                 }
-                let is_terminal = is_public_terminal_runtime_event(&event.event_type);
+                let event_type = event.event_type.clone();
+                let is_terminal = is_public_terminal_runtime_event(&event_type);
+                let is_answer_delta = is_public_answer_delta_runtime_event(&event_type);
+                if is_terminal && !emitted_answer_delta {
+                    let answer_events =
+                        terminal_answer_delta_sse_events(&initial_run, include_workflow_events, &event);
+                    emitted_answer_delta |= !answer_events.is_empty();
+                    if !send_native_sse_events(&sender, answer_events).await {
+                        return;
+                    }
+                }
                 let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
                 emitted_public_event |= sse.is_some();
+                emitted_answer_delta |= is_answer_delta && sse.is_some();
                 if !send_native_sse_event(&sender, sse).await {
                     return;
                 }
@@ -386,6 +414,7 @@ pub async fn send_native_runtime_event_stream(
                     include_workflow_events,
                     &sender,
                     emitted_public_event,
+                    emitted_answer_delta,
                     "durable_poll",
                     false,
                     ignored_waiting_callback_task_id,
@@ -404,6 +433,7 @@ pub async fn send_native_runtime_event_stream(
         include_workflow_events,
         &sender,
         emitted_public_event,
+        emitted_answer_delta,
         "stream_closed",
         true,
         ignored_waiting_callback_task_id,
@@ -421,12 +451,25 @@ async fn send_native_sse_event(
     sender.send(event).await.is_ok()
 }
 
+async fn send_native_sse_events(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    events: Vec<Result<Event, Infallible>>,
+) -> bool {
+    for event in events {
+        if sender.send(event).await.is_err() {
+            return false;
+        }
+    }
+    true
+}
+
 async fn emit_native_terminal_fallback(
     state: &ApiState,
     initial_run: &NativeRunResult,
     include_workflow_events: IncludeWorkflowEvents,
     sender: &mpsc::Sender<Result<Event, Infallible>>,
     emitted_public_event: bool,
+    emitted_answer_delta: bool,
     trigger: &'static str,
     warn_if_not_terminal: bool,
     ignored_waiting_callback_task_id: Option<Uuid>,
@@ -483,6 +526,13 @@ async fn emit_native_terminal_fallback(
             return true;
         }
     }
+    if !emitted_answer_delta {
+        let answer_events =
+            terminal_answer_delta_sse_events(&latest_run, include_workflow_events, &terminal_event);
+        if !send_native_sse_events(sender, answer_events).await {
+            return true;
+        }
+    }
     let _ = send_native_sse_event(
         sender,
         runtime_event_to_native_sse(&latest_run, include_workflow_events, terminal_event),
@@ -507,6 +557,40 @@ fn is_ignored_waiting_callback(
         .and_then(Value::as_str)
         .and_then(|value| Uuid::parse_str(value).ok())
         == Some(ignored_task_id)
+}
+
+fn terminal_answer_delta_to_runtime_event(
+    run: &NativeRunResult,
+    sequence: i64,
+    delta: TerminalAnswerDelta,
+) -> RuntimeEventEnvelope {
+    let payload = match delta.kind {
+        TerminalAnswerDeltaKind::Reasoning => {
+            debug_stream_events::reasoning_delta("assistant", run.id, delta.text)
+        }
+        TerminalAnswerDeltaKind::Text => {
+            debug_stream_events::text_delta("assistant", run.id, delta.text)
+        }
+    };
+    RuntimeEventEnvelope::new(run.id, sequence, payload)
+}
+
+fn terminal_answer_delta_sse_events(
+    run: &NativeRunResult,
+    include_workflow_events: IncludeWorkflowEvents,
+    terminal_event: &RuntimeEventEnvelope,
+) -> Vec<Result<Event, Infallible>> {
+    terminal_answer_deltas_from_payload(&terminal_event.payload)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, delta)| {
+            runtime_event_to_native_sse(
+                run,
+                include_workflow_events,
+                terminal_answer_delta_to_runtime_event(run, index as i64 + 1, delta),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -556,6 +640,34 @@ mod tests {
         assert_eq!(event_name, "reasoning.delta");
         assert_eq!(payload["delta"], json!("先分析用户问题"));
         assert_eq!(payload.get("workflow"), None);
+    }
+
+    #[tokio::test]
+    async fn native_terminal_answer_delta_sse_events_project_thinking_before_completed() {
+        use axum::response::{sse::Sse, IntoResponse};
+
+        let run = native_run();
+        let terminal_event = RuntimeEventEnvelope::new(
+            run.id,
+            1,
+            debug_stream_events::flow_finished(
+                run.id,
+                json!({ "answer": "<think>先分析</think>\n最终回答" }),
+            ),
+        );
+        let events =
+            terminal_answer_delta_sse_events(&run, IncludeWorkflowEvents::None, &terminal_event);
+        let response = Sse::new(tokio_stream::iter(events)).into_response();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("event: reasoning.delta"), "{body}");
+        assert!(body.contains("\"delta\":\"先分析\""), "{body}");
+        assert!(body.contains("event: message.delta"), "{body}");
+        assert!(body.contains("\"delta\":\"\\n最终回答\""), "{body}");
+        assert!(!body.contains("<think>"), "{body}");
     }
 
     #[test]
