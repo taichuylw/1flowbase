@@ -918,6 +918,25 @@ describe('FrontStagePage', () => {
     }
   });
 
+  test('opens page tree operation menu on hover', async () => {
+    authenticate(['frontstage.page.design']);
+    renderPage('page-1');
+
+    activateDesignMode();
+
+    const pageItem = getPageTreeItem('页面 page-1');
+    expect(screen.queryByText('编辑提示信息')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.mouseEnter(
+        within(pageItem).getByRole('button', { name: '页面操作菜单' })
+      );
+    });
+
+    expect(await screen.findByText('编辑提示信息')).toBeInTheDocument();
+    expect(await screen.findByText('移动到')).toBeInTheDocument();
+  });
+
   test('moves nodes through page tree mutation callback', async () => {
     authenticate(['frontstage.page.design']);
     const onMovePageNode = vi.fn().mockResolvedValue(undefined);

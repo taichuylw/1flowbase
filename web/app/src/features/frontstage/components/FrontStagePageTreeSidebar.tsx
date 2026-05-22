@@ -396,10 +396,12 @@ function renderTreeNode({
               </Tooltip>
               <Dropdown
                 menu={{ items: menuItems }}
-                trigger={['click']}
+                trigger={['hover']}
                 placement="bottomRight"
               >
                 <Button
+                  aria-haspopup="menu"
+                  aria-label="页面操作菜单"
                   className="frontstage-page-tree-sidebar__more-trigger"
                   disabled={isOperationPending}
                   icon={<MenuOutlined />}
