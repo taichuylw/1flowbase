@@ -150,52 +150,37 @@ export function HeroAnimation() {
 
         ctx.save();
         
-        const segments = 64;
+        // 3D perspective Y-axis compression factor (XZ horizontal water surface)
+        const perspectiveY = 0.22;
+        
+        // Draw 3 concentric wave rings representing a wave packet
+        const waveCount = 3;
+        const waveSpacing = 10; // distance between consecutive wave crests
+        
+        for (let w = 0; w < waveCount; w++) {
+          const r = ripple.radius - w * waveSpacing;
+          if (r <= 0) continue;
+          
+          // Local alpha for this wave ring, decaying as it gets closer to maxRadius
+          const localAlpha = (1 - r / ripple.maxRadius) * ripple.alpha;
+          if (localAlpha <= 0) continue;
 
-        // Outer wave ring
-        ctx.beginPath();
-        const outerFreq = 6;
-        const outerAmp = 3.5 * ripple.alpha; // Decays as ripple expands
-        for (let i = 0; i <= segments; i++) {
-          const angle = (i / segments) * Math.PI * 2;
-          const wavePhase = ripple.radius * 0.15;
-          const distortion = Math.sin(angle * outerFreq - wavePhase) * outerAmp;
-          const r = Math.max(1, ripple.radius + distortion);
-          const x = ripple.x + Math.cos(angle) * r;
-          const y = ripple.y + Math.sin(angle) * r;
-          if (i === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.strokeStyle = `rgba(0, 208, 132, ${ripple.alpha * 0.40})`;
-        ctx.lineWidth = 1;
-        ctx.shadowColor = 'rgba(0, 208, 132, 0.3)';
-        ctx.shadowBlur = 4;
-        ctx.stroke();
-
-        // Inner wave ring (slight delay)
-        if (ripple.radius > 8) {
           ctx.beginPath();
-          const innerFreq = 5;
-          const innerAmp = 2.2 * ripple.alpha;
-          const innerRadius = ripple.radius - 8;
-          for (let i = 0; i <= segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            const wavePhase = innerRadius * 0.18;
-            const distortion = Math.sin(angle * innerFreq - wavePhase) * innerAmp;
-            const r = Math.max(1, innerRadius + distortion);
-            const x = ripple.x + Math.cos(angle) * r;
-            const y = ripple.y + Math.sin(angle) * r;
-            if (i === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
+          // Draw a perfect ellipse on the XZ horizontal plane projected to screen XY
+          ctx.ellipse(ripple.x, ripple.y, r, r * perspectiveY, 0, 0, Math.PI * 2);
+          
+          // Outer ring is brightest, inner rings are softer
+          const ringIntensity = w === 0 ? 0.45 : w === 1 ? 0.25 : 0.12;
+          ctx.strokeStyle = `rgba(0, 208, 132, ${localAlpha * ringIntensity})`;
+          ctx.lineWidth = w === 0 ? 1.0 : w === 1 ? 0.8 : 0.6;
+          
+          if (w === 0) {
+            ctx.shadowColor = 'rgba(0, 208, 132, 0.25)';
+            ctx.shadowBlur = 4;
+          } else {
+            ctx.shadowBlur = 0;
           }
-          ctx.strokeStyle = `rgba(0, 208, 132, ${ripple.alpha * 0.20})`;
-          ctx.lineWidth = 0.8;
+          
           ctx.stroke();
         }
 
