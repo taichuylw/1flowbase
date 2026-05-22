@@ -258,6 +258,7 @@ fn provider_runtime_line_tool_commit_preserves_arguments() {
             id: "call-1".into(),
             name: "lookup_order".into(),
             arguments: json!({ "order_id": "A-1" }),
+            provider_metadata: json!({}),
         },
     };
 

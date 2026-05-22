@@ -99,6 +99,10 @@ fn empty_provider_metadata() -> Value {
     serde_json::json!({})
 }
 
+fn is_empty_provider_metadata(value: &Value) -> bool {
+    value.as_object().is_some_and(|object| object.is_empty())
+}
+
 impl Default for ProviderBalanceResult {
     fn default() -> Self {
         Self {
@@ -257,6 +261,11 @@ pub struct ProviderToolCall {
     pub name: String,
     #[serde(default)]
     pub arguments: Value,
+    #[serde(
+        default = "empty_provider_metadata",
+        skip_serializing_if = "is_empty_provider_metadata"
+    )]
+    pub provider_metadata: Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

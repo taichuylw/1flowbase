@@ -356,6 +356,7 @@ impl ProviderInvoker for ToolMcpMetadataInvoker {
                     id: "tool-call-1".to_string(),
                     name: "lookup_order".to_string(),
                     arguments: json!({ "order_id": "order_123" }),
+                    provider_metadata: json!({}),
                 }],
                 mcp_calls: vec![ProviderMcpCall {
                     id: "mcp-call-1".to_string(),
@@ -1590,6 +1591,11 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
             id: "call_weather".to_string(),
             name: "lookup_weather".to_string(),
             arguments: json!({ "city": "Shanghai" }),
+            provider_metadata: json!({
+                "gemini": {
+                    "thought_signature": "real-gemini-tool-signature"
+                }
+            }),
         }])]);
 
     let outcome = start_flow_debug_run(
@@ -1607,6 +1613,11 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
             assert_eq!(
                 pending.request_payload["tool_calls"][0]["id"],
                 json!("call_weather")
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["provider_metadata"]["gemini"]
+                    ["thought_signature"],
+                json!("real-gemini-tool-signature")
             );
             assert_eq!(pending.request_payload["finish_reason"], json!("tool_call"));
             assert_eq!(pending.request_payload["text"], json!("need tools"));
@@ -1661,6 +1672,7 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
             id: "call_weather".to_string(),
             name: "lookup_weather".to_string(),
             arguments: json!({ "city": "Shanghai" }),
+            provider_metadata: json!({}),
         }])]);
     let plan = llm_answer_plan();
 
@@ -1721,6 +1733,7 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert_eq!(messages[1]["tool_calls"][0]["id"], json!("call_weather"));
     assert_eq!(messages[2]["role"], json!("tool"));
     assert_eq!(messages[2]["tool_call_id"], json!("call_weather"));
+    assert_eq!(messages[2]["name"], json!("lookup_weather"));
 
     let resumed_llm_trace = resumed
         .node_traces
@@ -1751,6 +1764,7 @@ async fn resume_llm_tool_results_passes_native_response_cursor_and_delta_message
         id: "call_weather".to_string(),
         name: "lookup_weather".to_string(),
         arguments: json!({ "city": "Shanghai" }),
+        provider_metadata: json!({}),
     }]);
     waiting_response.response_id = Some("resp_previous".to_string());
     let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![waiting_response]);
@@ -1813,6 +1827,10 @@ async fn resume_llm_tool_results_passes_native_response_cursor_and_delta_message
         captured[0].messages[0].tool_call_id.as_deref(),
         Some("call_weather")
     );
+    assert_eq!(
+        captured[0].messages[0].name.as_deref(),
+        Some("lookup_weather")
+    );
 }
 
 #[tokio::test]
@@ -1821,11 +1839,13 @@ async fn multi_round_llm_tool_callbacks_keep_previous_round_debug_evidence() {
         id: "call_weather".to_string(),
         name: "lookup_weather".to_string(),
         arguments: json!({ "city": "Shanghai" }),
+        provider_metadata: json!({}),
     };
     let second_call = ProviderToolCall {
         id: "call_time".to_string(),
         name: "lookup_time".to_string(),
         arguments: json!({ "city": "Shanghai" }),
+        provider_metadata: json!({}),
     };
     let plan = llm_answer_plan();
     let (waiting_invoker, _waiting_inputs) =
@@ -1899,11 +1919,13 @@ async fn resume_llm_tool_results_rejects_missing_tool_results() {
             id: "call_weather".to_string(),
             name: "lookup_weather".to_string(),
             arguments: json!({ "city": "Shanghai" }),
+            provider_metadata: json!({}),
         },
         ProviderToolCall {
             id: "call_time".to_string(),
             name: "lookup_time".to_string(),
             arguments: json!({ "city": "Shanghai" }),
+            provider_metadata: json!({}),
         },
     ])]);
     let plan = llm_answer_plan();

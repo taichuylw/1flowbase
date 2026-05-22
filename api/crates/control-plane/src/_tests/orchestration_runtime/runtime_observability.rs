@@ -278,6 +278,7 @@ async fn live_debug_persists_llm_debug_payload_without_polluting_public_outputs(
                 id: "call-1".into(),
                 name: "lookup_order".into(),
                 arguments: serde_json::json!({ "order_id": "A-1" }),
+                provider_metadata: serde_json::json!({}),
             },
         },
         ProviderStreamEvent::McpCallCommit {
@@ -380,6 +381,7 @@ async fn provider_tool_commit_is_recorded_as_intent_not_execution() {
                 id: "call-1".into(),
                 name: "lookup_order".into(),
                 arguments: serde_json::json!({ "order_id": "A-1" }),
+                provider_metadata: serde_json::json!({}),
             },
         },
         ProviderStreamEvent::McpCallCommit {
@@ -958,6 +960,7 @@ async fn tool_call_commit_creates_capability_invocation_request() {
                 id: "call-1".into(),
                 name: "lookup_order".into(),
                 arguments: serde_json::json!({ "order_id": "A-1" }),
+                provider_metadata: serde_json::json!({}),
             },
         },
     ]);

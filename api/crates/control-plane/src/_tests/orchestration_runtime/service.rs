@@ -1423,6 +1423,7 @@ async fn fast_stream_provider_events_are_durably_persisted_to_runtime_observabil
                 id: "call-1".to_string(),
                 name: "lookup_policy".to_string(),
                 arguments: json!({ "query": "refund" }),
+                provider_metadata: json!({}),
             },
         },
         ProviderStreamEvent::UsageSnapshot {
@@ -1620,6 +1621,7 @@ async fn live_llm_tool_calls_create_callback_task_and_pause_downstream() {
                 id: "call_weather".to_string(),
                 name: "lookup_weather".to_string(),
                 arguments: json!({ "city": "Shanghai" }),
+                provider_metadata: json!({}),
             }],
             usage: ProviderUsage {
                 input_tokens: Some(8),
@@ -1714,6 +1716,7 @@ async fn complete_llm_tool_callback_resolves_final_llm_debug_refs() {
                 id: "call_weather".to_string(),
                 name: "lookup_weather".to_string(),
                 arguments: json!({ "city": "Shanghai" }),
+                provider_metadata: json!({}),
             }],
             usage: ProviderUsage {
                 input_tokens: Some(8),
@@ -1826,11 +1829,13 @@ async fn complete_llm_tool_callback_rejects_partial_results_without_consuming_ta
                     id: "call_weather".to_string(),
                     name: "lookup_weather".to_string(),
                     arguments: json!({ "city": "Shanghai" }),
+                    provider_metadata: json!({}),
                 },
                 ProviderToolCall {
                     id: "call_time".to_string(),
                     name: "lookup_time".to_string(),
                     arguments: json!({ "city": "Shanghai" }),
+                    provider_metadata: json!({}),
                 },
             ],
             usage: ProviderUsage {
@@ -1900,6 +1905,7 @@ async fn complete_llm_tool_callback_rejects_wrong_application_without_consuming_
                 id: "call_weather".to_string(),
                 name: "lookup_weather".to_string(),
                 arguments: json!({ "city": "Shanghai" }),
+                provider_metadata: json!({}),
             }],
             usage: ProviderUsage {
                 total_tokens: Some(12),
@@ -1969,6 +1975,7 @@ async fn live_debug_checkpoint_snapshot_stores_llm_output_metrics_without_proces
                 id: "tool-call-1".to_string(),
                 name: "lookup_policy".to_string(),
                 arguments: json!({ "query": "refund" }),
+                provider_metadata: json!({}),
             },
         },
         ProviderStreamEvent::UsageSnapshot {

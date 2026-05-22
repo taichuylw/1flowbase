@@ -1151,6 +1151,7 @@ fn append_llm_tool_result_messages(
         .ok_or_else(|| anyhow!("llm tool callback state is missing history"))?;
     let mut expected_ids = BTreeSet::new();
     let mut ordered_ids = Vec::new();
+    let mut pending_tool_names_by_id = BTreeMap::new();
     let mut delta_messages = Vec::new();
 
     for tool_call in pending_tool_calls {
@@ -1160,6 +1161,13 @@ fn append_llm_tool_result_messages(
             .ok_or_else(|| anyhow!("pending tool call is missing id"))?;
         expected_ids.insert(id.to_string());
         ordered_ids.push(id.to_string());
+        if let Some(name) = tool_call
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+        {
+            pending_tool_names_by_id.insert(id.to_string(), name.to_string());
+        }
     }
 
     let mut results_by_id = BTreeMap::new();
@@ -1193,7 +1201,10 @@ fn append_llm_tool_result_messages(
             .ok_or_else(|| anyhow!("missing tool result for {tool_call_id}"))?;
         let mut message = Map::new();
         message.insert("role".to_string(), Value::String("tool".to_string()));
-        message.insert("tool_call_id".to_string(), Value::String(tool_call_id));
+        message.insert(
+            "tool_call_id".to_string(),
+            Value::String(tool_call_id.clone()),
+        );
         message.insert(
             "content".to_string(),
             result
@@ -1202,7 +1213,13 @@ fn append_llm_tool_result_messages(
                 .map(tool_result_content_value)
                 .unwrap_or_else(|| Value::String(String::new())),
         );
-        if let Some(name) = result.get("name").and_then(Value::as_str) {
+        let name = result
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| pending_tool_names_by_id.get(&tool_call_id).cloned());
+        if let Some(name) = name {
             message.insert("name".to_string(), Value::String(name.to_string()));
         }
         let message = Value::Object(message);
