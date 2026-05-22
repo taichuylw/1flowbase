@@ -1615,6 +1615,15 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                 json!("fixture_provider")
             );
             assert_eq!(pending.request_payload["usage"]["total_tokens"], json!(14));
+            assert_eq!(pending.request_payload["history"][0]["role"], json!("user"));
+            assert_eq!(
+                pending.request_payload["history"][0]["content"],
+                json!("weather?")
+            );
+            assert_eq!(
+                pending.request_payload["history"][1]["tool_calls"][0]["id"],
+                json!("call_weather")
+            );
         }
         other => panic!("expected llm tool callback wait, got {other:?}"),
     }
@@ -1706,11 +1715,12 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
         .clone();
     assert_eq!(captured.len(), 1);
     let messages = serde_json::to_value(&captured[0].messages).expect("messages serialize");
-    assert_eq!(messages[0]["role"], json!("assistant"));
-    assert_eq!(messages[0]["tool_calls"][0]["id"], json!("call_weather"));
-    assert_eq!(messages[1]["role"], json!("tool"));
-    assert_eq!(messages[1]["tool_call_id"], json!("call_weather"));
-    assert_eq!(messages[2]["role"], json!("user"));
+    assert_eq!(messages[0]["role"], json!("user"));
+    assert_eq!(messages[0]["content"], json!("weather?"));
+    assert_eq!(messages[1]["role"], json!("assistant"));
+    assert_eq!(messages[1]["tool_calls"][0]["id"], json!("call_weather"));
+    assert_eq!(messages[2]["role"], json!("tool"));
+    assert_eq!(messages[2]["tool_call_id"], json!("call_weather"));
 
     let resumed_llm_trace = resumed
         .node_traces

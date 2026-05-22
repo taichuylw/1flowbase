@@ -1101,7 +1101,14 @@ fn llm_callback_history_after_assistant_tool_call(
     variable_pool: &Map<String, Value>,
     output_payload: &Value,
 ) -> Vec<Value> {
-    let mut history = compatible_history_messages(node, resolved_inputs, variable_pool);
+    let mut history = if let Some(history) = pending_llm_tool_callback_history(node, variable_pool)
+    {
+        history
+    } else {
+        let mut history = compatible_history_messages(node, resolved_inputs, variable_pool);
+        history.extend(prompt_messages_from_bindings(None, resolved_inputs));
+        history
+    };
     history.push(json!({
         "role": "assistant",
         "content": output_payload
@@ -1343,15 +1350,28 @@ fn binding_prompt_messages<'a>(
     resolved_inputs: &'a Map<String, Value>,
     variable_pool: &'a Map<String, Value>,
 ) -> Vec<Value> {
+    if let Some(history) = pending_llm_tool_callback_history(node, variable_pool) {
+        return history;
+    }
+
     let mut messages = compatible_history_messages(node, resolved_inputs, variable_pool);
-    let prompt_messages = rendered_templates
-        .get("prompt_messages")
+    messages.extend(prompt_messages_from_bindings(
+        Some(rendered_templates),
+        resolved_inputs,
+    ));
+    messages
+}
+
+fn prompt_messages_from_bindings(
+    rendered_templates: Option<&Map<String, Value>>,
+    resolved_inputs: &Map<String, Value>,
+) -> Vec<Value> {
+    rendered_templates
+        .and_then(|templates| templates.get("prompt_messages"))
         .or_else(|| resolved_inputs.get("prompt_messages"))
         .and_then(Value::as_array)
         .cloned()
-        .unwrap_or_default();
-    messages.extend(prompt_messages);
-    messages
+        .unwrap_or_default()
 }
 
 fn provider_messages_from_prompt_messages(
