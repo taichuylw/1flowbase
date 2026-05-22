@@ -32,8 +32,16 @@ type FrontStagePageTreeSidebarProps = {
   onAddGroup: () => void;
   onAddPage: () => void;
   onAddPageInGroup: (groupId: string) => void;
-  onAddNodeAtPosition?: (kind: 'page' | 'group', targetNodeId: string, position: 'before' | 'after') => void;
+  onAddNodeAtPosition: (
+    kind: 'page' | 'group',
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => void;
   onRenameNode: (nodeId: string, currentTitle: string | null) => void;
+  onUpdateNodeMetadata: (
+    nodeId: string,
+    input: { tooltip?: string | null; isHidden?: boolean }
+  ) => void;
   onMoveNode: (nodeId: string, direction: -1 | 1) => void;
   onDeleteNode: (nodeId: string) => void;
   onSelectPage: (nodeId: string) => void;
@@ -55,11 +63,8 @@ function renderTreeNode({
   canEdit,
   isOperationPending,
   collapsedGroupIds,
-  hiddenNodeIds,
-  nodeTooltips,
   toggleGroupCollapse,
-  toggleNodeHidden,
-  updateNodeTooltip,
+  onUpdateNodeMetadata,
   onAddPageInGroup,
   onAddNodeAtPosition,
   onRenameNode,
@@ -74,13 +79,17 @@ function renderTreeNode({
   canEdit: boolean;
   isOperationPending: boolean;
   collapsedGroupIds: Set<string>;
-  hiddenNodeIds: Set<string>;
-  nodeTooltips: Record<string, string>;
   toggleGroupCollapse: (groupId: string) => void;
-  toggleNodeHidden: (nodeId: string) => void;
-  updateNodeTooltip: (nodeId: string, tooltip: string) => void;
+  onUpdateNodeMetadata: (
+    nodeId: string,
+    input: { tooltip?: string | null; isHidden?: boolean }
+  ) => void;
   onAddPageInGroup: (groupId: string) => void;
-  onAddNodeAtPosition?: (kind: 'page' | 'group', targetNodeId: string, position: 'before' | 'after') => void;
+  onAddNodeAtPosition: (
+    kind: 'page' | 'group',
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => void;
   onRenameNode: (nodeId: string, currentTitle: string | null) => void;
   onMoveNode: (nodeId: string, direction: -1 | 1) => void;
   onDeleteNode: (nodeId: string) => void;
@@ -90,8 +99,8 @@ function renderTreeNode({
   const isSelected = selectedPageId === node.id;
   const canAddPageToGroup = node.kind === 'group' && level === 0;
   const isCollapsed = collapsedGroupIds.has(node.id);
-  const isHidden = hiddenNodeIds.has(node.id);
-  const tooltipText = nodeTooltips[node.id];
+  const isHidden = node.is_hidden ?? false;
+  const tooltipText = node.tooltip ?? undefined;
   const { canMoveUp, canMoveDown } = canMoveNode(siblings, node.id);
   const childNodes = node.children ?? [];
   const title = getNodeTitle(node);
@@ -112,29 +121,37 @@ function renderTreeNode({
       icon: <InfoCircleOutlined />,
       onClick: ({ domEvent }: { domEvent: any }) => {
         domEvent.stopPropagation();
-        const currentTooltip = nodeTooltips[node.id] ?? '';
+        const currentTooltip = node.tooltip ?? '';
         const promptInfo = window.prompt('编辑节点提示信息', currentTooltip);
         if (promptInfo !== null) {
-          updateNodeTooltip(node.id, promptInfo);
+          onUpdateNodeMetadata(node.id, { tooltip: promptInfo });
         }
       }
     },
     {
       key: 'hide',
       label: (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minWidth: '110px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            minWidth: '110px'
+          }}
+        >
           <span>隐藏</span>
           <Switch
             size="small"
             checked={isHidden}
             onChange={(checked, e) => {
               e.stopPropagation();
-              toggleNodeHidden(node.id);
+              onUpdateNodeMetadata(node.id, { isHidden: checked });
             }}
           />
         </div>
       ),
-      icon: isHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />,
+      icon: isHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />
     },
     {
       key: 'move-to',
@@ -174,7 +191,7 @@ function renderTreeNode({
           icon: <FileTextOutlined />,
           onClick: ({ domEvent }: { domEvent: any }) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition?.('page', node.id, 'before');
+            onAddNodeAtPosition('page', node.id, 'before');
           }
         },
         {
@@ -183,7 +200,7 @@ function renderTreeNode({
           icon: <FolderOutlined />,
           onClick: ({ domEvent }: { domEvent: any }) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition?.('group', node.id, 'before');
+            onAddNodeAtPosition('group', node.id, 'before');
           }
         }
       ]
@@ -199,7 +216,7 @@ function renderTreeNode({
           icon: <FileTextOutlined />,
           onClick: ({ domEvent }: { domEvent: any }) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition?.('page', node.id, 'after');
+            onAddNodeAtPosition('page', node.id, 'after');
           }
         },
         {
@@ -208,7 +225,7 @@ function renderTreeNode({
           icon: <FolderOutlined />,
           onClick: ({ domEvent }: { domEvent: any }) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition?.('group', node.id, 'after');
+            onAddNodeAtPosition('group', node.id, 'after');
           }
         }
       ]
@@ -243,7 +260,10 @@ function renderTreeNode({
       )}
       {node.kind === 'group' ? <FolderOutlined /> : <FileTextOutlined />}
       <span className="frontstage-page-tree-sidebar__node-copy">
-        <Typography.Text className="frontstage-page-tree-sidebar__node-title" ellipsis>
+        <Typography.Text
+          className="frontstage-page-tree-sidebar__node-title"
+          ellipsis
+        >
           {title}
         </Typography.Text>
         <Typography.Text
@@ -254,7 +274,14 @@ function renderTreeNode({
         </Typography.Text>
       </span>
       {isHidden && (
-        <EyeInvisibleOutlined style={{ fontSize: '12px', marginLeft: '4px', opacity: 0.7, color: '#ff4d4f' }} />
+        <EyeInvisibleOutlined
+          style={{
+            fontSize: '12px',
+            marginLeft: '4px',
+            opacity: 0.7,
+            color: '#ff4d4f'
+          }}
+        />
       )}
     </div>
   );
@@ -288,19 +315,21 @@ function renderTreeNode({
       <div
         className={[
           'frontstage-page-tree-sidebar__node-row',
-          isSelected ? 'frontstage-page-tree-sidebar__node-row--selected' : null,
+          isSelected
+            ? 'frontstage-page-tree-sidebar__node-row--selected'
+            : null,
           isPageNode ? 'frontstage-page-tree-sidebar__node-row--page' : null,
           isHidden ? 'frontstage-page-tree-sidebar__node-row--hidden' : null,
-          canEdit ? 'frontstage-page-tree-sidebar__node-row--design' : 'frontstage-page-tree-sidebar__node-row--view'
+          canEdit
+            ? 'frontstage-page-tree-sidebar__node-row--design'
+            : 'frontstage-page-tree-sidebar__node-row--view'
         ]
           .filter(Boolean)
           .join(' ')}
         style={{ paddingLeft: 8 + level * 16 }}
       >
         {tooltipText ? (
-          <Tooltip title={tooltipText}>
-            {nodeContent}
-          </Tooltip>
+          <Tooltip title={tooltipText}>{nodeContent}</Tooltip>
         ) : (
           nodeContent
         )}
@@ -415,7 +444,9 @@ function renderTreeNode({
           </>
         ) : null}
       </div>
-      {!isCollapsed && (childNodes.length > 0 || (canEdit && node.kind === 'group' && level === 0)) ? (
+      {!isCollapsed &&
+      (childNodes.length > 0 ||
+        (canEdit && node.kind === 'group' && level === 0)) ? (
         <ul className="frontstage-page-tree-sidebar__children">
           {childNodes.map((childNode) =>
             renderTreeNode({
@@ -426,11 +457,8 @@ function renderTreeNode({
               canEdit,
               isOperationPending,
               collapsedGroupIds,
-              hiddenNodeIds,
-              nodeTooltips,
               toggleGroupCollapse,
-              toggleNodeHidden,
-              updateNodeTooltip,
+              onUpdateNodeMetadata,
               onAddPageInGroup,
               onAddNodeAtPosition,
               onRenameNode,
@@ -455,36 +483,22 @@ export function FrontStagePageTreeSidebar({
   onAddPageInGroup,
   onAddNodeAtPosition,
   onRenameNode,
+  onUpdateNodeMetadata,
   onMoveNode,
   onDeleteNode,
   onSelectPage
 }: FrontStagePageTreeSidebarProps) {
-  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem('frontstage_collapsed_groups');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(
+    () => {
+      try {
+        const stored = localStorage.getItem('frontstage_collapsed_groups');
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+      } catch {
+        return new Set();
+      }
     }
-  });
+  );
 
-  const [hiddenNodeIds, setHiddenNodeIds] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem('frontstage_hidden_nodes');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const [nodeTooltips, setNodeTooltips] = useState<Record<string, string>>(() => {
-    try {
-      const stored = localStorage.getItem('frontstage_node_tooltips');
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
-    }
-  });
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
   const toggleGroupCollapse = (groupId: string) => {
@@ -495,28 +509,10 @@ export function FrontStagePageTreeSidebar({
       } else {
         next.add(groupId);
       }
-      localStorage.setItem('frontstage_collapsed_groups', JSON.stringify(Array.from(next)));
-      return next;
-    });
-  };
-
-  const toggleNodeHidden = (nodeId: string) => {
-    setHiddenNodeIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      localStorage.setItem('frontstage_hidden_nodes', JSON.stringify(Array.from(next)));
-      return next;
-    });
-  };
-
-  const updateNodeTooltip = (nodeId: string, tooltip: string) => {
-    setNodeTooltips((prev) => {
-      const next = { ...prev, [nodeId]: tooltip };
-      localStorage.setItem('frontstage_node_tooltips', JSON.stringify(next));
+      localStorage.setItem(
+        'frontstage_collapsed_groups',
+        JSON.stringify(Array.from(next))
+      );
       return next;
     });
   };
@@ -533,7 +529,10 @@ export function FrontStagePageTreeSidebar({
 
   const handleAddMenuBlur = (event: FocusEvent<HTMLDivElement>) => {
     const nextFocusTarget = event.relatedTarget;
-    if (nextFocusTarget instanceof Node && event.currentTarget.contains(nextFocusTarget)) {
+    if (
+      nextFocusTarget instanceof Node &&
+      event.currentTarget.contains(nextFocusTarget)
+    ) {
       return;
     }
 
@@ -553,11 +552,8 @@ export function FrontStagePageTreeSidebar({
               canEdit,
               isOperationPending,
               collapsedGroupIds,
-              hiddenNodeIds,
-              nodeTooltips,
               toggleGroupCollapse,
-              toggleNodeHidden,
-              updateNodeTooltip,
+              onUpdateNodeMetadata,
               onAddPageInGroup,
               onAddNodeAtPosition,
               onRenameNode,

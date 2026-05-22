@@ -5,7 +5,7 @@ use control_plane::{
     ports::{
         AuthRepository, CreateFrontstagePageInput, FrontstagePageRepository,
         MoveFrontstagePageInput, SaveFrontstageBlockCodeInput, SaveFrontstagePageContentInput,
-        UpdateFrontstagePageTitleInput, WorkspaceRepository,
+        UpdateFrontstagePageMetadataInput, WorkspaceRepository,
     },
 };
 use serde_json::json;
@@ -25,6 +25,8 @@ fn map_frontstage_page_row(row: &sqlx::postgres::PgRow) -> Result<domain::Fronts
         parent_id: row.get("parent_id"),
         kind,
         title: row.get("title"),
+        tooltip: row.get("tooltip"),
+        is_hidden: row.get("is_hidden"),
         slug: row.get("slug"),
         schema_root_uid: row.get("schema_root_uid"),
         rank: row.get("rank"),
@@ -96,6 +98,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 parent_id,
                 kind,
                 title,
+                tooltip,
+                is_hidden,
                 slug,
                 schema_root_uid,
                 rank,
@@ -128,6 +132,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 parent_id,
                 kind,
                 title,
+                tooltip,
+                is_hidden,
                 slug,
                 schema_root_uid,
                 rank,
@@ -158,6 +164,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 p.parent_id,
                 p.kind,
                 p.title,
+                p.tooltip,
+                p.is_hidden,
                 p.slug,
                 p.schema_root_uid,
                 p.rank,
@@ -214,6 +222,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 parent_id,
                 kind,
                 title,
+                tooltip,
+                is_hidden,
                 slug,
                 schema_root_uid,
                 rank,
@@ -264,15 +274,22 @@ impl FrontstagePageRepository for PgControlPlaneStore {
         Ok(page)
     }
 
-    async fn update_frontstage_page_title(
+    async fn update_frontstage_page_metadata(
         &self,
-        input: &UpdateFrontstagePageTitleInput,
+        input: &UpdateFrontstagePageMetadataInput,
     ) -> Result<domain::FrontstagePageRecord> {
         let mut tx = self.pool().begin().await?;
+        let title_present = input.title.is_some();
+        let title_value = input.title.clone().flatten();
+        let tooltip_present = input.tooltip.is_some();
+        let tooltip_value = input.tooltip.clone().flatten();
+        let hidden_present = input.is_hidden.is_some();
         let row = sqlx::query(
             r#"
             update frontstage_pages
-            set title = $3,
+            set title = case when $3 then $4 else title end,
+                tooltip = case when $5 then $6 else tooltip end,
+                is_hidden = case when $7 then $8 else is_hidden end,
                 updated_at = now()
             where workspace_id = $1 and id = $2
             returning
@@ -281,6 +298,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 parent_id,
                 kind,
                 title,
+                tooltip,
+                is_hidden,
                 slug,
                 schema_root_uid,
                 rank,
@@ -290,7 +309,12 @@ impl FrontstagePageRepository for PgControlPlaneStore {
         )
         .bind(input.workspace_id)
         .bind(input.page_id)
-        .bind(&input.title)
+        .bind(title_present)
+        .bind(&title_value)
+        .bind(tooltip_present)
+        .bind(&tooltip_value)
+        .bind(hidden_present)
+        .bind(input.is_hidden)
         .fetch_optional(&mut *tx)
         .await?;
         let page = row
@@ -320,6 +344,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 parent_id,
                 kind,
                 title,
+                tooltip,
+                is_hidden,
                 slug,
                 schema_root_uid,
                 rank,
@@ -397,6 +423,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                     parent_id,
                     kind,
                     title,
+                    tooltip,
+                    is_hidden,
                     slug,
                     schema_root_uid,
                     rank,
@@ -409,6 +437,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 p.parent_id,
                 p.kind,
                 p.title,
+                p.tooltip,
+                p.is_hidden,
                 p.slug,
                 p.schema_root_uid,
                 p.rank,

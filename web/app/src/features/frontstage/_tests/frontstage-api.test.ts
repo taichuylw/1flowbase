@@ -22,7 +22,8 @@ import {
   fetchFrontstagePageTree,
   frontstagePageTreeQueryKey,
   moveFrontstageNode,
-  renameFrontstagePageNode
+  renameFrontstagePageNode,
+  updateFrontstagePageNodeMetadata
 } from '../api/page-tree';
 
 describe('frontstage page tree feature api', () => {
@@ -58,7 +59,7 @@ describe('frontstage page tree feature api', () => {
         rank: '001000',
         schema_root_uid: 'root'
       });
-    const renameSpy = vi
+    const updateSpy = vi
       .spyOn(apiClient, 'updateFrontstagePageNodeTitle')
       .mockResolvedValue({
         id: 'page-1',
@@ -100,6 +101,12 @@ describe('frontstage page tree feature api', () => {
         { title: '页面 新名' },
         'csrf-123'
       );
+      await updateFrontstagePageNodeMetadata(
+        'workspace-1',
+        'page-1',
+        { tooltip: '展示在页面树', isHidden: true },
+        'csrf-123'
+      );
       await moveFrontstageNode(
         'workspace-1',
         'page-1',
@@ -121,10 +128,17 @@ describe('frontstage page tree feature api', () => {
         'csrf-123',
         expect.any(String)
       );
-      expect(renameSpy).toHaveBeenCalledWith(
+      expect(updateSpy).toHaveBeenCalledWith(
         'workspace-1',
         'page-1',
         { title: '页面 新名' },
+        'csrf-123',
+        expect.any(String)
+      );
+      expect(updateSpy).toHaveBeenCalledWith(
+        'workspace-1',
+        'page-1',
+        { tooltip: '展示在页面树', is_hidden: true },
         'csrf-123',
         expect.any(String)
       );
@@ -145,7 +159,7 @@ describe('frontstage page tree feature api', () => {
       listSpy.mockRestore();
       createGroupSpy.mockRestore();
       createPageSpy.mockRestore();
-      renameSpy.mockRestore();
+      updateSpy.mockRestore();
       moveSpy.mockRestore();
       deleteSpy.mockRestore();
     }
@@ -293,7 +307,9 @@ describe('frontstage page content feature api', () => {
 
 describe('frontstage block code feature api', () => {
   test('uses a workspace, page, and codeRef scoped query key', () => {
-    expect(frontstageBlockCodeQueryKey('workspace-1', 'page-1', 'hero')).toEqual([
+    expect(
+      frontstageBlockCodeQueryKey('workspace-1', 'page-1', 'hero')
+    ).toEqual([
       'frontstage',
       'workspace-1',
       'pages',

@@ -30,15 +30,32 @@ import {
 } from '../lib/page-tree';
 import { FrontStagePage } from '../pages/FrontStagePage';
 
-const pageContentSaveHook = vi.hoisted(() => ({ useFrontstagePageContentSave: vi.fn() }));
-const blockCatalogHook = vi.hoisted(() => ({ useFrontstageBlockCatalog: vi.fn() }));
+const pageContentSaveHook = vi.hoisted(() => ({
+  useFrontstagePageContentSave: vi.fn()
+}));
+const blockCatalogHook = vi.hoisted(() => ({
+  useFrontstageBlockCatalog: vi.fn()
+}));
 const blockCodeHook = vi.hoisted(() => ({ useFrontstageBlockCode: vi.fn() }));
 const runtimeSessionsHook = vi.hoisted(() => ({
   useFrontstagePageCanvasRuntimeSessions: vi.fn()
 }));
 const blockCodeApi = vi.hoisted(() => ({
-  fetchFrontstageBlockCode: vi.fn((_workspaceId: string, pageId: string, codeRef: string) => Promise.resolve({ pageId, codeRef, code: 'export default {}' })),
-  frontstageBlockCodeQueryKey: vi.fn((workspaceId: string, pageId: string, codeRef: string) => ['frontstage', workspaceId, 'pages', pageId, 'block-code', codeRef] as const),
+  fetchFrontstageBlockCode: vi.fn(
+    (_workspaceId: string, pageId: string, codeRef: string) =>
+      Promise.resolve({ pageId, codeRef, code: 'export default {}' })
+  ),
+  frontstageBlockCodeQueryKey: vi.fn(
+    (workspaceId: string, pageId: string, codeRef: string) =>
+      [
+        'frontstage',
+        workspaceId,
+        'pages',
+        pageId,
+        'block-code',
+        codeRef
+      ] as const
+  ),
   saveFrontstageBlockCode: vi.fn()
 }));
 
@@ -54,6 +71,8 @@ vi.mock('../api/block-code', () => blockCodeApi);
 type TestFrontStageTreeNode = {
   id: string;
   title: string | null;
+  tooltip?: string | null;
+  is_hidden?: boolean;
   kind: 'group' | 'page';
   children?: TestFrontStageTreeNode[];
 };
@@ -97,6 +116,34 @@ function createBackendPage(pageId: string): TestFrontStageTreeNode {
     title: `页面 ${pageId}`,
     kind: 'page'
   };
+}
+
+function updateNodeMetadataInTree(
+  nodes: TestFrontStageTreeNode[],
+  nodeId: string,
+  input: { tooltip?: string | null; isHidden?: boolean }
+): TestFrontStageTreeNode[] {
+  return nodes.map((node) => {
+    const nextNode =
+      node.id === nodeId
+        ? {
+            ...node,
+            tooltip: Object.prototype.hasOwnProperty.call(input, 'tooltip')
+              ? input.tooltip
+              : node.tooltip,
+            is_hidden: Object.prototype.hasOwnProperty.call(input, 'isHidden')
+              ? input.isHidden
+              : node.is_hidden
+          }
+        : node;
+
+    return {
+      ...nextNode,
+      children: nextNode.children
+        ? updateNodeMetadataInTree(nextNode.children, nodeId, input)
+        : nextNode.children
+    };
+  });
 }
 
 function createPageContent(
@@ -198,6 +245,12 @@ function FrontStagePageHarness({
       onRenamePageNode={(nodeId, input) => {
         setPageTree((currentTree) =>
           renameNodeInTree(currentTree, nodeId, input.title ?? '')
+        );
+        return Promise.resolve({ id: nodeId, kind: 'page' });
+      }}
+      onUpdatePageNodeMetadata={(nodeId, input) => {
+        setPageTree((currentTree) =>
+          updateNodeMetadataInTree(currentTree, nodeId, input)
         );
         return Promise.resolve({ id: nodeId, kind: 'page' });
       }}
@@ -459,7 +512,9 @@ describe('FrontStagePage', () => {
     expect(
       screen.queryByRole('button', { name: '创建区块' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '页面 page-1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 page-1' })
+    ).toBeInTheDocument();
   });
 
   test('shows design controls from shared design mode state', async () => {
@@ -482,12 +537,20 @@ describe('FrontStagePage', () => {
       screen.queryByRole('button', { name: 'JS Block 试运行' })
     ).not.toBeInTheDocument();
     expect(screen.getByText('页面树已同步')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '添加菜单' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '添加菜单' })
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '添加菜单' })).toHaveLength(1);
-    expect(screen.queryByRole('menuitem', { name: '新增分组' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: '新增分组' })
+    ).not.toBeInTheDocument();
     await hoverAddMenuAndFlush();
-    expect(await screen.findByRole('menuitem', { name: '新增分组' })).toBeInTheDocument();
-    expect(await screen.findByRole('menuitem', { name: '新增页面' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('menuitem', { name: '新增分组' })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('menuitem', { name: '新增页面' })
+    ).toBeInTheDocument();
     const addMenuActions = screen
       .getByRole('button', { name: '添加菜单' })
       .closest('.frontstage-page-tree-sidebar__actions');
@@ -495,7 +558,9 @@ describe('FrontStagePage', () => {
     await act(async () => {
       fireEvent.mouseLeave(addMenuActions as HTMLElement);
     });
-    expect(screen.queryByRole('menuitem', { name: '新增分组' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: '新增分组' })
+    ).not.toBeInTheDocument();
     exitDesignMode();
     expect(
       screen.queryByRole('button', { name: '创建区块' })
@@ -641,7 +706,10 @@ describe('FrontStagePage', () => {
     );
   });
 
-  test.each([['Data Table', 'data-table'], ['Create Form', 'create-form']] as const)(
+  test.each([
+    ['Data Table', 'data-table'],
+    ['Create Form', 'create-form']
+  ] as const)(
     'writes the selected %s JS template code when adding a block',
     async (templateName, templateId) => {
       authenticate(['frontstage.page.design']);
@@ -920,7 +988,18 @@ describe('FrontStagePage', () => {
 
   test('opens page tree operation menu on hover', async () => {
     authenticate(['frontstage.page.design']);
-    renderPage('page-1');
+    const onUpdatePageNodeMetadata = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          onUpdatePageNodeMetadata={onUpdatePageNodeMetadata}
+        />
+      </AppProviders>
+    );
 
     activateDesignMode();
 
@@ -935,6 +1014,27 @@ describe('FrontStagePage', () => {
 
     expect(await screen.findByText('编辑提示信息')).toBeInTheDocument();
     expect(await screen.findByText('移动到')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    await waitFor(() => {
+      expect(onUpdatePageNodeMetadata).toHaveBeenCalledWith('page-1', {
+        isHidden: true
+      });
+    });
+
+    const promptSpy = vi
+      .spyOn(window, 'prompt')
+      .mockReturnValue('展示在页面树');
+
+    try {
+      fireEvent.click(await screen.findByText('编辑提示信息'));
+      await waitFor(() => {
+        expect(onUpdatePageNodeMetadata).toHaveBeenCalledWith('page-1', {
+          tooltip: '展示在页面树'
+        });
+      });
+    } finally {
+      promptSpy.mockRestore();
+    }
   });
 
   test('moves nodes through page tree mutation callback', async () => {
@@ -986,7 +1086,9 @@ describe('FrontStagePage', () => {
     const pageItem = getPageTreeItem('页面 新建 1');
 
     confirmSpy.mockReturnValue(false);
-    await clickAndFlush(within(pageItem).getByRole('button', { name: /删\s*除/ }));
+    await clickAndFlush(
+      within(pageItem).getByRole('button', { name: /删\s*除/ })
+    );
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
     expect(screen.getByText('分组 1')).toBeInTheDocument();
@@ -1173,7 +1275,9 @@ describe('FrontStagePage', () => {
     await clickAddMenuItem('新增页面');
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: '页面 新建 2' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: '页面 新建 2' })
+      ).toBeInTheDocument();
     });
     const rootPageId = onNavigatePage.mock.calls.at(-1)?.[0] as
       | string
@@ -1191,7 +1295,9 @@ describe('FrontStagePage', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: '页面 新建 2' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: '页面 新建 2' })
+      ).toBeInTheDocument();
       expect(onNavigatePage).toHaveBeenLastCalledWith(rootPageId);
     });
   });
@@ -1236,7 +1342,9 @@ describe('FrontStagePage', () => {
     fireEvent.click(rootGroupDeleteButton);
 
     expect(screen.queryByText('页面 嵌套')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(undefined);
   });
 
@@ -1338,7 +1446,9 @@ describe('FrontStagePage', () => {
     await clickAndFlush(
       within(secondPageItem).getByRole('button', { name: /删\s*除/ })
     );
-    expect(screen.getByRole('heading', { name: '页面 新建 1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 新建 1' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(firstPageId);
   });
 
@@ -1383,7 +1493,9 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    expect(screen.getByRole('heading', { name: '页面 page-1' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 page-1' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith('page-1');
   });
 
@@ -1393,7 +1505,9 @@ describe('FrontStagePage', () => {
 
     renderPageWithInitialTree([], 'invalid-page-id', onNavigatePage);
 
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(undefined);
   });
 
@@ -1409,7 +1523,9 @@ describe('FrontStagePage', () => {
       </AppProviders>
     );
 
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('分组 一级')).not.toBeInTheDocument();
     expect(onNavigatePage).not.toHaveBeenCalled();
 
@@ -1446,7 +1562,9 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('分组 一级')).toBeInTheDocument();
     expect(screen.queryByText('分组 二级')).not.toBeInTheDocument();
     expect(screen.getAllByText('页面 内页').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: '页面 内页' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 内页' })
+    ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith('page-1');
   });
 
@@ -1455,7 +1573,9 @@ describe('FrontStagePage', () => {
     renderPage('page-1');
 
     expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '前台' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '前台' })
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '页面 page-1' })
     ).toBeInTheDocument();
@@ -1526,7 +1646,9 @@ describe('FrontStagePage', () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
-    expect(screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         '当前工作区页面树为空。请在设计态创建页面后将显示树结构。'
@@ -1560,7 +1682,9 @@ describe('FrontStagePage', () => {
     ]);
 
     expect(screen.getByRole('list')).toHaveTextContent('我的自定义主页');
-    expect(screen.getByRole('heading', { name: '我的自定义主页' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '我的自定义主页' })
+    ).toBeInTheDocument();
     expect(screen.getAllByText('我的自定义主页').length).toBeGreaterThan(0);
   });
 
@@ -1632,7 +1756,9 @@ describe('FrontStagePage', () => {
         '页面树加载失败，当前页面树仍可查看；请点击“重试”恢复最新数据。'
       )
     ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '页面 内页' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '页面 内页' })
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
     expect(onRetryLoadPageTree).toHaveBeenCalledTimes(1);

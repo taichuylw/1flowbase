@@ -76,6 +76,22 @@ describe('console-frontstage client', () => {
     });
   });
 
+  test('updateFrontstagePageNodeTitle patches node metadata payload with CSRF', async () => {
+    await expect(
+      updateFrontstagePageNodeTitle(
+        'workspace-1',
+        'page-1',
+        { tooltip: '展示在页面树', is_hidden: true },
+        'csrf-123'
+      )
+    ).resolves.toMatchObject({
+      path: '/api/console/frontstage/workspace-1/pages/page-1',
+      method: 'PATCH',
+      body: { tooltip: '展示在页面树', is_hidden: true },
+      csrfToken: 'csrf-123'
+    });
+  });
+
   test('moveFrontstagePageNode posts move payload with CSRF', async () => {
     await expect(
       moveFrontstagePageNode(

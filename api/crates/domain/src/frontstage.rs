@@ -33,6 +33,8 @@ pub struct FrontstagePageRecord {
     pub parent_id: Option<Uuid>,
     pub kind: FrontstagePageKind,
     pub title: Option<String>,
+    pub tooltip: Option<String>,
+    pub is_hidden: bool,
     pub slug: Option<String>,
     pub schema_root_uid: Option<String>,
     pub rank: String,

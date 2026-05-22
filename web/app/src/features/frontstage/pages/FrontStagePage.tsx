@@ -1,11 +1,4 @@
-import {
-  Alert,
-  Button,
-  Divider,
-  Drawer,
-  Empty,
-  Typography
-} from 'antd';
+import { Alert, Button, Divider, Drawer, Empty, Typography } from 'antd';
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -97,6 +90,10 @@ type FrontStagePageProps = {
     nodeId: string,
     input: RenamePageTreeNodeInput
   ) => Promise<PageTreeMutationResult | void>;
+  onUpdatePageNodeMetadata?: (
+    nodeId: string,
+    input: UpdatePageTreeNodeMetadataInput
+  ) => Promise<PageTreeMutationResult | void>;
   onMovePageNode?: (
     nodeId: string,
     input: MovePageTreeNodeInput
@@ -112,6 +109,11 @@ type CreatePageTreeNodeInput = {
 
 type RenamePageTreeNodeInput = {
   title: string | null;
+};
+
+type UpdatePageTreeNodeMetadataInput = {
+  tooltip?: string | null;
+  isHidden?: boolean;
 };
 
 type MovePageTreeNodeInput = {
@@ -271,6 +273,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   onCreateGroupNode,
   onCreatePageNode,
   onRenamePageNode,
+  onUpdatePageNodeMetadata,
   onMovePageNode,
   onDeletePageNode
 }) => {
@@ -470,7 +473,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     [jsBlockTrialLimits, matchingJsBlockCatalogEntry, selectedBlock]
   );
   useEffect(() => {
-
     const resolution = resolveSelectedPageId({
       currentSelectedPageId: selectedPageId,
       pageId,
@@ -608,9 +610,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
 
     return {
       onMoveUp: (blockId: string) => {
-        const idx = renderItems.findIndex(
-          (item) => item.blockId === blockId
-        );
+        const idx = renderItems.findIndex((item) => item.blockId === blockId);
         if (idx <= 0 || !blockCompositionState || !activePageContent) return;
         const next = moveFrontstageBlock(
           blockCompositionState,
@@ -620,9 +620,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         void saveBlockComposition(activePageContent, next);
       },
       onMoveDown: (blockId: string) => {
-        const idx = renderItems.findIndex(
-          (item) => item.blockId === blockId
-        );
+        const idx = renderItems.findIndex((item) => item.blockId === blockId);
         if (
           idx < 0 ||
           idx >= renderItems.length - 1 ||
@@ -836,8 +834,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }
     }
 
-    const titleIndex = kind === 'page' ? getNextPageTitleIndex(pageTree) : getNextGroupTitleIndex(pageTree);
-    const title = kind === 'page' ? `页面 新建 ${titleIndex}` : `分组 ${titleIndex}`;
+    const titleIndex =
+      kind === 'page'
+        ? getNextPageTitleIndex(pageTree)
+        : getNextGroupTitleIndex(pageTree);
+    const title =
+      kind === 'page' ? `页面 新建 ${titleIndex}` : `分组 ${titleIndex}`;
 
     const input = {
       title,
@@ -893,6 +895,15 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
 
     void runPageTreeOperation(async () => {
       await onRenamePageNode?.(nodeId, { title: nextTitle });
+    });
+  };
+
+  const handleUpdateNodeMetadata = (
+    nodeId: string,
+    input: UpdatePageTreeNodeMetadataInput
+  ) => {
+    void runPageTreeOperation(async () => {
+      await onUpdatePageNodeMetadata?.(nodeId, input);
     });
   };
 
@@ -1021,7 +1032,9 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onAddGroup={handleAddGroup}
       onAddPage={handleAddPage}
       onAddPageInGroup={handleAddPageInGroup}
+      onAddNodeAtPosition={handleAddNodeAtPosition}
       onRenameNode={handleRenameNode}
+      onUpdateNodeMetadata={handleUpdateNodeMetadata}
       onMoveNode={handleMoveNode}
       onDeleteNode={handleDeleteNode}
       onSelectPage={handleSelectPage}
