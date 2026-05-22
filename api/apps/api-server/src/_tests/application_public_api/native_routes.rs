@@ -6,11 +6,16 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
-use control_plane::ports::{
-    CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+use control_plane::{
+    orchestration_runtime::debug_stream_events,
+    ports::{
+        CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
+        RuntimeEventStreamPolicy, UpdateFlowRunInput,
+    },
 };
 use serde_json::{json, Value};
 use time::OffsetDateTime;
+use tokio::time::{timeout, Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -396,6 +401,95 @@ async fn native_resume_rejects_missing_llm_tool_result_without_consuming_task() 
         .unwrap()
         .unwrap();
     assert_eq!(stored_task.status, domain::CallbackTaskStatus::Pending);
+}
+
+#[tokio::test]
+async fn native_streaming_tool_resume_returns_current_turn_terminal_event() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_native_app(&app, "Native Streaming Tool Resume App").await;
+    let mut body = native_run_body(json!("provider/model:any-public-string"));
+    body["response_mode"] = json!("manual");
+
+    let created = post_native_run(&app, &token, body).await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_payload = response_json(created).await;
+    let run_id = Uuid::parse_str(created_payload["data"]["id"].as_str().unwrap()).unwrap();
+    let callback_task = seed_pending_llm_callback(state.as_ref(), run_id).await;
+    state
+        .runtime_event_stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(run_id, debug_stream_events::flow_started(run_id))
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(
+            run_id,
+            debug_stream_events::waiting_callback_with_task(
+                run_id,
+                callback_task.node_run_id,
+                "node-llm",
+                &callback_task,
+            ),
+        )
+        .await
+        .unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/1flowbase/runs/{run_id}/resume"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("accept", "text/event-stream")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "callback_task_id": callback_task.id,
+                        "response_mode": "streaming",
+                        "response_payload": {
+                            "tool_results": [
+                                {
+                                    "tool_call_id": "call_weather",
+                                    "content": "{\"temperature\":21}"
+                                }
+                            ]
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = timeout(
+        Duration::from_secs(5),
+        to_bytes(response.into_body(), usize::MAX),
+    )
+    .await
+    .expect("Native streaming tool resume SSE should finish on current connection")
+    .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(
+        !body.contains("event: required_action"),
+        "resume stream replayed a stale waiting_callback instead of the resumed turn: {body}"
+    );
+    assert!(
+        !body.contains("lookup_weather"),
+        "resume stream sent the stale tool call again: {body}"
+    );
+    assert!(
+        body.contains("event: run.completed") || body.contains("event: run.failed"),
+        "{body}"
+    );
 }
 
 #[tokio::test]

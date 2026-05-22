@@ -1200,14 +1200,27 @@ fn anthropic_completed_run_to_sse(
         }
     }
     if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
-        events.extend(mapper.runtime_event_to_sse(
-            run,
-            RuntimeEventEnvelope::new(
-                run.id,
-                1,
-                debug_stream_events::text_delta("assistant", run.id, answer.clone()),
-            ),
-        ));
+        let answer = split_terminal_assistant_answer(answer.clone());
+        if let Some(reasoning) = answer.reasoning {
+            events.extend(mapper.runtime_event_to_sse(
+                run,
+                RuntimeEventEnvelope::new(
+                    run.id,
+                    1,
+                    debug_stream_events::reasoning_delta("assistant", run.id, reasoning),
+                ),
+            ));
+        }
+        if !answer.content.is_empty() {
+            events.extend(mapper.runtime_event_to_sse(
+                run,
+                RuntimeEventEnvelope::new(
+                    run.id,
+                    2,
+                    debug_stream_events::text_delta("assistant", run.id, answer.content),
+                ),
+            ));
+        }
     }
     events.extend(mapper.anthropic_stop_events());
     events
@@ -1603,6 +1616,24 @@ mod tests {
         assert_eq!(payload["delta"]["type"], json!("thinking_delta"));
         assert_eq!(payload["delta"]["thinking"], json!("先分析用户问题"));
         assert_eq!(payload["delta"].get("text"), None);
+    }
+
+    #[tokio::test]
+    async fn anthropic_completed_stream_splits_thinking_from_text() {
+        let mut run = native_run();
+        run.status = NativeRunStatus::Succeeded;
+        run.answer = Some("<think>先分析</think>\n最终回答".to_string());
+        let response = completed_compatible_stream(anthropic_completed_run_to_sse(&run, "claude"));
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("\"type\":\"thinking_delta\""), "{body}");
+        assert!(body.contains("\"thinking\":\"先分析\""), "{body}");
+        assert!(body.contains("\"type\":\"text_delta\""), "{body}");
+        assert!(body.contains("\"text\":\"最终回答\""), "{body}");
+        assert!(!body.contains("<think>"), "{body}");
     }
 
     #[test]

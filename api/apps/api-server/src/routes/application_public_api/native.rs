@@ -412,6 +412,8 @@ async fn start_native_run_stream(
         state.clone(),
         run.clone(),
         include_workflow_events,
+        None,
+        None,
         sender,
     ));
 
@@ -635,19 +637,22 @@ async fn resume_native_run_stream(
         )
         .await
         .map_err(service_error)?;
-    let _ = state
+    let resume_started = state
         .runtime_event_stream
         .append(
             initial_run.id,
             debug_stream_events::flow_started(initial_run.id),
         )
-        .await;
+        .await
+        .map_err(service_error)?;
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(sse::send_native_runtime_event_stream(
         state.clone(),
         initial_run.clone(),
         sse::IncludeWorkflowEvents::None,
+        Some(resume_started.sequence - 1),
+        Some(callback_task_id),
         sender,
     ));
 
@@ -658,7 +663,8 @@ async fn resume_native_run_stream(
             ApiProviderRuntime::new(background_state.provider_runtime.clone()),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
-        );
+        )
+        .with_runtime_event_stream(background_state.runtime_event_stream.clone());
         let result = runtime_service
             .complete_callback_task(CompleteCallbackTaskCommand {
                 actor_user_id,

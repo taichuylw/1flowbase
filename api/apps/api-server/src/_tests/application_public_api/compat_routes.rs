@@ -1099,6 +1099,87 @@ async fn openai_chat_streaming_tool_resume_returns_done_on_current_connection() 
 }
 
 #[tokio::test]
+async fn openai_responses_streaming_tool_resume_returns_current_turn_terminal_event() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "OpenAI Responses Streaming Tool Resume App").await;
+
+    let first = post_json(
+        &app,
+        "/v1/responses",
+        ("authorization", format!("Bearer {token}")),
+        responses_body(false),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_payload = response_json(first).await;
+    let previous_response_id = first_payload["id"].as_str().unwrap().to_string();
+    let run_id = run_id_from_response_id(&previous_response_id).unwrap();
+    let callback_task = seed_llm_callback_for_response_run(state.as_ref(), run_id).await;
+    let call_id = encode_openai_callback_tool_call_id(callback_task.id, "call_inventory");
+    state
+        .runtime_event_stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(run_id, debug_stream_events::flow_started(run_id))
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(
+            run_id,
+            debug_stream_events::waiting_callback_with_task(
+                run_id,
+                callback_task.node_run_id,
+                "node-llm",
+                &callback_task,
+            ),
+        )
+        .await
+        .unwrap();
+
+    let response = post_json(
+        &app,
+        "/v1/responses",
+        ("authorization", format!("Bearer {token}")),
+        json!({
+            "model": "provider/custom-model:latest",
+            "stream": true,
+            "previous_response_id": previous_response_id,
+            "input": [
+                {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": {"stock": 7}
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = timeout(
+        Duration::from_secs(5),
+        to_bytes(response.into_body(), usize::MAX),
+    )
+    .await
+    .expect("OpenAI Responses streaming tool resume SSE should finish on current connection")
+    .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(
+        !body.contains("lookup_inventory"),
+        "resume stream sent the stale function call again: {body}"
+    );
+    assert!(
+        body.contains("response.completed") || body.contains("response.failed"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
 async fn compatible_streaming_routes_emit_terminal_fallback_after_runtime_stream_closes() {
     let (app, _) =
         test_app_with_runtime_event_stream(Arc::new(DropTerminalRuntimeEventStream::new())).await;

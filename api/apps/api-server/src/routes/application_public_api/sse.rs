@@ -333,15 +333,20 @@ pub async fn send_native_runtime_event_stream(
     state: Arc<ApiState>,
     initial_run: NativeRunResult,
     include_workflow_events: IncludeWorkflowEvents,
+    from_sequence: Option<i64>,
+    ignored_waiting_callback_task_id: Option<Uuid>,
     sender: mpsc::Sender<Result<Event, Infallible>>,
 ) {
     let stream = state.runtime_event_stream.clone();
-    let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
+    let Ok(mut subscription) = stream.subscribe(initial_run.id, from_sequence).await else {
         return;
     };
 
     let mut emitted_public_event = false;
     for event in subscription.replay {
+        if is_ignored_waiting_callback(&event, ignored_waiting_callback_task_id) {
+            continue;
+        }
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
         let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
         emitted_public_event |= sse.is_some();
@@ -361,6 +366,9 @@ pub async fn send_native_runtime_event_stream(
                 let Some(event) = maybe_event else {
                     break;
                 };
+                if is_ignored_waiting_callback(&event, ignored_waiting_callback_task_id) {
+                    continue;
+                }
                 let is_terminal = is_public_terminal_runtime_event(&event.event_type);
                 let sse = runtime_event_to_native_sse(&initial_run, include_workflow_events, event);
                 emitted_public_event |= sse.is_some();
@@ -380,6 +388,7 @@ pub async fn send_native_runtime_event_stream(
                     emitted_public_event,
                     "durable_poll",
                     false,
+                    ignored_waiting_callback_task_id,
                 )
                 .await
                 {
@@ -397,6 +406,7 @@ pub async fn send_native_runtime_event_stream(
         emitted_public_event,
         "stream_closed",
         true,
+        ignored_waiting_callback_task_id,
     )
     .await;
 }
@@ -419,6 +429,7 @@ async fn emit_native_terminal_fallback(
     emitted_public_event: bool,
     trigger: &'static str,
     warn_if_not_terminal: bool,
+    ignored_waiting_callback_task_id: Option<Uuid>,
 ) -> bool {
     let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
     let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
@@ -441,6 +452,16 @@ async fn emit_native_terminal_fallback(
         trigger = %trigger,
         "native stream missing runtime terminal event; emitting durable terminal fallback"
     );
+
+    if is_ignored_waiting_callback(&terminal_event, ignored_waiting_callback_task_id) {
+        debug!(
+            flow_run_id = %initial_run.id,
+            application_id = %initial_run.application_id,
+            trigger = %trigger,
+            "native resume stream ignored stale waiting callback terminal fallback"
+        );
+        return false;
+    }
 
     if !emitted_public_event {
         let started_event = RuntimeEventEnvelope::new(
@@ -468,6 +489,24 @@ async fn emit_native_terminal_fallback(
     )
     .await;
     true
+}
+
+fn is_ignored_waiting_callback(
+    event: &RuntimeEventEnvelope,
+    ignored_waiting_callback_task_id: Option<Uuid>,
+) -> bool {
+    if event.event_type != "waiting_callback" {
+        return false;
+    }
+    let Some(ignored_task_id) = ignored_waiting_callback_task_id else {
+        return false;
+    };
+    event
+        .payload
+        .get("callback_task_id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+        == Some(ignored_task_id)
 }
 
 #[cfg(test)]
