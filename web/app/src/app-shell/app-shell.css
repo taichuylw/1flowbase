@@ -9,6 +9,7 @@
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   min-height: 56px;
@@ -19,21 +20,26 @@
   border-bottom: 1px solid rgba(0, 171, 115, 0.08);
   box-shadow: 0 4px 20px rgba(0, 171, 115, 0.02);
   backdrop-filter: blur(20px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
 }
 
 .app-shell-header-main {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 24px;
-  min-width: 0;
-  flex: 1 1 auto;
+  min-width: max-content;
+  flex: 1 0 auto;
 }
 
 .app-shell-brand {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  min-width: max-content;
   flex: none;
 }
 
@@ -54,24 +60,27 @@
 
 .app-shell-nav {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .app-shell-navigation {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .app-shell-menu.ant-menu-horizontal {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 12px;
   border-bottom: none !important;
   background: transparent !important;
   line-height: 1;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .app-shell-menu.ant-menu-horizontal::after {
@@ -130,8 +139,37 @@
 
 .app-shell-actions {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
+  flex: none;
+  min-width: max-content;
+}
+
+.app-shell-action-row.ant-space {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: max-content;
+}
+
+.app-shell-action-row.ant-space > .ant-space-item {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: max-content;
+}
+
+.app-shell-secondary-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: max-content;
+}
+
+.app-shell-secondary-actions > span {
+  display: inline-flex;
   flex: none;
   min-width: max-content;
 }
@@ -191,6 +229,65 @@
   justify-content: center;
   height: 100%;
   padding-inline: 10px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.app-shell-design-menu.ant-menu-horizontal {
+  border-bottom: none !important;
+  background: transparent !important;
+  line-height: 1;
+  min-width: max-content;
+}
+
+.app-shell-design-menu.ant-menu-horizontal::after {
+  display: none;
+}
+
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item {
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 !important;
+  padding-inline: 0 !important;
+  border: none;
+  color: var(--text-secondary) !important;
+}
+
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item::after {
+  inset-inline: 0 !important;
+  border-bottom-width: 2px !important;
+}
+
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item:not(.ant-menu-item-selected):hover,
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-active:not(.ant-menu-item-selected) {
+  color: var(--text-primary) !important;
+  background: transparent !important;
+}
+
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-selected {
+  color: #2563eb !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-selected:hover {
+  background: rgba(59, 130, 246, 0.16) !important;
+}
+
+.app-shell-design-menu.ant-menu-horizontal > .ant-menu-item-selected::after {
+  border-bottom-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+.app-shell-design-block {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding-inline: 0;
   font-size: 18px;
   font-weight: 600;
 }
@@ -332,22 +429,20 @@
 
 @media (max-width: 767px) {
   .app-shell-header.ant-layout-header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 10px;
-    height: auto;
-    padding: 12px 14px 14px;
+    align-items: center;
+    gap: 14px;
+    height: 56px;
+    min-height: 56px;
+    padding: 0 14px;
   }
 
   .app-shell-header-main {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
+    align-items: center;
+    gap: 16px;
+    width: auto;
   }
 
   .app-shell-brand {
-    flex-wrap: wrap;
     gap: 10px;
   }
 
@@ -356,19 +451,19 @@
   }
 
   .app-shell-nav {
-    width: 100%;
-    overflow-x: auto;
+    width: auto;
+    overflow: visible;
   }
 
   .app-shell-navigation {
-    width: 100%;
+    width: auto;
   }
 
   .app-shell-actions {
-    align-self: flex-end;
+    align-self: center;
     justify-content: flex-end;
-    width: max-content;
-    max-width: 100%;
+    width: auto;
+    max-width: none;
   }
 
   .app-shell-content.ant-layout-content {

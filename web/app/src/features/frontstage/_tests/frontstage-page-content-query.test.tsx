@@ -169,7 +169,7 @@ describe('frontstage page content query route wiring', () => {
 
     renderApp('/frontstage');
 
-    await screen.findByText('当前未选中页面');
+    await screen.findByRole('heading', { name: '未选择 pageId（将使用默认首页）' });
     expect(pageContentApi.fetchFrontstagePageContent).not.toHaveBeenCalled();
   });
 

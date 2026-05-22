@@ -152,11 +152,25 @@ fn send_retained_after_sequence(
 #[async_trait::async_trait]
 impl RuntimeEventStream for LocalRuntimeEventStream {
     async fn open_run(&self, run_id: Uuid, policy: RuntimeEventStreamPolicy) -> Result<()> {
-        self.runs
+        let mut runs = self
+            .runs
             .lock()
-            .expect("runtime event stream runs lock poisoned")
-            .entry(run_id)
-            .or_insert_with(|| Arc::new(LocalRunEventStream::new(policy, self.broadcast_capacity)));
+            .expect("runtime event stream runs lock poisoned");
+        match runs.get(&run_id) {
+            Some(run) if run.closed.load(Ordering::SeqCst) => {
+                runs.insert(
+                    run_id,
+                    Arc::new(LocalRunEventStream::new(policy, self.broadcast_capacity)),
+                );
+            }
+            Some(_) => {}
+            None => {
+                runs.insert(
+                    run_id,
+                    Arc::new(LocalRunEventStream::new(policy, self.broadcast_capacity)),
+                );
+            }
+        }
         Ok(())
     }
 

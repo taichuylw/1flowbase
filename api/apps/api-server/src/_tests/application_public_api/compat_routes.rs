@@ -18,6 +18,7 @@ use control_plane::{
         CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
         RuntimeEventCloseReason, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventStream,
         RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
+        UpdateFlowRunInput,
     },
 };
 use serde_json::{json, Value};
@@ -379,6 +380,25 @@ async fn seed_llm_callback_for_response_run(
     state: &crate::app_state::ApiState,
     flow_run_id: uuid::Uuid,
 ) -> domain::CallbackTaskRecord {
+    state
+        .store
+        .update_flow_run(&UpdateFlowRunInput {
+            flow_run_id,
+            status: domain::FlowRunStatus::WaitingCallback,
+            output_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": "call_inventory",
+                        "name": "lookup_inventory",
+                        "arguments": { "sku": "sku_123" }
+                    }
+                ]
+            }),
+            error_payload: None,
+            finished_at: None,
+        })
+        .await
+        .unwrap();
     let node_run = state
         .store
         .create_node_run(&CreateNodeRunInput {
@@ -973,6 +993,79 @@ async fn compatible_streaming_routes_return_protocol_sse() {
     assert!(
         !anthropic_body.contains("event: workflow.event"),
         "{anthropic_body}"
+    );
+}
+
+#[tokio::test]
+async fn openai_chat_streaming_tool_resume_returns_done_on_current_connection() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "OpenAI Streaming Tool Resume App").await;
+
+    let created = post_json(
+        &app,
+        "/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        openai_body(false),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::OK);
+    let created_payload = response_json(created).await;
+    let run_id = created_payload["id"]
+        .as_str()
+        .and_then(|id| id.strip_prefix("chatcmpl-"))
+        .and_then(|id| uuid::Uuid::parse_str(id).ok())
+        .expect("chat completion id should include run id");
+    let callback_task = seed_llm_callback_for_response_run(state.as_ref(), run_id).await;
+    let tool_call_id = encode_openai_callback_tool_call_id(callback_task.id, "call_inventory");
+
+    let response = post_json(
+        &app,
+        "/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        json!({
+            "model": "provider/custom-model:latest",
+            "stream": true,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": "lookup_inventory",
+                            "arguments": "{\"sku\":\"sku_123\"}"
+                        }
+                    }]
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": "{\"stock\":7}"
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("content-type").unwrap(),
+        "text/event-stream"
+    );
+    let body = timeout(
+        Duration::from_secs(5),
+        to_bytes(response.into_body(), usize::MAX),
+    )
+    .await
+    .expect("OpenAI streaming tool resume SSE should finish on current connection")
+    .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("[DONE]"), "{body}");
+    assert!(
+        body.contains("runtime_error") || body.contains("\"finish_reason\":\"stop\""),
+        "{body}"
     );
 }
 

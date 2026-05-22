@@ -49,6 +49,10 @@
   margin-bottom: 24px;
 }
 
+.section-page-layout__sidebar-content {
+  min-width: 0;
+}
+
 .section-page-layout__content {
   display: flex;
   flex: 1 1 auto;

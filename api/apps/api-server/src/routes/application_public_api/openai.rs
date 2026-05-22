@@ -202,6 +202,11 @@ struct OpenAiToolResumeRequest {
     tool_results: Value,
 }
 
+struct OpenAiToolResumePlan {
+    initial_run: NativeRunResult,
+    command: CompleteCallbackTaskCommand,
+}
+
 #[utoipa::path(
     post,
     path = "/v1/chat/completions",
@@ -254,6 +259,28 @@ pub async fn create_chat_completion(
         .map(|_| "streaming".to_string());
     if let Some(resume) = openai_chat_tool_resume_request(&value)? {
         let callback_task_id = resume.callback_task_id;
+        if response_mode.as_deref() == Some("streaming") {
+            let resume_plan = prepare_openai_tool_resume(
+                state.clone(),
+                &credential.token,
+                callback_task_id,
+                resume.tool_results,
+            )
+            .await?;
+            let completion_id = compat_sse::openai_chat_completion_id_from_callback_task(
+                resume_plan.initial_run.id,
+                callback_task_id,
+            );
+            return compat_sse::start_openai_chat_resume_stream(
+                state,
+                resume_plan.initial_run,
+                model,
+                completion_id,
+                resume_plan.command,
+            )
+            .await
+            .map_err(Into::into);
+        }
         let run = resume_openai_tool_call(
             state,
             &credential.token,
@@ -266,13 +293,6 @@ pub async fn create_chat_completion(
         }
         let completion_id =
             compat_sse::openai_chat_completion_id_from_callback_task(run.id, callback_task_id);
-        if response_mode.as_deref() == Some("streaming") {
-            return Ok(compat_sse::completed_openai_chat_stream(
-                run,
-                model,
-                completion_id,
-            ));
-        }
         return Ok(Json(to_openai_response(run, model, completion_id)).into_response());
     }
 
@@ -411,6 +431,24 @@ pub async fn create_response(
             resume.callback_task_id,
         )
         .await?;
+        if response_mode.as_deref() == Some("streaming") {
+            let resume_plan = prepare_openai_tool_resume(
+                state.clone(),
+                &credential.token,
+                resume.callback_task_id,
+                resume.tool_results,
+            )
+            .await?;
+            return compat_sse::start_openai_response_resume_stream(
+                state,
+                resume_plan.initial_run,
+                model,
+                previous_response_id,
+                resume_plan.command,
+            )
+            .await
+            .map_err(Into::into);
+        }
         let run = resume_openai_tool_call(
             state,
             &credential.token,
@@ -420,13 +458,6 @@ pub async fn create_response(
         .await?;
         if !openai_required_action_is_supported(&run) {
             return Err(OpenAiRouteError::RequiredAction);
-        }
-        if response_mode.as_deref() == Some("streaming") {
-            return Ok(compat_sse::completed_openai_response_stream(
-                run,
-                model,
-                previous_response_id,
-            ));
         }
         return Ok(Json(to_openai_responses_response(
             run,
@@ -728,6 +759,57 @@ async fn resume_openai_tool_call(
             }
         }),
     ))
+}
+
+async fn prepare_openai_tool_resume(
+    state: Arc<ApiState>,
+    bearer_token: &str,
+    callback_task_id: Uuid,
+    tool_results: Value,
+) -> Result<OpenAiToolResumePlan, OpenAiRouteError> {
+    let api_actor = ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .authenticate_bearer_token(bearer_token)
+        .await
+        .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
+    let callback_task = state
+        .store
+        .get_published_callback_task(callback_task_id)
+        .await
+        .map_err(native::service_error)?
+        .ok_or_else(|| {
+            native::NativeApiError::new(
+                StatusCode::NOT_FOUND,
+                "callback_task",
+                "callback task was not found",
+            )
+        })?;
+    if callback_task.status != domain::CallbackTaskStatus::Pending {
+        return Err(native::NativeApiError::new(
+            StatusCode::CONFLICT,
+            "callback_task_not_pending",
+            "callback task is not pending",
+        )
+        .into());
+    }
+    let initial_run = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .get_native_run(GetNativeRunCommand {
+            bearer_token: bearer_token.to_string(),
+            run_id: callback_task.flow_run_id,
+        })
+        .await
+        .map_err(native::native_error)?;
+
+    Ok(OpenAiToolResumePlan {
+        initial_run,
+        command: CompleteCallbackTaskCommand {
+            actor_user_id: api_actor.creator_user_id,
+            application_id: api_actor.application_id,
+            callback_task_id,
+            response_payload: json!({ "tool_results": tool_results }),
+        },
+    })
 }
 
 fn openai_chat_tool_resume_request(

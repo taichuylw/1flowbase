@@ -242,6 +242,33 @@ async fn local_runtime_event_stream_rejects_append_after_close() {
 }
 
 #[tokio::test]
+async fn local_runtime_event_stream_open_run_reopens_closed_run_for_resume_phase() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream
+        .close_run(run_id, RuntimeEventCloseReason::WaitingCallback)
+        .await
+        .unwrap();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    let resumed = stream.append(run_id, required_text_delta(1)).await.unwrap();
+    let subscription = stream.subscribe(run_id, Some(0)).await.unwrap();
+
+    assert_eq!(resumed.sequence, 1);
+    assert_eq!(subscription.replay.len(), 1);
+    assert_eq!(subscription.replay[0].event_type, "text_delta");
+}
+
+#[tokio::test]
 async fn local_runtime_event_stream_subscribe_after_closed_cursor_finishes() {
     let stream = LocalRuntimeEventStream::new();
     let run_id = Uuid::now_v7();
