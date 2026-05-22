@@ -144,20 +144,7 @@ export function HeroAnimation() {
 
       ctx.clearRect(0, 0, width, height);
 
-      // Draw lake water background surface
-      const grad = ctx.createLinearGradient(0, waterHorizon, 0, height);
-      grad.addColorStop(0, 'rgba(230, 247, 242, 0.25)');   // Horizon: light misty green
-      grad.addColorStop(1, 'rgba(0, 208, 132, 0.07)');    // Foreground: subtle glowing emerald tint
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, waterHorizon, width, height);
 
-      // Draw a subtle horizon line separating air space from lake space
-      ctx.beginPath();
-      ctx.moveTo(0, waterHorizon);
-      ctx.lineTo(width, waterHorizon);
-      ctx.strokeStyle = 'rgba(0, 208, 132, 0.08)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
 
       // Decay mouse velocity
       mouseRef.current.vx *= 0.94;
