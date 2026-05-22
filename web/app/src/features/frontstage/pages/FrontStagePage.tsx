@@ -7,7 +7,7 @@ import {
   Flex,
   Grid,
   Layout,
-  Select,
+  Popover,
   Space,
   Typography
 } from 'antd';
@@ -1001,6 +1001,40 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         value: groupNode.id
       }))
     ];
+    const pageGroupPopoverContent = canShowPageGroupSelect ? (
+      <Space
+        direction="vertical"
+        size={4}
+        style={{ minWidth: 128 }}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        {pageGroupOptions.map((option) => {
+          const optionParentId =
+            option.value === ROOT_PAGE_GROUP_VALUE ? null : option.value;
+
+          return (
+            <Button
+              key={option.value}
+              type="text"
+              size="small"
+              block
+              disabled={
+                optionParentId === currentParentId || isOperationPending
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                handleMovePageToGroup(node.id, currentParentId, optionParentId);
+              }}
+              style={{ textAlign: 'left' }}
+            >
+              {option.label}
+            </Button>
+          );
+        })}
+      </Space>
+    ) : null;
     const rowStyle = {
       padding: '8px',
       borderRadius: 6,
@@ -1090,28 +1124,27 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   组内新增页面
                 </Button>
               ) : null}
-              {canShowPageGroupSelect ? (
-                <Select
-                  size="small"
-                  aria-label={`页面分组 ${node.title || node.id}`}
-                  value={currentParentId ?? ROOT_PAGE_GROUP_VALUE}
-                  style={{ width: 112 }}
-                  disabled={isOperationPending}
-                  options={pageGroupOptions}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onChange={(value) => {
-                    handleMovePageToGroup(
-                      node.id,
-                      currentParentId,
-                      value === ROOT_PAGE_GROUP_VALUE ? null : value
-                    );
-                  }}
-                />
+              {canShowPageGroupSelect && pageGroupPopoverContent ? (
+                <Popover
+                  trigger="hover"
+                  placement="rightTop"
+                  content={pageGroupPopoverContent}
+                  arrow={false}
+                >
+                  <Button
+                    size="small"
+                    aria-label={`移动到页面分组 ${node.title || node.id}`}
+                    disabled={isOperationPending}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    移动到
+                  </Button>
+                </Popover>
               ) : null}
               <Button
                 size="small"

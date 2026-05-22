@@ -927,7 +927,7 @@ describe('FrontStagePage', () => {
     expect(rows[1]).toHaveTextContent('页面 page-2');
   });
 
-  test('shows selected page group dropdown and moves the page without an extra action click', async () => {
+  test('shows selected page group hover panel and moves the page from a group click', async () => {
     authenticate(['frontstage.page.design']);
     const onMovePageNode = vi.fn().mockResolvedValue(undefined);
 
@@ -958,18 +958,14 @@ describe('FrontStagePage', () => {
     fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
 
     const selectedPageItem = getPageTreeItem('页面 page-1');
-    const groupSelect = within(selectedPageItem).getByRole('combobox', {
-      name: /页面分组/
+    const groupHoverTrigger = within(selectedPageItem).getByRole('button', {
+      name: /移动到页面分组/
     });
 
-    expect(groupSelect).toBeInTheDocument();
+    expect(groupHoverTrigger).toBeInTheDocument();
 
-    fireEvent.mouseDown(groupSelect);
-    fireEvent.click(
-      await screen.findByText('分组 2', {
-        selector: '.ant-select-item-option-content'
-      })
-    );
+    fireEvent.mouseEnter(groupHoverTrigger);
+    fireEvent.click(await screen.findByRole('button', { name: '分组 2' }));
 
     await waitFor(() => {
       expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
