@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -101,6 +101,12 @@ pub struct LiveProviderStreamEvent {
 }
 
 pub type LiveProviderStreamEventSender = mpsc::UnboundedSender<LiveProviderStreamEvent>;
+
+#[derive(Debug, Clone, Copy)]
+struct FirstTokenTiming {
+    first_token_at: OffsetDateTime,
+    time_to_first_token_ms: u64,
+}
 
 pub struct CancelFlowRunCommand {
     pub actor_user_id: Uuid,
@@ -1120,6 +1126,9 @@ where
             "runtime config finished"
         );
 
+        let provider_invoke_started_at = OffsetDateTime::now_utc();
+        let provider_invoke_started = std::time::Instant::now();
+        let first_token_timing = Arc::new(Mutex::new(None::<FirstTokenTiming>));
         let mut live_forward_handle = None;
         let live_provider_events = if let (Some(node_id), Some(node_run_id)) =
             (self.active_node_id.clone(), self.active_node_run_id)
@@ -1128,12 +1137,19 @@ where
             let persist_sender = self.persist_events.clone();
             let runtime_event_stream = self.runtime_event_stream.clone();
             let flow_run_id = self.flow_run_id;
+            let first_token_timing_for_task = first_token_timing.clone();
             let (provider_sender, mut provider_receiver) =
                 mpsc::unbounded_channel::<ProviderStreamEvent>();
             if live_sender.is_some() || runtime_event_stream.is_some() || persist_sender.is_some() {
                 live_forward_handle = Some(tokio::spawn(async move {
                     let mut think_tag_splitter = ThinkTagStreamSplitter::default();
                     while let Some(event) = provider_receiver.recv().await {
+                        record_first_token_timing(
+                            &first_token_timing_for_task,
+                            &event,
+                            provider_invoke_started_at,
+                            provider_invoke_started,
+                        );
                         if let Some(sender) = &live_sender {
                             let _ = sender.send(LiveProviderStreamEvent {
                                 node_id: node_id.clone(),
@@ -1217,7 +1233,6 @@ where
         };
 
         let has_live_provider_events = live_provider_events.is_some();
-        let provider_invoke_started = std::time::Instant::now();
         let invocation_result = self
             .runtime
             .invoke_stream_with_live_events(&installation, input, live_provider_events)
@@ -1243,13 +1258,43 @@ where
             }
         }
 
+        let captured_first_token_timing = first_token_timing.lock().ok().and_then(|timing| *timing);
         Ok(
             orchestration_runtime::execution_engine::ProviderInvocationOutput {
                 events: invocation_output.events,
                 result: invocation_output.result,
+                first_token_at: captured_first_token_timing.map(|timing| timing.first_token_at),
+                time_to_first_token_ms: captured_first_token_timing
+                    .map(|timing| timing.time_to_first_token_ms),
             },
         )
     }
+}
+
+fn record_first_token_timing(
+    first_token_timing: &Arc<Mutex<Option<FirstTokenTiming>>>,
+    event: &ProviderStreamEvent,
+    provider_invoke_started_at: OffsetDateTime,
+    provider_invoke_started: std::time::Instant,
+) {
+    if !matches!(
+        event,
+        ProviderStreamEvent::TextDelta { .. } | ProviderStreamEvent::ReasoningDelta { .. }
+    ) {
+        return;
+    }
+
+    let Ok(mut timing) = first_token_timing.lock() else {
+        return;
+    };
+    if timing.is_some() {
+        return;
+    }
+    let elapsed = provider_invoke_started.elapsed();
+    *timing = Some(FirstTokenTiming {
+        first_token_at: provider_invoke_started_at + elapsed,
+        time_to_first_token_ms: elapsed.as_millis() as u64,
+    });
 }
 
 fn is_expected_runtime_event_stream_closed_error(error: &anyhow::Error) -> bool {

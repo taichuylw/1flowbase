@@ -53,6 +53,8 @@ impl ProviderInvoker for CapturingProviderInvoker {
                 finish_reason: Some(ProviderFinishReason::Stop),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }

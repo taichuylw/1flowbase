@@ -60,6 +60,8 @@ impl ProviderInvoker for StubProviderInvoker {
                     finish_reason: Some(ProviderFinishReason::Error),
                     ..ProviderInvocationResult::default()
                 },
+                first_token_at: None,
+                time_to_first_token_ms: None,
             });
         }
 
@@ -91,6 +93,8 @@ impl ProviderInvoker for StubProviderInvoker {
                 finish_reason: Some(ProviderFinishReason::Stop),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -259,6 +263,8 @@ impl ProviderInvoker for FailsAfterFirstTokenInvoker {
                 finish_reason: Some(ProviderFinishReason::Error),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -308,6 +314,8 @@ impl ProviderInvoker for InputCacheUsageSnapshotInvoker {
                 finish_reason: Some(ProviderFinishReason::Stop),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -359,6 +367,8 @@ impl ProviderInvoker for ToolMcpMetadataInvoker {
                 provider_metadata: json!({ "raw_id": "provider-response-1" }),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -406,6 +416,8 @@ impl ProviderInvoker for SequentialLlmToolCallInvoker {
                 .into_iter()
                 .collect(),
             result,
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -469,6 +481,8 @@ impl ProviderInvoker for FailFirstFailoverInvoker {
                 finish_reason: Some(ProviderFinishReason::Stop),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -515,6 +529,8 @@ impl ProviderInvoker for FailAfterTokenFinishErrorFailoverInvoker {
                 finish_reason: Some(ProviderFinishReason::Error),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }
@@ -948,6 +964,8 @@ impl ProviderInvoker for ReasoningDeltaProviderInvoker {
                 finish_reason: Some(ProviderFinishReason::Stop),
                 ..ProviderInvocationResult::default()
             },
+            first_token_at: None,
+            time_to_first_token_ms: None,
         })
     }
 }

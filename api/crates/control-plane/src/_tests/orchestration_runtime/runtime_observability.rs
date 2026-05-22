@@ -667,6 +667,59 @@ async fn llm_turn_records_failover_attempt_and_links_usage_ledger() {
 }
 
 #[tokio::test]
+async fn llm_turn_records_first_output_token_from_reasoning_delta() {
+    let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
+        ProviderStreamEvent::ReasoningDelta {
+            delta: "先思考".into(),
+        },
+        ProviderStreamEvent::TextDelta {
+            delta: "再回答".into(),
+        },
+        ProviderStreamEvent::Finish {
+            reason: plugin_framework::provider_contract::ProviderFinishReason::Stop,
+        },
+    ]);
+    let seeded = service.seed_application_with_flow("Support Agent").await;
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({
+                "node-start": { "query": "请总结退款政策" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let llm_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-llm")
+        .expect("llm node run should exist");
+    let attempts = service
+        .list_model_failover_attempt_ledger(detail.flow_run.id)
+        .await;
+
+    assert_eq!(attempts.len(), 1);
+    assert!(attempts[0].first_token_at.is_some());
+    assert!(llm_node.metrics_payload["first_token_at"].is_string());
+    assert!(llm_node.metrics_payload["time_to_first_token_ms"].is_number());
+    assert!(llm_node.metrics_payload["attempts"][0]["first_token_at"].is_string());
+    assert!(llm_node.metrics_payload["attempts"][0]["time_to_first_token_ms"].is_number());
+}
+
+#[tokio::test]
 async fn failover_queue_records_each_attempt_and_links_usage_to_winner() {
     let service =
         OrchestrationRuntimeService::for_tests_with_fail_before_token_models(vec!["gpt-5.4-mini"]);

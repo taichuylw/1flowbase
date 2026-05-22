@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use observability::RuntimeEventBus;
 use plugin_framework::provider_contract::ProviderStreamEvent;
 use serde_json::{json, Value};
-use time::{Duration, OffsetDateTime};
+use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
@@ -689,7 +689,7 @@ where
                 request_ref: Some(projection.model_input_ref.clone()),
                 request_hash: Some(projection.model_input_hash.clone()),
                 started_at: OffsetDateTime::now_utc(),
-                first_token_at: None,
+                first_token_at: parse_attempt_first_token_at(&selected_attempt),
                 finished_at: Some(OffsetDateTime::now_utc()),
                 status: status.to_string(),
                 failed_after_first_token: selected_attempt
@@ -736,6 +736,13 @@ fn winner_attempt_id(attempts: &[domain::ModelFailoverAttemptLedgerRecord]) -> O
         .iter()
         .find(|attempt| attempt.status == "succeeded")
         .map(|attempt| attempt.id)
+}
+
+fn parse_attempt_first_token_at(attempt: &Value) -> Option<OffsetDateTime> {
+    attempt
+        .get("first_token_at")
+        .and_then(Value::as_str)
+        .and_then(|value| OffsetDateTime::parse(value, &Rfc3339).ok())
 }
 
 fn usage_i64(usage: &Value, field: &str) -> Option<i64> {

@@ -11,6 +11,7 @@ use plugin_framework::{
     },
 };
 use serde_json::{json, Map, Value};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
@@ -38,6 +39,8 @@ const LLM_TOOL_CALLBACK_STATE_KEY: &str = "__llm_tool_callback";
 pub struct ProviderInvocationOutput {
     pub events: Vec<ProviderStreamEvent>,
     pub result: ProviderInvocationResult,
+    pub first_token_at: Option<OffsetDateTime>,
+    pub time_to_first_token_ms: Option<u64>,
 }
 
 #[async_trait]
@@ -519,6 +522,8 @@ where
                 Some(&error_payload),
                 &ProviderUsage::default(),
                 0,
+                None,
+                None,
             );
             attempt_metrics.push(attempt);
 
@@ -532,6 +537,8 @@ where
                     Some(ProviderFinishReason::Error),
                     0,
                     attempt_metrics,
+                    None,
+                    None,
                 ),
                 Vec::new(),
                 false,
@@ -551,6 +558,8 @@ where
                     Some(&error_payload),
                     &ProviderUsage::default(),
                     0,
+                    None,
+                    None,
                 );
                 attempt_metrics.push(attempt.clone());
                 failed_attempts.push(attempt);
@@ -568,6 +577,8 @@ where
                         Some(ProviderFinishReason::Error),
                         0,
                         attempt_metrics,
+                        None,
+                        None,
                     ),
                     Vec::new(),
                     true,
@@ -613,6 +624,8 @@ where
             error_payload.as_ref(),
             &usage,
             output.events.len(),
+            output.first_token_at,
+            output.time_to_first_token_ms,
         );
         attempt_metrics.push(attempt.clone());
 
@@ -634,6 +647,8 @@ where
                     finish_reason,
                     output.events.len(),
                     attempt_metrics,
+                    output.first_token_at,
+                    output.time_to_first_token_ms,
                 ),
                 output.events,
                 true,
@@ -652,6 +667,8 @@ where
                 finish_reason.clone(),
                 output.events.len(),
                 attempt_metrics,
+                output.first_token_at,
+                output.time_to_first_token_ms,
             ),
             output.events,
             &invocation_messages,
@@ -673,6 +690,8 @@ where
             Some(ProviderFinishReason::Error),
             0,
             attempt_metrics,
+            None,
+            None,
         ),
         Vec::new(),
         true,
@@ -809,6 +828,8 @@ fn build_attempt_metric(
     error_payload: Option<&Value>,
     usage: &ProviderUsage,
     event_count: usize,
+    first_token_at: Option<OffsetDateTime>,
+    time_to_first_token_ms: Option<u64>,
 ) -> Value {
     json!({
         "attempt_index": attempt_index,
@@ -820,6 +841,8 @@ fn build_attempt_metric(
         "status": status,
         "failed_after_first_token": failed_after_first_token,
         "event_count": event_count,
+        "first_token_at": offset_datetime_json(first_token_at),
+        "time_to_first_token_ms": time_to_first_token_ms,
         "usage": serde_json::to_value(usage).unwrap_or(Value::Null),
         "error_code": error_payload
             .and_then(|payload| payload.get("error_kind"))
@@ -840,6 +863,8 @@ fn build_llm_metrics_payload(
     finish_reason: Option<ProviderFinishReason>,
     event_count: usize,
     attempts: Vec<Value>,
+    first_token_at: Option<OffsetDateTime>,
+    time_to_first_token_ms: Option<u64>,
 ) -> Value {
     json!({
         "provider_instance_id": runtime.provider_instance_id,
@@ -847,6 +872,8 @@ fn build_llm_metrics_payload(
         "protocol": runtime.protocol,
         "model": runtime.model,
         "event_count": event_count,
+        "first_token_at": offset_datetime_json(first_token_at),
+        "time_to_first_token_ms": time_to_first_token_ms,
         "route": build_llm_route_payload(runtime),
         "usage": serde_json::to_value(&usage).unwrap_or(Value::Null),
         "finish_reason": finish_reason
@@ -861,6 +888,13 @@ fn build_llm_metrics_payload(
             .unwrap_or(Value::Null),
         "attempts": attempts,
     })
+}
+
+fn offset_datetime_json(value: Option<OffsetDateTime>) -> Value {
+    value
+        .and_then(|datetime| datetime.format(&Rfc3339).ok())
+        .map(Value::String)
+        .unwrap_or(Value::Null)
 }
 
 fn build_llm_route_payload(runtime: &CompiledLlmRuntime) -> Value {
