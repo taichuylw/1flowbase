@@ -595,30 +595,19 @@ impl OpenAiChatStreamMapper {
             && !self.emitted_text_delta
             && envelope.event_type == "flow_finished"
         {
-            terminal_answer_segments(&envelope.payload)
+            terminal_answer_text(&envelope.payload)
         } else {
             None
         };
 
         let mut events = Vec::new();
         if let Some(answer) = terminal_answer {
-            if let Some(reasoning) = answer.reasoning {
-                if let Some(payload) = openai_delta_chunk_payload(
-                    initial_run,
-                    &self.model,
-                    &self.chat_completion_id,
-                    "reasoning_delta",
-                    reasoning,
-                ) {
-                    events.push(json_sse(payload));
-                }
-            }
             if let Some(payload) = openai_delta_chunk_payload(
                 initial_run,
                 &self.model,
                 &self.chat_completion_id,
                 "text_delta",
-                answer.content,
+                answer,
             ) {
                 events.push(json_sse(payload));
                 self.emitted_text_delta = true;
@@ -673,22 +662,16 @@ impl OpenAiResponseStreamMapper {
             && !self.emitted_text_delta
             && envelope.event_type == "flow_finished"
         {
-            terminal_answer_segments(&envelope.payload)
+            terminal_answer_text(&envelope.payload)
         } else {
             None
         };
 
         let mut events = Vec::new();
         if let Some(answer) = terminal_answer {
-            if let Some(reasoning) = answer.reasoning {
-                events.push(event_json_sse(
-                    "response.reasoning_text.delta",
-                    openai_response_reasoning_text_delta_payload(initial_run, reasoning),
-                ));
-            }
             events.push(event_json_sse(
                 "response.output_text.delta",
-                openai_response_output_text_delta_payload(initial_run, answer.content),
+                openai_response_output_text_delta_payload(initial_run, answer),
             ));
             self.emitted_text_delta = true;
         }
@@ -909,61 +892,14 @@ fn openai_response_output_text_delta_payload(initial_run: &NativeRunResult, text
     })
 }
 
-fn openai_response_reasoning_text_delta_payload(
-    initial_run: &NativeRunResult,
-    text: String,
-) -> Value {
-    json!({
-        "type": "response.reasoning_text.delta",
-        "response_id": response_id_from_run_id(initial_run.id),
-        "item_id": format!("msg_{}", initial_run.id),
-        "output_index": 0,
-        "content_index": 0,
-        "delta": text
-    })
-}
-
-struct TerminalAssistantAnswer {
-    reasoning: Option<String>,
-    content: String,
-}
-
-fn terminal_answer_segments(payload: &Value) -> Option<TerminalAssistantAnswer> {
-    let answer = payload
+fn terminal_answer_text(payload: &Value) -> Option<String> {
+    payload
         .get("output")
         .and_then(|output| output.get("answer"))
         .or_else(|| payload.get("answer"))
         .and_then(Value::as_str)
         .filter(|answer| !answer.is_empty())
-        .map(ToOwned::to_owned)?;
-    Some(split_terminal_assistant_answer(answer))
-}
-
-fn split_terminal_assistant_answer(answer: String) -> TerminalAssistantAnswer {
-    let trimmed_start = answer.trim_start();
-    let Some(after_open) = trimmed_start.strip_prefix("<think>") else {
-        return TerminalAssistantAnswer {
-            reasoning: None,
-            content: answer,
-        };
-    };
-    let Some(close_index) = after_open.find("</think>") else {
-        return TerminalAssistantAnswer {
-            reasoning: None,
-            content: answer,
-        };
-    };
-
-    // Thinking is user-visible output. Keep it as a reasoning delta instead of
-    // dropping it when terminal answer fallback has to reconstruct the stream.
-    let reasoning = after_open[..close_index].to_string();
-    let content = after_open[close_index + "</think>".len()..]
-        .trim_start()
-        .to_string();
-    TerminalAssistantAnswer {
-        reasoning: (!reasoning.is_empty()).then_some(reasoning),
-        content,
-    }
+        .map(ToOwned::to_owned)
 }
 
 fn openai_delta_chunk_payload(
@@ -1200,27 +1136,14 @@ fn anthropic_completed_run_to_sse(
         }
     }
     if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
-        let answer = split_terminal_assistant_answer(answer.clone());
-        if let Some(reasoning) = answer.reasoning {
-            events.extend(mapper.runtime_event_to_sse(
-                run,
-                RuntimeEventEnvelope::new(
-                    run.id,
-                    1,
-                    debug_stream_events::reasoning_delta("assistant", run.id, reasoning),
-                ),
-            ));
-        }
-        if !answer.content.is_empty() {
-            events.extend(mapper.runtime_event_to_sse(
-                run,
-                RuntimeEventEnvelope::new(
-                    run.id,
-                    2,
-                    debug_stream_events::text_delta("assistant", run.id, answer.content),
-                ),
-            ));
-        }
+        events.extend(mapper.runtime_event_to_sse(
+            run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::text_delta("assistant", run.id, answer.clone()),
+            ),
+        ));
     }
     events.extend(mapper.anthropic_stop_events());
     events
@@ -1619,7 +1542,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn anthropic_completed_stream_splits_thinking_from_text() {
+    async fn anthropic_completed_stream_preserves_thinking_in_text() {
         let mut run = native_run();
         run.status = NativeRunStatus::Succeeded;
         run.answer = Some("<think>先分析</think>\n最终回答".to_string());
@@ -1629,11 +1552,9 @@ mod tests {
             .unwrap();
         let body = String::from_utf8(body.to_vec()).unwrap();
 
-        assert!(body.contains("\"type\":\"thinking_delta\""), "{body}");
-        assert!(body.contains("\"thinking\":\"先分析\""), "{body}");
         assert!(body.contains("\"type\":\"text_delta\""), "{body}");
-        assert!(body.contains("\"text\":\"最终回答\""), "{body}");
-        assert!(!body.contains("<think>"), "{body}");
+        assert!(body.contains("<think>先分析</think>"), "{body}");
+        assert!(!body.contains("\"type\":\"thinking_delta\""), "{body}");
     }
 
     #[test]
@@ -1740,13 +1661,15 @@ mod tests {
     }
 
     #[test]
-    fn openai_chat_resume_terminal_answer_fallback_splits_thinking_from_content() {
+    fn openai_chat_resume_terminal_answer_fallback_preserves_thinking_in_content() {
         let run = native_run();
         let mut mapper =
             OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
-        let answer = split_terminal_assistant_answer("<think>先分析</think>\n最终回答".to_string());
-        assert_eq!(answer.reasoning.as_deref(), Some("先分析"));
-        assert_eq!(answer.content, "最终回答");
+        assert_eq!(
+            terminal_answer_text(&json!({ "answer": "<think>先分析</think>\n最终回答" }))
+                .as_deref(),
+            Some("<think>先分析</think>\n最终回答")
+        );
 
         let events = mapper.runtime_event_to_sse(
             &run,
@@ -1760,11 +1683,11 @@ mod tests {
             ),
         );
 
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), 3);
     }
 
     #[test]
-    fn openai_responses_resume_terminal_answer_fallback_splits_thinking_from_content() {
+    fn openai_responses_resume_terminal_answer_fallback_preserves_thinking_in_output_text() {
         let run = native_run();
         let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
         let events = mapper.runtime_event_to_sse(
@@ -1779,7 +1702,7 @@ mod tests {
             ),
         );
 
-        assert_eq!(events.len(), 3);
+        assert_eq!(events.len(), 2);
     }
 
     #[test]
