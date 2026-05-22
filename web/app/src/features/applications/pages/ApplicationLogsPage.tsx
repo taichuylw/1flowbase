@@ -28,6 +28,7 @@ import {
   ApplicationRunsTableColumnSettings
 } from '../components/logs/ApplicationRunsTable';
 import { useApplicationRunsTableConfiguration } from '../components/logs/useApplicationRunsTableConfiguration';
+import { isActiveRunStatus } from '../lib/run-status';
 import './application-logs-page.css';
 
 const FLOATING_WINDOW_TOP = 112;
@@ -35,6 +36,7 @@ const FLOATING_WINDOW_GAP = 16;
 const FLOATING_WINDOW_RIGHT = 32;
 const FLOATING_WINDOW_MIN_WIDTH = 360;
 const FLOATING_WINDOW_MAX_HEIGHT = 720;
+const ACTIVE_RUNS_REFETCH_INTERVAL_MS = 2_000;
 const DEFAULT_TIME_RANGE = '7';
 const PAGE_SIZE = 20;
 
@@ -260,6 +262,18 @@ export function ApplicationLogsPage({
   useEffect(() => {
     setPage(1);
   }, [applicationId, timeRange, sortBy, sortOrder]);
+
+  useEffect(() => {
+    if (!runs.some((run) => isActiveRunStatus(run.status))) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void runsQuery.refetch();
+    }, ACTIVE_RUNS_REFETCH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [runs, runsQuery.refetch]);
 
   function selectRun(runId: string | null) {
     setSelectedRunId(runId);

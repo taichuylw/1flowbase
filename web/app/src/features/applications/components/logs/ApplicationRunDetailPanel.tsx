@@ -21,7 +21,10 @@ import {
   type ApplicationRunDetail
 } from '../../api/runtime';
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
+import { isActiveRunStatus } from '../../lib/run-status';
 import './application-run-detail-panel.css';
+
+const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -209,6 +212,12 @@ function conversationSessionStatus(
   return mapRunStatusToSessionStatus(currentItem?.status ?? 'succeeded');
 }
 
+function hasActiveConversationItem(
+  page: ApplicationConversationMessagesPage | null
+) {
+  return Boolean(page?.items.some((item) => isActiveRunStatus(item.status)));
+}
+
 function RunConversation({
   applicationId,
   onClose,
@@ -280,6 +289,18 @@ function RunConversation({
       setConversationPage(initialConversationQuery.data);
     }
   }, [initialConversationQuery.data]);
+
+  useEffect(() => {
+    if (!hasActiveConversationItem(conversationPage)) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void initialConversationQuery.refetch();
+    }, ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [conversationPage, initialConversationQuery.refetch]);
 
   async function handleOpenMessageLog(message: AgentFlowDebugMessage) {
     const detailRunId =

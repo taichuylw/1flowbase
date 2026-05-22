@@ -468,6 +468,94 @@ describe('ApplicationLogsPage', () => {
     ).not.toBeInTheDocument();
   }, 20_000);
 
+  test('refreshes an active conversation log until the run reaches a terminal status', async () => {
+    runtimeApi.fetchApplicationRuns.mockReset();
+    runtimeApi.fetchApplicationConversationMessages.mockReset();
+    runtimeApi.fetchApplicationRuns.mockResolvedValue(
+      applicationRunsPage([
+        {
+          id: 'run-active',
+          run_mode: 'published_api_run' as const,
+          status: 'waiting_callback',
+          target_node_id: 'node-llm',
+          title: '公开 API 工具调用',
+          expand_id: 'customer-42',
+          authorized_account: 'root',
+          compatibility_mode: 'openai-chat-completions-v1',
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: null,
+          created_at: '2026-04-17T09:00:00Z',
+          updated_at: '2026-04-17T09:00:01Z'
+        }
+      ])
+    );
+    runtimeApi.fetchApplicationConversationMessages
+      .mockResolvedValueOnce({
+        items: [
+          {
+            run_id: 'run-active',
+            detail_run_id: 'run-active',
+            can_open_detail: true,
+            started_at: '2026-04-17T09:00:00Z',
+            finished_at: null,
+            status: 'waiting_callback',
+            query: '读取 README',
+            model: 'deepseek-chat',
+            answer: '等待工具结果',
+            is_current: true
+          }
+        ],
+        page: {
+          has_before: false,
+          has_after: false,
+          before_cursor: null,
+          after_cursor: 'run-active'
+        }
+      })
+      .mockResolvedValue({
+        items: [
+          {
+            run_id: 'run-active',
+            detail_run_id: 'run-active',
+            can_open_detail: true,
+            started_at: '2026-04-17T09:00:00Z',
+            finished_at: '2026-04-17T09:00:05Z',
+            status: 'succeeded',
+            query: '读取 README',
+            model: 'deepseek-chat',
+            answer: '最终回答',
+            is_current: true
+          }
+        ],
+        page: {
+          has_before: false,
+          has_after: false,
+          before_cursor: null,
+          after_cursor: 'run-active'
+        }
+      });
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('公开 API 工具调用')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    expect(await screen.findByText('等待工具结果')).toBeInTheDocument();
+    await waitFor(
+      () => {
+        expect(screen.getByText('最终回答')).toBeInTheDocument();
+      },
+      { timeout: 4_000 }
+    );
+    expect(
+      runtimeApi.fetchApplicationConversationMessages.mock.calls.length
+    ).toBeGreaterThanOrEqual(2);
+  }, 8_000);
+
   test('loads conversation log detail and trace artifacts from application logs', async () => {
     const detail = sampleRunDetail();
     detail.flow_run.output_payload = {
