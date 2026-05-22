@@ -2,7 +2,37 @@ use anyhow::Result;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::ports::{AppendRuntimeEventInput, OrchestrationRuntimeRepository, RuntimeEventEnvelope};
+use crate::ports::{
+    AppendRuntimeEventInput, OrchestrationRuntimeRepository, RuntimeEventEnvelope,
+    RuntimeEventPayload,
+};
+
+pub async fn persist_runtime_event_payload<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    event: &RuntimeEventPayload,
+) -> Result<()>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    if !event.persist_required {
+        return Ok(());
+    }
+    let node_run_id = event
+        .payload
+        .get("node_run_id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok());
+    let input = build_runtime_event_input(
+        flow_run_id,
+        node_run_id,
+        event.event_type.clone(),
+        event.source,
+        event.payload.clone(),
+    );
+    repository.append_runtime_event(&input).await?;
+    Ok(())
+}
 
 pub async fn persist_runtime_debug_stream_events<R>(
     repository: &R,

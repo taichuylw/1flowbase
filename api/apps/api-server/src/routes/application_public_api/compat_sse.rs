@@ -9,7 +9,7 @@ use control_plane::{
     orchestration_runtime::{
         debug_stream_events, OrchestrationRuntimeService, StartPublishedFlowRunCommand,
     },
-    ports::{RuntimeEventEnvelope, RuntimeEventStream},
+    ports::RuntimeEventEnvelope,
 };
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
@@ -20,6 +20,9 @@ use crate::{
     provider_runtime::ApiProviderRuntime,
     routes::application_public_api::{
         native::{service_error, NativeApiError},
+        stream_terminal_fallback::{
+            load_latest_native_run_for_terminal_fallback, terminal_runtime_event_from_native_run,
+        },
         tool_callback_ids::{
             encode_anthropic_callback_tool_use_id, encode_openai_callback_tool_call_id,
         },
@@ -33,8 +36,9 @@ pub(crate) async fn start_openai_run_stream(
     run: NativeRunResult,
     model: String,
 ) -> Result<Response, NativeApiError> {
+    let chat_completion_id = openai_chat_completion_id_from_run_id(run.id);
     start_compatible_run_stream(state, run, move |run, envelope| {
-        openai_runtime_event_to_sse(run, &model, envelope)
+        openai_runtime_event_to_sse(run, &model, &chat_completion_id, envelope)
     })
     .await
 }
@@ -63,8 +67,16 @@ pub(crate) async fn start_anthropic_run_stream(
     .await
 }
 
-pub(crate) fn completed_openai_chat_stream(run: NativeRunResult, model: String) -> Response {
-    completed_compatible_stream(openai_completed_run_to_sse(&run, &model))
+pub(crate) fn completed_openai_chat_stream(
+    run: NativeRunResult,
+    model: String,
+    chat_completion_id: String,
+) -> Response {
+    completed_compatible_stream(openai_completed_run_to_sse(
+        &run,
+        &model,
+        &chat_completion_id,
+    ))
 }
 
 pub(crate) fn completed_openai_response_stream(
@@ -122,7 +134,7 @@ where
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(send_compatible_runtime_event_stream(
-        state.runtime_event_stream.clone(),
+        state.clone(),
         run.clone(),
         sender,
         move |run, envelope| mapper(run, envelope),
@@ -188,13 +200,14 @@ where
 }
 
 async fn send_compatible_runtime_event_stream<F>(
-    stream: Arc<dyn RuntimeEventStream>,
+    state: Arc<ApiState>,
     initial_run: NativeRunResult,
     sender: mpsc::Sender<Result<Event, Infallible>>,
     mut mapper: F,
 ) where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
+    let stream = state.runtime_event_stream.clone();
     let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
         warn!(
             flow_run_id = %initial_run.id,
@@ -204,17 +217,18 @@ async fn send_compatible_runtime_event_stream<F>(
         return;
     };
 
+    let mut emitted_public_event = false;
     for event in subscription.replay {
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
-        for sse in mapper(&initial_run, event) {
-            if sender.send(sse).await.is_err() {
-                debug!(
-                    flow_run_id = %initial_run.id,
-                    application_id = %initial_run.application_id,
-                    "compatible public API stream client disconnected during replay"
-                );
-                return;
-            }
+        let events = mapper(&initial_run, event);
+        emitted_public_event |= !events.is_empty();
+        if !send_compatible_sse_events(&sender, events).await {
+            debug!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                "compatible public API stream client disconnected during replay"
+            );
+            return;
         }
         if is_terminal {
             debug!(
@@ -226,29 +240,124 @@ async fn send_compatible_runtime_event_stream<F>(
         }
     }
 
-    while let Some(event) = subscription.live_events.recv().await {
-        let event_type = event.event_type.clone();
-        let is_terminal = is_public_terminal_runtime_event(&event_type);
-        for sse in mapper(&initial_run, event) {
-            if sender.send(sse).await.is_err() {
-                debug!(
-                    flow_run_id = %initial_run.id,
-                    application_id = %initial_run.application_id,
-                    "compatible public API stream client disconnected"
-                );
-                return;
+    let mut durable_terminal_check = tokio::time::interval(Duration::from_millis(500));
+    durable_terminal_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            maybe_event = subscription.live_events.recv() => {
+                let Some(event) = maybe_event else {
+                    break;
+                };
+                let event_type = event.event_type.clone();
+                let is_terminal = is_public_terminal_runtime_event(&event_type);
+                let events = mapper(&initial_run, event);
+                emitted_public_event |= !events.is_empty();
+                if !send_compatible_sse_events(&sender, events).await {
+                    debug!(
+                        flow_run_id = %initial_run.id,
+                        application_id = %initial_run.application_id,
+                        "compatible public API stream client disconnected"
+                    );
+                    return;
+                }
+                if is_terminal {
+                    debug!(
+                        flow_run_id = %initial_run.id,
+                        application_id = %initial_run.application_id,
+                        event_type = %event_type,
+                        "compatible public API stream reached terminal event"
+                    );
+                    return;
+                }
+            }
+            _ = durable_terminal_check.tick() => {
+                if emit_compatible_terminal_fallback(
+                    &state,
+                    &initial_run,
+                    &sender,
+                    &mut mapper,
+                    emitted_public_event,
+                    "durable_poll",
+                    false,
+                )
+                .await
+                {
+                    return;
+                }
             }
         }
-        if is_terminal {
-            debug!(
-                flow_run_id = %initial_run.id,
-                application_id = %initial_run.application_id,
-                event_type = %event_type,
-                "compatible public API stream reached terminal event"
-            );
-            return;
+    }
+
+    emit_compatible_terminal_fallback(
+        &state,
+        &initial_run,
+        &sender,
+        &mut mapper,
+        emitted_public_event,
+        "stream_closed",
+        true,
+    )
+    .await;
+}
+
+async fn send_compatible_sse_events(
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    events: Vec<Result<Event, Infallible>>,
+) -> bool {
+    for sse in events {
+        if sender.send(sse).await.is_err() {
+            return false;
         }
     }
+    true
+}
+
+async fn emit_compatible_terminal_fallback<F>(
+    state: &ApiState,
+    initial_run: &NativeRunResult,
+    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    mapper: &mut F,
+    emitted_public_event: bool,
+    trigger: &'static str,
+    warn_if_not_terminal: bool,
+) -> bool
+where
+    F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
+{
+    let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
+    let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
+        if warn_if_not_terminal {
+            warn!(
+                flow_run_id = %initial_run.id,
+                application_id = %initial_run.application_id,
+                status = ?latest_run.status,
+                trigger = %trigger,
+                "compatible public API stream ended before durable run reached a terminal state"
+            );
+        }
+        return false;
+    };
+
+    warn!(
+        flow_run_id = %initial_run.id,
+        application_id = %initial_run.application_id,
+        status = ?latest_run.status,
+        trigger = %trigger,
+        "compatible public API stream missing runtime terminal event; emitting durable terminal fallback"
+    );
+
+    if !emitted_public_event {
+        let started_event = RuntimeEventEnvelope::new(
+            latest_run.id,
+            0,
+            debug_stream_events::flow_started(latest_run.id),
+        );
+        if !send_compatible_sse_events(sender, mapper(&latest_run, started_event)).await {
+            return true;
+        }
+    }
+    let _ = send_compatible_sse_events(sender, mapper(&latest_run, terminal_event)).await;
+    true
 }
 
 fn is_public_terminal_runtime_event(event_type: &str) -> bool {
@@ -258,14 +367,26 @@ fn is_public_terminal_runtime_event(event_type: &str) -> bool {
     )
 }
 
+pub(crate) fn openai_chat_completion_id_from_run_id(run_id: uuid::Uuid) -> String {
+    format!("chatcmpl-{run_id}")
+}
+
+pub(crate) fn openai_chat_completion_id_from_callback_task(
+    run_id: uuid::Uuid,
+    callback_task_id: uuid::Uuid,
+) -> String {
+    format!("chatcmpl-{run_id}-{callback_task_id}")
+}
+
 fn openai_runtime_event_to_sse(
     initial_run: &NativeRunResult,
     model: &str,
+    chat_completion_id: &str,
     envelope: RuntimeEventEnvelope,
 ) -> Vec<Result<Event, Infallible>> {
     match envelope.event_type.as_str() {
         "flow_started" => vec![json_sse(json!({
-            "id": format!("chatcmpl-{}", initial_run.id),
+            "id": chat_completion_id,
             "object": "chat.completion.chunk",
             "created": initial_run.created_at.unix_timestamp(),
             "model": model,
@@ -278,6 +399,7 @@ fn openai_runtime_event_to_sse(
         "text_delta" | "reasoning_delta" => openai_delta_chunk_payload(
             initial_run,
             model,
+            chat_completion_id,
             envelope.event_type.as_str(),
             envelope.text.unwrap_or_default(),
         )
@@ -286,7 +408,7 @@ fn openai_runtime_event_to_sse(
         .collect(),
         "flow_finished" => vec![
             json_sse(json!({
-                "id": format!("chatcmpl-{}", initial_run.id),
+                "id": chat_completion_id,
                 "object": "chat.completion.chunk",
                 "created": initial_run.created_at.unix_timestamp(),
                 "model": model,
@@ -310,19 +432,25 @@ fn openai_runtime_event_to_sse(
             done_sse(),
         ],
         "flow_cancelled" => vec![done_sse()],
-        "waiting_callback" => openai_tool_call_chunk_payload(initial_run, model, &envelope.payload)
-            .map(|payload| {
-                vec![
-                    json_sse(payload),
-                    json_sse(openai_finish_chunk_payload(
-                        initial_run,
-                        model,
-                        "tool_calls",
-                    )),
-                    done_sse(),
-                ]
-            })
-            .unwrap_or_else(required_action_not_supported_openai_sse),
+        "waiting_callback" => openai_tool_call_chunk_payload(
+            initial_run,
+            model,
+            chat_completion_id,
+            &envelope.payload,
+        )
+        .map(|payload| {
+            vec![
+                json_sse(payload),
+                json_sse(openai_finish_chunk_payload(
+                    initial_run,
+                    model,
+                    chat_completion_id,
+                    "tool_calls",
+                )),
+                done_sse(),
+            ]
+        })
+        .unwrap_or_else(required_action_not_supported_openai_sse),
         "waiting_human" => required_action_not_supported_openai_sse(),
         _ => Vec::new(),
     }
@@ -458,6 +586,7 @@ fn openai_response_stream_snapshot(
 fn openai_delta_chunk_payload(
     initial_run: &NativeRunResult,
     model: &str,
+    chat_completion_id: &str,
     event_type: &str,
     text: String,
 ) -> Option<Value> {
@@ -468,7 +597,7 @@ fn openai_delta_chunk_payload(
     };
 
     Some(json!({
-        "id": format!("chatcmpl-{}", initial_run.id),
+        "id": chat_completion_id,
         "object": "chat.completion.chunk",
         "created": initial_run.created_at.unix_timestamp(),
         "model": model,
@@ -483,6 +612,7 @@ fn openai_delta_chunk_payload(
 fn openai_tool_call_chunk_payload(
     initial_run: &NativeRunResult,
     model: &str,
+    chat_completion_id: &str,
     payload: &Value,
 ) -> Option<Value> {
     let callback_task_id = llm_tool_callback_task_id(payload)?;
@@ -514,7 +644,7 @@ fn openai_tool_call_chunk_payload(
     }
 
     Some(json!({
-        "id": format!("chatcmpl-{}", initial_run.id),
+        "id": chat_completion_id,
         "object": "chat.completion.chunk",
         "created": initial_run.created_at.unix_timestamp(),
         "model": model,
@@ -529,10 +659,11 @@ fn openai_tool_call_chunk_payload(
 fn openai_finish_chunk_payload(
     initial_run: &NativeRunResult,
     model: &str,
+    chat_completion_id: &str,
     finish_reason: &'static str,
 ) -> Value {
     json!({
-        "id": format!("chatcmpl-{}", initial_run.id),
+        "id": chat_completion_id,
         "object": "chat.completion.chunk",
         "created": initial_run.created_at.unix_timestamp(),
         "model": model,
@@ -629,9 +760,10 @@ fn openai_response_stream_snapshot_with_output(
 fn openai_completed_run_to_sse(
     run: &NativeRunResult,
     model: &str,
+    chat_completion_id: &str,
 ) -> Vec<Result<Event, Infallible>> {
     let mut events = vec![json_sse(json!({
-        "id": format!("chatcmpl-{}", run.id),
+        "id": chat_completion_id,
         "object": "chat.completion.chunk",
         "created": run.created_at.unix_timestamp(),
         "model": model,
@@ -642,11 +774,14 @@ fn openai_completed_run_to_sse(
         }]
     }))];
     if let Some(payload) = waiting_payload_from_run(run) {
-        if let Some(tool_call_payload) = openai_tool_call_chunk_payload(run, model, &payload) {
+        if let Some(tool_call_payload) =
+            openai_tool_call_chunk_payload(run, model, chat_completion_id, &payload)
+        {
             events.push(json_sse(tool_call_payload));
             events.push(json_sse(openai_finish_chunk_payload(
                 run,
                 model,
+                chat_completion_id,
                 "tool_calls",
             )));
             events.push(done_sse());
@@ -654,12 +789,18 @@ fn openai_completed_run_to_sse(
         }
     }
     if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
-        if let Some(payload) = openai_delta_chunk_payload(run, model, "text_delta", answer.clone())
+        if let Some(payload) =
+            openai_delta_chunk_payload(run, model, chat_completion_id, "text_delta", answer.clone())
         {
             events.push(json_sse(payload));
         }
     }
-    events.push(json_sse(openai_finish_chunk_payload(run, model, "stop")));
+    events.push(json_sse(openai_finish_chunk_payload(
+        run,
+        model,
+        chat_completion_id,
+        "stop",
+    )));
     events.push(done_sse());
     events
 }
@@ -1135,14 +1276,17 @@ mod tests {
 
     #[test]
     fn openai_delta_chunk_maps_reasoning_to_reasoning_content() {
+        let chat_completion_id = "chatcmpl-test";
         let payload = openai_delta_chunk_payload(
             &native_run(),
             "deepseek-v4-pro",
+            chat_completion_id,
             "reasoning_delta",
             "先分析用户问题".to_string(),
         )
         .expect("reasoning delta should map to an OpenAI-compatible chunk");
 
+        assert_eq!(payload["id"], json!(chat_completion_id));
         assert_eq!(
             payload["choices"][0]["delta"]["reasoning_content"],
             json!("先分析用户问题")
@@ -1165,9 +1309,11 @@ mod tests {
     #[test]
     fn openai_waiting_callback_maps_to_tool_call_chunk() {
         let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let chat_completion_id = "chatcmpl-tool-test";
         let payload = openai_tool_call_chunk_payload(
             &native_run(),
             "1flowbase",
+            chat_completion_id,
             &json!({
                 "callback_kind": "llm_tool_calls",
                 "callback_task_id": callback_task_id,
@@ -1182,6 +1328,7 @@ mod tests {
         )
         .expect("LLM callback should map to OpenAI tool call chunk");
 
+        assert_eq!(payload["id"], json!(chat_completion_id));
         assert_eq!(
             payload["choices"][0]["delta"]["tool_calls"][0]["function"]["name"],
             json!("lookup_weather")
@@ -1194,6 +1341,17 @@ mod tests {
             .as_str()
             .expect("tool call id should be encoded");
         assert!(call_id.contains("call_weather"));
+    }
+
+    #[test]
+    fn openai_chat_completion_id_changes_for_callback_resume() {
+        let run_id = Uuid::from_u128(0x11111111111111111111111111111111);
+        let callback_task_id = Uuid::from_u128(0x22222222222222222222222222222222);
+
+        assert_ne!(
+            openai_chat_completion_id_from_run_id(run_id),
+            openai_chat_completion_id_from_callback_task(run_id, callback_task_id)
+        );
     }
 
     #[test]

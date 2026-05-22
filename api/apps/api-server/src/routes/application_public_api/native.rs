@@ -409,7 +409,7 @@ async fn start_native_run_stream(
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(sse::send_native_runtime_event_stream(
-        state.runtime_event_stream.clone(),
+        state.clone(),
         run.clone(),
         include_workflow_events,
         sender,
@@ -645,7 +645,7 @@ async fn resume_native_run_stream(
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(sse::send_native_runtime_event_stream(
-        state.runtime_event_stream.clone(),
+        state.clone(),
         initial_run.clone(),
         sse::IncludeWorkflowEvents::None,
         sender,

@@ -253,20 +253,27 @@ pub async fn create_chat_completion(
         .filter(|stream| *stream)
         .map(|_| "streaming".to_string());
     if let Some(resume) = openai_chat_tool_resume_request(&value)? {
+        let callback_task_id = resume.callback_task_id;
         let run = resume_openai_tool_call(
             state,
             &credential.token,
-            resume.callback_task_id,
+            callback_task_id,
             resume.tool_results,
         )
         .await?;
         if !openai_required_action_is_supported(&run) {
             return Err(OpenAiRouteError::RequiredAction);
         }
+        let completion_id =
+            compat_sse::openai_chat_completion_id_from_callback_task(run.id, callback_task_id);
         if response_mode.as_deref() == Some("streaming") {
-            return Ok(compat_sse::completed_openai_chat_stream(run, model));
+            return Ok(compat_sse::completed_openai_chat_stream(
+                run,
+                model,
+                completion_id,
+            ));
         }
-        return Ok(Json(to_openai_response(run, model)).into_response());
+        return Ok(Json(to_openai_response(run, model, completion_id)).into_response());
     }
 
     let request = match map_chat_completion_request(value) {
@@ -315,7 +322,8 @@ pub async fn create_chat_completion(
     if !openai_required_action_is_supported(&run) {
         return Err(OpenAiRouteError::RequiredAction);
     }
-    Ok(Json(to_openai_response(run, model)).into_response())
+    let completion_id = compat_sse::openai_chat_completion_id_from_run_id(run.id);
+    Ok(Json(to_openai_response(run, model, completion_id)).into_response())
 }
 
 #[utoipa::path(
@@ -728,13 +736,20 @@ fn openai_chat_tool_resume_request(
     let Some(messages) = request.get("messages").and_then(Value::as_array) else {
         return Ok(None);
     };
+    let mut trailing_tool_messages = messages
+        .iter()
+        .rev()
+        .take_while(|message| message.get("role").and_then(Value::as_str) == Some("tool"))
+        .collect::<Vec<_>>();
+    if trailing_tool_messages.is_empty() {
+        return Ok(None);
+    }
+    trailing_tool_messages.reverse();
+
     let mut callback_task_id = None;
     let mut tool_results = Vec::new();
 
-    for message in messages {
-        if message.get("role").and_then(Value::as_str) != Some("tool") {
-            continue;
-        }
+    for message in trailing_tool_messages {
         let Some(external_tool_call_id) = message.get("tool_call_id").and_then(Value::as_str)
         else {
             continue;
@@ -904,7 +919,11 @@ fn string_value(value: &Value, field: &str) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn to_openai_response(run: NativeRunResult, model: String) -> OpenAiChatCompletionResponse {
+fn to_openai_response(
+    run: NativeRunResult,
+    model: String,
+    completion_id: String,
+) -> OpenAiChatCompletionResponse {
     let callback_task_id = callback_task_id_from_required_action(&run);
     let tool_calls = openai_tool_calls(run.tool_calls.as_ref(), callback_task_id);
     let finish_reason = if tool_calls.is_some() {
@@ -913,7 +932,7 @@ fn to_openai_response(run: NativeRunResult, model: String) -> OpenAiChatCompleti
         "stop"
     };
     OpenAiChatCompletionResponse {
-        id: format!("chatcmpl-{}", run.id),
+        id: completion_id,
         object: "chat.completion",
         created: run.created_at.unix_timestamp(),
         model,
@@ -1124,9 +1143,14 @@ mod tests {
             created_at: OffsetDateTime::UNIX_EPOCH,
         };
 
-        let payload = serde_json::to_value(to_openai_response(run, "provider/model".into()))
-            .expect("openai response serializes");
+        let payload = serde_json::to_value(to_openai_response(
+            run,
+            "provider/model".into(),
+            "chatcmpl-test-tool-call".to_string(),
+        ))
+        .expect("openai response serializes");
 
+        assert_eq!(payload["id"], json!("chatcmpl-test-tool-call"));
         assert_eq!(payload["choices"][0]["finish_reason"], json!("tool_calls"));
         assert_eq!(
             payload["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
@@ -1166,8 +1190,12 @@ mod tests {
             created_at: OffsetDateTime::UNIX_EPOCH,
         };
 
-        let payload = serde_json::to_value(to_openai_response(run, "provider/model".into()))
-            .expect("openai response serializes");
+        let payload = serde_json::to_value(to_openai_response(
+            run,
+            "provider/model".into(),
+            "chatcmpl-test-callback".to_string(),
+        ))
+        .expect("openai response serializes");
 
         let tool_call_id = payload["choices"][0]["message"]["tool_calls"][0]["id"]
             .as_str()
@@ -1208,6 +1236,66 @@ mod tests {
             resume.tool_results[0]["content"],
             json!("{\"temperature\":21}")
         );
+    }
+
+    #[test]
+    fn openai_chat_tool_resume_request_uses_latest_trailing_tool_messages() {
+        let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+        let previous_tool_call_id =
+            encode_openai_callback_tool_call_id(previous_callback_task_id, "call_previous");
+        let current_tool_call_id =
+            encode_openai_callback_tool_call_id(current_callback_task_id, "call_current");
+
+        let resume = openai_chat_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": previous_tool_call_id, "type": "function", "function": {"name": "lookup_previous", "arguments": "{}"}}
+                ]},
+                {"role": "tool", "tool_call_id": previous_tool_call_id, "content": "old result"},
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": current_tool_call_id, "type": "function", "function": {"name": "lookup_current", "arguments": "{}"}}
+                ]},
+                {"role": "tool", "tool_call_id": current_tool_call_id, "content": "new result"}
+            ]
+        }))
+        .expect("resume request should parse")
+        .expect("trailing tool messages should resume callback");
+
+        assert_eq!(resume.callback_task_id, current_callback_task_id);
+        assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
+        assert_eq!(
+            resume.tool_results[0]["tool_call_id"],
+            json!("call_current")
+        );
+        assert_eq!(resume.tool_results[0]["content"], json!("new result"));
+    }
+
+    #[test]
+    fn openai_chat_tool_resume_request_ignores_historical_tool_messages() {
+        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let external_tool_call_id =
+            encode_openai_callback_tool_call_id(callback_task_id, "call_previous");
+
+        let resume = openai_chat_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {"role": "assistant", "content": null, "tool_calls": [
+                    {"id": external_tool_call_id, "type": "function", "function": {"name": "lookup_previous", "arguments": "{}"}}
+                ]},
+                {"role": "tool", "tool_call_id": external_tool_call_id, "content": "old result"},
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next question"}
+            ]
+        }))
+        .expect("historical tool messages should parse");
+
+        assert!(resume.is_none());
     }
 
     #[test]

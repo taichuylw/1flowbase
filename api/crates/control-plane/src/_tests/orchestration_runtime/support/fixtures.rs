@@ -361,6 +361,21 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         )
     }
 
+    pub fn for_tests_with_provider_results(
+        provider_results: Vec<ProviderInvocationResult>,
+    ) -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
+        Self::new(
+            repository,
+            InMemoryProviderRuntime::with_provider_results(provider_results),
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests()),
+            "test-master-key",
+        )
+    }
+
     pub fn for_tests_with_live_events_then_error(live_events: Vec<ProviderStreamEvent>) -> Self {
         let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
             "application.view.all",

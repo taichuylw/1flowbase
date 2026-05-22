@@ -23,7 +23,12 @@ use crate::{
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
-use super::payloads::persisted_node_output_payload;
+use super::{
+    debug_stream_events,
+    llm_observability_refs::{apply_llm_debug_observability_refs, LlmDebugObservabilityRefs},
+    payloads::persisted_node_output_payload,
+    runtime_event_persister,
+};
 
 pub(super) struct WaitingNodeResumeUpdate {
     pub(super) node_run_id: Uuid,
@@ -151,6 +156,16 @@ where
                     finished_at: None,
                 })
                 .await?;
+            runtime_event_persister::persist_runtime_event_payload(
+                repository,
+                flow_run.id,
+                &debug_stream_events::waiting_human(
+                    flow_run.id,
+                    waiting_node_run.id,
+                    &wait.node_id,
+                ),
+            )
+            .await?;
         }
         orchestration_runtime::execution_state::ExecutionStopReason::WaitingCallback(wait) => {
             let snapshot = outcome
@@ -173,7 +188,7 @@ where
                     external_ref_payload: Some(wait.request_payload.clone()),
                 })
                 .await?;
-            repository
+            let callback_task = repository
                 .create_callback_task(&CreateCallbackTaskInput {
                     flow_run_id: flow_run.id,
                     node_run_id: waiting_node_run.id,
@@ -198,6 +213,17 @@ where
                     finished_at: None,
                 })
                 .await?;
+            runtime_event_persister::persist_runtime_event_payload(
+                repository,
+                flow_run.id,
+                &debug_stream_events::waiting_callback_with_task(
+                    flow_run.id,
+                    waiting_node_run.id,
+                    &wait.node_id,
+                    &callback_task,
+                ),
+            )
+            .await?;
         }
         orchestration_runtime::execution_state::ExecutionStopReason::Completed => {
             ensure_flow_run_transition(
@@ -205,11 +231,12 @@ where
                 domain::FlowRunStatus::Succeeded,
                 "persist_flow_completed",
             )?;
+            let output_payload = final_flow_output_payload(outcome);
             repository
                 .update_flow_run(&UpdateFlowRunInput {
                     flow_run_id: flow_run.id,
                     status: domain::FlowRunStatus::Succeeded,
-                    output_payload: final_flow_output_payload(outcome),
+                    output_payload: output_payload.clone(),
                     error_payload: None,
                     finished_at: Some(OffsetDateTime::now_utc()),
                 })
@@ -219,9 +246,15 @@ where
                     flow_run_id: flow_run.id,
                     node_run_id: None,
                     event_type: "flow_run_completed".to_string(),
-                    payload: final_flow_output_payload(outcome),
+                    payload: output_payload.clone(),
                 })
                 .await?;
+            runtime_event_persister::persist_runtime_event_payload(
+                repository,
+                flow_run.id,
+                &debug_stream_events::flow_finished(flow_run.id, output_payload),
+            )
+            .await?;
         }
         orchestration_runtime::execution_state::ExecutionStopReason::Failed(failure) => {
             ensure_flow_run_transition(
@@ -229,12 +262,14 @@ where
                 domain::FlowRunStatus::Failed,
                 "persist_flow_failed",
             )?;
+            let output_payload = final_flow_output_payload(outcome);
+            let error_payload = failure.error_payload.clone();
             repository
                 .update_flow_run(&UpdateFlowRunInput {
                     flow_run_id: flow_run.id,
                     status: domain::FlowRunStatus::Failed,
-                    output_payload: final_flow_output_payload(outcome),
-                    error_payload: Some(failure.error_payload.clone()),
+                    output_payload,
+                    error_payload: Some(error_payload.clone()),
                     finished_at: Some(OffsetDateTime::now_utc()),
                 })
                 .await?;
@@ -243,9 +278,15 @@ where
                     flow_run_id: flow_run.id,
                     node_run_id: None,
                     event_type: "flow_run_failed".to_string(),
-                    payload: failure.error_payload.clone(),
+                    payload: error_payload.clone(),
                 })
                 .await?;
+            runtime_event_persister::persist_runtime_event_payload(
+                repository,
+                flow_run.id,
+                &debug_stream_events::flow_failed(flow_run.id, error_payload),
+            )
+            .await?;
         }
     }
 
@@ -465,7 +506,7 @@ async fn persist_llm_context_observability<R>(
     node_run_id: Uuid,
     span_id: Uuid,
     trace: &orchestration_runtime::execution_state::NodeExecutionTrace,
-) -> Result<()>
+) -> Result<LlmDebugObservabilityRefs>
 where
     R: OrchestrationRuntimeRepository,
 {
@@ -565,7 +606,10 @@ where
             .await?;
     }
 
-    Ok(())
+    Ok(LlmDebugObservabilityRefs::from_records(
+        &projection,
+        &attempts,
+    ))
 }
 
 async fn append_model_attempts_from_metrics<R>(
@@ -775,6 +819,18 @@ where
             status,
             "persist_flow_debug_node_trace",
         )?;
+        let mut debug_payload = trace.debug_payload.clone();
+        if trace.node_type == "llm" {
+            let refs = persist_llm_context_observability(
+                repository,
+                flow_run_id,
+                node_run.id,
+                node_span.id,
+                trace,
+            )
+            .await?;
+            apply_llm_debug_observability_refs(&mut debug_payload, &refs);
+        }
         let node_run = repository
             .update_node_run(&UpdateNodeRunInput {
                 node_run_id: node_run.id,
@@ -787,20 +843,10 @@ where
                 ),
                 error_payload: trace.error_payload.clone(),
                 metrics_payload: trace.metrics_payload.clone(),
-                debug_payload: trace.debug_payload.clone(),
+                debug_payload,
                 finished_at,
             })
             .await?;
-        if trace.node_type == "llm" {
-            persist_llm_context_observability(
-                repository,
-                flow_run_id,
-                node_run.id,
-                node_span.id,
-                trace,
-            )
-            .await?;
-        }
         append_provider_stream_events(
             repository,
             flow_run_id,

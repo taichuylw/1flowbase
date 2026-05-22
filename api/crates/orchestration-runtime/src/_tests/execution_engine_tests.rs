@@ -559,6 +559,29 @@ async fn run_llm_trace_with_fixture_provider() -> crate::execution_state::NodeEx
         .expect("llm trace should exist")
 }
 
+fn assert_no_pending_observability_ref(value: &Value) {
+    match value {
+        Value::String(text) => {
+            assert!(
+                !text.starts_with("pending_attempt_id:")
+                    && !text.starts_with("pending_projection_id:"),
+                "debug payload kept unresolved observability ref: {text}"
+            );
+        }
+        Value::Array(items) => {
+            for item in items {
+                assert_no_pending_observability_ref(item);
+            }
+        }
+        Value::Object(object) => {
+            for item in object.values() {
+                assert_no_pending_observability_ref(item);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
 fn base_plan() -> CompiledPlan {
     let mut nodes = BTreeMap::new();
     nodes.insert(
@@ -810,6 +833,11 @@ async fn llm_node_success_keeps_processed_result_fields_in_output_payload() {
     assert!(trace.output_payload.get("context_projection_ref").is_none());
     assert!(trace.output_payload.get("attempt_refs").is_none());
     assert!(trace.output_payload.get("winner_attempt_ref").is_none());
+    assert!(trace.debug_payload.get("raw_response_ref").is_none());
+    assert!(trace.debug_payload.get("context_projection_ref").is_none());
+    assert!(trace.debug_payload.get("attempt_refs").is_none());
+    assert!(trace.debug_payload.get("winner_attempt_ref").is_none());
+    assert_no_pending_observability_ref(&trace.debug_payload);
     assert_eq!(
         trace.debug_payload["provider_events"]
             .as_array()

@@ -260,3 +260,46 @@ async fn local_runtime_event_stream_subscribe_after_closed_cursor_finishes() {
     assert!(subscription.replay.is_empty());
     assert!(subscription.live_events.recv().await.is_none());
 }
+
+#[tokio::test]
+async fn local_runtime_event_stream_subscribe_after_closed_replay_finishes() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream
+        .close_run(run_id, RuntimeEventCloseReason::Finished)
+        .await
+        .unwrap();
+
+    let mut subscription = stream.subscribe(run_id, Some(0)).await.unwrap();
+    assert_eq!(subscription.replay.len(), 1);
+    assert!(subscription.live_events.recv().await.is_none());
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_close_wakes_live_subscription() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    let mut subscription = stream.subscribe(run_id, Some(0)).await.unwrap();
+    assert!(subscription.replay.is_empty());
+
+    stream
+        .close_run(run_id, RuntimeEventCloseReason::Finished)
+        .await
+        .unwrap();
+
+    let closed = tokio::time::timeout(Duration::from_secs(1), subscription.live_events.recv())
+        .await
+        .expect("close_run should wake live subscribers");
+    assert!(closed.is_none());
+}
