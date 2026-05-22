@@ -218,7 +218,7 @@ async fn application_api_docs_list_models_and_streaming_contracts() {
         .collect::<Vec<_>>();
     assert!(operation_paths.contains(&("GET", "/v1/models")));
     assert!(operation_paths.contains(&("POST", "/v1/chat/completions")));
-    assert!(operation_paths.contains(&("POST", "/openai/v1/chat/completions")));
+    assert!(!operation_paths.contains(&("POST", "/openai/v1/chat/completions")));
     assert!(operation_paths.contains(&("POST", "/v1/responses")));
 
     let models_spec = app

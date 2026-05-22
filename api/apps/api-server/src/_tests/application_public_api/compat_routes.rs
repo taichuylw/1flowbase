@@ -613,7 +613,7 @@ async fn openai_chat_completions_accepts_root_endpoint_for_plain_base_url_client
 }
 
 #[tokio::test]
-async fn openai_chat_completions_accepts_prefixed_openai_alias() {
+async fn openai_chat_completions_rejects_removed_prefixed_openai_alias() {
     let app = test_app().await;
     let token = setup_published_app(&app, "OpenAI Prefixed Alias Compatible Route App").await;
 
@@ -625,10 +625,7 @@ async fn openai_chat_completions_accepts_prefixed_openai_alias() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload = response_json(response).await;
-    assert_eq!(payload["object"], json!("chat.completion"));
-    assert_eq!(payload["model"], json!("provider/custom-model:latest"));
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

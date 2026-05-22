@@ -584,8 +584,7 @@ fn operation_request_body(operation: &PublicOperation, docs: &DocTextResolver) -
                 }
             }
         })),
-        "applicationOpenAiCreateChatCompletion"
-        | "applicationOpenAiCreateChatCompletionPrefixed" => Some(json_request_body(
+        "applicationOpenAiCreateChatCompletion" => Some(json_request_body(
             openai_chat_completion_schema(docs),
             json!({
                 "model": "provider/model",
@@ -624,8 +623,7 @@ fn operation_responses(operation: &PublicOperation, docs: &DocTextResolver) -> V
         }
         "applicationNativeResumeRun" => native_responses(docs, "200", true),
         "applicationNativeUploadFile" => native_upload_responses(docs),
-        "applicationOpenAiCreateChatCompletion"
-        | "applicationOpenAiCreateChatCompletionPrefixed" => openai_responses(docs),
+        "applicationOpenAiCreateChatCompletion" => openai_responses(docs),
         "applicationOpenAiCreateResponse" => openai_response_responses(docs),
         "applicationOpenAiListModels" => openai_model_list_responses(docs),
         "applicationAnthropicCreateMessage" => anthropic_responses(docs),
@@ -1682,13 +1680,6 @@ fn public_operations() -> Vec<PublicOperation> {
             id: "applicationOpenAiCreateChatCompletion",
             method: "POST",
             path: "/v1/chat/completions",
-            category_id: OPENAI_CATEGORY_ID,
-            doc_key: "application_public_api.openai.chat_completion",
-        },
-        PublicOperation {
-            id: "applicationOpenAiCreateChatCompletionPrefixed",
-            method: "POST",
-            path: "/openai/v1/chat/completions",
             category_id: OPENAI_CATEGORY_ID,
             doc_key: "application_public_api.openai.chat_completion",
         },
