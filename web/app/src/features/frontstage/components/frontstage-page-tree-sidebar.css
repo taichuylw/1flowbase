@@ -1,0 +1,306 @@
+.frontstage-page-tree-sidebar {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-inline: 12px;
+}
+
+.frontstage-page-tree-sidebar__actions {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.frontstage-page-tree-sidebar__tree,
+.frontstage-page-tree-sidebar__children {
+  list-style: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.frontstage-page-tree-sidebar__node {
+  min-width: 0;
+  outline: none;
+}
+
+.frontstage-page-tree-sidebar__node-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  margin-block: 3px;
+  padding-block: 6px;
+  padding-right: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.frontstage-page-tree-sidebar__node-row--design {
+  padding-right: 40px;
+}
+
+.frontstage-page-tree-sidebar__node-row--page {
+  cursor: pointer;
+}
+
+.frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--page:hover,
+.frontstage-page-tree-sidebar__node:focus-visible
+  > .frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--page {
+  background: rgba(0, 208, 132, 0.08);
+}
+
+.frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--page:hover,
+.frontstage-page-tree-sidebar__node:focus-visible
+  > .frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--page {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* Default / View mode selected styling (Green) */
+.frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--selected {
+  border-color: transparent !important;
+  background: #e6f7f2 !important;
+}
+
+.frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--selected .frontstage-page-tree-sidebar__node-title {
+  color: #00d084 !important;
+  font-weight: 500;
+}
+
+.frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--selected .anticon {
+  color: #00d084 !important;
+}
+
+/* Design mode selected styling (Crystal Transparent Blue) */
+.frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--selected {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+.frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--selected .frontstage-page-tree-sidebar__node-title {
+  color: #2563eb !important;
+  font-weight: 500;
+}
+
+.frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--selected .anticon {
+  color: #2563eb !important;
+}
+
+.frontstage-page-tree-sidebar__node-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.frontstage-page-tree-sidebar__node-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.frontstage-page-tree-sidebar__node-title {
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: color 150ms ease;
+}
+
+/* Visually hidden but accessible to JSDOM accessible name calculation */
+.frontstage-page-tree-sidebar__node-kind {
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.frontstage-page-tree-sidebar__node-actions-visible {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.frontstage-page-tree-sidebar__node-row:hover .frontstage-page-tree-sidebar__node-actions-visible {
+  opacity: 1;
+}
+
+.frontstage-page-tree-sidebar__drag-handle.ant-btn,
+.frontstage-page-tree-sidebar__more-trigger.ant-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 0 !important;
+  vertical-align: middle !important;
+  width: 14px !important;
+  min-width: 14px !important;
+  height: 14px !important;
+  padding: 0 !important;
+  background: #3b82f6 !important;
+  border: none !important;
+  border-radius: 3px !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.15);
+  cursor: pointer;
+  transition: background 150ms ease, transform 100ms ease;
+}
+
+.frontstage-page-tree-sidebar__drag-handle.ant-btn:hover,
+.frontstage-page-tree-sidebar__more-trigger.ant-btn:hover {
+  background: #2563eb !important;
+  transform: scale(1.05);
+}
+
+.frontstage-page-tree-sidebar__drag-handle.ant-btn:active,
+.frontstage-page-tree-sidebar__more-trigger.ant-btn:active {
+  background: #1d4ed8 !important;
+  transform: scale(0.95);
+}
+
+.frontstage-page-tree-sidebar__drag-handle.ant-btn .anticon,
+.frontstage-page-tree-sidebar__more-trigger.ant-btn .anticon {
+  color: #ffffff !important;
+  font-size: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: 0 !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.frontstage-page-tree-sidebar__drag-handle.ant-btn > span,
+.frontstage-page-tree-sidebar__more-trigger.ant-btn > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+.frontstage-page-tree-sidebar__empty {
+  padding: 12px 4px;
+}
+
+.frontstage-page-tree-sidebar__add-item-btn.ant-btn {
+  color: #2563eb !important;
+  border: 1px dashed rgba(59, 130, 246, 0.4) !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+  border-radius: 6px !important;
+  height: 32px !important;
+  width: 100% !important;
+  text-align: left !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  font-weight: 500 !important;
+  transition: all 0.3s ease !important;
+  box-shadow: none !important;
+}
+
+.frontstage-page-tree-sidebar__add-item-btn.ant-btn:hover {
+  background: rgba(59, 130, 246, 0.16) !important;
+  border-color: rgba(59, 130, 246, 0.48) !important;
+  color: #1d4ed8 !important;
+}
+
+.frontstage-page-tree-sidebar__add-item-btn.ant-btn .anticon {
+  color: #2563eb !important;
+}
+
+.frontstage-page-tree-sidebar__add-item-btn.ant-btn:hover .anticon {
+  color: #1d4ed8 !important;
+}
+
+.frontstage-page-tree-sidebar__add-menu {
+  z-index: 20;
+  display: grid;
+  width: 100%;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+}
+
+.frontstage-page-tree-sidebar__add-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  color: #2563eb;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.frontstage-page-tree-sidebar__add-menu-item:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.frontstage-page-tree-sidebar__chevron {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #8c8c8c;
+  font-size: 10px;
+  transition: color 150ms ease, transform 0.2s ease;
+}
+
+.frontstage-page-tree-sidebar__chevron:hover {
+  color: #595959;
+}
+
+.frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--selected .frontstage-page-tree-sidebar__chevron {
+  color: #00d084 !important;
+}
+
+.frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--selected .frontstage-page-tree-sidebar__chevron {
+  color: #2563eb !important;
+}
+
+.frontstage-page-tree-sidebar__node-row--view.frontstage-page-tree-sidebar__node-row--selected .frontstage-page-tree-sidebar__chevron:hover {
+  color: #059669 !important;
+}
+
+.frontstage-page-tree-sidebar__node-row--design.frontstage-page-tree-sidebar__node-row--selected .frontstage-page-tree-sidebar__chevron:hover {
+  color: #1d4ed8 !important;
+}
+
+.frontstage-page-tree-sidebar__node-row--hidden {
+  opacity: 0.5;
+}
+
+@media (max-width: 991px) {
+  .frontstage-page-tree-sidebar {
+    padding-inline: 0;
+  }
+}

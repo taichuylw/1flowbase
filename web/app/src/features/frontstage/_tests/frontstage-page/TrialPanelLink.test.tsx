@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -8,6 +9,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
+import {
+  resetFrontstageDesignModeStore,
+  useFrontstageDesignModeStore
+} from '../../../../state/frontstage-design-mode-store';
 import { FrontStagePage } from '../../pages/FrontStagePage';
 
 const pageContentSaveHook = vi.hoisted(() => ({
@@ -97,9 +102,22 @@ function renderFrontStagePage() {
   );
 }
 
+function activateDesignMode() {
+  act(() => {
+    useFrontstageDesignModeStore.getState().setDesignMode(true);
+  });
+}
+
+function exitDesignMode() {
+  act(() => {
+    useFrontstageDesignModeStore.getState().setDesignMode(false);
+  });
+}
+
 describe('FrontStagePage trial panel link', () => {
   beforeEach(() => {
     resetAuthStore();
+    resetFrontstageDesignModeStore();
     vi.clearAllMocks();
     pageContentSaveHook.useFrontstagePageContentSave.mockReturnValue({
       save: vi.fn(() => Promise.resolve(createPageContent())),
@@ -138,7 +156,7 @@ describe('FrontStagePage trial panel link', () => {
     authenticate();
     renderFrontStagePage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '区块 cta' }));
     fireEvent.click(screen.getByRole('button', { name: '编辑区块' }));
     fireEvent.click(
@@ -154,7 +172,7 @@ describe('FrontStagePage trial panel link', () => {
     authenticate();
     renderFrontStagePage();
 
-    fireEvent.click(screen.getByRole('button', { name: '进入设计模式' }));
+    activateDesignMode();
     fireEvent.click(screen.getByRole('button', { name: '区块 cta' }));
     fireEvent.click(screen.getByRole('button', { name: '编辑区块' }));
     fireEvent.click(
@@ -166,7 +184,7 @@ describe('FrontStagePage trial panel link', () => {
     ).toBeInTheDocument();
 
     // Exit design mode — Drawer should close
-    fireEvent.click(screen.getByRole('button', { name: '退出设计模式' }));
+    exitDesignMode();
 
     await waitFor(() => {
       expect(

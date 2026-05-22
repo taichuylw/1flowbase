@@ -1,7 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { Menu } from 'antd';
 import type { MenuProps } from 'antd';
-
 import { getPrimaryNavigationRoutes } from '../routes/route-helpers';
 import { getSelectedRouteId } from '../routes/route-config';
 
@@ -66,3 +65,4 @@ export function Navigation({
     </nav>
   );
 }
+

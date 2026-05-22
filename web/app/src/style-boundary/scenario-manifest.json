@@ -84,6 +84,94 @@
     ]
   },
   {
+    "id": "page.frontstage",
+    "kind": "page",
+    "title": "Frontstage Page",
+    "impactFiles": [
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/packages/ui/src/index.tsx",
+      "web/app/src/app-shell/AppShellFrame.tsx",
+      "web/app/src/app-shell/Navigation.tsx",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx",
+      "web/app/src/app-shell/SettingsChromeMenu.tsx",
+      "web/app/src/app-shell/FrontstageDesignModeAction.tsx",
+      "web/app/src/state/frontstage-design-mode-store.ts",
+      "web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionSidebarNav.tsx",
+      "web/app/src/shared/ui/section-page-layout/section-page-layout.css",
+      "web/app/src/features/frontstage/pages/FrontStagePage.tsx",
+      "web/app/src/features/frontstage/pages/frontstage-page.css",
+      "web/app/src/features/frontstage/components/FrontStagePageTreeSidebar.tsx",
+      "web/app/src/features/frontstage/components/frontstage-page-tree-sidebar.css",
+      "web/app/src/features/frontstage/components/PageCanvas.tsx",
+      "web/app/src/app/router.tsx",
+      "web/app/src/style-boundary/registry.tsx"
+    ],
+    "boundaryNodes": [
+      {
+        "id": "shell-header",
+        "selector": ".app-shell-header",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          },
+          {
+            "property": "flex-wrap",
+            "expected": "nowrap"
+          },
+          {
+            "property": "overflow-x",
+            "expected": "auto"
+          }
+        ]
+      },
+      {
+        "id": "design-mode-button",
+        "selector": ".app-shell-design-mode-button",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "section-shell",
+        "selector": ".section-page-layout__shell",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "frontstage-sidebar",
+        "selector": ".frontstage-page-tree-sidebar",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "grid"
+          }
+        ]
+      },
+      {
+        "id": "frontstage-workspace",
+        "selector": ".frontstage-page-workspace",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "component.agent-flow-node-detail",
     "kind": "component",
     "title": "Agent Flow Node Detail",

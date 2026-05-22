@@ -9,6 +9,7 @@ const {
   commandExists,
   ensureServiceEnvFile,
   requireCommand,
+  resolveCommandPath,
 } = require('./env.js');
 const { runServicePrestartCommands } = require('./postgres-reset.js');
 const { DEFAULT_STARTUP_TIMEOUT_MS } = require('./services.js');
@@ -121,6 +122,19 @@ async function waitForPort(host, port, timeoutMs = 15000) {
   return false;
 }
 
+async function waitForPortToClose(host, port, timeoutMs = 5000, isPortOpenImpl = isPortOpen) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!(await isPortOpenImpl(host, port))) {
+      return true;
+    }
+
+    await sleep(200);
+  }
+
+  return !(await isPortOpenImpl(host, port));
+}
+
 function waitForServicePort(service, waitForPortImpl = waitForPort) {
   return waitForPortImpl(getProbeHost(service), service.port, getStartupTimeoutMs(service));
 }
@@ -134,12 +148,55 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-function listPortOccupantPids(port) {
-  if (!Number.isInteger(port) || port <= 0 || !commandExists('lsof')) {
+function parseWindowsNetstatPortOccupants(output, port) {
+  if (!Number.isInteger(port) || port <= 0) {
     return [];
   }
 
-  const result = runCommand('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN', '-P', '-n'], {
+  const occupants = new Set();
+  const portPattern = new RegExp(`^(?:\\[::\\]|\\S+):${port}$`, 'u');
+
+  for (const line of String(output || '').split(/\r?\n/)) {
+    const columns = line.trim().split(/\s+/u);
+    if (columns.length < 5 || columns[0].toUpperCase() !== 'TCP') {
+      continue;
+    }
+
+    const [, localAddress, , state, pid] = columns;
+    if (state.toUpperCase() !== 'LISTENING' || !portPattern.test(localAddress)) {
+      continue;
+    }
+
+    const parsedPid = Number.parseInt(pid, 10);
+    if (Number.isInteger(parsedPid) && parsedPid > 0) {
+      occupants.add(parsedPid);
+    }
+  }
+
+  return [...occupants];
+}
+
+function listPortOccupantPids(port, { platform = process.platform, runCommandImpl = runCommand } = {}) {
+  if (!Number.isInteger(port) || port <= 0) {
+    return [];
+  }
+
+  if (platform === 'win32') {
+    const result = runCommandImpl('netstat', ['-ano'], {
+      captureOutput: true,
+    });
+    if (result.error || result.status !== 0) {
+      return [];
+    }
+
+    return parseWindowsNetstatPortOccupants(result.stdout, port);
+  }
+
+  if (!commandExists('lsof')) {
+    return [];
+  }
+
+  const result = runCommandImpl('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN', '-P', '-n'], {
     captureOutput: true,
   });
   if (result.error || result.status !== 0) {
@@ -259,8 +316,12 @@ async function startService(
     stopServiceImpl = stopService,
     spawnImpl = spawn,
     buildServiceEnvImpl = buildServiceEnv,
+    listPortOccupantPidsImpl = listPortOccupantPids,
+    platform = process.platform,
+    resolveCommandPathImpl = resolveCommandPath,
     writePidRecordImpl = writePidRecord,
     waitForServicePortImpl = waitForServicePort,
+    waitForPortToCloseImpl = waitForPortToClose,
     clearPortConflictsImpl = clearPortConflicts,
     logImpl = log,
     takeOverPortOwnership = false,
@@ -287,6 +348,7 @@ async function startService(
 
   if (await isPortOpenImpl(getProbeHost(service), service.port) && takeOverPortOwnership) {
     await clearPortConflictsImpl(service.label, [service.port]);
+    await waitForPortToCloseImpl(getProbeHost(service), service.port, 5000, isPortOpenImpl);
   }
 
   if (await isPortOpenImpl(getProbeHost(service), service.port)) {
@@ -294,10 +356,11 @@ async function startService(
   }
 
   const outputFd = fs.openSync(service.logFile, 'a');
-  const child = spawnImpl(service.command, service.args, {
+  const child = spawnImpl(resolveCommandPathImpl(service.command) || service.command, service.args, {
     cwd: service.cwd,
     env: buildServiceEnvImpl(service),
-    detached: process.platform !== 'win32',
+    detached: platform !== 'win32',
+    shell: platform === 'win32',
     stdio: ['ignore', outputFd, outputFd],
   });
 
@@ -309,6 +372,11 @@ async function startService(
   if (!ready) {
     await stopServiceImpl(service);
     throw new Error(`${service.label} 启动超时，请查看日志：${service.logFile}`);
+  }
+
+  const listenerPids = listPortOccupantPidsImpl(service.port);
+  if (listenerPids.length > 0 && listenerPids[0] !== child.pid) {
+    writePidRecordImpl(service, listenerPids[0]);
   }
 
   logImpl(`${service.label} 已启动，监听 ${getBindHost(service)}:${service.port}`);
@@ -389,7 +457,10 @@ async function manageServices(
 }
 
 module.exports = {
+  listPortOccupantPids,
   manageServices,
+  parseWindowsNetstatPortOccupants,
   startService,
+  waitForPortToClose,
   waitForServicePort,
 };

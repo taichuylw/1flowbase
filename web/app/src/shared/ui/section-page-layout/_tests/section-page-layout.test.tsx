@@ -305,6 +305,23 @@ describe('SectionPageLayout', () => {
     expect(screen.queryByText('不会显示的内容')).not.toBeInTheDocument();
   });
 
+  test('renders custom sidebar content when navItems is empty', async () => {
+    renderInRouter(
+      <SectionPageLayout
+        pageTitle="前台"
+        navItems={[]}
+        activeKey=""
+        sidebarContent={<aside>页面树</aside>}
+      >
+        <section>前台画布</section>
+      </SectionPageLayout>
+    );
+
+    expect(await screen.findByText('页面树')).toBeInTheDocument();
+    expect(screen.getByText('前台画布')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
   test('switches to compact mobile navigation when breakpoint is below lg', async () => {
     useBreakpointSpy.mockReturnValue({
       xs: true,

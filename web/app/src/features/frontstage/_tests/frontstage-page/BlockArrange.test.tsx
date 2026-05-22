@@ -10,6 +10,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
+import {
+  resetFrontstageDesignModeStore,
+  useFrontstageDesignModeStore
+} from '../../../../state/frontstage-design-mode-store';
 import type {
   FrontstagePageContent,
   SaveFrontstagePageContentInput
@@ -398,17 +402,22 @@ async function confirmBlockDelete(blockId: string) {
   );
 }
 
-async function activateDesignMode() {
-  await clickAndFlush(screen.getByRole('button', { name: '进入设计模式' }));
+function activateDesignMode() {
+  act(() => {
+    useFrontstageDesignModeStore.getState().setDesignMode(true);
+  });
 }
 
-async function exitDesignMode() {
-  await clickAndFlush(screen.getByRole('button', { name: '退出设计模式' }));
+function exitDesignMode() {
+  act(() => {
+    useFrontstageDesignModeStore.getState().setDesignMode(false);
+  });
 }
 
 describe('FrontStagePage block arrange actions', () => {
   beforeEach(() => {
     resetAuthStore();
+    resetFrontstageDesignModeStore();
     vi.clearAllMocks();
     mockPageContentSaveState();
     mockFrontstageBlockCatalog();

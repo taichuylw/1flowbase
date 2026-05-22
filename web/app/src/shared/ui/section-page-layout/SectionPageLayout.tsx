@@ -20,6 +20,7 @@ export interface SectionPageLayoutProps {
   navItems: SectionNavItem[];
   activeKey: string;
   children: ReactNode;
+  sidebarContent?: ReactNode;
   sidebarFooter?: ReactNode;
   emptyState?: ReactNode;
   contentWidth?: 'wide' | 'narrow' | 'full';
@@ -31,6 +32,7 @@ export function SectionPageLayout({
   navItems,
   activeKey,
   children,
+  sidebarContent,
   sidebarFooter,
   emptyState,
   contentWidth = 'wide',
@@ -40,6 +42,8 @@ export function SectionPageLayout({
   const visibleItems = navItems.filter((item) => item.visible !== false);
   const compactMode = !screens.lg;
   const compactVariant = visibleItems.length <= 4 ? 'tabs' : 'drawer';
+  const hasSidebarContent = Boolean(sidebarContent);
+  const hasSidebar = visibleItems.length > 0 || hasSidebarContent;
   const layoutClassName = [
     'section-page-layout',
     `section-page-layout--${contentWidth}`,
@@ -50,7 +54,7 @@ export function SectionPageLayout({
 
   return (
     <Layout className={layoutClassName} data-testid="section-page-layout">
-      {visibleItems.length === 0 ? (
+      {!hasSidebar ? (
         <Layout.Content className="section-page-layout__content">
           {emptyState ?? null}
         </Layout.Content>
@@ -76,6 +80,11 @@ export function SectionPageLayout({
                 compactMode={false}
                 compactVariant={compactVariant}
               />
+              {hasSidebarContent ? (
+                <div className="section-page-layout__sidebar-content">
+                  {sidebarContent}
+                </div>
+              ) : null}
               {sidebarFooter ? (
                 <div className="section-page-layout__footer">{sidebarFooter}</div>
               ) : null}
@@ -90,12 +99,18 @@ export function SectionPageLayout({
                     {pageTitle}
                   </Typography.Title>
                 ) : null}
-                <SectionSidebarNav
-                  navItems={visibleItems}
-                  activeKey={activeKey}
-                  compactMode
-                  compactVariant={compactVariant}
-                />
+                {hasSidebarContent ? (
+                  <div className="section-page-layout__sidebar-content">
+                    {sidebarContent}
+                  </div>
+                ) : (
+                  <SectionSidebarNav
+                    navItems={visibleItems}
+                    activeKey={activeKey}
+                    compactMode
+                    compactVariant={compactVariant}
+                  />
+                )}
               </>
             ) : null}
             {children}
