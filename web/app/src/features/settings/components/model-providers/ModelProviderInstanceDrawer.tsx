@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  Alert,
   AutoComplete,
   Button,
   Divider,
@@ -15,6 +16,17 @@ import {
   Tag,
   Typography
 } from 'antd';
+
+import {
+  ApiOutlined,
+  CheckCircleOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  SettingOutlined,
+  EyeOutlined,
+  EyeInvisibleOutlined,
+  ImportOutlined
+} from '@ant-design/icons';
 
 import type {
   SettingsModelProviderCatalogEntry,
@@ -553,7 +565,12 @@ function ModelProviderInstanceDrawerContent({
               : undefined
         }
       >
-        {useTextArea ? (
+        {isSecret ? (
+          <Input.Password
+            autoComplete="off"
+            placeholder="请输入"
+          />
+        ) : useTextArea ? (
           <Input.TextArea
             rows={4}
             placeholder={
@@ -581,26 +598,20 @@ function ModelProviderInstanceDrawerContent({
       onClose={onClose}
       destroyOnHidden
       footer={
-        <Space>
-          <Button
-            loading={previewingModels}
-            onClick={() => {
-              void handlePreviewModels().catch(() => undefined);
-            }}
-          >
-            检测
-          </Button>
-          <Button
-            type="primary"
-            loading={submitting}
-            onClick={() => {
-              void handleSubmit().catch(() => undefined);
-            }}
-          >
-            保存
-          </Button>
-          <Button onClick={onClose}>取消</Button>
-        </Space>
+        <div style={{ textAlign: 'right' }}>
+          <Space>
+            <Button
+              type="primary"
+              loading={submitting}
+              onClick={() => {
+                void handleSubmit().catch(() => undefined);
+              }}
+            >
+              保存
+            </Button>
+            <Button onClick={onClose}>取消</Button>
+          </Space>
+        </div>
       }
     >
       <Form
@@ -614,221 +625,280 @@ function ModelProviderInstanceDrawerContent({
       >
         {catalogEntry ? (
           <>
-            <Descriptions
-              size="small"
-              column={1}
-              items={[
-                {
-                  key: 'provider',
-                  label: '供应商',
-                  children: `${catalogEntry.display_name} (${catalogEntry.provider_code})`
-                },
-                {
-                  key: 'protocol',
-                  label: '协议',
-                  children: (
-                    <Space wrap size={6}>
-                      <Tag>{catalogEntry.protocol}</Tag>
-                      <Tag>{catalogEntry.model_discovery_mode}</Tag>
-                    </Space>
-                  )
-                },
-                {
-                  key: 'models',
-                  label: '预置模型',
-                  children: String(catalogEntry.predefined_models.length)
-                }
-              ]}
+            <div className="model-provider-drawer__header-card">
+              <div className="model-provider-drawer__header-title">
+                <ApiOutlined style={{ fontSize: 20, color: 'var(--ant-color-primary)' }} />
+                <Typography.Title level={4} style={{ margin: 0 }}>
+                  {catalogEntry.display_name}
+                </Typography.Title>
+              </div>
+              <div className="model-provider-drawer__header-tags">
+                <Tag color="blue">{catalogEntry.provider_code}</Tag>
+                <Tag color="cyan">{catalogEntry.protocol}</Tag>
+                <Tag color="purple">发现模式: {catalogEntry.model_discovery_mode}</Tag>
+                <Tag color="gold">预置模型: {catalogEntry.predefined_models.length}</Tag>
+              </div>
+            </div>
+
+            <Alert
+              className="model-provider-drawer__alert-banner"
+              message="实例权限与共享"
+              description="当前 workspace 内的成员均可使用此凭据实例。为了您的安全，敏感凭据仅会在服务器中加密存储，而不会在任何前端接口中回显。"
+              type="info"
+              showIcon
             />
 
-            <Typography.Paragraph
-              type="secondary"
-              className="model-provider-panel__drawer-note"
-            >
-              配置完成后，当前 workspace 内的成员都可以在模型选择器中使用这个实例。密钥仅会加密存储。
-            </Typography.Paragraph>
-
-            <Form.Item
-              label="加入主实例"
-              name="included_in_main"
-              valuePropName="checked"
-              extra="加入后，该实例的已启用模型会汇总到主实例聚合视图中。"
-            >
-              <Switch aria-label="加入主实例" />
-            </Form.Item>
-
-            <Form.Item
-              label="凭据名称"
-              name="display_name"
-              rules={[{ required: true, message: '请填写凭据名称' }]}
-            >
-              <Input placeholder="例如：OpenAI Production" />
-            </Form.Item>
-
-            <Divider orientation="left">连接配置</Divider>
-            {primaryConfigFields.map(renderConfigField)}
-            {advancedConfigFields.length > 0 ? (
-              <CollapseShell
-                variant="compact"
-                items={[
-                  {
-                    key: 'advanced-config',
-                    header: '高级配置（可选）',
-                    children: advancedConfigFields.map(renderConfigField)
-                  }
-                ]}
-              />
-            ) : null}
-
-            <Divider orientation="left">模型配置</Divider>
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Flex align="center" gap={12} style={{ width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <CachedModelSelect
-                    modelIds={previewModels.map((model) => model.model_id)}
-                    ariaLabel="缓存模型"
-                    placeholder="缓存模型"
-                    value={selectedCachedModelId}
-                    emptyMode="select"
-                    style={{ width: '100%' }}
-                    onChange={applyCachedModelSelection}
-                  />
-                </div>
-                <Button type="dashed" onClick={() => appendConfiguredModelRow()}>
-                  添加模型
-                </Button>
-              </Flex>
-
-              <div
-                style={{
-                  border: '1px solid var(--ant-color-border-secondary)',
-                  borderRadius: 8,
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS,
-                    gap: CONFIGURED_MODEL_GRID_GAP,
-                    padding: '10px 12px',
-                    background: 'var(--ant-color-fill-tertiary)',
-                    alignItems: 'center'
-                  }}
+            <div className="model-provider-drawer__card">
+              <div className="model-provider-drawer__card-title">
+                <SettingOutlined />
+                <span>基础设置</span>
+              </div>
+              <div className="model-provider-drawer__card-body">
+                <Form.Item
+                  label="凭据名称"
+                  name="display_name"
+                  rules={[{ required: true, message: '请填写凭据名称' }]}
                 >
-                  <Typography.Text strong>模型 ID</Typography.Text>
-                  <Typography.Text strong>上下文</Typography.Text>
-                  <Typography.Text strong style={{ textAlign: 'center' }}>
-                    启用
-                  </Typography.Text>
-                  <Typography.Text strong style={{ textAlign: 'center' }}>
-                    操作
-                  </Typography.Text>
-                </div>
+                  <Input placeholder="例如：OpenAI Production" />
+                </Form.Item>
 
-                {configuredModels.length > 0 ? (
-                  configuredModels.map((row, index) => (
+                <div className="model-provider-drawer__switch-row" style={{ marginTop: 16 }}>
+                  <div className="model-provider-drawer__switch-info">
+                    <span className="model-provider-drawer__switch-label">加入主实例</span>
+                    <span className="model-provider-drawer__switch-desc">
+                      开启后，此实例下启用的模型将汇总至全局主实例的聚合视图中，方便统一调用。
+                    </span>
+                  </div>
+                  <Form.Item
+                    name="included_in_main"
+                    valuePropName="checked"
+                    noStyle
+                  >
+                    <Switch aria-label="加入主实例" />
+                  </Form.Item>
+                </div>
+              </div>
+            </div>
+
+            <div className="model-provider-drawer__card">
+              <div className="model-provider-drawer__card-title">
+                <CheckCircleOutlined />
+                <span>连接配置</span>
+              </div>
+              <div className="model-provider-drawer__card-body">
+                {primaryConfigFields.map(renderConfigField)}
+                {advancedConfigFields.length > 0 ? (
+                  <div style={{ marginTop: 12 }}>
+                    <CollapseShell
+                      variant="compact"
+                      items={[
+                        {
+                          key: 'advanced-config',
+                          header: '高级配置（可选）',
+                          children: advancedConfigFields.map(renderConfigField)
+                        }
+                      ]}
+                    />
+                  </div>
+                ) : null}
+
+                <div className="model-provider-drawer__test-btn-wrapper">
+                  <Button
+                    loading={previewingModels}
+                    onClick={() => {
+                      void handlePreviewModels().catch(() => undefined);
+                    }}
+                  >
+                    检测
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="model-provider-drawer__card">
+              <div className="model-provider-drawer__card-title">
+                <PlusOutlined />
+                <span>模型配置</span>
+              </div>
+              <div className="model-provider-drawer__card-body">
+                <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  <Flex align="center" gap={12} style={{ width: '100%' }} wrap="wrap">
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <CachedModelSelect
+                        modelIds={previewModels.map((model) => model.model_id)}
+                        ariaLabel="缓存模型"
+                        placeholder="缓存模型"
+                        value={selectedCachedModelId}
+                        emptyMode="select"
+                        style={{ width: '100%' }}
+                        onChange={applyCachedModelSelection}
+                      />
+                    </div>
+                    <Space size={8}>
+                      {previewModels.length > 0 && (
+                        <Button
+                          type="primary"
+                          ghost
+                          icon={<ImportOutlined />}
+                          onClick={() => {
+                            setConfiguredModels((current) => {
+                              const existingIds = new Set(current.map((row) => row.model_id.trim()));
+                              const newRows = [...current];
+                              for (const pm of previewModels) {
+                                const id = pm.model_id.trim();
+                                if (id && !existingIds.has(id)) {
+                                  newRows.push({
+                                    key: nextConfiguredModelKey(),
+                                    model_id: id,
+                                    context_window_input: '',
+                                    context_window_error: null,
+                                    enabled: true
+                                  });
+                                  existingIds.add(id);
+                                }
+                              }
+                              return newRows;
+                            });
+                          }}
+                        >
+                          导入全部已发现模型
+                        </Button>
+                      )}
+                      <Button type="dashed" icon={<PlusOutlined />} aria-label="添加模型" onClick={() => appendConfiguredModelRow()}>
+                        添加模型
+                      </Button>
+                    </Space>
+                  </Flex>
+
+                  <div className="model-provider-drawer__model-table">
                     <div
-                      key={row.key}
+                      className="model-provider-drawer__model-header"
                       style={{
-                        display: 'grid',
                         gridTemplateColumns: CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS,
                         gap: CONFIGURED_MODEL_GRID_GAP,
-                        padding: '12px',
-                        borderTop: '1px solid var(--ant-color-border-secondary)',
                         alignItems: 'center'
                       }}
                     >
-                      <AutoComplete
-                        value={row.model_id}
-                        options={modelAutocompleteOptions}
-                        onChange={(value) => {
-                          updateConfiguredModelRow(row.key, {
-                            model_id: String(value)
-                          });
-                        }}
-                        placeholder={
-                          previewModels.length > 0
-                            ? '输入或从检测缓存选择 model id'
-                            : '输入 model id'
-                        }
-                        filterOption={(inputValue, option) =>
-                          String(option?.value ?? '')
-                            .toLowerCase()
-                            .includes(inputValue.toLowerCase())
-                        }
-                      >
-                        <Input aria-label={`模型 ID ${index + 1}`} />
-                      </AutoComplete>
-                      <div>
-                        <AutoComplete
-                          value={row.context_window_input}
-                          options={contextWindowOptions}
-                          onChange={(value) => {
-                            const parsedContextWindow = parseModelContextWindowInput(
-                              String(value)
-                            );
-                            updateConfiguredModelRow(row.key, {
-                              context_window_input: String(value),
-                              context_window_error: parsedContextWindow.error
-                            });
-                          }}
-                          placeholder="例如 128K"
-                          filterOption={(inputValue, option) =>
-                            String(option?.value ?? '')
-                              .toLowerCase()
-                              .includes(inputValue.toLowerCase())
-                          }
-                        >
-                          <Input aria-label={`上下文 ${index + 1}`} />
-                        </AutoComplete>
-                        {row.context_window_error ? (
-                          <Typography.Text
-                            type="danger"
-                            style={{ display: 'block', marginTop: 4 }}
-                          >
-                            {row.context_window_error}
-                          </Typography.Text>
-                        ) : null}
-                      </div>
-                      <Switch
-                        size="small"
-                        aria-label={`启用模型 ${index + 1}`}
-                        checked={row.enabled}
-                        style={{ justifySelf: 'center' }}
-                        onChange={(checked) => {
-                          updateConfiguredModelRow(row.key, {
-                            enabled: checked
-                          });
-                        }}
-                      />
-                      <Button
-                        danger
-                        size="small"
-                        type="text"
-                        aria-label={`删除模型 ${index + 1}`}
-                        style={{ justifySelf: 'center', minWidth: 0, paddingInline: 0 }}
-                        onClick={() => removeConfiguredModelRow(row.key)}
-                      >
-                        删除
-                      </Button>
+                      <Typography.Text strong style={{ color: 'inherit' }}>模型 ID</Typography.Text>
+                      <Typography.Text strong style={{ color: 'inherit' }}>上下文</Typography.Text>
+                      <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
+                        启用
+                      </Typography.Text>
+                      <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
+                        操作
+                      </Typography.Text>
                     </div>
-                  ))
-                ) : (
-                  <div
-                    style={{
-                      padding: '24px 12px',
-                      borderTop: '1px solid var(--ant-color-border-secondary)'
-                    }}
-                  >
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="还没有配置模型，点击“添加模型”开始录入。"
-                    />
+
+                    {configuredModels.length > 0 ? (
+                      configuredModels.map((row, index) => (
+                        <div
+                          key={row.key}
+                          className="model-provider-drawer__model-row"
+                          style={{
+                            gridTemplateColumns: CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS,
+                            gap: CONFIGURED_MODEL_GRID_GAP,
+                            alignItems: 'start'
+                          }}
+                        >
+                          <div>
+                            <AutoComplete
+                              value={row.model_id}
+                              options={modelAutocompleteOptions}
+                              onChange={(value) => {
+                                updateConfiguredModelRow(row.key, {
+                                  model_id: String(value)
+                                });
+                              }}
+                              placeholder={
+                                previewModels.length > 0
+                                  ? '输入或从检测缓存选择 model id'
+                                  : '输入 model id'
+                              }
+                              filterOption={(inputValue, option) =>
+                                String(option?.value ?? '')
+                                  .toLowerCase()
+                                  .includes(inputValue.toLowerCase())
+                              }
+                              style={{ width: '100%' }}
+                            >
+                              <Input aria-label={`模型 ID ${index + 1}`} />
+                            </AutoComplete>
+                          </div>
+                          <div>
+                            <AutoComplete
+                              value={row.context_window_input}
+                              options={contextWindowOptions}
+                              onChange={(value) => {
+                                const parsedContextWindow = parseModelContextWindowInput(
+                                  String(value)
+                                );
+                                updateConfiguredModelRow(row.key, {
+                                  context_window_input: String(value),
+                                  context_window_error: parsedContextWindow.error
+                                });
+                              }}
+                              placeholder="例如 128K"
+                              filterOption={(inputValue, option) =>
+                                String(option?.value ?? '')
+                                  .toLowerCase()
+                                  .includes(inputValue.toLowerCase())
+                              }
+                              style={{ width: '100%' }}
+                            >
+                              <Input aria-label={`上下文 ${index + 1}`} />
+                            </AutoComplete>
+                            {row.context_window_error ? (
+                              <Typography.Text
+                                type="danger"
+                                style={{ display: 'block', marginTop: 4, fontSize: 12 }}
+                              >
+                                {row.context_window_error}
+                              </Typography.Text>
+                            ) : null}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
+                            <Switch
+                              size="small"
+                              aria-label={`启用模型 ${index + 1}`}
+                              checked={row.enabled}
+                              onChange={(checked) => {
+                                updateConfiguredModelRow(row.key, {
+                                  enabled: checked
+                                });
+                              }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <Button
+                              danger
+                              size="small"
+                              type="text"
+                              icon={<DeleteOutlined />}
+                              aria-label={`删除模型 ${index + 1}`}
+                              className="model-provider-drawer__delete-btn"
+                              style={{ height: 'auto', padding: '4px 8px' }}
+                              onClick={() => removeConfiguredModelRow(row.key)}
+                            />
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div
+                        style={{
+                          padding: '32px 16px',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description="还没有配置模型，点击“添加模型”或使用检测自动导入。"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
+                </Space>
               </div>
-            </Space>
+            </div>
           </>
         ) : (
           <Typography.Text type="secondary">当前没有可用 provider catalog。</Typography.Text>
