@@ -14,6 +14,7 @@ use axum::{
 };
 use control_plane::{
     application_public_api::compat::openai::run_id_from_response_id,
+    orchestration_runtime::debug_stream_events,
     ports::{
         CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
         RuntimeEventCloseReason, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventStream,
@@ -1017,6 +1018,29 @@ async fn openai_chat_streaming_tool_resume_returns_done_on_current_connection() 
         .expect("chat completion id should include run id");
     let callback_task = seed_llm_callback_for_response_run(state.as_ref(), run_id).await;
     let tool_call_id = encode_openai_callback_tool_call_id(callback_task.id, "call_inventory");
+    state
+        .runtime_event_stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(run_id, debug_stream_events::flow_started(run_id))
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(
+            run_id,
+            debug_stream_events::waiting_callback_with_task(
+                run_id,
+                callback_task.node_run_id,
+                "node-llm",
+                &callback_task,
+            ),
+        )
+        .await
+        .unwrap();
 
     let response = post_json(
         &app,
@@ -1063,6 +1087,14 @@ async fn openai_chat_streaming_tool_resume_returns_done_on_current_connection() 
     let body = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(body.contains("[DONE]"), "{body}");
+    assert!(
+        !body.contains("\"finish_reason\":\"tool_calls\""),
+        "resume stream replayed a stale waiting_callback instead of the resumed turn: {body}"
+    );
+    assert!(
+        !body.contains("lookup_inventory"),
+        "resume stream sent the stale tool call again: {body}"
+    );
     assert!(
         body.contains("runtime_error") || body.contains("\"finish_reason\":\"stop\""),
         "{body}"

@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: public-api-reasoning-native-first
-summary: 应用接入 API 以 1flowbase Native API / runtime event 为唯一真值层，OpenAI Chat Completions、OpenAI Responses、Anthropic 等外层协议只能从原生请求与事件映射，不允许把兼容协议下沉成状态来源。
+summary: 应用接入 API 以 1flowbase Native API / runtime event 为唯一真值层，思考内容是用户可见结果；OpenAI Chat Completions、OpenAI Responses、Anthropic 等外层协议只能从原生请求与事件映射，不允许把兼容协议下沉成状态来源。
 keywords:
   - application public api
   - application api docs
@@ -15,8 +15,8 @@ keywords:
   - heartbeat
   - model list
 created_at: 2026-05-20 19
-updated_at: 2026-05-21 10
-last_verified_at: 2026-05-21 10
+updated_at: 2026-05-22 15
+last_verified_at: 2026-05-22 15
 decision_policy: direct_reference
 scope:
   - api/apps/api-server/src/routes/application_public_api
@@ -28,11 +28,11 @@ scope:
 
 ## 规则
 
-修改应用接入 API 的思考过程、流式输出、会话续接或兼容协议映射时，先确认 1flowbase Native API / runtime event stream 是否表达了真实语义；OpenAI Chat Completions、OpenAI Responses、Anthropic 等兼容接口只能作为 Native 请求与事件的协议投影同步维护。
+修改应用接入 API 的思考过程、流式输出、会话续接或兼容协议映射时，先确认 1flowbase Native API / runtime event stream 是否表达了真实语义；`reasoning_delta` / `<think>` 是用户可见结果的一部分，不能被当成内部噪音删除。OpenAI Chat Completions、OpenAI Responses、Anthropic 等兼容接口只能作为 Native 请求与事件的协议投影同步维护。
 
 ## 原因
 
-用户纠正过：思考过程和会话能力都不是 OpenAI 专属能力，应用接入 API 应该以 1flowbase 原生接口为基础，再分别映射 OpenAI Chat Completions、OpenAI Responses 和 Anthropic。如果只补一个兼容接口，或把 `previous_response_id` 等外部协议字段当成内部真值，会造成不同接入方式行为不一致并污染状态边界。
+用户纠正过：思考过程和会话能力都不是 OpenAI 专属能力，应用接入 API 应该以 1flowbase 原生接口为基础，再分别映射 OpenAI Chat Completions、OpenAI Responses 和 Anthropic。用户也明确纠正过，思考过程是结果的一部分，必须给到用户；如果只补一个兼容接口、把 `previous_response_id` 等外部协议字段当成内部真值，或在兜底重建流时丢弃思考内容，会造成不同接入方式行为不一致并污染状态边界。
 
 ## 适用场景
 

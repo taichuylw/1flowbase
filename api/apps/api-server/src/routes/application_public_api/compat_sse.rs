@@ -41,9 +41,10 @@ pub(crate) async fn start_openai_run_stream(
     run: NativeRunResult,
     model: String,
 ) -> Result<Response, NativeApiError> {
-    let chat_completion_id = openai_chat_completion_id_from_run_id(run.id);
+    let mut mapper =
+        OpenAiChatStreamMapper::new(model, openai_chat_completion_id_from_run_id(run.id), false);
     start_compatible_run_stream(state, run, move |run, envelope| {
-        openai_runtime_event_to_sse(run, &model, &chat_completion_id, envelope)
+        mapper.runtime_event_to_sse(run, envelope)
     })
     .await
 }
@@ -54,8 +55,9 @@ pub(crate) async fn start_openai_response_stream(
     model: String,
     previous_response_id: Option<String>,
 ) -> Result<Response, NativeApiError> {
+    let mut mapper = OpenAiResponseStreamMapper::new(model, previous_response_id, false);
     start_compatible_run_stream(state, run, move |run, envelope| {
-        openai_response_runtime_event_to_sse(run, &model, previous_response_id.as_deref(), envelope)
+        mapper.runtime_event_to_sse(run, envelope)
     })
     .await
 }
@@ -67,8 +69,9 @@ pub(crate) async fn start_openai_chat_resume_stream(
     chat_completion_id: String,
     command: CompleteCallbackTaskCommand,
 ) -> Result<Response, NativeApiError> {
+    let mut mapper = OpenAiChatStreamMapper::new(model, chat_completion_id, true);
     start_compatible_resume_stream(state, run, command, move |run, envelope| {
-        openai_runtime_event_to_sse(run, &model, &chat_completion_id, envelope)
+        mapper.runtime_event_to_sse(run, envelope)
     })
     .await
 }
@@ -80,8 +83,9 @@ pub(crate) async fn start_openai_response_resume_stream(
     previous_response_id: Option<String>,
     command: CompleteCallbackTaskCommand,
 ) -> Result<Response, NativeApiError> {
+    let mut mapper = OpenAiResponseStreamMapper::new(model, previous_response_id, true);
     start_compatible_resume_stream(state, run, command, move |run, envelope| {
-        openai_response_runtime_event_to_sse(run, &model, previous_response_id.as_deref(), envelope)
+        mapper.runtime_event_to_sse(run, envelope)
     })
     .await
 }
@@ -143,6 +147,8 @@ where
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
+        None,
+        None,
         sender,
         move |run, envelope| mapper(run, envelope),
     ));
@@ -225,15 +231,18 @@ where
         )
         .await
         .map_err(service_error)?;
-    let _ = state
+    let resume_started = state
         .runtime_event_stream
         .append(run.id, debug_stream_events::flow_started(run.id))
-        .await;
+        .await
+        .map_err(service_error)?;
 
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
+        Some(resume_started.sequence - 1),
+        Some(command.callback_task_id),
         sender,
         move |run, envelope| mapper(run, envelope),
     ));
@@ -285,13 +294,15 @@ where
 async fn send_compatible_runtime_event_stream<F>(
     state: Arc<ApiState>,
     initial_run: NativeRunResult,
+    from_sequence: Option<i64>,
+    ignored_waiting_callback_task_id: Option<uuid::Uuid>,
     sender: mpsc::Sender<Result<Event, Infallible>>,
     mut mapper: F,
 ) where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
     let stream = state.runtime_event_stream.clone();
-    let Ok(mut subscription) = stream.subscribe(initial_run.id, None).await else {
+    let Ok(mut subscription) = stream.subscribe(initial_run.id, from_sequence).await else {
         warn!(
             flow_run_id = %initial_run.id,
             application_id = %initial_run.application_id,
@@ -302,6 +313,9 @@ async fn send_compatible_runtime_event_stream<F>(
 
     let mut emitted_public_event = false;
     for event in subscription.replay {
+        if is_ignored_waiting_callback(&event, ignored_waiting_callback_task_id) {
+            continue;
+        }
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
         let events = mapper(&initial_run, event);
         emitted_public_event |= !events.is_empty();
@@ -331,6 +345,9 @@ async fn send_compatible_runtime_event_stream<F>(
                 let Some(event) = maybe_event else {
                     break;
                 };
+                if is_ignored_waiting_callback(&event, ignored_waiting_callback_task_id) {
+                    continue;
+                }
                 let event_type = event.event_type.clone();
                 let is_terminal = is_public_terminal_runtime_event(&event_type);
                 let events = mapper(&initial_run, event);
@@ -362,6 +379,7 @@ async fn send_compatible_runtime_event_stream<F>(
                     emitted_public_event,
                     "durable_poll",
                     false,
+                    ignored_waiting_callback_task_id,
                 )
                 .await
                 {
@@ -379,6 +397,7 @@ async fn send_compatible_runtime_event_stream<F>(
         emitted_public_event,
         "stream_closed",
         true,
+        ignored_waiting_callback_task_id,
     )
     .await;
 }
@@ -455,6 +474,7 @@ async fn emit_compatible_terminal_fallback<F>(
     emitted_public_event: bool,
     trigger: &'static str,
     warn_if_not_terminal: bool,
+    ignored_waiting_callback_task_id: Option<uuid::Uuid>,
 ) -> bool
 where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
@@ -480,6 +500,15 @@ where
         trigger = %trigger,
         "compatible public API stream missing runtime terminal event; emitting durable terminal fallback"
     );
+    if is_ignored_waiting_callback(&terminal_event, ignored_waiting_callback_task_id) {
+        debug!(
+            flow_run_id = %initial_run.id,
+            application_id = %initial_run.application_id,
+            trigger = %trigger,
+            "compatible public API resume stream ignored stale waiting callback terminal fallback"
+        );
+        return false;
+    }
 
     if !emitted_public_event {
         let started_event = RuntimeEventEnvelope::new(
@@ -493,6 +522,24 @@ where
     }
     let _ = send_compatible_sse_events(sender, mapper(&latest_run, terminal_event)).await;
     true
+}
+
+fn is_ignored_waiting_callback(
+    event: &RuntimeEventEnvelope,
+    ignored_waiting_callback_task_id: Option<uuid::Uuid>,
+) -> bool {
+    if event.event_type != "waiting_callback" {
+        return false;
+    }
+    let Some(ignored_task_id) = ignored_waiting_callback_task_id else {
+        return false;
+    };
+    event
+        .payload
+        .get("callback_task_id")
+        .and_then(Value::as_str)
+        .and_then(|value| uuid::Uuid::parse_str(value).ok())
+        == Some(ignored_task_id)
 }
 
 fn is_public_terminal_runtime_event(event_type: &str) -> bool {
@@ -511,6 +558,148 @@ pub(crate) fn openai_chat_completion_id_from_callback_task(
     callback_task_id: uuid::Uuid,
 ) -> String {
     format!("chatcmpl-{run_id}-{callback_task_id}")
+}
+
+struct OpenAiChatStreamMapper {
+    model: String,
+    chat_completion_id: String,
+    terminal_answer_fallback: bool,
+    emitted_text_delta: bool,
+}
+
+impl OpenAiChatStreamMapper {
+    fn new(model: String, chat_completion_id: String, terminal_answer_fallback: bool) -> Self {
+        Self {
+            model,
+            chat_completion_id,
+            terminal_answer_fallback,
+            emitted_text_delta: false,
+        }
+    }
+
+    fn runtime_event_to_sse(
+        &mut self,
+        initial_run: &NativeRunResult,
+        envelope: RuntimeEventEnvelope,
+    ) -> Vec<Result<Event, Infallible>> {
+        if envelope.event_type == "text_delta"
+            && envelope
+                .text
+                .as_deref()
+                .is_some_and(|text| !text.is_empty())
+        {
+            self.emitted_text_delta = true;
+        }
+
+        let terminal_answer = if self.terminal_answer_fallback
+            && !self.emitted_text_delta
+            && envelope.event_type == "flow_finished"
+        {
+            terminal_answer_segments(&envelope.payload)
+        } else {
+            None
+        };
+
+        let mut events = Vec::new();
+        if let Some(answer) = terminal_answer {
+            if let Some(reasoning) = answer.reasoning {
+                if let Some(payload) = openai_delta_chunk_payload(
+                    initial_run,
+                    &self.model,
+                    &self.chat_completion_id,
+                    "reasoning_delta",
+                    reasoning,
+                ) {
+                    events.push(json_sse(payload));
+                }
+            }
+            if let Some(payload) = openai_delta_chunk_payload(
+                initial_run,
+                &self.model,
+                &self.chat_completion_id,
+                "text_delta",
+                answer.content,
+            ) {
+                events.push(json_sse(payload));
+                self.emitted_text_delta = true;
+            }
+        }
+        events.extend(openai_runtime_event_to_sse(
+            initial_run,
+            &self.model,
+            &self.chat_completion_id,
+            envelope,
+        ));
+        events
+    }
+}
+
+struct OpenAiResponseStreamMapper {
+    model: String,
+    previous_response_id: Option<String>,
+    terminal_answer_fallback: bool,
+    emitted_text_delta: bool,
+}
+
+impl OpenAiResponseStreamMapper {
+    fn new(
+        model: String,
+        previous_response_id: Option<String>,
+        terminal_answer_fallback: bool,
+    ) -> Self {
+        Self {
+            model,
+            previous_response_id,
+            terminal_answer_fallback,
+            emitted_text_delta: false,
+        }
+    }
+
+    fn runtime_event_to_sse(
+        &mut self,
+        initial_run: &NativeRunResult,
+        envelope: RuntimeEventEnvelope,
+    ) -> Vec<Result<Event, Infallible>> {
+        if envelope.event_type == "text_delta"
+            && envelope
+                .text
+                .as_deref()
+                .is_some_and(|text| !text.is_empty())
+        {
+            self.emitted_text_delta = true;
+        }
+
+        let terminal_answer = if self.terminal_answer_fallback
+            && !self.emitted_text_delta
+            && envelope.event_type == "flow_finished"
+        {
+            terminal_answer_segments(&envelope.payload)
+        } else {
+            None
+        };
+
+        let mut events = Vec::new();
+        if let Some(answer) = terminal_answer {
+            if let Some(reasoning) = answer.reasoning {
+                events.push(event_json_sse(
+                    "response.reasoning_text.delta",
+                    openai_response_reasoning_text_delta_payload(initial_run, reasoning),
+                ));
+            }
+            events.push(event_json_sse(
+                "response.output_text.delta",
+                openai_response_output_text_delta_payload(initial_run, answer.content),
+            ));
+            self.emitted_text_delta = true;
+        }
+        events.extend(openai_response_runtime_event_to_sse(
+            initial_run,
+            &self.model,
+            self.previous_response_id.as_deref(),
+            envelope,
+        ));
+        events
+    }
 }
 
 fn openai_runtime_event_to_sse(
@@ -607,14 +796,10 @@ fn openai_response_runtime_event_to_sse(
         )],
         "text_delta" => vec![event_json_sse(
             "response.output_text.delta",
-            json!({
-                "type": "response.output_text.delta",
-                "response_id": response_id_from_run_id(initial_run.id),
-                "item_id": format!("msg_{}", initial_run.id),
-                "output_index": 0,
-                "content_index": 0,
-                "delta": envelope.text.unwrap_or_default()
-            }),
+            openai_response_output_text_delta_payload(
+                initial_run,
+                envelope.text.unwrap_or_default(),
+            ),
         )],
         "reasoning_delta" => vec![event_json_sse(
             "response.reasoning_text.delta",
@@ -711,6 +896,74 @@ fn openai_response_stream_snapshot(
         "output_text": "",
         "previous_response_id": previous_response_id
     })
+}
+
+fn openai_response_output_text_delta_payload(initial_run: &NativeRunResult, text: String) -> Value {
+    json!({
+        "type": "response.output_text.delta",
+        "response_id": response_id_from_run_id(initial_run.id),
+        "item_id": format!("msg_{}", initial_run.id),
+        "output_index": 0,
+        "content_index": 0,
+        "delta": text
+    })
+}
+
+fn openai_response_reasoning_text_delta_payload(
+    initial_run: &NativeRunResult,
+    text: String,
+) -> Value {
+    json!({
+        "type": "response.reasoning_text.delta",
+        "response_id": response_id_from_run_id(initial_run.id),
+        "item_id": format!("msg_{}", initial_run.id),
+        "output_index": 0,
+        "content_index": 0,
+        "delta": text
+    })
+}
+
+struct TerminalAssistantAnswer {
+    reasoning: Option<String>,
+    content: String,
+}
+
+fn terminal_answer_segments(payload: &Value) -> Option<TerminalAssistantAnswer> {
+    let answer = payload
+        .get("output")
+        .and_then(|output| output.get("answer"))
+        .or_else(|| payload.get("answer"))
+        .and_then(Value::as_str)
+        .filter(|answer| !answer.is_empty())
+        .map(ToOwned::to_owned)?;
+    Some(split_terminal_assistant_answer(answer))
+}
+
+fn split_terminal_assistant_answer(answer: String) -> TerminalAssistantAnswer {
+    let trimmed_start = answer.trim_start();
+    let Some(after_open) = trimmed_start.strip_prefix("<think>") else {
+        return TerminalAssistantAnswer {
+            reasoning: None,
+            content: answer,
+        };
+    };
+    let Some(close_index) = after_open.find("</think>") else {
+        return TerminalAssistantAnswer {
+            reasoning: None,
+            content: answer,
+        };
+    };
+
+    // Thinking is user-visible output. Keep it as a reasoning delta instead of
+    // dropping it when terminal answer fallback has to reconstruct the stream.
+    let reasoning = after_open[..close_index].to_string();
+    let content = after_open[close_index + "</think>".len()..]
+        .trim_start()
+        .to_string();
+    TerminalAssistantAnswer {
+        reasoning: (!reasoning.is_empty()).then_some(reasoning),
+        content,
+    }
 }
 
 fn openai_delta_chunk_payload(
@@ -1436,6 +1689,108 @@ mod tests {
         assert_eq!(payload["usage"]["prompt_tokens"], json!(0));
         assert_eq!(payload["usage"]["completion_tokens"], json!(0));
         assert_eq!(payload["usage"]["total_tokens"], json!(0));
+    }
+
+    #[test]
+    fn openai_chat_resume_terminal_answer_fallback_emits_content_before_finish() {
+        let run = native_run();
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(run.id, json!({ "answer": "最终回答" })),
+            ),
+        );
+
+        assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn openai_chat_resume_terminal_answer_fallback_splits_thinking_from_content() {
+        let run = native_run();
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+        let answer = split_terminal_assistant_answer("<think>先分析</think>\n最终回答".to_string());
+        assert_eq!(answer.reasoning.as_deref(), Some("先分析"));
+        assert_eq!(answer.content, "最终回答");
+
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(
+                    run.id,
+                    json!({ "answer": "<think>先分析</think>\n最终回答" }),
+                ),
+            ),
+        );
+
+        assert_eq!(events.len(), 4);
+    }
+
+    #[test]
+    fn openai_responses_resume_terminal_answer_fallback_splits_thinking_from_content() {
+        let run = native_run();
+        let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(
+                    run.id,
+                    json!({ "answer": "<think>先分析</think>\n最终回答" }),
+                ),
+            ),
+        );
+
+        assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn openai_chat_resume_terminal_answer_fallback_does_not_duplicate_streamed_text() {
+        let run = native_run();
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+        let text_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::text_delta("node-llm", run.id, "已流式输出".to_string()),
+            ),
+        );
+        let terminal_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                2,
+                debug_stream_events::flow_finished(run.id, json!({ "answer": "最终回答" })),
+            ),
+        );
+
+        assert_eq!(text_events.len(), 1);
+        assert_eq!(terminal_events.len(), 2);
+    }
+
+    #[test]
+    fn openai_responses_resume_terminal_answer_fallback_emits_output_delta() {
+        let run = native_run();
+        let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(run.id, json!({ "answer": "最终回答" })),
+            ),
+        );
+
+        assert_eq!(events.len(), 2);
     }
 
     #[test]
