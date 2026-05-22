@@ -18,7 +18,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Empty, Typography, Dropdown, Tooltip, Switch } from 'antd';
 import { useState } from 'react';
-import type { FocusEvent } from 'react';
+import type { DragEvent, FocusEvent } from 'react';
 import type { MenuProps } from 'antd';
 
 import { canMoveNode, type FrontStageTreeNode } from '../lib/page-tree';
@@ -43,9 +43,16 @@ type FrontStagePageTreeSidebarProps = {
     input: { tooltip?: string | null; isHidden?: boolean }
   ) => void;
   onMoveNode: (nodeId: string, direction: -1 | 1) => void;
+  onMoveNodeToPosition: (
+    nodeId: string,
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => void;
   onDeleteNode: (nodeId: string) => void;
   onSelectPage: (nodeId: string) => void;
 };
+
+const PAGE_TREE_DRAG_DATA_TYPE = 'application/x-frontstage-page-tree-node';
 
 function getNodeTitle(node: FrontStageTreeNode) {
   if (node.title) {
@@ -69,8 +76,11 @@ function renderTreeNode({
   onAddNodeAtPosition,
   onRenameNode,
   onMoveNode,
+  onMoveNodeToPosition,
   onDeleteNode,
-  onSelectPage
+  onSelectPage,
+  draggedNodeId,
+  setDraggedNodeId
 }: {
   node: FrontStageTreeNode;
   level: number;
@@ -92,8 +102,15 @@ function renderTreeNode({
   ) => void;
   onRenameNode: (nodeId: string, currentTitle: string | null) => void;
   onMoveNode: (nodeId: string, direction: -1 | 1) => void;
+  onMoveNodeToPosition: (
+    nodeId: string,
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => void;
   onDeleteNode: (nodeId: string) => void;
   onSelectPage: (nodeId: string) => void;
+  draggedNodeId: string | null;
+  setDraggedNodeId: (nodeId: string | null) => void;
 }) {
   const isPageNode = node.kind === 'page';
   const isSelected = selectedPageId === node.id;
@@ -104,6 +121,39 @@ function renderTreeNode({
   const { canMoveUp, canMoveDown } = canMoveNode(siblings, node.id);
   const childNodes = node.children ?? [];
   const title = getNodeTitle(node);
+  const isDragging = draggedNodeId === node.id;
+
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!canEdit || !draggedNodeId || draggedNodeId === node.id) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    if (!canEdit) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const droppedNodeId =
+      event.dataTransfer.getData(PAGE_TREE_DRAG_DATA_TYPE) || draggedNodeId;
+    setDraggedNodeId(null);
+
+    if (!droppedNodeId || droppedNodeId === node.id) {
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position =
+      event.clientY <= rect.top + rect.height / 2 ? 'before' : 'after';
+
+    onMoveNodeToPosition(droppedNodeId, node.id, position);
+  };
 
   const menuItems: MenuProps['items'] = [
     {
@@ -291,6 +341,8 @@ function renderTreeNode({
       key={node.id}
       className="frontstage-page-tree-sidebar__node"
       data-testid={`frontstage-tree-node-${node.kind}-${node.title || node.id}`}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       onClick={(e) => {
         e.stopPropagation();
         if (isPageNode) {
@@ -322,11 +374,14 @@ function renderTreeNode({
           isHidden ? 'frontstage-page-tree-sidebar__node-row--hidden' : null,
           canEdit
             ? 'frontstage-page-tree-sidebar__node-row--design'
-            : 'frontstage-page-tree-sidebar__node-row--view'
+            : 'frontstage-page-tree-sidebar__node-row--view',
+          isDragging ? 'frontstage-page-tree-sidebar__node-row--dragging' : null
         ]
           .filter(Boolean)
           .join(' ')}
         style={{ paddingLeft: 8 + level * 16 }}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         {tooltipText ? (
           <Tooltip title={tooltipText}>{nodeContent}</Tooltip>
@@ -412,12 +467,27 @@ function renderTreeNode({
               className="frontstage-page-tree-sidebar__node-actions-visible"
               onClick={(e) => e.stopPropagation()}
             >
-              <Tooltip title="拖拽/排序 (请使用菜单中的上移/下移)">
+              <Tooltip title="拖拽/排序">
                 <Button
+                  aria-label="拖拽移动节点"
                   className="frontstage-page-tree-sidebar__drag-handle"
                   disabled={isOperationPending}
+                  draggable={!isOperationPending}
                   icon={<DragOutlined />}
                   size="small"
+                  onDragEnd={(event) => {
+                    event.stopPropagation();
+                    setDraggedNodeId(null);
+                  }}
+                  onDragStart={(event) => {
+                    event.stopPropagation();
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData(
+                      PAGE_TREE_DRAG_DATA_TYPE,
+                      node.id
+                    );
+                    setDraggedNodeId(node.id);
+                  }}
                   onClick={(event) => {
                     event.stopPropagation();
                   }}
@@ -463,8 +533,11 @@ function renderTreeNode({
               onAddNodeAtPosition,
               onRenameNode,
               onMoveNode,
+              onMoveNodeToPosition,
               onDeleteNode,
-              onSelectPage
+              onSelectPage,
+              draggedNodeId,
+              setDraggedNodeId
             })
           )}
         </ul>
@@ -485,6 +558,7 @@ export function FrontStagePageTreeSidebar({
   onRenameNode,
   onUpdateNodeMetadata,
   onMoveNode,
+  onMoveNodeToPosition,
   onDeleteNode,
   onSelectPage
 }: FrontStagePageTreeSidebarProps) {
@@ -500,6 +574,7 @@ export function FrontStagePageTreeSidebar({
   );
 
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
 
   const toggleGroupCollapse = (groupId: string) => {
     setCollapsedGroupIds((prev) => {
@@ -558,8 +633,11 @@ export function FrontStagePageTreeSidebar({
               onAddNodeAtPosition,
               onRenameNode,
               onMoveNode,
+              onMoveNodeToPosition,
               onDeleteNode,
-              onSelectPage
+              onSelectPage,
+              draggedNodeId,
+              setDraggedNodeId
             })
           )}
         </ul>

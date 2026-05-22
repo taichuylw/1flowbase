@@ -224,6 +224,19 @@ function findSiblingContext(
   return null;
 }
 
+function isNodeDescendantOf(
+  nodes: FrontStageTreeNode[],
+  ancestorNodeId: string,
+  targetNodeId: string
+): boolean {
+  const ancestorNode = findNodeById(nodes, ancestorNodeId);
+  if (!ancestorNode?.children) {
+    return false;
+  }
+
+  return Boolean(findNodeById(ancestorNode.children, targetNodeId));
+}
+
 function getNodeAppendRank(
   nodes: FrontStageTreeNode[],
   parentId: string | null
@@ -926,6 +939,39 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     });
   };
 
+  const handleMoveNodeToPosition = (
+    nodeId: string,
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => {
+    if (
+      nodeId === targetNodeId ||
+      isNodeDescendantOf(pageTree, nodeId, targetNodeId)
+    ) {
+      return;
+    }
+
+    const targetSiblingContext = findSiblingContext(pageTree, targetNodeId);
+    if (!targetSiblingContext) {
+      return;
+    }
+
+    const { parentId, siblings, index } = targetSiblingContext;
+    const rank =
+      position === 'before'
+        ? rankForMoveTarget(index, -1)
+        : index === siblings.length - 1
+          ? getNodeAppendRank(pageTree, parentId)
+          : rankForMoveTarget(index, 1);
+
+    void runPageTreeOperation(async () => {
+      await onMovePageNode?.(nodeId, {
+        parentId,
+        rank
+      });
+    });
+  };
+
   const handleSelectPage = (nodeId: string) => {
     if (selectedPageId === nodeId) {
       return;
@@ -1036,6 +1082,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onRenameNode={handleRenameNode}
       onUpdateNodeMetadata={handleUpdateNodeMetadata}
       onMoveNode={handleMoveNode}
+      onMoveNodeToPosition={handleMoveNodeToPosition}
       onDeleteNode={handleDeleteNode}
       onSelectPage={handleSelectPage}
     />

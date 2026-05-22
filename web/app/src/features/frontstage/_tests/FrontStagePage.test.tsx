@@ -1075,6 +1075,59 @@ describe('FrontStagePage', () => {
     expect(rows[1]).toHaveTextContent('页面 page-2');
   });
 
+  test('moves nodes by dragging the page tree handle onto another node', async () => {
+    authenticate(['frontstage.page.design']);
+    const onMovePageNode = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          initialPageTree={[
+            createBackendPage('page-1'),
+            createBackendPage('page-2')
+          ]}
+          onMovePageNode={onMovePageNode}
+        />
+      </AppProviders>
+    );
+
+    activateDesignMode();
+
+    const firstPageItem = screen.getByTestId(
+      'frontstage-tree-node-page-页面 page-1'
+    );
+    const secondPageItem = screen.getByTestId(
+      'frontstage-tree-node-page-页面 page-2'
+    );
+    const firstDragHandle = within(firstPageItem).getByRole('button', {
+      name: '拖拽移动节点'
+    });
+
+    const dataTransfer = {
+      data: new Map<string, string>(),
+      effectAllowed: '',
+      dropEffect: '',
+      setData(format: string, value: string) {
+        this.data.set(format, value);
+      },
+      getData(format: string) {
+        return this.data.get(format) ?? '';
+      }
+    };
+
+    fireEvent.dragStart(firstDragHandle, { dataTransfer });
+    fireEvent.dragOver(secondPageItem, { dataTransfer });
+    fireEvent.drop(secondPageItem, { dataTransfer });
+
+    await waitFor(() => {
+      expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
+        parentId: null,
+        rank: '003000'
+      });
+    });
+  });
+
   test('does not delete node when delete confirmation is canceled', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();

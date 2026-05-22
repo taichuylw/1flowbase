@@ -148,12 +148,6 @@ export function useModelProviderData({
           null)
         : null;
 
-  const drawerDefaultIncludedInMain =
-    drawerState?.mode === 'create'
-      ? providerOptionsByProviderCode[drawerState.providerCode]?.main_instance
-        .auto_include_new_instances ?? false
-      : editingInstance?.included_in_main ?? false;
-
   const modalInstances = useMemo(
     () =>
       instanceModalState
@@ -172,14 +166,27 @@ export function useModelProviderData({
     ? (providerOptionsByProviderCode[instanceModalState.providerCode] ?? null)
     : null;
 
+  const mainInstanceProviderCode =
+    drawerState?.mode === 'create'
+      ? drawerState.providerCode
+      : instanceModalState?.providerCode ?? null;
+
   const mainInstanceQuery = useQuery({
-    queryKey: instanceModalState
-      ? [...MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX, instanceModalState.providerCode]
+    queryKey: mainInstanceProviderCode
+      ? [...MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX, mainInstanceProviderCode]
       : [...MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX, 'idle'],
     queryFn: () =>
-      fetchSettingsModelProviderMainInstance(instanceModalState!.providerCode),
-    enabled: Boolean(instanceModalState)
+      fetchSettingsModelProviderMainInstance(mainInstanceProviderCode!),
+    enabled: Boolean(mainInstanceProviderCode)
   });
+
+  const drawerDefaultIncludedInMain =
+    drawerState?.mode === 'create'
+      ? mainInstanceQuery.data?.auto_include_new_instances ??
+        providerOptionsByProviderCode[drawerState.providerCode]?.main_instance
+          .auto_include_new_instances ??
+        false
+      : editingInstance?.included_in_main ?? false;
 
   const editingModelsQuery = useQuery({
     queryKey: editingInstance
