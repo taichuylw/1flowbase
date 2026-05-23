@@ -1,7 +1,8 @@
 .frontstage-page-workspace {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 104px);
+  height: 100%;
+  min-height: 0;
   background: #fff;
   border: 1px solid #edf7f1;
   border-radius: 8px 0 0 8px;
@@ -24,11 +25,14 @@
 .frontstage-page-workspace__body {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 76px 36px 28px;
 }
 
 @media (max-width: 991px) {
   .frontstage-page-workspace {
+    height: auto;
     min-height: auto;
     border-radius: 8px;
   }

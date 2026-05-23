@@ -97,10 +97,9 @@ export function ApplicationDetailPage({
       navItems={getApplicationSections(applicationId)}
       activeKey={requestedSectionKey}
       contentWidth={
-        requestedSectionKey === 'orchestration' || requestedSectionKey === 'logs'
-          ? 'full'
-          : 'wide'
+        requestedSectionKey === 'orchestration' ? 'full' : 'wide'
       }
+      heightMode={requestedSectionKey === 'logs' ? 'viewport' : 'natural'}
     >
       {content}
     </SectionPageLayout>
