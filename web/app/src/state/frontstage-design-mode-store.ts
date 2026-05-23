@@ -11,7 +11,7 @@ const initialState = {
   isDesignMode: false
 };
 
-export const useFrontstageDesignModeStore = create<FrontstageDesignModeState>(
+export const useFrontstageDesignModeStore = create<FrontstageDesignModeState>()(
   persist(
     (set) => ({
       ...initialState,
