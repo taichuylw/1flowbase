@@ -20,12 +20,12 @@ export function SettingsNavigation({
 }) {
   return (
     <SectionPageLayout
-      pageTitle={SETTINGS_PAGE_TITLE}
       pageDescription={SETTINGS_PAGE_DESCRIPTION}
       navItems={navItems}
       activeKey={activeKey}
       contentWidth="wide"
       heightMode={heightMode}
+      hideCompactNav
     >
       {children}
     </SectionPageLayout>
