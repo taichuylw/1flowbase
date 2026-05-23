@@ -8,6 +8,8 @@ pub struct CreateFrontstagePageInput {
     pub parent_id: Option<Uuid>,
     pub kind: domain::FrontstagePageKind,
     pub title: Option<String>,
+    pub icon: Option<String>,
+    pub tooltip: Option<String>,
     pub rank: String,
     pub schema_root_uid: Option<String>,
 }
@@ -18,6 +20,7 @@ pub struct UpdateFrontstagePageMetadataInput {
     pub actor_user_id: Uuid,
     pub page_id: Uuid,
     pub title: Option<Option<String>>,
+    pub icon: Option<Option<String>>,
     pub tooltip: Option<Option<String>>,
     pub is_hidden: Option<bool>,
 }

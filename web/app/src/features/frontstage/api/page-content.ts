@@ -10,6 +10,8 @@ import { getFrontstageApiBaseUrl } from './page-tree';
 export interface FrontstagePageContentNode {
   id: string;
   title: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
   kind: 'group' | 'page';
   parentId: string | null;
   rank: string;
@@ -52,6 +54,8 @@ function mapFrontstagePageNode(
   return {
     id: page.id,
     title: page.title,
+    icon: page.icon,
+    tooltip: page.tooltip,
     kind: page.kind,
     parentId: page.parent_id,
     rank: page.rank,

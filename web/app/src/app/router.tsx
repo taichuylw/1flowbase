@@ -309,15 +309,17 @@ function FrontStageWorkspaceContent({
 }
 
 function FrontStageRoute({ pageId }: { pageId?: string }) {
-  const workspaceId = useAuthStore((state) => state.actor?.current_workspace_id);
-
-  if (!workspaceId) {
-    return <Navigate to="/" replace />;
-  }
+  const workspaceId = useAuthStore(
+    (state) => state.actor?.current_workspace_id
+  );
 
   return (
     <RouteGuard routeId="frontstage">
-      <FrontStageWorkspaceContent workspaceId={workspaceId} pageId={pageId} />
+      {workspaceId ? (
+        <FrontStageWorkspaceContent workspaceId={workspaceId} pageId={pageId} />
+      ) : (
+        <Navigate to="/" replace />
+      )}
     </RouteGuard>
   );
 }

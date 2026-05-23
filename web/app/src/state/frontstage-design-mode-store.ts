@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface FrontstageDesignModeState {
   isDesignMode: boolean;
@@ -11,14 +12,20 @@ const initialState = {
 };
 
 export const useFrontstageDesignModeStore = create<FrontstageDesignModeState>(
-  (set) => ({
-    ...initialState,
-    setDesignMode: (enabled) => set({ isDesignMode: enabled }),
-    toggleDesignMode: () =>
-      set((state) => ({ isDesignMode: !state.isDesignMode }))
-  })
+  persist(
+    (set) => ({
+      ...initialState,
+      setDesignMode: (enabled) => set({ isDesignMode: enabled }),
+      toggleDesignMode: () =>
+        set((state) => ({ isDesignMode: !state.isDesignMode }))
+    }),
+    {
+      name: 'frontstage-design-mode'
+    }
+  )
 );
 
 export function resetFrontstageDesignModeStore() {
   useFrontstageDesignModeStore.setState(initialState);
+  useFrontstageDesignModeStore.persist?.clearStorage();
 }

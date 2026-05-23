@@ -21,6 +21,8 @@ pub struct CreateFrontstageGroupCommand {
     pub actor_user_id: Uuid,
     pub workspace_id: Uuid,
     pub title: Option<String>,
+    pub icon: Option<String>,
+    pub tooltip: Option<String>,
     pub parent_id: Option<Uuid>,
     pub rank: Option<String>,
 }
@@ -29,6 +31,8 @@ pub struct CreateFrontstagePageCommand {
     pub actor_user_id: Uuid,
     pub workspace_id: Uuid,
     pub title: Option<String>,
+    pub icon: Option<String>,
+    pub tooltip: Option<String>,
     pub parent_id: Option<Uuid>,
     pub rank: Option<String>,
 }
@@ -38,6 +42,7 @@ pub struct UpdateFrontstagePageMetadataCommand {
     pub workspace_id: Uuid,
     pub page_id: Uuid,
     pub title: Option<Option<String>>,
+    pub icon: Option<Option<String>>,
     pub tooltip: Option<Option<String>>,
     pub is_hidden: Option<bool>,
 }
@@ -133,6 +138,8 @@ where
                 parent_id: None,
                 kind: domain::FrontstagePageKind::Group,
                 title: command.title,
+                icon: command.icon,
+                tooltip: command.tooltip,
                 rank: normalize_rank(command.rank),
                 schema_root_uid: None,
             })
@@ -165,6 +172,8 @@ where
                 parent_id: command.parent_id,
                 kind: domain::FrontstagePageKind::Page,
                 title: command.title,
+                icon: command.icon,
+                tooltip: command.tooltip,
                 rank: normalize_rank(command.rank),
                 schema_root_uid: Some(reserved_schema_root_uid(page_id)),
             })
@@ -210,6 +219,7 @@ where
                 actor_user_id: command.actor_user_id,
                 page_id: command.page_id,
                 title: command.title,
+                icon: command.icon,
                 tooltip: command.tooltip,
                 is_hidden: command.is_hidden,
             })
@@ -549,6 +559,7 @@ mod tests {
             parent_id,
             kind,
             title: None,
+            icon: None,
             tooltip: None,
             is_hidden: false,
             slug: None,
