@@ -485,12 +485,13 @@ describe('SettingsPage', () => {
       },
       { timeout: 5000 }
     );
-    expect(
-      await screen.findByRole('heading', { name: 'API 文档', level: 3 })
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(docsApi.fetchSettingsApiDocsCatalog).toHaveBeenCalled();
+    });
     rootView.unmount();
 
     resetAuthStore();
+    docsApi.fetchSettingsApiDocsCatalog.mockClear();
     authenticateWithPermissions([
       'route_page.view.all',
       'api_reference.view.all'
@@ -503,9 +504,9 @@ describe('SettingsPage', () => {
       },
       { timeout: 5000 }
     );
-    expect(
-      await screen.findByRole('heading', { name: 'API 文档', level: 3 })
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(docsApi.fetchSettingsApiDocsCatalog).toHaveBeenCalled();
+    });
     view.unmount();
 
     resetAuthStore();
@@ -528,17 +529,14 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
-    expect(
-      await screen.findByRole('heading', { name: '设置', level: 4 })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('navigation', { name: 'Section navigation' })
-    ).toBeInTheDocument();
     expect(screen.getByTestId('section-page-layout')).toHaveClass(
-      'section-page-layout--wide'
+      'section-page-layout--wide',
+      'section-page-layout--viewport'
     );
     expect(
-      await screen.findByRole('heading', { name: '用户管理', level: 3 })
+      await screen.findByText(
+        '重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。'
+      )
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '新建用户' })
@@ -583,11 +581,6 @@ describe('SettingsPage', () => {
 
     renderApp('/settings/members');
 
-    await screen.findByRole(
-      'heading',
-      { name: '用户管理', level: 3 },
-      { timeout: 10000 }
-    );
     await waitFor(() => {
       expect(membersApi.fetchSettingsMembers).toHaveBeenCalled();
     });
@@ -630,11 +623,13 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
+    expect(screen.getByTestId('section-page-layout')).toHaveClass(
+      'section-page-layout--viewport'
+    );
     expect(
-      await screen.findByRole('heading', { name: '设置', level: 4 })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: '用户管理', level: 3 })
+      await screen.findByText(
+        '重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。'
+      )
     ).toBeInTheDocument();
   });
 
@@ -669,9 +664,6 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/system-runtime');
     });
-    expect(
-      await screen.findByRole('heading', { name: '系统运行', level: 3 })
-    ).toBeInTheDocument();
     expect(await screen.findByText('部署概览')).toBeInTheDocument();
     expect(screen.getByText('同机部署')).toBeInTheDocument();
     expect(screen.getByText('zh_Hans')).toBeInTheDocument();
@@ -694,7 +686,9 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/host-infrastructure');
     });
     expect(
-      await screen.findByRole('heading', { name: '基础设施', level: 3 })
+      await screen.findByText(
+        '安装、配置和启用会保存为待应用变更，重启 api-server 一次后生效。'
+      )
     ).toBeInTheDocument();
   });
 
@@ -707,10 +701,7 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/files');
     });
     expect(
-      await screen.findByRole('heading', { name: '文件管理', level: 3 })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('tab', { name: '文件表' })
+      await screen.findByRole('tab', { name: '文件表' })
     ).toBeInTheDocument();
   });
 

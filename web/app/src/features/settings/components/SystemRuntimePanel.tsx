@@ -196,13 +196,10 @@ export function SystemRuntimePanel() {
   const relationshipMeta = profile
     ? getRelationshipLabel(profile.topology.relationship)
     : null;
-  const sectionDescription =
-    '查看 API Server 与 Plugin Runner 的部署关系、运行状态与宿主机信息。';
-
   /* ── loading ── */
   if (runtimeQuery.isLoading) {
     return (
-      <SettingsSectionSurface title="系统运行" description={sectionDescription}>
+      <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
         <Flex justify="center" style={{ padding: '64px 0' }}>
           <Spin />
         </Flex>
@@ -213,7 +210,7 @@ export function SystemRuntimePanel() {
   /* ── error ── */
   if (runtimeQuery.isError) {
     return (
-      <SettingsSectionSurface title="系统运行" description={sectionDescription}>
+      <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
         <Alert
           type="error"
           showIcon
@@ -231,7 +228,7 @@ export function SystemRuntimePanel() {
   /* ── no data ── */
   if (!profile) {
     return (
-      <SettingsSectionSurface title="系统运行" description={sectionDescription}>
+      <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
         <Empty description="暂无运行时数据" />
       </SettingsSectionSurface>
     );
@@ -255,7 +252,7 @@ export function SystemRuntimePanel() {
 
   /* ── render ── */
   return (
-    <SettingsSectionSurface title="系统运行" description={sectionDescription}>
+    <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
       {/* ════════════════════════════════════════════════
          部署概览
          ════════════════════════════════════════════════ */}

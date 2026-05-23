@@ -16,10 +16,7 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
   });
 
   return (
-    <SettingsSectionSurface
-      title="基础设施"
-      description="管理缓存、短租约、事件、任务和限流等宿主基础设施 provider。"
-    >
+    <SettingsSectionSurface title="基础设施" hideHeader heightMode="fill">
       <Space direction="vertical" size={16} className="host-infrastructure-panel">
         <Alert
           type="info"

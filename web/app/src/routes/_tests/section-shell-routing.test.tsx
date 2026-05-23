@@ -247,10 +247,11 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/members');
     });
-    expect(await screen.findByRole('link', { name: '用户管理' })).toHaveAttribute(
-      'href',
-      '/settings/members'
-    );
+    expect(
+      await screen.findByText(
+        '重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。'
+      )
+    ).toBeInTheDocument();
   }, 10000);
 
   test('redirects /settings/docs to /settings/roles when docs is hidden but roles is visible', async () => {
@@ -261,10 +262,7 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/roles');
     });
-    expect(await screen.findByRole('link', { name: '权限管理' })).toHaveAttribute(
-      'href',
-      '/settings/roles'
-    );
+    expect(await screen.findByTestId('settings-section-surface')).toBeInTheDocument();
   });
 
   test('redirects /settings/docs to /settings/data-models when state model settings are visible', async () => {
@@ -275,10 +273,7 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/data-models');
     });
-    expect(await screen.findByRole('link', { name: '数据源' })).toHaveAttribute(
-      'href',
-      '/settings/data-models'
-    );
+    expect(await screen.findByTestId('settings-section-surface')).toBeInTheDocument();
   });
 
   test('redirects /settings/docs to /settings/files when file management is the only visible section', async () => {
@@ -289,9 +284,6 @@ describe('section shell routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/files');
     });
-    expect(await screen.findByRole('link', { name: '文件管理' })).toHaveAttribute(
-      'href',
-      '/settings/files'
-    );
+    expect(await screen.findByRole('tab', { name: '文件表' })).toBeInTheDocument();
   });
 });

@@ -155,7 +155,8 @@ export function ApiDocsPanel() {
     <SettingsSectionSurface
       title="API 文档"
       titleLevel={3}
-      description="头部下拉只负责切换分类，左侧列表浏览当前分类下的接口，右侧保持原生 Scalar 单接口详情。"
+      hideHeader
+      heightMode="fill"
     >
       <ApiDocsExplorer
         queryState={{

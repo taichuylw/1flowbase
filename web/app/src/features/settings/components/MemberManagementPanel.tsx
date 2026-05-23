@@ -341,22 +341,20 @@ export function MemberManagementPanel({
   );
 
   return (
-    <SettingsSectionSurface
-      title="用户管理"
-      description="管理工作台成员账号、角色与登录状态。"
-      headerActions={
-        canManageMembers ? (
-          <Button
-            type="primary"
-            icon={<UserAddOutlined />}
-            onClick={() => setCreateModalOpen(true)}
-          >
-            新建用户
-          </Button>
-        ) : null
-      }
-    >
+    <SettingsSectionSurface title="用户管理" hideHeader heightMode="fill">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {canManageMembers ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              type="primary"
+              icon={<UserAddOutlined />}
+              onClick={() => setCreateModalOpen(true)}
+            >
+              新建用户
+            </Button>
+          </div>
+        ) : null}
+
         <Table<SettingsMember>
           rowKey="id"
           loading={membersQuery.isLoading}
