@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import type { AgentFlowTraceItem } from '../../../api/runtime';
 import { getAgentFlowNodeTypeIcon } from '../../../lib/node-type-icons';
 import { nodeDisplayName } from './debug-workflow-trace-utils';
+import { collectLlmToolCallbacks } from './llm-tool-callbacks';
 import './debug-message.css';
 
 function statusTone(status: string) {
@@ -60,17 +61,18 @@ function metricText(item: AgentFlowTraceItem) {
   const tokens = readOutputTotalTokens(item.outputPayload);
   const duration =
     item.durationMs == null ? null : formatDuration(item.durationMs);
+  const toolCount =
+    item.nodeType === 'llm'
+      ? collectLlmToolCallbacks(item.debugPayload).length
+      : 0;
+  const metrics = [
+    typeof tokens === 'number' ? `${tokens} tokens` : null,
+    duration,
+    toolCount > 0 ? `工具 ${toolCount}` : null
+  ].filter((metric): metric is string => Boolean(metric));
 
-  if (typeof tokens === 'number' && duration) {
-    return `${tokens} tokens · ${duration}`;
-  }
-
-  if (typeof tokens === 'number') {
-    return `${tokens} tokens`;
-  }
-
-  if (duration) {
-    return duration;
+  if (metrics.length > 0) {
+    return metrics.join(' · ');
   }
 
   return '进行中';

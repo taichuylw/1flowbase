@@ -122,7 +122,7 @@ describe('DebugConversationPane auto scroll', () => {
 });
 
 describe('DebugConversationPane workflow trace', () => {
-  test('renders LLM tool callback rounds from trace debug payload', () => {
+  test('renders LLM tool callbacks under a collapsed Tools child node', () => {
     renderPane([
       {
         ...assistantMessage('等待工具结果'),
@@ -176,9 +176,126 @@ describe('DebugConversationPane workflow trace', () => {
     expect(screen.getByText('工作流')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /LLM/ }));
 
-    expect(screen.getByText('Round #1')).toBeInTheDocument();
-    expect(screen.getByLabelText('LLM 回合')).toHaveTextContent(
-      'lookup_weather'
+    expect(screen.queryByText('Round #1')).not.toBeInTheDocument();
+
+    const toolsNode = screen.getByRole('button', {
+      name: /Tools.*1 次工具回调/
+    });
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('lookup_weather')).not.toBeInTheDocument();
+
+    fireEvent.click(toolsNode);
+    expect(screen.getByLabelText('工具回调索引 JSON')).toHaveTextContent(
+      'call_weather'
+    );
+    expect(
+      screen.getByRole('button', { name: /lookup_weather.*call_weather/ })
+    ).toBeInTheDocument();
+  });
+
+  test('collapses repeated LLM node runs into one workflow row', () => {
+    renderPane([
+      {
+        ...assistantMessage('等待工具结果'),
+        status: 'waiting_callback',
+        traceSummary: [
+          {
+            nodeId: 'node-start',
+            nodeRunId: 'node-run-start',
+            nodeAlias: 'Start',
+            nodeType: 'start',
+            status: 'succeeded',
+            startedAt: '2026-04-25T10:00:00Z',
+            finishedAt: '2026-04-25T10:00:00Z',
+            durationMs: 80,
+            inputPayload: { query: '天气?' },
+            outputPayload: { query: '天气?' },
+            errorPayload: null,
+            metricsPayload: {},
+            debugPayload: {}
+          },
+          {
+            nodeId: 'node-llm',
+            nodeRunId: 'node-run-llm-1',
+            nodeAlias: 'LLM',
+            nodeType: 'llm',
+            status: 'succeeded',
+            startedAt: '2026-04-25T10:00:01Z',
+            finishedAt: '2026-04-25T10:00:06Z',
+            durationMs: 5400,
+            inputPayload: { prompt: '天气?' },
+            outputPayload: { usage: { total_tokens: 8035 } },
+            errorPayload: null,
+            metricsPayload: {},
+            debugPayload: {
+              llm_rounds: [
+                {
+                  round_index: 0,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'need weather',
+                    tool_calls: [
+                      {
+                        id: 'call_weather',
+                        name: 'lookup_weather'
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            nodeId: 'node-llm',
+            nodeRunId: 'node-run-llm-2',
+            nodeAlias: 'LLM',
+            nodeType: 'llm',
+            status: 'waiting_callback',
+            startedAt: '2026-04-25T10:00:07Z',
+            finishedAt: null,
+            durationMs: null,
+            inputPayload: { prompt: '天气?' },
+            outputPayload: { tool_calls: [{ id: 'call_policy' }] },
+            errorPayload: null,
+            metricsPayload: {},
+            debugPayload: {
+              llm_rounds: [
+                {
+                  round_index: 0,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'need policy',
+                    tool_calls: [
+                      {
+                        id: 'call_policy',
+                        name: 'read_policy'
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]);
+
+    expect(screen.getAllByTestId('debug-workflow-node-row')).toHaveLength(2);
+
+    const llmTraceNode = screen.getByRole('button', { name: /LLM/ });
+    expect(llmTraceNode).toHaveTextContent('工具 2');
+
+    fireEvent.click(llmTraceNode);
+    const toolsNode = screen.getByRole('button', {
+      name: /Tools.*2 次工具回调/
+    });
+    fireEvent.click(toolsNode);
+
+    expect(screen.getByLabelText('工具回调索引 JSON')).toHaveTextContent(
+      'call_weather'
+    );
+    expect(screen.getByLabelText('工具回调索引 JSON')).toHaveTextContent(
+      'call_policy'
     );
   });
 });

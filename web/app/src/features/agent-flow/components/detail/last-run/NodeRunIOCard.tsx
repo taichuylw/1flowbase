@@ -228,7 +228,7 @@ export function NodeRunPayloadSections({
 
   return (
     <>
-      <NodeRunJsonBlock
+      <RuntimeDebugPayloadBlock
         payload={inputPayload}
         title="输入"
         onLoadArtifact={onLoadArtifact}
@@ -236,14 +236,14 @@ export function NodeRunPayloadSections({
       {includeDebugPayload ? (
         <>
           <NodeRunConsoleLogs logs={consoleLogs} />
-          <NodeRunJsonBlock
+          <RuntimeDebugPayloadBlock
             payload={processPayload}
             title="数据处理"
             onLoadArtifact={onLoadArtifact}
           />
         </>
       ) : null}
-      <NodeRunJsonBlock
+      <RuntimeDebugPayloadBlock
         payload={outputPayload}
         title="输出"
         onLoadArtifact={onLoadArtifact}
@@ -252,13 +252,17 @@ export function NodeRunPayloadSections({
   );
 }
 
-function NodeRunJsonBlock({
+export function RuntimeDebugPayloadBlock({
   title,
   payload,
+  defaultCollapsed = false,
+  height = '220px',
   onLoadArtifact
 }: {
   title: string;
   payload: unknown;
+  defaultCollapsed?: boolean;
+  height?: string;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const { message } = App.useApp();
@@ -309,7 +313,8 @@ function NodeRunJsonBlock({
           </Space>
         ) : null
       }
-      height="220px"
+      defaultCollapsed={defaultCollapsed}
+      height={height}
       title={title}
       value={displayPayload}
     />
