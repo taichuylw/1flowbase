@@ -71,9 +71,6 @@ describe('HostInfrastructurePanel', () => {
 
     renderPanel();
 
-    expect(
-      await screen.findByRole('heading', { name: '基础设施', level: 3 })
-    ).toBeInTheDocument();
     expect(await screen.findByText('Redis')).toBeInTheDocument();
     expect(screen.getByText('disabled')).toBeInTheDocument();
     expect(screen.getByText('inactive')).toBeInTheDocument();

@@ -14,6 +14,8 @@ export interface LlmToolCallback {
   parsedResult: Record<string, unknown> | null;
   requestRoundIndex: number | null;
   resultRoundIndex: number | null;
+  call_usage: Record<string, unknown> | null;
+  result_context_usage: Record<string, unknown> | null;
   detailArtifactRef?: string | null;
 }
 
@@ -154,8 +156,14 @@ function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
         parsedResult: null,
         requestRoundIndex: nullableRoundIndex(toolCallback.request_round_index),
         resultRoundIndex: nullableRoundIndex(toolCallback.result_round_index),
-        detailArtifactRef:
-          firstStringField(toolCallback, ['artifact_ref', 'detail_artifact_ref'])
+        call_usage: optionalRecordField(toolCallback, ['call_usage']),
+        result_context_usage: optionalRecordField(toolCallback, [
+          'result_context_usage'
+        ]),
+        detailArtifactRef: firstStringField(toolCallback, [
+          'artifact_ref',
+          'detail_artifact_ref'
+        ])
       };
     }
   );
@@ -179,10 +187,11 @@ export function readLlmToolCallbackDetail(
     name: firstStringField(loadedPayload, ['name']) ?? 'Tool',
     callbackStatus: callbackStatusValue(loadedPayload.callback_status),
     executionStatus: executionStatusValue(loadedPayload.execution_status),
-    requestPayload: optionalRecordField(loadedPayload, [
-      'request_payload',
-      'requestPayload'
-    ]) ?? {},
+    requestPayload:
+      optionalRecordField(loadedPayload, [
+        'request_payload',
+        'requestPayload'
+      ]) ?? {},
     callbackPayload: optionalRecordField(loadedPayload, [
       'callback_payload',
       'callbackPayload'
@@ -193,9 +202,15 @@ export function readLlmToolCallbackDetail(
     ]),
     requestRoundIndex: nullableRoundIndex(loadedPayload.request_round_index),
     resultRoundIndex: nullableRoundIndex(loadedPayload.result_round_index),
+    call_usage: optionalRecordField(loadedPayload, ['call_usage']),
+    result_context_usage: optionalRecordField(loadedPayload, [
+      'result_context_usage'
+    ]),
     detailArtifactRef:
-      firstStringField(loadedPayload, ['artifact_ref', 'detail_artifact_ref']) ??
-      null
+      firstStringField(loadedPayload, [
+        'artifact_ref',
+        'detail_artifact_ref'
+      ]) ?? null
   };
 }
 
@@ -432,7 +447,10 @@ function mergeLlmToolCallbacks(callbacks: LlmToolCallback[]) {
       resultRoundIndex:
         callback.resultRoundIndex ?? currentCallback.resultRoundIndex,
       detailArtifactRef:
-        callback.detailArtifactRef ?? currentCallback.detailArtifactRef
+        callback.detailArtifactRef ?? currentCallback.detailArtifactRef,
+      call_usage: callback.call_usage ?? currentCallback.call_usage,
+      result_context_usage:
+        callback.result_context_usage ?? currentCallback.result_context_usage
     };
   }
 
@@ -495,12 +513,17 @@ function collectLlmToolCallbacksFromRounds(
       resultRoundIndex:
         nextCallback.resultRoundIndex ?? currentCallback.resultRoundIndex,
       callbackStatus: callbackStatus(callbackPayload),
-      executionStatus: executionStatusFromCallbackPayload(callbackPayload)
+      executionStatus: executionStatusFromCallbackPayload(callbackPayload),
+      call_usage: nextCallback.call_usage ?? currentCallback.call_usage,
+      result_context_usage:
+        nextCallback.result_context_usage ??
+        currentCallback.result_context_usage
     };
   };
 
   rounds.forEach((round, fallbackRoundIndex) => {
     const currentRoundIndex = roundIndex(round, fallbackRoundIndex);
+    const currentUsage = optionalRecordField(round, ['usage']);
 
     readRoundToolCalls(round).forEach((toolCall, toolCallIndex) => {
       const id = toolCallId(toolCall, currentRoundIndex, toolCallIndex);
@@ -511,7 +534,9 @@ function collectLlmToolCallbacksFromRounds(
         requestPayload: toolCall,
         callbackPayload: null,
         requestRoundIndex: currentRoundIndex,
-        resultRoundIndex: null
+        resultRoundIndex: null,
+        call_usage: optionalRecordField(toolCall, ['call_usage']) ?? currentUsage,
+        result_context_usage: null
       });
     });
 
@@ -524,7 +549,11 @@ function collectLlmToolCallbacksFromRounds(
         requestPayload: {},
         callbackPayload: toolResult,
         requestRoundIndex: null,
-        resultRoundIndex: currentRoundIndex
+        resultRoundIndex: currentRoundIndex,
+        call_usage: optionalRecordField(toolResult, ['call_usage']),
+        result_context_usage: optionalRecordField(toolResult, [
+          'result_context_usage'
+        ])
       });
     });
   });

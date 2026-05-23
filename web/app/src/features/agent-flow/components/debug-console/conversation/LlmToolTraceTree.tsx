@@ -1,8 +1,4 @@
-import {
-  DownOutlined,
-  RightOutlined,
-  ToolOutlined
-} from '@ant-design/icons';
+import { DownOutlined, RightOutlined, ToolOutlined } from '@ant-design/icons';
 import { Tag, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -64,6 +60,29 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
+function usageTotalTokens(usage: Record<string, unknown> | null) {
+  return typeof usage?.total_tokens === 'number' ? usage.total_tokens : null;
+}
+
+function toolTokenSummary(callback: LlmToolCallback) {
+  return (
+    usageTotalTokens(callback.call_usage) ??
+    usageTotalTokens(callback.result_context_usage)
+  );
+}
+
+function LlmToolInlineTokenSummary({ totalTokens }: { totalTokens: number | null }) {
+  if (totalTokens === null) {
+    return null;
+  }
+
+  return (
+    <span className="agent-flow-editor__debug-llm-tool-inline-tokens">
+      <Tag>{totalTokens} tokens</Tag>
+    </span>
+  );
+}
+
 function LlmToolCallbackItem({
   callback,
   expanded,
@@ -79,6 +98,8 @@ function LlmToolCallbackItem({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onToggle: () => void;
 }) {
+  const totalTokens = toolTokenSummary(callback);
+
   return (
     <article
       className="agent-flow-editor__debug-llm-tool-item"
@@ -92,12 +113,7 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
-          <Typography.Text
-            className="agent-flow-editor__debug-llm-tool-id"
-            type="secondary"
-          >
-            {callback.id}
-          </Typography.Text>
+          <LlmToolInlineTokenSummary totalTokens={totalTokens} />
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
@@ -191,6 +207,10 @@ export function LlmToolTraceTree({
           ...callback,
           ...loadedCallback,
           key: callback.key,
+          call_usage: loadedCallback.call_usage ?? callback.call_usage,
+          result_context_usage:
+            loadedCallback.result_context_usage ??
+            callback.result_context_usage,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
         };

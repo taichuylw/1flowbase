@@ -105,15 +105,23 @@ export function ModelProviderInstancesModal({
 
         <section className="model-provider-panel__main-instance-card">
           <div className="model-provider-panel__main-instance-head">
-            <div>
+            <div className="model-provider-panel__main-instance-title-row">
               <Typography.Text strong>主实例</Typography.Text>
-              <Typography.Paragraph type="secondary">
-                聚合视图会按已接入实例合并模型，agent-flow 使用这里的汇总结果。
-              </Typography.Paragraph>
+              <div className="model-provider-panel__main-instance-summary">
+                <Tag bordered={false} color="blue">
+                  聚合视图
+                </Tag>
+                <Typography.Text type="secondary">
+                  实例：{includedCount}
+                </Typography.Text>
+                <Typography.Text type="secondary">
+                  模型：{aggregatedModelCount}
+                </Typography.Text>
+              </div>
             </div>
             <Space
-              direction="vertical"
-              size={4}
+              direction="horizontal"
+              size={8}
               className="model-provider-panel__main-instance-toggle"
             >
               <Typography.Text type="secondary">
@@ -126,18 +134,6 @@ export function ModelProviderInstancesModal({
                 onChange={onToggleAutoIncludeNewInstances}
               />
             </Space>
-          </div>
-
-          <div className="model-provider-panel__main-instance-summary">
-            <Tag bordered={false} color="blue">
-              聚合视图
-            </Tag>
-            <Typography.Text type="secondary">
-              已接入 {includedCount} 个实例
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              已汇总 {aggregatedModelCount} 个模型
-            </Typography.Text>
           </div>
 
           {modelGroups.length === 0 ? (

@@ -51,6 +51,8 @@ struct LlmToolCallbackArtifact {
     callback_payload: Option<Value>,
     request_round_index: Option<i64>,
     result_round_index: Option<i64>,
+    call_usage: Option<Value>,
+    result_context_usage: Option<Value>,
 }
 
 impl LlmToolCallbackArtifact {
@@ -73,6 +75,8 @@ impl LlmToolCallbackArtifact {
             "parsed_result": self.callback_payload.as_ref().map(parsed_tool_callback_payload),
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
+            "call_usage": self.call_usage,
+            "result_context_usage": self.result_context_usage,
         })
     }
 
@@ -85,6 +89,8 @@ impl LlmToolCallbackArtifact {
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
             "artifact_ref": artifact_id.to_string(),
+            "call_usage": self.call_usage,
+            "result_context_usage": self.result_context_usage,
         })
     }
 }
@@ -114,6 +120,10 @@ fn record_string_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Str
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned)
     })
+}
+
+fn record_value_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Value> {
+    keys.iter().find_map(|key| record.get(*key).cloned())
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -338,6 +348,12 @@ fn collect_llm_tool_callbacks(
             continue;
         };
         let current_round_index = round_index(round, fallback_round_index);
+        let current_usage = round.get("usage").cloned();
+        let next_usage = rounds
+            .get(fallback_round_index + 1)
+            .and_then(Value::as_object)
+            .and_then(|round| round.get("usage"))
+            .cloned();
 
         for (tool_call_index, tool_call) in read_round_tool_calls(round).into_iter().enumerate() {
             let Some(tool_call_object) = tool_call.as_object() else {
@@ -354,6 +370,9 @@ fn collect_llm_tool_callbacks(
                     callback_payload: raw_payloads.get(&id).cloned(),
                     id,
                     name,
+                    call_usage: record_value_field(tool_call_object, &["call_usage"])
+                        .or_else(|| current_usage.clone()),
+                    result_context_usage: None,
                     request_payload: tool_call,
                     request_round_index: Some(current_round_index),
                     result_round_index: None,
@@ -375,9 +394,18 @@ fn collect_llm_tool_callbacks(
                 &mut callbacks,
                 &mut index_by_id,
                 LlmToolCallbackArtifact {
-                    callback_payload: raw_payloads.get(&id).cloned().or_else(|| Some(tool_result)),
+                    callback_payload: raw_payloads
+                        .get(&id)
+                        .cloned()
+                        .or_else(|| Some(tool_result.clone())),
                     id,
                     name,
+                    call_usage: record_value_field(tool_result_object, &["call_usage"]),
+                    result_context_usage: record_value_field(
+                        tool_result_object,
+                        &["result_context_usage"],
+                    )
+                    .or_else(|| next_usage.clone()),
                     request_payload: json!({}),
                     request_round_index: None,
                     result_round_index: Some(current_round_index),
@@ -419,6 +447,12 @@ fn upsert_llm_tool_callback(
     }
     if next.result_round_index.is_some() {
         current.result_round_index = next.result_round_index;
+    }
+    if next.call_usage.is_some() {
+        current.call_usage = next.call_usage;
+    }
+    if next.result_context_usage.is_some() {
+        current.result_context_usage = next.result_context_usage;
     }
 }
 

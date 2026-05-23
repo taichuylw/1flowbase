@@ -222,8 +222,9 @@ describe('settings section surface', () => {
     {
       pathname: '/settings/docs',
       permissions: ['route_page.view.all', 'api_reference.view.all'],
-      heading: 'API 文档',
-      level: 3
+      heading: null,
+      level: null,
+      visibleText: '暂无接口分类'
     },
     {
       pathname: '/settings/model-providers',
@@ -234,12 +235,20 @@ describe('settings section surface', () => {
     {
       pathname: '/settings/files',
       permissions: ['route_page.view.all', 'file_table.view.own'],
-      heading: '文件管理',
-      level: 3
+      heading: null,
+      level: null,
+      visibleTab: '文件表'
     }
   ])(
     'renders %s inside a shared settings surface',
-    async ({ pathname, permissions, heading, level }) => {
+    async ({
+      pathname,
+      permissions,
+      heading,
+      level,
+      visibleTab,
+      visibleText
+    }) => {
       authenticateWithPermissions(permissions);
 
       renderApp(pathname);
@@ -255,11 +264,29 @@ describe('settings section surface', () => {
       );
 
       expect(surface).toBeInTheDocument();
-      await waitFor(() => {
-        expect(
-          within(surface).getByRole('heading', { name: heading, level })
-        ).toBeInTheDocument();
-      });
+      if (heading && level) {
+        await waitFor(() => {
+          expect(
+            within(surface).getByRole('heading', { name: heading, level })
+          ).toBeInTheDocument();
+        });
+      }
+
+      if (visibleTab) {
+        await waitFor(() => {
+          expect(
+            within(surface).getByRole('tab', { name: visibleTab })
+          ).toBeInTheDocument();
+        });
+      }
+
+      if (visibleText) {
+        await waitFor(() => {
+          expect(within(surface).getAllByText(visibleText).length).toBeGreaterThan(
+            0
+          );
+        });
+      }
     }
   );
 });

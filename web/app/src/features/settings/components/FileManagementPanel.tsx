@@ -480,10 +480,7 @@ export function FileManagementPanel({
   ];
 
   return (
-    <SettingsSectionSurface
-      title="文件管理"
-      description="管理系统中的文件存储与文件表配置。"
-    >
+    <SettingsSectionSurface title="文件管理" hideHeader heightMode="fill">
       <div className="file-management-panel">
         {managementTabs.length > 0 ? (
           <section className="fm-section fm-tabs-section">

@@ -1,9 +1,4 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  within
-} from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode, type ComponentProps } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -98,6 +93,12 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
             llm_rounds: [
               {
                 round_index: 0,
+                usage: {
+                  input_tokens: 11,
+                  input_cache_hit_tokens: 5,
+                  output_tokens: 3,
+                  total_tokens: 14
+                },
                 assistant: {
                   role: 'assistant',
                   content: 'need tool',
@@ -105,6 +106,12 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
                     {
                       id: 'call_weather',
                       name: 'lookup_weather',
+                      call_usage: {
+                        input_tokens: 11,
+                        input_cache_hit_tokens: 5,
+                        output_tokens: 3,
+                        total_tokens: 14
+                      },
                       arguments: {
                         city: 'Shanghai'
                       }
@@ -123,12 +130,24 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
                   {
                     role: 'tool',
                     tool_call_id: 'call_weather',
+                    result_context_usage: {
+                      input_tokens: 20,
+                      input_cache_hit_tokens: 8,
+                      output_tokens: 4,
+                      total_tokens: 24
+                    },
                     content: '{"temperature":21}'
                   }
                 ]
               },
               {
                 round_index: 2,
+                usage: {
+                  input_tokens: 20,
+                  input_cache_hit_tokens: 8,
+                  output_tokens: 4,
+                  total_tokens: 24
+                },
                 assistant: {
                   role: 'assistant',
                   content: 'weather is clear'
@@ -169,6 +188,18 @@ const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
                   execution_status: 'unknown',
                   request_round_index: 0,
                   result_round_index: 0,
+                  call_usage: {
+                    input_tokens: 11,
+                    input_cache_hit_tokens: 5,
+                    output_tokens: 3,
+                    total_tokens: 14
+                  },
+                  result_context_usage: {
+                    input_tokens: 20,
+                    input_cache_hit_tokens: 8,
+                    output_tokens: 4,
+                    total_tokens: 24
+                  },
                   artifact_ref: 'artifact-tool-call-weather'
                 }
               ]
@@ -184,9 +215,27 @@ const toolCallbackDetailPayload = {
   name: 'lookup_weather',
   callback_status: 'returned',
   execution_status: 'unknown',
+  call_usage: {
+    input_tokens: 11,
+    input_cache_hit_tokens: 5,
+    output_tokens: 3,
+    total_tokens: 14
+  },
+  result_context_usage: {
+    input_tokens: 20,
+    input_cache_hit_tokens: 8,
+    output_tokens: 4,
+    total_tokens: 24
+  },
   request_payload: {
     id: 'call_weather',
     name: 'lookup_weather',
+    call_usage: {
+      input_tokens: 11,
+      input_cache_hit_tokens: 5,
+      output_tokens: 3,
+      total_tokens: 14
+    },
     arguments: {
       city: 'Shanghai'
     }
@@ -194,6 +243,12 @@ const toolCallbackDetailPayload = {
   callback_payload: {
     role: 'tool',
     tool_call_id: 'call_weather',
+    result_context_usage: {
+      input_tokens: 20,
+      input_cache_hit_tokens: 8,
+      output_tokens: 4,
+      total_tokens: 24
+    },
     content: '{"temperature":21}',
     adapter_trace_id: 'trace-weather-1'
   },
@@ -447,7 +502,9 @@ describe('debug conversation log panel', () => {
       name: /Tools.*1 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
-    expect(within(nodeDetail).queryByText('temperature')).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('temperature')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
 
@@ -457,19 +514,36 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*call_weather/
+      name: /lookup_weather.*14 tokens/
     });
+    const toolMain = toolCallback.querySelector(
+      '.agent-flow-editor__debug-llm-tool-main'
+    ) as HTMLElement;
+    expect(toolMain).toHaveTextContent('lookup_weather');
+    expect(toolMain).toHaveTextContent('14 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
-    expect(within(nodeDetail).queryByText('temperature')).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('call_weather')
+    ).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('temperature')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(toolCallback);
 
     expect(toolCallback).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(nodeDetail).getByLabelText('工具调用 JSON')
+    ).toHaveTextContent('Shanghai');
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('temperature');
+    expect(nodeDetail).not.toHaveTextContent('工具 token 归因');
     expect(within(nodeDetail).getByLabelText('工具调用 JSON')).toHaveTextContent(
-      'Shanghai'
+      'total_tokens'
     );
     expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      'temperature'
+      'result_context_usage'
     );
     expect(nodeDetail).toHaveTextContent('已返回');
     expect(nodeDetail).not.toHaveTextContent('执行未知');
@@ -523,14 +597,20 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(
       within(nodeDetail).getByRole('button', {
-        name: /lookup_weather.*call_weather/
+        name: /lookup_weather/
       })
     ).toBeInTheDocument();
     expect(
       within(nodeDetail).getByRole('button', {
-        name: /read_policy.*call_policy/
+        name: /read_policy/
       })
     ).toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('call_weather')
+    ).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('call_policy')
+    ).not.toBeInTheDocument();
     expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
       'weather is clear'
     );
@@ -573,7 +653,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*call_weather/
+      name: /lookup_weather.*14 tokens/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -586,11 +666,18 @@ describe('debug conversation log panel', () => {
     expect(
       await within(nodeDetail).findByLabelText('工具调用 JSON')
     ).toHaveTextContent('Shanghai');
-    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      'trace-weather-1'
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('trace-weather-1');
+    expect(
+      within(nodeDetail).getByLabelText('解析结果 JSON')
+    ).toHaveTextContent('temperature');
+    expect(nodeDetail).not.toHaveTextContent('工具 token 归因');
+    expect(within(nodeDetail).getByLabelText('工具调用 JSON')).toHaveTextContent(
+      'call_usage'
     );
-    expect(within(nodeDetail).getByLabelText('解析结果 JSON')).toHaveTextContent(
-      'temperature'
+    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
+      'result_context_usage'
     );
   }, 10_000);
 
