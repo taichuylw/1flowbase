@@ -514,17 +514,17 @@ where
         );
         if invocation_input.messages.is_empty() {
             let error_payload = build_empty_prompt_messages_error_payload(attempt_runtime);
-            let attempt = build_attempt_metric(
+            let attempt = build_attempt_metric(AttemptMetricInput {
                 attempt_index,
-                attempt_runtime,
-                "failed",
-                false,
-                Some(&error_payload),
-                &ProviderUsage::default(),
-                0,
-                None,
-                None,
-            );
+                runtime: attempt_runtime,
+                status: "failed",
+                failed_after_first_token: false,
+                error_payload: Some(&error_payload),
+                usage: &ProviderUsage::default(),
+                event_count: 0,
+                first_token_at: None,
+                time_to_first_token_ms: None,
+            });
             attempt_metrics.push(attempt);
 
             return build_failed_llm_execution(
@@ -550,17 +550,17 @@ where
             Err(error) => {
                 let provider_error = provider_runtime_error_from_anyhow(&error);
                 let error_payload = build_provider_error_payload(attempt_runtime, &provider_error);
-                let attempt = build_attempt_metric(
+                let attempt = build_attempt_metric(AttemptMetricInput {
                     attempt_index,
-                    attempt_runtime,
-                    "failed",
-                    false,
-                    Some(&error_payload),
-                    &ProviderUsage::default(),
-                    0,
-                    None,
-                    None,
-                );
+                    runtime: attempt_runtime,
+                    status: "failed",
+                    failed_after_first_token: false,
+                    error_payload: Some(&error_payload),
+                    usage: &ProviderUsage::default(),
+                    event_count: 0,
+                    first_token_at: None,
+                    time_to_first_token_ms: None,
+                });
                 attempt_metrics.push(attempt.clone());
                 failed_attempts.push(attempt);
                 if failover_enabled && attempt_index + 1 < attempt_runtimes.len() {
@@ -616,17 +616,17 @@ where
         } else {
             "succeeded"
         };
-        let attempt = build_attempt_metric(
+        let attempt = build_attempt_metric(AttemptMetricInput {
             attempt_index,
-            attempt_runtime,
-            attempt_status,
+            runtime: attempt_runtime,
+            status: attempt_status,
             failed_after_first_token,
-            error_payload.as_ref(),
-            &usage,
-            output.events.len(),
-            output.first_token_at,
-            output.time_to_first_token_ms,
-        );
+            error_payload: error_payload.as_ref(),
+            usage: &usage,
+            event_count: output.events.len(),
+            first_token_at: output.first_token_at,
+            time_to_first_token_ms: output.time_to_first_token_ms,
+        });
         attempt_metrics.push(attempt.clone());
 
         if let Some(error_payload) = &error_payload {
@@ -820,35 +820,37 @@ fn llm_attempt_runtimes(runtime: &CompiledLlmRuntime) -> Vec<CompiledLlmRuntime>
         .collect()
 }
 
-fn build_attempt_metric(
+struct AttemptMetricInput<'a> {
     attempt_index: usize,
-    runtime: &CompiledLlmRuntime,
-    status: &str,
+    runtime: &'a CompiledLlmRuntime,
+    status: &'a str,
     failed_after_first_token: bool,
-    error_payload: Option<&Value>,
-    usage: &ProviderUsage,
+    error_payload: Option<&'a Value>,
+    usage: &'a ProviderUsage,
     event_count: usize,
     first_token_at: Option<OffsetDateTime>,
     time_to_first_token_ms: Option<u64>,
-) -> Value {
+}
+
+fn build_attempt_metric(input: AttemptMetricInput<'_>) -> Value {
     json!({
-        "attempt_index": attempt_index,
-        "provider_instance_id": runtime.provider_instance_id,
-        "provider_code": runtime.provider_code,
-        "protocol": runtime.protocol,
-        "upstream_model_id": runtime.model,
-        "model": runtime.model,
-        "status": status,
-        "failed_after_first_token": failed_after_first_token,
-        "event_count": event_count,
-        "first_token_at": offset_datetime_json(first_token_at),
-        "time_to_first_token_ms": time_to_first_token_ms,
-        "usage": serde_json::to_value(usage).unwrap_or(Value::Null),
-        "error_code": error_payload
+        "attempt_index": input.attempt_index,
+        "provider_instance_id": input.runtime.provider_instance_id,
+        "provider_code": input.runtime.provider_code,
+        "protocol": input.runtime.protocol,
+        "upstream_model_id": input.runtime.model,
+        "model": input.runtime.model,
+        "status": input.status,
+        "failed_after_first_token": input.failed_after_first_token,
+        "event_count": input.event_count,
+        "first_token_at": offset_datetime_json(input.first_token_at),
+        "time_to_first_token_ms": input.time_to_first_token_ms,
+        "usage": serde_json::to_value(input.usage).unwrap_or(Value::Null),
+        "error_code": input.error_payload
             .and_then(|payload| payload.get("error_kind"))
             .cloned()
             .unwrap_or(Value::Null),
-        "error_message_ref": error_payload
+        "error_message_ref": input.error_payload
             .and_then(|payload| payload.get("message"))
             .and_then(Value::as_str)
             .map(|message| format!("runtime_artifact:inline:error:{message}"))
