@@ -339,6 +339,8 @@ pub struct ApplicationConversationMessageResponse {
     pub run_id: String,
     pub detail_run_id: Option<String>,
     pub can_open_detail: bool,
+    pub role: Option<String>,
+    pub content: Option<String>,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub status: String,
@@ -647,6 +649,8 @@ fn to_application_conversation_message_response(
         run_id: run_id.clone(),
         detail_run_id: Some(run_id),
         can_open_detail: true,
+        role: None,
+        content: None,
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
         status: run.status.as_str().to_string(),
@@ -724,7 +728,6 @@ where
     };
 
     let mut items = Vec::new();
-    let mut pending_user: Option<String> = None;
 
     for message in history {
         let role = message
@@ -736,27 +739,11 @@ where
         };
 
         match role {
-            "user" => {
-                if let Some(query) = pending_user.replace(content) {
-                    items.push(imported_context_item(run, items.len(), query, None));
-                }
-            }
-            "assistant" => {
-                if let Some(query) = pending_user.take() {
-                    items.push(imported_context_item(
-                        run,
-                        items.len(),
-                        query,
-                        Some(content),
-                    ));
-                }
+            "system" | "user" | "assistant" => {
+                items.push(imported_context_item(run, items.len(), role, content))
             }
             _ => {}
         }
-    }
-
-    if let Some(query) = pending_user {
-        items.push(imported_context_item(run, items.len(), query, None));
     }
 
     items
@@ -839,19 +826,21 @@ fn parse_imported_context_cursor(run_id: Uuid, cursor: &str) -> Option<usize> {
 fn imported_context_item(
     run: &domain::FlowRunRecord,
     index: usize,
-    query: String,
-    answer: Option<String>,
+    role: &str,
+    content: String,
 ) -> ApplicationConversationMessageResponse {
     ApplicationConversationMessageResponse {
         run_id: imported_context_cursor(run.id, index),
         detail_run_id: None,
         can_open_detail: false,
+        role: Some(role.to_string()),
+        content: Some(content),
         started_at: format_time(run.started_at),
         finished_at: format_optional_time(run.finished_at),
         status: "succeeded".to_string(),
-        query: Some(query),
+        query: None,
         model: application_run_model(&run.input_payload),
-        answer,
+        answer: None,
         is_current: false,
     }
 }
@@ -1850,13 +1839,29 @@ pub async fn list_application_run_conversation_messages(
             },
         )
         .await?;
+        let workspace_id = context.actor.current_workspace_id;
+        let system_context_items =
+            imported_context_messages_from_run(&detail.flow_run, |artifact_id| {
+                let state = state.clone();
+
+                async move {
+                    load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
+                        .await
+                        .ok()
+                }
+            })
+            .await
+            .into_iter()
+            .filter(|item| item.role.as_deref() == Some("system"));
 
         return Ok(Json(ApiSuccess::new(
             ApplicationConversationMessagesPageResponse {
-                items: page
-                    .items
-                    .into_iter()
-                    .map(|run| to_application_conversation_message_response(run, Some(run_id)))
+                items: system_context_items
+                    .chain(
+                        page.items.into_iter().map(|run| {
+                            to_application_conversation_message_response(run, Some(run_id))
+                        }),
+                    )
                     .collect(),
                 page: ApplicationConversationMessagesPageInfoResponse {
                     has_before: page.has_before,
@@ -2366,11 +2371,15 @@ mod tests {
         assert_eq!(page.items.len(), 2);
         assert!(page.page.has_before);
         assert!(!page.page.has_after);
-        assert_eq!(page.items[0].query.as_deref(), Some("old question 2"));
-        assert_eq!(page.items[0].answer.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[0].role.as_deref(), Some("assistant"));
+        assert_eq!(page.items[0].content.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[0].query, None);
+        assert_eq!(page.items[0].answer, None);
         assert!(!page.items[0].can_open_detail);
         assert_eq!(page.items[0].detail_run_id, None);
         assert_eq!(page.items[1].run_id, run_id.to_string());
+        assert_eq!(page.items[1].role, None);
+        assert_eq!(page.items[1].content, None);
         assert_eq!(page.items[1].query.as_deref(), Some("current question"));
         assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
         assert!(page.items[1].can_open_detail);
@@ -2450,12 +2459,16 @@ mod tests {
         )
         .await;
 
-        assert_eq!(page.items.len(), 2);
-        assert_eq!(page.items[0].query.as_deref(), Some("old question"));
-        assert_eq!(page.items[0].answer.as_deref(), Some("old answer"));
+        assert_eq!(page.items.len(), 4);
+        assert_eq!(page.items[0].role.as_deref(), Some("system"));
+        assert_eq!(page.items[0].content.as_deref(), Some("hidden"));
         assert!(!page.items[0].can_open_detail);
-        assert_eq!(page.items[1].run_id, run_id.to_string());
-        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
-        assert!(page.items[1].can_open_detail);
+        assert_eq!(page.items[1].role.as_deref(), Some("user"));
+        assert_eq!(page.items[1].content.as_deref(), Some("old question"));
+        assert_eq!(page.items[2].role.as_deref(), Some("assistant"));
+        assert_eq!(page.items[2].content.as_deref(), Some("old answer"));
+        assert_eq!(page.items[3].run_id, run_id.to_string());
+        assert_eq!(page.items[3].query.as_deref(), Some("current question"));
+        assert!(page.items[3].can_open_detail);
     }
 }

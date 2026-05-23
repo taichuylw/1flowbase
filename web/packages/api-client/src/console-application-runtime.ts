@@ -184,6 +184,8 @@ export interface ConsoleApplicationConversationMessage {
   run_id: string;
   detail_run_id?: string | null;
   can_open_detail?: boolean;
+  role?: 'system' | 'user' | 'assistant' | null;
+  content?: string | null;
   started_at: string;
   finished_at: string | null;
   status: string;

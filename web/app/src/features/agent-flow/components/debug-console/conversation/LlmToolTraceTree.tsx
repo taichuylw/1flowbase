@@ -16,7 +16,7 @@ import {
 function callbackStatusLabel(status: LlmToolCallback['callbackStatus']) {
   switch (status) {
     case 'returned':
-      return '已回调';
+      return '已返回';
     case 'cancelled':
       return '已取消';
     default:
@@ -102,9 +102,11 @@ function LlmToolCallbackItem({
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
         </Tag>
-        <Tag color={executionStatusColor(callback.executionStatus)}>
-          {executionStatusLabel(callback.executionStatus)}
-        </Tag>
+        {callback.executionStatus === 'unknown' ? null : (
+          <Tag color={executionStatusColor(callback.executionStatus)}>
+            {executionStatusLabel(callback.executionStatus)}
+          </Tag>
+        )}
         {expanded ? (
           <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
         ) : (
@@ -195,11 +197,6 @@ export function LlmToolTraceTree({
       }),
     [loadedToolCallbacks, toolCallbacks]
   );
-  const toolCallbackIds = useMemo(
-    () => effectiveToolCallbacks.map((callback) => callback.id),
-    [effectiveToolCallbacks]
-  );
-
   useEffect(() => {
     mountedRef.current = true;
 
@@ -304,13 +301,6 @@ export function LlmToolTraceTree({
         <div className="agent-flow-editor__debug-llm-tools-body">
           {effectiveToolCallbacks.length > 0 ? (
             <>
-              <RuntimeDebugPayloadBlock
-                defaultCollapsed={false}
-                height="7rem"
-                payload={toolCallbackIds}
-                title="工具回调索引"
-                onLoadArtifact={onLoadArtifact}
-              />
               <div
                 aria-label="工具回调列表"
                 className="agent-flow-editor__debug-llm-tool-list"
