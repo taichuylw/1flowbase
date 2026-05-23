@@ -27,7 +27,7 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 
 ## The Iron Law
 
-没有直接证据，不得下 QA 结论。默认只报告，不直接修。
+没有直接证据，不得下 QA 结论。默认只报告和 warning，不直接修；任何修复、删除或重构都必须得到用户明确同意。
 
 ## Quick Reference
 
@@ -41,6 +41,7 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 - `project evaluation mode` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口
 - 前后端字段契约必查：接口字段名必须沿用后端 DTO / 领域语义；展示文案可本地化，但不得为展示另起业务字段别名
 - 临时兼容旧字段必须标记 `@field-contract-compat source=... alias=... remove_by=yyyy-mm-dd`，带废弃计划和测试；QA 报告和 `repo-hygiene` 必须把它作为 warning 暴露
+- 命中过度抽象、无用代码、空转封装、死代码或无意义 helper / manager / utils 时，加载 `references/maintainability-dead-abstraction.md`；只能基于调用方、边界、运行路径或历史证据输出 finding / warning
 - 热点修改复盘必查：高频文件、提交意图、反复修改原因、缺失的前置判断规则，以及应更新的 `skills / AGENTS / scripts/node` 门禁；报告重点是预防下一次 AI 返工，不是只列业务代码修复建议
 - 评估范围命中前端页面、导航、样式、共享壳层或第三方组件覆写时，必须加载 `references/frontend-quality-gates.md`
 - 评估范围命中前端页面运行态、受保护页面、路由跳转、浏览器截图或控制台证据时，优先运行 `node scripts/node/page-debug.js`
@@ -63,6 +64,7 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 - Repository quality gate routing: `references/repo-quality-gates.md`
 - Quality gate watch scenarios: `references/quality-gate-watch.md`
 - Hotspot prevention review: `references/hotspot-prevention.md`
+- Maintainability / dead abstraction checks: `references/maintainability-dead-abstraction.md`
 - Task-scoped checks: `references/task-mode-checklist.md`
 - Full-project checks: `references/project-evaluation-checklist.md`
 - Frontend quality gates: `references/frontend-quality-gates.md`
@@ -81,4 +83,5 @@ description: Use when evaluating 1flowbase task outcomes or current project qual
 - 小任务也直接上全量审计
 - 只挑视觉问题，不看契约和状态
 - 只看当前改动点，不看被影响的其他消费者
+- 把 maintainability warning 当成已授权清理，未经用户同意就删除或重构
 - 后端评估仍沿用旧术语，忽略 `workspace/system`、`SYSTEM_SCOPE_ID`、runtime `scope_id`、`HostExtension / RuntimeExtension / CapabilityPlugin`、`Resource Action Kernel` 和新质量门禁

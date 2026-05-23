@@ -27,6 +27,7 @@
 | 样式边界 | 是否仍守住 `theme token / first-party wrapper / explicit slot` 边界，是否出现无边界第三方递归覆盖 | CSS 选择器、wrapper class、computed style、blast radius 说明 |
 | 导航真值层 | 导航文案、`route id`、`path`、选中态和权限映射是否仍来自同一事实源 | 路由配置、导航配置、选中态逻辑、spec 对照 |
 | 目录与边界 | 目录是否对齐 spec，文件职责是否仍聚焦，测试目录规则是否仍被遵守 | 目录树、文件职责、`_tests`、行数与目录压力 |
+| Maintainability / Dead Abstraction | 是否存在过度抽象、无用代码、空转封装或无意义 helper / manager / utils；是否只能作为 warning，等待用户同意后再修 | 调用点、导出点、运行路径、边界职责、历史废弃标记、`repo-hygiene` |
 | 交互流 | 本次改动是否破坏入口、主路径、详情路径或反馈逻辑 | 手动流程、截图、录屏、页面行为 |
 | 变化传播 | 改共享组件、共享状态、公共协议后，其他消费者是否被带坏 | 受影响页面/模块回归、调用方检查 |
 | 前后端字段契约 | 前端消费字段是否沿用后端 DTO / 领域字段名，是否为了展示另起业务字段别名；旧字段兼容是否标记 `@field-contract-compat` 并带废弃计划和测试 | DTO / OpenAPI、api-client 类型、feature API 消费层、`repo-hygiene` warning、定向 contract 测试 |
@@ -63,6 +64,7 @@
 - 公共状态改动必须检查其他写入口和读入口
 - 公共 API 改动必须检查调用方是否仍按同一契约工作
 - 前后端字段不一致且无 `@field-contract-compat` 标记时，默认按契约漂移报告；有标记时仍作为 warning 写入 QA 风险和 `tmp/test-governance/repo-hygiene.json`
+- 发现过度抽象、无用代码或空转封装时，只能基于证据输出 finding / warning；删除、合并或重构必须等待用户明确同意
 - 如果局部改动引入公共行为变化，默认至少报 `High`
 - 后端公共路由改动必须抽查其他调用方、OpenAPI 和相关 `_tests`
 - session、auth、provider 或 callback 改动必须补查 `public` 与 `control` 平面的传播影响
