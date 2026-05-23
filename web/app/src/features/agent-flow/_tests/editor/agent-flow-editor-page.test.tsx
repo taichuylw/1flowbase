@@ -184,7 +184,7 @@ beforeEach(() => {
     active: true,
     api_enabled: true,
     mapping_snapshot: apiMapping,
-    public_url: '/api/1flowbase/runs',
+    public_url: '/api/v1/agent/runs',
     created_by: 'user-1',
     created_at: '2026-05-20T09:00:00Z'
   });

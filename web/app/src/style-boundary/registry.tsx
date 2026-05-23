@@ -748,7 +748,7 @@ function seedStyleBoundaryApplicationFetch() {
             version_sequence: 3,
             active: true,
             api_enabled: true,
-            public_url: '/api/1flowbase/runs',
+            public_url: '/api/v1/agent/runs',
             created_by: 'user-1',
             created_at: '2026-05-09T10:00:00Z',
             mapping_snapshot: {
@@ -823,7 +823,7 @@ function seedStyleBoundaryApplicationFetch() {
               {
                 id: 'applicationNativeRun',
                 method: 'POST',
-                path: '/api/1flowbase/runs',
+                path: '/api/v1/agent/runs',
                 summary: 'Run published application',
                 description: 'Run published application',
                 tags: ['application-public-api'],
@@ -853,7 +853,7 @@ function seedStyleBoundaryApplicationFetch() {
           openapi: '3.1.0',
           info: { title: 'Support Agent API', version: 'v3' },
           paths: {
-            '/api/1flowbase/runs': {
+            '/api/v1/agent/runs': {
               post: {
                 operationId: 'applicationNativeRun',
                 responses: {

@@ -27,7 +27,7 @@ const operationsByCategory = {
       {
         id: 'create_native_run',
         method: 'POST',
-        path: '/api/1flowbase/runs',
+        path: '/api/v1/agent/runs',
         summary: 'Create Native public run',
         description: 'Create Native public run',
         tags: ['native'],
@@ -37,7 +37,7 @@ const operationsByCategory = {
       {
         id: 'get_native_run',
         method: 'GET',
-        path: '/api/1flowbase/runs/{run_id}',
+        path: '/api/v1/agent/runs/{run_id}',
         summary: 'Get Native public run',
         description: 'Get Native public run',
         tags: ['native'],
@@ -105,8 +105,8 @@ describe('ApiDocsExplorer', () => {
       expect(fetchCategoryOperations).toHaveBeenCalledWith('openai-compatible-api');
     });
     expect(await screen.findByText('全部分类 共 3 个接口')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /post \/api\/1flowbase\/runs/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /get \/api\/1flowbase\/runs\/\{run_id\}/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /post \/api\/v1\/agent\/runs/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /get \/api\/v1\/agent\/runs\/\{run_id\}/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /post \/v1\/chat\/completions/i })).toBeInTheDocument();
     expect(screen.queryByText('选择一个分类后查看接口列表')).not.toBeInTheDocument();
   });

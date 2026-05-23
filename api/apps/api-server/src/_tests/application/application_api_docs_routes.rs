@@ -259,7 +259,7 @@ async fn application_api_docs_list_models_and_streaming_contracts() {
         .unwrap();
     assert_eq!(native_spec.status(), StatusCode::OK);
     let native_payload = response_json(native_spec).await;
-    let native_streaming_schema = &native_payload["paths"]["/api/1flowbase/runs"]["post"]
+    let native_streaming_schema = &native_payload["paths"]["/api/v1/agent/runs"]["post"]
         ["responses"]["201"]["content"]["text/event-stream"]["schema"];
     assert_eq!(
         native_streaming_schema["x-1flowbase-heartbeat"],
@@ -388,8 +388,8 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         .unwrap();
     assert_eq!(create_run_spec.status(), StatusCode::OK);
     let create_run_payload = response_json(create_run_spec).await;
-    let create_run_body = &create_run_payload["paths"]["/api/1flowbase/runs"]["post"]
-        ["requestBody"]["content"]["application/json"]["schema"];
+    let create_run_body = &create_run_payload["paths"]["/api/v1/agent/runs"]["post"]["requestBody"]
+        ["content"]["application/json"]["schema"];
     assert_eq!(create_run_body["required"], json!(["query"]));
     assert_eq!(
         create_run_body["properties"]["query"]["type"],
@@ -501,7 +501,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         .unwrap();
     assert_eq!(get_run_spec.status(), StatusCode::OK);
     let get_run_payload = response_json(get_run_spec).await;
-    let get_run_operation = &get_run_payload["paths"]["/api/1flowbase/runs/{run_id}"]["get"];
+    let get_run_operation = &get_run_payload["paths"]["/api/v1/agent/runs/{run_id}"]["get"];
     assert_eq!(get_run_operation["requestBody"], Value::Null);
     assert_eq!(get_run_operation["parameters"][0]["name"], json!("run_id"));
     assert_eq!(get_run_operation["parameters"][0]["in"], json!("path"));
@@ -525,7 +525,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         .unwrap();
     assert_eq!(upload_file_spec.status(), StatusCode::OK);
     let upload_file_payload = response_json(upload_file_spec).await;
-    let upload_body = &upload_file_payload["paths"]["/api/1flowbase/files"]["post"]["requestBody"]
+    let upload_body = &upload_file_payload["paths"]["/api/v1/agent/files"]["post"]["requestBody"]
         ["content"]["multipart/form-data"]["schema"];
     assert_eq!(upload_body["required"], json!(["file_table_id", "file"]));
     assert_eq!(
@@ -534,7 +534,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
     );
     assert_eq!(upload_body["properties"]["file"]["format"], json!("binary"));
 
-    let create_run_post = &create_run_payload["paths"]["/api/1flowbase/runs"]["post"];
+    let create_run_post = &create_run_payload["paths"]["/api/v1/agent/runs"]["post"];
     assert_eq!(
         create_run_post["responses"]["201"]["content"]["application/json"]["schema"]["properties"]
             ["data"]["properties"]["status"]["type"],
@@ -636,21 +636,21 @@ async fn application_api_docs_specs_follow_requested_locale() {
         json!("Application API Docs App 的应用级公开 API 文档。当前启用的是发布版本 v1。公开路径由应用 API 密钥选择，不通过 application_id 选择。")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/1flowbase/runs"]["post"]["summary"],
+        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["summary"],
         json!("创建原生公开运行")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/1flowbase/runs"]["post"]["requestBody"]["content"]
+        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["requestBody"]["content"]
             ["application/json"]["schema"]["properties"]["query"]["description"],
         json!("用户输入，会映射到当前应用发布配置中的 query target。")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/1flowbase/runs"]["post"]["requestBody"]["content"]
+        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["requestBody"]["content"]
             ["application/json"]["schema"]["properties"]["title"]["description"],
         json!("运行标题。未传时默认使用用户输入，并截断到 255 个字符。")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/1flowbase/runs"]["post"]["responses"]["201"]["description"],
+        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["responses"]["201"]["description"],
         json!("原生运行已创建")
     );
     assert_eq!(

@@ -500,7 +500,7 @@ async fn application_api_publication_routes_publish_and_patch_api_enabled_state(
     assert_eq!(publish_payload["data"]["api_enabled"].as_bool(), Some(true));
     assert_eq!(
         publish_payload["data"]["public_url"].as_str(),
-        Some("/api/1flowbase/runs")
+        Some("/api/v1/agent/runs")
     );
 
     let patch_status = app
@@ -549,7 +549,7 @@ async fn application_api_publication_routes_publish_and_patch_api_enabled_state(
     assert_eq!(active_payload["data"]["api_enabled"].as_bool(), Some(false));
     assert_eq!(
         active_payload["data"]["public_url"].as_str(),
-        Some("/api/1flowbase/runs")
+        Some("/api/v1/agent/runs")
     );
     assert!(active_payload["data"]["mapping_snapshot"]["input"]["model_target"].is_null());
 
@@ -572,7 +572,7 @@ async fn application_api_publication_routes_publish_and_patch_api_enabled_state(
     );
     assert_eq!(
         detail_payload["data"]["sections"]["api"]["invoke_path_template"].as_str(),
-        Some("/api/1flowbase/runs")
+        Some("/api/v1/agent/runs")
     );
     assert_eq!(
         detail_payload["data"]["sections"]["api"]["api_capability_status"].as_str(),
