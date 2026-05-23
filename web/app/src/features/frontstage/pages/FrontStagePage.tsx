@@ -57,6 +57,7 @@ import {
   findNodeById,
   getDeleteConfirmMessage,
   getPageDisplayTitle,
+  moveNodeInTree,
   normalizePageTree,
   removeNodeFromTree,
   resolveSelectedPageId
@@ -385,6 +386,128 @@ function findSiblingContext(
   }
 
   return null;
+}
+
+function extractNodeFromTree(
+  nodes: FrontStageTreeNode[],
+  targetNodeId: string
+): { nodes: FrontStageTreeNode[]; extractedNode: FrontStageTreeNode | null } {
+  let extractedNode: FrontStageTreeNode | null = null;
+  const nextNodes: FrontStageTreeNode[] = [];
+
+  for (const node of nodes) {
+    if (node.id === targetNodeId) {
+      extractedNode = node;
+      continue;
+    }
+
+    if (node.children) {
+      const childResult = extractNodeFromTree(node.children, targetNodeId);
+      if (childResult.extractedNode) {
+        extractedNode = childResult.extractedNode;
+        nextNodes.push({
+          ...node,
+          children: childResult.nodes
+        });
+        continue;
+      }
+    }
+
+    nextNodes.push(node);
+  }
+
+  return {
+    nodes: nextNodes,
+    extractedNode
+  };
+}
+
+function insertNodeIntoTree(
+  nodes: FrontStageTreeNode[],
+  parentId: string | null,
+  index: number,
+  nodeToInsert: FrontStageTreeNode
+): FrontStageTreeNode[] {
+  if (!parentId) {
+    const nextNodes = [...nodes];
+    nextNodes.splice(index, 0, nodeToInsert);
+    return nextNodes;
+  }
+
+  return nodes.map((node) => {
+    if (node.id === parentId && node.kind === 'group') {
+      const nextChildren = [...(node.children ?? [])];
+      nextChildren.splice(index, 0, nodeToInsert);
+      return {
+        ...node,
+        children: nextChildren
+      };
+    }
+
+    return {
+      ...node,
+      children: node.children
+        ? insertNodeIntoTree(node.children, parentId, index, nodeToInsert)
+        : node.children
+    };
+  });
+}
+
+function moveNodeToTreePosition(
+  nodes: FrontStageTreeNode[],
+  nodeId: string,
+  targetNodeId: string,
+  position: 'before' | 'inside' | 'after'
+): FrontStageTreeNode[] {
+  const { nodes: nodesWithoutDragged, extractedNode } = extractNodeFromTree(
+    nodes,
+    nodeId
+  );
+  if (!extractedNode) {
+    return nodes;
+  }
+
+  const targetSiblingContext = findSiblingContext(
+    nodesWithoutDragged,
+    targetNodeId
+  );
+  if (!targetSiblingContext) {
+    return nodes;
+  }
+
+  if (extractedNode.kind === 'group' && targetSiblingContext.parentId) {
+    return nodes;
+  }
+
+  if (position === 'inside') {
+    if (extractedNode.kind !== 'page') {
+      return nodes;
+    }
+
+    const targetNode = findNodeById(nodesWithoutDragged, targetNodeId);
+    if (!targetNode || targetNode.kind !== 'group') {
+      return nodes;
+    }
+
+    return insertNodeIntoTree(
+      nodesWithoutDragged,
+      targetNodeId,
+      targetNode.children?.length ?? 0,
+      extractedNode
+    );
+  }
+
+  const insertIndex =
+    position === 'before'
+      ? targetSiblingContext.index
+      : targetSiblingContext.index + 1;
+
+  return insertNodeIntoTree(
+    nodesWithoutDragged,
+    targetSiblingContext.parentId,
+    insertIndex,
+    extractedNode
+  );
 }
 
 function isNodeDescendantOf(
@@ -1208,6 +1331,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
+    setPageTree((currentTree) => moveNodeInTree(currentTree, nodeId, direction));
+
     void runPageTreeOperation(async () => {
       await onMovePageNode?.(nodeId, {
         parentId: siblingContext.parentId,
@@ -1219,7 +1344,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const handleMoveNodeToPosition = (
     nodeId: string,
     targetNodeId: string,
-    position: 'before' | 'after'
+    position: 'before' | 'inside' | 'after'
   ) => {
     if (
       nodeId === targetNodeId ||
@@ -1228,22 +1353,43 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
+    const draggedNode = findNodeById(pageTree, nodeId);
+    const targetNode = findNodeById(pageTree, targetNodeId);
     const targetSiblingContext = findSiblingContext(pageTree, targetNodeId);
-    if (!targetSiblingContext) {
+    if (
+      !draggedNode ||
+      !targetNode ||
+      !targetSiblingContext ||
+      (draggedNode.kind === 'group' && targetSiblingContext.parentId)
+    ) {
+      return;
+    }
+
+    if (
+      position === 'inside' &&
+      (draggedNode.kind !== 'page' || targetNode.kind !== 'group')
+    ) {
       return;
     }
 
     const { parentId, siblings, index } = targetSiblingContext;
+    const nextParentId = position === 'inside' ? targetNodeId : parentId;
     const rank =
-      position === 'before'
+      position === 'inside'
+        ? getNodeAppendRank(pageTree, targetNodeId)
+        : position === 'before'
         ? rankForMoveTarget(index, -1)
         : index === siblings.length - 1
           ? getNodeAppendRank(pageTree, parentId)
           : rankForMoveTarget(index, 1);
 
+    setPageTree((currentTree) =>
+      moveNodeToTreePosition(currentTree, nodeId, targetNodeId, position)
+    );
+
     void runPageTreeOperation(async () => {
       await onMovePageNode?.(nodeId, {
-        parentId,
+        parentId: nextParentId,
         rank
       });
     });
