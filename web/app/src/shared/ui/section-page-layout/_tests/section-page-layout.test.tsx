@@ -359,4 +359,29 @@ describe('SectionPageLayout', () => {
 
     expect(await screen.findByRole('button', { name: '更多分区' })).toBeInTheDocument();
   });
+
+  test('can hide compact navigation when another responsive selector owns it', async () => {
+    useBreakpointSpy.mockReturnValue({
+      xs: true,
+      sm: true,
+      md: true,
+      lg: false,
+      xl: false,
+      xxl: false
+    });
+
+    renderInRouter(
+      <SectionPageLayout
+        navItems={navItems}
+        activeKey="profile"
+        hideCompactNav
+      >
+        <section>设置页内容</section>
+      </SectionPageLayout>
+    );
+
+    expect(await screen.findByText('设置页内容')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '更多分区' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+  });
 });

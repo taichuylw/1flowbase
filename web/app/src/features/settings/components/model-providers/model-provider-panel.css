@@ -740,14 +740,17 @@
   }
 }
 
-@media (max-width: 1380px) {
+@media (max-width: 768px) {
   .model-provider-panel__main.ant-layout.ant-layout-has-sider {
     flex-direction: column;
+    height: auto;
+    overflow: visible;
   }
 
   .model-provider-panel__main.ant-layout.ant-layout-has-sider>.model-provider-panel__left {
     flex: none;
     width: 100% !important;
+    height: auto;
   }
 
   .model-provider-panel__sidebar {
@@ -755,6 +758,7 @@
     width: auto !important;
     min-width: 0 !important;
     max-width: none !important;
+    height: auto;
   }
 
   .model-provider-panel__official {

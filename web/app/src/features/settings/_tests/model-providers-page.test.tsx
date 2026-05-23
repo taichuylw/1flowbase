@@ -1281,6 +1281,8 @@ describe('ModelProvidersPage', () => {
     );
     expect(cssSource).not.toContain('overflow: hidden !important');
     expect(cssSource).toContain('height: calc(100% - 24px);');
+    expect(cssSource).not.toContain('@media (max-width: 1380px)');
+    expect(cssSource).toContain('@media (max-width: 768px)');
   });
 
   test('deduplicates official install cards for the same provider and keeps only one latest entry', async () => {

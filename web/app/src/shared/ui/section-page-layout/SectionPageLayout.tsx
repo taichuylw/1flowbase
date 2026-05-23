@@ -25,6 +25,7 @@ export interface SectionPageLayoutProps {
   emptyState?: ReactNode;
   contentWidth?: 'wide' | 'narrow' | 'full';
   heightMode?: 'natural' | 'viewport';
+  hideCompactNav?: boolean;
 }
 
 export function SectionPageLayout({
@@ -36,7 +37,8 @@ export function SectionPageLayout({
   sidebarFooter,
   emptyState,
   contentWidth = 'wide',
-  heightMode = 'natural'
+  heightMode = 'natural',
+  hideCompactNav = false
 }: SectionPageLayoutProps) {
   const screens = Grid.useBreakpoint();
   const visibleItems = navItems.filter((item) => item.visible !== false);
@@ -103,14 +105,14 @@ export function SectionPageLayout({
                   <div className="section-page-layout__sidebar-content">
                     {sidebarContent}
                   </div>
-                ) : (
+                ) : !hideCompactNav ? (
                   <SectionSidebarNav
                     navItems={visibleItems}
                     activeKey={activeKey}
                     compactMode
                     compactVariant={compactVariant}
                   />
-                )}
+                ) : null}
               </>
             ) : null}
             {children}
