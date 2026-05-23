@@ -170,6 +170,9 @@ const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
                   execution_status: 'unknown',
                   request_round_index: 0,
                   result_round_index: 0,
+                  call_output_tokens: 12,
+                  result_input_tokens: 48,
+                  token_count_method: 'estimated',
                   artifact_ref: 'artifact-tool-call-weather'
                 }
               ]
@@ -606,7 +609,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather/
+      name: /lookup_weather.*调用 12 tokens.*结果 48 tokens/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')

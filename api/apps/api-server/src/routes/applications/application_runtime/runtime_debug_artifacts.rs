@@ -51,6 +51,9 @@ struct LlmToolCallbackArtifact {
     callback_payload: Option<Value>,
     request_round_index: Option<i64>,
     result_round_index: Option<i64>,
+    call_output_tokens: Option<u64>,
+    result_input_tokens: Option<u64>,
+    token_count_method: Option<String>,
 }
 
 impl LlmToolCallbackArtifact {
@@ -73,6 +76,9 @@ impl LlmToolCallbackArtifact {
             "parsed_result": self.callback_payload.as_ref().map(parsed_tool_callback_payload),
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
+            "call_output_tokens": self.call_output_tokens,
+            "result_input_tokens": self.result_input_tokens,
+            "token_count_method": self.token_count_method.clone(),
         })
     }
 
@@ -85,6 +91,9 @@ impl LlmToolCallbackArtifact {
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
             "artifact_ref": artifact_id.to_string(),
+            "call_output_tokens": self.call_output_tokens,
+            "result_input_tokens": self.result_input_tokens,
+            "token_count_method": self.token_count_method.clone(),
         })
     }
 }
@@ -114,6 +123,11 @@ fn record_string_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Str
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned)
     })
+}
+
+fn record_u64_field(record: &Map<String, Value>, keys: &[&str]) -> Option<u64> {
+    keys.iter()
+        .find_map(|key| record.get(*key).and_then(Value::as_u64))
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -354,6 +368,15 @@ fn collect_llm_tool_callbacks(
                     callback_payload: raw_payloads.get(&id).cloned(),
                     id,
                     name,
+                    call_output_tokens: record_u64_field(tool_call_object, &["call_output_tokens"]),
+                    result_input_tokens: record_u64_field(
+                        tool_call_object,
+                        &["result_input_tokens"],
+                    ),
+                    token_count_method: record_string_field(
+                        tool_call_object,
+                        &["token_count_method"],
+                    ),
                     request_payload: tool_call,
                     request_round_index: Some(current_round_index),
                     result_round_index: None,
@@ -375,9 +398,24 @@ fn collect_llm_tool_callbacks(
                 &mut callbacks,
                 &mut index_by_id,
                 LlmToolCallbackArtifact {
-                    callback_payload: raw_payloads.get(&id).cloned().or_else(|| Some(tool_result)),
+                    callback_payload: raw_payloads
+                        .get(&id)
+                        .cloned()
+                        .or_else(|| Some(tool_result.clone())),
                     id,
                     name,
+                    call_output_tokens: record_u64_field(
+                        tool_result_object,
+                        &["call_output_tokens"],
+                    ),
+                    result_input_tokens: record_u64_field(
+                        tool_result_object,
+                        &["result_input_tokens"],
+                    ),
+                    token_count_method: record_string_field(
+                        tool_result_object,
+                        &["token_count_method"],
+                    ),
                     request_payload: json!({}),
                     request_round_index: None,
                     result_round_index: Some(current_round_index),
@@ -419,6 +457,15 @@ fn upsert_llm_tool_callback(
     }
     if next.result_round_index.is_some() {
         current.result_round_index = next.result_round_index;
+    }
+    if next.call_output_tokens.is_some() {
+        current.call_output_tokens = next.call_output_tokens;
+    }
+    if next.result_input_tokens.is_some() {
+        current.result_input_tokens = next.result_input_tokens;
+    }
+    if next.token_count_method.is_some() {
+        current.token_count_method = next.token_count_method;
     }
 }
 

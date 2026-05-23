@@ -2049,6 +2049,9 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
                             {
                                 "id": "call_weather",
                                 "name": "lookup_weather",
+                                "call_output_tokens": 32,
+                                "result_input_tokens": null,
+                                "token_count_method": "estimated",
                                 "arguments": {
                                     "city": "Shanghai"
                                 }
@@ -2059,6 +2062,9 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
                         {
                             "role": "tool",
                             "tool_call_id": "call_weather",
+                            "call_output_tokens": null,
+                            "result_input_tokens": 12,
+                            "token_count_method": "estimated",
                             "content": "{\"temperature\":21}"
                         }
                     ]
@@ -2134,6 +2140,13 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
     assert_eq!(tool_callbacks[0]["execution_status"], "unknown");
     assert_eq!(tool_callbacks[0]["request_round_index"], 0);
     assert_eq!(tool_callbacks[0]["result_round_index"], 0);
+    assert!(tool_callbacks[0]["call_output_tokens"]
+        .as_u64()
+        .is_some_and(|tokens| tokens > 0));
+    assert!(tool_callbacks[0]["result_input_tokens"]
+        .as_u64()
+        .is_some_and(|tokens| tokens > 0));
+    assert_eq!(tool_callbacks[0]["token_count_method"], "estimated");
     let tool_callback_artifact_ref = tool_callbacks[0]["artifact_ref"].as_str().unwrap();
 
     let full_llm_rounds =
@@ -2170,4 +2183,11 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         tool_callback_detail["parsed_result"]["content"],
         "{\"temperature\":21}"
     );
+    assert!(tool_callback_detail["call_output_tokens"]
+        .as_u64()
+        .is_some_and(|tokens| tokens > 0));
+    assert!(tool_callback_detail["result_input_tokens"]
+        .as_u64()
+        .is_some_and(|tokens| tokens > 0));
+    assert_eq!(tool_callback_detail["token_count_method"], "estimated");
 }
