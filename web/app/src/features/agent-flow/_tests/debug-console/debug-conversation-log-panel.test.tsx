@@ -1,9 +1,4 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  within
-} from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode, type ComponentProps } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -447,7 +442,9 @@ describe('debug conversation log panel', () => {
       name: /Tools.*1 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
-    expect(within(nodeDetail).queryByText('temperature')).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('temperature')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
 
@@ -457,20 +454,25 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*call_weather/
+      name: /lookup_weather/
     });
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
-    expect(within(nodeDetail).queryByText('temperature')).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('call_weather')
+    ).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('temperature')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(toolCallback);
 
     expect(toolCallback).toHaveAttribute('aria-expanded', 'true');
-    expect(within(nodeDetail).getByLabelText('工具调用 JSON')).toHaveTextContent(
-      'Shanghai'
-    );
-    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      'temperature'
-    );
+    expect(
+      within(nodeDetail).getByLabelText('工具调用 JSON')
+    ).toHaveTextContent('Shanghai');
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('temperature');
     expect(nodeDetail).toHaveTextContent('已返回');
     expect(nodeDetail).not.toHaveTextContent('执行未知');
     expect(nodeDetail).toHaveTextContent('weather is clear');
@@ -523,14 +525,20 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(
       within(nodeDetail).getByRole('button', {
-        name: /lookup_weather.*call_weather/
+        name: /lookup_weather/
       })
     ).toBeInTheDocument();
     expect(
       within(nodeDetail).getByRole('button', {
-        name: /read_policy.*call_policy/
+        name: /read_policy/
       })
     ).toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('call_weather')
+    ).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('call_policy')
+    ).not.toBeInTheDocument();
     expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
       'weather is clear'
     );
@@ -573,7 +581,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*call_weather/
+      name: /lookup_weather/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -586,12 +594,12 @@ describe('debug conversation log panel', () => {
     expect(
       await within(nodeDetail).findByLabelText('工具调用 JSON')
     ).toHaveTextContent('Shanghai');
-    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      'trace-weather-1'
-    );
-    expect(within(nodeDetail).getByLabelText('解析结果 JSON')).toHaveTextContent(
-      'temperature'
-    );
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('trace-weather-1');
+    expect(
+      within(nodeDetail).getByLabelText('解析结果 JSON')
+    ).toHaveTextContent('temperature');
   }, 10_000);
 
   test('delegates log opening when the canvas shell controls the log panel', () => {

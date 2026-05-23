@@ -1,8 +1,4 @@
-import {
-  DownOutlined,
-  RightOutlined,
-  ToolOutlined
-} from '@ant-design/icons';
+import { DownOutlined, RightOutlined, ToolOutlined } from '@ant-design/icons';
 import { Tag, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -92,12 +88,6 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
-          <Typography.Text
-            className="agent-flow-editor__debug-llm-tool-id"
-            type="secondary"
-          >
-            {callback.id}
-          </Typography.Text>
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}

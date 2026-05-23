@@ -334,14 +334,6 @@
   flex: 1;
 }
 
-.agent-flow-editor__debug-llm-tool-id {
-  min-width: 0;
-  overflow: hidden;
-  max-width: 100%;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .agent-flow-editor__debug-llm-tool-detail {
   display: grid;
   gap: 0.5rem;

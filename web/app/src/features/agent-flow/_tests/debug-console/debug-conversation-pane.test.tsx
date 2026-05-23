@@ -62,9 +62,7 @@ function configureScrollMetrics(element: HTMLElement) {
 describe('DebugConversationPane auto scroll', () => {
   test('keeps streamed output pinned to the bottom until the user scrolls', () => {
     const { rerender } = renderPane([assistantMessage('你好')]);
-    const messagesElement = screen.getByTestId(
-      'debug-conversation-messages'
-    );
+    const messagesElement = screen.getByTestId('debug-conversation-messages');
     configureScrollMetrics(messagesElement);
 
     rerender(
@@ -103,7 +101,9 @@ describe('DebugConversationPane auto scroll', () => {
 
     rerender(
       <DebugConversationPane
-        messages={[assistantMessage('你好，正在输出更多内容，继续追加，暂停后追加')]}
+        messages={[
+          assistantMessage('你好，正在输出更多内容，继续追加，暂停后追加')
+        ]}
         runContext={runContext}
         status="running"
         stopping={false}
@@ -181,10 +181,13 @@ describe('DebugConversationPane workflow trace', () => {
     expect(screen.queryByText('lookup_weather')).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
-    expect(screen.queryByLabelText('工具回调索引 JSON')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /lookup_weather.*call_weather/ })
+      screen.queryByLabelText('工具回调索引 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /lookup_weather/ })
     ).toBeInTheDocument();
+    expect(screen.queryByText('call_weather')).not.toBeInTheDocument();
   });
 
   test('collapses repeated LLM node runs into one workflow row', () => {
@@ -285,12 +288,16 @@ describe('DebugConversationPane workflow trace', () => {
     });
     fireEvent.click(toolsNode);
 
-    expect(screen.queryByLabelText('工具回调索引 JSON')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /lookup_weather.*call_weather/ })
+      screen.queryByLabelText('工具回调索引 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /lookup_weather/ })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /read_policy.*call_policy/ })
+      screen.getByRole('button', { name: /read_policy/ })
     ).toBeInTheDocument();
+    expect(screen.queryByText('call_weather')).not.toBeInTheDocument();
+    expect(screen.queryByText('call_policy')).not.toBeInTheDocument();
   });
 });

@@ -765,7 +765,9 @@ describe('ApplicationLogsPage', () => {
       name: /Tools.*2 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
-    expect(within(logPanel).queryByText('call_weather')).not.toBeInTheDocument();
+    expect(
+      within(logPanel).queryByText('call_weather')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
     expect(
@@ -773,14 +775,18 @@ describe('ApplicationLogsPage', () => {
     ).not.toBeInTheDocument();
     expect(
       within(logPanel).getByRole('button', {
-        name: /lookup_weather.*call_weather/
+        name: /lookup_weather/
       })
     ).toBeInTheDocument();
     expect(
       within(logPanel).getByRole('button', {
-        name: /read_policy.*call_policy/
+        name: /read_policy/
       })
     ).toBeInTheDocument();
+    expect(
+      within(logPanel).queryByText('call_weather')
+    ).not.toBeInTheDocument();
+    expect(within(logPanel).queryByText('call_policy')).not.toBeInTheDocument();
   }, 20_000);
 
   test('does not offer run log details for imported context messages', async () => {
