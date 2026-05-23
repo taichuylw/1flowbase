@@ -62,12 +62,24 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
 
 function tokenAttributionItems(callback: LlmToolCallback) {
   return [
+    callback.call_input_tokens === null
+      ? null
+      : `调用输入 ${callback.call_input_tokens} tokens`,
+    callback.call_cached_input_tokens === null
+      ? null
+      : `调用缓存命中 ${callback.call_cached_input_tokens} tokens`,
     callback.call_output_tokens === null
       ? null
-      : `调用 ${callback.call_output_tokens} tokens`,
+      : `调用输出 ${callback.call_output_tokens} tokens`,
+    callback.result_context_input_tokens === null
+      ? null
+      : `回调上下文输入 ${callback.result_context_input_tokens} tokens`,
+    callback.result_context_cached_input_tokens === null
+      ? null
+      : `回调上下文缓存命中 ${callback.result_context_cached_input_tokens} tokens`,
     callback.result_input_tokens === null
       ? null
-      : `结果 ${callback.result_input_tokens} tokens`
+      : `结果输入 ${callback.result_input_tokens} tokens`
   ].filter((item): item is string => item !== null);
 }
 
@@ -238,10 +250,21 @@ export function LlmToolTraceTree({
           ...callback,
           ...loadedCallback,
           key: callback.key,
+          call_input_tokens:
+            loadedCallback.call_input_tokens ?? callback.call_input_tokens,
+          call_cached_input_tokens:
+            loadedCallback.call_cached_input_tokens ??
+            callback.call_cached_input_tokens,
           call_output_tokens:
             loadedCallback.call_output_tokens ?? callback.call_output_tokens,
           result_input_tokens:
             loadedCallback.result_input_tokens ?? callback.result_input_tokens,
+          result_context_input_tokens:
+            loadedCallback.result_context_input_tokens ??
+            callback.result_context_input_tokens,
+          result_context_cached_input_tokens:
+            loadedCallback.result_context_cached_input_tokens ??
+            callback.result_context_cached_input_tokens,
           token_count_method:
             loadedCallback.token_count_method ?? callback.token_count_method,
           detailArtifactRef:

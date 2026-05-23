@@ -93,6 +93,12 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
             llm_rounds: [
               {
                 round_index: 0,
+                usage: {
+                  input_tokens: 11,
+                  input_cache_hit_tokens: 5,
+                  output_tokens: 3,
+                  total_tokens: 14
+                },
                 assistant: {
                   role: 'assistant',
                   content: 'need tool',
@@ -100,6 +106,8 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
                     {
                       id: 'call_weather',
                       name: 'lookup_weather',
+                      call_input_tokens: 11,
+                      call_cached_input_tokens: 5,
                       call_output_tokens: 12,
                       result_input_tokens: null,
                       token_count_method: 'estimated',
@@ -123,6 +131,8 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
                     tool_call_id: 'call_weather',
                     call_output_tokens: null,
                     result_input_tokens: 48,
+                    result_context_input_tokens: 20,
+                    result_context_cached_input_tokens: 8,
                     token_count_method: 'estimated',
                     content: '{"temperature":21}'
                   }
@@ -130,6 +140,12 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
               },
               {
                 round_index: 2,
+                usage: {
+                  input_tokens: 20,
+                  input_cache_hit_tokens: 8,
+                  output_tokens: 4,
+                  total_tokens: 24
+                },
                 assistant: {
                   role: 'assistant',
                   content: 'weather is clear'
@@ -170,8 +186,12 @@ const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
                   execution_status: 'unknown',
                   request_round_index: 0,
                   result_round_index: 0,
+                  call_input_tokens: 11,
+                  call_cached_input_tokens: 5,
                   call_output_tokens: 12,
                   result_input_tokens: 48,
+                  result_context_input_tokens: 20,
+                  result_context_cached_input_tokens: 8,
                   token_count_method: 'estimated',
                   artifact_ref: 'artifact-tool-call-weather'
                 }
@@ -188,12 +208,18 @@ const toolCallbackDetailPayload = {
   name: 'lookup_weather',
   callback_status: 'returned',
   execution_status: 'unknown',
+  call_input_tokens: 11,
+  call_cached_input_tokens: 5,
   call_output_tokens: 12,
   result_input_tokens: 48,
+  result_context_input_tokens: 20,
+  result_context_cached_input_tokens: 8,
   token_count_method: 'estimated',
   request_payload: {
     id: 'call_weather',
     name: 'lookup_weather',
+    call_input_tokens: 11,
+    call_cached_input_tokens: 5,
     call_output_tokens: 12,
     result_input_tokens: null,
     token_count_method: 'estimated',
@@ -206,6 +232,8 @@ const toolCallbackDetailPayload = {
     tool_call_id: 'call_weather',
     call_output_tokens: null,
     result_input_tokens: 48,
+    result_context_input_tokens: 20,
+    result_context_cached_input_tokens: 8,
     token_count_method: 'estimated',
     content: '{"temperature":21}',
     adapter_trace_id: 'trace-weather-1'
@@ -472,14 +500,18 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*调用 12 tokens.*结果 48 tokens/
+      name: /lookup_weather.*调用输入 11 tokens.*调用缓存命中 5 tokens.*调用输出 12 tokens.*回调上下文输入 20 tokens.*回调上下文缓存命中 8 tokens.*结果输入 48 tokens/
     });
     const toolMain = toolCallback.querySelector(
       '.agent-flow-editor__debug-llm-tool-main'
     ) as HTMLElement;
     expect(toolMain).toHaveTextContent('lookup_weather');
-    expect(toolMain).toHaveTextContent('调用 12 tokens');
-    expect(toolMain).toHaveTextContent('结果 48 tokens');
+    expect(toolMain).toHaveTextContent('调用输入 11 tokens');
+    expect(toolMain).toHaveTextContent('调用缓存命中 5 tokens');
+    expect(toolMain).toHaveTextContent('调用输出 12 tokens');
+    expect(toolMain).toHaveTextContent('回调上下文输入 20 tokens');
+    expect(toolMain).toHaveTextContent('回调上下文缓存命中 8 tokens');
+    expect(toolMain).toHaveTextContent('结果输入 48 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
     expect(
       within(nodeDetail).queryByText('call_weather')
@@ -498,8 +530,10 @@ describe('debug conversation log panel', () => {
       within(nodeDetail).getByLabelText('完整回调 JSON')
     ).toHaveTextContent('temperature');
     expect(nodeDetail).toHaveTextContent('工具 token 归因');
-    expect(nodeDetail).toHaveTextContent('调用 12 tokens');
-    expect(nodeDetail).toHaveTextContent('结果 48 tokens');
+    expect(nodeDetail).toHaveTextContent('调用输入 11 tokens');
+    expect(nodeDetail).toHaveTextContent('调用输出 12 tokens');
+    expect(nodeDetail).toHaveTextContent('回调上下文输入 20 tokens');
+    expect(nodeDetail).toHaveTextContent('结果输入 48 tokens');
     expect(nodeDetail).toHaveTextContent('估算归因，不是额外账单');
     expect(nodeDetail).toHaveTextContent('已返回');
     expect(nodeDetail).not.toHaveTextContent('执行未知');
@@ -609,7 +643,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*调用 12 tokens.*结果 48 tokens/
+      name: /lookup_weather.*调用输入 11 tokens.*调用缓存命中 5 tokens.*调用输出 12 tokens.*回调上下文输入 20 tokens.*回调上下文缓存命中 8 tokens.*结果输入 48 tokens/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -629,8 +663,10 @@ describe('debug conversation log panel', () => {
       within(nodeDetail).getByLabelText('解析结果 JSON')
     ).toHaveTextContent('temperature');
     expect(nodeDetail).toHaveTextContent('工具 token 归因');
-    expect(nodeDetail).toHaveTextContent('调用 12 tokens');
-    expect(nodeDetail).toHaveTextContent('结果 48 tokens');
+    expect(nodeDetail).toHaveTextContent('调用输入 11 tokens');
+    expect(nodeDetail).toHaveTextContent('调用输出 12 tokens');
+    expect(nodeDetail).toHaveTextContent('回调上下文输入 20 tokens');
+    expect(nodeDetail).toHaveTextContent('结果输入 48 tokens');
   }, 10_000);
 
   test('delegates log opening when the canvas shell controls the log panel', () => {

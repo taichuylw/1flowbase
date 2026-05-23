@@ -2042,6 +2042,12 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
             "llm_rounds": [
                 {
                     "round_index": 0,
+                    "usage": {
+                        "input_tokens": 11,
+                        "input_cache_hit_tokens": 5,
+                        "output_tokens": 3,
+                        "total_tokens": 14
+                    },
                     "assistant": {
                         "role": "assistant",
                         "content": large_llm_content,
@@ -2049,6 +2055,8 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
                             {
                                 "id": "call_weather",
                                 "name": "lookup_weather",
+                                "call_input_tokens": 11,
+                                "call_cached_input_tokens": 5,
                                 "call_output_tokens": 32,
                                 "result_input_tokens": null,
                                 "token_count_method": "estimated",
@@ -2064,10 +2072,26 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
                             "tool_call_id": "call_weather",
                             "call_output_tokens": null,
                             "result_input_tokens": 12,
+                            "result_context_input_tokens": 20,
+                            "result_context_cached_input_tokens": 8,
                             "token_count_method": "estimated",
                             "content": "{\"temperature\":21}"
                         }
                     ]
+                },
+                {
+                    "round_index": 1,
+                    "usage": {
+                        "input_tokens": 20,
+                        "input_cache_hit_tokens": 8,
+                        "output_tokens": 4,
+                        "total_tokens": 24
+                    },
+                    "assistant": {
+                        "role": "assistant",
+                        "content": "weather is clear"
+                    },
+                    "finish_reason": "stop"
                 }
             ]
         }))
@@ -2140,12 +2164,16 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
     assert_eq!(tool_callbacks[0]["execution_status"], "unknown");
     assert_eq!(tool_callbacks[0]["request_round_index"], 0);
     assert_eq!(tool_callbacks[0]["result_round_index"], 0);
+    assert_eq!(tool_callbacks[0]["call_input_tokens"], 11);
+    assert_eq!(tool_callbacks[0]["call_cached_input_tokens"], 5);
     assert!(tool_callbacks[0]["call_output_tokens"]
         .as_u64()
         .is_some_and(|tokens| tokens > 0));
     assert!(tool_callbacks[0]["result_input_tokens"]
         .as_u64()
         .is_some_and(|tokens| tokens > 0));
+    assert_eq!(tool_callbacks[0]["result_context_input_tokens"], 20);
+    assert_eq!(tool_callbacks[0]["result_context_cached_input_tokens"], 8);
     assert_eq!(tool_callbacks[0]["token_count_method"], "estimated");
     let tool_callback_artifact_ref = tool_callbacks[0]["artifact_ref"].as_str().unwrap();
 
@@ -2183,11 +2211,18 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         tool_callback_detail["parsed_result"]["content"],
         "{\"temperature\":21}"
     );
+    assert_eq!(tool_callback_detail["call_input_tokens"], 11);
+    assert_eq!(tool_callback_detail["call_cached_input_tokens"], 5);
     assert!(tool_callback_detail["call_output_tokens"]
         .as_u64()
         .is_some_and(|tokens| tokens > 0));
     assert!(tool_callback_detail["result_input_tokens"]
         .as_u64()
         .is_some_and(|tokens| tokens > 0));
+    assert_eq!(tool_callback_detail["result_context_input_tokens"], 20);
+    assert_eq!(
+        tool_callback_detail["result_context_cached_input_tokens"],
+        8
+    );
     assert_eq!(tool_callback_detail["token_count_method"], "estimated");
 }

@@ -1141,17 +1141,29 @@ fn llm_callback_history_after_assistant_tool_call(
         history.extend(prompt_messages_from_bindings(None, resolved_inputs));
         history
     };
-    history.push(json!({
-        "role": "assistant",
-        "content": output_payload
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or_default(),
-        "tool_calls": output_payload
+    let mut assistant_message = Map::new();
+    assistant_message.insert("role".to_string(), Value::String("assistant".to_string()));
+    assistant_message.insert(
+        "content".to_string(),
+        Value::String(
+            output_payload
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        ),
+    );
+    assistant_message.insert(
+        "tool_calls".to_string(),
+        output_payload
             .get("tool_calls")
             .cloned()
             .unwrap_or_else(|| Value::Array(Vec::new())),
-    }));
+    );
+    if let Some(usage) = output_payload.get("usage") {
+        assistant_message.insert("usage".to_string(), usage.clone());
+    }
+    history.push(Value::Object(assistant_message));
     history
 }
 
@@ -1520,8 +1532,12 @@ fn provider_tool_calls_payload(tool_calls: &Value) -> Value {
                     return tool_call.clone();
                 };
                 let mut provider_tool_call = object.clone();
+                provider_tool_call.remove("call_input_tokens");
+                provider_tool_call.remove("call_cached_input_tokens");
                 provider_tool_call.remove("call_output_tokens");
                 provider_tool_call.remove("result_input_tokens");
+                provider_tool_call.remove("result_context_input_tokens");
+                provider_tool_call.remove("result_context_cached_input_tokens");
                 provider_tool_call.remove("token_count_method");
                 Value::Object(provider_tool_call)
             })
@@ -1747,7 +1763,7 @@ fn build_failed_llm_execution(
         executor_output: Map::new(),
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
-        debug_facts: build_llm_debug_facts(runtime, None, invocation_messages),
+        debug_facts: build_llm_debug_facts(runtime, None, invocation_messages, None),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1794,7 +1810,7 @@ fn build_successful_llm_execution(
     if !result.tool_calls.is_empty() {
         executor_output.insert(
             "tool_calls".to_string(),
-            tool_calls_with_call_output_tokens(&result.tool_calls),
+            tool_calls_with_call_output_tokens(&result.tool_calls, metrics_payload.get("usage")),
         );
     }
     if !result.mcp_calls.is_empty() {
@@ -1828,11 +1844,17 @@ fn build_successful_llm_execution(
         );
     }
 
+    let debug_facts = build_llm_debug_facts(
+        runtime,
+        Some(result),
+        invocation_messages,
+        metrics_payload.get("usage"),
+    );
     let raw = RawNodeExecutionResult {
         executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: Map::new(),
-        debug_facts: build_llm_debug_facts(runtime, Some(result), invocation_messages),
+        debug_facts,
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1878,6 +1900,7 @@ fn build_llm_debug_facts(
     runtime: &CompiledLlmRuntime,
     result: Option<&ProviderInvocationResult>,
     invocation_messages: &[Value],
+    result_usage: Option<&Value>,
 ) -> Map<String, Value> {
     let mut debug = Map::new();
     let assistant_content = result
@@ -1891,7 +1914,7 @@ fn build_llm_debug_facts(
             "content": assistant_content,
         }),
     );
-    let llm_rounds = build_llm_round_timeline(invocation_messages, result);
+    let llm_rounds = build_llm_round_timeline(invocation_messages, result, result_usage);
     if !llm_rounds.is_empty() {
         debug.insert("llm_rounds".to_string(), Value::Array(llm_rounds));
     }
@@ -1908,17 +1931,21 @@ fn build_llm_debug_facts(
 fn build_llm_round_timeline(
     invocation_messages: &[Value],
     result: Option<&ProviderInvocationResult>,
+    result_usage: Option<&Value>,
 ) -> Vec<Value> {
     let mut rounds = Vec::new();
 
     for message in invocation_messages {
         match message.get("role").and_then(Value::as_str) {
             Some("assistant") => {
-                rounds.push(json!({
-                    "round_index": rounds.len(),
-                    "assistant": message.clone(),
-                    "tool_results": [],
-                }));
+                let mut round = Map::new();
+                round.insert("round_index".to_string(), json!(rounds.len()));
+                round.insert("assistant".to_string(), message.clone());
+                round.insert("tool_results".to_string(), Value::Array(Vec::new()));
+                if let Some(usage) = message.get("usage") {
+                    round.insert("usage".to_string(), usage.clone());
+                }
+                rounds.push(Value::Object(round));
             }
             Some("tool") => {
                 if let Some(round) = rounds.last_mut().and_then(Value::as_object_mut) {
@@ -1934,12 +1961,18 @@ fn build_llm_round_timeline(
     }
 
     if let Some(result) = result {
+        if let Some(result_usage) = result_usage {
+            apply_result_context_usage_to_last_tool_results(&mut rounds, result_usage);
+        }
         let mut round = Map::new();
         round.insert("round_index".to_string(), json!(rounds.len()));
         round.insert(
             "assistant".to_string(),
-            provider_result_assistant_debug_payload(result),
+            provider_result_assistant_debug_payload(result, result_usage),
         );
+        if let Some(result_usage) = result_usage {
+            round.insert("usage".to_string(), result_usage.clone());
+        }
         if let Some(finish_reason) = result.finish_reason.as_ref() {
             round.insert(
                 "finish_reason".to_string(),
@@ -1952,7 +1985,10 @@ fn build_llm_round_timeline(
     rounds
 }
 
-fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) -> Value {
+fn provider_result_assistant_debug_payload(
+    result: &ProviderInvocationResult,
+    usage: Option<&Value>,
+) -> Value {
     let mut payload = Map::new();
     payload.insert("role".to_string(), Value::String("assistant".to_string()));
     payload.insert(
@@ -1962,14 +1998,17 @@ fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) ->
     if !result.tool_calls.is_empty() {
         payload.insert(
             "tool_calls".to_string(),
-            tool_calls_with_call_output_tokens(&result.tool_calls),
+            tool_calls_with_call_output_tokens(&result.tool_calls, usage),
         );
     }
 
     Value::Object(payload)
 }
 
-fn tool_calls_with_call_output_tokens(tool_calls: &[ProviderToolCall]) -> Value {
+fn tool_calls_with_call_output_tokens(
+    tool_calls: &[ProviderToolCall],
+    usage: Option<&Value>,
+) -> Value {
     Value::Array(
         tool_calls
             .iter()
@@ -1979,6 +2018,12 @@ fn tool_calls_with_call_output_tokens(tool_calls: &[ProviderToolCall]) -> Value 
                 let Some(mut object) = value.as_object().cloned() else {
                     return value;
                 };
+                if let Some(input_tokens) = usage.and_then(usage_input_tokens) {
+                    object.insert("call_input_tokens".to_string(), json!(input_tokens));
+                }
+                if let Some(cached_tokens) = usage.and_then(usage_cached_input_tokens) {
+                    object.insert("call_cached_input_tokens".to_string(), json!(cached_tokens));
+                }
                 object.insert("call_output_tokens".to_string(), json!(call_output_tokens));
                 object.insert("result_input_tokens".to_string(), Value::Null);
                 object.insert(
@@ -1989,6 +2034,52 @@ fn tool_calls_with_call_output_tokens(tool_calls: &[ProviderToolCall]) -> Value 
             })
             .collect(),
     )
+}
+
+fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: &Value) {
+    let result_context_input_tokens = usage_input_tokens(usage);
+    let result_context_cached_input_tokens = usage_cached_input_tokens(usage);
+    if result_context_input_tokens.is_none() && result_context_cached_input_tokens.is_none() {
+        return;
+    }
+
+    let Some(tool_results) = rounds
+        .last_mut()
+        .and_then(Value::as_object_mut)
+        .and_then(|round| round.get_mut("tool_results"))
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+
+    for tool_result in tool_results {
+        let Some(tool_result) = tool_result.as_object_mut() else {
+            continue;
+        };
+        if let Some(input_tokens) = result_context_input_tokens {
+            tool_result.insert(
+                "result_context_input_tokens".to_string(),
+                json!(input_tokens),
+            );
+        }
+        if let Some(cached_tokens) = result_context_cached_input_tokens {
+            tool_result.insert(
+                "result_context_cached_input_tokens".to_string(),
+                json!(cached_tokens),
+            );
+        }
+    }
+}
+
+fn usage_input_tokens(usage: &Value) -> Option<u64> {
+    usage.get("input_tokens").and_then(Value::as_u64)
+}
+
+fn usage_cached_input_tokens(usage: &Value) -> Option<u64> {
+    usage
+        .get("input_cache_hit_tokens")
+        .or_else(|| usage.get("cache_read_tokens"))
+        .and_then(Value::as_u64)
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {

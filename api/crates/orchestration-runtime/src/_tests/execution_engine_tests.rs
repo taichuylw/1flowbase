@@ -780,6 +780,7 @@ fn tool_call_response(tool_calls: Vec<ProviderToolCall>) -> ProviderInvocationRe
         finish_reason: Some(ProviderFinishReason::ToolCall),
         usage: ProviderUsage {
             input_tokens: Some(11),
+            input_cache_hit_tokens: Some(5),
             output_tokens: Some(3),
             total_tokens: Some(14),
             ..ProviderUsage::default()
@@ -794,6 +795,7 @@ fn final_llm_response(text: &str) -> ProviderInvocationResult {
         finish_reason: Some(ProviderFinishReason::Stop),
         usage: ProviderUsage {
             input_tokens: Some(20),
+            input_cache_hit_tokens: Some(8),
             output_tokens: Some(4),
             total_tokens: Some(24),
             ..ProviderUsage::default()
@@ -1627,6 +1629,14 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                     .is_some_and(|tokens| tokens > 0)
             );
             assert_eq!(
+                pending.request_payload["tool_calls"][0]["call_input_tokens"],
+                json!(11)
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["call_cached_input_tokens"],
+                json!(5)
+            );
+            assert_eq!(
                 pending.request_payload["tool_calls"][0]["result_input_tokens"],
                 Value::Null
             );
@@ -1696,6 +1706,23 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
             ["call_output_tokens"]
             .as_u64()
             .is_some_and(|tokens| tokens > 0)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_input_tokens"],
+        json!(11)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
+            ["call_cached_input_tokens"],
+        json!(5)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["usage"]["input_tokens"],
+        json!(11)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["usage"]["input_cache_hit_tokens"],
+        json!(5)
     );
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
@@ -1774,6 +1801,15 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert_eq!(messages[0]["content"], json!("weather?"));
     assert_eq!(messages[1]["role"], json!("assistant"));
     assert_eq!(messages[1]["tool_calls"][0]["id"], json!("call_weather"));
+    assert!(messages[1]["tool_calls"][0]
+        .get("call_input_tokens")
+        .is_none());
+    assert!(messages[1]["tool_calls"][0]
+        .get("call_cached_input_tokens")
+        .is_none());
+    assert!(messages[1]["tool_calls"][0]
+        .get("call_output_tokens")
+        .is_none());
     assert_eq!(messages[2]["role"], json!("tool"));
     assert_eq!(messages[2]["tool_call_id"], json!("call_weather"));
     assert_eq!(messages[2]["name"], json!("lookup_weather"));
@@ -1797,6 +1833,16 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
             .is_some_and(|tokens| tokens > 0)
     );
     assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            ["result_context_input_tokens"],
+        json!(20)
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            ["result_context_cached_input_tokens"],
+        json!(8)
+    );
+    assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["call_output_tokens"],
         Value::Null
     );
@@ -1812,6 +1858,14 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][1]["assistant"]["content"],
         json!("weather is clear")
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][1]["usage"]["input_tokens"],
+        json!(20)
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][1]["usage"]["input_cache_hit_tokens"],
+        json!(8)
     );
     assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][1]["finish_reason"],
