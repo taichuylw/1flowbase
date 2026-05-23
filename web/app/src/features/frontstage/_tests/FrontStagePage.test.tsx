@@ -1116,6 +1116,82 @@ describe('FrontStagePage', () => {
     });
   });
 
+  test('moves page into group by dragging onto the group middle', async () => {
+    authenticate(['frontstage.page.design']);
+    const onMovePageNode = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          initialPageTree={[
+            {
+              id: 'group-1',
+              title: '分组 group-1',
+              kind: 'group',
+              children: []
+            },
+            createBackendPage('page-1')
+          ]}
+          onMovePageNode={onMovePageNode}
+        />
+      </AppProviders>
+    );
+
+    activateDesignMode();
+
+    const pageItem = screen.getByTestId('frontstage-tree-node-page-页面 page-1');
+    const groupItem = screen.getByTestId(
+      'frontstage-tree-node-group-分组 group-1'
+    );
+    const groupRow = groupItem.querySelector(
+      '.frontstage-page-tree-sidebar__node-row'
+    );
+    if (!groupRow) {
+      throw new Error('missing group row');
+    }
+
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 100,
+      right: 240,
+      width: 240,
+      height: 100,
+      toJSON: () => ({})
+    });
+
+    const dragHandle = within(pageItem).getByRole('button', {
+      name: '拖拽移动节点'
+    });
+    const dataTransfer = {
+      data: new Map<string, string>(),
+      effectAllowed: '',
+      dropEffect: '',
+      setData(format: string, value: string) {
+        this.data.set(format, value);
+      },
+      getData(format: string) {
+        return this.data.get(format) ?? '';
+      }
+    };
+
+    fireEvent.dragStart(dragHandle, { dataTransfer });
+    fireEvent.dragOver(groupRow, { clientY: 50, dataTransfer });
+    fireEvent.drop(groupRow, { clientY: 50, dataTransfer });
+
+    await waitFor(() => {
+      expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
+        parentId: 'group-1',
+        rank: '001000'
+      });
+    });
+    rectSpy.mockRestore();
+  });
+
   test('does not delete node when delete confirmation is canceled', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
