@@ -26,7 +26,7 @@ function usage() {
     启动目标插件目录下 demo/ 的本地静态服务。
 
   package <plugin-path> --out <output-dir>
-    生成过滤 demo/scripts/target 后的 .1flowbasepkg 安装产物，并返回 sha256 元数据。
+    生成只包含运行时资源与 bin/ 可执行文件的 .1flowbasepkg 安装产物，并返回 sha256 元数据。
     可选传入官方签名参数，将 _meta/official-release.json 与 .sig 一并写入包内。
 
 选项：

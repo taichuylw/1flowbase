@@ -403,6 +403,42 @@ test('plugin package excludes demo and scripts from the packaged artifact', asyn
   assert.equal(fs.existsSync(path.join(extractedDir, 'scripts')), false);
 });
 
+test('plugin package excludes rust source files from the packaged artifact', async () => {
+  const pluginPath = makeTempPluginPath();
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-dist-'));
+
+  await main(['init', pluginPath]);
+  const fakeBinary = writeFakeRuntimeBinary(outputDir);
+
+  const result = await main([
+    'package',
+    pluginPath,
+    '--out',
+    outputDir,
+    '--runtime-binary',
+    fakeBinary,
+    '--target',
+    'x86_64-unknown-linux-musl',
+  ]);
+  const extractedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-extract-'));
+  const unpack = spawnSync('tar', ['-xzf', result.packageFile, '-C', extractedDir]);
+
+  assert.equal(unpack.status, 0);
+  assert.equal(fs.existsSync(path.join(extractedDir, 'manifest.yaml')), true);
+  assert.equal(
+    fs.existsSync(path.join(extractedDir, 'provider', 'acme_openai_compatible.yaml')),
+    true
+  );
+  assert.equal(fs.existsSync(path.join(extractedDir, 'i18n', 'en_US.json')), true);
+  assert.equal(
+    fs.existsSync(path.join(extractedDir, 'bin', 'acme_openai_compatible-provider')),
+    true
+  );
+  assert.equal(fs.existsSync(path.join(extractedDir, 'Cargo.toml')), false);
+  assert.equal(fs.existsSync(path.join(extractedDir, 'Cargo.lock')), false);
+  assert.equal(fs.existsSync(path.join(extractedDir, 'src')), false);
+});
+
 test('plugin package writes official signature metadata when signing inputs are provided', async () => {
   const pluginPath = makeTempPluginPath();
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-plugin-dist-'));
