@@ -17,7 +17,6 @@ describe('llm-node-config', () => {
       })
     ).toEqual({
       provider_code: '',
-      source_instance_id: '',
       model_id: '',
       protocol: undefined,
       provider_label: undefined,
@@ -26,12 +25,11 @@ describe('llm-node-config', () => {
     });
   });
 
-  test('getLlmModelProvider reads source_instance_id from the nested contract', () => {
+  test('getLlmModelProvider reads stable provider and model from the nested contract', () => {
     expect(
       getLlmModelProvider({
         model_provider: {
           provider_code: 'openai_compatible',
-          source_instance_id: 'provider-1',
           model_id: 'gpt-4o-mini',
           protocol: 'openai_compatible',
           provider_label: 'OpenAI Compatible',
@@ -41,7 +39,6 @@ describe('llm-node-config', () => {
       })
     ).toEqual({
       provider_code: 'openai_compatible',
-      source_instance_id: 'provider-1',
       model_id: 'gpt-4o-mini',
       protocol: 'openai_compatible',
       provider_label: 'OpenAI Compatible',

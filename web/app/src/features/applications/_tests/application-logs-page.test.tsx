@@ -78,6 +78,20 @@ function applicationRunsPage<T>(
   };
 }
 
+async function findLatestConversationLogButton() {
+  const buttons = await screen.findAllByRole(
+    'button',
+    { name: '查看对话日志' },
+    { timeout: 8_000 }
+  );
+  expect(buttons.length).toBeGreaterThan(0);
+  const latestButton = buttons[buttons.length - 1];
+  if (!latestButton) {
+    throw new Error('expected conversation log button');
+  }
+  return latestButton;
+}
+
 function sampleRunDetail(): ApplicationRunDetail {
   return {
     run: {
@@ -415,15 +429,7 @@ describe('ApplicationLogsPage', () => {
       within(detailPane).queryByLabelText('输入 JSON')
     ).not.toBeInTheDocument();
 
-    const openLogButton = (
-      await screen.findAllByRole(
-        'button',
-        { name: '查看对话日志' },
-        { timeout: 8_000 }
-      )
-    ).at(-1);
-    expect(openLogButton).toBeDefined();
-    fireEvent.click(openLogButton!);
+    fireEvent.click(await findLatestConversationLogButton());
 
     await waitFor(() => {
       expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
@@ -611,15 +617,7 @@ describe('ApplicationLogsPage', () => {
     expect(await screen.findByText('run-1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
-    const openLogButton = (
-      await screen.findAllByRole(
-        'button',
-        { name: '查看对话日志' },
-        { timeout: 8_000 }
-      )
-    ).at(-1);
-    expect(openLogButton).toBeDefined();
-    fireEvent.click(openLogButton!);
+    fireEvent.click(await findLatestConversationLogButton());
 
     const logPanel = await screen.findByRole('complementary', {
       name: '对话日志'
@@ -738,15 +736,7 @@ describe('ApplicationLogsPage', () => {
     expect(await screen.findByText('run-1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
-    const openLogButton = (
-      await screen.findAllByRole(
-        'button',
-        { name: '查看对话日志' },
-        { timeout: 8_000 }
-      )
-    ).at(-1);
-    expect(openLogButton).toBeDefined();
-    fireEvent.click(openLogButton!);
+    fireEvent.click(await findLatestConversationLogButton());
 
     const logPanel = await screen.findByRole('complementary', {
       name: '对话日志'
@@ -765,7 +755,9 @@ describe('ApplicationLogsPage', () => {
       name: /Tools.*2 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
-    expect(within(logPanel).queryByText('call_weather')).not.toBeInTheDocument();
+    expect(
+      within(logPanel).queryByText('call_weather')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
     expect(

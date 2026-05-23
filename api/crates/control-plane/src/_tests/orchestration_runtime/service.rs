@@ -9,8 +9,9 @@ use control_plane::{
         ApplicationJsDependencySelectionRepository, ApplicationRepository, FlowRepository,
         ModelDefinitionRepository, ModelProviderRepository, NodeContributionRepository,
         OrchestrationRuntimeRepository, PluginRepository, ProviderRuntimePort,
-        ReplaceApplicationJsDependencySelectionInput, RuntimeEventDurability, RuntimeEventEnvelope,
-        RuntimeEventPayload, RuntimeEventSource, UpsertDataModelSideEffectReceiptInput,
+        ReplaceApplicationJsDependencySelectionInput, RuntimeEventCloseReason,
+        RuntimeEventDurability, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventSource,
+        RuntimeEventStream, UpsertDataModelSideEffectReceiptInput,
     },
 };
 use serde_json::{json, Value};
@@ -268,6 +269,58 @@ async fn runtime_event_persister_flushes_pending_delta_before_cancelled_terminal
 }
 
 #[tokio::test]
+async fn runtime_event_persister_fails_stream_when_run_ends_without_terminal_event() {
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let run_id = Uuid::now_v7();
+
+    stream
+        .append(
+            run_id,
+            RuntimeEventPayload {
+                event_type: "flow_started".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "flow_started",
+                    "run_id": run_id,
+                }),
+            },
+        )
+        .await
+        .unwrap();
+
+    control_plane::orchestration_runtime::fail_runtime_event_stream_if_missing_terminal(
+        stream.clone(),
+        run_id,
+        &anyhow::anyhow!("debug run failed"),
+    )
+    .await;
+
+    let events = stream.events();
+    assert_eq!(
+        events.last().map(|event| event.event_type.as_str()),
+        Some("flow_failed")
+    );
+    assert_eq!(
+        events.last().map(|event| event.payload["error"].clone()),
+        Some(json!("debug run failed"))
+    );
+    assert_eq!(
+        events
+            .last()
+            .map(|event| event.payload["error_payload"]["message"].clone()),
+        Some(json!("debug run failed"))
+    );
+    assert_eq!(
+        stream.close_calls(),
+        vec![(run_id, RuntimeEventCloseReason::Failed)]
+    );
+}
+
+#[tokio::test]
 async fn start_node_debug_preview_creates_run_node_run_and_events() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;
@@ -295,13 +348,13 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
 }
 
 #[tokio::test]
-async fn start_node_debug_preview_uses_selected_source_provider_instance() {
+async fn start_node_debug_preview_rejects_ambiguous_stable_provider_model_binding() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service
         .seed_application_with_multi_instance_provider_flow("Support Agent")
         .await;
 
-    let outcome = service
+    let error = service
         .start_node_debug_preview(StartNodeDebugPreviewCommand {
             actor_user_id: seeded.actor_user_id,
             application_id: seeded.application_id,
@@ -313,58 +366,12 @@ async fn start_node_debug_preview_uses_selected_source_provider_instance() {
             debug_session_id: None,
         })
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(
-        outcome.preview_payload["metrics_payload"]["provider_instance_id"],
-        serde_json::json!(seeded.source_provider_instance_id.to_string())
-    );
-    assert_eq!(
-        outcome.node_run.output_payload["text"],
-        serde_json::json!("echo:gpt-5.4-mini:请总结退款政策")
-    );
-    assert_eq!(
-        outcome.node_run.output_payload["usage"]["total_tokens"],
-        serde_json::json!(12)
-    );
-    assert_eq!(
-        outcome.node_run.metrics_payload["runtime"]["usage"]["total_tokens"],
-        serde_json::json!(12)
-    );
-    assert!(outcome.node_run.output_payload.get("route").is_none());
-    assert!(outcome
-        .node_run
-        .output_payload
-        .get("provider_route")
-        .is_some());
-    assert_eq!(
-        outcome.flow_run.output_payload,
-        outcome.node_run.output_payload
-    );
-    for hidden_key in [
-        "resolved_inputs",
-        "rendered_templates",
-        "output_contract",
-        "metrics_payload",
-        "debug_payload",
-        "provider_events",
-    ] {
-        assert!(
-            outcome.node_run.output_payload.get(hidden_key).is_none(),
-            "{hidden_key} must not leak into node preview output"
-        );
-        assert!(
-            outcome.flow_run.output_payload.get(hidden_key).is_none(),
-            "{hidden_key} must not leak into flow preview output"
-        );
-    }
-    assert_eq!(
-        outcome.node_run.debug_payload["assistant_message"]["content"],
-        serde_json::json!("echo:gpt-5.4-mini:请总结退款政策")
-    );
-    assert!(outcome.node_run.debug_payload["provider_events"]
-        .as_array()
-        .is_some_and(|events| !events.is_empty()));
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::InvalidInput("provider_code"))
+    ));
 }
 
 #[tokio::test]
@@ -413,7 +420,6 @@ async fn start_node_debug_preview_uses_request_document_snapshot() {
                             "config": {
                                 "model_provider": {
                                     "provider_code": "fixture_provider",
-                                    "source_instance_id": seeded.source_provider_instance_id.to_string(),
                                     "model_id": "gpt-5.4-mini"
                                 }
                             },

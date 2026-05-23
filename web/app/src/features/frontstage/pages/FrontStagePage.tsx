@@ -1,6 +1,7 @@
 import * as AntIcons from '@ant-design/icons';
 import {
   Alert,
+  App as AntdApp,
   Button,
   Divider,
   Drawer,
@@ -526,7 +527,9 @@ function isNodeDescendantOf(
 function updatePageTreeNode(
   nodes: FrontStageTreeNode[],
   targetNodeId: string,
-  patch: Partial<Pick<FrontStageTreeNode, 'title' | 'icon' | 'tooltip' | 'is_hidden'>>
+  patch: Partial<
+    Pick<FrontStageTreeNode, 'title' | 'icon' | 'tooltip' | 'is_hidden'>
+  >
 ): FrontStageTreeNode[] {
   return nodes.map((node) => {
     if (node.id === targetNodeId) {
@@ -599,6 +602,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   onDeletePageNode
 }) => {
   const [pageTreeForm] = Form.useForm<PageTreeFormValues>();
+  const { modal } = AntdApp.useApp();
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const sessionStatus = useAuthStore((state) => state.sessionStatus);
   const actor = useAuthStore((state) => state.actor);
@@ -901,7 +905,6 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   useEffect(() => {
     if (!pageTreeFormDialog) {
       setIsPageTreeIconPickerOpen(false);
-      pageTreeForm.resetFields();
       return;
     }
 
@@ -1206,7 +1209,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
-    Modal.confirm({
+    modal.confirm({
       title: '删除节点',
       content: getDeleteConfirmMessage(node),
       okText: '删除',
@@ -1341,7 +1344,9 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
-    setPageTree((currentTree) => moveNodeInTree(currentTree, nodeId, direction));
+    setPageTree((currentTree) =>
+      moveNodeInTree(currentTree, nodeId, direction)
+    );
 
     void runPageTreeOperation(async () => {
       await onMovePageNode?.(nodeId, {
@@ -1388,10 +1393,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       position === 'inside'
         ? getNodeAppendRank(pageTree, targetNodeId)
         : position === 'before'
-        ? rankForMoveTarget(index, -1)
-        : index === siblings.length - 1
-          ? getNodeAppendRank(pageTree, parentId)
-          : rankForMoveTarget(index, 1);
+          ? rankForMoveTarget(index, -1)
+          : index === siblings.length - 1
+            ? getNodeAppendRank(pageTree, parentId)
+            : rankForMoveTarget(index, 1);
 
     setPageTree((currentTree) =>
       moveNodeToTreePosition(currentTree, nodeId, targetNodeId, position)

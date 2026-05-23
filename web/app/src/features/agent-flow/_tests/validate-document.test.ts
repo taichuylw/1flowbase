@@ -502,7 +502,9 @@ describe('validateDocument', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: '结果', valueType: 'unknown' }
     ]);
-    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+    const codeNode = document.graph.nodes.find(
+      (node) => node.id === 'node-code'
+    );
 
     if (!codeNode) {
       throw new Error('expected code node');
@@ -553,7 +555,6 @@ describe('validateDocument', () => {
 
     llmNode.config.model_provider = {
       provider_code: 'provider-stale',
-      source_instance_id: 'provider-stale-instance',
       model_id: 'gpt-4.1'
     };
 
@@ -580,8 +581,7 @@ describe('validateDocument', () => {
 
     llmNode.config.model_provider = {
       provider_code: 'openai_compatible',
-      source_instance_id: primaryGroup.source_instance_id,
-      model_id: 'gpt-4o'
+      model_id: 'missing-model'
     };
 
     const issues = validateDocument(document, modelProviderOptionsContract);
@@ -597,7 +597,7 @@ describe('validateDocument', () => {
     );
   });
 
-  test('flags a missing llm source instance on the unified field', () => {
+  test('accepts stable llm provider and model selection without source instance', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
 
@@ -607,24 +607,64 @@ describe('validateDocument', () => {
 
     llmNode.config.model_provider = {
       provider_code: primaryProvider.provider_code,
-      source_instance_id: '',
       model_id: primaryModel.model_id
     };
 
     const issues = validateDocument(document, modelProviderOptionsContract);
+
+    expect(issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.model_provider'
+        })
+      ])
+    );
+  });
+
+  test('flags an ambiguous stable model that is exposed by multiple included instances', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const duplicatedContract = JSON.parse(
+      JSON.stringify(modelProviderOptionsContract)
+    ) as typeof modelProviderOptionsContract;
+    const duplicatedProvider = duplicatedContract.providers[0];
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    duplicatedProvider.model_groups = [
+      {
+        source_instance_id: 'provider-openai-prod',
+        source_instance_display_name: 'OpenAI Production',
+        models: [{ ...primaryModel }]
+      },
+      {
+        source_instance_id: 'provider-openai-backup',
+        source_instance_display_name: 'OpenAI Backup',
+        models: [{ ...primaryModel }]
+      }
+    ];
+    llmNode.config.model_provider = {
+      provider_code: primaryProvider.provider_code,
+      model_id: primaryModel.model_id
+    };
+
+    const issues = validateDocument(document, duplicatedContract);
 
     expect(issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           nodeId: 'node-llm',
           fieldKey: 'config.model_provider',
-          title: 'LLM 缺少模型来源实例'
+          title: 'LLM 模型解析不唯一'
         })
       ])
     );
   });
 
-  test('flags a saved source instance that is no longer present in the grouped provider options', () => {
+  test('keeps the node populated but flags a model that does not exist under the selected provider', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
 
@@ -634,35 +674,7 @@ describe('validateDocument', () => {
 
     llmNode.config.model_provider = {
       provider_code: primaryProvider.provider_code,
-      source_instance_id: 'provider-openai-missing',
-      model_id: primaryModel.model_id
-    };
-
-    const issues = validateDocument(document, modelProviderOptionsContract);
-
-    expect(issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          nodeId: 'node-llm',
-          fieldKey: 'config.model_provider',
-          title: 'LLM 模型来源实例不可用'
-        })
-      ])
-    );
-  });
-
-  test('keeps the node populated but flags a model that does not exist under the selected source instance', () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
-
-    if (!llmNode) {
-      throw new Error('expected default LLM node');
-    }
-
-    llmNode.config.model_provider = {
-      provider_code: primaryProvider.provider_code,
-      source_instance_id: secondaryGroup.source_instance_id,
-      model_id: primaryModel.model_id
+      model_id: 'missing-model'
     };
 
     const issues = validateDocument(document, modelProviderOptionsContract);
@@ -670,8 +682,7 @@ describe('validateDocument', () => {
     expect(llmNode.config.model_provider).toEqual(
       expect.objectContaining({
         provider_code: primaryProvider.provider_code,
-        source_instance_id: secondaryGroup.source_instance_id,
-        model_id: primaryModel.model_id
+        model_id: 'missing-model'
       })
     );
     expect(issues).toEqual(

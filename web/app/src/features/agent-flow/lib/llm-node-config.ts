@@ -1,8 +1,10 @@
-import type { ConsolePluginFormFieldSchema, ConsolePluginFormSchema } from '@1flowbase/api-client';
+import type {
+  ConsolePluginFormFieldSchema,
+  ConsolePluginFormSchema
+} from '@1flowbase/api-client';
 
 export interface LlmNodeModelProvider {
   provider_code: string;
-  source_instance_id: string;
   model_id: string;
   protocol?: string;
   provider_label?: string;
@@ -42,7 +44,9 @@ function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
-export function getLlmParameterDefaultValue(field: ConsolePluginFormFieldSchema): unknown {
+export function getLlmParameterDefaultValue(
+  field: ConsolePluginFormFieldSchema
+): unknown {
   if (field.default_value !== undefined) {
     return field.default_value;
   }
@@ -74,7 +78,9 @@ export function buildLlmParameterState(
     items: Object.fromEntries(
       schema.fields.map((field) => {
         const enabled =
-          field.send_mode === 'always' ? true : Boolean(field.enabled_by_default);
+          field.send_mode === 'always'
+            ? true
+            : Boolean(field.enabled_by_default);
 
         return [
           field.key,
@@ -109,13 +115,14 @@ export function resolveLlmParameterStateOnModelChange({
   return buildLlmParameterState(nextSchema);
 }
 
-export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeModelProvider {
+export function getLlmModelProvider(
+  config: Record<string, unknown>
+): LlmNodeModelProvider {
   const provider = config.model_provider;
 
   if (!isRecord(provider)) {
     return {
       provider_code: '',
-      source_instance_id: '',
       model_id: '',
       protocol: undefined,
       provider_label: undefined,
@@ -126,7 +133,6 @@ export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeMod
 
   return {
     provider_code: asString(provider.provider_code),
-    source_instance_id: asString(provider.source_instance_id),
     model_id: asString(provider.model_id),
     protocol: asString(provider.protocol) || undefined,
     provider_label: asString(provider.provider_label) || undefined,
@@ -135,7 +141,9 @@ export function getLlmModelProvider(config: Record<string, unknown>): LlmNodeMod
   };
 }
 
-export function getLlmParameters(config: Record<string, unknown>): LlmNodeParameters {
+export function getLlmParameters(
+  config: Record<string, unknown>
+): LlmNodeParameters {
   const llmParameters = config.llm_parameters;
 
   if (isRecord(llmParameters)) {
@@ -146,7 +154,10 @@ export function getLlmParameters(config: Record<string, unknown>): LlmNodeParame
       items: Object.fromEntries(
         Object.entries(items).map(([key, item]) => {
           if (!isRecord(item)) {
-            return [key, { enabled: false, value: item } satisfies LlmParameterItem];
+            return [
+              key,
+              { enabled: false, value: item } satisfies LlmParameterItem
+            ];
           }
 
           return [
@@ -164,7 +175,9 @@ export function getLlmParameters(config: Record<string, unknown>): LlmNodeParame
   return DEFAULT_LLM_PARAMETERS;
 }
 
-export function getLlmResponseFormat(config: Record<string, unknown>): LlmNodeResponseFormat {
+export function getLlmResponseFormat(
+  config: Record<string, unknown>
+): LlmNodeResponseFormat {
   const responseFormat = config.response_format;
 
   if (!isRecord(responseFormat)) {

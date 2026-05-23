@@ -291,7 +291,9 @@ describe('agent-flow node schema registry', () => {
   });
 
   test('registers built-in Data Model CRUD nodes for picker and schema-driven config', () => {
-    const pickerTypes = BUILTIN_NODE_PICKER_OPTIONS.map((option) => option.type);
+    const pickerTypes = BUILTIN_NODE_PICKER_OPTIONS.map(
+      (option) => option.type
+    );
 
     expect(pickerTypes).toEqual(
       expect.arrayContaining([
@@ -317,7 +319,9 @@ describe('agent-flow node schema registry', () => {
       );
 
       expect(schema.nodeType).toBe(nodeType);
-      expect(serializedConfigBlocks).toContain('"path":"config.data_model_code"');
+      expect(serializedConfigBlocks).toContain(
+        '"path":"config.data_model_code"'
+      );
       expect(serializedConfigBlocks).toContain('"renderer":"data_model"');
       expect(serializedConfigBlocks).not.toContain('"path":"config.action"');
     }
@@ -330,38 +334,69 @@ describe('agent-flow node schema registry', () => {
     const updateSchema = resolveAgentFlowNodeSchema('data_model_update');
     const deleteSchema = resolveAgentFlowNodeSchema('data_model_delete');
 
-    expect(findFieldBlock(listSchema.detail.tabs.config.blocks, 'bindings.query')).toEqual(
-      expect.objectContaining({ renderer: 'data_model_query' })
-    );
-    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.record_id')).toEqual(
-      expect.objectContaining({ renderer: 'selector' })
-    );
-    expect(findFieldBlock(createSchema.detail.tabs.config.blocks, 'bindings.payload')).toEqual(
-      expect.objectContaining({ renderer: 'named_bindings' })
-    );
-    expect(findFieldBlock(createSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toEqual(
-      expect.objectContaining({ renderer: 'static_select' })
-    );
-    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.record_id')).toEqual(
-      expect.objectContaining({ renderer: 'selector' })
-    );
-    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.payload')).toEqual(
-      expect.objectContaining({ renderer: 'named_bindings' })
-    );
-    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toEqual(
-      expect.objectContaining({ renderer: 'static_select' })
-    );
-    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.record_id')).toEqual(
-      expect.objectContaining({ renderer: 'selector' })
-    );
-    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toEqual(
-      expect.objectContaining({ renderer: 'static_select' })
-    );
-    expect(findFieldBlock(listSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toBeNull();
-    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'config.side_effect_policy')).toBeNull();
-    expect(findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.query')).toBeNull();
-    expect(findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.query')).toBeNull();
-    expect(findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.query')).toBeNull();
+    expect(
+      findFieldBlock(listSchema.detail.tabs.config.blocks, 'bindings.query')
+    ).toEqual(expect.objectContaining({ renderer: 'data_model_query' }));
+    expect(
+      findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.record_id')
+    ).toEqual(expect.objectContaining({ renderer: 'selector' }));
+    expect(
+      findFieldBlock(createSchema.detail.tabs.config.blocks, 'bindings.payload')
+    ).toEqual(expect.objectContaining({ renderer: 'named_bindings' }));
+    expect(
+      findFieldBlock(
+        createSchema.detail.tabs.config.blocks,
+        'config.side_effect_policy'
+      )
+    ).toEqual(expect.objectContaining({ renderer: 'static_select' }));
+    expect(
+      findFieldBlock(
+        updateSchema.detail.tabs.config.blocks,
+        'bindings.record_id'
+      )
+    ).toEqual(expect.objectContaining({ renderer: 'selector' }));
+    expect(
+      findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.payload')
+    ).toEqual(expect.objectContaining({ renderer: 'named_bindings' }));
+    expect(
+      findFieldBlock(
+        updateSchema.detail.tabs.config.blocks,
+        'config.side_effect_policy'
+      )
+    ).toEqual(expect.objectContaining({ renderer: 'static_select' }));
+    expect(
+      findFieldBlock(
+        deleteSchema.detail.tabs.config.blocks,
+        'bindings.record_id'
+      )
+    ).toEqual(expect.objectContaining({ renderer: 'selector' }));
+    expect(
+      findFieldBlock(
+        deleteSchema.detail.tabs.config.blocks,
+        'config.side_effect_policy'
+      )
+    ).toEqual(expect.objectContaining({ renderer: 'static_select' }));
+    expect(
+      findFieldBlock(
+        listSchema.detail.tabs.config.blocks,
+        'config.side_effect_policy'
+      )
+    ).toBeNull();
+    expect(
+      findFieldBlock(
+        getSchema.detail.tabs.config.blocks,
+        'config.side_effect_policy'
+      )
+    ).toBeNull();
+    expect(
+      findFieldBlock(getSchema.detail.tabs.config.blocks, 'bindings.query')
+    ).toBeNull();
+    expect(
+      findFieldBlock(updateSchema.detail.tabs.config.blocks, 'bindings.query')
+    ).toBeNull();
+    expect(
+      findFieldBlock(deleteSchema.detail.tabs.config.blocks, 'bindings.query')
+    ).toBeNull();
   });
 
   test('exposes Data Model list query params without action-scoped visibility', () => {
@@ -380,11 +415,23 @@ describe('agent-flow node schema registry', () => {
   });
 
   test('creates Data Model CRUD nodes with fixed outputs', () => {
-    const listNode = createNodeDocument('data_model_list', 'node-data-model-list');
+    const listNode = createNodeDocument(
+      'data_model_list',
+      'node-data-model-list'
+    );
     const getNode = createNodeDocument('data_model_get', 'node-data-model-get');
-    const createNode = createNodeDocument('data_model_create', 'node-data-model-create');
-    const updateNode = createNodeDocument('data_model_update', 'node-data-model-update');
-    const deleteNode = createNodeDocument('data_model_delete', 'node-data-model-delete');
+    const createNode = createNodeDocument(
+      'data_model_create',
+      'node-data-model-create'
+    );
+    const updateNode = createNodeDocument(
+      'data_model_update',
+      'node-data-model-update'
+    );
+    const deleteNode = createNodeDocument(
+      'data_model_delete',
+      'node-data-model-delete'
+    );
 
     expect(listNode.config).toEqual({ data_model_code: '' });
     expect(getNode.config).toEqual({ data_model_code: '' });
@@ -404,9 +451,15 @@ describe('agent-flow node schema registry', () => {
       { key: 'records', title: 'Records', valueType: 'array' },
       { key: 'total', title: 'Total', valueType: 'number' }
     ]);
-    expect(getNode.outputs).toEqual([{ key: 'record', title: 'Record', valueType: 'json' }]);
-    expect(createNode.outputs).toEqual([{ key: 'record', title: 'Record', valueType: 'json' }]);
-    expect(updateNode.outputs).toEqual([{ key: 'record', title: 'Record', valueType: 'json' }]);
+    expect(getNode.outputs).toEqual([
+      { key: 'record', title: 'Record', valueType: 'json' }
+    ]);
+    expect(createNode.outputs).toEqual([
+      { key: 'record', title: 'Record', valueType: 'json' }
+    ]);
+    expect(updateNode.outputs).toEqual([
+      { key: 'record', title: 'Record', valueType: 'json' }
+    ]);
     expect(deleteNode.outputs).toEqual([
       { key: 'deleted_id', title: 'Deleted ID', valueType: 'string' },
       { key: 'affected_count', title: 'Affected Count', valueType: 'number' }
@@ -450,13 +503,15 @@ describe('agent-flow node schema registry', () => {
     for (const nodeType of expectedTypes) {
       expect(getBuiltinNodeRuntimeContract(nodeType)).not.toBeNull();
       expect(getBuiltinNodeRuntimeContract(nodeType)!.meta.type).toBe(nodeType);
-      expect(getBuiltinNodeRuntimeContract(nodeType)!.defaults.configVersion).toBe(1);
-      expect(getBuiltinNodeRuntimeContract(nodeType)!.defaults.alias).toBeTypeOf(
-        'string'
-      );
-      expect(Array.isArray(getBuiltinNodeRuntimeContract(nodeType)!.defaults.outputs)).toBe(
-        true
-      );
+      expect(
+        getBuiltinNodeRuntimeContract(nodeType)!.defaults.configVersion
+      ).toBe(1);
+      expect(
+        getBuiltinNodeRuntimeContract(nodeType)!.defaults.alias
+      ).toBeTypeOf('string');
+      expect(
+        Array.isArray(getBuiltinNodeRuntimeContract(nodeType)!.defaults.outputs)
+      ).toBe(true);
     }
   });
 
@@ -497,7 +552,6 @@ describe('agent-flow node schema registry', () => {
 
     firstContract.defaults.config.model_provider = {
       provider_code: 'mutated-provider',
-      source_instance_id: 'mutated-instance',
       model_id: 'mutated-model'
     };
     firstContract.defaults.bindings.prompt_messages = {
@@ -514,7 +568,6 @@ describe('agent-flow node schema registry', () => {
 
     expect(nextContract?.defaults.config.model_provider).toEqual({
       provider_code: '',
-      source_instance_id: '',
       model_id: ''
     });
     expect(nextContract?.defaults.bindings.prompt_messages).toEqual({
@@ -568,7 +621,12 @@ describe('agent-flow node schema registry', () => {
       throw new Error('expected Human Input contract');
     }
 
-    const node = createNodeDocument('human_input', 'node-human-input', 120, 240);
+    const node = createNodeDocument(
+      'human_input',
+      'node-human-input',
+      120,
+      240
+    );
 
     expect(node).toEqual(
       expect.objectContaining({
@@ -663,7 +721,6 @@ describe('agent-flow node schema registry', () => {
 
     firstNode.config.model_provider = {
       provider_code: 'mutated-provider',
-      source_instance_id: 'mutated-instance',
       model_id: 'mutated-model'
     };
     firstNode.bindings.prompt_messages = {
@@ -698,7 +755,6 @@ describe('agent-flow node schema registry', () => {
     expect(adapter.getValue('alias')).toBe('LLM');
     expect(adapter.getValue('config.model_provider')).toEqual({
       provider_code: '',
-      source_instance_id: '',
       model_id: ''
     });
 
@@ -724,5 +780,4 @@ describe('agent-flow node schema registry', () => {
     expect(nextNode.alias).toBe('LLM');
     expect(dispatch).not.toHaveBeenCalled();
   });
-
 });

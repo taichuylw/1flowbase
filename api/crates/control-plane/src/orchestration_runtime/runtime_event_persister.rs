@@ -1,10 +1,15 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use serde_json::{json, Value};
+use tokio::task::JoinHandle;
+use tracing::warn;
 use uuid::Uuid;
 
+use super::debug_stream_events;
 use crate::ports::{
-    AppendRuntimeEventInput, OrchestrationRuntimeRepository, RuntimeEventEnvelope,
-    RuntimeEventPayload,
+    AppendRuntimeEventInput, OrchestrationRuntimeRepository, RuntimeEventCloseReason,
+    RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventStream,
 };
 
 pub async fn persist_runtime_event_payload<R>(
@@ -112,8 +117,180 @@ where
     Ok(())
 }
 
+pub async fn fail_runtime_event_stream_if_missing_terminal(
+    stream: Arc<dyn RuntimeEventStream>,
+    run_id: Uuid,
+    error: &anyhow::Error,
+) {
+    match stream.replay(run_id, None, usize::MAX).await {
+        Ok(events)
+            if events
+                .iter()
+                .any(|event| is_terminal_runtime_event(&event.event_type)) =>
+        {
+            return;
+        }
+        Ok(_) => {}
+        Err(replay_error) => {
+            warn!(
+                flow_run_id = %run_id,
+                error = %replay_error,
+                "failed to check runtime event stream terminal state"
+            );
+        }
+    }
+
+    let error_payload = serde_json::json!({ "message": error.to_string() });
+    if let Err(append_error) = stream
+        .append(
+            run_id,
+            debug_stream_events::flow_failed(run_id, error_payload),
+        )
+        .await
+    {
+        warn!(
+            flow_run_id = %run_id,
+            event_type = "flow_failed",
+            error = %append_error,
+            "failed to append fallback runtime terminal event"
+        );
+    }
+    if let Err(close_error) = stream
+        .close_run(run_id, RuntimeEventCloseReason::Failed)
+        .await
+    {
+        warn!(
+            flow_run_id = %run_id,
+            reason = ?RuntimeEventCloseReason::Failed,
+            error = %close_error,
+            "failed to close fallback runtime event stream"
+        );
+    }
+}
+
+pub fn spawn_runtime_debug_event_persister<R>(
+    repository: R,
+    stream: Arc<dyn RuntimeEventStream>,
+    run_id: Uuid,
+) -> JoinHandle<()>
+where
+    R: OrchestrationRuntimeRepository + Send + Sync + 'static,
+{
+    tokio::spawn(async move {
+        let Ok(mut subscription) = stream.subscribe(run_id, Some(0)).await else {
+            warn!(
+                flow_run_id = %run_id,
+                "failed to subscribe runtime debug stream for durable event persistence"
+            );
+            return;
+        };
+
+        let mut batch = Vec::new();
+        for event in subscription.replay {
+            if push_debug_event_for_persistence(&repository, &mut batch, run_id, event).await {
+                return;
+            }
+        }
+
+        loop {
+            let Some(event) = subscription.live_events.recv().await else {
+                let _ = flush_debug_event_batch(&repository, &mut batch, run_id).await;
+                return;
+            };
+
+            if push_debug_event_for_persistence(&repository, &mut batch, run_id, event).await {
+                return;
+            }
+        }
+    })
+}
+
+pub async fn wait_for_runtime_debug_event_persister(
+    handle: JoinHandle<()>,
+    application_id: Uuid,
+    run_id: Uuid,
+) {
+    match tokio::time::timeout(std::time::Duration::from_secs(2), handle).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            warn!(
+                application_id = %application_id,
+                flow_run_id = %run_id,
+                error = %error,
+                "runtime debug stream persister task panicked"
+            );
+        }
+        Err(_) => {
+            warn!(
+                application_id = %application_id,
+                flow_run_id = %run_id,
+                "runtime debug stream persister did not finish after terminal event"
+            );
+        }
+    }
+}
+
+async fn push_debug_event_for_persistence<R>(
+    repository: &R,
+    batch: &mut Vec<RuntimeEventEnvelope>,
+    run_id: Uuid,
+    event: RuntimeEventEnvelope,
+) -> bool
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let is_terminal = is_terminal_runtime_event(&event.event_type);
+    let is_stream_delta = is_stream_delta_event(&event.event_type);
+    if is_stream_delta
+        && batch
+            .last()
+            .is_some_and(|previous| previous.event_type != event.event_type)
+    {
+        flush_debug_event_batch(repository, batch, run_id).await;
+    }
+    batch.push(event);
+    if is_terminal || !is_stream_delta {
+        return flush_debug_event_batch(repository, batch, run_id).await || is_terminal;
+    }
+    false
+}
+
+async fn flush_debug_event_batch<R>(
+    repository: &R,
+    batch: &mut Vec<RuntimeEventEnvelope>,
+    run_id: Uuid,
+) -> bool
+where
+    R: OrchestrationRuntimeRepository,
+{
+    if batch.is_empty() {
+        return false;
+    }
+
+    let has_terminal = batch
+        .iter()
+        .any(|event| is_terminal_runtime_event(&event.event_type));
+    let events = std::mem::take(batch);
+    if let Err(error) = persist_runtime_debug_stream_events(repository, events).await {
+        warn!(
+            flow_run_id = %run_id,
+            error = %error,
+            "failed to persist runtime debug stream events"
+        );
+    }
+
+    has_terminal
+}
+
 fn is_stream_delta_event(event_type: &str) -> bool {
     event_type == "text_delta" || event_type == "reasoning_delta"
+}
+
+fn is_terminal_runtime_event(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "flow_finished" | "flow_failed" | "flow_cancelled" | "waiting_human" | "waiting_callback"
+    )
 }
 
 struct PendingStreamDelta {

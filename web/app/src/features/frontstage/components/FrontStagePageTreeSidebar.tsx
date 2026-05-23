@@ -1,13 +1,5 @@
 import * as AntIcons from '@ant-design/icons';
-import {
-  Button,
-  Empty,
-  Typography,
-  Dropdown,
-  Popover,
-  Tooltip,
-  Switch
-} from 'antd';
+import { Button, Empty, Typography, Dropdown, Tooltip, Switch } from 'antd';
 import { useState } from 'react';
 import type { ElementType } from 'react';
 import type { DragEvent, FocusEvent } from 'react';
@@ -231,36 +223,6 @@ function renderTreeNode({
       value: groupNode.id
     }))
   ];
-  const pageGroupPopoverContent = canShowPageGroupSelect ? (
-    <div
-      style={{ minWidth: 128 }}
-      onClick={(event) => {
-        event.stopPropagation();
-      }}
-    >
-      {pageGroupOptions.map((option) => {
-        const optionParentId =
-          option.value === ROOT_PAGE_GROUP_VALUE ? null : option.value;
-
-        return (
-          <Button
-            key={option.value}
-            block
-            disabled={optionParentId === currentParentId || isOperationPending}
-            onClick={(event) => {
-              event.stopPropagation();
-              onMovePageToGroup?.(node.id, currentParentId, optionParentId);
-            }}
-            size="small"
-            style={{ textAlign: 'left' }}
-            type="text"
-          >
-            {option.label}
-          </Button>
-        );
-      })}
-    </div>
-  ) : null;
   const pageGroupMenuItems: NonNullable<MenuProps['items']> =
     canShowPageGroupSelect && onMovePageToGroup
       ? [
@@ -300,7 +262,9 @@ function renderTreeNode({
       ? findNodeById(pageTree, activeDraggedNodeId)
       : null;
     const canDropInsideCurrentGroup =
-      node.kind === 'group' && level === 0 && activeDraggedNode?.kind === 'page';
+      node.kind === 'group' &&
+      level === 0 &&
+      activeDraggedNode?.kind === 'page';
 
     if (
       canDropInsideCurrentGroup &&
@@ -617,106 +581,13 @@ function renderTreeNode({
         )}
         {canEdit ? (
           <>
-            {/* Hidden action buttons for test compatibility */}
-            <div
-              className="frontstage-page-tree-sidebar__node-actions"
-              style={{
-                position: 'absolute',
-                width: 0,
-                height: 0,
-                opacity: 0,
-                overflow: 'hidden',
-                pointerEvents: 'auto'
-              }}
-            >
-              <Button
-                aria-label="重命名"
-                disabled={isOperationPending}
-                icon={<EditOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRenameNode(node);
-                }}
-                size="small"
-                type="text"
-              />
-              {canAddPageToGroup ? (
-                <Button
-                  aria-label="组内新增页面"
-                  disabled={isOperationPending}
-                  icon={<FileAddOutlined />}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onAddPageInGroup(node.id);
-                  }}
-                  size="small"
-                  type="text"
-                />
-              ) : null}
-              {canShowPageGroupSelect && pageGroupPopoverContent ? (
-                <Popover
-                  arrow={false}
-                  content={pageGroupPopoverContent}
-                  placement="rightTop"
-                  trigger="hover"
-                >
-                  <Button
-                    aria-label={`移动到页面分组 ${node.title || node.id}`}
-                    disabled={isOperationPending}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onMouseDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                    size="small"
-                    type="text"
-                  />
-                </Popover>
-              ) : null}
-              <Button
-                aria-label="上移"
-                disabled={!canMoveUp || isOperationPending}
-                icon={<ArrowUpOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMoveNode(node.id, -1);
-                }}
-                size="small"
-                type="text"
-              />
-              <Button
-                aria-label="下移"
-                disabled={!canMoveDown || isOperationPending}
-                icon={<ArrowDownOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMoveNode(node.id, 1);
-                }}
-                size="small"
-                type="text"
-              />
-              <Button
-                aria-label="删除"
-                danger
-                disabled={isOperationPending}
-                icon={<DeleteOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDeleteNode(node.id);
-                }}
-                size="small"
-                type="text"
-              />
-            </div>
-
-            {/* Visible premium action buttons matching screenshots */}
             <div
               className="frontstage-page-tree-sidebar__node-actions-visible"
               onClick={(e) => e.stopPropagation()}
             >
               <Tooltip title="拖拽/排序 (请使用菜单中的上移/下移)">
                 <Button
+                  aria-label="拖拽移动节点"
                   className="frontstage-page-tree-sidebar__drag-handle"
                   disabled={isOperationPending}
                   draggable={!isOperationPending}
@@ -747,6 +618,7 @@ function renderTreeNode({
                 placement="bottomRight"
               >
                 <Button
+                  aria-label="页面操作菜单"
                   className="frontstage-page-tree-sidebar__more-trigger"
                   disabled={isOperationPending}
                   icon={<MenuOutlined />}

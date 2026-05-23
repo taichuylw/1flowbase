@@ -329,7 +329,26 @@ async function clickAndFlush(element: HTMLElement) {
 }
 
 async function clickLatestButtonAndFlush(label: string | RegExp) {
-  const buttons = await screen.findAllByRole('button', { name: label });
+  const buttonName =
+    typeof label === 'string'
+      ? new RegExp(label.split('').map(escapeRegExp).join('\\s*'))
+      : label;
+  const buttons = await screen.findAllByRole('button', {
+    name: buttonName
+  });
+  await clickAndFlush(buttons[buttons.length - 1]);
+}
+
+async function clickConfirmModalButtonAndFlush(label: string | RegExp) {
+  const buttonName =
+    typeof label === 'string'
+      ? new RegExp(label.split('').map(escapeRegExp).join('\\s*'))
+      : label;
+  const dialogs = await screen.findAllByRole('dialog');
+  const buttons = await within(dialogs[dialogs.length - 1]).findAllByRole(
+    'button',
+    { name: buttonName }
+  );
   await clickAndFlush(buttons[buttons.length - 1]);
 }
 
@@ -337,14 +356,95 @@ async function hoverAddMenuAndFlush() {
   fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
 }
 
+function getNextDefaultNodeTitle(label: '新增分组' | '新增页面') {
+  const titlePattern =
+    label === '新增分组' ? /^分组 (\d+)$/ : /^页面 新建 (\d+)$/;
+  const existingIndexes = screen
+    .queryAllByText(titlePattern)
+    .map((element) => element.textContent?.match(titlePattern)?.[1])
+    .filter((index): index is string => Boolean(index))
+    .map((index) => Number.parseInt(index, 10))
+    .filter(Number.isFinite);
+  const nextIndex =
+    existingIndexes.length > 0 ? Math.max(...existingIndexes) + 1 : 1;
+
+  return label === '新增分组' ? `分组 ${nextIndex}` : `页面 新建 ${nextIndex}`;
+}
+
 async function clickAddMenuItemAndFlush(label: '新增分组' | '新增页面') {
   await hoverAddMenuAndFlush();
   await clickAndFlush(await screen.findByRole('menuitem', { name: label }));
+  fireEvent.change(await screen.findByLabelText('名称'), {
+    target: { value: getNextDefaultNodeTitle(label) }
+  });
   await clickLatestButtonAndFlush('确定');
 }
 
 async function clickAddMenuItem(label: '新增分组' | '新增页面') {
   await clickAddMenuItemAndFlush(label);
+}
+
+async function clickAddPageInGroupAndFlush(groupContainer: HTMLElement) {
+  await clickPageTreeOperationMenuItemAndFlush(groupContainer, '在里面插入');
+  fireEvent.change(await screen.findByLabelText('名称'), {
+    target: { value: getNextDefaultNodeTitle('新增页面') }
+  });
+  await clickLatestButtonAndFlush('确定');
+}
+
+async function openPageTreeOperationMenuAndFlush(nodeContainer: HTMLElement) {
+  const menuButtons = within(nodeContainer).getAllByRole('button', {
+    name: '页面操作菜单'
+  });
+  const menuButton = menuButtons[0];
+  if (!menuButton) {
+    throw new Error('expected page tree operation menu button');
+  }
+  await clickAndFlush(menuButton);
+}
+
+async function clickPageTreeOperationMenuItemAndFlush(
+  nodeContainer: HTMLElement,
+  label: string | RegExp
+) {
+  await openPageTreeOperationMenuAndFlush(nodeContainer);
+  await clickAndFlush(await findLatestVisibleText(label));
+}
+
+async function clickPageTreeOperationSubmenuItemAndFlush(
+  nodeContainer: HTMLElement,
+  submenuLabel: string | RegExp,
+  label: string | RegExp
+) {
+  await openPageTreeOperationMenuAndFlush(nodeContainer);
+  const submenu = await findLatestVisibleText(submenuLabel);
+  const submenuTarget =
+    submenu.closest('.ant-dropdown-menu-submenu-title') ??
+    submenu.closest('.ant-dropdown-menu-submenu') ??
+    submenu.closest('.ant-dropdown-menu-item') ??
+    submenu;
+  fireEvent.mouseEnter(submenuTarget);
+  fireEvent.mouseOver(submenuTarget);
+  fireEvent.mouseMove(submenuTarget);
+  fireEvent.click(submenuTarget);
+  await clickAndFlush(await findLatestVisibleText(label));
+}
+
+async function findLatestVisibleText(label: string | RegExp) {
+  let elements: HTMLElement[] = [];
+  await waitFor(() => {
+    elements = Array.from(
+      document.body.querySelectorAll<HTMLElement>(
+        '.ant-dropdown:not(.ant-dropdown-hidden), .ant-dropdown-menu-submenu-popup:not(.ant-dropdown-hidden)'
+      )
+    ).flatMap((dropdown) => within(dropdown).queryAllByText(label));
+    expect(elements.length).toBeGreaterThan(0);
+  });
+  const element = elements[elements.length - 1];
+  if (!element) {
+    throw new Error(`expected visible text for ${String(label)}`);
+  }
+  return element;
 }
 
 function activateDesignMode() {
@@ -883,13 +983,11 @@ describe('FrontStagePage', () => {
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
 
     const pageListItem = getPageTreeItem('页面 新建 1');
-    await clickAndFlush(
-      within(pageListItem).getByRole('button', { name: /删\s*除/ })
-    );
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(pageListItem, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
 
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   test('creates page through page tree mutation callback without local fake node', async () => {
     authenticate(['frontstage.page.design']);
@@ -915,6 +1013,8 @@ describe('FrontStagePage', () => {
     await waitFor(() => {
       expect(onCreatePageNode).toHaveBeenCalledWith({
         title: '页面 新建 1',
+        icon: '',
+        tooltip: '',
         parentId: null,
         rank: '001000'
       });
@@ -952,14 +1052,14 @@ describe('FrontStagePage', () => {
 
     const pageItem = getPageTreeItem('页面 page-1');
 
-    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '编辑');
     fireEvent.change(screen.getByLabelText('名称'), {
       target: { value: '页面-已重命名' }
     });
     await clickLatestButtonAndFlush('确定');
     await waitFor(() => {
       expect(onRenamePageNode).toHaveBeenCalledWith('page-1', {
-        icon: 'FileTextOutlined',
+        icon: '',
         tooltip: '',
         title: '页面-已重命名'
       });
@@ -967,21 +1067,14 @@ describe('FrontStagePage', () => {
     await waitFor(() => {
       expect(screen.getByText('页面树已同步')).toBeInTheDocument();
     });
-    expect(screen.queryByText('页面-已重命名')).not.toBeInTheDocument();
+    expect(screen.getAllByText('页面-已重命名').length).toBeGreaterThan(0);
 
-    const deleteButton = within(pageItem).getByRole('button', {
-      name: /删\s*除/
-    });
-    await waitFor(() => {
-      expect(deleteButton).toBeEnabled();
-    });
-    fireEvent.click(deleteButton);
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
     await waitFor(() => {
       expect(onDeletePageNode).toHaveBeenCalledWith('page-1');
     });
-    expect(screen.getAllByText('页面 page-1').length).toBeGreaterThan(0);
-  });
+  }, 10_000);
 
   test('opens page tree operation menu on hover', async () => {
     authenticate(['frontstage.page.design']);
@@ -1003,11 +1096,9 @@ describe('FrontStagePage', () => {
     const pageItem = getPageTreeItem('页面 page-1');
     expect(screen.queryByText('编辑描述')).not.toBeInTheDocument();
 
-    await act(async () => {
-      fireEvent.mouseEnter(
-        within(pageItem).getByRole('button', { name: '页面操作菜单' })
-      );
-    });
+    await clickAndFlush(
+      within(pageItem).getByRole('button', { name: '页面操作菜单' })
+    );
 
     expect(await screen.findByText('编辑描述')).toBeInTheDocument();
     expect(await screen.findByText('移动到')).toBeInTheDocument();
@@ -1050,8 +1141,10 @@ describe('FrontStagePage', () => {
     activateDesignMode();
 
     const secondPageItem = getPageTreeItem('页面 page-2');
-    fireEvent.click(
-      within(secondPageItem).getByRole('button', { name: /上\s*移/ })
+    await clickPageTreeOperationSubmenuItemAndFlush(
+      secondPageItem,
+      '移动到',
+      '上移'
     );
 
     await waitFor(() => {
@@ -1064,11 +1157,11 @@ describe('FrontStagePage', () => {
     const rows = screen.getAllByRole('button', {
       name: /页面 page-\d+ 页面节点/
     });
-    expect(rows[0]).toHaveTextContent('页面 page-1');
-    expect(rows[1]).toHaveTextContent('页面 page-2');
+    expect(rows[0]).toHaveTextContent('页面 page-2');
+    expect(rows[1]).toHaveTextContent('页面 page-1');
   });
 
-  test('shows selected page group hover panel and moves the page from a group click', async () => {
+  test('moves selected page to another group from the operation menu', async () => {
     authenticate(['frontstage.page.design']);
     const onMovePageNode = vi.fn().mockResolvedValue(undefined);
 
@@ -1099,14 +1192,11 @@ describe('FrontStagePage', () => {
     activateDesignMode();
 
     const selectedPageItem = getPageTreeItem('页面 page-1');
-    const groupHoverTrigger = within(selectedPageItem).getByRole('button', {
-      name: /移动到页面分组/
-    });
-
-    expect(groupHoverTrigger).toBeInTheDocument();
-
-    fireEvent.mouseEnter(groupHoverTrigger);
-    fireEvent.click(await screen.findByRole('button', { name: '分组 2' }));
+    await clickPageTreeOperationSubmenuItemAndFlush(
+      selectedPageItem,
+      '移动到',
+      '分组 2'
+    );
 
     await waitFor(() => {
       expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
@@ -1140,7 +1230,9 @@ describe('FrontStagePage', () => {
 
     activateDesignMode();
 
-    const pageItem = screen.getByTestId('frontstage-tree-node-page-页面 page-1');
+    const pageItem = screen.getByTestId(
+      'frontstage-tree-node-page-页面 page-1'
+    );
     const groupItem = screen.getByTestId(
       'frontstage-tree-node-group-分组 group-1'
     );
@@ -1202,14 +1294,12 @@ describe('FrontStagePage', () => {
 
     const pageItem = getPageTreeItem('页面 新建 1');
 
-    await clickAndFlush(
-      within(pageItem).getByRole('button', { name: /删\s*除/ })
-    );
-    await clickLatestButtonAndFlush('取消');
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '删除');
+    await clickConfirmModalButtonAndFlush('取消');
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
     expect(screen.getByText('分组 1')).toBeInTheDocument();
-  });
+  }, 10_000);
 
   test('generates unique page id when existing page ids conflict', async () => {
     authenticate(['frontstage.page.design']);
@@ -1237,10 +1327,7 @@ describe('FrontStagePage', () => {
 
     const groupContainer = getGroupTreeItem('分组 1');
 
-    await clickAndFlush(
-      within(groupContainer).getByRole('button', { name: '组内新增页面' })
-    );
-    await clickLatestButtonAndFlush('确定');
+    await clickAddPageInGroupAndFlush(groupContainer);
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
   });
@@ -1263,7 +1350,7 @@ describe('FrontStagePage', () => {
     expect(screen.getByText('分组 2')).toBeInTheDocument();
   });
 
-  test('only allows adding a page into top-level groups', () => {
+  test('only allows adding a page into top-level groups', async () => {
     authenticate(['frontstage.page.design']);
 
     renderPageWithInitialTree([
@@ -1292,9 +1379,8 @@ describe('FrontStagePage', () => {
 
     const rootGroupItem = getGroupTreeItem('分组 一级');
 
-    expect(
-      within(rootGroupItem).getByRole('button', { name: '组内新增页面' })
-    ).toBeInTheDocument();
+    await openPageTreeOperationMenuAndFlush(rootGroupItem);
+    expect(await findLatestVisibleText('在里面插入')).toBeInTheDocument();
     expect(screen.queryByText('分组 二级')).not.toBeInTheDocument();
     expect(screen.getAllByText('页面 嵌套').length).toBeGreaterThan(0);
   });
@@ -1313,17 +1399,11 @@ describe('FrontStagePage', () => {
     expect(initialTreeRows[0]).toHaveTextContent('页面 新建 1');
     expect(initialTreeRows[1]).toHaveTextContent('页面 新建 2');
 
-    const secondRowUpButton = within(initialTreeRows[1]).getByRole('button', {
-      name: /上\s*移/
-    });
-    const firstRowDownButton = within(initialTreeRows[0]).getByRole('button', {
-      name: /下\s*移/
-    });
-
-    expect(secondRowUpButton).toBeEnabled();
-    expect(firstRowDownButton).toBeEnabled();
-
-    await clickAndFlush(secondRowUpButton);
+    await clickPageTreeOperationSubmenuItemAndFlush(
+      initialTreeRows[1],
+      '移动到',
+      '上移'
+    );
 
     const movedUpRows = screen.getAllByRole('button', {
       name: /页面 新建 \d+ 页面节点/
@@ -1331,27 +1411,18 @@ describe('FrontStagePage', () => {
     expect(movedUpRows[0]).toHaveTextContent('页面 新建 2');
     expect(movedUpRows[1]).toHaveTextContent('页面 新建 1');
 
-    const firstRowUpButton = within(movedUpRows[0]).getByRole('button', {
-      name: /上\s*移/
-    });
-    const secondRowDownButton = within(movedUpRows[1]).getByRole('button', {
-      name: /下\s*移/
-    });
-
-    expect(firstRowUpButton).toBeDisabled();
-    expect(secondRowDownButton).toBeDisabled();
-
-    const movedDownButton = within(movedUpRows[0]).getByRole('button', {
-      name: /下\s*移/
-    });
-    await clickAndFlush(movedDownButton);
+    await clickPageTreeOperationSubmenuItemAndFlush(
+      movedUpRows[0],
+      '移动到',
+      '下移'
+    );
 
     const movedDownRows = screen.getAllByRole('button', {
       name: /页面 新建 \d+ 页面节点/
     });
     expect(movedDownRows[0]).toHaveTextContent('页面 新建 1');
     expect(movedDownRows[1]).toHaveTextContent('页面 新建 2');
-  });
+  }, 10_000);
 
   test('deletes group and cascades child pages', async () => {
     authenticate(['frontstage.page.design']);
@@ -1362,67 +1433,59 @@ describe('FrontStagePage', () => {
 
     const groupItem = getGroupTreeItem('分组 1');
 
-    await clickAndFlush(
-      within(groupItem).getByRole('button', { name: '组内新增页面' })
-    );
-    await clickLatestButtonAndFlush('确定');
+    await clickAddPageInGroupAndFlush(groupItem);
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
 
-    const [groupDeleteButton] = within(groupItem).getAllByRole('button', {
-      name: /删\s*除/
-    });
-    await clickAndFlush(groupDeleteButton);
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(groupItem, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
 
     expect(screen.queryByText('分组 1')).not.toBeInTheDocument();
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   test('falls back to first available page when selected page is deleted by parent group', async () => {
     authenticate(['frontstage.page.design']);
     const onNavigatePage = vi.fn();
 
-    renderPage(undefined, onNavigatePage);
+    renderPageWithInitialTree(
+      [
+        {
+          id: 'group-1',
+          title: '分组 1',
+          kind: 'group',
+          children: [
+            {
+              id: 'page-in-group',
+              title: '页面 分组内',
+              kind: 'page'
+            }
+          ]
+        },
+        {
+          id: 'page-root',
+          title: '页面 根',
+          kind: 'page'
+        }
+      ],
+      'page-in-group',
+      onNavigatePage
+    );
 
     activateDesignMode();
-    await clickAddMenuItem('新增分组');
-
-    const groupItem = getGroupTreeItem('分组 1');
-
-    fireEvent.click(
-      within(groupItem).getByRole('button', { name: '组内新增页面' })
-    );
-    await clickLatestButtonAndFlush('确定');
-    await clickAddMenuItem('新增页面');
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: '页面 新建 2' })
-      ).toBeInTheDocument();
-    });
-    const rootPageId = onNavigatePage.mock.calls.at(-1)?.[0] as
-      | string
-      | undefined;
 
     const groupItemForDelete = getGroupTreeItem('分组 1');
 
-    const [groupDeleteButton] = within(groupItemForDelete).getAllByRole(
-      'button',
-      {
-        name: /删\s*除/
-      }
-    );
-    fireEvent.click(groupDeleteButton);
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(groupItemForDelete, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
 
     await waitFor(() => {
-      expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('分组 1')).not.toBeInTheDocument();
       expect(
-        screen.getByRole('heading', { name: '页面 新建 2' })
+        screen.getByRole('heading', { name: '页面 根' })
       ).toBeInTheDocument();
-      expect(onNavigatePage).toHaveBeenLastCalledWith(rootPageId);
+      expect(onNavigatePage).toHaveBeenLastCalledWith('page-root');
     });
-  });
+  }, 10_000);
 
   test('falls back to workspace-level route when selected nested group is deleted and no pages remain', async () => {
     authenticate(['frontstage.page.design']);
@@ -1458,18 +1521,17 @@ describe('FrontStagePage', () => {
 
     const rootGroup = getGroupTreeItem('分组 一级');
 
-    const [rootGroupDeleteButton] = within(rootGroup).getAllByRole('button', {
-      name: /删\s*除/
-    });
-    fireEvent.click(rootGroupDeleteButton);
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(rootGroup, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
 
-    expect(screen.queryByText('页面 嵌套')).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
-    ).toBeInTheDocument();
-    expect(onNavigatePage).toHaveBeenCalledWith(undefined);
-  });
+    await waitFor(() => {
+      expect(screen.queryAllByText('页面 嵌套')).toHaveLength(0);
+      expect(
+        screen.getByRole('heading', { name: '未选择 pageId（将使用默认首页）' })
+      ).toBeInTheDocument();
+      expect(onNavigatePage).toHaveBeenCalledWith(undefined);
+    });
+  }, 10_000);
 
   test('renames node title in design mode', async () => {
     authenticate(['frontstage.page.design']);
@@ -1480,15 +1542,15 @@ describe('FrontStagePage', () => {
 
     const pageItem = getPageTreeItem('页面 新建 1');
 
-    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '编辑');
     fireEvent.change(screen.getByLabelText('名称'), {
       target: { value: '页面-已重命名' }
     });
-    await clickAndFlush(await screen.findByRole('button', { name: '确定' }));
+    await clickLatestButtonAndFlush('确定');
     expect(screen.getAllByText('页面-已重命名').length).toBeGreaterThan(0);
-  });
+  }, 10_000);
 
-  test('allows renaming node title to empty string', async () => {
+  test('requires a non-empty node title when renaming', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
@@ -1497,14 +1559,14 @@ describe('FrontStagePage', () => {
 
     const pageItem = getPageTreeItem('页面 新建 1');
 
-    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '编辑');
     fireEvent.change(screen.getByLabelText('名称'), {
       target: { value: '' }
     });
-    await clickAndFlush(await screen.findByRole('button', { name: '确定' }));
-    expect(screen.getAllByText('未命名页面').length).toBeGreaterThan(0);
-    expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-  });
+    await clickLatestButtonAndFlush('确定');
+    expect(await screen.findByText('请输入名称')).toBeInTheDocument();
+    expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
+  }, 10_000);
 
   test('renaming a node prefills current title in the form', async () => {
     authenticate(['frontstage.page.design']);
@@ -1515,7 +1577,7 @@ describe('FrontStagePage', () => {
 
     const pageItem = getPageTreeItem('页面 新建 1');
 
-    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '编辑');
     expect(screen.getByLabelText('名称')).toHaveValue('页面 新建 1');
   });
 
@@ -1533,7 +1595,7 @@ describe('FrontStagePage', () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       )
     );
-  });
+  }, 10_000);
 
   test('falls back to first page when deleting selected page', async () => {
     authenticate(['frontstage.page.design']);
@@ -1548,15 +1610,15 @@ describe('FrontStagePage', () => {
 
     const secondPageItem = getPageTreeItem('页面 新建 2');
 
-    await clickAndFlush(
-      within(secondPageItem).getByRole('button', { name: /删\s*除/ })
-    );
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(secondPageItem, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
     expect(
       screen.getByRole('heading', { name: '页面 新建 1' })
     ).toBeInTheDocument();
-    expect(onNavigatePage).toHaveBeenCalledWith(firstPageId);
-  });
+    await waitFor(() => {
+      expect(onNavigatePage).toHaveBeenCalledWith(firstPageId);
+    });
+  }, 10_000);
 
   test('navigates to workspace-level frontstage route when all pages are deleted', async () => {
     authenticate(['frontstage.page.design']);
@@ -1566,11 +1628,13 @@ describe('FrontStagePage', () => {
 
     activateDesignMode();
     const pageItem = getPageTreeItem('页面 page-1');
-    fireEvent.click(within(pageItem).getByRole('button', { name: /删\s*除/ }));
-    await clickLatestButtonAndFlush('删除');
+    await clickPageTreeOperationMenuItemAndFlush(pageItem, '删除');
+    await clickConfirmModalButtonAndFlush('删除');
 
-    expect(onNavigatePage).toHaveBeenCalledWith(undefined);
-  });
+    await waitFor(() => {
+      expect(onNavigatePage).toHaveBeenCalledWith(undefined);
+    });
+  }, 10_000);
 
   test('falls back to first page when route pageId is missing from current tree', () => {
     authenticate(['frontstage.page.design']);

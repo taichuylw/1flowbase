@@ -51,7 +51,9 @@ function duplicateOutputs(outputs: FlowNodeOutputDocument[]) {
   return outputs.map(duplicateOutput);
 }
 
-function duplicateContractDefaults(contract: NodeRuntimeUiContract['defaults']) {
+function duplicateContractDefaults(
+  contract: NodeRuntimeUiContract['defaults']
+) {
   return {
     ...contract,
     config: cloneJsonValue(contract.config),
@@ -60,7 +62,9 @@ function duplicateContractDefaults(contract: NodeRuntimeUiContract['defaults']) 
   };
 }
 
-function duplicateContract(contract: NodeRuntimeUiContract): NodeRuntimeUiContract {
+function duplicateContract(
+  contract: NodeRuntimeUiContract
+): NodeRuntimeUiContract {
   return {
     ...contract,
     meta: { ...contract.meta },
@@ -151,7 +155,12 @@ function panelSection(
 }
 
 const basicsPanelSection = panelSection('basics', 'Basics', [
-  panelField({ key: 'alias', title: '节点别名', renderer: 'text', required: true }),
+  panelField({
+    key: 'alias',
+    title: '节点别名',
+    renderer: 'text',
+    required: true
+  }),
   panelField({ key: 'description', title: '节点简介', renderer: 'text' })
 ]);
 
@@ -263,7 +272,6 @@ function createLlmContract(): NodeRuntimeUiContract {
     config: {
       model_provider: {
         provider_code: '',
-        source_instance_id: '',
         model_id: ''
       },
       llm_parameters: {
@@ -584,10 +592,7 @@ function createPluginNodeContract(): NodeRuntimeUiContract {
     category: 'external',
     config: {},
     outputs,
-    panelSections: [
-      basicsPanelSection,
-      outputsPanelSection(outputs)
-    ]
+    panelSections: [basicsPanelSection, outputsPanelSection(outputs)]
   });
 }
 

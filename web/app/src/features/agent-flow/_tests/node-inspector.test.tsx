@@ -528,7 +528,6 @@ describe('NodeInspector', () => {
 
     llmNodeConfig.model_provider = {
       provider_code: primaryProviderOption.provider_code,
-      source_instance_id: primaryProviderFirstGroup.source_instance_id,
       model_id: primaryProviderFirstModel.model_id,
       provider_label: primaryProviderOption.display_name,
       model_label: primaryProviderFirstModel.display_name

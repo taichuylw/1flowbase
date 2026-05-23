@@ -618,12 +618,6 @@ fn compile_llm_runtime(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string);
-    let source_instance_id = provider_config
-        .and_then(|value| value.get("source_instance_id"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
     let model = provider_config
         .and_then(|value| value.get("model_id"))
         .and_then(Value::as_str)
@@ -647,122 +641,22 @@ fn compile_llm_runtime(
         return None;
     };
 
-    let Some(source_instance_id) = source_instance_id else {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::MissingProviderInstance,
-            message: format!("node {node_id} is missing config.model_provider.source_instance_id"),
-        });
-        if model.is_none() {
-            compile_issues.push(CompileIssue {
-                node_id: node_id.to_string(),
-                code: CompileIssueCode::MissingModel,
-                message: format!("node {node_id} is missing config.model_provider.model_id"),
-            });
-        }
-        return None;
-    };
-
-    let Some(provider_instance) = context.provider_instances.get(&source_instance_id) else {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::ProviderInstanceNotFound,
-            message: format!("source_instance_id {source_instance_id} was not found"),
-        });
-        if model.is_none() {
-            compile_issues.push(CompileIssue {
-                node_id: node_id.to_string(),
-                code: CompileIssueCode::MissingModel,
-                message: format!("node {node_id} is missing config.model_provider.model_id"),
-            });
-        }
-        return None;
-    };
-
-    if provider_instance.provider_code != provider_code {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::ProviderInstanceNotFound,
-            message: format!(
-                "source_instance_id {source_instance_id} belongs to provider {} instead of {provider_code}",
-                provider_instance.provider_code
-            ),
-        });
-        if model.is_none() {
-            compile_issues.push(CompileIssue {
-                node_id: node_id.to_string(),
-                code: CompileIssueCode::MissingModel,
-                message: format!("node {node_id} is missing config.model_provider.model_id"),
-            });
-        }
-        return None;
-    }
-
-    if !provider_instance.is_runnable {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::ProviderInstanceNotReady,
-            message: format!(
-                "source_instance_id {source_instance_id} installation is not runnable"
-            ),
-        });
-    }
-
-    if !provider_instance.included_in_main
-        || !context.provider_families.contains_key(&provider_code)
-    {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::ProviderInstanceNotFound,
-            message: format!(
-                "source_instance_id {source_instance_id} is not included in provider family {provider_code}"
-            ),
-        });
-        if model.is_none() {
-            compile_issues.push(CompileIssue {
-                node_id: node_id.to_string(),
-                code: CompileIssueCode::MissingModel,
-                message: format!("node {node_id} is missing config.model_provider.model_id"),
-            });
-        }
-        return None;
-    }
-
-    if !provider_instance.is_ready {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::ProviderInstanceNotReady,
-            message: format!("source_instance_id {source_instance_id} is not ready"),
-        });
-    }
-
     let Some(model) = model else {
         compile_issues.push(CompileIssue {
             node_id: node_id.to_string(),
             code: CompileIssueCode::MissingModel,
             message: format!("node {node_id} is missing config.model_provider.model_id"),
         });
-        return Some(CompiledLlmRuntime {
-            provider_instance_id: provider_instance.provider_instance_id.clone(),
-            provider_code: provider_instance.provider_code.clone(),
-            protocol: provider_instance.protocol.clone(),
-            model: String::new(),
-            routing: Some(fixed_model_routing(provider_instance, "")),
-        });
+        return None;
     };
 
-    if !provider_instance.allow_custom_models
-        && !provider_instance.available_models.is_empty()
-        && !provider_instance.available_models.contains(&model)
-    {
-        compile_issues.push(CompileIssue {
-            node_id: node_id.to_string(),
-            code: CompileIssueCode::ModelNotAvailable,
-            message: format!(
-                "model {model} is not available for source_instance_id {source_instance_id}"
-            ),
-        });
-    }
+    let provider_instance = resolve_fixed_model_provider_instance(
+        node_id,
+        &provider_code,
+        &model,
+        context,
+        compile_issues,
+    )?;
 
     Some(CompiledLlmRuntime {
         provider_instance_id: provider_instance.provider_instance_id.clone(),
@@ -771,6 +665,86 @@ fn compile_llm_runtime(
         model: model.clone(),
         routing: Some(fixed_model_routing(provider_instance, &model)),
     })
+}
+
+fn resolve_fixed_model_provider_instance<'a>(
+    node_id: &str,
+    provider_code: &str,
+    model: &str,
+    context: &'a FlowCompileContext,
+    compile_issues: &mut Vec<CompileIssue>,
+) -> Option<&'a FlowCompileProviderInstance> {
+    if !context.provider_families.contains_key(provider_code) {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotFound,
+            message: format!("provider {provider_code} was not found"),
+        });
+        return None;
+    }
+
+    let candidates = context
+        .provider_instances
+        .values()
+        .filter(|instance| instance.provider_code == provider_code && instance.included_in_main)
+        .collect::<Vec<_>>();
+
+    if candidates.is_empty() {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotFound,
+            message: format!("provider {provider_code} has no included runtime instance"),
+        });
+        return None;
+    }
+
+    let model_candidates = candidates
+        .into_iter()
+        .filter(|instance| provider_instance_supports_model(instance, model))
+        .collect::<Vec<_>>();
+
+    if model_candidates.is_empty() {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ModelNotAvailable,
+            message: format!("model {model} is not available for provider {provider_code}"),
+        });
+        return None;
+    }
+
+    let runnable_candidates = model_candidates
+        .iter()
+        .copied()
+        .filter(|instance| instance.is_ready && instance.is_runnable)
+        .collect::<Vec<_>>();
+
+    if runnable_candidates.len() > 1 {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.to_string(),
+            code: CompileIssueCode::ProviderInstanceNotFound,
+            message: format!(
+                "provider {provider_code} model {model} is ambiguous across multiple runtime instances"
+            ),
+        });
+        return None;
+    }
+
+    if let Some(provider_instance) = runnable_candidates.first() {
+        return Some(*provider_instance);
+    }
+
+    compile_issues.push(CompileIssue {
+        node_id: node_id.to_string(),
+        code: CompileIssueCode::ProviderInstanceNotReady,
+        message: format!("provider {provider_code} has no runnable instance for model {model}"),
+    });
+    None
+}
+
+fn provider_instance_supports_model(instance: &FlowCompileProviderInstance, model: &str) -> bool {
+    instance.allow_custom_models
+        || instance.available_models.is_empty()
+        || instance.available_models.contains(model)
 }
 
 fn fixed_model_routing(

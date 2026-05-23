@@ -162,7 +162,7 @@ pub(super) fn ensure_compiled_plan_runnable(
                 missing_provider_field(issue.message.as_str()),
             orchestration_runtime::compiled_plan::CompileIssueCode::ProviderInstanceNotFound
             | orchestration_runtime::compiled_plan::CompileIssueCode::ProviderInstanceNotReady =>
-                "source_instance_id",
+                "provider_code",
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingModel
             | orchestration_runtime::compiled_plan::CompileIssueCode::ModelNotAvailable => "model",
             orchestration_runtime::compiled_plan::CompileIssueCode::MissingPluginId => "plugin_id",
@@ -341,19 +341,11 @@ mod tests {
         },
     };
 
-    fn llm_document(
-        flow_id: Uuid,
-        provider_code: &str,
-        source_instance_id: Option<Uuid>,
-        model_id: &str,
-    ) -> Value {
-        let mut model_provider = json!({
+    fn llm_document(flow_id: Uuid, provider_code: &str, model_id: &str) -> Value {
+        let model_provider = json!({
             "provider_code": provider_code,
             "model_id": model_id,
         });
-        if let Some(source_instance_id) = source_instance_id {
-            model_provider["source_instance_id"] = json!(source_instance_id.to_string());
-        }
 
         json!({
             "schemaVersion": "1flowbase.flow/v2",
@@ -574,7 +566,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_requires_source_instance_id() {
+    async fn orchestration_runtime_compile_context_requires_provider_code() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
@@ -582,43 +574,31 @@ mod tests {
 
         let field = compile_error_field(
             &repository,
-            &llm_document(Uuid::now_v7(), "fixture_provider", None, "gpt-5.4-mini"),
+            &llm_document(Uuid::now_v7(), "", "gpt-5.4-mini"),
         )
         .await;
 
-        assert_eq!(field, "source_instance_id");
+        assert_eq!(field, "provider_code");
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_rejects_source_instance_from_another_provider() {
+    async fn orchestration_runtime_compile_context_rejects_unknown_provider_code() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        let foreign_instance_id = repository.seed_provider_instance(
-            "other_provider",
-            "Foreign Provider Instance",
-            true,
-            domain::ModelProviderInstanceStatus::Ready,
-            vec!["gpt-5.4-mini"],
-        );
 
         let field = compile_error_field(
             &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(foreign_instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "missing_provider", "gpt-5.4-mini"),
         )
         .await;
 
-        assert_eq!(field, "source_instance_id");
+        assert_eq!(field, "provider_code");
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_rejects_non_ready_source_instance() {
+    async fn orchestration_runtime_compile_context_rejects_non_ready_provider_instance() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
@@ -628,26 +608,20 @@ mod tests {
 
         let field = compile_error_field(
             &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
         )
         .await;
 
-        assert_eq!(field, "source_instance_id");
+        assert_eq!(field, "provider_code");
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_rejects_source_instance_outside_main_aggregation(
-    ) {
+    async fn orchestration_runtime_compile_context_ignores_instances_outside_main_aggregation() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        let excluded_instance_id = repository.seed_provider_instance(
+        let _excluded_instance_id = repository.seed_provider_instance(
             "fixture_provider",
             "Excluded",
             false,
@@ -655,42 +629,59 @@ mod tests {
             vec!["gpt-5.4-mini"],
         );
 
-        let field = compile_error_field(
-            &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(excluded_instance_id),
-                "gpt-5.4-mini",
-            ),
+        let compile_context = build_compile_context(&repository, Uuid::nil())
+            .await
+            .expect("compile context should build");
+        let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
+            Uuid::now_v7(),
+            "draft-1",
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
+            &compile_context,
         )
-        .await;
+        .expect("plan should compile");
 
-        assert_eq!(field, "source_instance_id");
+        assert!(
+            compiled_plan.compile_issues.is_empty(),
+            "excluded provider instance should not affect stable provider binding, got {:?}",
+            compiled_plan.compile_issues
+        );
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_validates_model_on_selected_source_instance() {
+    async fn orchestration_runtime_compile_context_rejects_ambiguous_stable_provider_model() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        let selected_instance_id = repository.seed_provider_instance(
+        repository.seed_provider_instance(
             "fixture_provider",
-            "Narrow Model Set",
+            "Duplicate Model Set",
             true,
             domain::ModelProviderInstanceStatus::Ready,
-            vec!["other-model"],
+            vec!["gpt-5.4-mini"],
         );
 
         let field = compile_error_field(
             &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(selected_instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
+        )
+        .await;
+
+        assert_eq!(field, "provider_code");
+    }
+
+    #[tokio::test]
+    async fn orchestration_runtime_compile_context_validates_model_on_stable_provider() {
+        let repository =
+            super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
+                vec![],
+            );
+        let instance_id = repository.default_provider_instance_id();
+        repository.set_instance_enabled_models(instance_id, vec!["other-model"]);
+
+        let field = compile_error_field(
+            &repository,
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
         )
         .await;
 
@@ -704,24 +695,14 @@ mod tests {
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
-        let selected_instance_id = repository.seed_provider_instance(
-            "fixture_provider",
-            "Cache Wider Than Enabled",
-            true,
-            domain::ModelProviderInstanceStatus::Ready,
-            vec!["other-model"],
-        );
+        let selected_instance_id = repository.default_provider_instance_id();
+        repository.set_instance_enabled_models(selected_instance_id, vec!["other-model"]);
         repository
             .set_instance_catalog_models(selected_instance_id, vec!["other-model", "gpt-5.4-mini"]);
 
         let field = compile_error_field(
             &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(selected_instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
         )
         .await;
 
@@ -734,6 +715,8 @@ mod tests {
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
             );
+        let default_instance_id = repository.default_provider_instance_id();
+        repository.set_instance_enabled_models(default_instance_id, vec!["other-model"]);
         let selected_instance_id = repository.seed_provider_instance(
             "fixture_provider",
             "Catalog Entry Source",
@@ -750,12 +733,7 @@ mod tests {
         let compiled_plan = orchestration_runtime::compiler::FlowCompiler::compile(
             Uuid::now_v7(),
             "draft-1",
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(selected_instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
             &compile_context,
         )
         .expect("plan should compile");
@@ -768,8 +746,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_rejects_source_instance_when_installation_unassigned(
-    ) {
+    async fn orchestration_runtime_compile_context_rejects_provider_when_installation_unassigned() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
@@ -785,21 +762,15 @@ mod tests {
 
         let field = compile_error_field(
             &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
         )
         .await;
 
-        assert_eq!(field, "source_instance_id");
+        assert_eq!(field, "provider_code");
     }
 
     #[tokio::test]
-    async fn orchestration_runtime_compile_context_rejects_source_instance_when_installation_disabled(
-    ) {
+    async fn orchestration_runtime_compile_context_rejects_provider_when_installation_disabled() {
         let repository =
             super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
                 vec![],
@@ -819,15 +790,10 @@ mod tests {
 
         let field = compile_error_field(
             &repository,
-            &llm_document(
-                Uuid::now_v7(),
-                "fixture_provider",
-                Some(instance_id),
-                "gpt-5.4-mini",
-            ),
+            &llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini"),
         )
         .await;
 
-        assert_eq!(field, "source_instance_id");
+        assert_eq!(field, "provider_code");
     }
 }

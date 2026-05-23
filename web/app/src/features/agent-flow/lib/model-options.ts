@@ -47,8 +47,8 @@ function toTag(source: string) {
   return source.replace(/_/g, ' ').toUpperCase();
 }
 
-function encodeModelSelectionValue(sourceInstanceId: string, modelId: string) {
-  return `${sourceInstanceId}::${modelId}`;
+function encodeModelSelectionValue(providerCode: string, modelId: string) {
+  return `${providerCode}::${modelId}`;
 }
 
 function mapLlmModelOption(
@@ -59,7 +59,7 @@ function mapLlmModelOption(
   return {
     value: model.model_id,
     selectionValue: encodeModelSelectionValue(
-      group.source_instance_id,
+      provider.provider_code,
       model.model_id
     ),
     label: model.display_name || model.model_id,
@@ -178,17 +178,10 @@ function localizeParameterForm(
     ),
     fields: parameterForm.fields.map((field) => ({
       ...field,
-      label: localizeText(options, provider.namespace, field.label) ?? field.label,
-      description: localizeText(
-        options,
-        provider.namespace,
-        field.description
-      ),
-      placeholder: localizeText(
-        options,
-        provider.namespace,
-        field.placeholder
-      ),
+      label:
+        localizeText(options, provider.namespace, field.label) ?? field.label,
+      description: localizeText(options, provider.namespace, field.description),
+      placeholder: localizeText(options, provider.namespace, field.placeholder),
       options: field.options.map((option) => ({
         ...option,
         label:
@@ -253,7 +246,9 @@ export function listLlmProviderOptions(
       key: group.source_instance_id,
       label: group.source_instance_display_name,
       sourceInstanceId: group.source_instance_id,
-      models: group.models.map((model) => mapLlmModelOption(provider, group, model))
+      models: group.models.map((model) =>
+        mapLlmModelOption(provider, group, model)
+      )
     })),
     models: provider.model_groups.flatMap((group) =>
       group.models.map((model) => mapLlmModelOption(provider, group, model))
@@ -270,24 +265,24 @@ export function findLlmProviderOption(
   }
 
   return (
-    listLlmProviderOptions(options).find((provider) => provider.value === providerCode) ?? null
+    listLlmProviderOptions(options).find(
+      (provider) => provider.value === providerCode
+    ) ?? null
   );
 }
 
 export function findLlmModelOption(
   options: AgentFlowModelProviderOptions | null | undefined,
   providerCode: string | null | undefined,
-  sourceInstanceId: string | null | undefined,
   modelId: string | null | undefined
 ) {
-  if (!providerCode || !sourceInstanceId || !modelId) {
+  if (!providerCode || !modelId) {
     return null;
   }
 
   return (
     findLlmProviderOption(options, providerCode)?.models.find(
-      (option) =>
-        option.sourceInstanceId === sourceInstanceId && option.value === modelId
+      (option) => option.value === modelId
     ) ?? null
   );
 }

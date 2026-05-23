@@ -35,7 +35,6 @@ import { LlmParameterForm } from './LlmParameterForm';
 
 const EMPTY_MODEL_PROVIDER = {
   provider_code: '',
-  source_instance_id: '',
   model_id: '',
   protocol: undefined,
   provider_label: undefined,
@@ -86,7 +85,6 @@ function getModelSearchText(
 function buildModelSelection(nextModel: LlmModelOption) {
   return {
     provider_code: nextModel.providerCode,
-    source_instance_id: nextModel.sourceInstanceId,
     model_id: nextModel.value,
     protocol: nextModel.protocol,
     provider_label: nextModel.providerLabel,
@@ -187,7 +185,6 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const modelProvider = getLlmModelProvider(config);
   const currentParameters = getLlmParameters(config);
   const providerCode = modelProvider.provider_code.trim();
-  const sourceInstanceId = modelProvider.source_instance_id.trim();
   const modelValue = modelProvider.model_id.trim();
   const providerOptions = useMemo(
     () => listLlmProviderOptions(providerOptionsQuery.data),
@@ -200,15 +197,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const selectedModel = findLlmModelOption(
     providerOptionsQuery.data,
     providerCode,
-    sourceInstanceId,
     modelValue
   );
-  const selectedSourceInstanceLabel =
-    selectedModel?.sourceInstanceLabel ??
-    selectedProvider?.modelGroups.find(
-      (group) => group.sourceInstanceId === sourceInstanceId
-    )?.label ??
-    (sourceInstanceId || null);
   const providerUnavailable = Boolean(
     providerCode && providerOptionsQuery.isSuccess && selectedProvider === null
   );
@@ -416,7 +406,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           ) : null}
         </div>
         <Typography.Text className="agent-flow-model-settings__section-subtitle">
-          主实例是供应商级聚合视图；节点实际仍保存来源实例与模型。
+          节点保存稳定供应商和模型语义，运行时解析当前可用实例。
         </Typography.Text>
         <Select
           aria-label="选择供应商和模型"
@@ -509,8 +499,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                 <div className="agent-flow-model-settings__options">
                                   {group.models.map((option) => {
                                     const active =
-                                      option.sourceInstanceId ===
-                                        sourceInstanceId &&
+                                      option.providerCode === providerCode &&
                                       option.value === modelValue;
 
                                     return (
@@ -622,9 +611,6 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             null
           }
           metaItems={[
-            selectedSourceInstanceLabel ? (
-              <span>{selectedSourceInstanceLabel}</span>
-            ) : null,
             <ContextMarker value={selectedModel?.effectiveContextWindow} />
           ]}
         />
