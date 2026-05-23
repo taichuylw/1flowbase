@@ -60,6 +60,41 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
+function tokenAttributionItems(callback: LlmToolCallback) {
+  return [
+    callback.call_output_tokens === null
+      ? null
+      : `调用 ${callback.call_output_tokens} tokens`,
+    callback.result_input_tokens === null
+      ? null
+      : `结果 ${callback.result_input_tokens} tokens`
+  ].filter((item): item is string => item !== null);
+}
+
+function LlmToolTokenAttribution({ callback }: { callback: LlmToolCallback }) {
+  const attributionItems = tokenAttributionItems(callback);
+
+  if (attributionItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="agent-flow-editor__debug-llm-tool-token-attribution">
+      <Typography.Text strong>工具 token 归因</Typography.Text>
+      <span className="agent-flow-editor__debug-llm-tool-token-list">
+        {attributionItems.map((item) => (
+          <Tag key={item}>{item}</Tag>
+        ))}
+      </span>
+      {callback.token_count_method === 'estimated' ? (
+        <Typography.Text type="secondary">
+          估算归因，不是额外账单。LLM 节点 usage 仍是唯一总账。
+        </Typography.Text>
+      ) : null}
+    </div>
+  );
+}
+
 function LlmToolCallbackItem({
   callback,
   expanded,
@@ -75,6 +110,8 @@ function LlmToolCallbackItem({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onToggle: () => void;
 }) {
+  const attributionItems = tokenAttributionItems(callback);
+
   return (
     <article
       className="agent-flow-editor__debug-llm-tool-item"
@@ -92,6 +129,9 @@ function LlmToolCallbackItem({
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
         </Tag>
+        {attributionItems.map((item) => (
+          <Tag key={item}>{item}</Tag>
+        ))}
         {callback.executionStatus === 'unknown' ? null : (
           <Tag color={executionStatusColor(callback.executionStatus)}>
             {executionStatusLabel(callback.executionStatus)}
@@ -109,6 +149,7 @@ function LlmToolCallbackItem({
           {loadFailed ? <Tag color="error">加载失败</Tag> : null}
           {!loading && !loadFailed ? (
             <>
+              <LlmToolTokenAttribution callback={callback} />
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
@@ -181,6 +222,12 @@ export function LlmToolTraceTree({
           ...callback,
           ...loadedCallback,
           key: callback.key,
+          call_output_tokens:
+            loadedCallback.call_output_tokens ?? callback.call_output_tokens,
+          result_input_tokens:
+            loadedCallback.result_input_tokens ?? callback.result_input_tokens,
+          token_count_method:
+            loadedCallback.token_count_method ?? callback.token_count_method,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
         };
