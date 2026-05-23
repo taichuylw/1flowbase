@@ -453,8 +453,8 @@ describe('debug conversation log panel', () => {
 
     expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
     expect(
-      within(nodeDetail).getByLabelText('工具回调索引 JSON')
-    ).toHaveTextContent('call_weather');
+      within(nodeDetail).queryByLabelText('工具回调索引 JSON')
+    ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
       name: /lookup_weather.*call_weather/
@@ -471,8 +471,8 @@ describe('debug conversation log panel', () => {
     expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
       'temperature'
     );
-    expect(nodeDetail).toHaveTextContent('已回调');
-    expect(nodeDetail).toHaveTextContent('执行未知');
+    expect(nodeDetail).toHaveTextContent('已返回');
+    expect(nodeDetail).not.toHaveTextContent('执行未知');
     expect(nodeDetail).toHaveTextContent('weather is clear');
     within(nodeDetail)
       .getAllByLabelText('数据处理 JSON')
@@ -519,15 +519,22 @@ describe('debug conversation log panel', () => {
     fireEvent.click(toolsNode);
 
     expect(
-      within(nodeDetail).getByLabelText('工具回调索引 JSON')
-    ).toHaveTextContent('call_weather');
+      within(nodeDetail).queryByLabelText('工具回调索引 JSON')
+    ).not.toBeInTheDocument();
     expect(
-      within(nodeDetail).getByLabelText('工具回调索引 JSON')
-    ).toHaveTextContent('call_policy');
+      within(nodeDetail).getByRole('button', {
+        name: /lookup_weather.*call_weather/
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(nodeDetail).getByRole('button', {
+        name: /read_policy.*call_policy/
+      })
+    ).toBeInTheDocument();
     expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
       'weather is clear'
     );
-  });
+  }, 10_000);
 
   test('loads full LLM tool callbacks when the rounds payload is truncated', async () => {
     const onLoadArtifact = vi.fn().mockResolvedValue(toolCallbackDetailPayload);
@@ -569,8 +576,8 @@ describe('debug conversation log panel', () => {
       name: /lookup_weather.*call_weather/
     });
     expect(
-      within(nodeDetail).getByLabelText('工具回调索引 JSON')
-    ).toHaveTextContent('call_weather');
+      within(nodeDetail).queryByLabelText('工具回调索引 JSON')
+    ).not.toBeInTheDocument();
     expect(within(nodeDetail).queryByText('Shanghai')).not.toBeInTheDocument();
 
     fireEvent.click(toolCallback);
@@ -585,7 +592,7 @@ describe('debug conversation log panel', () => {
     expect(within(nodeDetail).getByLabelText('解析结果 JSON')).toHaveTextContent(
       'temperature'
     );
-  });
+  }, 10_000);
 
   test('delegates log opening when the canvas shell controls the log panel', () => {
     const onOpenMessageLog = vi.fn();

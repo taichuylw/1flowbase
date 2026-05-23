@@ -148,7 +148,7 @@
   display: flex;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
   background: #f8fafd;
@@ -188,9 +188,9 @@
 
 .application-logs-floating-window__resize--right {
   top: 0;
-  right: 0;
+  right: -8px;
   bottom: 10px;
-  width: 10px;
+  width: 8px;
   cursor: ew-resize;
 }
 
@@ -222,7 +222,7 @@
 
 .application-logs-floating-window__resize--right::before {
   top: 16px;
-  right: 4px;
+  right: 6px;
   bottom: 16px;
   width: 2px;
 }

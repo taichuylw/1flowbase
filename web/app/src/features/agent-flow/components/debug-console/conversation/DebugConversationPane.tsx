@@ -9,8 +9,29 @@ import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgen
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
 
+const HISTORY_LOAD_SCROLL_THRESHOLD_PX = 96;
+
+interface ConversationScrollSnapshot {
+  firstMessageId: string | null;
+  initialized: boolean;
+  lastMessageId: string | null;
+  scrollHeight: number;
+  scrollTop: number;
+}
+
 function getQueryField(runContext: AgentFlowRunContext) {
   return runContext.fields.find((field) => field.key === 'query') ?? null;
+}
+
+function debugMessageLabel(role: AgentFlowDebugMessage['role']) {
+  switch (role) {
+    case 'system':
+      return 'System';
+    case 'assistant':
+      return 'Bot';
+    default:
+      return 'User';
+  }
 }
 
 export function DebugConversationPane({
@@ -46,6 +67,13 @@ export function DebugConversationPane({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const autoScrollEnabledRef = useRef(true);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
+  const scrollSnapshotRef = useRef<ConversationScrollSnapshot>({
+    firstMessageId: null,
+    initialized: false,
+    lastMessageId: null,
+    scrollHeight: 0,
+    scrollTop: 0
+  });
   const queryField = getQueryField(runContext);
   const composerDisabled =
     !queryField ||
@@ -61,27 +89,87 @@ export function DebugConversationPane({
     null;
   const activeAssistantMessageId = activeAssistantMessage?.id ?? null;
   const activeAssistantContent = activeAssistantMessage?.content ?? '';
-  const scrollToBottom = useCallback(() => {
-    if (status !== 'running' || !autoScrollEnabledRef.current) {
+  const firstMessageId = messages[0]?.id ?? null;
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const rememberScrollPosition = useCallback(
+    (element: HTMLDivElement | null = messagesRef.current) => {
+      if (!element) {
+        return;
+      }
+
+      scrollSnapshotRef.current = {
+        firstMessageId,
+        initialized: messages.length > 0,
+        lastMessageId,
+        scrollHeight: element.scrollHeight,
+        scrollTop: element.scrollTop
+      };
+    },
+    [firstMessageId, lastMessageId, messages.length]
+  );
+  const scrollToBottom = useCallback((force = false) => {
+    if (!force && (status !== 'running' || !autoScrollEnabledRef.current)) {
       return;
     }
 
-    if (typeof bottomRef.current?.scrollIntoView === 'function') {
-      bottomRef.current.scrollIntoView({ block: 'end' });
+    const element = messagesRef.current;
+
+    if (element) {
+      element.scrollTop = element.scrollHeight;
+      return;
     }
+
+    bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [status]);
 
   useLayoutEffect(() => {
-    if (activeAssistantMessageIdRef.current !== activeAssistantMessageId) {
+    const element = messagesRef.current;
+    const previousSnapshot = scrollSnapshotRef.current;
+    const activeAssistantChanged =
+      activeAssistantMessageIdRef.current !== activeAssistantMessageId;
+
+    if (activeAssistantChanged) {
       activeAssistantMessageIdRef.current = activeAssistantMessageId;
       autoScrollEnabledRef.current = true;
     }
 
-    scrollToBottom();
+    if (!element) {
+      return;
+    }
+
+    if (messages.length === 0) {
+      rememberScrollPosition(element);
+      return;
+    }
+
+    const historyWasPrepended =
+      previousSnapshot.initialized &&
+      previousSnapshot.firstMessageId !== null &&
+      previousSnapshot.firstMessageId !== firstMessageId &&
+      previousSnapshot.lastMessageId === lastMessageId;
+
+    if (historyWasPrepended) {
+      const insertedHeight =
+        element.scrollHeight - previousSnapshot.scrollHeight;
+      element.scrollTop = previousSnapshot.scrollTop + insertedHeight;
+    } else if (
+      !previousSnapshot.initialized ||
+      previousSnapshot.lastMessageId !== lastMessageId ||
+      activeAssistantChanged
+    ) {
+      scrollToBottom(true);
+    } else {
+      scrollToBottom();
+    }
+
+    rememberScrollPosition(element);
   }, [
     activeAssistantContent,
     activeAssistantMessageId,
+    firstMessageId,
+    lastMessageId,
     messages.length,
+    rememberScrollPosition,
     scrollToBottom
   ]);
 
@@ -98,22 +186,31 @@ export function DebugConversationPane({
 
     const observer = new ResizeObserver(() => {
       scrollToBottom();
+      rememberScrollPosition();
     });
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, [scrollToBottom]);
+  }, [rememberScrollPosition, scrollToBottom]);
 
   function pauseAutoScroll() {
     if (status === 'running') {
       autoScrollEnabledRef.current = false;
     }
+
+    rememberScrollPosition();
   }
 
   function handleMessagesScroll() {
     const element = messagesRef.current;
 
-    if (element && element.scrollTop <= 16) {
+    if (!element) {
+      return;
+    }
+
+    rememberScrollPosition(element);
+
+    if (element.scrollTop <= HISTORY_LOAD_SCROLL_THRESHOLD_PX) {
       onReachTop?.();
     }
   }
@@ -150,11 +247,13 @@ export function DebugConversationPane({
               ) : (
                 <article
                   key={message.id}
-                  className="agent-flow-editor__debug-message agent-flow-editor__debug-message--user"
+                  className={`agent-flow-editor__debug-message agent-flow-editor__debug-message--${message.role}`}
                 >
                   <div className="agent-flow-editor__debug-message-main">
                     <div className="agent-flow-editor__debug-message-header">
-                      <Typography.Text strong>User</Typography.Text>
+                      <Typography.Text strong>
+                        {debugMessageLabel(message.role)}
+                      </Typography.Text>
                     </div>
                     <Typography.Paragraph className="agent-flow-editor__debug-message-content">
                       {message.content}

@@ -183,6 +183,8 @@
   min-height: 0;
   overflow: auto;
   padding: 16px;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
 }
 
 .application-run-detail__conversation-pane
