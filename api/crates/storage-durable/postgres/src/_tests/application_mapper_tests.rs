@@ -43,7 +43,7 @@ fn planned_sections_expose_public_api_template_before_configuration() {
     );
     assert_eq!(
         sections.api.invoke_path_template.as_deref(),
-        Some("/api/1flowbase/runs")
+        Some("/api/v1/agent/runs")
     );
     assert_eq!(sections.api.api_capability_status, "not_published");
     assert_eq!(sections.api.credentials_status, "missing");
@@ -158,7 +158,7 @@ fn application_mapper_marks_api_section_active_when_key_mapping_and_publication_
     );
     assert_eq!(
         record.sections.api.invoke_path_template.as_deref(),
-        Some("/api/1flowbase/runs")
+        Some("/api/v1/agent/runs")
     );
     assert_eq!(record.sections.api.api_capability_status, "enabled");
     assert_eq!(record.sections.api.credentials_status, "configured");
