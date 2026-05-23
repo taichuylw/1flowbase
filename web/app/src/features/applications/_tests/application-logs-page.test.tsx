@@ -655,6 +655,124 @@ describe('ApplicationLogsPage', () => {
     );
   }, 20_000);
 
+  test('groups repeated LLM tool callbacks under Tools from application logs', async () => {
+    const detail = sampleRunDetail();
+    const llmNodeRun = detail.node_runs[0]!;
+    detail.flow_run.status = 'waiting_callback';
+    detail.node_runs = [
+      {
+        ...llmNodeRun,
+        id: 'node-run-llm-1',
+        status: 'succeeded',
+        output_payload: {
+          usage: {
+            total_tokens: 8035
+          }
+        },
+        debug_payload: {
+          llm_rounds: [
+            {
+              round_index: 0,
+              assistant: {
+                role: 'assistant',
+                content: 'need weather',
+                tool_calls: [
+                  {
+                    id: 'call_weather',
+                    name: 'lookup_weather'
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:03Z'
+      },
+      {
+        ...llmNodeRun,
+        id: 'node-run-llm-2',
+        status: 'waiting_callback',
+        output_payload: {
+          tool_calls: [
+            {
+              id: 'call_policy'
+            }
+          ]
+        },
+        debug_payload: {
+          llm_rounds: [
+            {
+              round_index: 1,
+              assistant: {
+                role: 'assistant',
+                content: 'need policy',
+                tool_calls: [
+                  {
+                    id: 'call_policy',
+                    name: 'read_policy'
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        started_at: '2026-04-17T09:00:04Z',
+        finished_at: null
+      }
+    ];
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const openLogButton = (
+      await screen.findAllByRole('button', { name: '查看对话日志' })
+    ).at(-1);
+    expect(openLogButton).toBeDefined();
+    fireEvent.click(openLogButton!);
+
+    const logPanel = await screen.findByRole('complementary', {
+      name: '对话日志'
+    });
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+
+    expect(
+      within(logPanel).getAllByTestId('debug-workflow-node-row')
+    ).toHaveLength(1);
+
+    const llmTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
+    expect(llmTraceNode).toHaveTextContent('工具 2');
+    fireEvent.click(llmTraceNode);
+
+    const toolsNode = within(logPanel).getByRole('button', {
+      name: /Tools.*2 次工具回调/
+    });
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+    expect(within(logPanel).queryByText('call_weather')).not.toBeInTheDocument();
+
+    fireEvent.click(toolsNode);
+    const toolIndex = within(logPanel).getByLabelText('工具回调索引 JSON');
+    expect(toolIndex).toHaveTextContent('call_weather');
+    expect(toolIndex).toHaveTextContent('call_policy');
+    expect(
+      within(logPanel).getByRole('button', {
+        name: /lookup_weather.*call_weather/
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(logPanel).getByRole('button', {
+        name: /read_policy.*call_policy/
+      })
+    ).toBeInTheDocument();
+  }, 20_000);
+
   test('does not offer run log details for imported context messages', async () => {
     runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
       items: [
