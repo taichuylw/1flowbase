@@ -60,68 +60,26 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
-function tokenAttributionItems(callback: LlmToolCallback) {
-  return [
-    callback.call_input_tokens === null
-      ? null
-      : `调用输入 ${callback.call_input_tokens} tokens`,
-    callback.call_cached_input_tokens === null
-      ? null
-      : `调用缓存命中 ${callback.call_cached_input_tokens} tokens`,
-    callback.call_output_tokens === null
-      ? null
-      : `调用输出 ${callback.call_output_tokens} tokens`,
-    callback.result_context_input_tokens === null
-      ? null
-      : `回调上下文输入 ${callback.result_context_input_tokens} tokens`,
-    callback.result_context_cached_input_tokens === null
-      ? null
-      : `回调上下文缓存命中 ${callback.result_context_cached_input_tokens} tokens`,
-    callback.result_input_tokens === null
-      ? null
-      : `结果输入 ${callback.result_input_tokens} tokens`
-  ].filter((item): item is string => item !== null);
+function usageTotalTokens(usage: Record<string, unknown> | null) {
+  return typeof usage?.total_tokens === 'number' ? usage.total_tokens : null;
 }
 
-function LlmToolInlineTokenSummary({
-  attributionItems
-}: {
-  attributionItems: string[];
-}) {
-  if (attributionItems.length === 0) {
+function toolTokenSummary(callback: LlmToolCallback) {
+  return (
+    usageTotalTokens(callback.call_usage) ??
+    usageTotalTokens(callback.result_context_usage)
+  );
+}
+
+function LlmToolInlineTokenSummary({ totalTokens }: { totalTokens: number | null }) {
+  if (totalTokens === null) {
     return null;
   }
 
   return (
     <span className="agent-flow-editor__debug-llm-tool-inline-tokens">
-      {attributionItems.map((item) => (
-        <Tag key={item}>{item}</Tag>
-      ))}
+      <Tag>{totalTokens} tokens</Tag>
     </span>
-  );
-}
-
-function LlmToolTokenAttribution({ callback }: { callback: LlmToolCallback }) {
-  const attributionItems = tokenAttributionItems(callback);
-
-  if (attributionItems.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="agent-flow-editor__debug-llm-tool-token-attribution">
-      <Typography.Text strong>工具 token 归因</Typography.Text>
-      <span className="agent-flow-editor__debug-llm-tool-token-list">
-        {attributionItems.map((item) => (
-          <Tag key={item}>{item}</Tag>
-        ))}
-      </span>
-      {callback.token_count_method === 'estimated' ? (
-        <Typography.Text type="secondary">
-          估算归因，不是额外账单。LLM 节点 usage 仍是唯一总账。
-        </Typography.Text>
-      ) : null}
-    </div>
   );
 }
 
@@ -140,7 +98,7 @@ function LlmToolCallbackItem({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onToggle: () => void;
 }) {
-  const attributionItems = tokenAttributionItems(callback);
+  const totalTokens = toolTokenSummary(callback);
 
   return (
     <article
@@ -155,7 +113,7 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
-          <LlmToolInlineTokenSummary attributionItems={attributionItems} />
+          <LlmToolInlineTokenSummary totalTokens={totalTokens} />
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
@@ -177,7 +135,6 @@ function LlmToolCallbackItem({
           {loadFailed ? <Tag color="error">加载失败</Tag> : null}
           {!loading && !loadFailed ? (
             <>
-              <LlmToolTokenAttribution callback={callback} />
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
@@ -250,23 +207,10 @@ export function LlmToolTraceTree({
           ...callback,
           ...loadedCallback,
           key: callback.key,
-          call_input_tokens:
-            loadedCallback.call_input_tokens ?? callback.call_input_tokens,
-          call_cached_input_tokens:
-            loadedCallback.call_cached_input_tokens ??
-            callback.call_cached_input_tokens,
-          call_output_tokens:
-            loadedCallback.call_output_tokens ?? callback.call_output_tokens,
-          result_input_tokens:
-            loadedCallback.result_input_tokens ?? callback.result_input_tokens,
-          result_context_input_tokens:
-            loadedCallback.result_context_input_tokens ??
-            callback.result_context_input_tokens,
-          result_context_cached_input_tokens:
-            loadedCallback.result_context_cached_input_tokens ??
-            callback.result_context_cached_input_tokens,
-          token_count_method:
-            loadedCallback.token_count_method ?? callback.token_count_method,
+          call_usage: loadedCallback.call_usage ?? callback.call_usage,
+          result_context_usage:
+            loadedCallback.result_context_usage ??
+            callback.result_context_usage,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
         };

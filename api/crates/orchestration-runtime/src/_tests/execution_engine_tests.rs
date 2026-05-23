@@ -1623,35 +1623,34 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                 pending.request_payload["tool_calls"][0]["id"],
                 json!("call_weather")
             );
-            assert!(
-                pending.request_payload["tool_calls"][0]["call_output_tokens"]
-                    .as_u64()
-                    .is_some_and(|tokens| tokens > 0)
-            );
             assert_eq!(
-                pending.request_payload["tool_calls"][0]["call_input_tokens"],
+                pending.request_payload["tool_calls"][0]["call_usage"]["input_tokens"],
                 json!(11)
             );
             assert_eq!(
-                pending.request_payload["tool_calls"][0]["call_cached_input_tokens"],
+                pending.request_payload["tool_calls"][0]["call_usage"]["input_cache_hit_tokens"],
                 json!(5)
             );
             assert_eq!(
-                pending.request_payload["tool_calls"][0]["result_input_tokens"],
-                Value::Null
+                pending.request_payload["tool_calls"][0]["call_usage"]["output_tokens"],
+                json!(3)
             );
             assert_eq!(
-                pending.request_payload["tool_calls"][0]["token_count_method"],
-                json!("estimated")
+                pending.request_payload["tool_calls"][0]["call_usage"]["total_tokens"],
+                json!(14)
             );
-            assert!(
-                pending.request_payload["tool_calls"][1]["call_output_tokens"]
-                    .as_u64()
-                    .is_some_and(|tokens| tokens > 0)
-            );
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("call_output_tokens")
+                .is_none());
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("result_input_tokens")
+                .is_none());
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("token_count_method")
+                .is_none());
             assert_eq!(
-                pending.request_payload["tool_calls"][1]["token_count_method"],
-                json!("estimated")
+                pending.request_payload["tool_calls"][1]["call_usage"]["total_tokens"],
+                json!(14)
             );
             assert!(pending.request_payload["tool_calls"][0]
                 .get("input_cache_hit_tokens")
@@ -1701,20 +1700,20 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
         llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
         json!("call_weather")
     );
-    assert!(
-        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
-            ["call_output_tokens"]
-            .as_u64()
-            .is_some_and(|tokens| tokens > 0)
-    );
     assert_eq!(
-        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_input_tokens"],
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_usage"]
+            ["input_tokens"],
         json!(11)
     );
     assert_eq!(
-        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
-            ["call_cached_input_tokens"],
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_usage"]
+            ["input_cache_hit_tokens"],
         json!(5)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_usage"]
+            ["output_tokens"],
+        json!(3)
     );
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["usage"]["input_tokens"],
@@ -1724,10 +1723,10 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
         llm_trace.debug_payload["llm_rounds"][0]["usage"]["input_cache_hit_tokens"],
         json!(5)
     );
-    assert_eq!(
+    assert!(
         llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
-            ["token_count_method"],
-        json!("estimated")
+            .get("call_output_tokens")
+            .is_none()
     );
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["finish_reason"],
@@ -1804,6 +1803,7 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert!(messages[1]["tool_calls"][0]
         .get("call_input_tokens")
         .is_none());
+    assert!(messages[1]["tool_calls"][0].get("call_usage").is_none());
     assert!(messages[1]["tool_calls"][0]
         .get("call_cached_input_tokens")
         .is_none());
@@ -1828,27 +1828,34 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
         json!("call_weather")
     );
     assert!(
-        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_input_tokens"]
-            .as_u64()
-            .is_some_and(|tokens| tokens > 0)
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("result_input_tokens")
+            .is_none()
     );
     assert_eq!(
-        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
-            ["result_context_input_tokens"],
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_context_usage"]
+            ["input_tokens"],
         json!(20)
     );
     assert_eq!(
-        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
-            ["result_context_cached_input_tokens"],
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_context_usage"]
+            ["input_cache_hit_tokens"],
         json!(8)
     );
     assert_eq!(
-        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["call_output_tokens"],
-        Value::Null
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_context_usage"]
+            ["total_tokens"],
+        json!(24)
     );
-    assert_eq!(
-        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["token_count_method"],
-        json!("estimated")
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("call_output_tokens")
+            .is_none()
+    );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("token_count_method")
+            .is_none()
     );
     assert!(
         resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]

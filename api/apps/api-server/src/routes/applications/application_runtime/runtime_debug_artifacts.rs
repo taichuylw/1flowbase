@@ -51,13 +51,8 @@ struct LlmToolCallbackArtifact {
     callback_payload: Option<Value>,
     request_round_index: Option<i64>,
     result_round_index: Option<i64>,
-    call_input_tokens: Option<u64>,
-    call_cached_input_tokens: Option<u64>,
-    call_output_tokens: Option<u64>,
-    result_input_tokens: Option<u64>,
-    result_context_input_tokens: Option<u64>,
-    result_context_cached_input_tokens: Option<u64>,
-    token_count_method: Option<String>,
+    call_usage: Option<Value>,
+    result_context_usage: Option<Value>,
 }
 
 impl LlmToolCallbackArtifact {
@@ -80,13 +75,8 @@ impl LlmToolCallbackArtifact {
             "parsed_result": self.callback_payload.as_ref().map(parsed_tool_callback_payload),
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
-            "call_input_tokens": self.call_input_tokens,
-            "call_cached_input_tokens": self.call_cached_input_tokens,
-            "call_output_tokens": self.call_output_tokens,
-            "result_input_tokens": self.result_input_tokens,
-            "result_context_input_tokens": self.result_context_input_tokens,
-            "result_context_cached_input_tokens": self.result_context_cached_input_tokens,
-            "token_count_method": self.token_count_method.clone(),
+            "call_usage": self.call_usage,
+            "result_context_usage": self.result_context_usage,
         })
     }
 
@@ -99,13 +89,8 @@ impl LlmToolCallbackArtifact {
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
             "artifact_ref": artifact_id.to_string(),
-            "call_input_tokens": self.call_input_tokens,
-            "call_cached_input_tokens": self.call_cached_input_tokens,
-            "call_output_tokens": self.call_output_tokens,
-            "result_input_tokens": self.result_input_tokens,
-            "result_context_input_tokens": self.result_context_input_tokens,
-            "result_context_cached_input_tokens": self.result_context_cached_input_tokens,
-            "token_count_method": self.token_count_method.clone(),
+            "call_usage": self.call_usage,
+            "result_context_usage": self.result_context_usage,
         })
     }
 }
@@ -137,19 +122,8 @@ fn record_string_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Str
     })
 }
 
-fn record_u64_field(record: &Map<String, Value>, keys: &[&str]) -> Option<u64> {
-    keys.iter()
-        .find_map(|key| record.get(*key).and_then(Value::as_u64))
-}
-
-fn usage_input_tokens(record: Option<&Map<String, Value>>) -> Option<u64> {
-    record.and_then(|record| record_u64_field(record, &["input_tokens"]))
-}
-
-fn usage_cached_input_tokens(record: Option<&Map<String, Value>>) -> Option<u64> {
-    record.and_then(|record| {
-        record_u64_field(record, &["input_cache_hit_tokens", "cache_read_tokens"])
-    })
+fn record_value_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Value> {
+    keys.iter().find_map(|key| record.get(*key).cloned())
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -374,12 +348,12 @@ fn collect_llm_tool_callbacks(
             continue;
         };
         let current_round_index = round_index(round, fallback_round_index);
-        let current_usage = round.get("usage").and_then(Value::as_object);
+        let current_usage = round.get("usage").cloned();
         let next_usage = rounds
             .get(fallback_round_index + 1)
             .and_then(Value::as_object)
             .and_then(|round| round.get("usage"))
-            .and_then(Value::as_object);
+            .cloned();
 
         for (tool_call_index, tool_call) in read_round_tool_calls(round).into_iter().enumerate() {
             let Some(tool_call_object) = tool_call.as_object() else {
@@ -396,24 +370,9 @@ fn collect_llm_tool_callbacks(
                     callback_payload: raw_payloads.get(&id).cloned(),
                     id,
                     name,
-                    call_input_tokens: record_u64_field(tool_call_object, &["call_input_tokens"])
-                        .or_else(|| usage_input_tokens(current_usage)),
-                    call_cached_input_tokens: record_u64_field(
-                        tool_call_object,
-                        &["call_cached_input_tokens"],
-                    )
-                    .or_else(|| usage_cached_input_tokens(current_usage)),
-                    call_output_tokens: record_u64_field(tool_call_object, &["call_output_tokens"]),
-                    result_input_tokens: record_u64_field(
-                        tool_call_object,
-                        &["result_input_tokens"],
-                    ),
-                    result_context_input_tokens: None,
-                    result_context_cached_input_tokens: None,
-                    token_count_method: record_string_field(
-                        tool_call_object,
-                        &["token_count_method"],
-                    ),
+                    call_usage: record_value_field(tool_call_object, &["call_usage"])
+                        .or_else(|| current_usage.clone()),
+                    result_context_usage: None,
                     request_payload: tool_call,
                     request_round_index: Some(current_round_index),
                     result_round_index: None,
@@ -441,33 +400,12 @@ fn collect_llm_tool_callbacks(
                         .or_else(|| Some(tool_result.clone())),
                     id,
                     name,
-                    call_input_tokens: record_u64_field(tool_result_object, &["call_input_tokens"]),
-                    call_cached_input_tokens: record_u64_field(
+                    call_usage: record_value_field(tool_result_object, &["call_usage"]),
+                    result_context_usage: record_value_field(
                         tool_result_object,
-                        &["call_cached_input_tokens"],
-                    ),
-                    call_output_tokens: record_u64_field(
-                        tool_result_object,
-                        &["call_output_tokens"],
-                    ),
-                    result_input_tokens: record_u64_field(
-                        tool_result_object,
-                        &["result_input_tokens"],
-                    ),
-                    result_context_input_tokens: record_u64_field(
-                        tool_result_object,
-                        &["result_context_input_tokens"],
+                        &["result_context_usage"],
                     )
-                    .or_else(|| usage_input_tokens(next_usage)),
-                    result_context_cached_input_tokens: record_u64_field(
-                        tool_result_object,
-                        &["result_context_cached_input_tokens"],
-                    )
-                    .or_else(|| usage_cached_input_tokens(next_usage)),
-                    token_count_method: record_string_field(
-                        tool_result_object,
-                        &["token_count_method"],
-                    ),
+                    .or_else(|| next_usage.clone()),
                     request_payload: json!({}),
                     request_round_index: None,
                     result_round_index: Some(current_round_index),
@@ -510,26 +448,11 @@ fn upsert_llm_tool_callback(
     if next.result_round_index.is_some() {
         current.result_round_index = next.result_round_index;
     }
-    if next.call_input_tokens.is_some() {
-        current.call_input_tokens = next.call_input_tokens;
+    if next.call_usage.is_some() {
+        current.call_usage = next.call_usage;
     }
-    if next.call_cached_input_tokens.is_some() {
-        current.call_cached_input_tokens = next.call_cached_input_tokens;
-    }
-    if next.call_output_tokens.is_some() {
-        current.call_output_tokens = next.call_output_tokens;
-    }
-    if next.result_input_tokens.is_some() {
-        current.result_input_tokens = next.result_input_tokens;
-    }
-    if next.result_context_input_tokens.is_some() {
-        current.result_context_input_tokens = next.result_context_input_tokens;
-    }
-    if next.result_context_cached_input_tokens.is_some() {
-        current.result_context_cached_input_tokens = next.result_context_cached_input_tokens;
-    }
-    if next.token_count_method.is_some() {
-        current.token_count_method = next.token_count_method;
+    if next.result_context_usage.is_some() {
+        current.result_context_usage = next.result_context_usage;
     }
 }
 

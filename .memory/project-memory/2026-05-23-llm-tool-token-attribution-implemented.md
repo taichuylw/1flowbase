@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: LLM tool token attribution implemented
-summary: 用户确认并实现 #420：LLM usage 作为唯一总账；tool 行展示生成工具调用那轮 LLM 的 input/cache hit/output，以及工具结果回填后下一轮 LLM 的 context input/cache hit 和 tool result input。input/cache 字段是 round 级归因，不做 per-tool 精确拆账。
+summary: 用户确认并实现 #420：LLM usage 作为唯一总账；tool 调试 payload 只透传 provider 返回的整轮 `call_usage` / `result_context_usage`，不再估算 tool_call / tool_result token。工具折叠行只像 LLM 节点一样显示本轮 `total_tokens` 摘要，详细输入、输出和缓存命中在 JSON 里查看。
 keywords:
   - llm-tool-token-attribution
   - tool-callback
@@ -34,7 +34,7 @@ scope:
 
 ## 谁在做什么
 
-用户确认 #420 的实现方向后，后端和前端分别完成 LLM 工具调用 token 归因。用户后续纠正：工具折叠行不能只有工具调用 output tokens，还必须能看到生成工具调用那轮 LLM 的 input/cache hit，以及 tool result 作为下一轮上下文后的 context input/cache hit。#423 负责后端 runtime payload，#421 负责前端追踪面板展示，#422 完成独立测试验收；#420 保持打开，进入用户最终验收。
+用户确认 #420 的实现方向后，后端和前端分别完成 LLM 工具调用 token 归因。用户后续纠正：工具折叠行不需要拆展示 input/output/cache/result，也不需要估算 tool_call / tool_result token；只展示本轮 provider usage 的 `total_tokens` 摘要，具体 round usage 放进工具调用 / 回调 JSON。#423 负责后端 runtime payload，#421 负责前端追踪面板展示，#422 完成独立测试验收；#420 保持打开，进入用户最终验收。
 
 ## 为什么这样做
 
@@ -42,15 +42,15 @@ LLM 节点的 provider usage 是唯一总账，但用户需要解释一次 agent
 
 ## 为什么要做
 
-对话日志里需要能看出：工具调用阶段消耗的是生成 tool call 那轮 LLM 的 input + output，工具结果回填阶段消耗的是下一轮 LLM 的 context input；cache hit 是对应 LLM round 的请求级 usage，可以放到对应 tool 行作为 round-level attribution，但不能把多条 tool 行相加当真实账单，也不能伪造单 tool 精确缓存拆分。
+对话日志里需要能看出：工具调用阶段对应生成 tool call 那轮 LLM 的完整 `call_usage`，工具结果回填阶段对应下一轮 LLM 的完整 `result_context_usage`。这些 usage 是 provider 返回的 round-level 数据，不拆 per-tool 精确缓存或 payload token，也不把多条 tool 行相加当真实账单。
 
 ## 截止日期
 
-基础实现已在 `2026-05-23 23` 完成提交、独立 QA 和子 issue 关闭；input/cache hit 补充修正在 `2026-05-24 00` 完成验证；#420 等用户最终验收。
+基础实现已在 `2026-05-23 23` 完成提交、独立 QA 和子 issue 关闭；usage 透传与摘要口径修正在 `2026-05-24 00` 完成验证；#420 等用户最终验收。
 
 ## 决策背后动机
 
-用户希望统计口径足够简单、能解释真实消耗、同时不误导账单：tool token 是 LLM 总账里的组成部分，不和 LLM usage 重复求和。工具行可以帮助用户观察每个 tool 对上下文和输出的影响，但 LLM 节点 usage 仍是唯一总账；估算字段必须用 `token_count_method: estimated` 明示。
+用户希望统计口径足够简单、能解释真实消耗、同时不误导账单：tool token 是 LLM 总账里的组成部分，不和 LLM usage 重复求和。工具行只做本轮 `total_tokens` 摘要；详细 input、output、cache hit 使用后端透传的 provider usage JSON，不再估算。
 
 ## 验证证据
 

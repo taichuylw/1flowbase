@@ -14,13 +14,8 @@ export interface LlmToolCallback {
   parsedResult: Record<string, unknown> | null;
   requestRoundIndex: number | null;
   resultRoundIndex: number | null;
-  call_input_tokens: number | null;
-  call_cached_input_tokens: number | null;
-  call_output_tokens: number | null;
-  result_input_tokens: number | null;
-  result_context_input_tokens: number | null;
-  result_context_cached_input_tokens: number | null;
-  token_count_method: 'estimated' | null;
+  call_usage: Record<string, unknown> | null;
+  result_context_usage: Record<string, unknown> | null;
   detailArtifactRef?: string | null;
 }
 
@@ -136,14 +131,6 @@ function nullableRoundIndex(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function nullableTokenCount(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function tokenCountMethod(value: unknown): 'estimated' | null {
-  return value === 'estimated' ? value : null;
-}
-
 function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
   if (
     !isRecord(debugPayload) ||
@@ -169,21 +156,10 @@ function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
         parsedResult: null,
         requestRoundIndex: nullableRoundIndex(toolCallback.request_round_index),
         resultRoundIndex: nullableRoundIndex(toolCallback.result_round_index),
-        call_input_tokens: nullableTokenCount(toolCallback.call_input_tokens),
-        call_cached_input_tokens: nullableTokenCount(
-          toolCallback.call_cached_input_tokens
-        ),
-        call_output_tokens: nullableTokenCount(toolCallback.call_output_tokens),
-        result_input_tokens: nullableTokenCount(
-          toolCallback.result_input_tokens
-        ),
-        result_context_input_tokens: nullableTokenCount(
-          toolCallback.result_context_input_tokens
-        ),
-        result_context_cached_input_tokens: nullableTokenCount(
-          toolCallback.result_context_cached_input_tokens
-        ),
-        token_count_method: tokenCountMethod(toolCallback.token_count_method),
+        call_usage: optionalRecordField(toolCallback, ['call_usage']),
+        result_context_usage: optionalRecordField(toolCallback, [
+          'result_context_usage'
+        ]),
         detailArtifactRef: firstStringField(toolCallback, [
           'artifact_ref',
           'detail_artifact_ref'
@@ -226,19 +202,10 @@ export function readLlmToolCallbackDetail(
     ]),
     requestRoundIndex: nullableRoundIndex(loadedPayload.request_round_index),
     resultRoundIndex: nullableRoundIndex(loadedPayload.result_round_index),
-    call_input_tokens: nullableTokenCount(loadedPayload.call_input_tokens),
-    call_cached_input_tokens: nullableTokenCount(
-      loadedPayload.call_cached_input_tokens
-    ),
-    call_output_tokens: nullableTokenCount(loadedPayload.call_output_tokens),
-    result_input_tokens: nullableTokenCount(loadedPayload.result_input_tokens),
-    result_context_input_tokens: nullableTokenCount(
-      loadedPayload.result_context_input_tokens
-    ),
-    result_context_cached_input_tokens: nullableTokenCount(
-      loadedPayload.result_context_cached_input_tokens
-    ),
-    token_count_method: tokenCountMethod(loadedPayload.token_count_method),
+    call_usage: optionalRecordField(loadedPayload, ['call_usage']),
+    result_context_usage: optionalRecordField(loadedPayload, [
+      'result_context_usage'
+    ]),
     detailArtifactRef:
       firstStringField(loadedPayload, [
         'artifact_ref',
@@ -481,23 +448,9 @@ function mergeLlmToolCallbacks(callbacks: LlmToolCallback[]) {
         callback.resultRoundIndex ?? currentCallback.resultRoundIndex,
       detailArtifactRef:
         callback.detailArtifactRef ?? currentCallback.detailArtifactRef,
-      call_input_tokens:
-        callback.call_input_tokens ?? currentCallback.call_input_tokens,
-      call_cached_input_tokens:
-        callback.call_cached_input_tokens ??
-        currentCallback.call_cached_input_tokens,
-      call_output_tokens:
-        callback.call_output_tokens ?? currentCallback.call_output_tokens,
-      result_input_tokens:
-        callback.result_input_tokens ?? currentCallback.result_input_tokens,
-      result_context_input_tokens:
-        callback.result_context_input_tokens ??
-        currentCallback.result_context_input_tokens,
-      result_context_cached_input_tokens:
-        callback.result_context_cached_input_tokens ??
-        currentCallback.result_context_cached_input_tokens,
-      token_count_method:
-        callback.token_count_method ?? currentCallback.token_count_method
+      call_usage: callback.call_usage ?? currentCallback.call_usage,
+      result_context_usage:
+        callback.result_context_usage ?? currentCallback.result_context_usage
     };
   }
 
@@ -561,28 +514,16 @@ function collectLlmToolCallbacksFromRounds(
         nextCallback.resultRoundIndex ?? currentCallback.resultRoundIndex,
       callbackStatus: callbackStatus(callbackPayload),
       executionStatus: executionStatusFromCallbackPayload(callbackPayload),
-      call_input_tokens:
-        nextCallback.call_input_tokens ?? currentCallback.call_input_tokens,
-      call_cached_input_tokens:
-        nextCallback.call_cached_input_tokens ??
-        currentCallback.call_cached_input_tokens,
-      call_output_tokens:
-        nextCallback.call_output_tokens ?? currentCallback.call_output_tokens,
-      result_input_tokens:
-        nextCallback.result_input_tokens ?? currentCallback.result_input_tokens,
-      result_context_input_tokens:
-        nextCallback.result_context_input_tokens ??
-        currentCallback.result_context_input_tokens,
-      result_context_cached_input_tokens:
-        nextCallback.result_context_cached_input_tokens ??
-        currentCallback.result_context_cached_input_tokens,
-      token_count_method:
-        nextCallback.token_count_method ?? currentCallback.token_count_method
+      call_usage: nextCallback.call_usage ?? currentCallback.call_usage,
+      result_context_usage:
+        nextCallback.result_context_usage ??
+        currentCallback.result_context_usage
     };
   };
 
   rounds.forEach((round, fallbackRoundIndex) => {
     const currentRoundIndex = roundIndex(round, fallbackRoundIndex);
+    const currentUsage = optionalRecordField(round, ['usage']);
 
     readRoundToolCalls(round).forEach((toolCall, toolCallIndex) => {
       const id = toolCallId(toolCall, currentRoundIndex, toolCallIndex);
@@ -594,19 +535,8 @@ function collectLlmToolCallbacksFromRounds(
         callbackPayload: null,
         requestRoundIndex: currentRoundIndex,
         resultRoundIndex: null,
-        call_input_tokens: nullableTokenCount(toolCall.call_input_tokens),
-        call_cached_input_tokens: nullableTokenCount(
-          toolCall.call_cached_input_tokens
-        ),
-        call_output_tokens: nullableTokenCount(toolCall.call_output_tokens),
-        result_input_tokens: nullableTokenCount(toolCall.result_input_tokens),
-        result_context_input_tokens: nullableTokenCount(
-          toolCall.result_context_input_tokens
-        ),
-        result_context_cached_input_tokens: nullableTokenCount(
-          toolCall.result_context_cached_input_tokens
-        ),
-        token_count_method: tokenCountMethod(toolCall.token_count_method)
+        call_usage: optionalRecordField(toolCall, ['call_usage']) ?? currentUsage,
+        result_context_usage: null
       });
     });
 
@@ -620,19 +550,10 @@ function collectLlmToolCallbacksFromRounds(
         callbackPayload: toolResult,
         requestRoundIndex: null,
         resultRoundIndex: currentRoundIndex,
-        call_input_tokens: nullableTokenCount(toolResult.call_input_tokens),
-        call_cached_input_tokens: nullableTokenCount(
-          toolResult.call_cached_input_tokens
-        ),
-        call_output_tokens: nullableTokenCount(toolResult.call_output_tokens),
-        result_input_tokens: nullableTokenCount(toolResult.result_input_tokens),
-        result_context_input_tokens: nullableTokenCount(
-          toolResult.result_context_input_tokens
-        ),
-        result_context_cached_input_tokens: nullableTokenCount(
-          toolResult.result_context_cached_input_tokens
-        ),
-        token_count_method: tokenCountMethod(toolResult.token_count_method)
+        call_usage: optionalRecordField(toolResult, ['call_usage']),
+        result_context_usage: optionalRecordField(toolResult, [
+          'result_context_usage'
+        ])
       });
     });
   });

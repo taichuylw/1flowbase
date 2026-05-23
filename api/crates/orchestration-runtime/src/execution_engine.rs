@@ -1257,19 +1257,6 @@ fn append_llm_tool_result_messages(
                 .map(tool_result_content_value)
                 .unwrap_or_else(|| Value::String(String::new())),
         );
-        let result_input_tokens = message
-            .get("content")
-            .map(estimated_tool_result_input_tokens)
-            .unwrap_or(0);
-        message.insert("call_output_tokens".to_string(), Value::Null);
-        message.insert(
-            "result_input_tokens".to_string(),
-            json!(result_input_tokens),
-        );
-        message.insert(
-            "token_count_method".to_string(),
-            Value::String("estimated".to_string()),
-        );
         let name = result
             .get("name")
             .and_then(Value::as_str)
@@ -1314,27 +1301,6 @@ fn tool_result_content_value(value: Value) -> Value {
         Value::String(_) => value,
         other => Value::String(other.to_string()),
     }
-}
-
-fn estimated_tool_result_input_tokens(content: &Value) -> u64 {
-    match content {
-        Value::String(text) if text.is_empty() => 0,
-        Value::String(text) => estimated_text_token_count(text),
-        value => estimated_json_token_count(value),
-    }
-}
-
-fn estimated_text_token_count(text: &str) -> u64 {
-    if text.is_empty() {
-        return 0;
-    }
-
-    (text.len() as u64).div_ceil(4).max(1)
-}
-
-fn estimated_json_token_count(value: &Value) -> u64 {
-    let text = serde_json::to_string(value).unwrap_or_default();
-    estimated_text_token_count(&text)
 }
 
 fn pending_llm_tool_callback_state<'a>(
@@ -1532,10 +1498,12 @@ fn provider_tool_calls_payload(tool_calls: &Value) -> Value {
                     return tool_call.clone();
                 };
                 let mut provider_tool_call = object.clone();
+                provider_tool_call.remove("call_usage");
                 provider_tool_call.remove("call_input_tokens");
                 provider_tool_call.remove("call_cached_input_tokens");
                 provider_tool_call.remove("call_output_tokens");
                 provider_tool_call.remove("result_input_tokens");
+                provider_tool_call.remove("result_context_usage");
                 provider_tool_call.remove("result_context_input_tokens");
                 provider_tool_call.remove("result_context_cached_input_tokens");
                 provider_tool_call.remove("token_count_method");
@@ -1810,7 +1778,7 @@ fn build_successful_llm_execution(
     if !result.tool_calls.is_empty() {
         executor_output.insert(
             "tool_calls".to_string(),
-            tool_calls_with_call_output_tokens(&result.tool_calls, metrics_payload.get("usage")),
+            tool_calls_with_call_usage(&result.tool_calls, metrics_payload.get("usage")),
         );
     }
     if !result.mcp_calls.is_empty() {
@@ -1998,38 +1966,25 @@ fn provider_result_assistant_debug_payload(
     if !result.tool_calls.is_empty() {
         payload.insert(
             "tool_calls".to_string(),
-            tool_calls_with_call_output_tokens(&result.tool_calls, usage),
+            tool_calls_with_call_usage(&result.tool_calls, usage),
         );
     }
 
     Value::Object(payload)
 }
 
-fn tool_calls_with_call_output_tokens(
-    tool_calls: &[ProviderToolCall],
-    usage: Option<&Value>,
-) -> Value {
+fn tool_calls_with_call_usage(tool_calls: &[ProviderToolCall], usage: Option<&Value>) -> Value {
     Value::Array(
         tool_calls
             .iter()
             .map(|tool_call| {
                 let value = serde_json::to_value(tool_call).unwrap_or(Value::Null);
-                let call_output_tokens = estimated_json_token_count(&value);
                 let Some(mut object) = value.as_object().cloned() else {
                     return value;
                 };
-                if let Some(input_tokens) = usage.and_then(usage_input_tokens) {
-                    object.insert("call_input_tokens".to_string(), json!(input_tokens));
+                if let Some(usage) = usage {
+                    object.insert("call_usage".to_string(), usage.clone());
                 }
-                if let Some(cached_tokens) = usage.and_then(usage_cached_input_tokens) {
-                    object.insert("call_cached_input_tokens".to_string(), json!(cached_tokens));
-                }
-                object.insert("call_output_tokens".to_string(), json!(call_output_tokens));
-                object.insert("result_input_tokens".to_string(), Value::Null);
-                object.insert(
-                    "token_count_method".to_string(),
-                    Value::String("estimated".to_string()),
-                );
                 Value::Object(object)
             })
             .collect(),
@@ -2037,12 +1992,6 @@ fn tool_calls_with_call_output_tokens(
 }
 
 fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: &Value) {
-    let result_context_input_tokens = usage_input_tokens(usage);
-    let result_context_cached_input_tokens = usage_cached_input_tokens(usage);
-    if result_context_input_tokens.is_none() && result_context_cached_input_tokens.is_none() {
-        return;
-    }
-
     let Some(tool_results) = rounds
         .last_mut()
         .and_then(Value::as_object_mut)
@@ -2056,30 +2005,8 @@ fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: 
         let Some(tool_result) = tool_result.as_object_mut() else {
             continue;
         };
-        if let Some(input_tokens) = result_context_input_tokens {
-            tool_result.insert(
-                "result_context_input_tokens".to_string(),
-                json!(input_tokens),
-            );
-        }
-        if let Some(cached_tokens) = result_context_cached_input_tokens {
-            tool_result.insert(
-                "result_context_cached_input_tokens".to_string(),
-                json!(cached_tokens),
-            );
-        }
+        tool_result.insert("result_context_usage".to_string(), usage.clone());
     }
-}
-
-fn usage_input_tokens(usage: &Value) -> Option<u64> {
-    usage.get("input_tokens").and_then(Value::as_u64)
-}
-
-fn usage_cached_input_tokens(usage: &Value) -> Option<u64> {
-    usage
-        .get("input_cache_hit_tokens")
-        .or_else(|| usage.get("cache_read_tokens"))
-        .and_then(Value::as_u64)
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {
