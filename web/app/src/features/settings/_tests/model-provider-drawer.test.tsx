@@ -97,7 +97,7 @@ describe('ModelProviderInstanceDrawer', () => {
       await screen.findByRole('dialog');
       expect(screen.getByText('API 密钥授权配置')).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: '添加模型' })
+        screen.getByRole('button', { name: '添加' })
       ).toBeInTheDocument();
       expect(screen.queryByText('校验模型')).not.toBeInTheDocument();
       expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
@@ -122,7 +122,7 @@ describe('ModelProviderInstanceDrawer', () => {
       fireEvent.change(screen.getByLabelText('API Key'), {
         target: { value: 'super-secret' }
       });
-      fireEvent.change(screen.getByLabelText('凭据名称'), {
+      fireEvent.change(screen.getByLabelText('名称'), {
         target: { value: 'OpenAI Production' }
       });
 
@@ -144,12 +144,12 @@ describe('ModelProviderInstanceDrawer', () => {
       fireEvent.click(await screen.findByText('gpt-4o-mini'));
       expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
+      fireEvent.click(screen.getByRole('button', { name: '添加' }));
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
       });
 
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
+      fireEvent.click(screen.getByRole('button', { name: '添加' }));
 
       fireEvent.change(screen.getByLabelText('模型 ID 2'), {
         target: { value: 'manual-model-id' }
@@ -244,7 +244,7 @@ describe('ModelProviderInstanceDrawer', () => {
 
       expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
       expect(
-        screen.getByRole('switch', { name: '加入主实例' })
+        screen.getByRole('switch', { name: '注入主实例' })
       ).not.toBeChecked();
 
       fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
@@ -292,10 +292,10 @@ describe('ModelProviderInstanceDrawer', () => {
       fireEvent.change(screen.getByLabelText('API Key'), {
         target: { value: 'super-secret' }
       });
-      fireEvent.change(screen.getByLabelText('凭据名称'), {
+      fireEvent.change(screen.getByLabelText('名称'), {
         target: { value: 'OpenAI Draft' }
       });
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
+      fireEvent.click(screen.getByRole('button', { name: '添加' }));
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
       });
