@@ -21,7 +21,6 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   PlusOutlined,
-  SettingOutlined,
   EyeOutlined,
   EyeInvisibleOutlined,
   ImportOutlined
@@ -624,25 +623,18 @@ function ModelProviderInstanceDrawerContent({
       >
         {catalogEntry ? (
           <>
-            <div className="model-provider-drawer__header-card">
-              <div className="model-provider-drawer__header-title">
-                <ApiOutlined style={{ fontSize: 20, color: 'var(--ant-color-primary)' }} />
-                <Typography.Title level={4} style={{ margin: 0 }}>
-                  {catalogEntry.display_name}
-                </Typography.Title>
-              </div>
-              <div className="model-provider-drawer__header-tags">
-                <Tag color="blue">{catalogEntry.provider_code}</Tag>
-                <Tag color="cyan">{catalogEntry.protocol}</Tag>
-                <Tag color="purple">发现模式: {catalogEntry.model_discovery_mode}</Tag>
-                <Tag color="gold">预置模型: {catalogEntry.predefined_models.length}</Tag>
-              </div>
-            </div>
-
             <div className="model-provider-drawer__card">
-              <div className="model-provider-drawer__card-title">
-                <SettingOutlined />
-                <span>基础设置</span>
+              <div className="model-provider-drawer__card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ApiOutlined style={{ color: 'var(--ant-color-primary)' }} />
+                  <span>{catalogEntry.display_name}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', fontWeight: 'normal', fontSize: '12px' }}>
+                  <Tag color="blue" style={{ margin: 0 }}>{catalogEntry.provider_code}</Tag>
+                  <Tag color="cyan" style={{ margin: 0 }}>{catalogEntry.protocol}</Tag>
+                  <Tag color="purple" style={{ margin: 0 }}>发现模式: {catalogEntry.model_discovery_mode}</Tag>
+                  <Tag color="gold" style={{ margin: 0 }}>预置模型: {catalogEntry.predefined_models.length}</Tag>
+                </div>
               </div>
               <div className="model-provider-drawer__card-body">
                 <Flex gap={16} align="flex-start">
@@ -671,9 +663,23 @@ function ModelProviderInstanceDrawerContent({
             </div>
 
             <div className="model-provider-drawer__card">
-              <div className="model-provider-drawer__card-title">
-                <CheckCircleOutlined />
-                <span>连接配置</span>
+              <div className="model-provider-drawer__card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircleOutlined />
+                  <span>连接配置</span>
+                </div>
+                <div>
+                  <Button
+                    size="small"
+                    loading={previewingModels}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handlePreviewModels().catch(() => undefined);
+                    }}
+                  >
+                    检测
+                  </Button>
+                </div>
               </div>
               <div className="model-provider-drawer__card-body">
                 {primaryConfigFields.map(renderConfigField)}
@@ -691,17 +697,6 @@ function ModelProviderInstanceDrawerContent({
                     />
                   </div>
                 ) : null}
-
-                <div className="model-provider-drawer__test-btn-wrapper">
-                  <Button
-                    loading={previewingModels}
-                    onClick={() => {
-                      void handlePreviewModels().catch(() => undefined);
-                    }}
-                  >
-                    检测
-                  </Button>
-                </div>
               </div>
             </div>
 

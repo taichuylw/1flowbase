@@ -903,30 +903,6 @@
 
 /* Model Provider Drawer Optimization Styles */
 
-.model-provider-drawer__header-card {
-  background: linear-gradient(135deg, rgba(240, 245, 255, 0.6) 0%, rgba(255, 255, 255, 0.8) 100%);
-  border: 1px solid rgba(24, 144, 255, 0.15);
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.03);
-}
-
-.model-provider-drawer__header-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.model-provider-drawer__header-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .model-provider-drawer__config-section {
   display: flex;
   flex-direction: column;
@@ -957,12 +933,6 @@
 
 .model-provider-drawer__card-body {
   padding: 16px;
-}
-
-.model-provider-drawer__test-btn-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
 }
 
 .model-provider-drawer__discovered-section {
