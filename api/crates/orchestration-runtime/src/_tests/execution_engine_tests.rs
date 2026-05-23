@@ -1586,8 +1586,8 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
 
 #[tokio::test]
 async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
-    let (invoker, _captured_inputs) =
-        sequential_tool_invoker(vec![tool_call_response(vec![ProviderToolCall {
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![tool_call_response(vec![
+        ProviderToolCall {
             id: "call_weather".to_string(),
             name: "lookup_weather".to_string(),
             arguments: json!({ "city": "Shanghai" }),
@@ -1596,7 +1596,14 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                     "thought_signature": "real-gemini-tool-signature"
                 }
             }),
-        }])]);
+        },
+        ProviderToolCall {
+            id: "call_unit".to_string(),
+            name: "lookup_unit".to_string(),
+            arguments: json!({ "scale": "celsius" }),
+            provider_metadata: json!({}),
+        },
+    ])]);
 
     let outcome = start_flow_debug_run(
         &llm_answer_plan(),
@@ -1614,6 +1621,31 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                 pending.request_payload["tool_calls"][0]["id"],
                 json!("call_weather")
             );
+            assert!(
+                pending.request_payload["tool_calls"][0]["call_output_tokens"]
+                    .as_u64()
+                    .is_some_and(|tokens| tokens > 0)
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["result_input_tokens"],
+                Value::Null
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["token_count_method"],
+                json!("estimated")
+            );
+            assert!(
+                pending.request_payload["tool_calls"][1]["call_output_tokens"]
+                    .as_u64()
+                    .is_some_and(|tokens| tokens > 0)
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][1]["token_count_method"],
+                json!("estimated")
+            );
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("input_cache_hit_tokens")
+                .is_none());
             assert_eq!(
                 pending.request_payload["tool_calls"][0]["provider_metadata"]["gemini"]
                     ["thought_signature"],
@@ -1658,6 +1690,17 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
         json!("call_weather")
+    );
+    assert!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
+            ["call_output_tokens"]
+            .as_u64()
+            .is_some_and(|tokens| tokens > 0)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
+            ["token_count_method"],
+        json!("estimated")
     );
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["finish_reason"],
@@ -1747,6 +1790,24 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["tool_call_id"],
         json!("call_weather")
+    );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_input_tokens"]
+            .as_u64()
+            .is_some_and(|tokens| tokens > 0)
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["call_output_tokens"],
+        Value::Null
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["token_count_method"],
+        json!("estimated")
+    );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("input_cache_hit_tokens")
+            .is_none()
     );
     assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][1]["assistant"]["content"],

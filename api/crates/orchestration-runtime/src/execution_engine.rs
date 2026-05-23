@@ -7,7 +7,7 @@ use plugin_framework::{
     provider_contract::{
         ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderMessage,
         ProviderMessageRole, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent,
-        ProviderUsage,
+        ProviderToolCall, ProviderUsage,
     },
 };
 use serde_json::{json, Map, Value};
@@ -964,24 +964,54 @@ fn build_provider_invocation_input(
     }
 }
 
+fn prompt_messages_from_provider_messages(messages: &[ProviderMessage]) -> Vec<Value> {
+    messages
+        .iter()
+        .map(|message| {
+            let mut payload = Map::new();
+            payload.insert(
+                "role".to_string(),
+                serde_json::to_value(&message.role).unwrap_or(Value::Null),
+            );
+            payload.insert(
+                "content".to_string(),
+                Value::String(message.content.clone()),
+            );
+            if let Some(name) = &message.name {
+                payload.insert("name".to_string(), Value::String(name.clone()));
+            }
+            if let Some(tool_call_id) = &message.tool_call_id {
+                payload.insert(
+                    "tool_call_id".to_string(),
+                    Value::String(tool_call_id.clone()),
+                );
+            }
+            if let Some(tool_calls) = &message.tool_calls {
+                payload.insert("tool_calls".to_string(), tool_calls.clone());
+            }
+            if let Some(content_blocks) = &message.content_blocks {
+                payload.insert("content_blocks".to_string(), content_blocks.clone());
+            }
+
+            Value::Object(payload)
+        })
+        .collect()
+}
+
 fn build_llm_debug_invocation_messages(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
     invocation_input: &ProviderInvocationInput,
-) -> Vec<ProviderMessage> {
-    if invocation_input.previous_response_id.is_some() {
-        let (_, messages) = provider_messages_from_prompt_messages(binding_prompt_messages(
-            node,
-            rendered_templates,
-            resolved_inputs,
-            variable_pool,
-        ));
-        return messages;
+) -> Vec<Value> {
+    if invocation_input.previous_response_id.is_some()
+        || pending_llm_tool_callback_state(variable_pool, &node.node_id).is_some()
+    {
+        return binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool);
     }
 
-    invocation_input.messages.clone()
+    prompt_messages_from_provider_messages(&invocation_input.messages)
 }
 
 fn has_pending_tool_calls(output_payload: &Value) -> bool {
@@ -1215,6 +1245,19 @@ fn append_llm_tool_result_messages(
                 .map(tool_result_content_value)
                 .unwrap_or_else(|| Value::String(String::new())),
         );
+        let result_input_tokens = message
+            .get("content")
+            .map(estimated_tool_result_input_tokens)
+            .unwrap_or(0);
+        message.insert("call_output_tokens".to_string(), Value::Null);
+        message.insert(
+            "result_input_tokens".to_string(),
+            json!(result_input_tokens),
+        );
+        message.insert(
+            "token_count_method".to_string(),
+            Value::String("estimated".to_string()),
+        );
         let name = result
             .get("name")
             .and_then(Value::as_str)
@@ -1259,6 +1302,27 @@ fn tool_result_content_value(value: Value) -> Value {
         Value::String(_) => value,
         other => Value::String(other.to_string()),
     }
+}
+
+fn estimated_tool_result_input_tokens(content: &Value) -> u64 {
+    match content {
+        Value::String(text) if text.is_empty() => 0,
+        Value::String(text) => estimated_text_token_count(text),
+        value => estimated_json_token_count(value),
+    }
+}
+
+fn estimated_text_token_count(text: &str) -> u64 {
+    if text.is_empty() {
+        return 0;
+    }
+
+    (text.len() as u64).div_ceil(4).max(1)
+}
+
+fn estimated_json_token_count(value: &Value) -> u64 {
+    let text = serde_json::to_string(value).unwrap_or_default();
+    estimated_text_token_count(&text)
 }
 
 fn pending_llm_tool_callback_state<'a>(
@@ -1432,7 +1496,7 @@ fn provider_messages_from_prompt_messages(
                     .get("tool_call_id")
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned),
-                tool_calls: message.get("tool_calls").cloned(),
+                tool_calls: message.get("tool_calls").map(provider_tool_calls_payload),
                 content_blocks: message.get("content_blocks").cloned(),
             });
         }
@@ -1441,6 +1505,28 @@ fn provider_messages_from_prompt_messages(
     let system = (!system_parts.is_empty()).then(|| system_parts.join("\n\n"));
 
     (system, messages)
+}
+
+fn provider_tool_calls_payload(tool_calls: &Value) -> Value {
+    let Some(tool_calls) = tool_calls.as_array() else {
+        return tool_calls.clone();
+    };
+
+    Value::Array(
+        tool_calls
+            .iter()
+            .map(|tool_call| {
+                let Some(object) = tool_call.as_object() else {
+                    return tool_call.clone();
+                };
+                let mut provider_tool_call = object.clone();
+                provider_tool_call.remove("call_output_tokens");
+                provider_tool_call.remove("result_input_tokens");
+                provider_tool_call.remove("token_count_method");
+                Value::Object(provider_tool_call)
+            })
+            .collect(),
+    )
 }
 
 fn provider_message_role(role: &str) -> ProviderMessageRole {
@@ -1655,7 +1741,7 @@ fn build_failed_llm_execution(
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
     include_output_payload: bool,
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
 ) -> Result<LlmNodeExecution> {
     let raw = RawNodeExecutionResult {
         executor_output: Map::new(),
@@ -1686,7 +1772,7 @@ fn build_successful_llm_execution(
     final_content: Option<String>,
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
     let answer_text = strip_llm_think_tags(&raw_text);
@@ -1708,7 +1794,7 @@ fn build_successful_llm_execution(
     if !result.tool_calls.is_empty() {
         executor_output.insert(
             "tool_calls".to_string(),
-            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+            tool_calls_with_call_output_tokens(&result.tool_calls),
         );
     }
     if !result.mcp_calls.is_empty() {
@@ -1791,7 +1877,7 @@ fn build_llm_provider_route_payload(runtime: &CompiledLlmRuntime) -> Value {
 fn build_llm_debug_facts(
     runtime: &CompiledLlmRuntime,
     result: Option<&ProviderInvocationResult>,
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
 ) -> Map<String, Value> {
     let mut debug = Map::new();
     let assistant_content = result
@@ -1820,26 +1906,26 @@ fn build_llm_debug_facts(
 }
 
 fn build_llm_round_timeline(
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
     result: Option<&ProviderInvocationResult>,
 ) -> Vec<Value> {
     let mut rounds = Vec::new();
 
     for message in invocation_messages {
-        match message.role {
-            ProviderMessageRole::Assistant => {
+        match message.get("role").and_then(Value::as_str) {
+            Some("assistant") => {
                 rounds.push(json!({
                     "round_index": rounds.len(),
-                    "assistant": provider_message_debug_payload(message),
+                    "assistant": message.clone(),
                     "tool_results": [],
                 }));
             }
-            ProviderMessageRole::Tool => {
+            Some("tool") => {
                 if let Some(round) = rounds.last_mut().and_then(Value::as_object_mut) {
                     if let Some(tool_results) =
                         round.get_mut("tool_results").and_then(Value::as_array_mut)
                     {
-                        tool_results.push(provider_message_debug_payload(message));
+                        tool_results.push(message.clone());
                     }
                 }
             }
@@ -1866,35 +1952,6 @@ fn build_llm_round_timeline(
     rounds
 }
 
-fn provider_message_debug_payload(message: &ProviderMessage) -> Value {
-    let mut payload = Map::new();
-    payload.insert(
-        "role".to_string(),
-        serde_json::to_value(&message.role).unwrap_or(Value::Null),
-    );
-    payload.insert(
-        "content".to_string(),
-        Value::String(message.content.clone()),
-    );
-    if let Some(name) = &message.name {
-        payload.insert("name".to_string(), Value::String(name.clone()));
-    }
-    if let Some(tool_call_id) = &message.tool_call_id {
-        payload.insert(
-            "tool_call_id".to_string(),
-            Value::String(tool_call_id.clone()),
-        );
-    }
-    if let Some(tool_calls) = &message.tool_calls {
-        payload.insert("tool_calls".to_string(), tool_calls.clone());
-    }
-    if let Some(content_blocks) = &message.content_blocks {
-        payload.insert("content_blocks".to_string(), content_blocks.clone());
-    }
-
-    Value::Object(payload)
-}
-
 fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) -> Value {
     let mut payload = Map::new();
     payload.insert("role".to_string(), Value::String("assistant".to_string()));
@@ -1905,11 +1962,33 @@ fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) ->
     if !result.tool_calls.is_empty() {
         payload.insert(
             "tool_calls".to_string(),
-            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+            tool_calls_with_call_output_tokens(&result.tool_calls),
         );
     }
 
     Value::Object(payload)
+}
+
+fn tool_calls_with_call_output_tokens(tool_calls: &[ProviderToolCall]) -> Value {
+    Value::Array(
+        tool_calls
+            .iter()
+            .map(|tool_call| {
+                let value = serde_json::to_value(tool_call).unwrap_or(Value::Null);
+                let call_output_tokens = estimated_json_token_count(&value);
+                let Some(mut object) = value.as_object().cloned() else {
+                    return value;
+                };
+                object.insert("call_output_tokens".to_string(), json!(call_output_tokens));
+                object.insert("result_input_tokens".to_string(), Value::Null);
+                object.insert(
+                    "token_count_method".to_string(),
+                    Value::String("estimated".to_string()),
+                );
+                Value::Object(object)
+            })
+            .collect(),
+    )
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {
