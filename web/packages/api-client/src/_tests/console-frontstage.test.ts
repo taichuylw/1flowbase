@@ -34,13 +34,25 @@ describe('console-frontstage client', () => {
     await expect(
       createFrontstageGroup(
         'workspace-1',
-        { title: '分组 1', parent_id: null, rank: '001000' },
+        {
+          title: '分组 1',
+          icon: 'FolderOutlined',
+          tooltip: '分组描述',
+          parent_id: null,
+          rank: '001000'
+        },
         'csrf-123'
       )
     ).resolves.toMatchObject({
       path: '/api/console/frontstage/workspace-1/pages/groups',
       method: 'POST',
-      body: { title: '分组 1', parent_id: null, rank: '001000' },
+      body: {
+        title: '分组 1',
+        icon: 'FolderOutlined',
+        tooltip: '分组描述',
+        parent_id: null,
+        rank: '001000'
+      },
       csrfToken: 'csrf-123'
     });
   });
@@ -49,13 +61,25 @@ describe('console-frontstage client', () => {
     await expect(
       createFrontstagePage(
         'workspace-1',
-        { title: '页面 新建 1', parent_id: 'group-1', rank: '002000' },
+        {
+          title: '页面 新建 1',
+          icon: 'FileTextOutlined',
+          tooltip: '页面描述',
+          parent_id: 'group-1',
+          rank: '002000'
+        },
         'csrf-123'
       )
     ).resolves.toMatchObject({
       path: '/api/console/frontstage/workspace-1/pages',
       method: 'POST',
-      body: { title: '页面 新建 1', parent_id: 'group-1', rank: '002000' },
+      body: {
+        title: '页面 新建 1',
+        icon: 'FileTextOutlined',
+        tooltip: '页面描述',
+        parent_id: 'group-1',
+        rank: '002000'
+      },
       csrfToken: 'csrf-123'
     });
   });

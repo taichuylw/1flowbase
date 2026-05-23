@@ -36,6 +36,7 @@ pub enum FrontstagePageTreeNodeKind {
 pub struct FrontstagePageTreeNodeResponse {
     pub id: String,
     pub title: Option<String>,
+    pub icon: Option<String>,
     pub tooltip: Option<String>,
     pub is_hidden: bool,
     pub kind: FrontstagePageTreeNodeKind,
@@ -48,6 +49,7 @@ pub struct FrontstagePageTreeNodeResponse {
 pub struct FrontstagePageResponse {
     pub id: String,
     title: Option<String>,
+    pub icon: Option<String>,
     pub tooltip: Option<String>,
     pub is_hidden: bool,
     pub kind: FrontstagePageTreeNodeKind,
@@ -85,6 +87,8 @@ pub struct FrontstageBlockCodeResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateFrontstageGroupBody {
     pub title: Option<String>,
+    pub icon: Option<String>,
+    pub tooltip: Option<String>,
     pub parent_id: Option<String>,
     pub rank: Option<String>,
 }
@@ -92,6 +96,8 @@ pub struct CreateFrontstageGroupBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateFrontstagePageBody {
     pub title: Option<String>,
+    pub icon: Option<String>,
+    pub tooltip: Option<String>,
     pub parent_id: Option<String>,
     pub rank: Option<String>,
 }
@@ -100,6 +106,8 @@ pub struct CreateFrontstagePageBody {
 pub struct UpdateFrontstagePageMetadataBody {
     #[serde(default, deserialize_with = "deserialize_present_optional")]
     pub title: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_optional")]
+    pub icon: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_present_optional")]
     pub tooltip: Option<Option<String>>,
     pub is_hidden: Option<bool>,
@@ -222,6 +230,8 @@ pub async fn create_frontstage_group(
             actor_user_id: context.user.id,
             workspace_id,
             title: body.title,
+            icon: body.icon,
+            tooltip: body.tooltip,
             parent_id,
             rank: body.rank,
         })
@@ -261,6 +271,8 @@ pub async fn create_frontstage_page(
             actor_user_id: context.user.id,
             workspace_id,
             title: body.title,
+            icon: body.icon,
+            tooltip: body.tooltip,
             parent_id,
             rank: body.rank,
         })
@@ -340,6 +352,7 @@ pub async fn update_frontstage_page_title(
             workspace_id,
             page_id,
             title: body.title,
+            icon: body.icon,
             tooltip: body.tooltip,
             is_hidden: body.is_hidden,
         })
@@ -563,6 +576,7 @@ fn to_page_response(page: domain::FrontstagePageRecord) -> FrontstagePageRespons
     FrontstagePageResponse {
         id: page.id.to_string(),
         title: page.title,
+        icon: page.icon,
         tooltip: page.tooltip,
         is_hidden: page.is_hidden,
         kind: to_kind_response(page.kind),
@@ -602,6 +616,7 @@ fn to_tree_node_response(node: domain::FrontstagePageTreeNode) -> FrontstagePage
     FrontstagePageTreeNodeResponse {
         id: node.page.id.to_string(),
         title: node.page.title,
+        icon: node.page.icon,
         tooltip: node.page.tooltip,
         is_hidden: node.page.is_hidden,
         kind: to_kind_response(node.page.kind),

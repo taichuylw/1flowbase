@@ -433,6 +433,7 @@ async fn patch_page_metadata_persists_tooltip_and_hidden_state() {
         &cookie,
         &csrf,
         json!({
+            "icon": "FileTextOutlined",
             "tooltip": "展示在页面树",
             "is_hidden": true
         }),
@@ -441,6 +442,7 @@ async fn patch_page_metadata_persists_tooltip_and_hidden_state() {
 
     assert_eq!(patch_status, StatusCode::OK);
     assert_eq!(patch_payload["data"]["title"], json!("Named"));
+    assert_eq!(patch_payload["data"]["icon"], json!("FileTextOutlined"));
     assert_eq!(patch_payload["data"]["tooltip"], json!("展示在页面树"));
     assert_eq!(patch_payload["data"]["is_hidden"], json!(true));
 
@@ -459,6 +461,7 @@ async fn patch_page_metadata_persists_tooltip_and_hidden_state() {
     let payload: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(payload["data"][0]["title"], json!("Named"));
+    assert_eq!(payload["data"][0]["icon"], json!("FileTextOutlined"));
     assert_eq!(payload["data"][0]["tooltip"], json!("展示在页面树"));
     assert_eq!(payload["data"][0]["is_hidden"], json!(true));
 }

@@ -1,6 +1,7 @@
 export type FrontStageTreeNode = {
   id: string;
   title: string | null;
+  icon?: string | null;
   tooltip?: string | null;
   is_hidden?: boolean;
   kind: 'group' | 'page';

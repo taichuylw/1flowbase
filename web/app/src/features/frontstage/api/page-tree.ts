@@ -16,16 +16,21 @@ export type FrontstagePageNode = ConsoleFrontstagePageNode;
 
 export interface CreateFrontstageNodeInput {
   title: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
   parentId: string | null;
   rank: string;
 }
 
 export interface RenameFrontstageNodeInput {
   title: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
 }
 
 export interface UpdateFrontstageNodeMetadataInput {
   title?: string | null;
+  icon?: string | null;
   tooltip?: string | null;
   isHidden?: boolean;
 }
@@ -63,6 +68,8 @@ export function createFrontstagePageGroupNode(
     workspaceId,
     {
       title: input.title,
+      icon: input.icon,
+      tooltip: input.tooltip,
       parent_id: input.parentId,
       rank: input.rank
     },
@@ -80,6 +87,8 @@ export function createFrontstagePageNode(
     workspaceId,
     {
       title: input.title,
+      icon: input.icon,
+      tooltip: input.tooltip,
       parent_id: input.parentId,
       rank: input.rank
     },
@@ -94,10 +103,22 @@ export function renameFrontstagePageNode(
   input: RenameFrontstageNodeInput,
   csrfToken: string
 ): Promise<FrontstagePageNode> {
+  const body: {
+    title?: string | null;
+    icon?: string | null;
+    tooltip?: string | null;
+  } = { title: input.title };
+  if (Object.prototype.hasOwnProperty.call(input, 'icon')) {
+    body.icon = input.icon;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'tooltip')) {
+    body.tooltip = input.tooltip;
+  }
+
   return updateFrontstagePageNodeTitle(
     workspaceId,
     pageNodeId,
-    { title: input.title },
+    body,
     csrfToken,
     getFrontstageApiBaseUrl()
   );
@@ -114,6 +135,7 @@ export function updateFrontstagePageNodeMetadata(
     pageNodeId,
     {
       title: input.title,
+      icon: input.icon,
       tooltip: input.tooltip,
       is_hidden: input.isHidden
     },

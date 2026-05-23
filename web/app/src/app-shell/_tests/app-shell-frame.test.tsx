@@ -50,7 +50,7 @@ describe('AppShellFrame', () => {
 
       expect(
         accountLabel.compareDocumentPosition(settingsTrigger) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+          Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     });
   });
@@ -68,7 +68,7 @@ describe('AppShellFrame', () => {
 
       expect(
         settingsTrigger.compareDocumentPosition(designButton) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+          Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
     });
@@ -82,7 +82,7 @@ describe('AppShellFrame', () => {
     );
   });
 
-  test('renders frontstage design mode button globally on non-frontstage pages and navigates', async () => {
+  test('renders frontstage design mode button globally on non-frontstage pages without navigating', async () => {
     const locationSpy = vi.fn();
     const originalLocation = window.location;
 
@@ -114,7 +114,8 @@ describe('AppShellFrame', () => {
 
     fireEvent.click(screen.getByLabelText('进入设计模式'));
 
-    expect(locationSpy).toHaveBeenCalledWith('/frontstage?design=true');
+    expect(useFrontstageDesignModeStore.getState().isDesignMode).toBe(true);
+    expect(locationSpy).not.toHaveBeenCalled();
 
     // restore
     Object.defineProperty(window, 'location', {

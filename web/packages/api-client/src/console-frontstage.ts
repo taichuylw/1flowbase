@@ -3,6 +3,7 @@ import { apiFetch } from './transport';
 export interface ConsoleFrontstagePageTreeNode {
   id: string;
   title: string | null;
+  icon?: string | null;
   tooltip?: string | null;
   is_hidden?: boolean;
   kind: 'group' | 'page';
@@ -12,6 +13,7 @@ export interface ConsoleFrontstagePageTreeNode {
 export interface ConsoleFrontstagePageNode {
   id: string;
   title: string | null;
+  icon?: string | null;
   tooltip?: string | null;
   is_hidden?: boolean;
   kind: 'group' | 'page';
@@ -44,12 +46,15 @@ export interface ConsoleFrontstageBlockCode {
 
 export interface CreateFrontstagePageNodeInput {
   title?: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
   parent_id?: string | null;
   rank?: string | null;
 }
 
 export interface UpdateFrontstagePageNodeTitleInput {
   title?: string | null;
+  icon?: string | null;
   tooltip?: string | null;
   is_hidden?: boolean;
 }
