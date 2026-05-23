@@ -93,6 +93,10 @@
   min-height: 0;
 }
 
+.section-page-layout--viewport .section-page-layout__rail {
+  position: static;
+}
+
 .section-page-layout--viewport .section-page-layout__content {
   height: 100%;
   min-height: 0;
