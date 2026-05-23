@@ -680,6 +680,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         pageTitle="前台"
         navItems={[]}
         activeKey=""
+        contentWidth="wide"
+        heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
             页面树加载中
@@ -714,6 +716,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         pageTitle="前台"
         navItems={[]}
         activeKey=""
+        contentWidth="wide"
+        heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
             页面树不可用
@@ -1092,6 +1096,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     <SectionPageLayout
       navItems={[]}
       activeKey=""
+      contentWidth="wide"
+      heightMode="viewport"
       sidebarContent={frontstageSidebar}
     >
       <>

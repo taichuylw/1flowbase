@@ -1364,7 +1364,7 @@ describe('ApplicationLogsPage', () => {
       /\.application-logs-page\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*box-sizing:\s*border-box;/s
     );
     expect(cssSource).toMatch(
-      /\.application-logs-page\s*\{[^}]*padding:\s*32px 0;/s
+      /\.application-logs-page\s*\{[^}]*padding:\s*0;/s
     );
     expect(cssSource).toMatch(
       /\.application-logs-page__stack\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100%;/s
@@ -1433,7 +1433,7 @@ describe('ApplicationLogsPage', () => {
     );
   });
 
-  test('renders logs inside the full section layout height chain', async () => {
+  test('renders logs inside the viewport section layout height chain', async () => {
     const pageSource = await readFile(
       path.resolve(
         process.cwd(),
@@ -1443,7 +1443,10 @@ describe('ApplicationLogsPage', () => {
     );
 
     expect(pageSource).toMatch(
-      /contentWidth=\{[\s\S]*requestedSectionKey === 'orchestration' \|\| requestedSectionKey === 'logs'[\s\S]*\? 'full'[\s\S]*: 'wide'[\s\S]*\}/
+      /contentWidth=\{[\s\S]*requestedSectionKey === 'orchestration'[\s\S]*\? 'full'[\s\S]*: 'wide'[\s\S]*\}/
+    );
+    expect(pageSource).toMatch(
+      /heightMode=\{requestedSectionKey === 'logs' \? 'viewport' : 'natural'\}/
     );
   });
 
