@@ -1,6 +1,6 @@
 ---
 name: qa-evaluation
-description: Use when evaluating 1flowbase task outcomes or current project quality and need an evidence-driven QA report instead of direct implementation
+description: Evidence-driven QA evaluation for 1flowbase task acceptance, regression, delivery, full-project audits, quality gate routing, frontend/backend contract, status, boundary and runtime checks, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
 ---
 
 # QA Evaluation

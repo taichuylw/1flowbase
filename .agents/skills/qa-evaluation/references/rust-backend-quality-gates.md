@@ -1,5 +1,14 @@
 # Rust Backend Quality Gates
 
+## Contents
+
+- [When To Use](#when-to-use)
+- [Review Checklist](#review-checklist)
+- [Evidence Chain](#evidence-chain)
+- [Test Coverage Expectations](#test-coverage-expectations)
+- [Completion Self-Check Evidence](#completion-self-check-evidence)
+- [Failure Signals](#failure-signals)
+
 ## When To Use
 
 评估范围命中 Rust 后端 API、service、domain、repository、migration、异步任务、状态入口或数据库一致性时，使用本文件补充 `backend-regression-steps.md`。
