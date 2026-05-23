@@ -724,6 +724,9 @@ function ModelProviderInstanceDrawerContent({
                         onChange={applyCachedModelSelection}
                       />
                     </div>
+                    <Button type="dashed" aria-label="添加" onClick={() => appendConfiguredModelRow()}>
+                      添加
+                    </Button>
                     {previewModels.length > 0 && (
                       <Button
                         type="primary"
@@ -751,9 +754,6 @@ function ModelProviderInstanceDrawerContent({
                         全部导入
                       </Button>
                     )}
-                    <Button type="dashed" aria-label="添加" onClick={() => appendConfiguredModelRow()}>
-                      添加
-                    </Button>
                   </Flex>
 
                   <div className="model-provider-drawer__model-table">
