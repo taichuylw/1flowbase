@@ -1,5 +1,10 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { ComponentProps } from 'react';
+import {
+  fireEvent,
+  render,
+  screen,
+  within
+} from '@testing-library/react';
+import { StrictMode, type ComponentProps } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
 import type {
@@ -137,33 +142,206 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
   )
 };
 
+const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
+  ...assistantMessage,
+  traceSummary: assistantMessage.traceSummary.map((item) =>
+    item.nodeId === 'node-llm'
+      ? {
+          ...item,
+          outputPayload: {
+            answer: 'weather is clear'
+          },
+          debugPayload: {
+            provider: 'openai',
+            llm_rounds: {
+              __runtime_debug_artifact: true,
+              artifact_ref: 'artifact-llm-rounds',
+              is_truncated: true,
+              original_size_bytes: 2000,
+              preview_size_bytes: 120,
+              content_type: 'application/json',
+              preview: '["call_weather"]',
+              tool_callbacks: [
+                {
+                  id: 'call_weather',
+                  name: 'lookup_weather',
+                  callback_status: 'returned',
+                  execution_status: 'unknown',
+                  request_round_index: 0,
+                  result_round_index: 0,
+                  artifact_ref: 'artifact-tool-call-weather'
+                }
+              ]
+            }
+          }
+        }
+      : item
+  )
+};
+
+const toolCallbackDetailPayload = {
+  id: 'call_weather',
+  name: 'lookup_weather',
+  callback_status: 'returned',
+  execution_status: 'unknown',
+  request_payload: {
+    id: 'call_weather',
+    name: 'lookup_weather',
+    arguments: {
+      city: 'Shanghai'
+    }
+  },
+  callback_payload: {
+    role: 'tool',
+    tool_call_id: 'call_weather',
+    content: '{"temperature":21}',
+    adapter_trace_id: 'trace-weather-1'
+  },
+  parsed_result: {
+    tool_call_id: 'call_weather',
+    content: '{"temperature":21}'
+  },
+  request_round_index: 0,
+  result_round_index: 0
+};
+
+const multiLlmRunAssistantMessage: AgentFlowDebugMessage = {
+  ...assistantMessage,
+  traceSummary: [
+    assistantMessage.traceSummary[0],
+    {
+      ...assistantMessage.traceSummary[1],
+      nodeRunId: 'node-run-llm-1',
+      status: 'succeeded',
+      durationMs: 5400,
+      outputPayload: {
+        usage: { total_tokens: 8035 },
+        tool_calls: [{ id: 'call_weather', name: 'lookup_weather' }]
+      },
+      debugPayload: {
+        llm_rounds: [
+          {
+            round_index: 0,
+            assistant: {
+              role: 'assistant',
+              content: 'need weather',
+              tool_calls: [
+                {
+                  id: 'call_weather',
+                  name: 'lookup_weather',
+                  arguments: { city: 'Shanghai' }
+                }
+              ]
+            },
+            finish_reason: 'tool_call'
+          }
+        ]
+      }
+    },
+    {
+      ...assistantMessage.traceSummary[1],
+      nodeRunId: 'node-run-llm-2',
+      status: 'succeeded',
+      durationMs: 6900,
+      outputPayload: {
+        usage: { total_tokens: 8259 },
+        tool_calls: [{ id: 'call_policy', name: 'read_policy' }]
+      },
+      debugPayload: {
+        llm_rounds: [
+          {
+            round_index: 0,
+            assistant: { role: 'assistant', content: 'continue' },
+            tool_results: [
+              {
+                role: 'tool',
+                tool_call_id: 'call_weather',
+                content: '{"temperature":21}'
+              }
+            ]
+          },
+          {
+            round_index: 1,
+            assistant: {
+              role: 'assistant',
+              content: 'need policy',
+              tool_calls: [
+                {
+                  id: 'call_policy',
+                  name: 'read_policy',
+                  arguments: { path: '.memory/user-memory.md' }
+                }
+              ]
+            },
+            finish_reason: 'tool_call'
+          }
+        ]
+      }
+    },
+    {
+      ...assistantMessage.traceSummary[1],
+      nodeRunId: 'node-run-llm-3',
+      status: 'succeeded',
+      durationMs: 8500,
+      outputPayload: {
+        answer: 'weather is clear'
+      },
+      debugPayload: {
+        llm_rounds: [
+          {
+            round_index: 0,
+            assistant: { role: 'assistant', content: 'finish' },
+            tool_results: [
+              {
+                role: 'tool',
+                tool_call_id: 'call_policy',
+                content: 'memory loaded'
+              }
+            ]
+          },
+          {
+            round_index: 1,
+            assistant: {
+              role: 'assistant',
+              content: 'weather is clear'
+            },
+            finish_reason: 'stop'
+          }
+        ]
+      }
+    }
+  ]
+};
+
 function renderConsole(
   props: Partial<ComponentProps<typeof AgentFlowDebugConsole>> = {}
 ) {
   return render(
-    <AgentFlowDebugConsole
-      messages={[
-        {
-          id: 'user-1',
-          role: 'user',
-          status: 'completed',
-          runId: 'run-1',
-          content: '你好?',
-          rawOutput: null,
-          traceSummary: []
-        },
-        assistantMessage
-      ]}
-      runContext={runContext}
-      status="completed"
-      stopping={false}
-      onChangeRunContextValue={vi.fn()}
-      onClearSession={vi.fn()}
-      onClose={vi.fn()}
-      onStopRun={vi.fn()}
-      onSubmitPrompt={vi.fn()}
-      {...props}
-    />
+    <StrictMode>
+      <AgentFlowDebugConsole
+        messages={[
+          {
+            id: 'user-1',
+            role: 'user',
+            status: 'completed',
+            runId: 'run-1',
+            content: '你好?',
+            rawOutput: null,
+            traceSummary: []
+          },
+          assistantMessage
+        ]}
+        runContext={runContext}
+        status="completed"
+        stopping={false}
+        onChangeRunContextValue={vi.fn()}
+        onClearSession={vi.fn()}
+        onClose={vi.fn()}
+        onStopRun={vi.fn()}
+        onSubmitPrompt={vi.fn()}
+        {...props}
+      />
+    </StrictMode>
   );
 }
 
@@ -234,9 +412,9 @@ describe('debug conversation log panel', () => {
     expect(
       within(panel).getAllByTestId('debug-workflow-node-row')
     ).toHaveLength(2);
-  });
+  }, 10_000);
 
-  test('shows LLM tool callback rounds inside trace node detail', () => {
+  test('groups LLM tool callbacks behind a virtual Tools child node', () => {
     renderConsole({
       messages: [
         {
@@ -260,20 +438,153 @@ describe('debug conversation log panel', () => {
     const nodeDetail = within(panel).getByRole('region', {
       name: 'LLM 节点详情'
     });
-    const rounds = within(nodeDetail).getByLabelText('LLM 回合');
+    expect(within(nodeDetail).queryByText('Round #1')).not.toBeInTheDocument();
+    expect(
+      within(nodeDetail).queryByText('Tool Callback #1')
+    ).not.toBeInTheDocument();
 
-    expect(within(rounds).getByText('Round #1')).toBeInTheDocument();
-    expect(within(rounds).getByText('Tool Callback #1')).toBeInTheDocument();
-    expect(within(rounds).getByText('Final Answer')).toBeInTheDocument();
-    expect(rounds).toHaveTextContent('lookup_weather');
-    expect(rounds).toHaveTextContent('call_weather');
-    expect(rounds).toHaveTextContent('temperature');
-    expect(rounds).toHaveTextContent('weather is clear');
+    const toolsNode = within(nodeDetail).getByRole('button', {
+      name: /Tools.*1 次工具回调/
+    });
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+    expect(within(nodeDetail).queryByText('temperature')).not.toBeInTheDocument();
+
+    fireEvent.click(toolsNode);
+
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(nodeDetail).getByLabelText('工具回调索引 JSON')
+    ).toHaveTextContent('call_weather');
+
+    const toolCallback = within(nodeDetail).getByRole('button', {
+      name: /lookup_weather.*call_weather/
+    });
+    expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
+    expect(within(nodeDetail).queryByText('temperature')).not.toBeInTheDocument();
+
+    fireEvent.click(toolCallback);
+
+    expect(toolCallback).toHaveAttribute('aria-expanded', 'true');
+    expect(within(nodeDetail).getByLabelText('工具调用 JSON')).toHaveTextContent(
+      'Shanghai'
+    );
+    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
+      'temperature'
+    );
+    expect(nodeDetail).toHaveTextContent('已回调');
+    expect(nodeDetail).toHaveTextContent('执行未知');
+    expect(nodeDetail).toHaveTextContent('weather is clear');
     within(nodeDetail)
       .getAllByLabelText('数据处理 JSON')
       .forEach((block) => {
         expect(block).not.toHaveTextContent('llm_rounds');
       });
+  }, 10_000);
+
+  test('collapses repeated LLM node runs into one trace row', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '天气?',
+          rawOutput: null,
+          traceSummary: []
+        },
+        multiLlmRunAssistantMessage
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+
+    expect(
+      within(panel).getAllByTestId('debug-workflow-node-row')
+    ).toHaveLength(2);
+
+    const llmTraceNode = within(panel).getByRole('button', { name: /LLM/ });
+    expect(llmTraceNode).toHaveTextContent('工具 2');
+
+    fireEvent.click(llmTraceNode);
+
+    const nodeDetail = within(panel).getByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    const toolsNode = within(nodeDetail).getByRole('button', {
+      name: /Tools.*2 次工具回调/
+    });
+    fireEvent.click(toolsNode);
+
+    expect(
+      within(nodeDetail).getByLabelText('工具回调索引 JSON')
+    ).toHaveTextContent('call_weather');
+    expect(
+      within(nodeDetail).getByLabelText('工具回调索引 JSON')
+    ).toHaveTextContent('call_policy');
+    expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
+      'weather is clear'
+    );
+  });
+
+  test('loads full LLM tool callbacks when the rounds payload is truncated', async () => {
+    const onLoadArtifact = vi.fn().mockResolvedValue(toolCallbackDetailPayload);
+
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '天气?',
+          rawOutput: null,
+          traceSummary: []
+        },
+        truncatedLlmRoundsAssistantMessage
+      ],
+      onLoadArtifact
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
+
+    const nodeDetail = within(panel).getByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    const toolsNode = within(nodeDetail).getByRole('button', {
+      name: /Tools.*1 次工具回调/
+    });
+    fireEvent.click(toolsNode);
+
+    expect(
+      within(nodeDetail).queryByRole('button', { name: '加载完整工具' })
+    ).not.toBeInTheDocument();
+    expect(onLoadArtifact).not.toHaveBeenCalled();
+    const toolCallback = within(nodeDetail).getByRole('button', {
+      name: /lookup_weather.*call_weather/
+    });
+    expect(
+      within(nodeDetail).getByLabelText('工具回调索引 JSON')
+    ).toHaveTextContent('call_weather');
+    expect(within(nodeDetail).queryByText('Shanghai')).not.toBeInTheDocument();
+
+    fireEvent.click(toolCallback);
+
+    expect(onLoadArtifact).toHaveBeenCalledWith('artifact-tool-call-weather');
+    expect(
+      await within(nodeDetail).findByLabelText('工具调用 JSON')
+    ).toHaveTextContent('Shanghai');
+    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
+      'trace-weather-1'
+    );
+    expect(within(nodeDetail).getByLabelText('解析结果 JSON')).toHaveTextContent(
+      'temperature'
+    );
   });
 
   test('delegates log opening when the canvas shell controls the log panel', () => {

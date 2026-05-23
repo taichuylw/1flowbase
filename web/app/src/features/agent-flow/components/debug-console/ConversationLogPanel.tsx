@@ -5,11 +5,12 @@ import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { NodeRunPayloadSections } from '../detail/last-run/NodeRunIOCard';
 import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
-import { LlmRoundTimeline } from './conversation/DebugWorkflowProcess';
+import { LlmToolTraceTree } from './conversation/LlmToolTraceTree';
 import {
-  getTraceItemKey,
+  groupTraceItemsForDisplay,
   nodeDisplayName
 } from './conversation/debug-workflow-trace-utils';
+import { stripLlmRoundsFromDebugPayload } from './conversation/llm-tool-callbacks';
 import './conversation-log-panel.css';
 
 function buildDetailInput(message: AgentFlowDebugMessage) {
@@ -52,20 +53,6 @@ function formatTimestamp(value: string | null | undefined) {
 
 function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
   return message.compatibilityModeLabel ?? message.compatibilityMode ?? '—';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function debugPayloadWithoutLlmRounds(debugPayload: unknown) {
-  if (!isRecord(debugPayload) || !Array.isArray(debugPayload.llm_rounds)) {
-    return debugPayload;
-  }
-
-  return Object.fromEntries(
-    Object.entries(debugPayload).filter(([key]) => key !== 'llm_rounds')
-  );
 }
 
 function ConversationLogDetail({
@@ -159,24 +146,26 @@ function ConversationTrace({
     );
   }
 
+  const traceGroups = groupTraceItemsForDisplay(message.traceSummary);
+
   return (
     <div className="agent-flow-editor__conversation-log-trace">
       <div
         aria-label="追踪节点"
         className="agent-flow-editor__conversation-log-node-list"
       >
-        {message.traceSummary.map((item) => {
-          const itemKey = getTraceItemKey(item);
-          const nodeExpanded = itemKey === expandedNodeKey;
+        {traceGroups.map((group) => {
+          const item = group.item;
+          const nodeExpanded = group.key === expandedNodeKey;
 
           return (
             <DebugWorkflowNodeItem
-              key={itemKey}
+              key={group.key}
               expanded={nodeExpanded}
               item={item}
               onToggle={() =>
                 setExpandedNodeKey((current) =>
-                  current === itemKey ? null : itemKey
+                  current === group.key ? null : group.key
                 )
               }
             >
@@ -185,12 +174,15 @@ function ConversationTrace({
                 className="agent-flow-editor__conversation-log-node-detail"
               >
                 <div className="agent-flow-editor__conversation-log-json-list">
-                  <LlmRoundTimeline
+                  <LlmToolTraceTree
                     debugPayload={item.debugPayload}
+                    debugPayloads={group.items.map(
+                      (traceItem) => traceItem.debugPayload
+                    )}
                     onLoadArtifact={onLoadArtifact}
                   />
                   <NodeRunPayloadSections
-                    debugPayload={debugPayloadWithoutLlmRounds(
+                    debugPayload={stripLlmRoundsFromDebugPayload(
                       item.debugPayload ?? {}
                     )}
                     inputPayload={item.inputPayload}
