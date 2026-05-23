@@ -5,8 +5,8 @@ import type {
 import { apiFetch, apiFetchVoid } from '../transport';
 
 export const APPLICATION_PUBLIC_RUNTIME_PATHS = {
-  nativeRuns: '/api/1flowbase/runs',
-  nativeFiles: '/api/1flowbase/files',
+  nativeRuns: '/api/v1/agent/runs',
+  nativeFiles: '/api/v1/agent/files',
   openAiChatCompletions: '/v1/chat/completions',
   anthropicMessages: '/v1/messages'
 } as const;

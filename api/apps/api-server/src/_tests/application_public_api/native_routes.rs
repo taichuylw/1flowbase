@@ -185,7 +185,7 @@ async fn post_native_run(app: &Router, token: &str, body: Value) -> axum::respon
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/1flowbase/runs")
+                .uri("/api/v1/agent/runs")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_string()))
@@ -327,7 +327,7 @@ async fn native_get_run_exposes_pending_llm_required_action() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/api/1flowbase/runs/{run_id}"))
+                .uri(format!("/api/v1/agent/runs/{run_id}"))
                 .header("authorization", format!("Bearer {token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -374,7 +374,7 @@ async fn native_resume_rejects_missing_llm_tool_result_without_consuming_task() 
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/1flowbase/runs/{run_id}/resume"))
+                .uri(format!("/api/v1/agent/runs/{run_id}/resume"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -444,7 +444,7 @@ async fn native_streaming_tool_resume_returns_current_turn_terminal_event() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/1flowbase/runs/{run_id}/resume"))
+                .uri(format!("/api/v1/agent/runs/{run_id}/resume"))
                 .header("authorization", format!("Bearer {token}"))
                 .header("accept", "text/event-stream")
                 .header("content-type", "application/json")
@@ -611,7 +611,7 @@ async fn native_run_route_forbids_reading_run_created_by_another_application_api
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/api/1flowbase/runs/{run_id}"))
+                .uri(format!("/api/v1/agent/runs/{run_id}"))
                 .header("authorization", format!("Bearer {second_token}"))
                 .body(Body::empty())
                 .unwrap(),

@@ -46,7 +46,7 @@ use crate::{
     response::ApiSuccess,
 };
 
-const PUBLIC_RUNS_PATH: &str = "/api/1flowbase/runs";
+const PUBLIC_RUNS_PATH: &str = "/api/v1/agent/runs";
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateApplicationApiKeyBody {

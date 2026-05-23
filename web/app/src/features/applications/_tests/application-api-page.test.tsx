@@ -98,7 +98,7 @@ const application: ApplicationDetail = {
       status: 'configured',
       credential_kind: 'application_api_key',
       invoke_routing_mode: 'api_key_bound_application',
-      invoke_path_template: '/api/1flowbase/runs',
+      invoke_path_template: '/api/v1/agent/runs',
       api_capability_status: 'enabled',
       credentials_status: 'active'
     },
@@ -201,7 +201,7 @@ describe('ApplicationApiPage', () => {
     expect(within(statusCard).queryByText('OpenAI')).not.toBeInTheDocument();
     expect(within(statusCard).queryByText('Anthropic')).not.toBeInTheDocument();
     expect(
-      within(statusCard).queryByText('/api/1flowbase/runs')
+      within(statusCard).queryByText('/api/v1/agent/runs')
     ).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'API 文档' })).toBeInTheDocument();
     expect(

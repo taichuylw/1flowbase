@@ -239,8 +239,8 @@ describe('application public API client', () => {
 
   test('keeps public runtime path examples application-id-free', () => {
     expect(Object.values(APPLICATION_PUBLIC_RUNTIME_PATHS)).toEqual([
-      '/api/1flowbase/runs',
-      '/api/1flowbase/files',
+      '/api/v1/agent/runs',
+      '/api/v1/agent/files',
       '/v1/chat/completions',
       '/v1/messages'
     ]);
