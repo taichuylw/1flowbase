@@ -491,13 +491,13 @@ export function HeroAnimation() {
             font-size: var(--hero-title-size);
             font-weight: 800;
             letter-spacing: -0.02em;
-            background: linear-gradient(135deg, #ffdf00 0%, #d4af37 45%, ${token.colorText} 85%);
+            background: linear-gradient(135deg, #a3f5d5 0%, #008f5f 55%, ${token.colorText} 95%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             margin: 0;
             line-height: 1.15;
-            filter: drop-shadow(0 0 6px rgba(255, 223, 0, 0.45)) drop-shadow(0 2px 3px rgba(212, 175, 55, 0.25));
+            filter: drop-shadow(0 0 6px rgba(163, 245, 213, 0.5)) drop-shadow(0 2px 3px rgba(0, 143, 95, 0.3));
           }
 
           .hero-slogan-line {

@@ -1,4 +1,6 @@
+import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { App, Button, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
@@ -12,6 +14,7 @@ import {
   mapRunDetailToTrace
 } from '../../../agent-flow/lib/debug-console/run-detail-mapper';
 import type { AgentFlowDebugSessionStatus } from '../../../agent-flow/hooks/runtime/useAgentFlowDebugSession';
+import { useClipboardCopy } from '../../../../shared/ui/clipboard/use-clipboard-copy';
 import {
   applicationConversationMessagesQueryKey,
   applicationRunDetailQueryKey,
@@ -109,6 +112,36 @@ const runConversationContext: AgentFlowRunContext = {
   remembered: false,
   fields: []
 };
+
+function RunIdSubtitle({ runId }: { runId: string }) {
+  const { message } = App.useApp();
+  const { copied, copy } = useClipboardCopy();
+
+  async function handleCopyRunId() {
+    try {
+      await copy(runId);
+      message.success('已复制 ID');
+    } catch {
+      message.error('复制失败');
+    }
+  }
+
+  return (
+    <span className="application-run-detail__run-id">
+      <span className="application-run-detail__run-id-value">{runId}</span>
+      <Tooltip title="复制 ID">
+        <Button
+          aria-label="复制运行 ID"
+          className="application-run-detail__run-id-copy"
+          icon={copied ? <CheckOutlined /> : <CopyOutlined />}
+          onClick={handleCopyRunId}
+          size="small"
+          type="text"
+        />
+      </Tooltip>
+    </span>
+  );
+}
 
 function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
   return (
@@ -330,7 +363,7 @@ function RunConversation({
         showComposer
         status={conversationSessionStatus(conversationPage)}
         stopping={false}
-        subtitle={runId}
+        subtitle={<RunIdSubtitle runId={runId} />}
         title="运行详情"
         onChangeRunContextValue={() => {}}
         onClearSession={() => {}}

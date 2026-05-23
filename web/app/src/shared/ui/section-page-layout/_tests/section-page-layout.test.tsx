@@ -256,7 +256,7 @@ describe('SectionPageLayout', () => {
     expect(viewportContentBlock).toContain(
       'padding-bottom: var(--section-page-viewport-bottom-gap, 3px);'
     );
-    expect(viewportRailBlock ?? '').not.toContain('top: 0;');
+    expect(viewportRailBlock).toContain('position: static;');
   });
 
   test('lets full section layouts return to natural height on mobile', () => {

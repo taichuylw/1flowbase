@@ -87,12 +87,24 @@ describe('frontstage page tree feature api', () => {
       await fetchFrontstagePageTree('workspace-1');
       await createFrontstagePageGroupNode(
         'workspace-1',
-        { title: '分组 1', parentId: null, rank: '001000' },
+        {
+          title: '分组 1',
+          icon: 'FolderOutlined',
+          tooltip: '分组描述',
+          parentId: null,
+          rank: '001000'
+        },
         'csrf-123'
       );
       await createFrontstagePageNode(
         'workspace-1',
-        { title: '页面 1', parentId: 'group-1', rank: '001000' },
+        {
+          title: '页面 1',
+          icon: 'FileTextOutlined',
+          tooltip: '页面描述',
+          parentId: 'group-1',
+          rank: '001000'
+        },
         'csrf-123'
       );
       await renameFrontstagePageNode(
@@ -118,13 +130,25 @@ describe('frontstage page tree feature api', () => {
       expect(listSpy).toHaveBeenCalledWith('workspace-1', expect.any(String));
       expect(createGroupSpy).toHaveBeenCalledWith(
         'workspace-1',
-        { title: '分组 1', parent_id: null, rank: '001000' },
+        {
+          title: '分组 1',
+          icon: 'FolderOutlined',
+          tooltip: '分组描述',
+          parent_id: null,
+          rank: '001000'
+        },
         'csrf-123',
         expect.any(String)
       );
       expect(createPageSpy).toHaveBeenCalledWith(
         'workspace-1',
-        { title: '页面 1', parent_id: 'group-1', rank: '001000' },
+        {
+          title: '页面 1',
+          icon: 'FileTextOutlined',
+          tooltip: '页面描述',
+          parent_id: 'group-1',
+          rank: '001000'
+        },
         'csrf-123',
         expect.any(String)
       );
@@ -184,6 +208,8 @@ describe('frontstage page content feature api', () => {
         page: {
           id: 'page-1',
           title: '页面 1',
+          icon: undefined,
+          tooltip: undefined,
           kind: 'page',
           parent_id: 'group-1',
           rank: '001000',

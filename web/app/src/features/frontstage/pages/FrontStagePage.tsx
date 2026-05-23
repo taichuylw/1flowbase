@@ -1,5 +1,18 @@
-import { Alert, Button, Divider, Drawer, Empty, Typography } from 'antd';
+import * as AntIcons from '@ant-design/icons';
+import {
+  Alert,
+  Button,
+  Divider,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Popover,
+  Typography
+} from 'antd';
 import type { FC } from 'react';
+import type { ElementType } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
@@ -43,8 +56,6 @@ import { createFrontstagePageCanvasRuntimeRunPlanState } from '../lib/page-canva
 import {
   findNodeById,
   getDeleteConfirmMessage,
-  getNextGroupTitleIndex,
-  getNextPageTitleIndex,
   getPageDisplayTitle,
   normalizePageTree,
   removeNodeFromTree,
@@ -90,6 +101,10 @@ type FrontStagePageProps = {
     nodeId: string,
     input: RenamePageTreeNodeInput
   ) => Promise<PageTreeMutationResult | void>;
+  onUpdatePageNodeMetadata?: (
+    nodeId: string,
+    input: UpdatePageTreeNodeMetadataInput
+  ) => Promise<PageTreeMutationResult | void>;
   onMovePageNode?: (
     nodeId: string,
     input: MovePageTreeNodeInput
@@ -99,12 +114,22 @@ type FrontStagePageProps = {
 
 type CreatePageTreeNodeInput = {
   title: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
   parentId: string | null;
   rank: string;
 };
 
 type RenamePageTreeNodeInput = {
   title: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
+};
+
+type UpdatePageTreeNodeMetadataInput = {
+  icon?: string | null;
+  tooltip?: string | null;
+  isHidden?: boolean;
 };
 
 type MovePageTreeNodeInput = {
@@ -118,6 +143,57 @@ type PageTreeMutationResult = {
 };
 
 type PageTreeOperationStatus = 'idle' | 'pending' | 'error';
+
+type PageTreeFormValues = {
+  title?: string;
+  icon?: string;
+  tooltip?: string;
+};
+
+type PageTreeFormDialog =
+  | {
+      kind: 'create';
+      nodeKind: 'group' | 'page';
+      parentId: string | null;
+      rank: string;
+      title: string;
+      initialTitle: string;
+      initialIcon: string;
+      initialTooltip: string;
+    }
+  | {
+      kind: 'rename';
+      nodeId: string;
+      title: string;
+      initialTitle: string;
+      initialIcon: string;
+      initialTooltip: string;
+    }
+  | {
+      kind: 'tooltip';
+      nodeId: string;
+      title: string;
+      initialTooltip: string;
+    };
+
+type AntIconComponent = ElementType<{ className?: string }>;
+
+const antIconComponents = AntIcons as Record<string, unknown>;
+const pageTreeIconEntries = Object.entries(antIconComponents)
+  .filter(
+    (entry): entry is [string, AntIconComponent] =>
+      /(?:Outlined|Filled|TwoTone)$/.test(entry[0]) &&
+      (typeof entry[1] === 'function' ||
+        (typeof entry[1] === 'object' && entry[1] !== null))
+  )
+  .sort(([left], [right]) => left.localeCompare(right));
+const pageTreeIconMap = Object.fromEntries(pageTreeIconEntries);
+const CloseIcon =
+  (pageTreeIconMap.CloseOutlined as AntIconComponent | undefined) ??
+  (() => null);
+const PlusIcon =
+  (pageTreeIconMap.PlusOutlined as AntIconComponent | undefined) ??
+  (() => null);
 
 function createCatalogBlockInput(
   entry: NormalizedFrontstageBlockCatalogEntry,
@@ -149,6 +225,102 @@ function createCatalogBlockInput(
       hint: entry.runtimeKind
     }
   };
+}
+
+function renderPageTreeIconPicker(
+  selectedIcon: string | undefined,
+  onChange: (icon: string | undefined) => void,
+  iconPickerOpen: boolean,
+  onIconPickerOpenChange: (open: boolean) => void
+) {
+  const SelectedIcon = selectedIcon
+    ? (pageTreeIconMap[selectedIcon] as AntIconComponent | undefined)
+    : undefined;
+  const DisplayIcon = SelectedIcon ?? PlusIcon;
+  const picker = (
+    <div className="frontstage-page-tree-form__icon-popover">
+      <div className="frontstage-page-tree-form__icon-grid">
+        {pageTreeIconEntries.map(([iconName, Icon]) => (
+          <button
+            key={iconName}
+            aria-label={iconName}
+            className={[
+              'frontstage-page-tree-form__icon-button',
+              selectedIcon === iconName
+                ? 'frontstage-page-tree-form__icon-button--selected'
+                : null
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            type="button"
+            onClick={() => {
+              onChange(iconName);
+              onIconPickerOpenChange(false);
+            }}
+          >
+            <Icon />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="frontstage-page-tree-form__icon-field">
+      <Popover
+        arrow={false}
+        content={picker}
+        open={iconPickerOpen}
+        placement="bottomLeft"
+        trigger="click"
+        onOpenChange={onIconPickerOpenChange}
+      >
+        <button
+          aria-label="选择图标"
+          className={[
+            'frontstage-page-tree-form__icon-select-button',
+            selectedIcon
+              ? 'frontstage-page-tree-form__icon-select-button--with-clear'
+              : null
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          type="button"
+        >
+          <DisplayIcon />
+        </button>
+      </Popover>
+      {selectedIcon ? (
+        <button
+          aria-label="清除图标"
+          className="frontstage-page-tree-form__icon-clear-button"
+          type="button"
+          onClick={() => onChange(undefined)}
+        >
+          <CloseIcon />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function PageTreeIconPickerField({
+  value,
+  onChange,
+  iconPickerOpen,
+  onIconPickerOpenChange
+}: {
+  value?: string;
+  onChange?: (icon: string | undefined) => void;
+  iconPickerOpen: boolean;
+  onIconPickerOpenChange: (open: boolean) => void;
+}) {
+  return renderPageTreeIconPicker(
+    value,
+    (icon) => onChange?.(icon),
+    iconPickerOpen,
+    onIconPickerOpenChange
+  );
 }
 
 function toDisplayErrorMessage(error: unknown): string {
@@ -215,6 +387,41 @@ function findSiblingContext(
   return null;
 }
 
+function isNodeDescendantOf(
+  nodes: FrontStageTreeNode[],
+  ancestorNodeId: string,
+  targetNodeId: string
+): boolean {
+  const ancestorNode = findNodeById(nodes, ancestorNodeId);
+  if (!ancestorNode?.children) {
+    return false;
+  }
+
+  return Boolean(findNodeById(ancestorNode.children, targetNodeId));
+}
+
+function updatePageTreeNode(
+  nodes: FrontStageTreeNode[],
+  targetNodeId: string,
+  patch: Pick<FrontStageTreeNode, 'title' | 'icon' | 'tooltip'>
+): FrontStageTreeNode[] {
+  return nodes.map((node) => {
+    if (node.id === targetNodeId) {
+      return {
+        ...node,
+        ...patch
+      };
+    }
+
+    return {
+      ...node,
+      children: node.children
+        ? updatePageTreeNode(node.children, targetNodeId, patch)
+        : node.children
+    };
+  });
+}
+
 function getNodeAppendRank(
   nodes: FrontStageTreeNode[],
   parentId: string | null
@@ -264,10 +471,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   onCreateGroupNode,
   onCreatePageNode,
   onRenamePageNode,
+  onUpdatePageNodeMetadata,
   onMovePageNode,
   onDeletePageNode
 }) => {
+  const [pageTreeForm] = Form.useForm<PageTreeFormValues>();
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const sessionStatus = useAuthStore((state) => state.sessionStatus);
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const isDesignMode = useFrontstageDesignModeStore(
@@ -278,6 +488,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   );
   const [operationStatus, setOperationStatus] =
     useState<PageTreeOperationStatus>('idle');
+  const [pageTreeFormDialog, setPageTreeFormDialog] =
+    useState<PageTreeFormDialog | null>(null);
+  const [isPageTreeIconPickerOpen, setIsPageTreeIconPickerOpen] =
+    useState(false);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isBlockCodeEditorOpen, setIsBlockCodeEditorOpen] = useState(false);
   const [isBlockConfigurationOpen, setIsBlockConfigurationOpen] =
@@ -405,6 +619,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       Boolean(me?.permissions.includes(DESIGN_MODE_PERMISSION))
     );
   }, [actor, me]);
+  const hasResolvedDesignModePermission = sessionStatus !== 'unknown';
   const selectedBlockIndex =
     blockCompositionState?.selectedBlockId === selectedBlockId
       ? blockCompositionState.document.blocks.findIndex(
@@ -531,10 +746,19 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   }, [canShowSelectedBlockActions]);
 
   useEffect(() => {
-    if (!canEnterDesignMode && isDesignMode) {
+    if (
+      hasResolvedDesignModePermission &&
+      !canEnterDesignMode &&
+      isDesignMode
+    ) {
       setDesignMode(false);
     }
-  }, [canEnterDesignMode, isDesignMode, setDesignMode]);
+  }, [
+    canEnterDesignMode,
+    hasResolvedDesignModePermission,
+    isDesignMode,
+    setDesignMode
+  ]);
 
   useEffect(() => {
     if (!canEnterDesignMode || !isDesignMode) {
@@ -550,6 +774,27 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     setJsBlockTrialContextSnapshot(defaultJsBlockTrialContextSnapshot);
     setJsBlockTrialLimits(DEFAULT_JS_BLOCK_TRIAL_LIMITS);
   }, [defaultJsBlockTrialContextSnapshot]);
+
+  useEffect(() => {
+    if (!pageTreeFormDialog) {
+      setIsPageTreeIconPickerOpen(false);
+      pageTreeForm.resetFields();
+      return;
+    }
+
+    if (pageTreeFormDialog.kind === 'tooltip') {
+      pageTreeForm.setFieldsValue({
+        tooltip: pageTreeFormDialog.initialTooltip
+      });
+      return;
+    }
+
+    pageTreeForm.setFieldsValue({
+      title: pageTreeFormDialog.initialTitle,
+      icon: pageTreeFormDialog.initialIcon,
+      tooltip: pageTreeFormDialog.initialTooltip
+    });
+  }, [pageTreeForm, pageTreeFormDialog]);
 
   const selectedPageDisplayTitle = getPageDisplayTitle(
     pageTree,
@@ -657,6 +902,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         pageTitle="前台"
         navItems={[]}
         activeKey=""
+        contentWidth="wide"
+        heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
             页面树加载中
@@ -691,6 +938,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         pageTitle="前台"
         navItems={[]}
         activeKey=""
+        contentWidth="wide"
+        heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
             页面树不可用
@@ -758,48 +1007,49 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     }
   };
 
-  const handleAddGroup = () => {
-    const input = {
-      title: `分组 ${getNextGroupTitleIndex(pageTree)}`,
-      parentId: null,
-      rank: getNodeAppendRank(pageTree, null)
-    };
-
-    void runPageTreeOperation(async () => {
-      await onCreateGroupNode?.(input);
+  const openCreateNodeDialog = (
+    nodeKind: 'group' | 'page',
+    parentId: string | null,
+    rank: string
+  ) => {
+    setPageTreeFormDialog({
+      kind: 'create',
+      nodeKind,
+      parentId,
+      rank,
+      initialTitle: '',
+      initialIcon: '',
+      initialTooltip: '',
+      title: nodeKind === 'page' ? '新增页面' : '新增分组'
     });
+  };
+
+  const createPageTreeNode = async (
+    nodeKind: 'group' | 'page',
+    input: CreatePageTreeNodeInput
+  ) => {
+    if (nodeKind === 'page') {
+      const createdNode = await onCreatePageNode?.(input);
+      if (createdNode?.kind === 'page') {
+        setSelectedPageId(createdNode.id);
+        onNavigatePage?.(createdNode.id);
+      }
+      return;
+    }
+
+    await onCreateGroupNode?.(input);
+  };
+
+  const handleAddGroup = () => {
+    openCreateNodeDialog('group', null, getNodeAppendRank(pageTree, null));
   };
 
   const handleAddPage = () => {
-    const input = {
-      title: `页面 新建 ${getNextPageTitleIndex(pageTree)}`,
-      parentId: null,
-      rank: getNodeAppendRank(pageTree, null)
-    };
-
-    void runPageTreeOperation(async () => {
-      const createdNode = await onCreatePageNode?.(input);
-      if (createdNode?.kind === 'page') {
-        setSelectedPageId(createdNode.id);
-        onNavigatePage?.(createdNode.id);
-      }
-    });
+    openCreateNodeDialog('page', null, getNodeAppendRank(pageTree, null));
   };
 
   const handleAddPageInGroup = (groupId: string) => {
-    const input = {
-      title: `页面 新建 ${getNextPageTitleIndex(pageTree)}`,
-      parentId: groupId,
-      rank: getNodeAppendRank(pageTree, groupId)
-    };
-
-    void runPageTreeOperation(async () => {
-      const createdNode = await onCreatePageNode?.(input);
-      if (createdNode?.kind === 'page') {
-        setSelectedPageId(createdNode.id);
-        onNavigatePage?.(createdNode.id);
-      }
-    });
+    openCreateNodeDialog('page', groupId, getNodeAppendRank(pageTree, groupId));
   };
 
   const handleAddNodeAtPosition = (
@@ -824,30 +1074,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       }
     }
 
-    const titleIndex =
-      kind === 'page'
-        ? getNextPageTitleIndex(pageTree)
-        : getNextGroupTitleIndex(pageTree);
-    const title =
-      kind === 'page' ? `页面 新建 ${titleIndex}` : `分组 ${titleIndex}`;
-
-    const input = {
-      title,
-      parentId,
-      rank
-    };
-
-    void runPageTreeOperation(async () => {
-      if (kind === 'page') {
-        const createdNode = await onCreatePageNode?.(input);
-        if (createdNode?.kind === 'page') {
-          setSelectedPageId(createdNode.id);
-          onNavigatePage?.(createdNode.id);
-        }
-      } else {
-        await onCreateGroupNode?.(input);
-      }
-    });
+    openCreateNodeDialog(kind, parentId, rank);
   };
 
   const handleDeleteNode = (nodeId: string) => {
@@ -856,35 +1083,117 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       return;
     }
 
-    const confirmed = window.confirm(getDeleteConfirmMessage(node));
-    if (!confirmed) {
-      return;
-    }
+    Modal.confirm({
+      title: '删除节点',
+      content: getDeleteConfirmMessage(node),
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        await runPageTreeOperation(async () => {
+          await onDeletePageNode?.(nodeId);
+          const next = removeNodeFromTree(pageTree, nodeId);
+          const nextResolution = resolveSelectedPageId({
+            pageId: selectedPageId ?? undefined,
+            pageTree: next
+          });
+          const nextSelectedPageId = nextResolution.selectedPageId;
 
-    void runPageTreeOperation(async () => {
-      await onDeletePageNode?.(nodeId);
-      const next = removeNodeFromTree(pageTree, nodeId);
-      const nextResolution = resolveSelectedPageId({
-        pageId: selectedPageId ?? undefined,
-        pageTree: next
-      });
-      const nextSelectedPageId = nextResolution.selectedPageId;
-
-      setSelectedPageId(nextSelectedPageId);
-      if (nextResolution.shouldNavigate) {
-        onNavigatePage?.(nextResolution.navigationTarget);
+          setSelectedPageId(nextSelectedPageId);
+          if (nextResolution.shouldNavigate) {
+            onNavigatePage?.(nextResolution.navigationTarget);
+          }
+        });
       }
     });
   };
 
-  const handleRenameNode = (nodeId: string, currentTitle: string | null) => {
-    const nextTitle = window.prompt('重命名节点', currentTitle ?? '');
-    if (nextTitle === null) {
+  const handleSubmitPageTreeForm = async () => {
+    if (!pageTreeFormDialog) {
       return;
     }
 
+    const values = await pageTreeForm.validateFields();
+    const dialog = pageTreeFormDialog;
+
+    if (dialog.kind === 'create') {
+      const title = values.title ?? '';
+      const input = {
+        title,
+        icon: values.icon ?? null,
+        tooltip: values.tooltip ?? null,
+        parentId: dialog.parentId,
+        rank: dialog.rank
+      };
+
+      await runPageTreeOperation(async () => {
+        await createPageTreeNode(dialog.nodeKind, input);
+      });
+
+      setPageTreeFormDialog(null);
+      return;
+    }
+
+    if (dialog.kind === 'rename') {
+      const title = values.title ?? '';
+      const icon = values.icon ?? null;
+      const tooltip = values.tooltip ?? null;
+
+      await runPageTreeOperation(async () => {
+        await onRenamePageNode?.(dialog.nodeId, {
+          title,
+          icon,
+          tooltip
+        });
+        setPageTree((currentTree) =>
+          updatePageTreeNode(currentTree, dialog.nodeId, {
+            title,
+            icon,
+            tooltip
+          })
+        );
+      });
+      setPageTreeFormDialog(null);
+      return;
+    }
+
+    await runPageTreeOperation(async () => {
+      await onUpdatePageNodeMetadata?.(dialog.nodeId, {
+        tooltip: values.tooltip ?? ''
+      });
+    });
+    setPageTreeFormDialog(null);
+  };
+
+  const handleRenameNode = (node: FrontStageTreeNode) => {
+    setPageTreeFormDialog({
+      kind: 'rename',
+      nodeId: node.id,
+      initialTitle: node.title ?? '',
+      initialIcon: node.icon ?? '',
+      initialTooltip: node.tooltip ?? '',
+      title: '编辑节点'
+    });
+  };
+
+  const handleEditNodeTooltip = (
+    nodeId: string,
+    currentTooltip: string | null
+  ) => {
+    setPageTreeFormDialog({
+      kind: 'tooltip',
+      nodeId,
+      initialTooltip: currentTooltip ?? '',
+      title: '编辑描述'
+    });
+  };
+
+  const handleUpdateNodeMetadata = (
+    nodeId: string,
+    input: UpdatePageTreeNodeMetadataInput
+  ) => {
     void runPageTreeOperation(async () => {
-      await onRenamePageNode?.(nodeId, { title: nextTitle });
+      await onUpdatePageNodeMetadata?.(nodeId, input);
     });
   };
 
@@ -903,6 +1212,39 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       await onMovePageNode?.(nodeId, {
         parentId: siblingContext.parentId,
         rank: rankForMoveTarget(targetIndex, direction)
+      });
+    });
+  };
+
+  const handleMoveNodeToPosition = (
+    nodeId: string,
+    targetNodeId: string,
+    position: 'before' | 'after'
+  ) => {
+    if (
+      nodeId === targetNodeId ||
+      isNodeDescendantOf(pageTree, nodeId, targetNodeId)
+    ) {
+      return;
+    }
+
+    const targetSiblingContext = findSiblingContext(pageTree, targetNodeId);
+    if (!targetSiblingContext) {
+      return;
+    }
+
+    const { parentId, siblings, index } = targetSiblingContext;
+    const rank =
+      position === 'before'
+        ? rankForMoveTarget(index, -1)
+        : index === siblings.length - 1
+          ? getNodeAppendRank(pageTree, parentId)
+          : rankForMoveTarget(index, 1);
+
+    void runPageTreeOperation(async () => {
+      await onMovePageNode?.(nodeId, {
+        parentId,
+        rank
       });
     });
   };
@@ -1030,9 +1372,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       onAddGroup={handleAddGroup}
       onAddPage={handleAddPage}
       onAddPageInGroup={handleAddPageInGroup}
-      onRenameNode={handleRenameNode}
-      onMoveNode={handleMoveNode}
       onAddNodeAtPosition={handleAddNodeAtPosition}
+      onRenameNode={handleRenameNode}
+      onUpdateNodeMetadata={handleUpdateNodeMetadata}
+      onEditNodeTooltip={handleEditNodeTooltip}
+      onMoveNode={handleMoveNode}
+      onMoveNodeToPosition={handleMoveNodeToPosition}
       onMovePageToGroup={handleMovePageToGroup}
       onDeleteNode={handleDeleteNode}
       onSelectPage={handleSelectPage}
@@ -1043,6 +1388,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     <SectionPageLayout
       navItems={[]}
       activeKey=""
+      contentWidth="wide"
+      heightMode="viewport"
       sidebarContent={frontstageSidebar}
     >
       <>
@@ -1152,6 +1499,57 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             )}
           </Drawer>
         </section>
+        <Modal
+          title={pageTreeFormDialog?.title}
+          open={Boolean(pageTreeFormDialog)}
+          okText="确定"
+          cancelText="取消"
+          confirmLoading={isOperationPending}
+          destroyOnHidden
+          forceRender
+          onCancel={() => setPageTreeFormDialog(null)}
+          onOk={() => pageTreeForm.submit()}
+        >
+          <Form<PageTreeFormValues>
+            form={pageTreeForm}
+            layout="vertical"
+            preserve={false}
+            onFinish={() => {
+              void handleSubmitPageTreeForm();
+            }}
+          >
+            {pageTreeFormDialog?.kind === 'tooltip' ? (
+              <Form.Item label="描述" name="tooltip">
+                <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
+              </Form.Item>
+            ) : (
+              <>
+                <Form.Item
+                  label="名称"
+                  name="title"
+                  rules={[
+                    {
+                      required: true,
+                      whitespace: true,
+                      message: '请输入名称'
+                    }
+                  ]}
+                >
+                  <Input autoFocus />
+                </Form.Item>
+                <Form.Item label="图标" name="icon">
+                  <PageTreeIconPickerField
+                    iconPickerOpen={isPageTreeIconPickerOpen}
+                    onIconPickerOpenChange={setIsPageTreeIconPickerOpen}
+                  />
+                </Form.Item>
+                <Form.Item label="描述" name="tooltip">
+                  <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
+                </Form.Item>
+              </>
+            )}
+          </Form>
+        </Modal>
         {canEnterDesignMode && isDesignMode ? (
           <AddBlockCatalogPickerDrawer
             open={isAddBlockPickerOpen}

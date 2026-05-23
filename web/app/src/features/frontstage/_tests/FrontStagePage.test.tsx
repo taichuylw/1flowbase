@@ -71,6 +71,9 @@ vi.mock('../api/block-code', () => blockCodeApi);
 type TestFrontStageTreeNode = {
   id: string;
   title: string | null;
+  icon?: string | null;
+  tooltip?: string | null;
+  is_hidden?: boolean;
   kind: 'group' | 'page';
   children?: TestFrontStageTreeNode[];
 };
@@ -114,6 +117,37 @@ function createBackendPage(pageId: string): TestFrontStageTreeNode {
     title: `页面 ${pageId}`,
     kind: 'page'
   };
+}
+
+function updateNodeMetadataInTree(
+  nodes: TestFrontStageTreeNode[],
+  nodeId: string,
+  input: { icon?: string | null; tooltip?: string | null; isHidden?: boolean }
+): TestFrontStageTreeNode[] {
+  return nodes.map((node) => {
+    const nextNode =
+      node.id === nodeId
+        ? {
+            ...node,
+            icon: Object.prototype.hasOwnProperty.call(input, 'icon')
+              ? input.icon
+              : node.icon,
+            tooltip: Object.prototype.hasOwnProperty.call(input, 'tooltip')
+              ? input.tooltip
+              : node.tooltip,
+            is_hidden: Object.prototype.hasOwnProperty.call(input, 'isHidden')
+              ? input.isHidden
+              : node.is_hidden
+          }
+        : node;
+
+    return {
+      ...nextNode,
+      children: nextNode.children
+        ? updateNodeMetadataInTree(nextNode.children, nodeId, input)
+        : nextNode.children
+    };
+  });
 }
 
 function createPageContent(
@@ -193,6 +227,8 @@ function FrontStagePageHarness({
         const groupNode = {
           id: createTestNodeId(),
           title: input.title,
+          icon: input.icon,
+          tooltip: input.tooltip,
           kind: 'group' as const,
           children: []
         };
@@ -203,6 +239,8 @@ function FrontStagePageHarness({
         const pageNode = {
           id: createTestNodeId(),
           title: input.title,
+          icon: input.icon,
+          tooltip: input.tooltip,
           kind: 'page' as const
         };
         setPageTree((currentTree) =>
@@ -214,7 +252,20 @@ function FrontStagePageHarness({
       }}
       onRenamePageNode={(nodeId, input) => {
         setPageTree((currentTree) =>
-          renameNodeInTree(currentTree, nodeId, input.title ?? '')
+          updateNodeMetadataInTree(
+            renameNodeInTree(currentTree, nodeId, input.title ?? ''),
+            nodeId,
+            {
+              icon: input.icon,
+              tooltip: input.tooltip
+            }
+          )
+        );
+        return Promise.resolve({ id: nodeId, kind: 'page' });
+      }}
+      onUpdatePageNodeMetadata={(nodeId, input) => {
+        setPageTree((currentTree) =>
+          updateNodeMetadataInTree(currentTree, nodeId, input)
         );
         return Promise.resolve({ id: nodeId, kind: 'page' });
       }}
@@ -283,13 +334,21 @@ async function clickAndFlush(element: HTMLElement) {
   });
 }
 
+async function clickLatestButtonAndFlush(label: string | RegExp) {
+  const buttons = await screen.findAllByRole('button', { name: label });
+  await clickAndFlush(buttons[buttons.length - 1]);
+}
+
 async function hoverAddMenuAndFlush() {
-  fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
+  await act(async () => {
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
+  });
 }
 
 async function clickAddMenuItemAndFlush(label: '新增分组' | '新增页面') {
   await hoverAddMenuAndFlush();
   await clickAndFlush(await screen.findByRole('menuitem', { name: label }));
+  await clickLatestButtonAndFlush('确定');
 }
 
 async function clickAddMenuItem(label: '新增分组' | '新增页面') {
@@ -438,11 +497,6 @@ function getSavedBlocks(input: SaveFrontstagePageContentInput) {
 }
 
 describe('FrontStagePage', () => {
-  let confirmSpy: {
-    mockRestore: () => void;
-    mockReturnValue: (value: boolean) => unknown;
-  };
-
   beforeEach(() => {
     resetAuthStore();
     resetFrontstageDesignModeStore();
@@ -456,11 +510,6 @@ describe('FrontStagePage', () => {
       codeRef: 'frontstage-js-block-1-code',
       code: 'saved template'
     });
-    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-  });
-
-  afterEach(() => {
-    confirmSpy.mockRestore();
   });
 
   test('shows page context and design mode is unavailable without permission', () => {
@@ -513,7 +562,13 @@ describe('FrontStagePage', () => {
     expect(
       await screen.findByRole('menuitem', { name: '新增页面' })
     ).toBeInTheDocument();
-    fireEvent.mouseLeave(screen.getByRole('button', { name: '添加菜单' }));
+    const addMenuActions = screen
+      .getByRole('button', { name: '添加菜单' })
+      .closest('.frontstage-page-tree-sidebar__actions');
+    expect(addMenuActions).not.toBeNull();
+    await act(async () => {
+      fireEvent.mouseLeave(addMenuActions as HTMLElement);
+    });
     expect(
       screen.queryByRole('menuitem', { name: '新增分组' })
     ).not.toBeInTheDocument();
@@ -845,6 +900,7 @@ describe('FrontStagePage', () => {
     await clickAndFlush(
       within(pageListItem).getByRole('button', { name: /删\s*除/ })
     );
+    await clickLatestButtonAndFlush('删除');
 
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
   });
@@ -908,38 +964,84 @@ describe('FrontStagePage', () => {
 
     activateDesignMode();
 
-    const promptSpy = vi
-      .spyOn(window, 'prompt')
-      .mockReturnValue('页面-已重命名');
+    const pageItem = getPageTreeItem('页面 page-1');
 
-    try {
-      const pageItem = getPageTreeItem('页面 page-1');
+    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    fireEvent.change(screen.getByLabelText('名称'), {
+      target: { value: '页面-已重命名' }
+    });
+    await clickLatestButtonAndFlush('确定');
+    await waitFor(() => {
+      expect(onRenamePageNode).toHaveBeenCalledWith('page-1', {
+        icon: 'FileTextOutlined',
+        tooltip: '',
+        title: '页面-已重命名'
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('页面树已同步')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('页面-已重命名')).not.toBeInTheDocument();
 
-      fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
-      await waitFor(() => {
-        expect(onRenamePageNode).toHaveBeenCalledWith('page-1', {
-          title: '页面-已重命名'
-        });
-      });
-      await waitFor(() => {
-        expect(screen.getByText('页面树已同步')).toBeInTheDocument();
-      });
-      expect(screen.queryByText('页面-已重命名')).not.toBeInTheDocument();
+    const deleteButton = within(pageItem).getByRole('button', {
+      name: /删\s*除/
+    });
+    await waitFor(() => {
+      expect(deleteButton).toBeEnabled();
+    });
+    fireEvent.click(deleteButton);
+    await clickLatestButtonAndFlush('删除');
+    await waitFor(() => {
+      expect(onDeletePageNode).toHaveBeenCalledWith('page-1');
+    });
+    expect(screen.getAllByText('页面 page-1').length).toBeGreaterThan(0);
+  });
 
-      const deleteButton = within(pageItem).getByRole('button', {
-        name: /删\s*除/
+  test('opens page tree operation menu on hover', async () => {
+    authenticate(['frontstage.page.design']);
+    const onUpdatePageNodeMetadata = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AppProviders>
+        <FrontStagePage
+          workspaceId="workspace-1"
+          pageId="page-1"
+          initialPageTree={[createBackendPage('page-1')]}
+          onUpdatePageNodeMetadata={onUpdatePageNodeMetadata}
+        />
+      </AppProviders>
+    );
+
+    activateDesignMode();
+
+    const pageItem = getPageTreeItem('页面 page-1');
+    expect(screen.queryByText('编辑描述')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.mouseEnter(
+        within(pageItem).getByRole('button', { name: '页面操作菜单' })
+      );
+    });
+
+    expect(await screen.findByText('编辑描述')).toBeInTheDocument();
+    expect(await screen.findByText('移动到')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    await waitFor(() => {
+      expect(onUpdatePageNodeMetadata).toHaveBeenCalledWith('page-1', {
+        isHidden: true
       });
-      await waitFor(() => {
-        expect(deleteButton).toBeEnabled();
+    });
+
+    fireEvent.click(await screen.findByText('编辑描述'));
+    fireEvent.change(screen.getByLabelText('描述'), {
+      target: { value: '展示在页面树' }
+    });
+    await clickLatestButtonAndFlush('确定');
+    await waitFor(() => {
+      expect(onUpdatePageNodeMetadata).toHaveBeenCalledWith('page-1', {
+        tooltip: '展示在页面树'
       });
-      fireEvent.click(deleteButton);
-      await waitFor(() => {
-        expect(onDeletePageNode).toHaveBeenCalledWith('page-1');
-      });
-      expect(screen.getAllByText('页面 page-1').length).toBeGreaterThan(0);
-    } finally {
-      promptSpy.mockRestore();
-    }
+    });
   });
 
   test('moves nodes through page tree mutation callback', async () => {
@@ -980,7 +1082,7 @@ describe('FrontStagePage', () => {
     expect(rows[1]).toHaveTextContent('页面 page-2');
   });
 
-  test('shows selected page group hover panel and moves the page from a group click', async () => {
+  test('moves nodes by dragging the page tree handle onto another node', async () => {
     authenticate(['frontstage.page.design']);
     const onMovePageNode = vi.fn().mockResolvedValue(undefined);
 
@@ -988,20 +1090,9 @@ describe('FrontStagePage', () => {
       <AppProviders>
         <FrontStagePage
           workspaceId="workspace-1"
-          pageId="page-1"
           initialPageTree={[
-            {
-              id: 'group-1',
-              title: '分组 1',
-              kind: 'group',
-              children: [createBackendPage('page-1')]
-            },
-            {
-              id: 'group-2',
-              title: '分组 2',
-              kind: 'group',
-              children: []
-            }
+            createBackendPage('page-1'),
+            createBackendPage('page-2')
           ]}
           onMovePageNode={onMovePageNode}
         />
@@ -1010,20 +1101,36 @@ describe('FrontStagePage', () => {
 
     activateDesignMode();
 
-    const selectedPageItem = getPageTreeItem('页面 page-1');
-    const groupHoverTrigger = within(selectedPageItem).getByRole('button', {
-      name: /移动到页面分组/
+    const firstPageItem = screen.getByTestId(
+      'frontstage-tree-node-page-页面 page-1'
+    );
+    const secondPageItem = screen.getByTestId(
+      'frontstage-tree-node-page-页面 page-2'
+    );
+    const firstDragHandle = within(firstPageItem).getByRole('button', {
+      name: '拖拽移动节点'
     });
 
-    expect(groupHoverTrigger).toBeInTheDocument();
+    const dataTransfer = {
+      data: new Map<string, string>(),
+      effectAllowed: '',
+      dropEffect: '',
+      setData(format: string, value: string) {
+        this.data.set(format, value);
+      },
+      getData(format: string) {
+        return this.data.get(format) ?? '';
+      }
+    };
 
-    fireEvent.mouseEnter(groupHoverTrigger);
-    fireEvent.click(await screen.findByRole('button', { name: '分组 2' }));
+    fireEvent.dragStart(firstDragHandle, { dataTransfer });
+    fireEvent.dragOver(secondPageItem, { dataTransfer });
+    fireEvent.drop(secondPageItem, { dataTransfer });
 
     await waitFor(() => {
       expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
-        parentId: 'group-2',
-        rank: '001000'
+        parentId: null,
+        rank: '003000'
       });
     });
   });
@@ -1038,10 +1145,10 @@ describe('FrontStagePage', () => {
 
     const pageItem = getPageTreeItem('页面 新建 1');
 
-    confirmSpy.mockReturnValue(false);
     await clickAndFlush(
       within(pageItem).getByRole('button', { name: /删\s*除/ })
     );
+    await clickLatestButtonAndFlush('取消');
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
     expect(screen.getByText('分组 1')).toBeInTheDocument();
@@ -1076,6 +1183,7 @@ describe('FrontStagePage', () => {
     await clickAndFlush(
       within(groupContainer).getByRole('button', { name: '组内新增页面' })
     );
+    await clickLatestButtonAndFlush('确定');
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
   });
@@ -1200,12 +1308,14 @@ describe('FrontStagePage', () => {
     await clickAndFlush(
       within(groupItem).getByRole('button', { name: '组内新增页面' })
     );
+    await clickLatestButtonAndFlush('确定');
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
 
     const [groupDeleteButton] = within(groupItem).getAllByRole('button', {
       name: /删\s*除/
     });
     await clickAndFlush(groupDeleteButton);
+    await clickLatestButtonAndFlush('删除');
 
     expect(screen.queryByText('分组 1')).not.toBeInTheDocument();
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
@@ -1225,6 +1335,7 @@ describe('FrontStagePage', () => {
     fireEvent.click(
       within(groupItem).getByRole('button', { name: '组内新增页面' })
     );
+    await clickLatestButtonAndFlush('确定');
     await clickAddMenuItem('新增页面');
 
     await waitFor(() => {
@@ -1245,6 +1356,7 @@ describe('FrontStagePage', () => {
       }
     );
     fireEvent.click(groupDeleteButton);
+    await clickLatestButtonAndFlush('删除');
 
     await waitFor(() => {
       expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
@@ -1255,7 +1367,7 @@ describe('FrontStagePage', () => {
     });
   });
 
-  test('falls back to workspace-level route when selected nested group is deleted and no pages remain', () => {
+  test('falls back to workspace-level route when selected nested group is deleted and no pages remain', async () => {
     authenticate(['frontstage.page.design']);
     const onNavigatePage = vi.fn();
 
@@ -1293,6 +1405,7 @@ describe('FrontStagePage', () => {
       name: /删\s*除/
     });
     fireEvent.click(rootGroupDeleteButton);
+    await clickLatestButtonAndFlush('删除');
 
     expect(screen.queryByText('页面 嵌套')).not.toBeInTheDocument();
     expect(
@@ -1308,18 +1421,14 @@ describe('FrontStagePage', () => {
     activateDesignMode();
     await clickAddMenuItem('新增页面');
 
-    const promptSpy = vi
-      .spyOn(window, 'prompt')
-      .mockReturnValue('页面-已重命名');
+    const pageItem = getPageTreeItem('页面 新建 1');
 
-    try {
-      const pageItem = getPageTreeItem('页面 新建 1');
-
-      fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
-      expect(screen.getAllByText('页面-已重命名').length).toBeGreaterThan(0);
-    } finally {
-      promptSpy.mockRestore();
-    }
+    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    fireEvent.change(screen.getByLabelText('名称'), {
+      target: { value: '页面-已重命名' }
+    });
+    await clickAndFlush(await screen.findByRole('button', { name: '确定' }));
+    expect(screen.getAllByText('页面-已重命名').length).toBeGreaterThan(0);
   });
 
   test('allows renaming node title to empty string', async () => {
@@ -1329,42 +1438,28 @@ describe('FrontStagePage', () => {
     activateDesignMode();
     await clickAddMenuItem('新增页面');
 
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('');
+    const pageItem = getPageTreeItem('页面 新建 1');
 
-    try {
-      const pageItem = getPageTreeItem('页面 新建 1');
-
-      fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
-      expect(screen.getAllByText('未命名页面').length).toBeGreaterThan(0);
-      expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-    } finally {
-      promptSpy.mockRestore();
-    }
+    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    fireEvent.change(screen.getByLabelText('名称'), {
+      target: { value: '' }
+    });
+    await clickAndFlush(await screen.findByRole('button', { name: '确定' }));
+    expect(screen.getAllByText('未命名页面').length).toBeGreaterThan(0);
+    expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
   });
 
-  test('renaming a node passes current title into the prompt default value', async () => {
+  test('renaming a node prefills current title in the form', async () => {
     authenticate(['frontstage.page.design']);
     renderPage();
 
     activateDesignMode();
     await clickAddMenuItem('新增页面');
 
-    const promptSpy = vi
-      .spyOn(window, 'prompt')
-      .mockImplementation((title, defaultValue) => {
-        expect(title).toBe('重命名节点');
-        expect(defaultValue).toBe('页面 新建 1');
-        return '页面 新建 1';
-      });
+    const pageItem = getPageTreeItem('页面 新建 1');
 
-    try {
-      const pageItem = getPageTreeItem('页面 新建 1');
-
-      fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
-      expect(promptSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      promptSpy.mockRestore();
-    }
+    fireEvent.click(within(pageItem).getByRole('button', { name: '重命名' }));
+    expect(screen.getByLabelText('名称')).toHaveValue('页面 新建 1');
   });
 
   test('navigates to created page when entering pageId-less frontstage route', async () => {
@@ -1399,13 +1494,14 @@ describe('FrontStagePage', () => {
     await clickAndFlush(
       within(secondPageItem).getByRole('button', { name: /删\s*除/ })
     );
+    await clickLatestButtonAndFlush('删除');
     expect(
       screen.getByRole('heading', { name: '页面 新建 1' })
     ).toBeInTheDocument();
     expect(onNavigatePage).toHaveBeenCalledWith(firstPageId);
   });
 
-  test('navigates to workspace-level frontstage route when all pages are deleted', () => {
+  test('navigates to workspace-level frontstage route when all pages are deleted', async () => {
     authenticate(['frontstage.page.design']);
     const onNavigatePage = vi.fn();
 
@@ -1414,6 +1510,7 @@ describe('FrontStagePage', () => {
     activateDesignMode();
     const pageItem = getPageTreeItem('页面 page-1');
     fireEvent.click(within(pageItem).getByRole('button', { name: /删\s*除/ }));
+    await clickLatestButtonAndFlush('删除');
 
     expect(onNavigatePage).toHaveBeenCalledWith(undefined);
   });

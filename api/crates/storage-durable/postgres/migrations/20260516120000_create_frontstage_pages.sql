@@ -4,6 +4,7 @@ create table if not exists frontstage_pages (
   parent_id uuid references frontstage_pages(id) on delete cascade,
   kind text not null check (kind in ('group', 'page')),
   title text,
+  icon text,
   slug text,
   schema_root_uid text,
   rank text not null default '',

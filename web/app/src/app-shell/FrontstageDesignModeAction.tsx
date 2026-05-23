@@ -1,4 +1,3 @@
-import { useNavigate } from '@tanstack/react-router';
 import { Menu, Tooltip } from 'antd';
 import { useEffect } from 'react';
 
@@ -13,13 +12,12 @@ function isFrontstageRoute(pathname: string) {
 
 interface FrontstageDesignModeActionBaseProps {
   pathname: string;
-  navigateTo: (path: string) => void;
 }
 
 function FrontstageDesignModeActionBase({
-  pathname,
-  navigateTo
+  pathname
 }: FrontstageDesignModeActionBaseProps) {
+  const sessionStatus = useAuthStore((state) => state.sessionStatus);
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const isDesignMode = useFrontstageDesignModeStore(
@@ -36,13 +34,20 @@ function FrontstageDesignModeActionBase({
   const canUseDesignMode =
     actor?.effective_display_role === 'root' ||
     Boolean(me?.permissions.includes(DESIGN_MODE_PERMISSION));
+  const hasResolvedDesignModePermission = sessionStatus !== 'unknown';
 
-  // Exit design mode if user navigates away from frontstage routes or loses permission
+  // Exit design mode only when permission is lost; route changes should not
+  // overwrite the browser-persisted preference.
   useEffect(() => {
-    if ((!isAllowedRoute || !canUseDesignMode) && isDesignMode) {
+    if (hasResolvedDesignModePermission && !canUseDesignMode && isDesignMode) {
       setDesignMode(false);
     }
-  }, [canUseDesignMode, isAllowedRoute, isDesignMode, setDesignMode]);
+  }, [
+    canUseDesignMode,
+    hasResolvedDesignModePermission,
+    isDesignMode,
+    setDesignMode
+  ]);
 
   // Support reading design mode from URL query parameters (for non-SPA transition/initial page load)
   useEffect(() => {
@@ -64,15 +69,7 @@ function FrontstageDesignModeActionBase({
   const label = isDesignMode ? '退出设计模式' : '进入设计模式';
 
   const handleClick = () => {
-    if (isAllowedRoute) {
-      toggleDesignMode();
-    } else {
-      navigateTo('/frontstage');
-      // Set design mode to true on the next tick/after navigation starts
-      setTimeout(() => {
-        setDesignMode(true);
-      }, 0);
-    }
+    toggleDesignMode();
   };
 
   const selectedKeys = isDesignMode ? ['design-mode'] : [];
@@ -109,37 +106,11 @@ function FrontstageDesignModeActionBase({
   );
 }
 
-function RoutedFrontstageDesignModeAction({ pathname }: { pathname: string }) {
-  const navigate = useNavigate();
-  return (
-    <FrontstageDesignModeActionBase
-      pathname={pathname}
-      navigateTo={(path) => navigate({ to: path })}
-    />
-  );
-}
-
-function StaticFrontstageDesignModeAction({ pathname }: { pathname: string }) {
-  return (
-    <FrontstageDesignModeActionBase
-      pathname={pathname}
-      navigateTo={(path) => {
-        window.location.href = `${path}?design=true`;
-      }}
-    />
-  );
-}
-
 export function FrontstageDesignModeAction({
-  pathname,
-  useRouterNavigation = false
+  pathname
 }: {
   pathname: string;
   useRouterNavigation?: boolean;
 }) {
-  return useRouterNavigation ? (
-    <RoutedFrontstageDesignModeAction pathname={pathname} />
-  ) : (
-    <StaticFrontstageDesignModeAction pathname={pathname} />
-  );
+  return <FrontstageDesignModeActionBase pathname={pathname} />;
 }
