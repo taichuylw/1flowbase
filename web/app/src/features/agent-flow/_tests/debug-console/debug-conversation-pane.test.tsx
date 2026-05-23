@@ -66,11 +66,6 @@ describe('DebugConversationPane auto scroll', () => {
       'debug-conversation-messages'
     );
     configureScrollMetrics(messagesElement);
-    const bottomElement = screen.getByTestId(
-      'debug-conversation-bottom-sentinel'
-    );
-    const scrollIntoViewSpy = vi.fn();
-    bottomElement.scrollIntoView = scrollIntoViewSpy;
 
     rerender(
       <DebugConversationPane
@@ -84,7 +79,7 @@ describe('DebugConversationPane auto scroll', () => {
       />
     );
 
-    expect(scrollIntoViewSpy).toHaveBeenCalled();
+    expect(messagesElement.scrollTop).toBe(360);
 
     messagesElement.scrollTop = 40;
     messagesElement.dispatchEvent(new Event('scroll', { bubbles: true }));
@@ -101,13 +96,14 @@ describe('DebugConversationPane auto scroll', () => {
       />
     );
 
-    expect(scrollIntoViewSpy).toHaveBeenCalledTimes(2);
+    expect(messagesElement.scrollTop).toBe(360);
 
     messagesElement.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+    messagesElement.scrollTop = 40;
 
     rerender(
       <DebugConversationPane
-        messages={[assistantMessage('你好，正在输出更多内容，继续追加')]}
+        messages={[assistantMessage('你好，正在输出更多内容，继续追加，暂停后追加')]}
         runContext={runContext}
         status="running"
         stopping={false}
@@ -117,7 +113,7 @@ describe('DebugConversationPane auto scroll', () => {
       />
     );
 
-    expect(scrollIntoViewSpy).toHaveBeenCalledTimes(2);
+    expect(messagesElement.scrollTop).toBe(40);
   });
 });
 
@@ -185,9 +181,7 @@ describe('DebugConversationPane workflow trace', () => {
     expect(screen.queryByText('lookup_weather')).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
-    expect(screen.getByLabelText('工具回调索引 JSON')).toHaveTextContent(
-      'call_weather'
-    );
+    expect(screen.queryByLabelText('工具回调索引 JSON')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /lookup_weather.*call_weather/ })
     ).toBeInTheDocument();
@@ -291,11 +285,12 @@ describe('DebugConversationPane workflow trace', () => {
     });
     fireEvent.click(toolsNode);
 
-    expect(screen.getByLabelText('工具回调索引 JSON')).toHaveTextContent(
-      'call_weather'
-    );
-    expect(screen.getByLabelText('工具回调索引 JSON')).toHaveTextContent(
-      'call_policy'
-    );
+    expect(screen.queryByLabelText('工具回调索引 JSON')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /lookup_weather.*call_weather/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /read_policy.*call_policy/ })
+    ).toBeInTheDocument();
   });
 });

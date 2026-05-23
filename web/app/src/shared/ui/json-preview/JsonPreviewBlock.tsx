@@ -31,8 +31,8 @@ const EDITOR_OPTIONS = {
     bottom: 8
   },
   scrollbar: {
-    verticalScrollbarSize: 8,
-    horizontalScrollbarSize: 8
+    verticalScrollbarSize: 14,
+    horizontalScrollbarSize: 12
   }
 };
 

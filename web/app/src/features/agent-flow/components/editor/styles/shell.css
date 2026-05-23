@@ -552,6 +552,26 @@
   min-height: 0;
   overflow: auto;
   padding: clamp(0.75rem, 3.6cqw, 1rem);
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+
+.agent-flow-editor__debug-messages::-webkit-scrollbar {
+  width: 14px;
+}
+
+.agent-flow-editor__debug-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-flow-editor__debug-messages::-webkit-scrollbar-thumb {
+  border: 3px solid #f8fafd;
+  border-radius: 999px;
+  background: #9aa8b6;
+}
+
+.agent-flow-editor__debug-messages::-webkit-scrollbar-thumb:hover {
+  background: #7c8b9a;
 }
 
 .agent-flow-editor__debug-message-list {
@@ -580,6 +600,10 @@
 .agent-flow-editor__debug-message--user {
   justify-content: flex-end;
   margin-left: auto;
+}
+
+.agent-flow-editor__debug-message--system {
+  justify-content: center;
 }
 
 .agent-flow-editor__debug-message-avatar {
@@ -618,6 +642,17 @@
   max-width: min(20rem, 82%);
 }
 
+.agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-main {
+  width: 100%;
+  max-width: min(34rem, 100%);
+  border: 1px solid #dbe4ef;
+  border-radius: 0.75rem;
+  background: #f1f5f9;
+  padding: clamp(0.5rem, 2.5cqw, 0.625rem)
+    clamp(0.75rem, 3cqw, 0.875rem);
+}
+
 .agent-flow-editor__debug-message-header {
   display: flex;
   align-items: center;
@@ -628,6 +663,12 @@
 .agent-flow-editor__debug-message--user
   .agent-flow-editor__debug-message-header {
   justify-content: flex-end;
+}
+
+.agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-header {
+  margin-bottom: 0.25rem;
+  color: #475569;
 }
 
 .agent-flow-editor__debug-message-content.ant-typography {
@@ -654,6 +695,14 @@
   color: #111827;
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-content.ant-typography {
+  margin-bottom: 0;
+  color: #334155;
+  font-size: 0.8125rem;
+  line-height: 1.6;
 }
 
 .agent-flow-editor__debug-composer {

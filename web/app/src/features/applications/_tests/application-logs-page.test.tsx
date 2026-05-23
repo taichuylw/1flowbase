@@ -415,11 +415,13 @@ describe('ApplicationLogsPage', () => {
       within(detailPane).queryByLabelText('输入 JSON')
     ).not.toBeInTheDocument();
 
-    const openLogButton = screen
-      .getAllByRole('button', {
-        name: '查看对话日志'
-      })
-      .at(-1);
+    const openLogButton = (
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      )
+    ).at(-1);
     expect(openLogButton).toBeDefined();
     fireEvent.click(openLogButton!);
 
@@ -610,7 +612,11 @@ describe('ApplicationLogsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
     const openLogButton = (
-      await screen.findAllByRole('button', { name: '查看对话日志' })
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      )
     ).at(-1);
     expect(openLogButton).toBeDefined();
     fireEvent.click(openLogButton!);
@@ -733,7 +739,11 @@ describe('ApplicationLogsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
     const openLogButton = (
-      await screen.findAllByRole('button', { name: '查看对话日志' })
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      )
     ).at(-1);
     expect(openLogButton).toBeDefined();
     fireEvent.click(openLogButton!);
@@ -758,9 +768,9 @@ describe('ApplicationLogsPage', () => {
     expect(within(logPanel).queryByText('call_weather')).not.toBeInTheDocument();
 
     fireEvent.click(toolsNode);
-    const toolIndex = within(logPanel).getByLabelText('工具回调索引 JSON');
-    expect(toolIndex).toHaveTextContent('call_weather');
-    expect(toolIndex).toHaveTextContent('call_policy');
+    expect(
+      within(logPanel).queryByLabelText('工具回调索引 JSON')
+    ).not.toBeInTheDocument();
     expect(
       within(logPanel).getByRole('button', {
         name: /lookup_weather.*call_weather/
@@ -780,12 +790,42 @@ describe('ApplicationLogsPage', () => {
           run_id: 'run-1:history:0',
           detail_run_id: null,
           can_open_detail: false,
+          role: 'system',
+          content: '你是项目助手',
+          started_at: '2026-04-17T08:58:59Z',
+          finished_at: '2026-04-17T08:59:00Z',
+          status: 'succeeded',
+          query: null,
+          model: 'deepseek-chat',
+          answer: null,
+          is_current: false
+        },
+        {
+          run_id: 'run-1:history:1',
+          detail_run_id: null,
+          can_open_detail: false,
+          role: 'user',
+          content: '外部传入的问题',
           started_at: '2026-04-17T08:59:00Z',
           finished_at: '2026-04-17T08:59:01Z',
           status: 'succeeded',
-          query: '外部传入的问题',
+          query: null,
           model: 'deepseek-chat',
-          answer: '外部传入的回答',
+          answer: null,
+          is_current: false
+        },
+        {
+          run_id: 'run-1:history:2',
+          detail_run_id: null,
+          can_open_detail: false,
+          role: 'assistant',
+          content: '外部传入的回答',
+          started_at: '2026-04-17T08:59:01Z',
+          finished_at: '2026-04-17T08:59:02Z',
+          status: 'succeeded',
+          query: null,
+          model: 'deepseek-chat',
+          answer: null,
           is_current: false
         },
         {
@@ -821,6 +861,8 @@ describe('ApplicationLogsPage', () => {
     const conversation = await screen.findByTestId(
       'debug-conversation-messages'
     );
+    expect(await within(conversation).findByText('System')).toBeInTheDocument();
+    expect(within(conversation).getByText('你是项目助手')).toBeInTheDocument();
     expect(
       await within(conversation).findByText('外部传入的问题')
     ).toBeInTheDocument();

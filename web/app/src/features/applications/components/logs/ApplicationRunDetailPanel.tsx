@@ -190,11 +190,43 @@ function conversationItemDetailRunId(
   return nonEmptyString(item.detail_run_id) ?? nonEmptyString(item.run_id);
 }
 
+function conversationMessageRole(
+  item: ApplicationConversationMessagesPage['items'][number]
+): AgentFlowDebugMessage['role'] | null {
+  switch (item.role) {
+    case 'system':
+    case 'user':
+    case 'assistant':
+      return item.role;
+    default:
+      return null;
+  }
+}
+
 function mapConversationItemToMessages(
   item: ApplicationConversationMessagesPage['items'][number]
 ): AgentFlowDebugMessage[] {
   const detailRunId = conversationItemDetailRunId(item);
   const canOpenDetail = Boolean(detailRunId) && item.can_open_detail !== false;
+  const messageRole = conversationMessageRole(item);
+  const messageContent = nonEmptyString(item.content);
+
+  if (messageRole && messageContent) {
+    return [
+      {
+        id: `conversation-${messageRole}-${item.run_id}`,
+        role: messageRole,
+        content: messageContent,
+        status: mapRunStatusToMessageStatus(item.status),
+        runId: item.run_id,
+        detailRunId,
+        canOpenDetail,
+        rawOutput: null,
+        traceSummary: []
+      }
+    ];
+  }
+
   const userContent = nonEmptyString(item.query) ?? '无';
   const assistantContent = nonEmptyString(item.answer) ?? '暂无输出';
 

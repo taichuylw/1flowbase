@@ -84,7 +84,7 @@ export interface AgentFlowVariableGroup {
 
 export interface AgentFlowDebugMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant';
   content: string;
   status: AgentFlowDebugMessageStatus;
   runId: string | null;

@@ -40,6 +40,29 @@
 .agent-flow-editor__conversation-log-tabs .ant-tabs-tabpane {
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+
+.agent-flow-editor__conversation-log-tabs .ant-tabs-tabpane::-webkit-scrollbar {
+  width: 14px;
+}
+
+.agent-flow-editor__conversation-log-tabs
+  .ant-tabs-tabpane::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-flow-editor__conversation-log-tabs
+  .ant-tabs-tabpane::-webkit-scrollbar-thumb {
+  border: 3px solid #f5f7fb;
+  border-radius: 999px;
+  background: #9aa8b6;
+}
+
+.agent-flow-editor__conversation-log-tabs
+  .ant-tabs-tabpane::-webkit-scrollbar-thumb:hover {
+  background: #7c8b9a;
 }
 
 .agent-flow-editor__conversation-log-tab,
