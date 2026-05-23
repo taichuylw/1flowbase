@@ -143,6 +143,24 @@
   overflow-wrap: anywhere;
 }
 
+.application-run-detail__run-id {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.application-run-detail__run-id-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.application-run-detail__run-id-copy.ant-btn {
+  flex: 0 0 auto;
+  color: var(--ant-color-text-tertiary);
+}
+
 .application-run-detail__conversation-pane
   .agent-flow-editor__debug-console-pane {
   display: flex;
