@@ -71,6 +71,24 @@ function tokenAttributionItems(callback: LlmToolCallback) {
   ].filter((item): item is string => item !== null);
 }
 
+function LlmToolInlineTokenSummary({
+  attributionItems
+}: {
+  attributionItems: string[];
+}) {
+  if (attributionItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <span className="agent-flow-editor__debug-llm-tool-inline-tokens">
+      {attributionItems.map((item) => (
+        <Tag key={item}>{item}</Tag>
+      ))}
+    </span>
+  );
+}
+
 function LlmToolTokenAttribution({ callback }: { callback: LlmToolCallback }) {
   const attributionItems = tokenAttributionItems(callback);
 
@@ -125,13 +143,11 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
+          <LlmToolInlineTokenSummary attributionItems={attributionItems} />
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
         </Tag>
-        {attributionItems.map((item) => (
-          <Tag key={item}>{item}</Tag>
-        ))}
         {callback.executionStatus === 'unknown' ? null : (
           <Tag color={executionStatusColor(callback.executionStatus)}>
             {executionStatusLabel(callback.executionStatus)}

@@ -471,6 +471,12 @@ describe('debug conversation log panel', () => {
     const toolCallback = within(nodeDetail).getByRole('button', {
       name: /lookup_weather.*调用 12 tokens.*结果 48 tokens/
     });
+    const toolMain = toolCallback.querySelector(
+      '.agent-flow-editor__debug-llm-tool-main'
+    ) as HTMLElement;
+    expect(toolMain).toHaveTextContent('lookup_weather');
+    expect(toolMain).toHaveTextContent('调用 12 tokens');
+    expect(toolMain).toHaveTextContent('结果 48 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
     expect(
       within(nodeDetail).queryByText('call_weather')
