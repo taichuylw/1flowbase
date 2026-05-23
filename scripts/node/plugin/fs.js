@@ -79,12 +79,18 @@ function copyTree(sourcePath, targetPath) {
 
 function createArtifactRoot(pluginPath, options = {}) {
   const excludedEntries = new Set(options.excludedEntries || []);
+  const includedEntries = options.includedEntries
+    ? new Set(options.includedEntries)
+    : null;
   const prefix = options.prefix || '1flowbase-plugin-artifact';
   const artifactRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), `${prefix}-${sanitizeCode(getPluginName(pluginPath))}-`)
   );
 
   for (const entry of fs.readdirSync(pluginPath)) {
+    if (includedEntries && !includedEntries.has(entry)) {
+      continue;
+    }
     if (excludedEntries.has(entry)) {
       continue;
     }
@@ -104,7 +110,14 @@ function createDemoPackageRoot(pluginPath) {
 function createPackageArtifactRoot(pluginPath) {
   return createArtifactRoot(pluginPath, {
     prefix: '1flowbase-plugin-package',
-    excludedEntries: ['demo', 'scripts', 'target'],
+    includedEntries: [
+      '_assets',
+      'i18n',
+      'manifest.yaml',
+      'models',
+      'provider',
+      'readme',
+    ],
   });
 }
 
