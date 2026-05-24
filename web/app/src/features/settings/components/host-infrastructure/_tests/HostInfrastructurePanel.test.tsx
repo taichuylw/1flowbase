@@ -279,6 +279,35 @@ describe('HostInfrastructurePanel', () => {
     expect(screen.getAllByRole('button', { name: /清理/ })[0]).toBeEnabled();
   });
 
+  test('explains when cache inspection succeeds but the current store is empty', async () => {
+    api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
+    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
+      provider_code: 'local',
+      can_manage: true,
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      domains: []
+    });
+
+    renderPanel(true);
+
+    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+
+    expect(
+      await screen.findByText('当前 cache-store 没有可观察 entry。')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'API 已连接到当前 api-server 进程的 local Moka cache-store；没有缓存域表示当前进程里暂时没有 entry，或重启后内存缓存已清空。'
+      )
+    ).toBeInTheDocument();
+  });
+
   test('keeps cache value and clear actions unavailable for view-only users', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
     api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({

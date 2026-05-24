@@ -324,6 +324,15 @@ export function HostInfrastructureCachePanel({
         />
       ) : null}
 
+      {overviewQuery.isSuccess && capabilities?.list_domains && !domains.length ? (
+        <Alert
+          type="info"
+          showIcon
+          message="当前 cache-store 没有可观察 entry。"
+          description="API 已连接到当前 api-server 进程的 local Moka cache-store；没有缓存域表示当前进程里暂时没有 entry，或重启后内存缓存已清空。"
+        />
+      ) : null}
+
       <div className="host-cache-panel__layout">
         <aside className="host-cache-panel__domains">
           <div className="host-cache-panel__section-title">缓存域</div>
