@@ -433,10 +433,26 @@ async fn application_runtime_routes_logs_report_run_statistics() {
     assert_eq!(start.status(), StatusCode::CREATED);
     let start_body = to_bytes(start.into_body(), usize::MAX).await.unwrap();
     let start_payload: Value = serde_json::from_slice(&start_body).unwrap();
-    let flow_run_id =
-        Uuid::parse_str(start_payload["data"]["flow_run"]["id"].as_str().unwrap()).unwrap();
+    let flow_run_id_string = start_payload["data"]["flow_run"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let flow_run_id = Uuid::parse_str(&flow_run_id_string).unwrap();
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &flow_run_id_string,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
 
+    sqlx::query("delete from application_run_log_summaries where flow_run_id = $1")
+        .bind(flow_run_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("delete from flow_run_callback_tasks where flow_run_id = $1")
         .bind(flow_run_id)
         .execute(&pool)
