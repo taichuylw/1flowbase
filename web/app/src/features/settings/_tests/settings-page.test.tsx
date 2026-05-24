@@ -124,28 +124,26 @@ const hostInfrastructureApi = vi.hoisted(() => ({
     'host-infrastructure',
     'providers'
   ],
-  settingsHostInfrastructureCacheOverviewQueryKey: [
+  settingsHostInfrastructureMemoryOverviewQueryKey: [
     'settings',
     'host-infrastructure',
-    'cache'
+    'memory'
   ],
-  settingsHostInfrastructureCacheEntriesQueryKey: vi.fn(
-    (domainCode: string | null) => [
+  settingsHostInfrastructureMemoryEntriesQueryKey: vi.fn(
+    (contractCode: string | null) => [
       'settings',
       'host-infrastructure',
-      'cache',
-      'domains',
-      domainCode,
+      'memory',
+      'contracts',
+      contractCode,
       'entries'
     ]
   ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
-  fetchSettingsHostInfrastructureCacheOverview: vi.fn(),
-  fetchSettingsHostInfrastructureCacheEntries: vi.fn(),
-  revealSettingsHostInfrastructureCacheEntry: vi.fn(),
-  clearSettingsHostInfrastructureCacheEntry: vi.fn(),
-  clearSettingsHostInfrastructureCacheDomain: vi.fn()
+  fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
+  revealSettingsHostInfrastructureMemoryEntry: vi.fn()
 }));
 
 const dataModelsApi = vi.hoisted(() => ({
@@ -469,30 +467,22 @@ describe('SettingsPage', () => {
     hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
       []
     );
-    hostInfrastructureApi.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue(
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue(
       {
-        provider_code: 'local',
         can_manage: true,
-        capabilities: {
-          list_domains: true,
-          list_entries: true,
-          reveal_value: true,
-          clear_entry: true,
-          clear_domain: true
-        },
-        domains: []
+        contracts: []
       }
     );
-    hostInfrastructureApi.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue(
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue(
       {
-        domain_code: 'application-logs',
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
         capabilities: {
-          list_domains: true,
           list_entries: true,
-          reveal_value: true,
-          clear_entry: true,
-          clear_domain: true
+          reveal_value: true
         },
+        supported: true,
         entries: []
       }
     );

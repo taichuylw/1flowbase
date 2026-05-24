@@ -7,7 +7,8 @@ use std::{
 use async_trait::async_trait;
 use control_plane::ports::{
     CacheDomainSnapshot, CacheEntrySnapshot, CacheEntryValueSnapshot, CacheInspectionCapabilities,
-    CacheStore,
+    CacheStore, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
+    EphemeralInspectionCapabilities,
 };
 use moka::{future::Cache, Expiry};
 use time::OffsetDateTime;
@@ -21,6 +22,16 @@ struct CacheEntry {
     ttl: Option<time::Duration>,
     created_at: OffsetDateTime,
     expires_at: Option<OffsetDateTime>,
+}
+
+#[derive(Clone)]
+pub(crate) struct JsonEntryInspectionSnapshot {
+    pub key: String,
+    pub value: serde_json::Value,
+    pub value_size_bytes: u64,
+    pub ttl_seconds: Option<i64>,
+    pub created_at_unix: Option<i64>,
+    pub expires_at_unix: Option<i64>,
 }
 
 struct CacheEntryExpiry;
@@ -156,12 +167,69 @@ impl MokaCacheStore {
         }
     }
 
+    fn json_entry_snapshot(key: String, entry: &CacheEntry) -> JsonEntryInspectionSnapshot {
+        let now = OffsetDateTime::now_utc();
+        JsonEntryInspectionSnapshot {
+            key,
+            value: entry.value.clone(),
+            value_size_bytes: Self::entry_size_bytes(entry),
+            ttl_seconds: Self::remaining_ttl_seconds(entry, now),
+            created_at_unix: Some(entry.created_at.unix_timestamp()),
+            expires_at_unix: entry.expires_at.map(|value| value.unix_timestamp()),
+        }
+    }
+
+    fn ephemeral_entry_snapshot(
+        key: String,
+        entry: &CacheEntry,
+        contract_code: &str,
+        entry_kind: &str,
+        group_code: Option<String>,
+        sensitive: bool,
+        metadata: serde_json::Value,
+    ) -> EphemeralEntrySnapshot {
+        let json_entry = Self::json_entry_snapshot(key, entry);
+        EphemeralEntrySnapshot {
+            contract_code: contract_code.to_string(),
+            group_code,
+            key: json_entry.key,
+            entry_kind: entry_kind.to_string(),
+            status: "active".to_string(),
+            owner: None,
+            value_size_bytes: json_entry.value_size_bytes,
+            ttl_seconds: json_entry.ttl_seconds,
+            created_at_unix: json_entry.created_at_unix,
+            expires_at_unix: json_entry.expires_at_unix,
+            sensitive,
+            metadata,
+        }
+    }
+
     async fn visible_entries(&self) -> Vec<(String, CacheEntry)> {
         self.cache.run_pending_tasks().await;
         self.cache
             .iter()
             .filter_map(|(key, entry)| self.key_without_namespace(&key).map(|key| (key, entry)))
             .collect()
+    }
+
+    pub(crate) async fn list_json_entries_for_inspection(
+        &self,
+    ) -> Vec<JsonEntryInspectionSnapshot> {
+        self.visible_entries()
+            .await
+            .into_iter()
+            .map(|(key, entry)| Self::json_entry_snapshot(key, &entry))
+            .collect()
+    }
+
+    pub(crate) async fn reveal_json_entry_for_inspection(
+        &self,
+        key: &str,
+    ) -> Option<JsonEntryInspectionSnapshot> {
+        self.get_entry(key)
+            .await
+            .map(|entry| Self::json_entry_snapshot(key.to_string(), &entry))
     }
 }
 
@@ -300,6 +368,55 @@ impl CacheStore for MokaCacheStore {
             self.cache.invalidate(&self.namespaced_key(&key)).await;
         }
         Ok(count)
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::supported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        let mut entries = self
+            .visible_entries()
+            .await
+            .into_iter()
+            .map(|(key, entry)| {
+                let domain_code = Self::domain_code(&key).to_string();
+                Self::ephemeral_entry_snapshot(
+                    key,
+                    &entry,
+                    "cache-store",
+                    "cache_entry",
+                    Some(domain_code.clone()),
+                    true,
+                    serde_json::json!({ "domain_code": domain_code }),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.key.cmp(&right.key));
+        Ok(entries)
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        let Some(entry) = self.get_entry(key).await else {
+            return Ok(None);
+        };
+        let domain_code = Self::domain_code(key).to_string();
+        let metadata = Self::ephemeral_entry_snapshot(
+            key.to_string(),
+            &entry,
+            "cache-store",
+            "cache_entry",
+            Some(domain_code.clone()),
+            true,
+            serde_json::json!({ "domain_code": domain_code }),
+        );
+        Ok(Some(EphemeralEntryValueSnapshot {
+            metadata,
+            value: entry.value,
+        }))
     }
 }
 

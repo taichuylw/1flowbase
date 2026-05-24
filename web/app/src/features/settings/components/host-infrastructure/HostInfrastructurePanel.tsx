@@ -6,7 +6,7 @@ import {
   settingsHostInfrastructureProvidersQueryKey
 } from '../../api/host-infrastructure';
 import { SettingsSectionSurface } from '../SettingsSectionSurface';
-import { HostInfrastructureCachePanel } from './HostInfrastructureCachePanel';
+import { HostInfrastructureMemoryObservationPanel } from './HostInfrastructureMemoryObservationPanel';
 import { HostInfrastructureProviderTable } from './HostInfrastructureProviderTable';
 import './host-infrastructure-panel.css';
 
@@ -44,9 +44,11 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
             )
           },
           {
-            key: 'cache',
-            label: '缓存观察',
-            children: <HostInfrastructureCachePanel canManage={canManage} />
+            key: 'memory',
+            label: '内存观察',
+            children: (
+              <HostInfrastructureMemoryObservationPanel canManage={canManage} />
+            )
           }
         ]}
       />

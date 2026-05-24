@@ -78,3 +78,31 @@ async fn moka_rate_limit_store_starts_new_window_after_expiry() {
     assert!(next_window.allowed);
     assert_eq!(next_window.remaining, 0);
 }
+
+#[tokio::test]
+async fn moka_rate_limit_store_exposes_ephemeral_inspection_snapshots() {
+    let store = MokaRateLimitStore::new("flowbase:rate", 128);
+
+    store
+        .consume("actor:1", 3, Duration::seconds(60))
+        .await
+        .unwrap();
+
+    let capabilities = store.ephemeral_inspection_capabilities();
+    assert!(capabilities.list_entries);
+    assert!(capabilities.reveal_value);
+    let entries = store.list_ephemeral_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].contract_code, "rate-limit-store");
+    assert_eq!(entries[0].key, "actor:1");
+    assert!(!entries[0].sensitive);
+    assert_eq!(entries[0].metadata["count"], 1);
+
+    let revealed = store
+        .reveal_ephemeral_entry("actor:1")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(revealed.metadata.key, "actor:1");
+    assert_eq!(revealed.value["count"], 1);
+}

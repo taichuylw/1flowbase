@@ -20,7 +20,13 @@
   min-width: 0;
 }
 
+.host-memory-panel {
+  width: 100%;
+  min-width: 0;
+}
+
 .host-cache-panel__toolbar,
+.host-memory-panel__toolbar,
 .host-cache-panel__entries-header {
   display: flex;
   align-items: center;
@@ -82,8 +88,18 @@
   width: 100%;
 }
 
+.host-memory-panel__contract,
+.host-memory-panel__drawer {
+  width: 100%;
+}
+
+.host-memory-panel__key {
+  max-width: min(420px, 40vw);
+}
+
 @media (max-width: 840px) {
   .host-cache-panel__toolbar,
+  .host-memory-panel__toolbar,
   .host-cache-panel__entries-header {
     align-items: flex-start;
     flex-direction: column;
@@ -95,5 +111,9 @@
 
   .host-cache-panel__key {
     max-width: 62vw;
+  }
+
+  .host-memory-panel__key {
+    max-width: 60vw;
   }
 }

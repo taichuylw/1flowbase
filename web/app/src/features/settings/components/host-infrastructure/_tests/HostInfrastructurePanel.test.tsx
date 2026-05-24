@@ -10,28 +10,26 @@ const api = vi.hoisted(() => ({
     'host-infrastructure',
     'providers'
   ],
-  settingsHostInfrastructureCacheOverviewQueryKey: [
+  settingsHostInfrastructureMemoryOverviewQueryKey: [
     'settings',
     'host-infrastructure',
-    'cache'
+    'memory'
   ],
-  settingsHostInfrastructureCacheEntriesQueryKey: vi.fn(
-    (domainCode: string | null) => [
+  settingsHostInfrastructureMemoryEntriesQueryKey: vi.fn(
+    (contractCode: string | null) => [
       'settings',
       'host-infrastructure',
-      'cache',
-      'domains',
-      domainCode,
+      'memory',
+      'contracts',
+      contractCode,
       'entries'
     ]
   ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
-  fetchSettingsHostInfrastructureCacheOverview: vi.fn(),
-  fetchSettingsHostInfrastructureCacheEntries: vi.fn(),
-  revealSettingsHostInfrastructureCacheEntry: vi.fn(),
-  clearSettingsHostInfrastructureCacheEntry: vi.fn(),
-  clearSettingsHostInfrastructureCacheDomain: vi.fn()
+  fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
+  revealSettingsHostInfrastructureMemoryEntry: vi.fn()
 }));
 
 vi.mock('../../../api/host-infrastructure', () => api);
@@ -68,27 +66,19 @@ describe('HostInfrastructurePanel', () => {
   });
 
   beforeEach(() => {
-    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
-      provider_code: 'local',
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
-      capabilities: {
-        list_domains: true,
-        list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
-      },
-      domains: []
+      contracts: []
     });
-    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
-      domain_code: 'application-logs',
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
       capabilities: {
-        list_domains: true,
         list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
+        reveal_value: true
       },
+      supported: true,
       entries: []
     });
   });
@@ -223,216 +213,230 @@ describe('HostInfrastructurePanel', () => {
     ).toBeInTheDocument();
   });
 
-  test('renders cache domains and metadata entries', async () => {
+  test('renders memory contract tabs and metadata entries', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
-    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
-      provider_code: 'local',
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
-      capabilities: {
-        list_domains: true,
-        list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
-      },
-      domains: [
+      contracts: [
         {
-          domain_code: 'application-logs',
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            reveal_value: true
+          },
           entry_count: 2,
-          total_value_size_bytes: 2048
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 2048,
+          supported: true
         }
       ]
     });
-    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
-      domain_code: 'application-logs',
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
       capabilities: {
-        list_domains: true,
         list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
+        reveal_value: true
       },
+      supported: true,
       entries: [
         {
-          domain_code: 'application-logs',
-          key: 'application-logs:run:1',
+          contract_code: 'session-store',
+          group_code: 'sessions',
+          key: 'session:1',
+          entry_kind: 'session',
+          status: 'active',
+          owner: 'user-1',
           value_size_bytes: 1024,
           ttl_seconds: 60,
           created_at_unix: 1_700_000_000,
-          expires_at_unix: 1_700_000_060
+          expires_at_unix: 1_700_000_060,
+          sensitive: true,
+          metadata: { workspace_id: 'workspace-1' }
         }
       ]
     });
 
     renderPanel(true);
 
-    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
 
     expect(
-      (await screen.findAllByText('application-logs')).length
-    ).toBeGreaterThan(0);
-    expect(
-      await screen.findByText('application-logs:run:1')
+      await screen.findByRole('tab', { name: 'Sessions' })
     ).toBeInTheDocument();
+    expect(await screen.findByText('session:1')).toBeInTheDocument();
     expect(screen.getByText('1m 0s')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /查看 value/ })).toBeEnabled();
-    expect(screen.getAllByRole('button', { name: /清理/ })[0]).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Metadata/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Reveal/ })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: /清理/ })
+    ).not.toBeInTheDocument();
   });
 
-  test('explains when cache inspection succeeds but the current store is empty', async () => {
+  test('explains when memory observation succeeds but there are no contracts', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
-    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
-      provider_code: 'local',
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
-      capabilities: {
-        list_domains: true,
-        list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
-      },
-      domains: []
+      contracts: []
     });
 
     renderPanel(true);
 
-    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
 
     expect(
-      await screen.findByText('当前 cache-store 没有可观察 entry。')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'API 已连接到当前 api-server 进程的 local Moka cache-store；没有缓存域表示当前进程里暂时没有 entry，或重启后内存缓存已清空。'
-      )
+      await screen.findByText('暂无可观察内存 contract')
     ).toBeInTheDocument();
   });
 
-  test('keeps cache value and clear actions unavailable for view-only users', async () => {
+  test('keeps memory reveal actions unavailable for view-only users', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
-    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
-      provider_code: 'local',
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: false,
-      capabilities: {
-        list_domains: true,
-        list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
-      },
-      domains: [
+      contracts: [
         {
-          domain_code: 'application-logs',
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            reveal_value: true
+          },
           entry_count: 1,
-          total_value_size_bytes: 1024
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 1024,
+          supported: true
         }
       ]
     });
-    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
-      domain_code: 'application-logs',
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
       capabilities: {
-        list_domains: true,
         list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
+        reveal_value: true
       },
+      supported: true,
       entries: [
         {
-          domain_code: 'application-logs',
-          key: 'application-logs:run:1',
+          contract_code: 'session-store',
+          group_code: 'sessions',
+          key: 'session:1',
+          entry_kind: 'session',
+          status: 'active',
+          owner: null,
           value_size_bytes: 1024,
           ttl_seconds: null,
           created_at_unix: null,
-          expires_at_unix: null
+          expires_at_unix: null,
+          sensitive: true,
+          metadata: {}
         }
       ]
     });
 
     renderPanel(false);
 
-    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
 
-    expect(await screen.findByText('仅 metadata')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /查看 value/ })
+      await screen.findByText('当前视图只展示 metadata。')
+    ).toBeInTheDocument();
+    expect(await screen.findByText('session:1')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Metadata/ })
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: /Reveal/ })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '清理缓存域' })
+      screen.queryByRole('button', { name: /清理/ })
     ).not.toBeInTheDocument();
   });
 
-  test('reveals cache value after explicit confirmation', async () => {
+  test('reveals memory value after explicit confirmation', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
-    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
-      provider_code: 'local',
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
-      capabilities: {
-        list_domains: true,
-        list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
-      },
-      domains: [
+      contracts: [
         {
-          domain_code: 'application-logs',
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            reveal_value: true
+          },
           entry_count: 1,
-          total_value_size_bytes: 1024
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 1024,
+          supported: true
         }
       ]
     });
-    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
-      domain_code: 'application-logs',
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
       capabilities: {
-        list_domains: true,
         list_entries: true,
-        reveal_value: true,
-        clear_entry: true,
-        clear_domain: true
+        reveal_value: true
       },
+      supported: true,
       entries: [
         {
-          domain_code: 'application-logs',
-          key: 'application-logs:run:1',
+          contract_code: 'session-store',
+          group_code: 'sessions',
+          key: 'session:1',
+          entry_kind: 'session',
+          status: 'active',
+          owner: null,
           value_size_bytes: 1024,
           ttl_seconds: null,
           created_at_unix: null,
-          expires_at_unix: null
+          expires_at_unix: null,
+          sensitive: true,
+          metadata: {}
         }
       ]
     });
-    api.revealSettingsHostInfrastructureCacheEntry.mockResolvedValue({
+    api.revealSettingsHostInfrastructureMemoryEntry.mockResolvedValue({
       metadata: {
-        domain_code: 'application-logs',
-        key: 'application-logs:run:1',
+        contract_code: 'session-store',
+        group_code: 'sessions',
+        key: 'session:1',
+        entry_kind: 'session',
+        status: 'active',
+        owner: null,
         value_size_bytes: 1024,
         ttl_seconds: null,
         created_at_unix: null,
-        expires_at_unix: null
+        expires_at_unix: null,
+        sensitive: true,
+        metadata: {}
       },
       value: { flow_run: { status: 'succeeded' } }
     });
 
     renderPanel(true);
 
-    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
-    fireEvent.click(await screen.findByRole('button', { name: /查看 value/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
     fireEvent.click(
       await screen.findByRole('button', { name: '查看并记录审计' })
     );
 
     await waitFor(() => {
       expect(
-        api.revealSettingsHostInfrastructureCacheEntry
-      ).toHaveBeenCalledWith(
-        'application-logs',
-        'application-logs:run:1',
-        'csrf-123'
-      );
+        api.revealSettingsHostInfrastructureMemoryEntry
+      ).toHaveBeenCalledWith('session-store', 'session:1', 'csrf-123');
     });
     expect(await screen.findByText('Entry value')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cache value JSON')).toHaveTextContent(
+    expect(screen.getByLabelText('Memory value JSON')).toHaveTextContent(
       'succeeded'
     );
   });

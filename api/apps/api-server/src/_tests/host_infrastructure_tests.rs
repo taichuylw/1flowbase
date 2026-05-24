@@ -13,7 +13,25 @@ fn local_infra_host_provides_required_defaults() {
         "local"
     );
     assert!(registry.session_store().is_some());
+    assert!(registry.registered_cache_store().is_some());
+    assert!(registry.registered_distributed_lock().is_some());
+    assert!(registry.registered_event_bus().is_some());
+    assert!(registry.registered_task_queue().is_some());
+    assert!(registry.registered_rate_limit_store().is_some());
     assert!(registry.runtime_event_stream().is_some());
+}
+
+#[test]
+fn empty_infra_registry_reports_contracts_as_unregistered() {
+    let registry = crate::host_infrastructure::HostInfrastructureRegistry::default();
+
+    assert!(registry.session_store().is_none());
+    assert!(registry.registered_cache_store().is_none());
+    assert!(registry.registered_distributed_lock().is_none());
+    assert!(registry.registered_event_bus().is_none());
+    assert!(registry.registered_task_queue().is_none());
+    assert!(registry.registered_rate_limit_store().is_none());
+    assert!(registry.runtime_event_stream().is_none());
 }
 
 #[test]

@@ -225,6 +225,56 @@ export interface ClearConsoleCacheDomainResult {
   cleared_count: number;
 }
 
+export interface ConsoleMemoryObservationCapabilities {
+  list_entries: boolean;
+  reveal_value: boolean;
+}
+
+export interface ConsoleMemoryContractSummary {
+  contract_code: string;
+  label: string;
+  provider_code: string | null;
+  capabilities: ConsoleMemoryObservationCapabilities;
+  entry_count: number;
+  sensitive_entry_count: number;
+  total_value_size_bytes: number;
+  supported: boolean;
+}
+
+export interface ConsoleMemoryEntryMetadata {
+  contract_code: string;
+  group_code: string | null;
+  key: string;
+  entry_kind: string;
+  status: string;
+  owner: string | null;
+  value_size_bytes: number;
+  ttl_seconds: number | null;
+  created_at_unix: number | null;
+  expires_at_unix: number | null;
+  sensitive: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface ConsoleHostInfrastructureMemoryOverview {
+  can_manage: boolean;
+  contracts: ConsoleMemoryContractSummary[];
+}
+
+export interface ConsoleHostInfrastructureMemoryEntries {
+  contract_code: string;
+  label: string;
+  provider_code: string | null;
+  capabilities: ConsoleMemoryObservationCapabilities;
+  supported: boolean;
+  entries: ConsoleMemoryEntryMetadata[];
+}
+
+export interface ConsoleMemoryEntryValue {
+  metadata: ConsoleMemoryEntryMetadata;
+  value: unknown;
+}
+
 function buildPluginCatalogPath(
   path: string,
   filter?: ConsolePluginCatalogFilter
@@ -477,6 +527,42 @@ export function clearConsoleHostInfrastructureCacheDomain(
       domainCode
     )}/clear`,
     method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleHostInfrastructureMemoryOverview(baseUrl?: string) {
+  return apiFetch<ConsoleHostInfrastructureMemoryOverview>({
+    path: '/api/console/settings/host-infrastructure/memory',
+    baseUrl
+  });
+}
+
+export function listConsoleHostInfrastructureMemoryEntries(
+  contractCode: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleHostInfrastructureMemoryEntries>({
+    path: `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
+      contractCode
+    )}/entries`,
+    baseUrl
+  });
+}
+
+export function revealConsoleHostInfrastructureMemoryEntry(
+  contractCode: string,
+  key: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleMemoryEntryValue>({
+    path: `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
+      contractCode
+    )}/entries/reveal`,
+    method: 'POST',
+    body: { key },
     csrfToken,
     baseUrl
   });

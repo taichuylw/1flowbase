@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use control_plane::ports::{
+    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities,
     RuntimeEventCloseReason, RuntimeEventDurability, RuntimeEventEnvelope,
     RuntimeEventOverflowBehavior, RuntimeEventPayload, RuntimeEventStream,
     RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
@@ -61,6 +62,55 @@ impl LocalRuntimeEventStream {
             .get(&run_id)
             .cloned()
             .ok_or_else(|| anyhow!("runtime event stream is not open"))
+    }
+
+    fn entry_key(run_id: Uuid, sequence: i64) -> String {
+        format!("{run_id}:{sequence}")
+    }
+
+    fn parse_entry_key(key: &str) -> Option<(Uuid, i64)> {
+        let (run_id, sequence) = key.rsplit_once(':')?;
+        Some((Uuid::parse_str(run_id).ok()?, sequence.parse().ok()?))
+    }
+
+    fn event_value_size_bytes(event: &RuntimeEventEnvelope) -> u64 {
+        serde_json::to_vec(&event.payload)
+            .map(|bytes| bytes.len() as u64)
+            .unwrap_or(0)
+    }
+
+    fn event_snapshot(event: &RuntimeEventEnvelope, run_closed: bool) -> EphemeralEntrySnapshot {
+        EphemeralEntrySnapshot {
+            contract_code: "runtime-event-stream".to_string(),
+            group_code: Some(event.run_id.to_string()),
+            key: Self::entry_key(event.run_id, event.sequence),
+            entry_kind: "runtime_event".to_string(),
+            status: if run_closed {
+                "closed".to_string()
+            } else {
+                "open".to_string()
+            },
+            owner: event.node_run_id.map(|value| value.to_string()),
+            value_size_bytes: Self::event_value_size_bytes(event),
+            ttl_seconds: None,
+            created_at_unix: Some(event.occurred_at.unix_timestamp()),
+            expires_at_unix: None,
+            sensitive: true,
+            metadata: serde_json::json!({
+                "run_id": event.run_id,
+                "node_run_id": event.node_run_id,
+                "sequence": event.sequence,
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "source": event.source,
+                "durability": event.durability,
+                "persist_required": event.persist_required,
+                "trace_visible": event.trace_visible,
+                "delta_index": event.delta_index,
+                "content_type": event.content_type,
+                "text_size_bytes": event.text.as_ref().map(|value| value.len()),
+            }),
+        }
     }
 }
 
@@ -316,5 +366,66 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             }
         }
         Ok(())
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::supported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> Result<Vec<EphemeralEntrySnapshot>> {
+        let runs = self
+            .runs
+            .lock()
+            .expect("runtime event stream runs lock poisoned")
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut entries = Vec::new();
+        for run in runs {
+            let closed = run.closed.load(Ordering::SeqCst);
+            let ring = run.ring.lock().expect("runtime event ring lock poisoned");
+            entries.extend(
+                ring.iter()
+                    .map(|event| Self::event_snapshot(event, closed))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        entries.sort_by(|left, right| {
+            left.group_code
+                .cmp(&right.group_code)
+                .then(left.key.cmp(&right.key))
+        });
+        Ok(entries)
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        key: &str,
+    ) -> Result<Option<EphemeralEntryValueSnapshot>> {
+        let Some((run_id, sequence)) = Self::parse_entry_key(key) else {
+            return Ok(None);
+        };
+        let Some(run) = self
+            .runs
+            .lock()
+            .expect("runtime event stream runs lock poisoned")
+            .get(&run_id)
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        let closed = run.closed.load(Ordering::SeqCst);
+        let ring = run.ring.lock().expect("runtime event ring lock poisoned");
+        let Some(event) = ring
+            .iter()
+            .find(|event| event.sequence == sequence)
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        Ok(Some(EphemeralEntryValueSnapshot {
+            metadata: Self::event_snapshot(&event, closed),
+            value: event.payload,
+        }))
     }
 }
