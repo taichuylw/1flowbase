@@ -93,7 +93,7 @@ describe('DebugAssistantMessage', () => {
     expect(
       table.compareDocumentPosition(actionRow) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('group', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);

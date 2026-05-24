@@ -766,7 +766,7 @@ describe('Settings data models page', () => {
     expect(
       detailActions.compareDocumentPosition(tabs) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       within(detailActions).getByRole('button', {
         name: /编\s*辑/
@@ -874,7 +874,7 @@ describe('Settings data models page', () => {
     expect(
       titleInput.compareDocumentPosition(codeInput) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
     fireEvent.change(screen.getByLabelText('Code'), {
       target: { value: 'companies' }
@@ -1204,17 +1204,17 @@ describe('Settings data models page', () => {
     expect(
       screen.getByText('存储值').compareDocumentPosition(screen.getByText('显示值')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen
         .getByRole('button', { name: '添加选项' })
         .compareDocumentPosition(screen.getByText('规则')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen.getByText('规则').compareDocumentPosition(screen.getByText('默认值')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByLabelText('选项 1 显示值')).toBeInTheDocument();
     expect(
       (screen.getByLabelText('选项 1 存储值') as HTMLInputElement).value

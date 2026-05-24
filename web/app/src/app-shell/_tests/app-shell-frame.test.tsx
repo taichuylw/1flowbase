@@ -51,7 +51,7 @@ describe('AppShellFrame', () => {
       expect(
         accountLabel.compareDocumentPosition(settingsTrigger) &
           Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
   });
 
@@ -69,7 +69,7 @@ describe('AppShellFrame', () => {
       expect(
         settingsTrigger.compareDocumentPosition(designButton) &
           Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
     });
 

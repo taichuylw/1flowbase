@@ -123,6 +123,35 @@ test('collectRepoHygieneFindings reports duplicate test titles and oversized fil
   );
 });
 
+test('collectRepoHygieneFindings excludes tmp sandbox tests from formal quality assets', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-tmp-'));
+  writeFile(
+    repoRoot,
+    'tmp/demo/app/src/app/_tests/demo.test.tsx',
+    [
+      "test.only('tmp sandbox test should not block repo hygiene', () => {",
+      '  expect(screen.getByText("Demo")).toBeTruthy();',
+      '});',
+    ].join('\n')
+  );
+  writeFile(
+    repoRoot,
+    'web/app/src/features/example/_tests/example.test.ts',
+    "test('formal test stays visible', () => {});\n"
+  );
+
+  const findings = collectRepoHygieneFindings({ repoRoot });
+
+  assert.equal(
+    findings.some((finding) => finding.file.startsWith('tmp/demo/')),
+    false
+  );
+  assert.equal(
+    findings.some((finding) => finding.file === 'web/app/src/features/example/_tests/example.test.ts'),
+    false
+  );
+});
+
 test('main writes an advisory report and only fails on blocking findings', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-main-'));
   writeFile(
