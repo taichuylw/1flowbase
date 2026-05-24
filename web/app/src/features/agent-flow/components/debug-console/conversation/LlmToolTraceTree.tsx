@@ -60,25 +60,26 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
-function usageTotalTokens(usage: Record<string, unknown> | null) {
-  return typeof usage?.total_tokens === 'number' ? usage.total_tokens : null;
-}
-
 function toolTokenSummary(callback: LlmToolCallback) {
-  return (
-    usageTotalTokens(callback.call_usage) ??
-    usageTotalTokens(callback.result_context_usage)
-  );
+  return callback.token_delta;
 }
 
-function LlmToolInlineTokenSummary({ totalTokens }: { totalTokens: number | null }) {
+function formatTokenDelta(tokenDelta: number) {
+  return tokenDelta >= 0 ? `+${tokenDelta}` : `${tokenDelta}`;
+}
+
+function LlmToolInlineTokenSummary({
+  totalTokens
+}: {
+  totalTokens: number | null;
+}) {
   if (totalTokens === null) {
     return null;
   }
 
   return (
     <span className="agent-flow-editor__debug-llm-tool-inline-tokens">
-      <Tag>{totalTokens} tokens</Tag>
+      <Tag>{formatTokenDelta(totalTokens)} tokens</Tag>
     </span>
   );
 }
@@ -211,6 +212,7 @@ export function LlmToolTraceTree({
           result_context_usage:
             loadedCallback.result_context_usage ??
             callback.result_context_usage,
+          token_delta: loadedCallback.token_delta ?? callback.token_delta,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
         };

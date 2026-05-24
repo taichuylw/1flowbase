@@ -130,6 +130,7 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
                   {
                     role: 'tool',
                     tool_call_id: 'call_weather',
+                    token_delta: 10,
                     result_context_usage: {
                       input_tokens: 20,
                       input_cache_hit_tokens: 8,
@@ -200,6 +201,7 @@ const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
                     output_tokens: 4,
                     total_tokens: 24
                   },
+                  token_delta: 10,
                   artifact_ref: 'artifact-tool-call-weather'
                 }
               ]
@@ -227,6 +229,7 @@ const toolCallbackDetailPayload = {
     output_tokens: 4,
     total_tokens: 24
   },
+  token_delta: 10,
   request_payload: {
     id: 'call_weather',
     name: 'lookup_weather',
@@ -243,6 +246,7 @@ const toolCallbackDetailPayload = {
   callback_payload: {
     role: 'tool',
     tool_call_id: 'call_weather',
+    token_delta: 10,
     result_context_usage: {
       input_tokens: 20,
       input_cache_hit_tokens: 8,
@@ -514,10 +518,11 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*14 tokens/
+      name: /lookup_weather.*\+10 tokens/
     });
     expect(toolCallback).toHaveTextContent('lookup_weather');
-    expect(toolCallback).toHaveTextContent('14 tokens');
+    expect(toolCallback).toHaveTextContent('+10 tokens');
+    expect(toolCallback).not.toHaveTextContent('14 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
     expect(
       within(nodeDetail).queryByText('call_weather')
@@ -536,12 +541,12 @@ describe('debug conversation log panel', () => {
       within(nodeDetail).getByLabelText('完整回调 JSON')
     ).toHaveTextContent('temperature');
     expect(nodeDetail).not.toHaveTextContent('工具 token 归因');
-    expect(within(nodeDetail).getByLabelText('工具调用 JSON')).toHaveTextContent(
-      'total_tokens'
-    );
-    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      'result_context_usage'
-    );
+    expect(
+      within(nodeDetail).getByLabelText('工具调用 JSON')
+    ).toHaveTextContent('total_tokens');
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('result_context_usage');
     expect(nodeDetail).toHaveTextContent('已返回');
     expect(nodeDetail).not.toHaveTextContent('执行未知');
     expect(nodeDetail).toHaveTextContent('weather is clear');
@@ -650,7 +655,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*14 tokens/
+      name: /lookup_weather.*\+10 tokens/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -670,12 +675,12 @@ describe('debug conversation log panel', () => {
       within(nodeDetail).getByLabelText('解析结果 JSON')
     ).toHaveTextContent('temperature');
     expect(nodeDetail).not.toHaveTextContent('工具 token 归因');
-    expect(within(nodeDetail).getByLabelText('工具调用 JSON')).toHaveTextContent(
-      'call_usage'
-    );
-    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      'result_context_usage'
-    );
+    expect(
+      within(nodeDetail).getByLabelText('工具调用 JSON')
+    ).toHaveTextContent('call_usage');
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('result_context_usage');
   }, 10_000);
 
   test('delegates log opening when the canvas shell controls the log panel', () => {

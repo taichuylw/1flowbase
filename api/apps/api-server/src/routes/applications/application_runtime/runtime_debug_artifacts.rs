@@ -64,6 +64,10 @@ impl LlmToolCallbackArtifact {
         }
     }
 
+    fn token_delta(&self) -> Option<i64> {
+        llm_usage_token_delta(self.call_usage.as_ref(), self.result_context_usage.as_ref())
+    }
+
     fn detail_payload(&self) -> Value {
         json!({
             "id": self.id,
@@ -77,6 +81,7 @@ impl LlmToolCallbackArtifact {
             "result_round_index": self.result_round_index,
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
+            "token_delta": self.token_delta(),
         })
     }
 
@@ -91,6 +96,7 @@ impl LlmToolCallbackArtifact {
             "artifact_ref": artifact_id.to_string(),
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
+            "token_delta": self.token_delta(),
         })
     }
 }
@@ -124,6 +130,27 @@ fn record_string_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Str
 
 fn record_value_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Value> {
     keys.iter().find_map(|key| record.get(*key).cloned())
+}
+
+fn llm_usage_total_tokens(usage: Option<&Value>) -> Option<i64> {
+    let total_tokens = usage?.get("total_tokens")?;
+    if let Some(value) = total_tokens.as_i64() {
+        return Some(value);
+    }
+
+    total_tokens
+        .as_u64()
+        .and_then(|value| i64::try_from(value).ok())
+}
+
+fn llm_usage_token_delta(
+    call_usage: Option<&Value>,
+    result_context_usage: Option<&Value>,
+) -> Option<i64> {
+    let call_total = llm_usage_total_tokens(call_usage)?;
+    let result_total = llm_usage_total_tokens(result_context_usage)?;
+
+    result_total.checked_sub(call_total)
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -1320,6 +1347,57 @@ mod tests {
                 "http_status": 500
             }))),
             "failed"
+        );
+    }
+
+    #[test]
+    fn llm_tool_callback_payloads_include_context_token_delta() {
+        let rounds = json!([
+            {
+                "round_index": 0,
+                "usage": {
+                    "total_tokens": 8122
+                },
+                "assistant": {
+                    "role": "assistant",
+                    "content": "need tool",
+                    "tool_calls": [
+                        {
+                            "id": "call_weather",
+                            "name": "lookup_weather"
+                        }
+                    ]
+                }
+            },
+            {
+                "round_index": 1,
+                "tool_results": [
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_weather",
+                        "content": "{\"temperature\":21}"
+                    }
+                ]
+            },
+            {
+                "round_index": 2,
+                "usage": {
+                    "total_tokens": 8224
+                },
+                "assistant": {
+                    "role": "assistant",
+                    "content": "continue"
+                }
+            }
+        ]);
+
+        let callbacks = collect_llm_tool_callbacks(&rounds, &std::collections::HashMap::new());
+
+        assert_eq!(callbacks.len(), 1);
+        assert_eq!(callbacks[0].detail_payload()["token_delta"], json!(102));
+        assert_eq!(
+            callbacks[0].summary_payload(Uuid::now_v7())["token_delta"],
+            json!(102)
         );
     }
 
