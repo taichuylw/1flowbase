@@ -17,8 +17,8 @@ function readQualityGateAction() {
   return fs.readFileSync(path.join(repoRoot, '.github', 'actions', 'quality-gate', 'action.yml'), 'utf8');
 }
 
-function readGitHubReadme() {
-  return fs.readFileSync(path.join(repoRoot, '.github', 'README.md'), 'utf8');
+function readGitHubAutomationDocs() {
+  return fs.readFileSync(path.join(repoRoot, '.github', 'GITHUB_AUTOMATION.md'), 'utf8');
 }
 
 function readReactDoctorConfig() {
@@ -129,7 +129,7 @@ test('React Doctor keeps current frontstage debt as a narrow baseline', () => {
 });
 
 test('GitHub automation docs describe latest-only issue publishing', () => {
-  const readme = readGitHubReadme();
+  const readme = readGitHubAutomationDocs();
 
   assert.match(readme, /push` to `latest`/u);
   assert.match(
@@ -142,7 +142,7 @@ test('GitHub automation docs describe latest-only issue publishing', () => {
 });
 
 test('GitHub automation docs describe the React Doctor frontend gate', () => {
-  const readme = readGitHubReadme();
+  const readme = readGitHubAutomationDocs();
 
   assert.match(readme, /React Doctor frontend gates/u);
   assert.match(readme, /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u);
