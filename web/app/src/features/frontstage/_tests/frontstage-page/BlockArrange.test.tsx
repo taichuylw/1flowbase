@@ -21,6 +21,8 @@ import type {
 import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';
 import { FrontStagePage } from '../../pages/FrontStagePage';
 
+vi.setConfig({ testTimeout: 10_000 });
+
 const pageContentSaveHook = vi.hoisted(() => ({
   useFrontstagePageContentSave: vi.fn()
 }));

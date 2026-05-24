@@ -4,8 +4,6 @@ import {
   Alert,
   AutoComplete,
   Button,
-  Divider,
-  Descriptions,
   Drawer,
   Empty,
   Flex,
@@ -23,8 +21,6 @@ import {
   DeleteOutlined,
   PlusOutlined,
   SettingOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
   ImportOutlined
 } from '@ant-design/icons';
 

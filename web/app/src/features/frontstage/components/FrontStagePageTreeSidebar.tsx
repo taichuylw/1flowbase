@@ -203,9 +203,6 @@ function renderTreeNode({
   const childNodes = node.children ?? [];
   const title = getNodeTitle(node);
   const isDragging = draggedNodeId === node.id;
-  const draggedNode = draggedNodeId
-    ? findNodeById(pageTree, draggedNodeId)
-    : null;
   const isInsideDropTarget =
     dropIndicator?.targetNodeId === node.id &&
     dropIndicator.position === 'inside';
@@ -429,7 +426,7 @@ function renderTreeNode({
             label: '在里面插入',
             icon: <FileAddOutlined />,
             disabled: isOperationPending,
-            onClick: ({ domEvent }: { domEvent: any }) => {
+            onClick: ({ domEvent }: MenuClickInfo) => {
               domEvent.stopPropagation();
               onAddPageInGroup(node.id);
             }

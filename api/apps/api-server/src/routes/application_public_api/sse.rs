@@ -408,17 +408,17 @@ pub async fn send_native_runtime_event_stream(
                 }
             }
             _ = durable_terminal_check.tick() => {
-                if emit_native_terminal_fallback(
-                    &state,
-                    &initial_run,
+                if emit_native_terminal_fallback(NativeTerminalFallback {
+                    state: &state,
+                    initial_run: &initial_run,
                     include_workflow_events,
-                    &sender,
+                    sender: &sender,
                     emitted_public_event,
                     emitted_answer_delta,
-                    "durable_poll",
-                    false,
+                    trigger: "durable_poll",
+                    warn_if_not_terminal: false,
                     ignored_waiting_callback_task_id,
-                )
+                })
                 .await
                 {
                     return;
@@ -427,17 +427,17 @@ pub async fn send_native_runtime_event_stream(
         }
     }
 
-    emit_native_terminal_fallback(
-        &state,
-        &initial_run,
+    emit_native_terminal_fallback(NativeTerminalFallback {
+        state: &state,
+        initial_run: &initial_run,
         include_workflow_events,
-        &sender,
+        sender: &sender,
         emitted_public_event,
         emitted_answer_delta,
-        "stream_closed",
-        true,
+        trigger: "stream_closed",
+        warn_if_not_terminal: true,
         ignored_waiting_callback_task_id,
-    )
+    })
     .await;
 }
 
@@ -463,17 +463,31 @@ async fn send_native_sse_events(
     true
 }
 
-async fn emit_native_terminal_fallback(
-    state: &ApiState,
-    initial_run: &NativeRunResult,
+struct NativeTerminalFallback<'a> {
+    state: &'a ApiState,
+    initial_run: &'a NativeRunResult,
     include_workflow_events: IncludeWorkflowEvents,
-    sender: &mpsc::Sender<Result<Event, Infallible>>,
+    sender: &'a mpsc::Sender<Result<Event, Infallible>>,
     emitted_public_event: bool,
     emitted_answer_delta: bool,
     trigger: &'static str,
     warn_if_not_terminal: bool,
     ignored_waiting_callback_task_id: Option<Uuid>,
-) -> bool {
+}
+
+async fn emit_native_terminal_fallback(fallback: NativeTerminalFallback<'_>) -> bool {
+    let NativeTerminalFallback {
+        state,
+        initial_run,
+        include_workflow_events,
+        sender,
+        emitted_public_event,
+        emitted_answer_delta,
+        trigger,
+        warn_if_not_terminal,
+        ignored_waiting_callback_task_id,
+    } = fallback;
+
     let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
     let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
         if warn_if_not_terminal {

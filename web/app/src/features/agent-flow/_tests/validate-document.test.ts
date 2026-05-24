@@ -10,7 +10,6 @@ import { validateDocument } from '../lib/validate-document';
 const primaryProvider = modelProviderOptionsContract.providers[0];
 const primaryGroup = primaryProvider.model_groups[0];
 const primaryModel = primaryGroup.models[0];
-const secondaryGroup = primaryProvider.model_groups[1];
 
 function createCodeDocumentWithOutputs(
   outputs: Array<{

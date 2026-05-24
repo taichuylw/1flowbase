@@ -372,16 +372,16 @@ async fn send_compatible_runtime_event_stream<F>(
                 }
             }
             _ = durable_terminal_check.tick() => {
-                if emit_compatible_terminal_fallback(
-                    &state,
-                    &initial_run,
-                    &sender,
-                    &mut mapper,
+                if emit_compatible_terminal_fallback(CompatibleTerminalFallback {
+                    state: &state,
+                    initial_run: &initial_run,
+                    sender: &sender,
+                    mapper: &mut mapper,
                     emitted_public_event,
-                    "durable_poll",
-                    false,
+                    trigger: "durable_poll",
+                    warn_if_not_terminal: false,
                     ignored_waiting_callback_task_id,
-                )
+                })
                 .await
                 {
                     return;
@@ -390,16 +390,16 @@ async fn send_compatible_runtime_event_stream<F>(
         }
     }
 
-    emit_compatible_terminal_fallback(
-        &state,
-        &initial_run,
-        &sender,
-        &mut mapper,
+    emit_compatible_terminal_fallback(CompatibleTerminalFallback {
+        state: &state,
+        initial_run: &initial_run,
+        sender: &sender,
+        mapper: &mut mapper,
         emitted_public_event,
-        "stream_closed",
-        true,
+        trigger: "stream_closed",
+        warn_if_not_terminal: true,
         ignored_waiting_callback_task_id,
-    )
+    })
     .await;
 }
 
@@ -467,19 +467,32 @@ fn resume_metadata_from_detail(detail: &domain::ApplicationRunDetail) -> Value {
     })
 }
 
-async fn emit_compatible_terminal_fallback<F>(
-    state: &ApiState,
-    initial_run: &NativeRunResult,
-    sender: &mpsc::Sender<Result<Event, Infallible>>,
-    mapper: &mut F,
+struct CompatibleTerminalFallback<'a, F> {
+    state: &'a ApiState,
+    initial_run: &'a NativeRunResult,
+    sender: &'a mpsc::Sender<Result<Event, Infallible>>,
+    mapper: &'a mut F,
     emitted_public_event: bool,
     trigger: &'static str,
     warn_if_not_terminal: bool,
     ignored_waiting_callback_task_id: Option<uuid::Uuid>,
-) -> bool
+}
+
+async fn emit_compatible_terminal_fallback<F>(fallback: CompatibleTerminalFallback<'_, F>) -> bool
 where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
+    let CompatibleTerminalFallback {
+        state,
+        initial_run,
+        sender,
+        mapper,
+        emitted_public_event,
+        trigger,
+        warn_if_not_terminal,
+        ignored_waiting_callback_task_id,
+    } = fallback;
+
     let latest_run = load_latest_native_run_for_terminal_fallback(state, initial_run).await;
     let Some(terminal_event) = terminal_runtime_event_from_native_run(&latest_run) else {
         if warn_if_not_terminal {

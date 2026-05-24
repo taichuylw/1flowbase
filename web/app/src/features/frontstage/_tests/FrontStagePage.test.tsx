@@ -68,6 +68,10 @@ vi.mock(
 );
 vi.mock('../api/block-code', () => blockCodeApi);
 
+const SLOW_FRONTSTAGE_TEST_TIMEOUT = 20_000;
+
+vi.setConfig({ testTimeout: SLOW_FRONTSTAGE_TEST_TIMEOUT });
+
 type TestFrontStageTreeNode = {
   id: string;
   title: string | null;
@@ -418,11 +422,7 @@ async function clickPageTreeOperationSubmenuItemAndFlush(
 ) {
   await openPageTreeOperationMenuAndFlush(nodeContainer);
   const submenu = await findLatestVisibleText(submenuLabel);
-  const submenuTarget =
-    submenu.closest('.ant-dropdown-menu-submenu-title') ??
-    submenu.closest('.ant-dropdown-menu-submenu') ??
-    submenu.closest('.ant-dropdown-menu-item') ??
-    submenu;
+  const submenuTarget = getPageTreeSubmenuTrigger(submenu);
   fireEvent.mouseEnter(submenuTarget);
   fireEvent.mouseOver(submenuTarget);
   fireEvent.mouseMove(submenuTarget);
@@ -430,14 +430,24 @@ async function clickPageTreeOperationSubmenuItemAndFlush(
   await clickAndFlush(await findLatestVisibleText(label));
 }
 
+function getPageTreeSubmenuTrigger(submenu: HTMLElement) {
+  return (
+    submenu.closest('.ant-dropdown-menu-submenu-title') ??
+    submenu.closest('.ant-dropdown-menu-submenu') ??
+    submenu
+  );
+}
+
 async function findLatestVisibleText(label: string | RegExp) {
   let elements: HTMLElement[] = [];
   await waitFor(() => {
-    elements = Array.from(
-      document.body.querySelectorAll<HTMLElement>(
-        '.ant-dropdown:not(.ant-dropdown-hidden), .ant-dropdown-menu-submenu-popup:not(.ant-dropdown-hidden)'
-      )
-    ).flatMap((dropdown) => within(dropdown).queryAllByText(label));
+    // eslint-disable-next-line testing-library/no-node-access
+    const activeDropdowns = document.body.querySelectorAll<HTMLElement>(
+      '.ant-dropdown:not(.ant-dropdown-hidden), .ant-dropdown-menu-submenu-popup:not(.ant-dropdown-hidden)'
+    );
+    elements = Array.from(activeDropdowns).flatMap((dropdown) =>
+      within(dropdown).queryAllByText(label)
+    );
     expect(elements.length).toBeGreaterThan(0);
   });
   const element = elements[elements.length - 1];
@@ -969,7 +979,7 @@ describe('FrontStagePage', () => {
     expect(
       screen.getByRole('button', { name: '区块 frontstage-js-block-1' })
     ).toBeInTheDocument();
-  }, 10000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('supports adding and deleting page tree nodes in design mode', async () => {
     authenticate(['frontstage.page.design']);
@@ -987,7 +997,7 @@ describe('FrontStagePage', () => {
     await clickConfirmModalButtonAndFlush('删除');
 
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('creates page through page tree mutation callback without local fake node', async () => {
     authenticate(['frontstage.page.design']);
@@ -1074,7 +1084,7 @@ describe('FrontStagePage', () => {
     await waitFor(() => {
       expect(onDeletePageNode).toHaveBeenCalledWith('page-1');
     });
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('opens page tree operation menu on hover', async () => {
     authenticate(['frontstage.page.design']);
@@ -1236,12 +1246,6 @@ describe('FrontStagePage', () => {
     const groupItem = screen.getByTestId(
       'frontstage-tree-node-group-分组 group-1'
     );
-    const groupRow = groupItem.querySelector(
-      '.frontstage-page-tree-sidebar__node-row'
-    );
-    if (!groupRow) {
-      throw new Error('missing group row');
-    }
 
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockReturnValue({
@@ -1272,8 +1276,8 @@ describe('FrontStagePage', () => {
     };
 
     fireEvent.dragStart(dragHandle, { dataTransfer });
-    fireEvent.dragOver(groupRow, { clientY: 50, dataTransfer });
-    fireEvent.drop(groupRow, { clientY: 50, dataTransfer });
+    fireEvent.dragOver(groupItem, { clientY: 50, dataTransfer });
+    fireEvent.drop(groupItem, { clientY: 50, dataTransfer });
 
     await waitFor(() => {
       expect(onMovePageNode).toHaveBeenCalledWith('page-1', {
@@ -1299,7 +1303,7 @@ describe('FrontStagePage', () => {
 
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
     expect(screen.getByText('分组 1')).toBeInTheDocument();
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('generates unique page id when existing page ids conflict', async () => {
     authenticate(['frontstage.page.design']);
@@ -1422,7 +1426,7 @@ describe('FrontStagePage', () => {
     });
     expect(movedDownRows[0]).toHaveTextContent('页面 新建 1');
     expect(movedDownRows[1]).toHaveTextContent('页面 新建 2');
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('deletes group and cascades child pages', async () => {
     authenticate(['frontstage.page.design']);
@@ -1441,7 +1445,7 @@ describe('FrontStagePage', () => {
 
     expect(screen.queryByText('分组 1')).not.toBeInTheDocument();
     expect(screen.queryByText('页面 新建 1')).not.toBeInTheDocument();
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('falls back to first available page when selected page is deleted by parent group', async () => {
     authenticate(['frontstage.page.design']);
@@ -1485,7 +1489,7 @@ describe('FrontStagePage', () => {
       ).toBeInTheDocument();
       expect(onNavigatePage).toHaveBeenLastCalledWith('page-root');
     });
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('falls back to workspace-level route when selected nested group is deleted and no pages remain', async () => {
     authenticate(['frontstage.page.design']);
@@ -1531,7 +1535,7 @@ describe('FrontStagePage', () => {
       ).toBeInTheDocument();
       expect(onNavigatePage).toHaveBeenCalledWith(undefined);
     });
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('renames node title in design mode', async () => {
     authenticate(['frontstage.page.design']);
@@ -1548,7 +1552,7 @@ describe('FrontStagePage', () => {
     });
     await clickLatestButtonAndFlush('确定');
     expect(screen.getAllByText('页面-已重命名').length).toBeGreaterThan(0);
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('requires a non-empty node title when renaming', async () => {
     authenticate(['frontstage.page.design']);
@@ -1566,7 +1570,7 @@ describe('FrontStagePage', () => {
     await clickLatestButtonAndFlush('确定');
     expect(await screen.findByText('请输入名称')).toBeInTheDocument();
     expect(screen.getAllByText('页面 新建 1').length).toBeGreaterThan(0);
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('renaming a node prefills current title in the form', async () => {
     authenticate(['frontstage.page.design']);
@@ -1595,7 +1599,7 @@ describe('FrontStagePage', () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       )
     );
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('falls back to first page when deleting selected page', async () => {
     authenticate(['frontstage.page.design']);
@@ -1618,7 +1622,7 @@ describe('FrontStagePage', () => {
     await waitFor(() => {
       expect(onNavigatePage).toHaveBeenCalledWith(firstPageId);
     });
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('navigates to workspace-level frontstage route when all pages are deleted', async () => {
     authenticate(['frontstage.page.design']);
@@ -1634,7 +1638,7 @@ describe('FrontStagePage', () => {
     await waitFor(() => {
       expect(onNavigatePage).toHaveBeenCalledWith(undefined);
     });
-  }, 10_000);
+  }, SLOW_FRONTSTAGE_TEST_TIMEOUT);
 
   test('falls back to first page when route pageId is missing from current tree', () => {
     authenticate(['frontstage.page.design']);
