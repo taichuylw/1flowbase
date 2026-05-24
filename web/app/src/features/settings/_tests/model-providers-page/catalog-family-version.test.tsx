@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 
 import {
   fireEvent,
@@ -151,8 +149,6 @@ import {
   buildSettingsModelProviderInstances,
   buildSettingsModelProviderOptions
 } from '../model-provider-test-fixtures';
-import { SettingsModelProvidersSection } from '../../pages/settings-page/SettingsModelProvidersSection';
-
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 
 function authenticateWithPermissions(
@@ -198,19 +194,6 @@ function renderApp(pathname: string) {
       <AppRouterProvider />
     </AppProviders>
   );
-}
-
-async function openProviderInstancesModal() {
-  const catalogRow = await screen.findByRole(
-    'row',
-    {
-      name: /OpenAI Compatible/
-    },
-    { timeout: 10_000 }
-  );
-  fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
-
-  return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
 }
 
 describe('ModelProvidersPage - catalog and family version', () => {

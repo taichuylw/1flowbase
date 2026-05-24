@@ -1,27 +1,17 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within
-} from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { expect, vi } from 'vitest';
 
 import { AppProviders } from '../../../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 import {
-  resetFrontstageDesignModeStore,
-  useFrontstageDesignModeStore
+  resetFrontstageDesignModeStore
 } from '../../../../state/frontstage-design-mode-store';
 import type {
   FrontstagePageContent,
   SaveFrontstagePageContentInput
 } from '../../api/page-content';
-import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';
-import { createFrontstageBuiltInJsBlockTemplateCode } from '../../lib/block-templates';
-import type { UseFrontstagePageCanvasRuntimeSessionsResult } from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
+import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';import type { UseFrontstagePageCanvasRuntimeSessionsResult } from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
 import {
   insertPageIntoGroup,
   moveNodeInTree,
@@ -317,163 +307,6 @@ function renderPageWithInitialTree(
   );
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getPageTreeItem(title: string) {
-  return screen.getByRole('button', {
-    name: new RegExp(`${escapeRegExp(title)}\\s+页面节点`)
-  });
-}
-
-function getGroupTreeItem(title: string) {
-  return screen.getByTestId(`frontstage-tree-node-group-${title}`);
-}
-
-async function clickAndFlush(element: HTMLElement) {
-  await act(async () => {
-    element.click();
-  });
-}
-
-async function clickLatestButtonAndFlush(label: string | RegExp) {
-  const buttonName =
-    typeof label === 'string'
-      ? new RegExp(label.split('').map(escapeRegExp).join('\\s*'))
-      : label;
-  const buttons = await screen.findAllByRole('button', {
-    name: buttonName
-  });
-  await clickAndFlush(buttons[buttons.length - 1]);
-}
-
-async function clickConfirmModalButtonAndFlush(label: string | RegExp) {
-  const buttonName =
-    typeof label === 'string'
-      ? new RegExp(label.split('').map(escapeRegExp).join('\\s*'))
-      : label;
-  const dialogs = await screen.findAllByRole('dialog');
-  const buttons = await within(dialogs[dialogs.length - 1]).findAllByRole(
-    'button',
-    { name: buttonName }
-  );
-  await clickAndFlush(buttons[buttons.length - 1]);
-}
-
-async function hoverAddMenuAndFlush() {
-  fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
-}
-
-function getNextDefaultNodeTitle(label: '新增分组' | '新增页面') {
-  const titlePattern =
-    label === '新增分组' ? /^分组 (\d+)$/ : /^页面 新建 (\d+)$/;
-  const existingIndexes = screen
-    .queryAllByText(titlePattern)
-    .map((element) => element.textContent?.match(titlePattern)?.[1])
-    .filter((index): index is string => Boolean(index))
-    .map((index) => Number.parseInt(index, 10))
-    .filter(Number.isFinite);
-  const nextIndex =
-    existingIndexes.length > 0 ? Math.max(...existingIndexes) + 1 : 1;
-
-  return label === '新增分组' ? `分组 ${nextIndex}` : `页面 新建 ${nextIndex}`;
-}
-
-async function clickAddMenuItemAndFlush(label: '新增分组' | '新增页面') {
-  await hoverAddMenuAndFlush();
-  await clickAndFlush(await screen.findByRole('menuitem', { name: label }));
-  fireEvent.change(await screen.findByLabelText('名称'), {
-    target: { value: getNextDefaultNodeTitle(label) }
-  });
-  await clickLatestButtonAndFlush('确定');
-}
-
-async function clickAddMenuItem(label: '新增分组' | '新增页面') {
-  await clickAddMenuItemAndFlush(label);
-}
-
-async function clickAddPageInGroupAndFlush(groupContainer: HTMLElement) {
-  await clickPageTreeOperationMenuItemAndFlush(groupContainer, '在里面插入');
-  fireEvent.change(await screen.findByLabelText('名称'), {
-    target: { value: getNextDefaultNodeTitle('新增页面') }
-  });
-  await clickLatestButtonAndFlush('确定');
-}
-
-async function openPageTreeOperationMenuAndFlush(nodeContainer: HTMLElement) {
-  const menuButtons = within(nodeContainer).getAllByRole('button', {
-    name: '页面操作菜单'
-  });
-  const menuButton = menuButtons[0];
-  if (!menuButton) {
-    throw new Error('expected page tree operation menu button');
-  }
-  await clickAndFlush(menuButton);
-}
-
-async function clickPageTreeOperationMenuItemAndFlush(
-  nodeContainer: HTMLElement,
-  label: string | RegExp
-) {
-  await openPageTreeOperationMenuAndFlush(nodeContainer);
-  await clickAndFlush(await findLatestVisibleText(label));
-}
-
-async function clickPageTreeOperationSubmenuItemAndFlush(
-  nodeContainer: HTMLElement,
-  submenuLabel: string | RegExp,
-  label: string | RegExp
-) {
-  await openPageTreeOperationMenuAndFlush(nodeContainer);
-  const submenu = await findLatestVisibleText(submenuLabel);
-  const submenuTarget = getPageTreeSubmenuTrigger(submenu);
-  fireEvent.mouseEnter(submenuTarget);
-  fireEvent.mouseOver(submenuTarget);
-  fireEvent.mouseMove(submenuTarget);
-  fireEvent.click(submenuTarget);
-  await clickAndFlush(await findLatestVisibleText(label));
-}
-
-function getPageTreeSubmenuTrigger(submenu: HTMLElement) {
-  return (
-    submenu.closest('.ant-dropdown-menu-submenu-title') ??
-    submenu.closest('.ant-dropdown-menu-submenu') ??
-    submenu
-  );
-}
-
-async function findLatestVisibleText(label: string | RegExp) {
-  let elements: HTMLElement[] = [];
-  await waitFor(() => {
-    // eslint-disable-next-line testing-library/no-node-access
-    const activeDropdowns = document.body.querySelectorAll<HTMLElement>(
-      '.ant-dropdown:not(.ant-dropdown-hidden), .ant-dropdown-menu-submenu-popup:not(.ant-dropdown-hidden)'
-    );
-    elements = Array.from(activeDropdowns).flatMap((dropdown) =>
-      within(dropdown).queryAllByText(label)
-    );
-    expect(elements.length).toBeGreaterThan(0);
-  });
-  const element = elements[elements.length - 1];
-  if (!element) {
-    throw new Error(`expected visible text for ${String(label)}`);
-  }
-  return element;
-}
-
-function activateDesignMode() {
-  act(() => {
-    useFrontstageDesignModeStore.getState().setDesignMode(true);
-  });
-}
-
-function exitDesignMode() {
-  act(() => {
-    useFrontstageDesignModeStore.getState().setDesignMode(false);
-  });
-}
-
 function mockPageContentSaveState(
   overrides: Partial<FrontstagePageContentSaveState> = {}
 ): FrontstagePageContentSaveState {
@@ -587,23 +420,7 @@ function mockRuntimeSessions(
     hasError: false,
     ...overrides
   });
-}
-
-function getSavedBlocks(input: SaveFrontstagePageContentInput) {
-  const payload = input.root.payload;
-  if (typeof payload !== 'object' || payload === null) {
-    throw new Error('root payload must be an object');
-  }
-
-  const blocks = (payload as { blocks?: unknown }).blocks;
-  if (!Array.isArray(blocks)) {
-    throw new Error('root payload blocks must be an array');
-  }
-
-  return blocks as Array<Record<string, unknown>>;
-}
-
-describe('FrontStagePage - runtime canvas state', () => {
+}describe('FrontStagePage - runtime canvas state', () => {
   beforeEach(() => {
     resetAuthStore();
     resetFrontstageDesignModeStore();

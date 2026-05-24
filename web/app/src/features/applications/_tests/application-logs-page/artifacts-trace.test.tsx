@@ -5,8 +5,6 @@ import {
   waitFor,
   within
 } from '@testing-library/react';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { vi } from 'vitest';
 
 const runtimeApi = vi.hoisted(() => ({
@@ -59,7 +57,7 @@ vi.mock('../../api/runtime', () => runtimeApi);
 
 import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
-import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
+import { resetAuthStore } from '../../../../state/auth-store';
 import { ApplicationLogsPage } from '../../pages/ApplicationLogsPage';
 
 function applicationRunsPage<T>(

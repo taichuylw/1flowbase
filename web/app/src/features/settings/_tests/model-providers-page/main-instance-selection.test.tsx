@@ -1,6 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import {
   fireEvent,
   render,
@@ -151,8 +148,6 @@ import {
   buildSettingsModelProviderInstances,
   buildSettingsModelProviderOptions
 } from '../model-provider-test-fixtures';
-import { SettingsModelProvidersSection } from '../../pages/settings-page/SettingsModelProvidersSection';
-
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 
 function authenticateWithPermissions(

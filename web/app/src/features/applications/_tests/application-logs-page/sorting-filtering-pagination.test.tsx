@@ -59,7 +59,7 @@ vi.mock('../../api/runtime', () => runtimeApi);
 
 import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
-import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
+import { resetAuthStore } from '../../../../state/auth-store';
 import { ApplicationLogsPage } from '../../pages/ApplicationLogsPage';
 
 function applicationRunsPage<T>(
@@ -76,14 +76,6 @@ function applicationRunsPage<T>(
     page: overrides?.page ?? 1,
     page_size: overrides?.page_size ?? 20
   };
-}
-
-function lastElement<T>(items: T[], message: string): T {
-  const item = items.at(-1);
-  if (!item) {
-    throw new Error(message);
-  }
-  return item;
 }
 
 function sampleRunDetail(): ApplicationRunDetail {

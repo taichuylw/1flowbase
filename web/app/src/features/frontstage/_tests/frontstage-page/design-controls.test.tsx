@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within
 } from '@testing-library/react';
 import { useState } from 'react';
 import { expect, vi } from 'vitest';
@@ -301,165 +300,8 @@ function renderPage(
   );
 }
 
-function renderPageWithInitialTree(
-  pageTree: TestFrontStageTreeNode[],
-  pageId?: string,
-  onNavigatePage?: (pageId?: string) => void
-) {
-  return render(
-    <AppProviders>
-      <FrontStagePageHarness
-        pageId={pageId}
-        onNavigatePage={onNavigatePage}
-        initialPageTree={pageTree}
-      />
-    </AppProviders>
-  );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getPageTreeItem(title: string) {
-  return screen.getByRole('button', {
-    name: new RegExp(`${escapeRegExp(title)}\\s+页面节点`)
-  });
-}
-
-function getGroupTreeItem(title: string) {
-  return screen.getByTestId(`frontstage-tree-node-group-${title}`);
-}
-
-async function clickAndFlush(element: HTMLElement) {
-  await act(async () => {
-    element.click();
-  });
-}
-
-async function clickLatestButtonAndFlush(label: string | RegExp) {
-  const buttonName =
-    typeof label === 'string'
-      ? new RegExp(label.split('').map(escapeRegExp).join('\\s*'))
-      : label;
-  const buttons = await screen.findAllByRole('button', {
-    name: buttonName
-  });
-  await clickAndFlush(buttons[buttons.length - 1]);
-}
-
-async function clickConfirmModalButtonAndFlush(label: string | RegExp) {
-  const buttonName =
-    typeof label === 'string'
-      ? new RegExp(label.split('').map(escapeRegExp).join('\\s*'))
-      : label;
-  const dialogs = await screen.findAllByRole('dialog');
-  const buttons = await within(dialogs[dialogs.length - 1]).findAllByRole(
-    'button',
-    { name: buttonName }
-  );
-  await clickAndFlush(buttons[buttons.length - 1]);
-}
-
 async function hoverAddMenuAndFlush() {
   fireEvent.mouseEnter(screen.getByRole('button', { name: '添加菜单' }));
-}
-
-function getNextDefaultNodeTitle(label: '新增分组' | '新增页面') {
-  const titlePattern =
-    label === '新增分组' ? /^分组 (\d+)$/ : /^页面 新建 (\d+)$/;
-  const existingIndexes = screen
-    .queryAllByText(titlePattern)
-    .map((element) => element.textContent?.match(titlePattern)?.[1])
-    .filter((index): index is string => Boolean(index))
-    .map((index) => Number.parseInt(index, 10))
-    .filter(Number.isFinite);
-  const nextIndex =
-    existingIndexes.length > 0 ? Math.max(...existingIndexes) + 1 : 1;
-
-  return label === '新增分组' ? `分组 ${nextIndex}` : `页面 新建 ${nextIndex}`;
-}
-
-async function clickAddMenuItemAndFlush(label: '新增分组' | '新增页面') {
-  await hoverAddMenuAndFlush();
-  await clickAndFlush(await screen.findByRole('menuitem', { name: label }));
-  fireEvent.change(await screen.findByLabelText('名称'), {
-    target: { value: getNextDefaultNodeTitle(label) }
-  });
-  await clickLatestButtonAndFlush('确定');
-}
-
-async function clickAddMenuItem(label: '新增分组' | '新增页面') {
-  await clickAddMenuItemAndFlush(label);
-}
-
-async function clickAddPageInGroupAndFlush(groupContainer: HTMLElement) {
-  await clickPageTreeOperationMenuItemAndFlush(groupContainer, '在里面插入');
-  fireEvent.change(await screen.findByLabelText('名称'), {
-    target: { value: getNextDefaultNodeTitle('新增页面') }
-  });
-  await clickLatestButtonAndFlush('确定');
-}
-
-async function openPageTreeOperationMenuAndFlush(nodeContainer: HTMLElement) {
-  const menuButtons = within(nodeContainer).getAllByRole('button', {
-    name: '页面操作菜单'
-  });
-  const menuButton = menuButtons[0];
-  if (!menuButton) {
-    throw new Error('expected page tree operation menu button');
-  }
-  await clickAndFlush(menuButton);
-}
-
-async function clickPageTreeOperationMenuItemAndFlush(
-  nodeContainer: HTMLElement,
-  label: string | RegExp
-) {
-  await openPageTreeOperationMenuAndFlush(nodeContainer);
-  await clickAndFlush(await findLatestVisibleText(label));
-}
-
-async function clickPageTreeOperationSubmenuItemAndFlush(
-  nodeContainer: HTMLElement,
-  submenuLabel: string | RegExp,
-  label: string | RegExp
-) {
-  await openPageTreeOperationMenuAndFlush(nodeContainer);
-  const submenu = await findLatestVisibleText(submenuLabel);
-  const submenuTarget = getPageTreeSubmenuTrigger(submenu);
-  fireEvent.mouseEnter(submenuTarget);
-  fireEvent.mouseOver(submenuTarget);
-  fireEvent.mouseMove(submenuTarget);
-  fireEvent.click(submenuTarget);
-  await clickAndFlush(await findLatestVisibleText(label));
-}
-
-function getPageTreeSubmenuTrigger(submenu: HTMLElement) {
-  return (
-    submenu.closest('.ant-dropdown-menu-submenu-title') ??
-    submenu.closest('.ant-dropdown-menu-submenu') ??
-    submenu
-  );
-}
-
-async function findLatestVisibleText(label: string | RegExp) {
-  let elements: HTMLElement[] = [];
-  await waitFor(() => {
-    // eslint-disable-next-line testing-library/no-node-access
-    const activeDropdowns = document.body.querySelectorAll<HTMLElement>(
-      '.ant-dropdown:not(.ant-dropdown-hidden), .ant-dropdown-menu-submenu-popup:not(.ant-dropdown-hidden)'
-    );
-    elements = Array.from(activeDropdowns).flatMap((dropdown) =>
-      within(dropdown).queryAllByText(label)
-    );
-    expect(elements.length).toBeGreaterThan(0);
-  });
-  const element = elements[elements.length - 1];
-  if (!element) {
-    throw new Error(`expected visible text for ${String(label)}`);
-  }
-  return element;
 }
 
 function activateDesignMode() {
@@ -517,37 +359,6 @@ function createCatalogEntry(
     },
     uiCapabilities: [],
     raw: {} as NormalizedFrontstageBlockCatalogEntry['raw'],
-    ...overrides
-  };
-}
-
-function createCatalogMatchedBlockPayload(
-  overrides: Record<string, unknown> = {}
-): Record<string, unknown> {
-  return {
-    id: 'frontstage-js-block-1',
-    codeRef: 'frontstage-js-block-1-code',
-    catalog: {
-      providerCode: '1flowbase',
-      installationId: 'builtin-installation'
-    },
-    contribution: {
-      pluginId: 'builtin-frontstage',
-      pluginVersion: '1.0.0',
-      code: 'frontstage.js-ui-block'
-    },
-    props: {
-      title: 'Landing hero'
-    },
-    'x-layout': {
-      order: 0,
-      region: 'main'
-    },
-    runtime: {
-      kind: 'iframe',
-      entry: 'index.js',
-      hint: 'iframe'
-    },
     ...overrides
   };
 }

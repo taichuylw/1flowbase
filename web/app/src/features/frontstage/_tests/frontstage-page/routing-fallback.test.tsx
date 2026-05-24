@@ -19,9 +19,7 @@ import type {
   FrontstagePageContent,
   SaveFrontstagePageContentInput
 } from '../../api/page-content';
-import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';
-import { createFrontstageBuiltInJsBlockTemplateCode } from '../../lib/block-templates';
-import type { UseFrontstagePageCanvasRuntimeSessionsResult } from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
+import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';import type { UseFrontstagePageCanvasRuntimeSessionsResult } from '../../hooks/use-frontstage-page-canvas-runtime-sessions';
 import {
   insertPageIntoGroup,
   moveNodeInTree,
@@ -393,14 +391,6 @@ async function clickAddMenuItem(label: '新增分组' | '新增页面') {
   await clickAddMenuItemAndFlush(label);
 }
 
-async function clickAddPageInGroupAndFlush(groupContainer: HTMLElement) {
-  await clickPageTreeOperationMenuItemAndFlush(groupContainer, '在里面插入');
-  fireEvent.change(await screen.findByLabelText('名称'), {
-    target: { value: getNextDefaultNodeTitle('新增页面') }
-  });
-  await clickLatestButtonAndFlush('确定');
-}
-
 async function openPageTreeOperationMenuAndFlush(nodeContainer: HTMLElement) {
   const menuButtons = within(nodeContainer).getAllByRole('button', {
     name: '页面操作菜单'
@@ -418,29 +408,6 @@ async function clickPageTreeOperationMenuItemAndFlush(
 ) {
   await openPageTreeOperationMenuAndFlush(nodeContainer);
   await clickAndFlush(await findLatestVisibleText(label));
-}
-
-async function clickPageTreeOperationSubmenuItemAndFlush(
-  nodeContainer: HTMLElement,
-  submenuLabel: string | RegExp,
-  label: string | RegExp
-) {
-  await openPageTreeOperationMenuAndFlush(nodeContainer);
-  const submenu = await findLatestVisibleText(submenuLabel);
-  const submenuTarget = getPageTreeSubmenuTrigger(submenu);
-  fireEvent.mouseEnter(submenuTarget);
-  fireEvent.mouseOver(submenuTarget);
-  fireEvent.mouseMove(submenuTarget);
-  fireEvent.click(submenuTarget);
-  await clickAndFlush(await findLatestVisibleText(label));
-}
-
-function getPageTreeSubmenuTrigger(submenu: HTMLElement) {
-  return (
-    submenu.closest('.ant-dropdown-menu-submenu-title') ??
-    submenu.closest('.ant-dropdown-menu-submenu') ??
-    submenu
-  );
 }
 
 async function findLatestVisibleText(label: string | RegExp) {
@@ -468,12 +435,6 @@ function activateDesignMode() {
   });
 }
 
-function exitDesignMode() {
-  act(() => {
-    useFrontstageDesignModeStore.getState().setDesignMode(false);
-  });
-}
-
 function mockPageContentSaveState(
   overrides: Partial<FrontstagePageContentSaveState> = {}
 ): FrontstagePageContentSaveState {
@@ -491,65 +452,6 @@ function mockPageContentSaveState(
 
   pageContentSaveHook.useFrontstagePageContentSave.mockReturnValue(state);
   return state;
-}
-
-function createCatalogEntry(
-  overrides: Partial<NormalizedFrontstageBlockCatalogEntry> = {}
-): NormalizedFrontstageBlockCatalogEntry {
-  return {
-    id: '1flowbase:frontstage.js-ui-block',
-    runtimeKind: 'iframe',
-    installationId: 'builtin-installation',
-    providerCode: '1flowbase',
-    pluginId: 'builtin-frontstage',
-    pluginVersion: '1.0.0',
-    contributionCode: 'frontstage.js-ui-block',
-    title: '空白 JS Block',
-    entry: 'index.js',
-    permissions: {
-      network: 'none',
-      storage: 'none',
-      secrets: 'none'
-    },
-    contextContract: {
-      primitives: [],
-      inputSchema: {}
-    },
-    uiCapabilities: [],
-    raw: {} as NormalizedFrontstageBlockCatalogEntry['raw'],
-    ...overrides
-  };
-}
-
-function createCatalogMatchedBlockPayload(
-  overrides: Record<string, unknown> = {}
-): Record<string, unknown> {
-  return {
-    id: 'frontstage-js-block-1',
-    codeRef: 'frontstage-js-block-1-code',
-    catalog: {
-      providerCode: '1flowbase',
-      installationId: 'builtin-installation'
-    },
-    contribution: {
-      pluginId: 'builtin-frontstage',
-      pluginVersion: '1.0.0',
-      code: 'frontstage.js-ui-block'
-    },
-    props: {
-      title: 'Landing hero'
-    },
-    'x-layout': {
-      order: 0,
-      region: 'main'
-    },
-    runtime: {
-      kind: 'iframe',
-      entry: 'index.js',
-      hint: 'iframe'
-    },
-    ...overrides
-  };
 }
 
 function mockFrontstageBlockCatalog(
@@ -587,23 +489,7 @@ function mockRuntimeSessions(
     hasError: false,
     ...overrides
   });
-}
-
-function getSavedBlocks(input: SaveFrontstagePageContentInput) {
-  const payload = input.root.payload;
-  if (typeof payload !== 'object' || payload === null) {
-    throw new Error('root payload must be an object');
-  }
-
-  const blocks = (payload as { blocks?: unknown }).blocks;
-  if (!Array.isArray(blocks)) {
-    throw new Error('root payload blocks must be an array');
-  }
-
-  return blocks as Array<Record<string, unknown>>;
-}
-
-describe('FrontStagePage - routing fallback', () => {
+}describe('FrontStagePage - routing fallback', () => {
   beforeEach(() => {
     resetAuthStore();
     resetFrontstageDesignModeStore();

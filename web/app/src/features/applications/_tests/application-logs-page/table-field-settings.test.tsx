@@ -78,14 +78,6 @@ function applicationRunsPage<T>(
   };
 }
 
-function lastElement<T>(items: T[], message: string): T {
-  const item = items.at(-1);
-  if (!item) {
-    throw new Error(message);
-  }
-  return item;
-}
-
 function sampleRunDetail(): ApplicationRunDetail {
   return {
     run: {
