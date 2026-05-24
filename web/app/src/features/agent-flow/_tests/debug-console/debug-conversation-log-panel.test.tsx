@@ -33,6 +33,11 @@ const assistantMessage: AgentFlowDebugMessage = {
   rawOutput: {
     answer: '你好，我可以帮你。'
   },
+  statistics: {
+    total_tokens: 154,
+    unique_node_count: 2,
+    tool_callback_count: 0
+  },
   traceSummary: [
     {
       nodeId: 'node-start',
@@ -434,6 +439,13 @@ describe('debug conversation log panel', () => {
     expect(within(panel).getByText('run-1')).toBeInTheDocument();
     expect(within(panel).getByText('协议')).toBeInTheDocument();
     expect(within(panel).getByText('OpenAI Responses')).toBeInTheDocument();
+    expect(within(panel).getByText('总 tokens')).toBeInTheDocument();
+    expect(within(panel).getByText('154')).toBeInTheDocument();
+    expect(within(panel).getByText('真实节点数')).toBeInTheDocument();
+    expect(within(panel).getByText('2')).toBeInTheDocument();
+    expect(within(panel).getByText('工具回调次数')).toBeInTheDocument();
+    expect(within(panel).getByText('0')).toBeInTheDocument();
+    expect(within(panel).queryByText('节点数')).not.toBeInTheDocument();
     expect(within(panel).queryByText('数据处理')).not.toBeInTheDocument();
     expect(within(panel).queryByText('provider')).not.toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::{collections::HashSet, future::Future, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
@@ -112,6 +112,7 @@ pub struct FlowRunSummaryResponse {
     pub subject: application_logs::ApplicationRunSubjectResponse,
     pub actor: application_logs::ApplicationRunActorResponse,
     pub correlation: application_logs::ApplicationRunCorrelationResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub created_at: String,
@@ -249,6 +250,7 @@ pub struct RunEventResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApplicationRunDetailResponse {
     pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
     pub detail: application_logs::ApplicationRunTypedDetailResponse,
     pub flow_run: FlowRunResponse,
     pub node_runs: Vec<NodeRunResponse>,
@@ -362,6 +364,7 @@ fn format_optional_time(value: Option<time::OffsetDateTime>) -> Option<String> {
 fn to_flow_run_summary_response(
     application: &domain::ApplicationRecord,
     summary: domain::ApplicationRunSummary,
+    statistics: application_logs::ApplicationRunStatisticsResponse,
 ) -> FlowRunSummaryResponse {
     let application_type = application.application_type.as_str().to_string();
     let run_object_kind = application.sections.logs.run_object_kind.clone();
@@ -404,11 +407,94 @@ fn to_flow_run_summary_response(
         subject,
         actor,
         correlation,
+        statistics,
         started_at: format_time(summary.started_at),
         finished_at: format_optional_time(summary.finished_at),
         created_at: format_time(summary.created_at),
         updated_at: format_time(summary.updated_at),
     }
+}
+
+fn usage_token_value(value: &serde_json::Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
+}
+
+fn usage_total_tokens(usage: &serde_json::Value) -> Option<i64> {
+    if let Some(total_tokens) = usage.get("total_tokens").and_then(usage_token_value) {
+        return Some(total_tokens);
+    }
+
+    let segments = ["input_tokens", "output_tokens", "reasoning_tokens"];
+    let mut total = 0_i64;
+    let mut has_segment = false;
+
+    for segment in segments {
+        if let Some(tokens) = usage.get(segment).and_then(usage_token_value) {
+            total += tokens;
+            has_segment = true;
+        }
+    }
+
+    has_segment.then_some(total)
+}
+
+fn metrics_payload_total_tokens(metrics_payload: &serde_json::Value) -> Option<i64> {
+    metrics_payload.get("usage").and_then(usage_total_tokens)
+}
+
+fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
+    if task.callback_kind != "llm_tool_calls" {
+        return 0;
+    }
+
+    task.request_payload
+        .get("tool_calls")
+        .and_then(serde_json::Value::as_array)
+        .map(|tool_calls| tool_calls.len() as i64)
+        .unwrap_or(0)
+}
+
+fn application_run_statistics(
+    detail: &domain::ApplicationRunDetail,
+) -> application_logs::ApplicationRunStatisticsResponse {
+    let mut unique_node_ids = HashSet::new();
+    let mut total_tokens = None;
+
+    for node_run in &detail.node_runs {
+        unique_node_ids.insert(node_run.node_id.as_str());
+
+        if let Some(node_tokens) = metrics_payload_total_tokens(&node_run.metrics_payload) {
+            total_tokens = Some(total_tokens.unwrap_or(0) + node_tokens);
+        }
+    }
+
+    application_logs::ApplicationRunStatisticsResponse {
+        total_tokens,
+        unique_node_count: unique_node_ids.len() as i64,
+        tool_callback_count: detail
+            .callback_tasks
+            .iter()
+            .map(callback_task_tool_callback_count)
+            .sum(),
+    }
+}
+
+async fn application_run_statistics_for_flow_run(
+    store: &MainDurableStore,
+    application_id: Uuid,
+    flow_run_id: Uuid,
+) -> Result<application_logs::ApplicationRunStatisticsResponse, ApiError> {
+    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+        store,
+        application_id,
+        flow_run_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+
+    Ok(application_run_statistics(&detail))
 }
 
 fn application_runs_created_after(query: &ApplicationRunsQuery) -> Option<OffsetDateTime> {
@@ -828,6 +914,7 @@ fn to_application_run_detail_response(
     application: &domain::ApplicationRecord,
     detail: domain::ApplicationRunDetail,
 ) -> ApplicationRunDetailResponse {
+    let statistics = application_run_statistics(&detail);
     let flow_run = to_flow_run_response(detail.flow_run.clone());
     let node_runs = detail
         .node_runs
@@ -902,6 +989,7 @@ fn to_application_run_detail_response(
 
     ApplicationRunDetailResponse {
         run,
+        statistics,
         detail: typed_detail,
         flow_run,
         node_runs,
@@ -1547,12 +1635,21 @@ pub async fn list_application_runs(
         )
         .await?;
 
+    let mut items = Vec::with_capacity(runs_page.items.len());
+
+    for summary in runs_page.items {
+        let statistics =
+            application_run_statistics_for_flow_run(&state.store, id, summary.id).await?;
+
+        items.push(to_flow_run_summary_response(
+            &application,
+            summary,
+            statistics,
+        ));
+    }
+
     Ok(Json(ApiSuccess::new(FlowRunSummaryPageResponse {
-        items: runs_page
-            .items
-            .into_iter()
-            .map(|summary| to_flow_run_summary_response(&application, summary))
-            .collect(),
+        items,
         total: runs_page.total,
         page: runs_page.page,
         page_size: runs_page.page_size,
@@ -1995,6 +2092,27 @@ mod tests {
             ),
             Some(11)
         );
+    }
+
+    #[test]
+    fn usage_total_tokens_uses_total_or_known_segments() {
+        assert_eq!(
+            usage_total_tokens(&serde_json::json!({
+                "total_tokens": 128,
+                "input_tokens": 40,
+                "output_tokens": 12
+            })),
+            Some(128)
+        );
+        assert_eq!(
+            usage_total_tokens(&serde_json::json!({
+                "input_tokens": 40,
+                "output_tokens": 12,
+                "reasoning_tokens": 6
+            })),
+            Some(58)
+        );
+        assert_eq!(usage_total_tokens(&serde_json::json!({})), None);
     }
 
     #[test]

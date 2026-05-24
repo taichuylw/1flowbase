@@ -65,6 +65,13 @@ pub struct ApplicationRunLogResponse {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunStatisticsResponse {
+    pub total_tokens: Option<i64>,
+    pub unique_node_count: i64,
+    pub tool_callback_count: i64,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApplicationRunTypedDetailResponse {
     pub kind: String,

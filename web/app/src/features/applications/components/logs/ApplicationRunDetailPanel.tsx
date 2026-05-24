@@ -176,6 +176,7 @@ function buildConversationLogMessage(
     compatibilityModeLabel:
       formatApplicationRunCompatibilityMode(compatibilityMode),
     rawOutput,
+    statistics: detail.statistics,
     traceSummary: mapRunDetailToTrace(detail)
   };
 }

@@ -109,6 +109,11 @@ function sampleRunDetail(): ApplicationRunDetail {
       created_at: '2026-04-17T09:00:00Z',
       updated_at: '2026-04-17T09:00:01Z'
     },
+    statistics: {
+      total_tokens: 50,
+      unique_node_count: 3,
+      tool_callback_count: 20
+    },
     flow_run: {
       id: 'run-1',
       application_id: 'app-1',
@@ -226,6 +231,11 @@ describe('ApplicationLogsPage', () => {
           expand_id: 'customer-42',
           authorized_account: 'root',
           compatibility_mode: 'openai-responses-v1',
+          statistics: {
+            total_tokens: 50,
+            unique_node_count: 3,
+            tool_callback_count: 20
+          },
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z',
@@ -304,6 +314,18 @@ describe('ApplicationLogsPage', () => {
         name: 'expand_id'
       })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: '总 tokens' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: '真实节点数' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: '工具回调次数' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('50')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
     expect(runtimeApi.fetchApplicationRuns).toHaveBeenCalledWith('app-1', {
       page: 1,
       pageSize: 20,
@@ -454,6 +476,13 @@ describe('ApplicationLogsPage', () => {
     );
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
     expect(within(logPanel).getByText('OpenAI Responses')).toBeInTheDocument();
+    expect(within(logPanel).getByText('总 tokens')).toBeInTheDocument();
+    expect(within(logPanel).getByText('50')).toBeInTheDocument();
+    expect(within(logPanel).getByText('真实节点数')).toBeInTheDocument();
+    expect(within(logPanel).getByText('3')).toBeInTheDocument();
+    expect(within(logPanel).getByText('工具回调次数')).toBeInTheDocument();
+    expect(within(logPanel).getByText('20')).toBeInTheDocument();
+    expect(within(logPanel).queryByText('节点数')).not.toBeInTheDocument();
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
     const logTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
