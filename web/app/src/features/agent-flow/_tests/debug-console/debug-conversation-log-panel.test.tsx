@@ -131,6 +131,7 @@ const llmRoundAssistantMessage: AgentFlowDebugMessage = {
                     role: 'tool',
                     tool_call_id: 'call_weather',
                     token_delta: 10,
+                    duration_ms: 1234,
                     result_context_usage: {
                       input_tokens: 20,
                       input_cache_hit_tokens: 8,
@@ -202,6 +203,7 @@ const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
                     total_tokens: 24
                   },
                   token_delta: 10,
+                  duration_ms: 1234,
                   artifact_ref: 'artifact-tool-call-weather'
                 }
               ]
@@ -230,6 +232,7 @@ const toolCallbackDetailPayload = {
     total_tokens: 24
   },
   token_delta: 10,
+  duration_ms: 1234,
   request_payload: {
     id: 'call_weather',
     name: 'lookup_weather',
@@ -247,6 +250,7 @@ const toolCallbackDetailPayload = {
     role: 'tool',
     tool_call_id: 'call_weather',
     token_delta: 10,
+    duration_ms: 1234,
     result_context_usage: {
       input_tokens: 20,
       input_cache_hit_tokens: 8,
@@ -518,10 +522,10 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*\+10 tokens/
+      name: /lookup_weather.*\+10 tokens.*1\.2 s/
     });
     expect(toolCallback).toHaveTextContent('lookup_weather');
-    expect(toolCallback).toHaveTextContent('+10 tokens');
+    expect(toolCallback).toHaveTextContent('+10 tokens · 1.2 s');
     expect(toolCallback).not.toHaveTextContent('14 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
     expect(
@@ -655,7 +659,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*\+10 tokens/
+      name: /lookup_weather.*\+10 tokens.*1\.2 s/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')

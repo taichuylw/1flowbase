@@ -60,27 +60,45 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
-function toolTokenSummary(callback: LlmToolCallback) {
-  return callback.token_delta;
-}
-
 function formatTokenDelta(tokenDelta: number) {
   return tokenDelta >= 0 ? `+${tokenDelta}` : `${tokenDelta}`;
 }
 
-function LlmToolInlineTokenSummary({
-  totalTokens
-}: {
-  totalTokens: number | null;
-}) {
-  if (totalTokens === null) {
+function formatDuration(durationMs: number) {
+  if (durationMs < 1000) {
+    return `${durationMs} ms`;
+  }
+
+  const seconds = durationMs / 1000;
+  const roundedSeconds = Math.round(seconds * 10) / 10;
+  return `${Number.isInteger(roundedSeconds) ? roundedSeconds.toFixed(0) : roundedSeconds.toFixed(1)} s`;
+}
+
+function toolMetricsSummary(callback: LlmToolCallback) {
+  const metrics = [
+    typeof callback.token_delta === 'number'
+      ? `${formatTokenDelta(callback.token_delta)} tokens`
+      : null,
+    typeof callback.duration_ms === 'number'
+      ? formatDuration(callback.duration_ms)
+      : null
+  ].filter((metric): metric is string => Boolean(metric));
+
+  return metrics.length > 0 ? metrics.join(' · ') : null;
+}
+
+function LlmToolInlineMetrics({ metricText }: { metricText: string | null }) {
+  if (metricText === null) {
     return null;
   }
 
   return (
-    <span className="agent-flow-editor__debug-llm-tool-inline-tokens">
-      <Tag>{formatTokenDelta(totalTokens)} tokens</Tag>
-    </span>
+    <Typography.Text
+      className="agent-flow-editor__debug-llm-tool-inline-metrics"
+      type="secondary"
+    >
+      {metricText}
+    </Typography.Text>
   );
 }
 
@@ -99,7 +117,7 @@ function LlmToolCallbackItem({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onToggle: () => void;
 }) {
-  const totalTokens = toolTokenSummary(callback);
+  const metricsText = toolMetricsSummary(callback);
 
   return (
     <article
@@ -114,7 +132,7 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
-          <LlmToolInlineTokenSummary totalTokens={totalTokens} />
+          <LlmToolInlineMetrics metricText={metricsText} />
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
@@ -213,6 +231,7 @@ export function LlmToolTraceTree({
             loadedCallback.result_context_usage ??
             callback.result_context_usage,
           token_delta: loadedCallback.token_delta ?? callback.token_delta,
+          duration_ms: loadedCallback.duration_ms ?? callback.duration_ms,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
         };

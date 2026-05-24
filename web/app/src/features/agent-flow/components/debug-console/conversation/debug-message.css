@@ -339,10 +339,9 @@
   min-width: 0;
 }
 
-.agent-flow-editor__debug-llm-tool-inline-tokens {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+.agent-flow-editor__debug-llm-tool-inline-metrics {
+  font-size: 0.875rem;
+  line-height: 1.4;
 }
 
 .agent-flow-editor__debug-llm-tool-detail {
