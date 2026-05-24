@@ -232,6 +232,11 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
                 subject: { kind: 'agent_flow', id: 'app-1' },
                 actor: { kind: 'user', id: 'user-1', display_name: 'root' },
                 correlation: {},
+                statistics: {
+                  total_tokens: 50,
+                  unique_node_count: 3,
+                  tool_callback_count: 20
+                },
                 started_at: '2026-05-08T00:00:00Z',
                 finished_at: null,
                 created_at: '2026-05-08T00:00:00Z',
@@ -255,7 +260,12 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
           application_type: 'agent_flow',
           run_object_kind: 'application_run',
           compatibility_mode: null,
-          subject: { kind: 'agent_flow' }
+          subject: { kind: 'agent_flow' },
+          statistics: {
+            total_tokens: 50,
+            unique_node_count: 3,
+            tool_callback_count: 20
+          }
         }
       ]
     });
@@ -287,6 +297,11 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
               created_at: '2026-05-08T00:00:00Z',
               updated_at: '2026-05-08T00:00:00Z'
             },
+            statistics: {
+              total_tokens: null,
+              unique_node_count: 0,
+              tool_callback_count: 0
+            },
             detail: {
               kind: 'agent_flow',
               flow_run: { id: 'run-1' },
@@ -316,6 +331,11 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       run: {
         application_type: 'agent_flow',
         run_object_kind: 'application_run'
+      },
+      statistics: {
+        total_tokens: null,
+        unique_node_count: 0,
+        tool_callback_count: 0
       },
       detail: { kind: 'agent_flow' },
       flow_run: { id: 'run-1' }

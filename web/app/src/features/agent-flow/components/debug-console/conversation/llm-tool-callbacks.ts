@@ -16,6 +16,8 @@ export interface LlmToolCallback {
   resultRoundIndex: number | null;
   call_usage: Record<string, unknown> | null;
   result_context_usage: Record<string, unknown> | null;
+  token_delta: number | null;
+  duration_ms: number | null;
   detailArtifactRef?: string | null;
 }
 
@@ -65,6 +67,21 @@ function firstStringField(
     const value = record[key];
 
     if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function optionalNumberField(
+  record: Record<string, unknown>,
+  keys: string[]
+): number | null {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
     }
   }
@@ -160,6 +177,8 @@ function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
         result_context_usage: optionalRecordField(toolCallback, [
           'result_context_usage'
         ]),
+        token_delta: optionalNumberField(toolCallback, ['token_delta']),
+        duration_ms: optionalNumberField(toolCallback, ['duration_ms']),
         detailArtifactRef: firstStringField(toolCallback, [
           'artifact_ref',
           'detail_artifact_ref'
@@ -206,6 +225,8 @@ export function readLlmToolCallbackDetail(
     result_context_usage: optionalRecordField(loadedPayload, [
       'result_context_usage'
     ]),
+    token_delta: optionalNumberField(loadedPayload, ['token_delta']),
+    duration_ms: optionalNumberField(loadedPayload, ['duration_ms']),
     detailArtifactRef:
       firstStringField(loadedPayload, [
         'artifact_ref',
@@ -450,7 +471,9 @@ function mergeLlmToolCallbacks(callbacks: LlmToolCallback[]) {
         callback.detailArtifactRef ?? currentCallback.detailArtifactRef,
       call_usage: callback.call_usage ?? currentCallback.call_usage,
       result_context_usage:
-        callback.result_context_usage ?? currentCallback.result_context_usage
+        callback.result_context_usage ?? currentCallback.result_context_usage,
+      token_delta: callback.token_delta ?? currentCallback.token_delta,
+      duration_ms: callback.duration_ms ?? currentCallback.duration_ms
     };
   }
 
@@ -517,7 +540,9 @@ function collectLlmToolCallbacksFromRounds(
       call_usage: nextCallback.call_usage ?? currentCallback.call_usage,
       result_context_usage:
         nextCallback.result_context_usage ??
-        currentCallback.result_context_usage
+        currentCallback.result_context_usage,
+      token_delta: nextCallback.token_delta ?? currentCallback.token_delta,
+      duration_ms: nextCallback.duration_ms ?? currentCallback.duration_ms
     };
   };
 
@@ -535,8 +560,11 @@ function collectLlmToolCallbacksFromRounds(
         callbackPayload: null,
         requestRoundIndex: currentRoundIndex,
         resultRoundIndex: null,
-        call_usage: optionalRecordField(toolCall, ['call_usage']) ?? currentUsage,
-        result_context_usage: null
+        call_usage:
+          optionalRecordField(toolCall, ['call_usage']) ?? currentUsage,
+        result_context_usage: null,
+        token_delta: optionalNumberField(toolCall, ['token_delta']),
+        duration_ms: optionalNumberField(toolCall, ['duration_ms'])
       });
     });
 
@@ -553,7 +581,9 @@ function collectLlmToolCallbacksFromRounds(
         call_usage: optionalRecordField(toolResult, ['call_usage']),
         result_context_usage: optionalRecordField(toolResult, [
           'result_context_usage'
-        ])
+        ]),
+        token_delta: optionalNumberField(toolResult, ['token_delta']),
+        duration_ms: optionalNumberField(toolResult, ['duration_ms'])
       });
     });
   });

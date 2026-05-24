@@ -20,6 +20,12 @@ function formatTimestamp(value: string | null | undefined) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
+function formatRunStatisticNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('zh-CN')
+    : '-';
+}
+
 export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   DataTableColumn<ApplicationRunSummary>
 > = [
@@ -85,6 +91,27 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
     render: (_: unknown, run) => (
       <Tag color={STATUS_COLOR[run.status] ?? 'default'}>{run.status}</Tag>
     )
+  },
+  {
+    key: 'total_tokens',
+    title: '总 tokens',
+    width: 130,
+    render: (_value, run) =>
+      formatRunStatisticNumber(run.statistics?.total_tokens)
+  },
+  {
+    key: 'unique_node_count',
+    title: '真实节点数',
+    width: 130,
+    render: (_value, run) =>
+      formatRunStatisticNumber(run.statistics?.unique_node_count)
+  },
+  {
+    key: 'tool_callback_count',
+    title: '工具回调次数',
+    width: 150,
+    render: (_value, run) =>
+      formatRunStatisticNumber(run.statistics?.tool_callback_count)
   },
   {
     key: 'started_at',

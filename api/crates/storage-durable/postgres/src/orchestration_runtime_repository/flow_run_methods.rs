@@ -373,7 +373,12 @@ impl PgControlPlaneStore {
         .fetch_optional(self.pool())
         .await?;
 
-        row.map(map_flow_run_record).transpose()
+        let flow_run = row.map(map_flow_run_record).transpose()?;
+        if let Some(flow_run) = &flow_run {
+            self.upsert_application_run_log_summary_for_flow_run(flow_run)
+                .await?;
+        }
+        Ok(flow_run)
     }
 
     async fn get_flow_run(
@@ -589,7 +594,10 @@ impl PgControlPlaneStore {
         .fetch_one(self.pool())
         .await?;
 
-        map_flow_run_record(row)
+        let flow_run = map_flow_run_record(row)?;
+        self.upsert_application_run_log_summary_for_flow_run(&flow_run)
+            .await?;
+        Ok(flow_run)
     }
 
     async fn update_flow_run_if_status(
@@ -648,7 +656,10 @@ impl PgControlPlaneStore {
         .await?;
 
         if let Some(row) = row {
-            return map_flow_run_record(row).map(Some);
+            let flow_run = map_flow_run_record(row)?;
+            self.upsert_application_run_log_summary_for_flow_run(&flow_run)
+                .await?;
+            return Ok(Some(flow_run));
         }
 
         let exists = sqlx::query_scalar::<_, bool>(

@@ -40,7 +40,13 @@ struct RuntimeDebugArtifactWriter {
     state: Arc<ApiState>,
     storage: domain::FileStorageRecord,
     driver: Arc<dyn storage_object::FileStorageDriver>,
-    llm_tool_callback_raw_payloads: HashMap<String, Value>,
+    llm_tool_callback_runtime_facts: HashMap<String, LlmToolCallbackRuntimeFacts>,
+}
+
+#[derive(Clone)]
+struct LlmToolCallbackRuntimeFacts {
+    callback_payload: Value,
+    duration_ms: Option<i64>,
 }
 
 #[derive(Clone)]
@@ -53,6 +59,7 @@ struct LlmToolCallbackArtifact {
     result_round_index: Option<i64>,
     call_usage: Option<Value>,
     result_context_usage: Option<Value>,
+    duration_ms: Option<i64>,
 }
 
 impl LlmToolCallbackArtifact {
@@ -62,6 +69,10 @@ impl LlmToolCallbackArtifact {
         } else {
             "waiting_callback"
         }
+    }
+
+    fn token_delta(&self) -> Option<i64> {
+        llm_usage_token_delta(self.call_usage.as_ref(), self.result_context_usage.as_ref())
     }
 
     fn detail_payload(&self) -> Value {
@@ -77,6 +88,8 @@ impl LlmToolCallbackArtifact {
             "result_round_index": self.result_round_index,
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
+            "token_delta": self.token_delta(),
+            "duration_ms": self.duration_ms,
         })
     }
 
@@ -91,6 +104,8 @@ impl LlmToolCallbackArtifact {
             "artifact_ref": artifact_id.to_string(),
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
+            "token_delta": self.token_delta(),
+            "duration_ms": self.duration_ms,
         })
     }
 }
@@ -124,6 +139,38 @@ fn record_string_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Str
 
 fn record_value_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Value> {
     keys.iter().find_map(|key| record.get(*key).cloned())
+}
+
+fn record_i64_field(record: &Map<String, Value>, keys: &[&str]) -> Option<i64> {
+    keys.iter().find_map(|key| {
+        let value = record.get(*key)?;
+        if let Some(value) = value.as_i64() {
+            return Some(value);
+        }
+
+        value.as_u64().and_then(|value| i64::try_from(value).ok())
+    })
+}
+
+fn llm_usage_total_tokens(usage: Option<&Value>) -> Option<i64> {
+    let total_tokens = usage?.get("total_tokens")?;
+    if let Some(value) = total_tokens.as_i64() {
+        return Some(value);
+    }
+
+    total_tokens
+        .as_u64()
+        .and_then(|value| i64::try_from(value).ok())
+}
+
+fn llm_usage_token_delta(
+    call_usage: Option<&Value>,
+    result_context_usage: Option<&Value>,
+) -> Option<i64> {
+    let call_total = llm_usage_total_tokens(call_usage)?;
+    let result_total = llm_usage_total_tokens(result_context_usage)?;
+
+    result_total.checked_sub(call_total)
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -170,10 +217,20 @@ fn tool_result_id(tool_result: &Map<String, Value>, round_number: i64, index: us
         .unwrap_or_else(|| format!("tool-result-{}-{}", round_number + 1, index + 1))
 }
 
-fn collect_llm_tool_callback_raw_payloads(
+fn callback_duration_ms(task: &domain::CallbackTaskRecord) -> Option<i64> {
+    let completed_at = task.completed_at?;
+    let duration = completed_at - task.created_at;
+    if duration < time::Duration::ZERO {
+        return None;
+    }
+
+    i64::try_from(duration.whole_milliseconds()).ok()
+}
+
+fn collect_llm_tool_callback_runtime_facts(
     callback_tasks: &[domain::CallbackTaskRecord],
-) -> HashMap<String, Value> {
-    let mut payload_by_tool_call_id = HashMap::new();
+) -> HashMap<String, LlmToolCallbackRuntimeFacts> {
+    let mut facts_by_tool_call_id = HashMap::new();
 
     for task in callback_tasks {
         if task.callback_kind != "llm_tool_calls" {
@@ -183,6 +240,7 @@ fn collect_llm_tool_callback_raw_payloads(
         let Some(response_payload) = task.response_payload.as_ref() else {
             continue;
         };
+        let duration_ms = callback_duration_ms(task);
 
         for callback_payload in read_callback_response_tool_payloads(response_payload) {
             let Some(callback_payload_object) = callback_payload.as_object() else {
@@ -194,11 +252,17 @@ fn collect_llm_tool_callback_raw_payloads(
                 continue;
             };
 
-            payload_by_tool_call_id.insert(tool_call_id, callback_payload);
+            facts_by_tool_call_id.insert(
+                tool_call_id,
+                LlmToolCallbackRuntimeFacts {
+                    callback_payload,
+                    duration_ms,
+                },
+            );
         }
     }
 
-    payload_by_tool_call_id
+    facts_by_tool_call_id
 }
 
 fn read_callback_response_tool_payloads(response_payload: &Value) -> Vec<Value> {
@@ -335,7 +399,7 @@ fn parsed_tool_callback_payload(callback_payload: &Value) -> Value {
 
 fn collect_llm_tool_callbacks(
     llm_rounds: &Value,
-    raw_payloads: &HashMap<String, Value>,
+    runtime_facts: &HashMap<String, LlmToolCallbackRuntimeFacts>,
 ) -> Vec<LlmToolCallbackArtifact> {
     let Some(rounds) = llm_rounds.as_array() else {
         return Vec::new();
@@ -367,7 +431,10 @@ fn collect_llm_tool_callbacks(
                 &mut callbacks,
                 &mut index_by_id,
                 LlmToolCallbackArtifact {
-                    callback_payload: raw_payloads.get(&id).cloned(),
+                    callback_payload: runtime_facts
+                        .get(&id)
+                        .map(|facts| facts.callback_payload.clone()),
+                    duration_ms: runtime_facts.get(&id).and_then(|facts| facts.duration_ms),
                     id,
                     name,
                     call_usage: record_value_field(tool_call_object, &["call_usage"])
@@ -394,10 +461,12 @@ fn collect_llm_tool_callbacks(
                 &mut callbacks,
                 &mut index_by_id,
                 LlmToolCallbackArtifact {
-                    callback_payload: raw_payloads
+                    callback_payload: runtime_facts
                         .get(&id)
-                        .cloned()
+                        .map(|facts| facts.callback_payload.clone())
                         .or_else(|| Some(tool_result.clone())),
+                    duration_ms: record_i64_field(tool_result_object, &["duration_ms"])
+                        .or_else(|| runtime_facts.get(&id).and_then(|facts| facts.duration_ms)),
                     id,
                     name,
                     call_usage: record_value_field(tool_result_object, &["call_usage"]),
@@ -454,6 +523,56 @@ fn upsert_llm_tool_callback(
     if next.result_context_usage.is_some() {
         current.result_context_usage = next.result_context_usage;
     }
+    if next.duration_ms.is_some() {
+        current.duration_ms = next.duration_ms;
+    }
+}
+
+fn with_llm_tool_callback_runtime_facts(
+    llm_rounds: Value,
+    runtime_facts: &HashMap<String, LlmToolCallbackRuntimeFacts>,
+) -> (Value, bool) {
+    let Value::Array(rounds) = llm_rounds else {
+        return (llm_rounds, false);
+    };
+    let mut changed = false;
+    let rounds = rounds
+        .into_iter()
+        .enumerate()
+        .map(|(fallback_round_index, round)| {
+            let Some(mut round_object) = round.as_object().cloned() else {
+                return round;
+            };
+            let current_round_index = round_index(&round_object, fallback_round_index);
+            let Some(tool_results) = round_object
+                .get_mut("tool_results")
+                .and_then(Value::as_array_mut)
+            else {
+                return Value::Object(round_object);
+            };
+
+            for (tool_result_index, tool_result) in tool_results.iter_mut().enumerate() {
+                let Some(tool_result_object) = tool_result.as_object_mut() else {
+                    continue;
+                };
+                if tool_result_object.contains_key("duration_ms") {
+                    continue;
+                }
+                let id = tool_result_id(tool_result_object, current_round_index, tool_result_index);
+                let Some(duration_ms) = runtime_facts.get(&id).and_then(|facts| facts.duration_ms)
+                else {
+                    continue;
+                };
+
+                tool_result_object.insert("duration_ms".to_string(), json!(duration_ms));
+                changed = true;
+            }
+
+            Value::Object(round_object)
+        })
+        .collect();
+
+    (Value::Array(rounds), changed)
 }
 
 impl RuntimeDebugArtifactWriter {
@@ -474,7 +593,7 @@ impl RuntimeDebugArtifactWriter {
             state,
             storage,
             driver,
-            llm_tool_callback_raw_payloads: HashMap::new(),
+            llm_tool_callback_runtime_facts: HashMap::new(),
         })
     }
 
@@ -591,7 +710,7 @@ impl RuntimeDebugArtifactWriter {
         }
 
         let callbacks =
-            collect_llm_tool_callbacks(llm_rounds, &self.llm_tool_callback_raw_payloads);
+            collect_llm_tool_callbacks(llm_rounds, &self.llm_tool_callback_runtime_facts);
         if callbacks.is_empty() {
             return Ok(payload);
         }
@@ -695,6 +814,13 @@ impl RuntimeDebugArtifactWriter {
                     } else {
                         payload
                     };
+                    if !changed && is_llm_rounds_field_path(&field_path) {
+                        let (payload, runtime_facts_changed) = with_llm_tool_callback_runtime_facts(
+                            payload,
+                            &self.llm_tool_callback_runtime_facts,
+                        );
+                        return Ok((payload, runtime_facts_changed));
+                    }
                     Ok((payload, changed))
                 }
                 value => Ok((value, false)),
@@ -714,8 +840,8 @@ pub async fn offload_application_run_detail_artifacts(
     }
 
     let mut writer = RuntimeDebugArtifactWriter::new(state.clone()).await?;
-    writer.llm_tool_callback_raw_payloads =
-        collect_llm_tool_callback_raw_payloads(&detail.callback_tasks);
+    writer.llm_tool_callback_runtime_facts =
+        collect_llm_tool_callback_runtime_facts(&detail.callback_tasks);
     let flow_scope = RuntimeDebugArtifactScope {
         workspace_id,
         application_id,
@@ -1172,6 +1298,7 @@ pub(super) async fn load_runtime_debug_artifact_json_value(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use time::{Duration, OffsetDateTime};
 
     use super::*;
 
@@ -1320,6 +1447,121 @@ mod tests {
                 "http_status": 500
             }))),
             "failed"
+        );
+    }
+
+    #[test]
+    fn llm_tool_callback_payloads_include_context_token_delta() {
+        let rounds = json!([
+            {
+                "round_index": 0,
+                "usage": {
+                    "total_tokens": 8122
+                },
+                "assistant": {
+                    "role": "assistant",
+                    "content": "need tool",
+                    "tool_calls": [
+                        {
+                            "id": "call_weather",
+                            "name": "lookup_weather"
+                        }
+                    ]
+                }
+            },
+            {
+                "round_index": 1,
+                "tool_results": [
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_weather",
+                        "content": "{\"temperature\":21}"
+                    }
+                ]
+            },
+            {
+                "round_index": 2,
+                "usage": {
+                    "total_tokens": 8224
+                },
+                "assistant": {
+                    "role": "assistant",
+                    "content": "continue"
+                }
+            }
+        ]);
+
+        let callbacks = collect_llm_tool_callbacks(&rounds, &std::collections::HashMap::new());
+
+        assert_eq!(callbacks.len(), 1);
+        assert_eq!(callbacks[0].detail_payload()["token_delta"], json!(102));
+        assert_eq!(
+            callbacks[0].summary_payload(Uuid::now_v7())["token_delta"],
+            json!(102)
+        );
+    }
+
+    #[test]
+    fn llm_tool_callback_payloads_include_callback_duration_ms() {
+        let task = domain::CallbackTaskRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: Uuid::now_v7(),
+            node_run_id: Uuid::now_v7(),
+            callback_kind: "llm_tool_calls".into(),
+            status: domain::CallbackTaskStatus::Completed,
+            request_payload: json!({}),
+            response_payload: Some(json!({
+                "tool_results": [
+                    {
+                        "tool_call_id": "call_weather",
+                        "content": "{\"temperature\":21}"
+                    }
+                ]
+            })),
+            external_ref_payload: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            completed_at: Some(OffsetDateTime::UNIX_EPOCH + Duration::milliseconds(1234)),
+        };
+        let rounds = json!([
+            {
+                "round_index": 0,
+                "usage": { "total_tokens": 8122 },
+                "assistant": {
+                    "tool_calls": [
+                        {
+                            "id": "call_weather",
+                            "name": "lookup_weather"
+                        }
+                    ]
+                }
+            },
+            {
+                "round_index": 1,
+                "tool_results": [
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_weather",
+                        "result_context_usage": { "total_tokens": 8224 },
+                        "content": "{\"temperature\":21}"
+                    }
+                ]
+            }
+        ]);
+
+        let callback_facts = collect_llm_tool_callback_runtime_facts(&[task]);
+        let callbacks = collect_llm_tool_callbacks(&rounds, &callback_facts);
+        let (enriched_rounds, changed) =
+            with_llm_tool_callback_runtime_facts(rounds, &callback_facts);
+
+        assert!(changed);
+        assert_eq!(callbacks[0].detail_payload()["duration_ms"], json!(1234));
+        assert_eq!(
+            callbacks[0].summary_payload(Uuid::now_v7())["duration_ms"],
+            json!(1234)
+        );
+        assert_eq!(
+            enriched_rounds[1]["tool_results"][0]["duration_ms"],
+            json!(1234)
         );
     }
 

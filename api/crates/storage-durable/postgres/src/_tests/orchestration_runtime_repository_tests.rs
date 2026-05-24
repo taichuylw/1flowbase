@@ -7,9 +7,9 @@ use control_plane::{
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         FlowRepository, GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
-        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        ListApplicationRunsPageInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+        UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
+        UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
     },
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
@@ -1493,6 +1493,123 @@ async fn orchestration_runtime_repository_returns_callback_tasks_with_run_detail
         duplicate.downcast_ref::<ControlPlaneError>(),
         Some(ControlPlaneError::Conflict("callback_task_not_pending"))
     ));
+}
+
+#[tokio::test]
+async fn terminal_flow_run_writes_static_application_run_log_summary() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-05-24 09:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    let first_node = seed_node_run_for(
+        &store,
+        &run,
+        "node-llm",
+        "llm",
+        "LLM",
+        json!({ "prompt": "总结退款政策" }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+    let _second_node = seed_node_run_for(
+        &store,
+        &run,
+        "node-tool",
+        "tool",
+        "Tool",
+        json!({ "tool_name": "lookup_order" }),
+        started_at + Duration::seconds(2),
+    )
+    .await;
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_node_run(
+        &store,
+        &UpdateNodeRunInput {
+            node_run_id: first_node.id,
+            status: NodeRunStatus::Succeeded,
+            output_payload: json!({ "answer": "ok" }),
+            error_payload: None,
+            metrics_payload: json!({ "usage": { "input_tokens": 3, "output_tokens": 4 } }),
+            debug_payload: json!({}),
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_callback_task(
+        &store,
+        &CreateCallbackTaskInput {
+            flow_run_id: run.id,
+            node_run_id: first_node.id,
+            callback_kind: "llm_tool_calls".to_string(),
+            request_payload: json!({
+                "tool_calls": [
+                    { "id": "call-1" },
+                    { "id": "call-2" }
+                ]
+            }),
+            external_ref_payload: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "完成" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(5)),
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        update node_runs
+        set metrics_payload = '{"usage":{"total_tokens":999}}'::jsonb
+        where id = $1
+        "#,
+    )
+    .bind(first_node.id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let logs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationRunsPageInput {
+                page: 1,
+                page_size: 20,
+                created_after: None,
+                sort_by: Some("created_at".to_string()),
+                sort_order: Some("desc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(logs.total, 1);
+    assert_eq!(logs.items[0].run.id, run.id);
+    assert_eq!(logs.items[0].total_tokens, Some(7));
+    assert_eq!(logs.items[0].unique_node_count, 2);
+    assert_eq!(logs.items[0].tool_callback_count, 2);
 }
 
 #[tokio::test]

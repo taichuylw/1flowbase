@@ -285,6 +285,7 @@ export function mapRunDetailToConversation(
     status: mapMessageStatus(detail.flow_run.status),
     runId: detail.flow_run.id,
     rawOutput,
+    statistics: detail.statistics,
     traceSummary: traceItems.slice(0, 3)
   };
 }

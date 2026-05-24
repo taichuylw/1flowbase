@@ -3,12 +3,12 @@ use sqlx::{postgres::PgRow, Row};
 use uuid::Uuid;
 
 use crate::mappers::orchestration_runtime_mapper::{
-    PgOrchestrationRuntimeMapper, StoredApplicationRunSummaryRow, StoredAuditHashRow,
-    StoredBillingSessionRow, StoredCallbackTaskRow, StoredCapabilityInvocationRow,
-    StoredCheckpointRow, StoredCompiledPlanRow, StoredContextProjectionRow, StoredCostLedgerRow,
-    StoredCreditLedgerRow, StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow,
-    StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow,
-    StoredUsageLedgerRow,
+    PgOrchestrationRuntimeMapper, StoredApplicationRunLogSummaryRow,
+    StoredApplicationRunSummaryRow, StoredAuditHashRow, StoredBillingSessionRow,
+    StoredCallbackTaskRow, StoredCapabilityInvocationRow, StoredCheckpointRow,
+    StoredCompiledPlanRow, StoredContextProjectionRow, StoredCostLedgerRow, StoredCreditLedgerRow,
+    StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow, StoredRunEventRow,
+    StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow, StoredUsageLedgerRow,
 };
 
 pub(super) fn map_compiled_plan_record(row: PgRow) -> Result<domain::CompiledPlanRecord> {
@@ -390,4 +390,36 @@ pub(super) fn map_application_run_summary(row: PgRow) -> Result<domain::Applicat
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
     })
+}
+
+pub(super) fn map_application_run_log_summary(
+    row: PgRow,
+) -> Result<domain::ApplicationRunLogSummary> {
+    PgOrchestrationRuntimeMapper::to_application_run_log_summary(
+        StoredApplicationRunLogSummaryRow {
+            run: StoredApplicationRunSummaryRow {
+                id: row.get("id"),
+                run_mode: row.get("run_mode"),
+                status: row.get("status"),
+                target_node_id: row.get("target_node_id"),
+                title: row.get("title"),
+                input_payload: row.get("input_payload"),
+                external_user: row.get("external_user"),
+                authorized_account: row.get("authorized_account"),
+                api_key_id: row.get("api_key_id"),
+                publication_version_id: row.get("publication_version_id"),
+                external_conversation_id: row.get("external_conversation_id"),
+                external_trace_id: row.get("external_trace_id"),
+                compatibility_mode: row.get("compatibility_mode"),
+                idempotency_key: row.get("idempotency_key"),
+                started_at: row.get("started_at"),
+                finished_at: row.get("finished_at"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            },
+            total_tokens: row.get("total_tokens"),
+            unique_node_count: row.get("unique_node_count"),
+            tool_callback_count: row.get("tool_callback_count"),
+        },
+    )
 }
