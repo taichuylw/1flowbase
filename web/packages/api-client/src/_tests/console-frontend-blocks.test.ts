@@ -4,13 +4,7 @@ import * as transport from '../transport';
 import { listConsoleFrontendBlocks } from '../console-frontend-blocks';
 
 describe('console-frontend-blocks client', () => {
-  const apiFetchSpy = vi
-    .spyOn(transport, 'apiFetch')
-    .mockImplementation(async (input) => input as never);
-
-  test('frontend blocks transport spy is active', () => {
-    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
-  });
+  vi.spyOn(transport, 'apiFetch').mockImplementation(async (input) => input as never);
 
   test('lists frontend block catalog entries from console endpoint', async () => {
     await expect(listConsoleFrontendBlocks()).resolves.toMatchObject({

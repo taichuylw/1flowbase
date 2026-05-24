@@ -15,148 +15,169 @@ import {
 } from '../console-frontstage';
 
 describe('console-frontstage client', () => {
-  const apiFetchSpy = vi
-    .spyOn(transport, 'apiFetch')
-    .mockImplementation(async (input) => input as never);
+  vi.spyOn(transport, 'apiFetch').mockImplementation(async (input) => input as never);
 
-  test('frontstage transport spy is active', () => {
-    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
+  test.each([
+    {
+      name: 'page tree collection',
+      request: () => listFrontstagePages('workspace-1'),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages',
+        method: 'GET'
+      }
+    },
+    {
+      name: 'page detail',
+      request: () => getFrontstagePageDetail('workspace-1', 'page-1'),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1',
+        method: 'GET'
+      }
+    },
+    {
+      name: 'encoded JS block code ref',
+      request: () => getFrontstageBlockCode('workspace-1', 'page-1', 'hero/main'),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1/block-codes/hero%2Fmain',
+        method: 'GET'
+      }
+    }
+  ])('reads $name through the console frontstage route', async ({ request, expected }) => {
+    await expect(request()).resolves.toMatchObject(expected);
   });
 
-  test('listFrontstagePages reads the workspace page tree', async () => {
-    await expect(listFrontstagePages('workspace-1')).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages',
-      method: 'GET'
-    });
-  });
-
-  test('createFrontstageGroup posts group payload with CSRF', async () => {
-    await expect(
-      createFrontstageGroup(
-        'workspace-1',
-        {
+  test.each([
+    {
+      name: 'group creation',
+      request: () =>
+        createFrontstageGroup(
+          'workspace-1',
+          {
+            title: '分组 1',
+            icon: 'FolderOutlined',
+            tooltip: '分组描述',
+            parent_id: null,
+            rank: '001000'
+          },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/groups',
+        method: 'POST',
+        body: {
           title: '分组 1',
           icon: 'FolderOutlined',
           tooltip: '分组描述',
           parent_id: null,
           rank: '001000'
         },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/groups',
-      method: 'POST',
-      body: {
-        title: '分组 1',
-        icon: 'FolderOutlined',
-        tooltip: '分组描述',
-        parent_id: null,
-        rank: '001000'
-      },
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('createFrontstagePage posts page payload with CSRF', async () => {
-    await expect(
-      createFrontstagePage(
-        'workspace-1',
-        {
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'page creation',
+      request: () =>
+        createFrontstagePage(
+          'workspace-1',
+          {
+            title: '页面 新建 1',
+            icon: 'FileTextOutlined',
+            tooltip: '页面描述',
+            parent_id: 'group-1',
+            rank: '002000'
+          },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages',
+        method: 'POST',
+        body: {
           title: '页面 新建 1',
           icon: 'FileTextOutlined',
           tooltip: '页面描述',
           parent_id: 'group-1',
           rank: '002000'
         },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages',
-      method: 'POST',
-      body: {
-        title: '页面 新建 1',
-        icon: 'FileTextOutlined',
-        tooltip: '页面描述',
-        parent_id: 'group-1',
-        rank: '002000'
-      },
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('updateFrontstagePageNodeTitle patches title payload with CSRF', async () => {
-    await expect(
-      updateFrontstagePageNodeTitle(
-        'workspace-1',
-        'page-1',
-        { title: '页面-已重命名' },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1',
-      method: 'PATCH',
-      body: { title: '页面-已重命名' },
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('updateFrontstagePageNodeTitle patches node metadata payload with CSRF', async () => {
-    await expect(
-      updateFrontstagePageNodeTitle(
-        'workspace-1',
-        'page-1',
-        { tooltip: '展示在页面树', is_hidden: true },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1',
-      method: 'PATCH',
-      body: { tooltip: '展示在页面树', is_hidden: true },
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('moveFrontstagePageNode posts move payload with CSRF', async () => {
-    await expect(
-      moveFrontstagePageNode(
-        'workspace-1',
-        'page-1',
-        { parent_id: null, rank: '000000' },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1/move',
-      method: 'POST',
-      body: { parent_id: null, rank: '000000' },
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('deleteFrontstagePageNode deletes node with CSRF', async () => {
-    await expect(
-      deleteFrontstagePageNode('workspace-1', 'page-1', 'csrf-123')
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1',
-      method: 'DELETE',
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('getFrontstagePageDetail reads page detail with schema and root', async () => {
-    await expect(
-      getFrontstagePageDetail('workspace-1', 'page-1')
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1',
-      method: 'GET'
-    });
-  });
-
-  test('saveFrontstagePageContent puts schema and root payloads with CSRF', async () => {
-    await expect(
-      saveFrontstagePageContent(
-        'workspace-1',
-        'page-1',
-        {
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'title patch',
+      request: () =>
+        updateFrontstagePageNodeTitle(
+          'workspace-1',
+          'page-1',
+          { title: '页面-已重命名' },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1',
+        method: 'PATCH',
+        body: { title: '页面-已重命名' },
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'metadata patch',
+      request: () =>
+        updateFrontstagePageNodeTitle(
+          'workspace-1',
+          'page-1',
+          { tooltip: '展示在页面树', is_hidden: true },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1',
+        method: 'PATCH',
+        body: { tooltip: '展示在页面树', is_hidden: true },
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'node move',
+      request: () =>
+        moveFrontstagePageNode(
+          'workspace-1',
+          'page-1',
+          { parent_id: null, rank: '000000' },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1/move',
+        method: 'POST',
+        body: { parent_id: null, rank: '000000' },
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'node deletion',
+      request: () => deleteFrontstagePageNode('workspace-1', 'page-1', 'csrf-123'),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1',
+        method: 'DELETE',
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'page content save',
+      request: () =>
+        saveFrontstagePageContent(
+          'workspace-1',
+          'page-1',
+          {
+            schema: {
+              payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
+            },
+            root: {
+              payload: { children: ['hero-1'] }
+            }
+          },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1/content',
+        method: 'PUT',
+        body: {
           schema: {
             payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
           },
@@ -164,46 +185,27 @@ describe('console-frontstage client', () => {
             payload: { children: ['hero-1'] }
           }
         },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1/content',
-      method: 'PUT',
-      body: {
-        schema: {
-          payload: { version: 1, nodes: [{ uid: 'hero-1' }] }
-        },
-        root: {
-          payload: { children: ['hero-1'] }
-        }
-      },
-      csrfToken: 'csrf-123'
-    });
-  });
-
-  test('getFrontstageBlockCode reads encoded JS block code refs', async () => {
-    await expect(
-      getFrontstageBlockCode('workspace-1', 'page-1', 'hero/main')
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1/block-codes/hero%2Fmain',
-      method: 'GET'
-    });
-  });
-
-  test('saveFrontstageBlockCode puts code payload with CSRF', async () => {
-    await expect(
-      saveFrontstageBlockCode(
-        'workspace-1',
-        'page-1',
-        'hero',
-        { code: 'export default function Hero() {}' },
-        'csrf-123'
-      )
-    ).resolves.toMatchObject({
-      path: '/api/console/frontstage/workspace-1/pages/page-1/block-codes/hero',
-      method: 'PUT',
-      body: { code: 'export default function Hero() {}' },
-      csrfToken: 'csrf-123'
-    });
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'block code save',
+      request: () =>
+        saveFrontstageBlockCode(
+          'workspace-1',
+          'page-1',
+          'hero',
+          { code: 'export default function Hero() {}' },
+          'csrf-123'
+        ),
+      expected: {
+        path: '/api/console/frontstage/workspace-1/pages/page-1/block-codes/hero',
+        method: 'PUT',
+        body: { code: 'export default function Hero() {}' },
+        csrfToken: 'csrf-123'
+      }
+    }
+  ])('writes $name through the console frontstage route', async ({ request, expected }) => {
+    await expect(request()).resolves.toMatchObject(expected);
   });
 });

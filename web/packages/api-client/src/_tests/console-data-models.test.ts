@@ -28,19 +28,7 @@ import {
 } from '../console-data-models';
 
 describe('console-data-models client', () => {
-  const apiFetchSpy = vi
-    .spyOn(transport, 'apiFetch')
-    .mockImplementation(async (input) => input as never);
-
-  test('data models transport spy is active', () => {
-    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
-  });
-
-  test('fetchConsoleDataSourceInstances reads the data source collection', async () => {
-    await expect(fetchConsoleDataSourceInstances()).resolves.toMatchObject({
-      path: '/api/console/data-sources/instances'
-    });
-  });
+  vi.spyOn(transport, 'apiFetch').mockImplementation(async (input) => input as never);
 
   test('updateConsoleDataSourceDefaults patches defaults with CSRF', async () => {
     await expect(
@@ -59,21 +47,34 @@ describe('console-data-models client', () => {
     });
   });
 
-  test('fetchConsoleDataModels can filter by data source and resource filter', async () => {
-    await expect(
-      fetchConsoleDataModels({
-        data_source_instance_id: 'main_source',
-        filter: { code: { $includes: 'customer profile' } }
-      })
-    ).resolves.toMatchObject({
-      path: '/api/console/models?data_source_instance_id=main_source&filter=%7B%22code%22%3A%7B%22%24includes%22%3A%22customer+profile%22%7D%7D'
-    });
-  });
-
-  test('fetchConsoleAgentFlowDataModelOptions reads the backend scene read model', async () => {
-    await expect(fetchConsoleAgentFlowDataModelOptions()).resolves.toMatchObject({
-      path: '/api/console/models/agent-flow-options'
-    });
+  test.each([
+    {
+      name: 'data source collection',
+      request: () => fetchConsoleDataSourceInstances(),
+      expected: {
+        path: '/api/console/data-sources/instances'
+      }
+    },
+    {
+      name: 'filtered model collection',
+      request: () =>
+        fetchConsoleDataModels({
+          data_source_instance_id: 'main_source',
+          filter: { code: { $includes: 'customer profile' } }
+        }),
+      expected: {
+        path: '/api/console/models?data_source_instance_id=main_source&filter=%7B%22code%22%3A%7B%22%24includes%22%3A%22customer+profile%22%7D%7D'
+      }
+    },
+    {
+      name: 'agent-flow data model options',
+      request: () => fetchConsoleAgentFlowDataModelOptions(),
+      expected: {
+        path: '/api/console/models/agent-flow-options'
+      }
+    }
+  ])('reads the $name route', async ({ request, expected }) => {
+    await expect(request()).resolves.toMatchObject(expected);
   });
 
   test('create and update Data Models use the console model routes', async () => {

@@ -41,8 +41,9 @@ const BENIGN_MARKER_PATTERNS = [
 ];
 const FOCUSED_TEST_PATTERN = /\b(?:describe|it|test)\.only\s*\(/u;
 const SKIPPED_TEST_PATTERN = /\b(?:describe|it|test)\.(?:skip|todo)\s*\(|\bx(?:describe|it)\s*\(/u;
-const WEAK_ASSERTION_PATTERN = /expect\([^\n]+\)\.(?:toBeTruthy|toBeDefined)\s*\(/u;
+const WEAK_ASSERTION_PATTERN = /\.(?:toBeTruthy|toBeDefined)\s*\(/u;
 const TEST_TITLE_PATTERN = /\b(?:describe|it|test)\s*\(\s*(['"`])([^'"`\n]+)\1/gu;
+const INLINE_TEST_TITLE_PATTERN = /^\s*(?:it|test)\s*\(\s*(['"`])([^'"`\n]+)\1/u;
 const TEST_PATH_PATTERN = /(?:^|\/)(?:_tests|tests)\//u;
 
 function getRepoRoot() {
@@ -135,10 +136,102 @@ function stripStringLiterals(line) {
     .replace(/`([^`\\]|\\.)*`/gu, '``');
 }
 
+function collectWeakAssertionFindings({ relativePath, lines, structuralLines }) {
+  const findings = [];
+  const reportedLines = new Set();
+
+  structuralLines.forEach((line, index) => {
+    if (!/\bexpect\s*\(/u.test(line)) {
+      return;
+    }
+
+    const statementLines = [];
+    for (
+      let statementIndex = index;
+      statementIndex < Math.min(index + 12, structuralLines.length);
+      statementIndex += 1
+    ) {
+      statementLines.push(structuralLines[statementIndex]);
+      if (/;\s*$/u.test(structuralLines[statementIndex])) {
+        break;
+      }
+    }
+
+    const statement = statementLines.join('\n');
+    if (
+      /\.not\s*\.\s*(?:toBeTruthy|toBeDefined)\s*\(/u.test(statement)
+      || !WEAK_ASSERTION_PATTERN.test(statement)
+    ) {
+      return;
+    }
+
+    const lineNumber = index + 1;
+    if (reportedLines.has(lineNumber)) {
+      return;
+    }
+
+    reportedLines.add(lineNumber);
+    findings.push(createFinding({
+      rule: 'weak-test-assertion',
+      file: relativePath,
+      line: lineNumber,
+      message: 'weak assertion should be replaced with a behavior-specific expectation',
+      snippet: lines[index],
+    }));
+  });
+
+  return findings;
+}
+
+function collectLowValueTestFindings({ relativePath, lines, structuralLines }) {
+  const findings = [];
+
+  lines.forEach((line, index) => {
+    const titleMatch = line.match(INLINE_TEST_TITLE_PATTERN);
+    if (!titleMatch) {
+      return;
+    }
+
+    const title = titleMatch[2].replace(/\s+/gu, ' ').trim();
+    const structuralBlock = structuralLines.slice(index, index + 20).join('\n');
+    const lineNumber = index + 1;
+
+    if (
+      /\b(?:transport )?spy is active\b/iu.test(title)
+      && /expect\([^)]+\)\.toHaveBeenCalledTimes\s*\(\s*0\s*\)/u.test(structuralBlock)
+    ) {
+      findings.push(createFinding({
+        rule: 'setup-only-test',
+        file: relativePath,
+        line: lineNumber,
+        message: 'setup-only test should be removed or folded into a behavior test',
+        snippet: line,
+      }));
+      return;
+    }
+
+    if (
+      /\breturns the provided\b/iu.test(title)
+      && /expect\s*\([\s\S]*\)\s*\.\s*toEqual\s*\(/u.test(structuralBlock)
+    ) {
+      findings.push(createFinding({
+        rule: 'identity-wrapper-test',
+        file: relativePath,
+        line: lineNumber,
+        message: 'identity wrapper test should be removed or replaced with a real contract invariant',
+        snippet: line,
+      }));
+    }
+  });
+
+  return findings;
+}
+
 function scanSourceFile({ relativePath, content }) {
   const lines = content.split(/\r?\n/u);
   const findings = [];
   const testPath = isTestPath(relativePath);
+  const structuralLines = testPath ? lines.map((line) => stripStringLiterals(line)) : [];
 
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
@@ -170,7 +263,7 @@ function scanSourceFile({ relativePath, content }) {
       return;
     }
 
-    const structuralLine = stripStringLiterals(line);
+    const structuralLine = structuralLines[index];
 
     if (FOCUSED_TEST_PATTERN.test(structuralLine)) {
       findings.push(createFinding({
@@ -193,16 +286,20 @@ function scanSourceFile({ relativePath, content }) {
       }));
     }
 
-    if (WEAK_ASSERTION_PATTERN.test(structuralLine)) {
-      findings.push(createFinding({
-        rule: 'weak-test-assertion',
-        file: relativePath,
-        line: lineNumber,
-        message: 'weak assertion should be replaced with a behavior-specific expectation',
-        snippet: line,
-      }));
-    }
   });
+
+  if (testPath) {
+    findings.push(...collectLowValueTestFindings({
+      relativePath,
+      lines,
+      structuralLines,
+    }));
+    findings.push(...collectWeakAssertionFindings({
+      relativePath,
+      lines,
+      structuralLines,
+    }));
+  }
 
   return findings;
 }
@@ -227,12 +324,18 @@ function collectLinePressureFindings({ relativePath, content }) {
     return [];
   }
 
+  const testPath = isTestPath(relativePath);
+
   return [createFinding({
-    rule: 'file-size-pressure',
+    rule: testPath ? 'test-file-size-pressure' : 'file-size-pressure',
     file: relativePath,
     message: lines >= 1500
-      ? 'file is at or over the repository split pressure line'
-      : 'file is approaching the repository split pressure line',
+      ? testPath
+        ? 'test file is at or over the repository split pressure line'
+        : 'file is at or over the repository split pressure line'
+      : testPath
+        ? 'test file is approaching the repository split pressure line'
+        : 'file is approaching the repository split pressure line',
     snippet: `${lines} lines`,
   })];
 }
