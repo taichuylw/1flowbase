@@ -10,6 +10,7 @@ mod frontstage_routes;
 mod host_extension_boot_tests;
 mod host_extension_loader_tests;
 mod host_extensions_builtin_tests;
+mod host_infrastructure_cache_routes;
 mod host_infrastructure_config_routes;
 mod host_infrastructure_tests;
 mod host_route_registry_tests;

@@ -112,3 +112,100 @@ async fn moka_cache_store_supports_ephemeral_set_if_absent() {
             .unwrap()
     );
 }
+
+#[tokio::test]
+async fn moka_cache_store_exposes_cache_inspection_snapshots() {
+    let store = MokaCacheStore::new("flowbase:test", 128);
+
+    CacheStore::set_json(
+        &store,
+        "application-logs:run:1",
+        json!({ "status": "succeeded" }),
+        Some(Duration::seconds(60)),
+    )
+    .await
+    .unwrap();
+    CacheStore::set_json(
+        &store,
+        "runtime-records:contact:1",
+        json!({ "name": "Ada" }),
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(CacheStore::inspection_capabilities(&store).reveal_value);
+    let domains = CacheStore::list_cache_domains(&store).await.unwrap();
+    assert_eq!(domains.len(), 2);
+    assert!(domains.iter().any(|domain| {
+        domain.domain_code == "application-logs"
+            && domain.entry_count == 1
+            && domain.total_value_size_bytes > 0
+    }));
+
+    let entries = CacheStore::list_cache_entries(&store, "application-logs")
+        .await
+        .unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].key, "application-logs:run:1");
+    assert_eq!(entries[0].domain_code, "application-logs");
+    let ttl_seconds = entries[0].ttl_seconds.unwrap();
+    assert!(ttl_seconds > 0);
+    assert!(ttl_seconds <= 60);
+    assert!(entries[0].created_at_unix.is_some());
+    assert!(entries[0].expires_at_unix.is_some());
+
+    let value =
+        CacheStore::reveal_cache_entry(&store, "application-logs", "application-logs:run:1")
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(value.value, json!({ "status": "succeeded" }));
+}
+
+#[tokio::test]
+async fn moka_cache_store_clears_entry_and_domain_through_inspection() {
+    let store = MokaCacheStore::new("flowbase:test", 128);
+
+    CacheStore::set_json(&store, "application-logs:run:1", json!({ "a": 1 }), None)
+        .await
+        .unwrap();
+    CacheStore::set_json(&store, "application-logs:run:2", json!({ "a": 2 }), None)
+        .await
+        .unwrap();
+    CacheStore::set_json(&store, "runtime-records:row:1", json!({ "b": 1 }), None)
+        .await
+        .unwrap();
+
+    assert!(
+        CacheStore::clear_cache_entry(&store, "application-logs", "application-logs:run:1")
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        CacheStore::reveal_cache_entry(&store, "application-logs", "application-logs:run:1")
+            .await
+            .unwrap(),
+        None
+    );
+
+    assert_eq!(
+        CacheStore::clear_cache_domain(&store, "application-logs")
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        CacheStore::list_cache_entries(&store, "application-logs")
+            .await
+            .unwrap(),
+        Vec::new()
+    );
+    assert_eq!(
+        CacheStore::list_cache_entries(&store, "runtime-records")
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}

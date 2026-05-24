@@ -194,6 +194,46 @@ vi.mock('@1flowbase/api-client', () => ({
     id: 'task-1'
   }),
   listConsoleHostInfrastructureProviders: vi.fn().mockResolvedValue([]),
+  getConsoleHostInfrastructureCacheOverview: vi.fn().mockResolvedValue({
+    provider_code: 'local',
+    can_manage: true,
+    capabilities: {
+      list_domains: true,
+      list_entries: true,
+      reveal_value: true,
+      clear_entry: true,
+      clear_domain: true
+    },
+    domains: []
+  }),
+  listConsoleHostInfrastructureCacheEntries: vi.fn().mockResolvedValue({
+    domain_code: 'application-logs',
+    capabilities: {
+      list_domains: true,
+      list_entries: true,
+      reveal_value: true,
+      clear_entry: true,
+      clear_domain: true
+    },
+    entries: []
+  }),
+  revealConsoleHostInfrastructureCacheEntry: vi.fn().mockResolvedValue({
+    metadata: {
+      domain_code: 'application-logs',
+      key: 'application-logs:run:1',
+      value_size_bytes: 12,
+      ttl_seconds: null,
+      created_at_unix: null,
+      expires_at_unix: null
+    },
+    value: { ok: true }
+  }),
+  clearConsoleHostInfrastructureCacheEntry: vi.fn().mockResolvedValue({
+    cleared: true
+  }),
+  clearConsoleHostInfrastructureCacheDomain: vi.fn().mockResolvedValue({
+    cleared_count: 1
+  }),
   saveConsoleHostInfrastructureProviderConfig: vi.fn().mockResolvedValue({
     restart_required: true,
     installation_desired_state: 'pending_restart',
@@ -247,6 +287,11 @@ import {
   switchConsolePluginFamilyVersion,
   getConsolePluginTask,
   listConsoleHostInfrastructureProviders,
+  getConsoleHostInfrastructureCacheOverview,
+  listConsoleHostInfrastructureCacheEntries,
+  revealConsoleHostInfrastructureCacheEntry,
+  clearConsoleHostInfrastructureCacheEntry,
+  clearConsoleHostInfrastructureCacheDomain,
   saveConsoleHostInfrastructureProviderConfig
 } from '@1flowbase/api-client';
 import type { ConsoleModelProviderInstance } from '@1flowbase/api-client';
@@ -338,8 +383,15 @@ import {
   updateSettingsFileTableBinding
 } from '../file-management';
 import {
+  clearSettingsHostInfrastructureCacheDomain,
+  clearSettingsHostInfrastructureCacheEntry,
+  fetchSettingsHostInfrastructureCacheEntries,
+  fetchSettingsHostInfrastructureCacheOverview,
   fetchSettingsHostInfrastructureProviders,
+  revealSettingsHostInfrastructureCacheEntry,
   saveSettingsHostInfrastructureProviderConfig,
+  settingsHostInfrastructureCacheEntriesQueryKey,
+  settingsHostInfrastructureCacheOverviewQueryKey,
   settingsHostInfrastructureProvidersQueryKey
 } from '../host-infrastructure';
 
@@ -952,6 +1004,60 @@ describe('settings api wrappers', () => {
         enabled_contracts: ['storage-ephemeral'],
         config_json: { host: 'localhost', port: 6379 }
       },
+      'csrf-123'
+    );
+  });
+
+  test('forwards host infrastructure cache helpers', async () => {
+    expect(settingsHostInfrastructureCacheOverviewQueryKey).toEqual([
+      'settings',
+      'host-infrastructure',
+      'cache'
+    ]);
+    expect(
+      settingsHostInfrastructureCacheEntriesQueryKey('application-logs')
+    ).toEqual([
+      'settings',
+      'host-infrastructure',
+      'cache',
+      'domains',
+      'application-logs',
+      'entries'
+    ]);
+
+    await fetchSettingsHostInfrastructureCacheOverview();
+    await fetchSettingsHostInfrastructureCacheEntries('application-logs');
+    await revealSettingsHostInfrastructureCacheEntry(
+      'application-logs',
+      'application-logs:run:1',
+      'csrf-123'
+    );
+    await clearSettingsHostInfrastructureCacheEntry(
+      'application-logs',
+      'application-logs:run:1',
+      'csrf-123'
+    );
+    await clearSettingsHostInfrastructureCacheDomain(
+      'application-logs',
+      'csrf-123'
+    );
+
+    expect(getConsoleHostInfrastructureCacheOverview).toHaveBeenCalledTimes(1);
+    expect(listConsoleHostInfrastructureCacheEntries).toHaveBeenCalledWith(
+      'application-logs'
+    );
+    expect(revealConsoleHostInfrastructureCacheEntry).toHaveBeenCalledWith(
+      'application-logs',
+      'application-logs:run:1',
+      'csrf-123'
+    );
+    expect(clearConsoleHostInfrastructureCacheEntry).toHaveBeenCalledWith(
+      'application-logs',
+      'application-logs:run:1',
+      'csrf-123'
+    );
+    expect(clearConsoleHostInfrastructureCacheDomain).toHaveBeenCalledWith(
+      'application-logs',
       'csrf-123'
     );
   });

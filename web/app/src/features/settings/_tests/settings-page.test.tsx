@@ -124,8 +124,28 @@ const hostInfrastructureApi = vi.hoisted(() => ({
     'host-infrastructure',
     'providers'
   ],
+  settingsHostInfrastructureCacheOverviewQueryKey: [
+    'settings',
+    'host-infrastructure',
+    'cache'
+  ],
+  settingsHostInfrastructureCacheEntriesQueryKey: vi.fn(
+    (domainCode: string | null) => [
+      'settings',
+      'host-infrastructure',
+      'cache',
+      'domains',
+      domainCode,
+      'entries'
+    ]
+  ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
-  saveSettingsHostInfrastructureProviderConfig: vi.fn()
+  saveSettingsHostInfrastructureProviderConfig: vi.fn(),
+  fetchSettingsHostInfrastructureCacheOverview: vi.fn(),
+  fetchSettingsHostInfrastructureCacheEntries: vi.fn(),
+  revealSettingsHostInfrastructureCacheEntry: vi.fn(),
+  clearSettingsHostInfrastructureCacheEntry: vi.fn(),
+  clearSettingsHostInfrastructureCacheDomain: vi.fn()
 }));
 
 const dataModelsApi = vi.hoisted(() => ({
@@ -449,6 +469,33 @@ describe('SettingsPage', () => {
     hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
       []
     );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue(
+      {
+        provider_code: 'local',
+        can_manage: true,
+        capabilities: {
+          list_domains: true,
+          list_entries: true,
+          reveal_value: true,
+          clear_entry: true,
+          clear_domain: true
+        },
+        domains: []
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue(
+      {
+        domain_code: 'application-logs',
+        capabilities: {
+          list_domains: true,
+          list_entries: true,
+          reveal_value: true,
+          clear_entry: true,
+          clear_domain: true
+        },
+        entries: []
+      }
+    );
     dataModelsApi.fetchSettingsDataSourceInstances.mockResolvedValue([
       {
         id: 'main_source',
@@ -644,9 +691,10 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/data-models');
     });
-    expect(
-      await screen.findByRole('link', { name: '数据源' })
-    ).toHaveAttribute('href', '/settings/data-models');
+    expect(await screen.findByRole('link', { name: '数据源' })).toHaveAttribute(
+      'href',
+      '/settings/data-models'
+    );
     expect(dataModelsApi.fetchSettingsDataSourceInstances).toHaveBeenCalled();
     expect(
       await screen.findByText('主数据源', {}, { timeout: 10000 })

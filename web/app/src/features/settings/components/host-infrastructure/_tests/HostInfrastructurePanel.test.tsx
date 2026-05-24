@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { resetAuthStore, useAuthStore } from '../../../../../state/auth-store';
 
@@ -10,8 +10,28 @@ const api = vi.hoisted(() => ({
     'host-infrastructure',
     'providers'
   ],
+  settingsHostInfrastructureCacheOverviewQueryKey: [
+    'settings',
+    'host-infrastructure',
+    'cache'
+  ],
+  settingsHostInfrastructureCacheEntriesQueryKey: vi.fn(
+    (domainCode: string | null) => [
+      'settings',
+      'host-infrastructure',
+      'cache',
+      'domains',
+      domainCode,
+      'entries'
+    ]
+  ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
-  saveSettingsHostInfrastructureProviderConfig: vi.fn()
+  saveSettingsHostInfrastructureProviderConfig: vi.fn(),
+  fetchSettingsHostInfrastructureCacheOverview: vi.fn(),
+  fetchSettingsHostInfrastructureCacheEntries: vi.fn(),
+  revealSettingsHostInfrastructureCacheEntry: vi.fn(),
+  clearSettingsHostInfrastructureCacheEntry: vi.fn(),
+  clearSettingsHostInfrastructureCacheDomain: vi.fn()
 }));
 
 vi.mock('../../../api/host-infrastructure', () => api);
@@ -45,6 +65,32 @@ describe('HostInfrastructurePanel', () => {
   afterEach(() => {
     vi.clearAllMocks();
     resetAuthStore();
+  });
+
+  beforeEach(() => {
+    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
+      provider_code: 'local',
+      can_manage: true,
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      domains: []
+    });
+    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
+      domain_code: 'application-logs',
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      entries: []
+    });
   });
 
   test('renders installed inactive provider config from manifest schema', async () => {
@@ -157,7 +203,9 @@ describe('HostInfrastructurePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存并等待重启' }));
 
     await waitFor(() => {
-      expect(api.saveSettingsHostInfrastructureProviderConfig).toHaveBeenCalledWith(
+      expect(
+        api.saveSettingsHostInfrastructureProviderConfig
+      ).toHaveBeenCalledWith(
         'installation-1',
         'redis',
         {
@@ -173,5 +221,190 @@ describe('HostInfrastructurePanel', () => {
     expect(
       await screen.findByText('已保存，重启 api-server 一次后生效。')
     ).toBeInTheDocument();
+  });
+
+  test('renders cache domains and metadata entries', async () => {
+    api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
+    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
+      provider_code: 'local',
+      can_manage: true,
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      domains: [
+        {
+          domain_code: 'application-logs',
+          entry_count: 2,
+          total_value_size_bytes: 2048
+        }
+      ]
+    });
+    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
+      domain_code: 'application-logs',
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      entries: [
+        {
+          domain_code: 'application-logs',
+          key: 'application-logs:run:1',
+          value_size_bytes: 1024,
+          ttl_seconds: 60,
+          created_at_unix: 1_700_000_000,
+          expires_at_unix: 1_700_000_060
+        }
+      ]
+    });
+
+    renderPanel(true);
+
+    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+
+    expect(
+      (await screen.findAllByText('application-logs')).length
+    ).toBeGreaterThan(0);
+    expect(
+      await screen.findByText('application-logs:run:1')
+    ).toBeInTheDocument();
+    expect(screen.getByText('1m 0s')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /查看 value/ })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: /清理/ })[0]).toBeEnabled();
+  });
+
+  test('keeps cache value and clear actions unavailable for view-only users', async () => {
+    api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
+    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
+      provider_code: 'local',
+      can_manage: false,
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      domains: [
+        {
+          domain_code: 'application-logs',
+          entry_count: 1,
+          total_value_size_bytes: 1024
+        }
+      ]
+    });
+    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
+      domain_code: 'application-logs',
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      entries: [
+        {
+          domain_code: 'application-logs',
+          key: 'application-logs:run:1',
+          value_size_bytes: 1024,
+          ttl_seconds: null,
+          created_at_unix: null,
+          expires_at_unix: null
+        }
+      ]
+    });
+
+    renderPanel(false);
+
+    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+
+    expect(await screen.findByText('仅 metadata')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /查看 value/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '清理缓存域' })
+    ).not.toBeInTheDocument();
+  });
+
+  test('reveals cache value after explicit confirmation', async () => {
+    api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
+    api.fetchSettingsHostInfrastructureCacheOverview.mockResolvedValue({
+      provider_code: 'local',
+      can_manage: true,
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      domains: [
+        {
+          domain_code: 'application-logs',
+          entry_count: 1,
+          total_value_size_bytes: 1024
+        }
+      ]
+    });
+    api.fetchSettingsHostInfrastructureCacheEntries.mockResolvedValue({
+      domain_code: 'application-logs',
+      capabilities: {
+        list_domains: true,
+        list_entries: true,
+        reveal_value: true,
+        clear_entry: true,
+        clear_domain: true
+      },
+      entries: [
+        {
+          domain_code: 'application-logs',
+          key: 'application-logs:run:1',
+          value_size_bytes: 1024,
+          ttl_seconds: null,
+          created_at_unix: null,
+          expires_at_unix: null
+        }
+      ]
+    });
+    api.revealSettingsHostInfrastructureCacheEntry.mockResolvedValue({
+      metadata: {
+        domain_code: 'application-logs',
+        key: 'application-logs:run:1',
+        value_size_bytes: 1024,
+        ttl_seconds: null,
+        created_at_unix: null,
+        expires_at_unix: null
+      },
+      value: { flow_run: { status: 'succeeded' } }
+    });
+
+    renderPanel(true);
+
+    fireEvent.click(await screen.findByRole('tab', { name: '缓存观察' }));
+    fireEvent.click(await screen.findByRole('button', { name: /查看 value/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '查看并记录审计' })
+    );
+
+    await waitFor(() => {
+      expect(
+        api.revealSettingsHostInfrastructureCacheEntry
+      ).toHaveBeenCalledWith(
+        'application-logs',
+        'application-logs:run:1',
+        'csrf-123'
+      );
+    });
+    expect(await screen.findByText('Entry value')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cache value JSON')).toHaveTextContent(
+      'succeeded'
+    );
   });
 });

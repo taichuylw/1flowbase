@@ -1,14 +1,20 @@
 use std::sync::Arc;
 
+use access_control::ensure_permission;
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
-    routing::{get, put},
+    routing::{get, post, put},
     Json, Router,
 };
-use control_plane::host_infrastructure_config::{
-    HostInfrastructureConfigService, HostInfrastructureProviderConfigView,
-    SaveHostInfrastructureProviderConfigCommand,
+use control_plane::{
+    audit::audit_log,
+    errors::ControlPlaneError,
+    host_infrastructure_config::{
+        HostInfrastructureConfigService, HostInfrastructureProviderConfigView,
+        SaveHostInfrastructureProviderConfigCommand,
+    },
+    ports::{AuthRepository, CacheDomainSnapshot, CacheEntrySnapshot, CacheInspectionCapabilities},
 };
 use plugin_framework::provider_contract::{
     PluginFormCondition, PluginFormFieldSchema, PluginFormOption,
@@ -102,8 +108,91 @@ pub struct SaveHostInfrastructureProviderConfigResponse {
     pub provider_config_status: String,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CacheInspectionCapabilitiesResponse {
+    pub list_domains: bool,
+    pub list_entries: bool,
+    pub reveal_value: bool,
+    pub clear_entry: bool,
+    pub clear_domain: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CacheDomainResponse {
+    pub domain_code: String,
+    pub entry_count: u64,
+    pub total_value_size_bytes: u64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CacheEntryMetadataResponse {
+    pub domain_code: String,
+    pub key: String,
+    pub value_size_bytes: u64,
+    pub ttl_seconds: Option<i64>,
+    pub created_at_unix: Option<i64>,
+    pub expires_at_unix: Option<i64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CacheOverviewResponse {
+    pub provider_code: Option<String>,
+    pub can_manage: bool,
+    pub capabilities: CacheInspectionCapabilitiesResponse,
+    pub domains: Vec<CacheDomainResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CacheEntriesResponse {
+    pub domain_code: String,
+    pub capabilities: CacheInspectionCapabilitiesResponse,
+    pub entries: Vec<CacheEntryMetadataResponse>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CacheEntryKeyBody {
+    pub key: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CacheEntryValueResponse {
+    pub metadata: CacheEntryMetadataResponse,
+    #[schema(value_type = Object)]
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ClearCacheEntryResponse {
+    pub cleared: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ClearCacheDomainResponse {
+    pub cleared_count: u64,
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
+        .route(
+            "/settings/host-infrastructure/cache",
+            get(get_host_infrastructure_cache_overview),
+        )
+        .route(
+            "/settings/host-infrastructure/cache/domains/:domain_code/entries",
+            get(list_host_infrastructure_cache_entries),
+        )
+        .route(
+            "/settings/host-infrastructure/cache/domains/:domain_code/entries/reveal",
+            post(reveal_host_infrastructure_cache_entry),
+        )
+        .route(
+            "/settings/host-infrastructure/cache/domains/:domain_code/entries/clear",
+            post(clear_host_infrastructure_cache_entry),
+        )
+        .route(
+            "/settings/host-infrastructure/cache/domains/:domain_code/clear",
+            post(clear_host_infrastructure_cache_domain),
+        )
         .route(
             "/settings/host-infrastructure/providers",
             get(list_host_infrastructure_providers),
@@ -112,6 +201,193 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/settings/host-infrastructure/providers/:installation_id/:provider_code/config",
             put(save_host_infrastructure_provider_config),
         )
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/settings/host-infrastructure/cache",
+    responses((status = 200, body = CacheOverviewResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn get_host_infrastructure_cache_overview(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<CacheOverviewResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_cache_view(&context.actor)?;
+    let cache = state.infrastructure.cache_store();
+    let capabilities = cache.inspection_capabilities();
+    let domains = if capabilities.list_domains {
+        cache
+            .list_cache_domains()
+            .await?
+            .into_iter()
+            .map(to_cache_domain_response)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    Ok(Json(ApiSuccess::new(CacheOverviewResponse {
+        provider_code: state
+            .infrastructure
+            .default_provider("cache-store")
+            .map(ToString::to_string),
+        can_manage: can_manage_cache(&context.actor),
+        capabilities: capabilities.into(),
+        domains,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/settings/host-infrastructure/cache/domains/{domain_code}/entries",
+    params(("domain_code" = String, Path)),
+    responses((status = 200, body = CacheEntriesResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_host_infrastructure_cache_entries(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(domain_code): Path<String>,
+) -> Result<Json<ApiSuccess<CacheEntriesResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_cache_view(&context.actor)?;
+    let cache = state.infrastructure.cache_store();
+    let capabilities = cache.inspection_capabilities();
+    let entries = if capabilities.list_entries {
+        cache
+            .list_cache_entries(&domain_code)
+            .await?
+            .into_iter()
+            .map(to_cache_entry_metadata_response)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    Ok(Json(ApiSuccess::new(CacheEntriesResponse {
+        domain_code,
+        capabilities: capabilities.into(),
+        entries,
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/settings/host-infrastructure/cache/domains/{domain_code}/entries/reveal",
+    request_body = CacheEntryKeyBody,
+    params(("domain_code" = String, Path)),
+    responses((status = 200, body = CacheEntryValueResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn reveal_host_infrastructure_cache_entry(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(domain_code): Path<String>,
+    Json(body): Json<CacheEntryKeyBody>,
+) -> Result<Json<ApiSuccess<CacheEntryValueResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    ensure_cache_manage(&context.actor)?;
+    let cache = state.infrastructure.cache_store();
+    let capabilities = cache.inspection_capabilities();
+    if !capabilities.reveal_value {
+        return Err(ControlPlaneError::InvalidInput("cache_inspection_unsupported").into());
+    }
+
+    let value = cache
+        .reveal_cache_entry(&domain_code, &body.key)
+        .await?
+        .ok_or(ControlPlaneError::NotFound("cache_entry"))?;
+    append_cache_audit(
+        &state,
+        &context.actor,
+        "host_infrastructure.cache_value_revealed",
+        serde_json::json!({
+            "domain_code": domain_code,
+            "key": body.key,
+            "value_size_bytes": value.metadata.value_size_bytes,
+        }),
+    )
+    .await?;
+
+    Ok(Json(ApiSuccess::new(CacheEntryValueResponse {
+        metadata: to_cache_entry_metadata_response(value.metadata),
+        value: value.value,
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/settings/host-infrastructure/cache/domains/{domain_code}/entries/clear",
+    request_body = CacheEntryKeyBody,
+    params(("domain_code" = String, Path)),
+    responses((status = 200, body = ClearCacheEntryResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn clear_host_infrastructure_cache_entry(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(domain_code): Path<String>,
+    Json(body): Json<CacheEntryKeyBody>,
+) -> Result<Json<ApiSuccess<ClearCacheEntryResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    ensure_cache_manage(&context.actor)?;
+    let cache = state.infrastructure.cache_store();
+    let capabilities = cache.inspection_capabilities();
+    if !capabilities.clear_entry {
+        return Err(ControlPlaneError::InvalidInput("cache_inspection_unsupported").into());
+    }
+
+    let cleared = cache.clear_cache_entry(&domain_code, &body.key).await?;
+    append_cache_audit(
+        &state,
+        &context.actor,
+        "host_infrastructure.cache_entry_cleared",
+        serde_json::json!({
+            "domain_code": domain_code,
+            "key": body.key,
+            "cleared": cleared,
+        }),
+    )
+    .await?;
+
+    Ok(Json(ApiSuccess::new(ClearCacheEntryResponse { cleared })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/settings/host-infrastructure/cache/domains/{domain_code}/clear",
+    params(("domain_code" = String, Path)),
+    responses((status = 200, body = ClearCacheDomainResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn clear_host_infrastructure_cache_domain(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(domain_code): Path<String>,
+) -> Result<Json<ApiSuccess<ClearCacheDomainResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    ensure_cache_manage(&context.actor)?;
+    let cache = state.infrastructure.cache_store();
+    let capabilities = cache.inspection_capabilities();
+    if !capabilities.clear_domain {
+        return Err(ControlPlaneError::InvalidInput("cache_inspection_unsupported").into());
+    }
+
+    let cleared_count = cache.clear_cache_domain(&domain_code).await?;
+    append_cache_audit(
+        &state,
+        &context.actor,
+        "host_infrastructure.cache_domain_cleared",
+        serde_json::json!({
+            "domain_code": domain_code,
+            "cleared_count": cleared_count,
+        }),
+    )
+    .await?;
+
+    Ok(Json(ApiSuccess::new(ClearCacheDomainResponse {
+        cleared_count,
+    })))
 }
 
 #[utoipa::path(
@@ -193,6 +469,79 @@ fn to_provider_response(
             .collect(),
         config_json: provider.config_json,
         restart_required: provider.restart_required,
+    }
+}
+
+fn ensure_cache_view(actor: &domain::ActorContext) -> Result<(), ApiError> {
+    ensure_permission(actor, "plugin_config.view.all")
+        .map_err(ControlPlaneError::PermissionDenied)?;
+    Ok(())
+}
+
+fn ensure_cache_manage(actor: &domain::ActorContext) -> Result<(), ApiError> {
+    ensure_permission(actor, "plugin_config.configure.all")
+        .map_err(ControlPlaneError::PermissionDenied)?;
+    Ok(())
+}
+
+fn can_manage_cache(actor: &domain::ActorContext) -> bool {
+    actor.has_permission("plugin_config.configure.all")
+}
+
+async fn append_cache_audit(
+    state: &ApiState,
+    actor: &domain::ActorContext,
+    event_code: &str,
+    payload: serde_json::Value,
+) -> Result<(), ApiError> {
+    let workspace_id = if actor.current_workspace_id == domain::SYSTEM_SCOPE_ID {
+        None
+    } else {
+        Some(actor.current_workspace_id)
+    };
+    AuthRepository::append_audit_log(
+        &state.store,
+        &audit_log(
+            workspace_id,
+            Some(actor.user_id),
+            "host_infrastructure_cache",
+            None,
+            event_code,
+            payload,
+        ),
+    )
+    .await?;
+    Ok(())
+}
+
+impl From<CacheInspectionCapabilities> for CacheInspectionCapabilitiesResponse {
+    fn from(capabilities: CacheInspectionCapabilities) -> Self {
+        Self {
+            list_domains: capabilities.list_domains,
+            list_entries: capabilities.list_entries,
+            reveal_value: capabilities.reveal_value,
+            clear_entry: capabilities.clear_entry,
+            clear_domain: capabilities.clear_domain,
+        }
+    }
+}
+
+fn to_cache_domain_response(domain: CacheDomainSnapshot) -> CacheDomainResponse {
+    CacheDomainResponse {
+        domain_code: domain.domain_code,
+        entry_count: domain.entry_count,
+        total_value_size_bytes: domain.total_value_size_bytes,
+    }
+}
+
+fn to_cache_entry_metadata_response(entry: CacheEntrySnapshot) -> CacheEntryMetadataResponse {
+    CacheEntryMetadataResponse {
+        domain_code: entry.domain_code,
+        key: entry.key,
+        value_size_bytes: entry.value_size_bytes,
+        ttl_seconds: entry.ttl_seconds,
+        created_at_unix: entry.created_at_unix,
+        expires_at_unix: entry.expires_at_unix,
     }
 }
 

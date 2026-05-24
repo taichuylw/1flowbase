@@ -176,6 +176,55 @@ export interface SaveConsoleHostInfrastructureProviderConfigInput {
   config_json: Record<string, unknown>;
 }
 
+export interface ConsoleCacheInspectionCapabilities {
+  list_domains: boolean;
+  list_entries: boolean;
+  reveal_value: boolean;
+  clear_entry: boolean;
+  clear_domain: boolean;
+}
+
+export interface ConsoleCacheDomain {
+  domain_code: string;
+  entry_count: number;
+  total_value_size_bytes: number;
+}
+
+export interface ConsoleCacheEntryMetadata {
+  domain_code: string;
+  key: string;
+  value_size_bytes: number;
+  ttl_seconds: number | null;
+  created_at_unix: number | null;
+  expires_at_unix: number | null;
+}
+
+export interface ConsoleHostInfrastructureCacheOverview {
+  provider_code: string | null;
+  can_manage: boolean;
+  capabilities: ConsoleCacheInspectionCapabilities;
+  domains: ConsoleCacheDomain[];
+}
+
+export interface ConsoleHostInfrastructureCacheEntries {
+  domain_code: string;
+  capabilities: ConsoleCacheInspectionCapabilities;
+  entries: ConsoleCacheEntryMetadata[];
+}
+
+export interface ConsoleCacheEntryValue {
+  metadata: ConsoleCacheEntryMetadata;
+  value: unknown;
+}
+
+export interface ClearConsoleCacheEntryResult {
+  cleared: boolean;
+}
+
+export interface ClearConsoleCacheDomainResult {
+  cleared_count: number;
+}
+
 function buildPluginCatalogPath(
   path: string,
   filter?: ConsolePluginCatalogFilter
@@ -361,6 +410,74 @@ export function getConsolePluginTask(taskId: string, baseUrl?: string) {
 export function listConsoleHostInfrastructureProviders(baseUrl?: string) {
   return apiFetch<ConsoleHostInfrastructureProviderConfig[]>({
     path: '/api/console/settings/host-infrastructure/providers',
+    baseUrl
+  });
+}
+
+export function getConsoleHostInfrastructureCacheOverview(baseUrl?: string) {
+  return apiFetch<ConsoleHostInfrastructureCacheOverview>({
+    path: '/api/console/settings/host-infrastructure/cache',
+    baseUrl
+  });
+}
+
+export function listConsoleHostInfrastructureCacheEntries(
+  domainCode: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleHostInfrastructureCacheEntries>({
+    path: `/api/console/settings/host-infrastructure/cache/domains/${encodeURIComponent(
+      domainCode
+    )}/entries`,
+    baseUrl
+  });
+}
+
+export function revealConsoleHostInfrastructureCacheEntry(
+  domainCode: string,
+  key: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleCacheEntryValue>({
+    path: `/api/console/settings/host-infrastructure/cache/domains/${encodeURIComponent(
+      domainCode
+    )}/entries/reveal`,
+    method: 'POST',
+    body: { key },
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function clearConsoleHostInfrastructureCacheEntry(
+  domainCode: string,
+  key: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ClearConsoleCacheEntryResult>({
+    path: `/api/console/settings/host-infrastructure/cache/domains/${encodeURIComponent(
+      domainCode
+    )}/entries/clear`,
+    method: 'POST',
+    body: { key },
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function clearConsoleHostInfrastructureCacheDomain(
+  domainCode: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ClearConsoleCacheDomainResult>({
+    path: `/api/console/settings/host-infrastructure/cache/domains/${encodeURIComponent(
+      domainCode
+    )}/clear`,
+    method: 'POST',
+    csrfToken,
     baseUrl
   });
 }
