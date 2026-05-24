@@ -78,9 +78,9 @@ pub use modeling::{
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{
-    ApplicationRunDetail, ApplicationRunSummary, CallbackTaskRecord, CallbackTaskStatus,
-    CheckpointRecord, CompiledPlanRecord, DataModelSideEffectReceiptRecord, FlowRunMode,
-    FlowRunRecord, FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord,
+    ApplicationRunDetail, ApplicationRunLogSummary, ApplicationRunSummary, CallbackTaskRecord,
+    CallbackTaskStatus, CheckpointRecord, CompiledPlanRecord, DataModelSideEffectReceiptRecord,
+    FlowRunMode, FlowRunRecord, FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord,
     NodeRunStatus, RunEventRecord, RuntimeDebugArtifactRecord,
 };
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};

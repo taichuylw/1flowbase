@@ -879,6 +879,50 @@ async fn drop_runtime_table(database_url: &str, model_id: &str) {
     sqlx::query(&statement).execute(pool.pool()).await.unwrap();
 }
 
+async fn update_runtime_record_title_directly(
+    database_url: &str,
+    model_id: &str,
+    record_id: &str,
+    title: &str,
+) {
+    let durable = storage_durable::build_main_durable_postgres(database_url)
+        .await
+        .unwrap();
+    let pool = durable.store;
+    let model_id = uuid::Uuid::parse_str(model_id).unwrap();
+    let row = sqlx::query(
+        r#"
+        select model_definitions.physical_table_name, model_fields.physical_column_name
+        from model_definitions
+        join model_fields on model_fields.data_model_id = model_definitions.id
+        where model_definitions.id = $1
+          and model_fields.code = 'title'
+        "#,
+    )
+    .bind(model_id)
+    .fetch_one(pool.pool())
+    .await
+    .unwrap();
+    let physical_table_name: String = row.get("physical_table_name");
+    let physical_column_name: String = row.get("physical_column_name");
+    let statement = format!(
+        "update {} set {} = $1 where id = $2",
+        quote_test_identifier(&physical_table_name),
+        quote_test_identifier(&physical_column_name)
+    );
+
+    sqlx::query(&statement)
+        .bind(title)
+        .bind(uuid::Uuid::parse_str(record_id).unwrap())
+        .execute(pool.pool())
+        .await
+        .unwrap();
+}
+
+fn quote_test_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
 mod api_key_access;
 mod crud_dispatch;
 mod status_scope;

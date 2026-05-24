@@ -23,10 +23,11 @@ use control_plane::{
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        ListApplicationConversationRunsPageInput, OrchestrationRuntimeRepository,
-        UpdateFlowRunInput, UpdateFlowRunPayloadsInput, UpdateNodeRunInput,
-        UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput, UpsertCompiledPlanInput,
-        UpsertDataModelSideEffectReceiptInput, UpsertDebugVariableCacheEntryInput,
+        ListApplicationConversationRunsPageInput, ListApplicationRunsPageInput,
+        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
+        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
+        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        UpsertDebugVariableCacheEntryInput,
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -45,6 +46,7 @@ use sequencing::*;
 
 include!("event_methods.rs");
 include!("artifact_methods.rs");
+include!("application_run_log_methods.rs");
 include!("debug_variable_cache_methods.rs");
 include!("flow_run_methods.rs");
 include!("ledger_methods.rs");
@@ -426,6 +428,14 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: control_plane::ports::ListApplicationRunsPageInput,
     ) -> Result<control_plane::ports::ApplicationRunSummaryPage> {
         PgControlPlaneStore::list_application_runs_page(self, application_id, input).await
+    }
+
+    async fn list_application_run_logs_page(
+        &self,
+        application_id: Uuid,
+        input: control_plane::ports::ListApplicationRunsPageInput,
+    ) -> Result<control_plane::ports::ApplicationRunLogSummaryPage> {
+        PgControlPlaneStore::list_application_run_logs_page(self, application_id, input).await
     }
 
     async fn list_application_conversation_runs_page(

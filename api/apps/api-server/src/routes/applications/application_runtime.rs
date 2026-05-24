@@ -481,22 +481,6 @@ fn application_run_statistics(
     }
 }
 
-async fn application_run_statistics_for_flow_run(
-    store: &MainDurableStore,
-    application_id: Uuid,
-    flow_run_id: Uuid,
-) -> Result<application_logs::ApplicationRunStatisticsResponse, ApiError> {
-    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
-        store,
-        application_id,
-        flow_run_id,
-    )
-    .await?
-    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-
-    Ok(application_run_statistics(&detail))
-}
-
 fn application_runs_created_after(query: &ApplicationRunsQuery) -> Option<OffsetDateTime> {
     let days = query.time_range_days?;
 
@@ -1618,7 +1602,7 @@ pub async fn list_application_runs(
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runs_page =
-        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_runs_page(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
             &state.store,
             id,
             control_plane::ports::ListApplicationRunsPageInput {
@@ -1637,13 +1621,15 @@ pub async fn list_application_runs(
 
     let mut items = Vec::with_capacity(runs_page.items.len());
 
-    for summary in runs_page.items {
-        let statistics =
-            application_run_statistics_for_flow_run(&state.store, id, summary.id).await?;
-
+    for log_summary in runs_page.items {
+        let statistics = application_logs::ApplicationRunStatisticsResponse {
+            total_tokens: log_summary.total_tokens,
+            unique_node_count: log_summary.unique_node_count,
+            tool_callback_count: log_summary.tool_callback_count,
+        };
         items.push(to_flow_run_summary_response(
             &application,
-            summary,
+            log_summary.run,
             statistics,
         ));
     }

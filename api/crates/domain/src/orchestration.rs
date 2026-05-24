@@ -264,6 +264,14 @@ pub struct ApplicationRunSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunLogSummary {
+    pub run: ApplicationRunSummary,
+    pub total_tokens: Option<i64>,
+    pub unique_node_count: i64,
+    pub tool_callback_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationRunDetail {
     pub flow_run: FlowRunRecord,
     pub node_runs: Vec<NodeRunRecord>,

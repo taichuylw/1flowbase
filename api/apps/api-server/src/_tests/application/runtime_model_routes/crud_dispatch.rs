@@ -140,6 +140,153 @@ async fn runtime_model_routes_create_fetch_update_delete_and_filter_records() {
 }
 
 #[tokio::test]
+async fn runtime_model_routes_cache_main_source_reads_and_invalidate_after_writes() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let model_id = create_model_with_status(&app, &cookie, &csrf, "cache_orders", None).await;
+    create_text_field(&app, &cookie, &csrf, &model_id, "title").await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/runtime/models/cache_orders/records")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "title": "cached-title" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let record_id = created["data"]["id"].as_str().unwrap().to_string();
+
+    let first_list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/runtime/models/cache_orders/records")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_list.status(), StatusCode::OK);
+    let first_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/runtime/models/cache_orders/records/{record_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_get.status(), StatusCode::OK);
+
+    update_runtime_record_title_directly(&database_url, &model_id, &record_id, "db-bypass-title")
+        .await;
+
+    let cached_list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/runtime/models/cache_orders/records")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let cached_list_payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(cached_list.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(
+        cached_list_payload["data"]["items"][0]["title"],
+        json!("cached-title")
+    );
+
+    let cached_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/runtime/models/cache_orders/records/{record_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let cached_get_payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(cached_get.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(cached_get_payload["data"]["title"], json!("cached-title"));
+
+    let patch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!(
+                    "/api/runtime/models/cache_orders/records/{record_id}"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "title": "api-updated-title" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patch_response.status(), StatusCode::OK);
+
+    let invalidated_get = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/runtime/models/cache_orders/records/{record_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let invalidated_get_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(invalidated_get.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        invalidated_get_payload["data"]["title"],
+        json!("api-updated-title")
+    );
+}
+
+#[tokio::test]
 async fn runtime_model_routes_dispatch_external_source_crud_to_data_source_runtime() {
     let package = TempDataSourcePackage::new();
     write_external_runtime_package(&package);
