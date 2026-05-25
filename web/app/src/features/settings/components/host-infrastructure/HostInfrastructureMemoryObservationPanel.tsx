@@ -14,6 +14,7 @@ import {
   Input,
   Space,
   Table,
+  Tabs,
   Tag,
   Tree,
   Typography
@@ -169,8 +170,13 @@ export function HostInfrastructureMemoryObservationPanel({
     queryFn: fetchSettingsHostInfrastructureMemoryOverview
   });
   const contracts = overviewQuery.data?.contracts ?? [];
+  const resolvedActiveContractCode =
+    activeContractCode &&
+    contracts.some((contract) => contract.contract_code === activeContractCode)
+      ? activeContractCode
+      : (contracts[0]?.contract_code ?? null);
   const activeContract = contracts.find(
-    (contract) => contract.contract_code === activeContractCode
+    (contract) => contract.contract_code === resolvedActiveContractCode
   );
   const pageSize = activeContract?.capabilities.default_page_size ?? 50;
   const canListEntries = Boolean(
@@ -193,49 +199,57 @@ export function HostInfrastructureMemoryObservationPanel({
     queryKey: submittedSearch
       ? canSearchEntries
         ? settingsHostInfrastructureMemorySearchQueryKey(
-            activeContractCode,
+            resolvedActiveContractCode,
             entryRequest
               ? { ...entryRequest, q: submittedSearch }
               : { q: submittedSearch }
           )
         : settingsHostInfrastructureMemoryEntriesQueryKey(
-            activeContractCode,
+            resolvedActiveContractCode,
             entryRequest
           )
       : settingsHostInfrastructureMemoryEntriesQueryKey(
-          activeContractCode,
+          resolvedActiveContractCode,
           entryRequest
         ),
     queryFn: () => {
-      if (!activeContractCode || !entryRequest) {
+      if (!resolvedActiveContractCode || !entryRequest) {
         return Promise.resolve(null);
       }
       if (submittedSearch && canSearchEntries) {
         return searchSettingsHostInfrastructureMemoryEntries(
-          activeContractCode,
+          resolvedActiveContractCode,
           { ...entryRequest, q: submittedSearch }
         );
       }
       return fetchSettingsHostInfrastructureMemoryEntries(
-        activeContractCode,
+        resolvedActiveContractCode,
         entryRequest
       );
     },
-    enabled: Boolean(activeContractCode && canListEntries && entryRequest)
+    enabled: Boolean(
+      resolvedActiveContractCode && canListEntries && entryRequest
+    )
   });
   const rootTreeQuery = useQuery({
-    queryKey: settingsHostInfrastructureMemoryTreeQueryKey(activeContractCode, {
-      inspection_path: [],
-      limit: pageSize
-    }),
+    queryKey: settingsHostInfrastructureMemoryTreeQueryKey(
+      resolvedActiveContractCode,
+      {
+        inspection_path: [],
+        limit: pageSize
+      }
+    ),
     queryFn: () =>
-      activeContractCode
-        ? fetchSettingsHostInfrastructureMemoryTree(activeContractCode, {
-            inspection_path: [],
-            limit: pageSize
-          })
+      resolvedActiveContractCode
+        ? fetchSettingsHostInfrastructureMemoryTree(
+            resolvedActiveContractCode,
+            {
+              inspection_path: [],
+              limit: pageSize
+            }
+          )
         : Promise.resolve(null),
-    enabled: Boolean(activeContractCode && canListTree)
+    enabled: Boolean(resolvedActiveContractCode && canListTree)
   });
   const entries = entriesQuery.data?.entries ?? [];
   const canReveal = resolveCanReveal(
@@ -251,7 +265,7 @@ export function HostInfrastructureMemoryObservationPanel({
     setCursorHistory([]);
     setSubmittedSearch('');
     setSearchText('');
-  }, [activeContractCode]);
+  }, [resolvedActiveContractCode]);
 
   const refreshMemoryQueries = async (contractCode: string | null) => {
     await Promise.all([
@@ -298,7 +312,7 @@ export function HostInfrastructureMemoryObservationPanel({
   const selectedTreeKey = findTreeKeyByPath(treeData, selectedInspectionPath);
 
   const loadTreeChildren = async (treeNode: DataNode) => {
-    if (!activeContractCode) {
+    if (!resolvedActiveContractCode) {
       return;
     }
     const node = treeNode as DataNode & {
@@ -310,11 +324,11 @@ export function HostInfrastructureMemoryObservationPanel({
     }
     const response = await queryClient.fetchQuery({
       queryKey: settingsHostInfrastructureMemoryTreeQueryKey(
-        activeContractCode,
+        resolvedActiveContractCode,
         { inspection_path: node.inspectionPath, limit: pageSize }
       ),
       queryFn: () =>
-        fetchSettingsHostInfrastructureMemoryTree(activeContractCode, {
+        fetchSettingsHostInfrastructureMemoryTree(resolvedActiveContractCode, {
           inspection_path: node.inspectionPath,
           limit: pageSize
         })
@@ -460,7 +474,7 @@ export function HostInfrastructureMemoryObservationPanel({
         <Button
           icon={<ReloadOutlined />}
           onClick={() => {
-            void refreshMemoryQueries(activeContractCode);
+            void refreshMemoryQueries(resolvedActiveContractCode);
           }}
           loading={
             overviewQuery.isFetching ||
@@ -489,195 +503,202 @@ export function HostInfrastructureMemoryObservationPanel({
       ) : null}
 
       {contracts.length ? (
-        <div className="host-memory-panel__layout">
-          <Space
-            direction="vertical"
-            size={12}
-            className="host-memory-panel__tree"
-          >
-            <Typography.Text className="host-memory-panel__section-title">
-              Contracts
-            </Typography.Text>
-            <Space
-              direction="vertical"
-              size={8}
-              className="host-memory-panel__contract-list"
-            >
-              {contracts.map((contract) => (
-                <button
-                  key={contract.contract_code}
-                  type="button"
-                  className={
-                    contract.contract_code === activeContractCode
-                      ? 'host-memory-panel__contract-button host-memory-panel__contract-button--active'
-                      : 'host-memory-panel__contract-button'
-                  }
-                  onClick={() => selectContract(contract.contract_code)}
-                >
-                  <Typography.Text strong>{contract.label}</Typography.Text>
-                  <Typography.Text type="secondary">
-                    {contract.entry_count} entries ·{' '}
-                    {formatBytes(contract.total_value_size_bytes)}
-                  </Typography.Text>
-                </button>
-              ))}
-            </Space>
+        <Tabs
+          activeKey={resolvedActiveContractCode ?? undefined}
+          className="host-memory-panel__tabs"
+          items={contracts.map((contract) => ({
+            key: contract.contract_code,
+            label: (
+              <span className="host-memory-panel__tab-label">
+                <span>{contract.label}</span>
+                <Tag className="host-memory-panel__tab-count">
+                  {contract.entry_count}
+                </Tag>
+              </span>
+            ),
+            children:
+              contract.contract_code === resolvedActiveContractCode ? (
+                <div className="host-memory-panel__layout">
+                  <Space
+                    direction="vertical"
+                    size={12}
+                    className="host-memory-panel__tree"
+                  >
+                    {activeContract ? (
+                      <>
+                        <Descriptions bordered size="small" column={1}>
+                          <Descriptions.Item label="Contract">
+                            {activeContract.contract_code}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Provider">
+                            {activeContract.provider_code ?? 'unknown'}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Sensitive">
+                            {activeContract.sensitive_entry_count}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Size">
+                            {formatBytes(activeContract.total_value_size_bytes)}
+                          </Descriptions.Item>
+                        </Descriptions>
 
-            {activeContract ? (
-              <>
-                <Descriptions bordered size="small" column={1}>
-                  <Descriptions.Item label="Contract">
-                    {activeContract.contract_code}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Provider">
-                    {activeContract.provider_code ?? 'unknown'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Sensitive">
-                    {activeContract.sensitive_entry_count}
-                  </Descriptions.Item>
-                </Descriptions>
+                        {!activeContract.supported ||
+                        !activeContract.capabilities.list_tree ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            message="当前 contract 不支持 tree inspection。"
+                          />
+                        ) : rootTreeQuery.isError ? (
+                          <Alert
+                            type="error"
+                            showIcon
+                            message="内存树加载失败。"
+                          />
+                        ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="暂无内存节点"
+                          />
+                        ) : (
+                          <div className="host-memory-panel__tree-body">
+                            <Tree
+                              treeData={treeData}
+                              loadData={loadTreeChildren}
+                              selectedKeys={
+                                selectedTreeKey ? [selectedTreeKey] : []
+                              }
+                              onSelect={(_, info) => {
+                                const node = info.node as DataNode & {
+                                  inspectionPath?: string[];
+                                };
+                                if (node.inspectionPath) {
+                                  selectInspectionPath(node.inspectionPath);
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="请选择内存 contract"
+                      />
+                    )}
+                  </Space>
 
-                {!activeContract.supported ||
-                !activeContract.capabilities.list_tree ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message="当前 contract 不支持 tree inspection。"
-                  />
-                ) : rootTreeQuery.isError ? (
-                  <Alert type="error" showIcon message="内存树加载失败。" />
-                ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="暂无内存节点"
-                  />
-                ) : (
-                  <Tree
-                    treeData={treeData}
-                    loadData={loadTreeChildren}
-                    selectedKeys={selectedTreeKey ? [selectedTreeKey] : []}
-                    onSelect={(_, info) => {
-                      const node = info.node as DataNode & {
-                        inspectionPath?: string[];
-                      };
-                      if (node.inspectionPath) {
-                        selectInspectionPath(node.inspectionPath);
-                      }
-                    }}
-                  />
-                )}
-              </>
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="请选择内存 contract"
-              />
-            )}
-          </Space>
+                  <Space
+                    direction="vertical"
+                    size={12}
+                    className="host-memory-panel__entries"
+                  >
+                    <div className="host-memory-panel__entries-header">
+                      <Space direction="vertical" size={2}>
+                        <Typography.Text strong>Entries</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {selectedInspectionPath
+                            ? formatInspectionPath(selectedInspectionPath)
+                            : '未选择路径'}
+                        </Typography.Text>
+                      </Space>
+                      <Input.Search
+                        allowClear
+                        disabled={!canSearchEntries}
+                        value={searchText}
+                        onChange={(event) => setSearchText(event.target.value)}
+                        onSearch={(value) => {
+                          if (!canSearchEntries) {
+                            return;
+                          }
+                          setSubmittedSearch(value.trim());
+                          setEntryCursor(null);
+                          setCursorHistory([]);
+                        }}
+                        size="small"
+                        style={{ maxWidth: 240 }}
+                      />
+                    </div>
 
-          <Space
-            direction="vertical"
-            size={12}
-            className="host-memory-panel__entries"
-          >
-            <div className="host-memory-panel__entries-header">
-              <Space direction="vertical" size={2}>
-                <Typography.Text strong>Entries</Typography.Text>
-                <Typography.Text type="secondary">
-                  {selectedInspectionPath
-                    ? formatInspectionPath(selectedInspectionPath)
-                    : '未选择路径'}
-                </Typography.Text>
-              </Space>
-              <Input.Search
-                allowClear
-                disabled={!canSearchEntries}
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                onSearch={(value) => {
-                  if (!canSearchEntries) {
-                    return;
-                  }
-                  setSubmittedSearch(value.trim());
-                  setEntryCursor(null);
-                  setCursorHistory([]);
-                }}
-                size="small"
-                style={{ maxWidth: 240 }}
-              />
-            </div>
-
-            {!selectedInspectionPath ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="请选择 tree 节点"
-              />
-            ) : entriesQuery.isError ? (
-              <Alert
-                type="error"
-                showIcon
-                message="内存 entry 连接失败。"
-                description="无法读取当前路径的 entries。"
-              />
-            ) : entriesQuery.isSuccess && !entries.length ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="暂无内存 entry"
-              />
-            ) : (
-              <>
-                <Table
-                  rowKey={(entry) => entry.entry_ref}
-                  columns={entryColumns}
-                  dataSource={entries}
-                  loading={entriesQuery.isLoading || entriesQuery.isFetching}
-                  pagination={false}
-                  size="small"
-                />
-                <div className="host-memory-panel__entries-header">
-                  <Typography.Text type="secondary">
-                    {entriesQuery.data
-                      ? `${formatBytes(entriesQuery.data.emitted_bytes)} emitted`
-                      : null}
-                  </Typography.Text>
-                  <Space size={8}>
-                    <Button
-                      size="small"
-                      disabled={!cursorHistory.length}
-                      onClick={() => {
-                        setCursorHistory((current) => {
-                          const previousCursor = current.at(-1) ?? null;
-                          const nextHistory = current.slice(0, -1);
-                          setEntryCursor(previousCursor || null);
-                          return nextHistory;
-                        });
-                      }}
-                    >
-                      上一页
-                    </Button>
-                    <Button
-                      size="small"
-                      disabled={!entriesQuery.data?.next_cursor}
-                      onClick={() => {
-                        const nextCursor = entriesQuery.data?.next_cursor;
-                        if (!nextCursor) {
-                          return;
-                        }
-                        setCursorHistory((current) => [
-                          ...current,
-                          entryCursor ?? ''
-                        ]);
-                        setEntryCursor(nextCursor);
-                      }}
-                    >
-                      下一页
-                    </Button>
+                    {!selectedInspectionPath ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="请选择 tree 节点"
+                      />
+                    ) : entriesQuery.isError ? (
+                      <Alert
+                        type="error"
+                        showIcon
+                        message="内存 entry 连接失败。"
+                        description="无法读取当前路径的 entries。"
+                      />
+                    ) : entriesQuery.isSuccess && !entries.length ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="暂无内存 entry"
+                      />
+                    ) : (
+                      <>
+                        <Table
+                          rowKey={(entry) => entry.entry_ref}
+                          columns={entryColumns}
+                          dataSource={entries}
+                          loading={
+                            entriesQuery.isLoading || entriesQuery.isFetching
+                          }
+                          pagination={false}
+                          size="small"
+                        />
+                        <div className="host-memory-panel__entries-header">
+                          <Typography.Text type="secondary">
+                            {entriesQuery.data
+                              ? `${formatBytes(
+                                  entriesQuery.data.emitted_bytes
+                                )} emitted`
+                              : null}
+                          </Typography.Text>
+                          <Space size={8}>
+                            <Button
+                              size="small"
+                              disabled={!cursorHistory.length}
+                              onClick={() => {
+                                setCursorHistory((current) => {
+                                  const previousCursor = current.at(-1) ?? null;
+                                  const nextHistory = current.slice(0, -1);
+                                  setEntryCursor(previousCursor || null);
+                                  return nextHistory;
+                                });
+                              }}
+                            >
+                              上一页
+                            </Button>
+                            <Button
+                              size="small"
+                              disabled={!entriesQuery.data?.next_cursor}
+                              onClick={() => {
+                                const nextCursor =
+                                  entriesQuery.data?.next_cursor;
+                                if (!nextCursor) {
+                                  return;
+                                }
+                                setCursorHistory((current) => [
+                                  ...current,
+                                  entryCursor ?? ''
+                                ]);
+                                setEntryCursor(nextCursor);
+                              }}
+                            >
+                              下一页
+                            </Button>
+                          </Space>
+                        </div>
+                      </>
+                    )}
                   </Space>
                 </div>
-              </>
-            )}
-          </Space>
-        </div>
+              ) : null
+          }))}
+          onChange={selectContract}
+        />
       ) : null}
 
       <Drawer
@@ -784,9 +805,14 @@ export function HostInfrastructureMemoryObservationPanel({
                     revealedEntry.preview_size_bytes
                   )} of ${formatBytes(revealedEntry.full_value_size_bytes)}`}
                 />
-                <Typography.Paragraph code copyable>
-                  {revealedEntry.value_preview}
-                </Typography.Paragraph>
+                <JsonPreviewBlock
+                  title="Memory value preview"
+                  value={revealedEntry.value_preview}
+                  rawText={revealedEntry.value_preview}
+                  collapsible={false}
+                  height="320px"
+                  copySuccessMessage="已复制内存预览 JSON"
+                />
               </Space>
             ) : (
               <Alert

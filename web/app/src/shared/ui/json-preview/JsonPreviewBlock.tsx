@@ -76,7 +76,8 @@ export function JsonPreviewBlock({
   defaultCollapsed = false,
   displayTitle = title,
   fullscreenAriaLabel,
-  height = '220px'
+  height = '220px',
+  rawText
 }: {
   title: string;
   value: unknown;
@@ -90,12 +91,16 @@ export function JsonPreviewBlock({
   displayTitle?: string;
   fullscreenAriaLabel?: string;
   height?: string;
+  rawText?: string;
 }) {
   const { message } = App.useApp();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [expanded, setExpanded] = useState(false);
   const { copied, copy } = useClipboardCopy();
-  const formattedValue = useMemo(() => formatJsonPreview(value), [value]);
+  const formattedValue = useMemo(
+    () => rawText ?? formatJsonPreview(value),
+    [rawText, value]
+  );
   const isCollapsed = collapsible ? collapsed : false;
 
   const handleCopy = async () => {

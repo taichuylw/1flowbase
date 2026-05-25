@@ -43,11 +43,40 @@
   min-width: 0;
 }
 
+.host-memory-panel__tabs {
+  min-width: 0;
+}
+
+.host-memory-panel__tab-label {
+  display: inline-flex;
+  max-width: min(220px, 42vw);
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.host-memory-panel__tab-label > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-memory-panel__tab-count {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
+}
+
 .host-cache-panel__domains,
 .host-cache-panel__entries,
 .host-memory-panel__tree,
 .host-memory-panel__entries {
   min-width: 0;
+}
+
+.host-memory-panel__tree-body {
+  min-width: 0;
+  overflow: auto;
 }
 
 .host-cache-panel__section-title,
@@ -59,13 +88,11 @@
   text-transform: uppercase;
 }
 
-.host-cache-panel__domain-list,
-.host-memory-panel__contract-list {
+.host-cache-panel__domain-list {
   width: 100%;
 }
 
-.host-cache-panel__domain-button,
-.host-memory-panel__contract-button {
+.host-cache-panel__domain-button {
   display: flex;
   width: 100%;
   min-height: 56px;
@@ -82,8 +109,7 @@
   text-align: left;
 }
 
-.host-cache-panel__domain-button--active,
-.host-memory-panel__contract-button--active {
+.host-cache-panel__domain-button--active {
   border-color: #1677ff;
   background: #e6f4ff;
 }
@@ -96,7 +122,6 @@
   width: 100%;
 }
 
-.host-memory-panel__contract,
 .host-memory-panel__drawer {
   width: 100%;
 }
@@ -117,6 +142,10 @@
   .host-cache-panel__layout,
   .host-memory-panel__layout {
     grid-template-columns: 1fr;
+  }
+
+  .host-memory-panel__tab-label {
+    max-width: 62vw;
   }
 
   .host-cache-panel__key {

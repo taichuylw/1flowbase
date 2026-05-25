@@ -27,6 +27,8 @@ keywords:
 
 实现后的边界仍是：后端提供 `inspection_path`、cursor 和 metadata；前端不解析 storage key；bulk list/tree/search 只传 metadata；value reveal 走 metadata / preview / full mode 并有 value size 上限。当前 local in-memory providers 使用轻量 metadata snapshot 后分页，没有引入持久化 provider 索引重构。
 
+`2026-05-25` 追加交互边界：`/settings/memory-observation` 按不同 ephemeral contract 使用 Ant Design Tabs 分区；每个 tab 内固定左侧树状 inspection path、右侧 entries table；查看 metadata/value/preview JSON 统一复用 `JsonPreviewBlock`，保留行号、复制和放大查看。
+
 ## 谁在做什么？
 
 用户在 `2026-05-25 20` 确认易失层不需要历史兼容，因为重启后内存内容自然消失；下一步准备把方案挂到 GitHub issue 上。AI 负责把设计收敛成 issue 树，不进入实现。

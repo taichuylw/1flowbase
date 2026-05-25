@@ -465,6 +465,156 @@ describe('HostInfrastructurePanel', () => {
     expect(await screen.findByText('session:1')).toBeInTheDocument();
   });
 
+  test('renders memory contracts as tabs with tree and table panes', async () => {
+    api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
+      can_manage: true,
+      contracts: [
+        {
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          entry_count: 1,
+          sensitive_entry_count: 0,
+          total_value_size_bytes: 512,
+          supported: true
+        },
+        {
+          contract_code: 'cache-store',
+          label: 'Cache',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          entry_count: 1,
+          sensitive_entry_count: 0,
+          total_value_size_bytes: 1024,
+          supported: true
+        }
+      ]
+    });
+    api.fetchSettingsHostInfrastructureMemoryTree.mockImplementation(
+      (contractCode: string) =>
+        Promise.resolve({
+          contract_code: contractCode,
+          label: contractCode === 'cache-store' ? 'Cache' : 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          supported: true,
+          inspection_path: [],
+          nodes: [
+            {
+              node_ref:
+                contractCode === 'cache-store'
+                  ? 'cache-domain-node'
+                  : 'session-workspace-node',
+              label:
+                contractCode === 'cache-store'
+                  ? 'application-cache'
+                  : 'workspace-1',
+              inspection_path:
+                contractCode === 'cache-store'
+                  ? ['application-cache']
+                  : ['workspace-1'],
+              depth: 1,
+              entry_count: 1,
+              sensitive_entry_count: 0,
+              total_value_size_bytes:
+                contractCode === 'cache-store' ? 1024 : 512,
+              has_children: false
+            }
+          ],
+          next_cursor: null,
+          limit: 50,
+          byte_limit: 65536,
+          emitted_bytes: 128,
+          truncated_by_byte_limit: false
+        })
+    );
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockImplementation(
+      (contractCode: string, request?: { inspection_path?: string[] }) =>
+        Promise.resolve({
+          contract_code: contractCode,
+          label: contractCode === 'cache-store' ? 'Cache' : 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          supported: true,
+          inspection_path: request?.inspection_path ?? [],
+          entries: [
+            {
+              contract_code: contractCode,
+              group_code: contractCode === 'cache-store' ? 'cache' : 'sessions',
+              entry_ref:
+                contractCode === 'cache-store' ? 'cache:key:1' : 'session:1',
+              key: contractCode === 'cache-store' ? 'cache:key:1' : 'session:1',
+              inspection_path:
+                contractCode === 'cache-store'
+                  ? ['application-cache', 'cache:key:1']
+                  : ['workspace-1', 'session:1'],
+              entry_kind:
+                contractCode === 'cache-store' ? 'cache_entry' : 'session',
+              status: 'active',
+              owner: null,
+              value_size_bytes: contractCode === 'cache-store' ? 1024 : 512,
+              metadata_size_bytes: 24,
+              ttl_seconds: null,
+              created_at_unix: null,
+              expires_at_unix: null,
+              sensitive: false,
+              metadata: {}
+            }
+          ],
+          next_cursor: null,
+          limit: 50,
+          byte_limit: 65536,
+          emitted_bytes: 128,
+          truncated_by_byte_limit: false
+        })
+    );
+
+    renderMemoryObservationPanel(true);
+
+    expect(
+      await screen.findByRole('tab', { name: /Sessions/ })
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
+    fireEvent.click(await screen.findByText('workspace-1'));
+    expect(await screen.findByText('session:1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Cache/ }));
+
+    expect(await screen.findByText('application-cache')).toBeInTheDocument();
+    expect(screen.queryByText('session:1')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByText('application-cache'));
+    expect(await screen.findByText('cache:key:1')).toBeInTheDocument();
+    expect(
+      api.fetchSettingsHostInfrastructureMemoryEntries
+    ).toHaveBeenLastCalledWith('cache-store', {
+      inspection_path: ['application-cache'],
+      cursor: null,
+      limit: 50
+    });
+  });
+
   test('explains when memory observation succeeds but there are no contracts', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
     api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
