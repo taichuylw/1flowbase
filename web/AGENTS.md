@@ -43,7 +43,7 @@
 - 需要吃到本地资源限制时，优先走仓库标准入口：`pnpm --dir web test`、`pnpm --dir web/app test`、`node scripts/node/test-frontend.js fast|full`；不要直接用裸 `pnpm exec vitest` 或 `pnpm exec turbo` 绕过限制。
 - 页面开发顺序先做“页面 + 组件组合”，再做“页面布局 + 组件样式调整”，除非用户同意，否则不对上层或者全局样式进行修改或者调整
 - `packages/api-client/src` 当前是按 console resource 平铺的历史结构；新增 client 模块前先按平面或 feature 收纳，不继续扩大根层平铺。
-- `features/settings/_tests/model-providers-page.test.tsx` 已超过单文件压力线；新增 model provider 页面用例前先拆分场景文件。
+- Model provider 页面用例放在 `features/settings/_tests/model-providers-page/` 场景文件内，不再回退到单个页面大测试文件。
 
 ## Verification
 - 进入自检、验收、回归或交付阶段时，使用 `qa-evaluation` 并自行执行对应脚本。

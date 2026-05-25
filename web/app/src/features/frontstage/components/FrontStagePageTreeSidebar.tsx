@@ -20,7 +20,7 @@ type FrontStagePageTreeSidebarProps = {
   onAddGroup: () => void;
   onAddPage: () => void;
   onAddPageInGroup: (groupId: string) => void;
-  onAddNodeAtPosition: (
+  onAddNodeAtPosition?: (
     kind: 'page' | 'group',
     targetNodeId: string,
     position: 'before' | 'after'
@@ -48,6 +48,8 @@ type FrontStagePageTreeSidebarProps = {
 
 const PAGE_TREE_DRAG_DATA_TYPE = 'application/x-frontstage-page-tree-node';
 const ROOT_PAGE_GROUP_VALUE = '__frontstage_root__';
+
+type MenuClickInfo = Parameters<NonNullable<MenuProps['onClick']>>[0];
 
 type AntIconComponent = ElementType<{ className?: string }>;
 type PageTreeDropIndicator = {
@@ -91,21 +93,6 @@ function getNodeTitle(node: FrontStageTreeNode) {
   return node.kind === 'group' ? '未命名分组' : '未命名页面';
 }
 
-function renderNodeIcon(node: FrontStageTreeNode) {
-  if (!node.icon) {
-    return null;
-  }
-
-  const IconComponent =
-    pageTreeIconMap[node.icon as keyof typeof pageTreeIconMap];
-
-  if (!IconComponent) {
-    return null;
-  }
-
-  return <IconComponent />;
-}
-
 function findParentId(
   nodes: FrontStageTreeNode[],
   targetNodeId: string,
@@ -125,6 +112,21 @@ function findParentId(
   }
 
   return undefined;
+}
+
+function renderNodeIcon(node: FrontStageTreeNode) {
+  if (!node.icon) {
+    return null;
+  }
+
+  const IconComponent =
+    pageTreeIconMap[node.icon as keyof typeof pageTreeIconMap];
+
+  if (!IconComponent) {
+    return null;
+  }
+
+  return <IconComponent />;
 }
 
 function renderTreeNode({
@@ -167,7 +169,7 @@ function renderTreeNode({
   ) => void;
   onEditNodeTooltip: (nodeId: string, currentTooltip: string | null) => void;
   onAddPageInGroup: (groupId: string) => void;
-  onAddNodeAtPosition: (
+  onAddNodeAtPosition?: (
     kind: 'page' | 'group',
     targetNodeId: string,
     position: 'before' | 'after'
@@ -195,8 +197,8 @@ function renderTreeNode({
   const isSelected = selectedPageId === node.id;
   const canAddPageToGroup = node.kind === 'group' && level === 0;
   const isCollapsed = collapsedGroupIds.has(node.id);
-  const isHidden = node.is_hidden ?? false;
-  const tooltipText = node.tooltip ?? undefined;
+  const isHidden = Boolean(node.is_hidden);
+  const tooltipText = node.tooltip ?? '';
   const { canMoveUp, canMoveDown } = canMoveNode(siblings, node.id);
   const childNodes = node.children ?? [];
   const title = getNodeTitle(node);
@@ -213,31 +215,37 @@ function renderTreeNode({
     (candidate) => candidate.kind === 'group'
   );
   const currentParentId = findParentId(pageTree, node.id) ?? null;
-  const pageGroupMoveItems: NonNullable<MenuProps['items']> =
-    isPageNode && onMovePageToGroup && topLevelGroups.length > 0
+  const canShowPageGroupSelect = Boolean(
+    isPageNode && isSelected && onMovePageToGroup && topLevelGroups.length > 0
+  );
+  const pageGroupOptions = [
+    { label: '不分组', value: ROOT_PAGE_GROUP_VALUE },
+    ...topLevelGroups.map((groupNode) => ({
+      label: groupNode.title || '未命名分组',
+      value: groupNode.id
+    }))
+  ];
+  const pageGroupMenuItems: NonNullable<MenuProps['items']> =
+    canShowPageGroupSelect && onMovePageToGroup
       ? [
           { type: 'divider' as const },
-          {
-            key: `move-group-${ROOT_PAGE_GROUP_VALUE}`,
-            label: '不分组',
-            disabled: currentParentId === null || isOperationPending,
-            onClick: ({ domEvent }: { domEvent: any }) => {
-              domEvent.stopPropagation();
-              onMovePageToGroup(node.id, currentParentId, null);
-            }
-          },
-          ...topLevelGroups.map((groupNode) => ({
-            key: `move-group-${groupNode.id}`,
-            label: groupNode.title || '未命名分组',
-            disabled: currentParentId === groupNode.id || isOperationPending,
-            onClick: ({ domEvent }: { domEvent: any }) => {
-              domEvent.stopPropagation();
-              onMovePageToGroup(node.id, currentParentId, groupNode.id);
-            }
-          }))
+          ...pageGroupOptions.map((option) => {
+            const optionParentId =
+              option.value === ROOT_PAGE_GROUP_VALUE ? null : option.value;
+
+            return {
+              key: `move-group-${option.value}`,
+              label: option.label,
+              disabled:
+                optionParentId === currentParentId || isOperationPending,
+              onClick: ({ domEvent }: MenuClickInfo) => {
+                domEvent.stopPropagation();
+                onMovePageToGroup(node.id, currentParentId, optionParentId);
+              }
+            };
+          })
         ]
       : [];
-
   const getDraggedNodeIdFromEvent = (event: DragEvent<HTMLElement>) =>
     draggedNodeId || event.dataTransfer.getData(PAGE_TREE_DRAG_DATA_TYPE);
 
@@ -256,7 +264,9 @@ function renderTreeNode({
       ? findNodeById(pageTree, activeDraggedNodeId)
       : null;
     const canDropInsideCurrentGroup =
-      node.kind === 'group' && level === 0 && activeDraggedNode?.kind === 'page';
+      node.kind === 'group' &&
+      level === 0 &&
+      activeDraggedNode?.kind === 'page';
 
     if (
       canDropInsideCurrentGroup &&
@@ -322,7 +332,7 @@ function renderTreeNode({
       key: 'rename',
       label: '编辑',
       icon: <EditOutlined />,
-      onClick: ({ domEvent }: { domEvent: any }) => {
+      onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
         onRenameNode(node);
       }
@@ -331,7 +341,7 @@ function renderTreeNode({
       key: 'tooltip',
       label: '编辑描述',
       icon: <InfoCircleOutlined />,
-      onClick: ({ domEvent }: { domEvent: any }) => {
+      onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
         onEditNodeTooltip(node.id, node.tooltip ?? null);
       }
@@ -371,7 +381,7 @@ function renderTreeNode({
           label: '上移',
           icon: <ArrowUpOutlined />,
           disabled: !canMoveUp,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onMoveNode(node.id, -1);
           }
@@ -381,12 +391,12 @@ function renderTreeNode({
           label: '下移',
           icon: <ArrowDownOutlined />,
           disabled: !canMoveDown,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
             onMoveNode(node.id, 1);
           }
         },
-        ...pageGroupMoveItems
+        ...pageGroupMenuItems
       ]
     },
     {
@@ -398,18 +408,18 @@ function renderTreeNode({
           key: 'insert-before-page',
           label: '页面',
           icon: <FileTextOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition('page', node.id, 'before');
+            onAddNodeAtPosition?.('page', node.id, 'before');
           }
         },
         {
           key: 'insert-before-group',
           label: '分组',
           icon: <FolderOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition('group', node.id, 'before');
+            onAddNodeAtPosition?.('group', node.id, 'before');
           }
         }
       ]
@@ -421,7 +431,7 @@ function renderTreeNode({
             label: '在里面插入',
             icon: <FileAddOutlined />,
             disabled: isOperationPending,
-            onClick: ({ domEvent }: { domEvent: any }) => {
+            onClick: ({ domEvent }: MenuClickInfo) => {
               domEvent.stopPropagation();
               onAddPageInGroup(node.id);
             }
@@ -437,18 +447,18 @@ function renderTreeNode({
           key: 'insert-after-page',
           label: '页面',
           icon: <FileTextOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition('page', node.id, 'after');
+            onAddNodeAtPosition?.('page', node.id, 'after');
           }
         },
         {
           key: 'insert-after-group',
           label: '分组',
           icon: <FolderOutlined />,
-          onClick: ({ domEvent }: { domEvent: any }) => {
+          onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
-            onAddNodeAtPosition('group', node.id, 'after');
+            onAddNodeAtPosition?.('group', node.id, 'after');
           }
         }
       ]
@@ -461,7 +471,7 @@ function renderTreeNode({
       label: '删除',
       icon: <DeleteOutlined />,
       danger: true,
-      onClick: ({ domEvent }: { domEvent: any }) => {
+      onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
         onDeleteNode(node.id);
       }
@@ -553,10 +563,12 @@ function renderTreeNode({
             : null,
           isPageNode ? 'frontstage-page-tree-sidebar__node-row--page' : null,
           isHidden ? 'frontstage-page-tree-sidebar__node-row--hidden' : null,
+          isDragging
+            ? 'frontstage-page-tree-sidebar__node-row--dragging'
+            : null,
           canEdit
             ? 'frontstage-page-tree-sidebar__node-row--design'
-            : 'frontstage-page-tree-sidebar__node-row--view',
-          isDragging ? 'frontstage-page-tree-sidebar__node-row--dragging' : null
+            : 'frontstage-page-tree-sidebar__node-row--view'
         ]
           .filter(Boolean)
           .join(' ')}
@@ -571,84 +583,11 @@ function renderTreeNode({
         )}
         {canEdit ? (
           <>
-            {/* Hidden action buttons for test compatibility */}
-            <div
-              className="frontstage-page-tree-sidebar__node-actions"
-              style={{
-                position: 'absolute',
-                width: 0,
-                height: 0,
-                opacity: 0,
-                overflow: 'hidden',
-                pointerEvents: 'auto'
-              }}
-            >
-              <Button
-                aria-label="重命名"
-                disabled={isOperationPending}
-                icon={<EditOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRenameNode(node);
-                }}
-                size="small"
-                type="text"
-              />
-              {canAddPageToGroup ? (
-                <Button
-                  aria-label="组内新增页面"
-                  disabled={isOperationPending}
-                  icon={<FileAddOutlined />}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onAddPageInGroup(node.id);
-                  }}
-                  size="small"
-                  type="text"
-                />
-              ) : null}
-              <Button
-                aria-label="上移"
-                disabled={!canMoveUp || isOperationPending}
-                icon={<ArrowUpOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMoveNode(node.id, -1);
-                }}
-                size="small"
-                type="text"
-              />
-              <Button
-                aria-label="下移"
-                disabled={!canMoveDown || isOperationPending}
-                icon={<ArrowDownOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMoveNode(node.id, 1);
-                }}
-                size="small"
-                type="text"
-              />
-              <Button
-                aria-label="删除"
-                danger
-                disabled={isOperationPending}
-                icon={<DeleteOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDeleteNode(node.id);
-                }}
-                size="small"
-                type="text"
-              />
-            </div>
-
-            {/* Visible premium action buttons matching screenshots */}
             <div
               className="frontstage-page-tree-sidebar__node-actions-visible"
               onClick={(e) => e.stopPropagation()}
             >
-              <Tooltip title="拖拽/排序">
+              <Tooltip title="拖拽/排序 (请使用菜单中的上移/下移)">
                 <Button
                   aria-label="拖拽移动节点"
                   className="frontstage-page-tree-sidebar__drag-handle"
@@ -677,11 +616,10 @@ function renderTreeNode({
               </Tooltip>
               <Dropdown
                 menu={{ items: menuItems }}
-                trigger={['hover']}
+                trigger={['click']}
                 placement="bottomRight"
               >
                 <Button
-                  aria-haspopup="menu"
                   aria-label="页面操作菜单"
                   className="frontstage-page-tree-sidebar__more-trigger"
                   disabled={isOperationPending}

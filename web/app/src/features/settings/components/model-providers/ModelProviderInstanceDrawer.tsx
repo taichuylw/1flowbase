@@ -3,8 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AutoComplete,
   Button,
-  Divider,
-  Descriptions,
   Drawer,
   Empty,
   Flex,
@@ -21,8 +19,6 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   PlusOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
   ImportOutlined
 } from '@ant-design/icons';
 

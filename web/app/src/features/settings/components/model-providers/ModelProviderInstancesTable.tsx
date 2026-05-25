@@ -113,12 +113,6 @@ export function ModelProviderInstancesTable({
                   </span>
                   {renderStatusTag(instance.status)}
                 </div>
-                <Typography.Paragraph
-                  className="model-provider-panel__instance-subtitle"
-                  ellipsis={{ rows: 1 }}
-                >
-                  {instance.provider_code} · {instance.protocol}
-                </Typography.Paragraph>
               </div>
 
               <div className="model-provider-panel__instance-header-side">

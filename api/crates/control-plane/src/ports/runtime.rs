@@ -747,6 +747,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         application_id: Uuid,
         input: ListApplicationRunsPageInput,
     ) -> anyhow::Result<ApplicationRunSummaryPage>;
+    async fn list_application_run_logs_page(
+        &self,
+        application_id: Uuid,
+        input: ListApplicationRunsPageInput,
+    ) -> anyhow::Result<ApplicationRunLogSummaryPage> {
+        let _ = (application_id, input);
+        anyhow::bail!("list_application_run_logs_page not implemented")
+    }
     async fn list_application_conversation_runs_page(
         &self,
         application_id: Uuid,
@@ -779,6 +787,14 @@ pub struct ListApplicationRunsPageInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplicationRunSummaryPage {
     pub items: Vec<domain::ApplicationRunSummary>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationRunLogSummaryPage {
+    pub items: Vec<domain::ApplicationRunLogSummary>,
     pub total: i64,
     pub page: i64,
     pub page_size: i64,

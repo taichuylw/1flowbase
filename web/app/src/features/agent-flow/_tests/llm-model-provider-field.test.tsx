@@ -1,5 +1,11 @@
 /* eslint-disable testing-library/no-container, testing-library/no-node-access */
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from '@testing-library/react';
 import { useEffect, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
@@ -165,7 +171,6 @@ describe('LlmModelField', () => {
 
     llmNode.config.model_provider = {
       provider_code: primaryProviderOption.provider_code,
-      source_instance_id: primaryProviderFirstGroup.source_instance_id,
       model_id: primaryProviderFirstModel.model_id,
       protocol: primaryProviderOption.protocol,
       provider_label: primaryProviderOption.display_name,
@@ -313,7 +318,6 @@ describe('LlmModelField', () => {
       expect(llmNode?.config).toMatchObject({
         model_provider: {
           provider_code: 'openai_compatible',
-          source_instance_id: primaryProviderSecondGroup.source_instance_id,
           model_id: primaryProviderSecondModel.model_id,
           provider_label: primaryProviderOption.display_name,
           model_label: primaryProviderSecondModel.display_name
@@ -328,6 +332,10 @@ describe('LlmModelField', () => {
           }
         }
       });
+      expect(
+        (llmNode?.config.model_provider as Record<string, unknown>)
+          .source_instance_id
+      ).toBeUndefined();
     });
   }, 10_000);
 
@@ -784,7 +792,6 @@ describe('LlmModelField', () => {
 
     llmNode.config.model_provider = {
       provider_code: duplicatedProvider.provider_code,
-      source_instance_id: 'provider-openai-backup',
       model_id: 'gpt-4o-mini',
       provider_label: duplicatedProvider.display_name,
       model_label: 'GPT-4o Mini'
@@ -879,7 +886,6 @@ describe('LlmModelField', () => {
 
     llmNode.config.model_provider = {
       provider_code: extendedProvider.provider_code,
-      source_instance_id: primaryProviderFirstGroup.source_instance_id,
       model_id: primaryProviderFirstModel.model_id,
       provider_label: extendedProvider.display_name,
       model_label: primaryProviderFirstModel.display_name
@@ -975,7 +981,6 @@ describe('LlmModelField', () => {
 
     llmNode.config.model_provider = {
       provider_code: 'provider_stale',
-      source_instance_id: 'provider-stale-instance',
       model_id: 'gpt-4o-mini'
     };
 
@@ -1021,8 +1026,6 @@ describe('LlmModelField', () => {
             config: expect.objectContaining({
               model_provider: expect.objectContaining({
                 provider_code: secondaryProviderOption.provider_code,
-                source_instance_id:
-                  secondaryProviderFirstGroup.source_instance_id,
                 model_id: secondaryProviderFirstModel.model_id,
                 provider_label: secondaryProviderOption.display_name,
                 model_label: secondaryProviderFirstModel.display_name

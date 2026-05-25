@@ -780,6 +780,7 @@ fn tool_call_response(tool_calls: Vec<ProviderToolCall>) -> ProviderInvocationRe
         finish_reason: Some(ProviderFinishReason::ToolCall),
         usage: ProviderUsage {
             input_tokens: Some(11),
+            input_cache_hit_tokens: Some(5),
             output_tokens: Some(3),
             total_tokens: Some(14),
             ..ProviderUsage::default()
@@ -794,6 +795,7 @@ fn final_llm_response(text: &str) -> ProviderInvocationResult {
         finish_reason: Some(ProviderFinishReason::Stop),
         usage: ProviderUsage {
             input_tokens: Some(20),
+            input_cache_hit_tokens: Some(8),
             output_tokens: Some(4),
             total_tokens: Some(24),
             ..ProviderUsage::default()
@@ -1586,8 +1588,8 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
 
 #[tokio::test]
 async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
-    let (invoker, _captured_inputs) =
-        sequential_tool_invoker(vec![tool_call_response(vec![ProviderToolCall {
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![tool_call_response(vec![
+        ProviderToolCall {
             id: "call_weather".to_string(),
             name: "lookup_weather".to_string(),
             arguments: json!({ "city": "Shanghai" }),
@@ -1596,7 +1598,14 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                     "thought_signature": "real-gemini-tool-signature"
                 }
             }),
-        }])]);
+        },
+        ProviderToolCall {
+            id: "call_unit".to_string(),
+            name: "lookup_unit".to_string(),
+            arguments: json!({ "scale": "celsius" }),
+            provider_metadata: json!({}),
+        },
+    ])]);
 
     let outcome = start_flow_debug_run(
         &llm_answer_plan(),
@@ -1614,6 +1623,38 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
                 pending.request_payload["tool_calls"][0]["id"],
                 json!("call_weather")
             );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["call_usage"]["input_tokens"],
+                json!(11)
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["call_usage"]["input_cache_hit_tokens"],
+                json!(5)
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["call_usage"]["output_tokens"],
+                json!(3)
+            );
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["call_usage"]["total_tokens"],
+                json!(14)
+            );
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("call_output_tokens")
+                .is_none());
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("result_input_tokens")
+                .is_none());
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("token_count_method")
+                .is_none());
+            assert_eq!(
+                pending.request_payload["tool_calls"][1]["call_usage"]["total_tokens"],
+                json!(14)
+            );
+            assert!(pending.request_payload["tool_calls"][0]
+                .get("input_cache_hit_tokens")
+                .is_none());
             assert_eq!(
                 pending.request_payload["tool_calls"][0]["provider_metadata"]["gemini"]
                     ["thought_signature"],
@@ -1658,6 +1699,34 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
         json!("call_weather")
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_usage"]
+            ["input_tokens"],
+        json!(11)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_usage"]
+            ["input_cache_hit_tokens"],
+        json!(5)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["call_usage"]
+            ["output_tokens"],
+        json!(3)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["usage"]["input_tokens"],
+        json!(11)
+    );
+    assert_eq!(
+        llm_trace.debug_payload["llm_rounds"][0]["usage"]["input_cache_hit_tokens"],
+        json!(5)
+    );
+    assert!(
+        llm_trace.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]
+            .get("call_output_tokens")
+            .is_none()
     );
     assert_eq!(
         llm_trace.debug_payload["llm_rounds"][0]["finish_reason"],
@@ -1731,6 +1800,16 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
     assert_eq!(messages[0]["content"], json!("weather?"));
     assert_eq!(messages[1]["role"], json!("assistant"));
     assert_eq!(messages[1]["tool_calls"][0]["id"], json!("call_weather"));
+    assert!(messages[1]["tool_calls"][0]
+        .get("call_input_tokens")
+        .is_none());
+    assert!(messages[1]["tool_calls"][0].get("call_usage").is_none());
+    assert!(messages[1]["tool_calls"][0]
+        .get("call_cached_input_tokens")
+        .is_none());
+    assert!(messages[1]["tool_calls"][0]
+        .get("call_output_tokens")
+        .is_none());
     assert_eq!(messages[2]["role"], json!("tool"));
     assert_eq!(messages[2]["tool_call_id"], json!("call_weather"));
     assert_eq!(messages[2]["name"], json!("lookup_weather"));
@@ -1748,9 +1827,52 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
         resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["tool_call_id"],
         json!("call_weather")
     );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("result_input_tokens")
+            .is_none()
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_context_usage"]
+            ["input_tokens"],
+        json!(20)
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_context_usage"]
+            ["input_cache_hit_tokens"],
+        json!(8)
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]["result_context_usage"]
+            ["total_tokens"],
+        json!(24)
+    );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("call_output_tokens")
+            .is_none()
+    );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("token_count_method")
+            .is_none()
+    );
+    assert!(
+        resumed_llm_trace.debug_payload["llm_rounds"][0]["tool_results"][0]
+            .get("input_cache_hit_tokens")
+            .is_none()
+    );
     assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][1]["assistant"]["content"],
         json!("weather is clear")
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][1]["usage"]["input_tokens"],
+        json!(20)
+    );
+    assert_eq!(
+        resumed_llm_trace.debug_payload["llm_rounds"][1]["usage"]["input_cache_hit_tokens"],
+        json!(8)
     );
     assert_eq!(
         resumed_llm_trace.debug_payload["llm_rounds"][1]["finish_reason"],

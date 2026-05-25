@@ -304,10 +304,7 @@ export function RolePermissionPanel({
   };
 
   return (
-    <SettingsSectionSurface
-      title="权限管理"
-      description="管理工作台角色与查看权限绑定，使用左右布局快速切换选择角色并分配模块功能。"
-    >
+    <SettingsSectionSurface title="权限管理" hideHeader heightMode="fill">
       <div
         style={{
           display: 'flex',

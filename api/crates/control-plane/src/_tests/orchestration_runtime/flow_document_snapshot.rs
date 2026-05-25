@@ -48,7 +48,6 @@ async fn start_flow_debug_run_uses_request_document_snapshot() {
                             "config": {
                                 "model_provider": {
                                     "provider_code": "fixture_provider",
-                                    "source_instance_id": seeded.source_provider_instance_id.to_string(),
                                     "model_id": "gpt-5.4-mini"
                                 }
                             },

@@ -34,6 +34,38 @@ test('scanSourceFile reports debt markers and weak assertions without failing th
   assert.equal(findings.every((finding) => finding.severity === 'warning'), true);
 });
 
+test('scanSourceFile reports low-value test smells as advisory findings', () => {
+  const findings = scanSourceFile({
+    relativePath: 'web/packages/api-client/src/_tests/console-frontstage.test.ts',
+    content: [
+      "test('frontstage transport spy is active', () => {",
+      '  expect(apiFetchSpy).toHaveBeenCalledTimes(0);',
+      '});',
+      '',
+      "test('createEmbedContext returns the provided context', () => {",
+      "  expect(createEmbedContext({ applicationId: 'app-1' })).toEqual({ applicationId: 'app-1' });",
+      '});',
+      '',
+      "test('keeps account before settings', () => {",
+      '  expect(',
+      '    accountLabel.compareDocumentPosition(settingsTrigger) &',
+      '      Node.DOCUMENT_POSITION_FOLLOWING',
+      '  ).toBeTruthy();',
+      '});',
+    ].join('\n'),
+  });
+
+  assert.deepEqual(
+    findings.map((finding) => finding.rule),
+    [
+      'setup-only-test',
+      'identity-wrapper-test',
+      'weak-test-assertion',
+    ]
+  );
+  assert.equal(findings.every((finding) => finding.severity === 'warning'), true);
+});
+
 test('scanSourceFile reports front-back field contract compatibility markers as warnings', () => {
   const findings = scanSourceFile({
     relativePath: 'web/app/src/features/example/api/example.ts',
@@ -69,6 +101,11 @@ test('collectRepoHygieneFindings reports duplicate test titles and oversized fil
     'api/crates/control-plane/src/large.rs',
     `${Array.from({ length: 1501 }, (_, index) => `pub const LINE_${index}: usize = ${index};`).join('\n')}\n`
   );
+  writeFile(
+    repoRoot,
+    'web/app/src/features/example/_tests/large-page.test.tsx',
+    `${Array.from({ length: 1501 }, (_, index) => `expect(row${index}).toBeInTheDocument();`).join('\n')}\n`
+  );
 
   const findings = collectRepoHygieneFindings({ repoRoot });
 
@@ -79,6 +116,39 @@ test('collectRepoHygieneFindings reports duplicate test titles and oversized fil
   assert.equal(
     findings.some((finding) => finding.rule === 'file-size-pressure'),
     true
+  );
+  assert.equal(
+    findings.some((finding) => finding.rule === 'test-file-size-pressure'),
+    true
+  );
+});
+
+test('collectRepoHygieneFindings excludes tmp sandbox tests from formal quality assets', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-tmp-'));
+  writeFile(
+    repoRoot,
+    'tmp/demo/app/src/app/_tests/demo.test.tsx',
+    [
+      "test.only('tmp sandbox test should not block repo hygiene', () => {",
+      '  expect(screen.getByText("Demo")).toBeTruthy();',
+      '});',
+    ].join('\n')
+  );
+  writeFile(
+    repoRoot,
+    'web/app/src/features/example/_tests/example.test.ts',
+    "test('formal test stays visible', () => {});\n"
+  );
+
+  const findings = collectRepoHygieneFindings({ repoRoot });
+
+  assert.equal(
+    findings.some((finding) => finding.file.startsWith('tmp/demo/')),
+    false
+  );
+  assert.equal(
+    findings.some((finding) => finding.file === 'web/app/src/features/example/_tests/example.test.ts'),
+    false
   );
 });
 

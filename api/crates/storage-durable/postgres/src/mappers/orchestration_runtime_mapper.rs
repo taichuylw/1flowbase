@@ -345,6 +345,14 @@ pub struct StoredApplicationRunSummaryRow {
     pub updated_at: OffsetDateTime,
 }
 
+#[derive(Debug, Clone)]
+pub struct StoredApplicationRunLogSummaryRow {
+    pub run: StoredApplicationRunSummaryRow,
+    pub total_tokens: Option<i64>,
+    pub unique_node_count: i64,
+    pub tool_callback_count: i64,
+}
+
 pub struct PgOrchestrationRuntimeMapper;
 
 impl PgOrchestrationRuntimeMapper {
@@ -724,6 +732,17 @@ impl PgOrchestrationRuntimeMapper {
             finished_at: row.finished_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
+        })
+    }
+
+    pub fn to_application_run_log_summary(
+        row: StoredApplicationRunLogSummaryRow,
+    ) -> Result<domain::ApplicationRunLogSummary> {
+        Ok(domain::ApplicationRunLogSummary {
+            run: Self::to_application_run_summary(row.run)?,
+            total_tokens: row.total_tokens,
+            unique_node_count: row.unique_node_count,
+            tool_callback_count: row.tool_callback_count,
         })
     }
 }

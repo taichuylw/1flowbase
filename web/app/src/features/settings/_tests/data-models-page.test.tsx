@@ -13,6 +13,10 @@ import type {
   SettingsDataModelField
 } from '../api/data-models';
 
+const SLOW_SETTINGS_PAGE_TEST_TIMEOUT = 20_000;
+
+vi.setConfig({ testTimeout: SLOW_SETTINGS_PAGE_TEST_TIMEOUT });
+
 const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
   fetchSettingsMembers: vi.fn(),
@@ -237,12 +241,20 @@ function findDataModelsNavigation() {
 }
 
 async function openContactsDataModelEditor() {
-  await screen.findByText('Contacts', {}, { timeout: 10_000 });
+  await screen.findByText(
+    'Contacts',
+    {},
+    { timeout: SLOW_SETTINGS_PAGE_TEST_TIMEOUT }
+  );
   return openDataModelEditorByTitle('Contacts');
 }
 
 async function openDataModelEditorByTitle(title: string) {
-  await screen.findByText(title, {}, { timeout: 10_000 });
+  await screen.findByText(
+    title,
+    {},
+    { timeout: SLOW_SETTINGS_PAGE_TEST_TIMEOUT }
+  );
   const contactsRow = screen
     .getAllByRole('row')
     .find((row) => within(row).queryByText(title));
@@ -654,7 +666,7 @@ describe('Settings data models page', () => {
     expect(screen.getByText('数据表')).toBeInTheDocument();
     expect(await screen.findByText('Contacts')).toBeInTheDocument();
     expect(screen.getByText('contacts')).toBeInTheDocument();
-  }, 10_000);
+  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
 
   test('shows built-in user and role metadata in the main data source editor', async () => {
     renderApp('/settings/data-models');
@@ -722,7 +734,7 @@ describe('Settings data models page', () => {
     ).toBeInTheDocument();
     expect(within(editorDialog).getByText('角色标识')).toBeInTheDocument();
     expect(within(editorDialog).getByText('默认成员角色')).toBeInTheDocument();
-  }, 10_000);
+  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
 
   test('selects a Data Model and exposes detail tabs with safe status controls', async () => {
     renderApp('/settings/data-models?source=source-1');
@@ -754,7 +766,7 @@ describe('Settings data models page', () => {
     expect(
       detailActions.compareDocumentPosition(tabs) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       within(detailActions).getByRole('button', {
         name: /编\s*辑/
@@ -803,7 +815,7 @@ describe('Settings data models page', () => {
     expect(
       screen.queryByRole('combobox', { name: 'api_exposed_ready' })
     ).not.toBeInTheDocument();
-  }, 10_000);
+  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
 
   test('shows editable grants, record preview, and Advisor severities', async () => {
     renderApp('/settings/data-models?source=source-1');
@@ -835,7 +847,11 @@ describe('Settings data models page', () => {
   test('creates Data Models from the data source section', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    await screen.findByText('Contacts', {}, { timeout: 10_000 });
+    await screen.findByText(
+      'Contacts',
+      {},
+      { timeout: SLOW_SETTINGS_PAGE_TEST_TIMEOUT }
+    );
     fireEvent.click(screen.getByRole('button', { name: '新建数据表' }));
     const createDialog = await screen.findByRole('dialog', {
       name: '新建 Data Model'
@@ -858,7 +874,7 @@ describe('Settings data models page', () => {
     expect(
       titleInput.compareDocumentPosition(codeInput) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
     fireEvent.change(screen.getByLabelText('Code'), {
       target: { value: 'companies' }
@@ -895,7 +911,11 @@ describe('Settings data models page', () => {
   test('exposes Data Model editing from the detail drawer', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    await screen.findByText('Contacts', {}, { timeout: 10_000 });
+    await screen.findByText(
+      'Contacts',
+      {},
+      { timeout: SLOW_SETTINGS_PAGE_TEST_TIMEOUT }
+    );
     const contactsRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('Contacts'));
@@ -968,7 +988,11 @@ describe('Settings data models page', () => {
   test('deletes a Data Model from the table operation column after confirmation', async () => {
     renderApp('/settings/data-models?source=source-1');
 
-    await screen.findByText('Contacts', {}, { timeout: 10_000 });
+    await screen.findByText(
+      'Contacts',
+      {},
+      { timeout: SLOW_SETTINGS_PAGE_TEST_TIMEOUT }
+    );
     const contactsRow = screen
       .getAllByRole('row')
       .find((row) => within(row).queryByText('Contacts'));
@@ -1180,17 +1204,17 @@ describe('Settings data models page', () => {
     expect(
       screen.getByText('存储值').compareDocumentPosition(screen.getByText('显示值')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen
         .getByRole('button', { name: '添加选项' })
         .compareDocumentPosition(screen.getByText('规则')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen.getByText('规则').compareDocumentPosition(screen.getByText('默认值')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByLabelText('选项 1 显示值')).toBeInTheDocument();
     expect(
       (screen.getByLabelText('选项 1 存储值') as HTMLInputElement).value

@@ -292,6 +292,11 @@
   font-weight: 600;
 }
 
+.app-shell-settings-popup,
+.app-shell-account-popup {
+  z-index: 1300 !important;
+}
+
 .app-shell-settings-popup.ant-menu,
 .app-shell-settings-popup .ant-menu {
   width: 216px;

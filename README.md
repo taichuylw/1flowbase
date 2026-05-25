@@ -56,6 +56,17 @@ cargo run -p plugin-runner --bin plugin-runner
 *   API 服务地址：`http://127.0.0.1:7800`
 *   插件运行器地址：`http://127.0.0.1:7801`
 
+### Docker 一键部署
+
+```bash
+cd docker
+docker compose up -d
+```
+
+整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。默认访问地址：`http://127.0.0.1:3100`，初始 root 账号为 `root`，密码为 `1flowbase`。
+
+生产部署时再复制 `docker/.env.example` 为 `docker/.env`，修改数据库密码、`API_PROVIDER_SECRET_MASTER_KEY` 和 root 密码。
+
 ---
 
 ## ⚙️ 脚本启动
@@ -97,7 +108,7 @@ node scripts/node/verify.js repo
 ---
 ## 鸣谢
 
-感谢 [Linux.do](https://linux.do/) 社区支持。特别感谢L社区各位佬们分享学习经验和笔记，受益匪浅
+感谢 [Linux.do](https://linux.do/) 学ai 上L站
 
 ---
 

@@ -1,0 +1,126 @@
+name: container images
+
+on:
+  push:
+    branches:
+      - latest
+    paths:
+      - ".github/workflows/container-images.yml"
+      - "web/app/package.json"
+      - "api/apps/api-server/Cargo.toml"
+      - "api/apps/plugin-runner/Cargo.toml"
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component image to publish.
+        required: true
+        type: choice
+        options:
+          - web
+          - api-server
+          - plugin-runner
+      image_tag:
+        description: Image tag to publish, for example v0.1.0. Must match the component manifest version.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: container-images-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.component || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: web
+            image: 1flowbase-web
+            dockerfile: docker/web.Dockerfile
+            manifest: web/app/package.json
+          - component: api-server
+            image: 1flowbase-api-server
+            dockerfile: docker/api-server.Dockerfile
+            manifest: api/apps/api-server/Cargo.toml
+          - component: plugin-runner
+            image: 1flowbase-plugin-runner
+            dockerfile: docker/plugin-runner.Dockerfile
+            manifest: api/apps/plugin-runner/Cargo.toml
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Select component
+        id: select
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          enabled=false
+          image_tag=""
+          old_tag=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.component }}" == "${{ matrix.component }}" ]]; then
+              enabled=true
+              image_tag="${{ inputs.image_tag }}"
+            fi
+          else
+            image_tag="$(node scripts/node/verify-container-version.js print-tag "${{ matrix.component }}")"
+            before_sha="${{ github.event.before }}"
+            zero_sha="0000000000000000000000000000000000000000"
+
+            if [[ "$before_sha" != "$zero_sha" ]] \
+              && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
+              && git cat-file -e "$before_sha:${{ matrix.manifest }}" 2>/dev/null; then
+              if old_version="$(git show "$before_sha:${{ matrix.manifest }}" | node scripts/node/verify-container-version.js read-stdin-version "${{ matrix.component }}")"; then
+                old_tag="v${old_version}"
+              fi
+            fi
+
+            if [[ "$image_tag" != "$old_tag" ]]; then
+              enabled=true
+            fi
+          fi
+
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+          echo "old_tag=$old_tag" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.select.outputs.enabled == 'true'
+
+      - uses: docker/login-action@v3
+        if: steps.select.outputs.enabled == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate component version
+        if: steps.select.outputs.enabled == 'true'
+        run: node scripts/node/verify-container-version.js ${{ matrix.component }} ${{ steps.select.outputs.image_tag }}
+
+      - name: Build and push ${{ matrix.image }}
+        if: steps.select.outputs.enabled == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.select.outputs.image_tag }}
+            org.opencontainers.image.title=${{ matrix.image }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

@@ -7,7 +7,7 @@ use plugin_framework::{
     provider_contract::{
         ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderMessage,
         ProviderMessageRole, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent,
-        ProviderUsage,
+        ProviderToolCall, ProviderUsage,
     },
 };
 use serde_json::{json, Map, Value};
@@ -964,24 +964,54 @@ fn build_provider_invocation_input(
     }
 }
 
+fn prompt_messages_from_provider_messages(messages: &[ProviderMessage]) -> Vec<Value> {
+    messages
+        .iter()
+        .map(|message| {
+            let mut payload = Map::new();
+            payload.insert(
+                "role".to_string(),
+                serde_json::to_value(&message.role).unwrap_or(Value::Null),
+            );
+            payload.insert(
+                "content".to_string(),
+                Value::String(message.content.clone()),
+            );
+            if let Some(name) = &message.name {
+                payload.insert("name".to_string(), Value::String(name.clone()));
+            }
+            if let Some(tool_call_id) = &message.tool_call_id {
+                payload.insert(
+                    "tool_call_id".to_string(),
+                    Value::String(tool_call_id.clone()),
+                );
+            }
+            if let Some(tool_calls) = &message.tool_calls {
+                payload.insert("tool_calls".to_string(), tool_calls.clone());
+            }
+            if let Some(content_blocks) = &message.content_blocks {
+                payload.insert("content_blocks".to_string(), content_blocks.clone());
+            }
+
+            Value::Object(payload)
+        })
+        .collect()
+}
+
 fn build_llm_debug_invocation_messages(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
     invocation_input: &ProviderInvocationInput,
-) -> Vec<ProviderMessage> {
-    if invocation_input.previous_response_id.is_some() {
-        let (_, messages) = provider_messages_from_prompt_messages(binding_prompt_messages(
-            node,
-            rendered_templates,
-            resolved_inputs,
-            variable_pool,
-        ));
-        return messages;
+) -> Vec<Value> {
+    if invocation_input.previous_response_id.is_some()
+        || pending_llm_tool_callback_state(variable_pool, &node.node_id).is_some()
+    {
+        return binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool);
     }
 
-    invocation_input.messages.clone()
+    prompt_messages_from_provider_messages(&invocation_input.messages)
 }
 
 fn has_pending_tool_calls(output_payload: &Value) -> bool {
@@ -1111,17 +1141,29 @@ fn llm_callback_history_after_assistant_tool_call(
         history.extend(prompt_messages_from_bindings(None, resolved_inputs));
         history
     };
-    history.push(json!({
-        "role": "assistant",
-        "content": output_payload
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or_default(),
-        "tool_calls": output_payload
+    let mut assistant_message = Map::new();
+    assistant_message.insert("role".to_string(), Value::String("assistant".to_string()));
+    assistant_message.insert(
+        "content".to_string(),
+        Value::String(
+            output_payload
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        ),
+    );
+    assistant_message.insert(
+        "tool_calls".to_string(),
+        output_payload
             .get("tool_calls")
             .cloned()
             .unwrap_or_else(|| Value::Array(Vec::new())),
-    }));
+    );
+    if let Some(usage) = output_payload.get("usage") {
+        assistant_message.insert("usage".to_string(), usage.clone());
+    }
+    history.push(Value::Object(assistant_message));
     history
 }
 
@@ -1432,7 +1474,7 @@ fn provider_messages_from_prompt_messages(
                     .get("tool_call_id")
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned),
-                tool_calls: message.get("tool_calls").cloned(),
+                tool_calls: message.get("tool_calls").map(provider_tool_calls_payload),
                 content_blocks: message.get("content_blocks").cloned(),
             });
         }
@@ -1441,6 +1483,35 @@ fn provider_messages_from_prompt_messages(
     let system = (!system_parts.is_empty()).then(|| system_parts.join("\n\n"));
 
     (system, messages)
+}
+
+fn provider_tool_calls_payload(tool_calls: &Value) -> Value {
+    let Some(tool_calls) = tool_calls.as_array() else {
+        return tool_calls.clone();
+    };
+
+    Value::Array(
+        tool_calls
+            .iter()
+            .map(|tool_call| {
+                let Some(object) = tool_call.as_object() else {
+                    return tool_call.clone();
+                };
+                let mut provider_tool_call = object.clone();
+                provider_tool_call.remove("call_usage");
+                provider_tool_call.remove("call_input_tokens");
+                provider_tool_call.remove("call_cached_input_tokens");
+                provider_tool_call.remove("call_output_tokens");
+                provider_tool_call.remove("result_input_tokens");
+                provider_tool_call.remove("result_context_usage");
+                provider_tool_call.remove("result_context_input_tokens");
+                provider_tool_call.remove("result_context_cached_input_tokens");
+                provider_tool_call.remove("token_delta");
+                provider_tool_call.remove("token_count_method");
+                Value::Object(provider_tool_call)
+            })
+            .collect(),
+    )
 }
 
 fn provider_message_role(role: &str) -> ProviderMessageRole {
@@ -1655,13 +1726,13 @@ fn build_failed_llm_execution(
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
     include_output_payload: bool,
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
 ) -> Result<LlmNodeExecution> {
     let raw = RawNodeExecutionResult {
         executor_output: Map::new(),
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
-        debug_facts: build_llm_debug_facts(runtime, None, invocation_messages),
+        debug_facts: build_llm_debug_facts(runtime, None, invocation_messages, None),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1686,7 +1757,7 @@ fn build_successful_llm_execution(
     final_content: Option<String>,
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
     let answer_text = strip_llm_think_tags(&raw_text);
@@ -1708,7 +1779,7 @@ fn build_successful_llm_execution(
     if !result.tool_calls.is_empty() {
         executor_output.insert(
             "tool_calls".to_string(),
-            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+            tool_calls_with_call_usage(&result.tool_calls, metrics_payload.get("usage")),
         );
     }
     if !result.mcp_calls.is_empty() {
@@ -1742,11 +1813,17 @@ fn build_successful_llm_execution(
         );
     }
 
+    let debug_facts = build_llm_debug_facts(
+        runtime,
+        Some(result),
+        invocation_messages,
+        metrics_payload.get("usage"),
+    );
     let raw = RawNodeExecutionResult {
         executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: Map::new(),
-        debug_facts: build_llm_debug_facts(runtime, Some(result), invocation_messages),
+        debug_facts,
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -1791,7 +1868,8 @@ fn build_llm_provider_route_payload(runtime: &CompiledLlmRuntime) -> Value {
 fn build_llm_debug_facts(
     runtime: &CompiledLlmRuntime,
     result: Option<&ProviderInvocationResult>,
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
+    result_usage: Option<&Value>,
 ) -> Map<String, Value> {
     let mut debug = Map::new();
     let assistant_content = result
@@ -1805,7 +1883,7 @@ fn build_llm_debug_facts(
             "content": assistant_content,
         }),
     );
-    let llm_rounds = build_llm_round_timeline(invocation_messages, result);
+    let llm_rounds = build_llm_round_timeline(invocation_messages, result, result_usage);
     if !llm_rounds.is_empty() {
         debug.insert("llm_rounds".to_string(), Value::Array(llm_rounds));
     }
@@ -1820,26 +1898,30 @@ fn build_llm_debug_facts(
 }
 
 fn build_llm_round_timeline(
-    invocation_messages: &[ProviderMessage],
+    invocation_messages: &[Value],
     result: Option<&ProviderInvocationResult>,
+    result_usage: Option<&Value>,
 ) -> Vec<Value> {
     let mut rounds = Vec::new();
 
     for message in invocation_messages {
-        match message.role {
-            ProviderMessageRole::Assistant => {
-                rounds.push(json!({
-                    "round_index": rounds.len(),
-                    "assistant": provider_message_debug_payload(message),
-                    "tool_results": [],
-                }));
+        match message.get("role").and_then(Value::as_str) {
+            Some("assistant") => {
+                let mut round = Map::new();
+                round.insert("round_index".to_string(), json!(rounds.len()));
+                round.insert("assistant".to_string(), message.clone());
+                round.insert("tool_results".to_string(), Value::Array(Vec::new()));
+                if let Some(usage) = message.get("usage") {
+                    round.insert("usage".to_string(), usage.clone());
+                }
+                rounds.push(Value::Object(round));
             }
-            ProviderMessageRole::Tool => {
+            Some("tool") => {
                 if let Some(round) = rounds.last_mut().and_then(Value::as_object_mut) {
                     if let Some(tool_results) =
                         round.get_mut("tool_results").and_then(Value::as_array_mut)
                     {
-                        tool_results.push(provider_message_debug_payload(message));
+                        tool_results.push(message.clone());
                     }
                 }
             }
@@ -1848,12 +1930,18 @@ fn build_llm_round_timeline(
     }
 
     if let Some(result) = result {
+        if let Some(result_usage) = result_usage {
+            apply_result_context_usage_to_last_tool_results(&mut rounds, result_usage);
+        }
         let mut round = Map::new();
         round.insert("round_index".to_string(), json!(rounds.len()));
         round.insert(
             "assistant".to_string(),
-            provider_result_assistant_debug_payload(result),
+            provider_result_assistant_debug_payload(result, result_usage),
         );
+        if let Some(result_usage) = result_usage {
+            round.insert("usage".to_string(), result_usage.clone());
+        }
         if let Some(finish_reason) = result.finish_reason.as_ref() {
             round.insert(
                 "finish_reason".to_string(),
@@ -1866,36 +1954,10 @@ fn build_llm_round_timeline(
     rounds
 }
 
-fn provider_message_debug_payload(message: &ProviderMessage) -> Value {
-    let mut payload = Map::new();
-    payload.insert(
-        "role".to_string(),
-        serde_json::to_value(&message.role).unwrap_or(Value::Null),
-    );
-    payload.insert(
-        "content".to_string(),
-        Value::String(message.content.clone()),
-    );
-    if let Some(name) = &message.name {
-        payload.insert("name".to_string(), Value::String(name.clone()));
-    }
-    if let Some(tool_call_id) = &message.tool_call_id {
-        payload.insert(
-            "tool_call_id".to_string(),
-            Value::String(tool_call_id.clone()),
-        );
-    }
-    if let Some(tool_calls) = &message.tool_calls {
-        payload.insert("tool_calls".to_string(), tool_calls.clone());
-    }
-    if let Some(content_blocks) = &message.content_blocks {
-        payload.insert("content_blocks".to_string(), content_blocks.clone());
-    }
-
-    Value::Object(payload)
-}
-
-fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) -> Value {
+fn provider_result_assistant_debug_payload(
+    result: &ProviderInvocationResult,
+    usage: Option<&Value>,
+) -> Value {
     let mut payload = Map::new();
     payload.insert("role".to_string(), Value::String("assistant".to_string()));
     payload.insert(
@@ -1905,11 +1967,74 @@ fn provider_result_assistant_debug_payload(result: &ProviderInvocationResult) ->
     if !result.tool_calls.is_empty() {
         payload.insert(
             "tool_calls".to_string(),
-            serde_json::to_value(&result.tool_calls).unwrap_or(Value::Null),
+            tool_calls_with_call_usage(&result.tool_calls, usage),
         );
     }
 
     Value::Object(payload)
+}
+
+fn tool_calls_with_call_usage(tool_calls: &[ProviderToolCall], usage: Option<&Value>) -> Value {
+    Value::Array(
+        tool_calls
+            .iter()
+            .map(|tool_call| {
+                let value = serde_json::to_value(tool_call).unwrap_or(Value::Null);
+                let Some(mut object) = value.as_object().cloned() else {
+                    return value;
+                };
+                if let Some(usage) = usage {
+                    object.insert("call_usage".to_string(), usage.clone());
+                }
+                Value::Object(object)
+            })
+            .collect(),
+    )
+}
+
+fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: &Value) {
+    let call_usage = rounds
+        .last()
+        .and_then(Value::as_object)
+        .and_then(|round| round.get("usage"))
+        .cloned();
+    let token_delta = llm_usage_token_delta(call_usage.as_ref(), usage);
+    let Some(tool_results) = rounds
+        .last_mut()
+        .and_then(Value::as_object_mut)
+        .and_then(|round| round.get_mut("tool_results"))
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+
+    for tool_result in tool_results {
+        let Some(tool_result) = tool_result.as_object_mut() else {
+            continue;
+        };
+        tool_result.insert("result_context_usage".to_string(), usage.clone());
+        if let Some(token_delta) = token_delta {
+            tool_result.insert("token_delta".to_string(), json!(token_delta));
+        }
+    }
+}
+
+fn llm_usage_total_tokens(usage: &Value) -> Option<i64> {
+    let total_tokens = usage.get("total_tokens")?;
+    if let Some(value) = total_tokens.as_i64() {
+        return Some(value);
+    }
+
+    total_tokens
+        .as_u64()
+        .and_then(|value| i64::try_from(value).ok())
+}
+
+fn llm_usage_token_delta(call_usage: Option<&Value>, result_context_usage: &Value) -> Option<i64> {
+    let call_total = llm_usage_total_tokens(call_usage?)?;
+    let result_total = llm_usage_total_tokens(result_context_usage)?;
+
+    result_total.checked_sub(call_total)
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {
@@ -2224,5 +2349,50 @@ mod input_cache_usage_tests {
         assert_eq!(usage.input_cache_hit_tokens, Some(45));
         assert_eq!(usage.input_cache_miss_tokens, Some(67));
         assert_eq!(usage.total_tokens(), Some(112));
+    }
+}
+
+#[cfg(test)]
+mod llm_round_timeline_tests {
+    use super::*;
+
+    #[test]
+    fn llm_round_timeline_adds_tool_result_token_delta() {
+        let invocation_messages = vec![
+            json!({
+                "role": "assistant",
+                "content": "need weather",
+                "usage": {
+                    "total_tokens": 8122
+                },
+                "tool_calls": [
+                    {
+                        "id": "call_weather",
+                        "name": "lookup_weather"
+                    }
+                ]
+            }),
+            json!({
+                "role": "tool",
+                "tool_call_id": "call_weather",
+                "content": "{\"temperature\":21}"
+            }),
+        ];
+        let result = ProviderInvocationResult {
+            final_content: Some("continue".into()),
+            usage: ProviderUsage {
+                total_tokens: Some(8224),
+                ..ProviderUsage::default()
+            },
+            ..ProviderInvocationResult::default()
+        };
+        let result_usage = json!({
+            "total_tokens": 8224
+        });
+
+        let rounds =
+            build_llm_round_timeline(&invocation_messages, Some(&result), Some(&result_usage));
+
+        assert_eq!(rounds[0]["tool_results"][0]["token_delta"], json!(102));
     }
 }

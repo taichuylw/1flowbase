@@ -71,10 +71,17 @@ export interface ConsoleApplicationRunSummary {
   subject?: ConsoleApplicationRunSubject;
   actor?: ConsoleApplicationRunActor;
   correlation?: ConsoleApplicationRunCorrelation;
+  statistics?: ConsoleApplicationRunStatistics;
   started_at: string;
   finished_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ConsoleApplicationRunStatistics {
+  total_tokens: number | null;
+  unique_node_count: number;
+  tool_callback_count: number;
 }
 
 export interface ConsoleApplicationRunsPage {
@@ -172,6 +179,7 @@ export interface ConsoleCallbackTask {
 
 export interface ConsoleApplicationRunDetail {
   run?: ConsoleApplicationRunLog;
+  statistics?: ConsoleApplicationRunStatistics;
   detail?: ConsoleApplicationRunTypedDetail;
   flow_run: ConsoleFlowRunDetail;
   node_runs: ConsoleNodeRunDetail[];

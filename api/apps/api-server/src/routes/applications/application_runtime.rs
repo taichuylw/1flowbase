@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::{collections::HashSet, future::Future, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
@@ -11,20 +11,22 @@ use control_plane::{
     application::ApplicationService,
     errors::ControlPlaneError,
     orchestration_runtime::{
-        debug_stream_events, CancelFlowRunCommand, CompleteCallbackTaskCommand,
-        ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
-        ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
+        debug_stream_events, fail_runtime_event_stream_if_missing_terminal,
+        spawn_runtime_debug_event_persister, wait_for_runtime_debug_event_persister,
+        CancelFlowRunCommand, CompleteCallbackTaskCommand, ContinueFlowDebugRunCommand,
+        OrchestrationRuntimeService, PrepareFlowDebugRunCommand, ResumeFlowRunCommand,
+        StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
     ports::{
         ListApplicationConversationRunsPageInput, OrchestrationRuntimeRepository,
-        RuntimeEventCloseReason, RuntimeEventStream, RuntimeEventStreamPolicy,
+        RuntimeEventStreamPolicy,
     },
 };
 use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
-use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::{error, warn};
+use tokio::sync::mpsc;
+use tracing::error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -51,182 +53,6 @@ use runtime_debug_artifacts::{
     load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
     offload_application_run_detail_artifacts,
 };
-
-fn is_terminal_runtime_event(event_type: &str) -> bool {
-    matches!(
-        event_type,
-        "flow_finished" | "flow_failed" | "flow_cancelled" | "waiting_human" | "waiting_callback"
-    )
-}
-
-async fn fail_runtime_event_stream_if_missing_terminal(
-    stream: Arc<dyn RuntimeEventStream>,
-    run_id: Uuid,
-    error: &anyhow::Error,
-) {
-    match stream.replay(run_id, None, usize::MAX).await {
-        Ok(events)
-            if events
-                .iter()
-                .any(|event| is_terminal_runtime_event(&event.event_type)) =>
-        {
-            return;
-        }
-        Ok(_) => {}
-        Err(replay_error) => {
-            warn!(
-                flow_run_id = %run_id,
-                error = %replay_error,
-                "failed to check runtime event stream terminal state"
-            );
-        }
-    }
-
-    let error_payload = serde_json::json!({ "message": error.to_string() });
-    if let Err(append_error) = stream
-        .append(
-            run_id,
-            debug_stream_events::flow_failed(run_id, error_payload),
-        )
-        .await
-    {
-        warn!(
-            flow_run_id = %run_id,
-            event_type = "flow_failed",
-            error = %append_error,
-            "failed to append fallback runtime terminal event"
-        );
-    }
-    if let Err(close_error) = stream
-        .close_run(run_id, RuntimeEventCloseReason::Failed)
-        .await
-    {
-        warn!(
-            flow_run_id = %run_id,
-            reason = ?RuntimeEventCloseReason::Failed,
-            error = %close_error,
-            "failed to close fallback runtime event stream"
-        );
-    }
-}
-
-fn spawn_debug_event_persister<R>(
-    repository: R,
-    stream: Arc<dyn RuntimeEventStream>,
-    run_id: Uuid,
-) -> JoinHandle<()>
-where
-    R: OrchestrationRuntimeRepository + Send + Sync + 'static,
-{
-    tokio::spawn(async move {
-        let Ok(mut subscription) = stream.subscribe(run_id, Some(0)).await else {
-            warn!(
-                flow_run_id = %run_id,
-                "failed to subscribe runtime debug stream for durable event persistence"
-            );
-            return;
-        };
-
-        let mut batch = Vec::new();
-        for event in subscription.replay {
-            if push_debug_event_for_persistence(&repository, &mut batch, run_id, event).await {
-                return;
-            }
-        }
-
-        loop {
-            let Some(event) = subscription.live_events.recv().await else {
-                let _ = flush_debug_event_batch(&repository, &mut batch, run_id).await;
-                return;
-            };
-
-            if push_debug_event_for_persistence(&repository, &mut batch, run_id, event).await {
-                return;
-            }
-        }
-    })
-}
-
-async fn wait_for_debug_event_persister(
-    handle: JoinHandle<()>,
-    application_id: Uuid,
-    run_id: Uuid,
-) {
-    match tokio::time::timeout(std::time::Duration::from_secs(2), handle).await {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => {
-            warn!(
-                application_id = %application_id,
-                flow_run_id = %run_id,
-                error = %error,
-                "runtime debug stream persister task panicked"
-            );
-        }
-        Err(_) => {
-            warn!(
-                application_id = %application_id,
-                flow_run_id = %run_id,
-                "runtime debug stream persister did not finish after terminal event"
-            );
-        }
-    }
-}
-
-async fn push_debug_event_for_persistence<R>(
-    repository: &R,
-    batch: &mut Vec<control_plane::ports::RuntimeEventEnvelope>,
-    run_id: Uuid,
-    event: control_plane::ports::RuntimeEventEnvelope,
-) -> bool
-where
-    R: OrchestrationRuntimeRepository,
-{
-    let is_terminal = is_terminal_runtime_event(&event.event_type);
-    let is_stream_delta = event.event_type == "text_delta" || event.event_type == "reasoning_delta";
-    if is_stream_delta
-        && batch
-            .last()
-            .is_some_and(|previous| previous.event_type != event.event_type)
-    {
-        flush_debug_event_batch(repository, batch, run_id).await;
-    }
-    batch.push(event);
-    if is_terminal || !is_stream_delta {
-        return flush_debug_event_batch(repository, batch, run_id).await || is_terminal;
-    }
-    false
-}
-
-async fn flush_debug_event_batch<R>(
-    repository: &R,
-    batch: &mut Vec<control_plane::ports::RuntimeEventEnvelope>,
-    run_id: Uuid,
-) -> bool
-where
-    R: OrchestrationRuntimeRepository,
-{
-    if batch.is_empty() {
-        return false;
-    }
-
-    let has_terminal = batch
-        .iter()
-        .any(|event| is_terminal_runtime_event(&event.event_type));
-    let events = std::mem::take(batch);
-    if let Err(error) = control_plane::orchestration_runtime::persist_runtime_debug_stream_events(
-        repository, events,
-    )
-    .await
-    {
-        warn!(
-            flow_run_id = %run_id,
-            error = %error,
-            "failed to persist runtime debug stream events"
-        );
-    }
-
-    has_terminal
-}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartNodeDebugPreviewBody {
@@ -286,6 +112,7 @@ pub struct FlowRunSummaryResponse {
     pub subject: application_logs::ApplicationRunSubjectResponse,
     pub actor: application_logs::ApplicationRunActorResponse,
     pub correlation: application_logs::ApplicationRunCorrelationResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub created_at: String,
@@ -423,6 +250,7 @@ pub struct RunEventResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApplicationRunDetailResponse {
     pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
     pub detail: application_logs::ApplicationRunTypedDetailResponse,
     pub flow_run: FlowRunResponse,
     pub node_runs: Vec<NodeRunResponse>,
@@ -536,6 +364,7 @@ fn format_optional_time(value: Option<time::OffsetDateTime>) -> Option<String> {
 fn to_flow_run_summary_response(
     application: &domain::ApplicationRecord,
     summary: domain::ApplicationRunSummary,
+    statistics: application_logs::ApplicationRunStatisticsResponse,
 ) -> FlowRunSummaryResponse {
     let application_type = application.application_type.as_str().to_string();
     let run_object_kind = application.sections.logs.run_object_kind.clone();
@@ -578,10 +407,77 @@ fn to_flow_run_summary_response(
         subject,
         actor,
         correlation,
+        statistics,
         started_at: format_time(summary.started_at),
         finished_at: format_optional_time(summary.finished_at),
         created_at: format_time(summary.created_at),
         updated_at: format_time(summary.updated_at),
+    }
+}
+
+fn usage_token_value(value: &serde_json::Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
+}
+
+fn usage_total_tokens(usage: &serde_json::Value) -> Option<i64> {
+    if let Some(total_tokens) = usage.get("total_tokens").and_then(usage_token_value) {
+        return Some(total_tokens);
+    }
+
+    let segments = ["input_tokens", "output_tokens", "reasoning_tokens"];
+    let mut total = 0_i64;
+    let mut has_segment = false;
+
+    for segment in segments {
+        if let Some(tokens) = usage.get(segment).and_then(usage_token_value) {
+            total += tokens;
+            has_segment = true;
+        }
+    }
+
+    has_segment.then_some(total)
+}
+
+fn metrics_payload_total_tokens(metrics_payload: &serde_json::Value) -> Option<i64> {
+    metrics_payload.get("usage").and_then(usage_total_tokens)
+}
+
+fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
+    if task.callback_kind != "llm_tool_calls" {
+        return 0;
+    }
+
+    task.request_payload
+        .get("tool_calls")
+        .and_then(serde_json::Value::as_array)
+        .map(|tool_calls| tool_calls.len() as i64)
+        .unwrap_or(0)
+}
+
+fn application_run_statistics(
+    detail: &domain::ApplicationRunDetail,
+) -> application_logs::ApplicationRunStatisticsResponse {
+    let mut unique_node_ids = HashSet::new();
+    let mut total_tokens = None;
+
+    for node_run in &detail.node_runs {
+        unique_node_ids.insert(node_run.node_id.as_str());
+
+        if let Some(node_tokens) = metrics_payload_total_tokens(&node_run.metrics_payload) {
+            total_tokens = Some(total_tokens.unwrap_or(0) + node_tokens);
+        }
+    }
+
+    application_logs::ApplicationRunStatisticsResponse {
+        total_tokens,
+        unique_node_count: unique_node_ids.len() as i64,
+        tool_callback_count: detail
+            .callback_tasks
+            .iter()
+            .map(callback_task_tool_callback_count)
+            .sum(),
     }
 }
 
@@ -1002,6 +898,7 @@ fn to_application_run_detail_response(
     application: &domain::ApplicationRecord,
     detail: domain::ApplicationRunDetail,
 ) -> ApplicationRunDetailResponse {
+    let statistics = application_run_statistics(&detail);
     let flow_run = to_flow_run_response(detail.flow_run.clone());
     let node_runs = detail
         .node_runs
@@ -1076,6 +973,7 @@ fn to_application_run_detail_response(
 
     ApplicationRunDetailResponse {
         run,
+        statistics,
         detail: typed_detail,
         flow_run,
         node_runs,
@@ -1289,7 +1187,7 @@ pub async fn start_flow_debug_run_stream(
         .runtime_event_stream
         .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
         .await?;
-    let persister_handle = spawn_debug_event_persister(
+    let persister_handle = spawn_runtime_debug_event_persister(
         state.store.clone(),
         state.runtime_event_stream.clone(),
         run_id,
@@ -1376,7 +1274,7 @@ pub async fn start_flow_debug_run_stream(
                 );
             }
         }
-        wait_for_debug_event_persister(persister_handle, id, run_id).await;
+        wait_for_runtime_debug_event_persister(persister_handle, id, run_id).await;
     });
 
     tracing::info!(
@@ -1704,7 +1602,7 @@ pub async fn list_application_runs(
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runs_page =
-        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_runs_page(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
             &state.store,
             id,
             control_plane::ports::ListApplicationRunsPageInput {
@@ -1721,12 +1619,23 @@ pub async fn list_application_runs(
         )
         .await?;
 
+    let mut items = Vec::with_capacity(runs_page.items.len());
+
+    for log_summary in runs_page.items {
+        let statistics = application_logs::ApplicationRunStatisticsResponse {
+            total_tokens: log_summary.total_tokens,
+            unique_node_count: log_summary.unique_node_count,
+            tool_callback_count: log_summary.tool_callback_count,
+        };
+        items.push(to_flow_run_summary_response(
+            &application,
+            log_summary.run,
+            statistics,
+        ));
+    }
+
     Ok(Json(ApiSuccess::new(FlowRunSummaryPageResponse {
-        items: runs_page
-            .items
-            .into_iter()
-            .map(|summary| to_flow_run_summary_response(&application, summary))
-            .collect(),
+        items,
         total: runs_page.total,
         page: runs_page.page,
         page_size: runs_page.page_size,
@@ -2169,6 +2078,27 @@ mod tests {
             ),
             Some(11)
         );
+    }
+
+    #[test]
+    fn usage_total_tokens_uses_total_or_known_segments() {
+        assert_eq!(
+            usage_total_tokens(&serde_json::json!({
+                "total_tokens": 128,
+                "input_tokens": 40,
+                "output_tokens": 12
+            })),
+            Some(128)
+        );
+        assert_eq!(
+            usage_total_tokens(&serde_json::json!({
+                "input_tokens": 40,
+                "output_tokens": 12,
+                "reasoning_tokens": 6
+            })),
+            Some(58)
+        );
+        assert_eq!(usage_total_tokens(&serde_json::json!({})), None);
     }
 
     #[test]

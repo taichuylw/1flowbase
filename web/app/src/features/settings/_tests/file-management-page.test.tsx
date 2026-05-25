@@ -175,10 +175,10 @@ function renderApp(pathname: string) {
   );
 }
 
-function findFileManagementHeading() {
+function findFileTableTab() {
   return screen.findByRole(
-    'heading',
-    { name: '文件管理', level: 3 },
+    'tab',
+    { name: '文件表' },
     { timeout: 10_000 }
   );
 }
@@ -255,9 +255,8 @@ describe('File management settings page', () => {
 
     renderApp('/settings/files');
 
-    expect(await findFileManagementHeading()).toBeInTheDocument();
+    expect(await findFileTableTab()).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '存储配置' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '文件表' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新增/ })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('搜索存储...')).toBeInTheDocument();
   }, 10_000);
@@ -267,11 +266,10 @@ describe('File management settings page', () => {
 
     renderApp('/settings/files');
 
-    expect(await findFileManagementHeading()).toBeInTheDocument();
+    expect(await findFileTableTab()).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '存储配置' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '文件表' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /新增/ })
     ).not.toBeInTheDocument();
@@ -286,15 +284,14 @@ describe('File management settings page', () => {
 
     renderApp('/settings/files');
 
-    expect(await findFileManagementHeading()).toBeInTheDocument();
+    expect(
+      await screen.findByText('暂无权限查看文件表列表，您可以创建一个新文件表。')
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '文件表' })
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新增/ })).toBeInTheDocument();
     expect(fileManagementApi.fetchSettingsFileTables).not.toHaveBeenCalled();
-    expect(
-      screen.getByText('暂无权限查看文件表列表，您可以创建一个新文件表。')
-    ).toBeInTheDocument();
   });
 
   test('root mode opens the storage create drawer', async () => {

@@ -2,6 +2,16 @@
 
 只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；不要跳过前置验证直接下 QA 结论。
 
+## Contents
+
+- [Fixed Order](#fixed-order)
+- [Step 1: Read Specs First](#step-1-read-specs-first)
+- [Step 2: Run Backend Verification](#step-2-run-backend-verification)
+- [Step 3: Sample Key Routes](#step-3-sample-key-routes)
+- [Step 4: Sample Service Write Entrypoints](#step-4-sample-service-write-entrypoints)
+- [Step 5: Sample Repository And Mapper Layering](#step-5-sample-repository-and-mapper-layering)
+- [Step 6: Blast Radius Before Conclusion](#step-6-blast-radius-before-conclusion)
+
 ## Fixed Order
 
 1. 读相关 spec

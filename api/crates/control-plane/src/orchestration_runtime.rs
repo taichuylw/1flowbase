@@ -227,6 +227,11 @@ where
     runtime_event_persister::persist_runtime_debug_stream_events(repository, events).await
 }
 
+pub use runtime_event_persister::{
+    fail_runtime_event_stream_if_missing_terminal, spawn_runtime_debug_event_persister,
+    wait_for_runtime_debug_event_persister,
+};
+
 #[derive(Clone)]
 struct RuntimeProviderInvoker<R, H> {
     repository: R,

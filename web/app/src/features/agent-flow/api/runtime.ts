@@ -67,6 +67,12 @@ export interface AgentFlowTraceItem {
   debugPayload?: Record<string, unknown>;
 }
 
+export interface AgentFlowRunStatistics {
+  total_tokens: number | null;
+  unique_node_count: number;
+  tool_callback_count: number;
+}
+
 export interface AgentFlowVariableItem {
   key: string;
   label: string;
@@ -93,6 +99,7 @@ export interface AgentFlowDebugMessage {
   compatibilityMode?: string | null;
   compatibilityModeLabel?: string | null;
   rawOutput: Record<string, unknown> | null;
+  statistics?: AgentFlowRunStatistics;
   traceSummary: AgentFlowTraceItem[];
 }
 

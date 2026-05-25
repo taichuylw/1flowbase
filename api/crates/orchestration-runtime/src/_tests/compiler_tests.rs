@@ -98,7 +98,6 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
                     "config": {
                         "model_provider": {
                             "provider_code": "fixture_provider",
-                            "source_instance_id": "provider-selected",
                             "model_id": "gpt-5.4-mini"
                         },
                         "temperature": 0.2
@@ -911,7 +910,6 @@ fn compile_collects_provider_compile_issues() {
     document["graph"]["nodes"][1]["config"] = json!({
         "model_provider": {
             "provider_code": "fixture_provider",
-            "source_instance_id": "provider-selected",
             "model_id": "unknown-model"
         }
     });
@@ -1022,10 +1020,10 @@ fn compile_failover_queue_routes_with_frozen_targets() {
 }
 
 #[test]
-fn compile_collects_missing_source_instance_issue() {
+fn compile_collects_missing_provider_issue() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
-    document["graph"]["nodes"][1]["config"]["model_provider"]["source_instance_id"] = Value::Null;
+    document["graph"]["nodes"][1]["config"]["model_provider"]["provider_code"] = Value::Null;
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
@@ -1033,6 +1031,33 @@ fn compile_collects_missing_source_instance_issue() {
         .compile_issues
         .iter()
         .any(|issue| issue.code == CompileIssueCode::MissingProviderInstance));
+}
+
+#[test]
+fn compile_rejects_ambiguous_stable_provider_model_binding() {
+    let flow_id = Uuid::now_v7();
+    let mut context = compile_context();
+    context.provider_instances.insert(
+        "provider-recreated".to_string(),
+        FlowCompileProviderInstance {
+            provider_instance_id: "provider-recreated".to_string(),
+            provider_code: "fixture_provider".to_string(),
+            protocol: "openai_compatible".to_string(),
+            is_ready: true,
+            is_runnable: true,
+            included_in_main: true,
+            available_models: BTreeSet::from(["gpt-5.4-mini".to_string()]),
+            allow_custom_models: false,
+        },
+    );
+
+    let plan =
+        FlowCompiler::compile(flow_id, "draft-1", &sample_document(flow_id), &context).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.code == CompileIssueCode::ProviderInstanceNotFound
+            && issue.message.contains("ambiguous")
+    }));
 }
 
 #[test]

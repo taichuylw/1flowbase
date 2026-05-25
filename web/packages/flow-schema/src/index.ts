@@ -413,7 +413,6 @@ export function createDefaultAgentFlowDocument({
           config: {
             model_provider: {
               provider_code: '',
-              source_instance_id: '',
               model_id: ''
             },
             llm_parameters: {

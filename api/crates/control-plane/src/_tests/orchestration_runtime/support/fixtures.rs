@@ -832,7 +832,6 @@ fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid
                     "config": {
                         "model_provider": {
                             "provider_code": "fixture_provider",
-                            "source_instance_id": _provider_instance_id.to_string(),
                             "model_id": "gpt-5.4-mini"
                         },
                         "temperature": 0.2
@@ -895,7 +894,6 @@ fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -
                     "config": {
                         "model_provider": {
                             "provider_code": "fixture_provider",
-                            "source_instance_id": _provider_instance_id.to_string(),
                             "model_id": "gpt-5.4-mini"
                         },
                         "temperature": 0.2

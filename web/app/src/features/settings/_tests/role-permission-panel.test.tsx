@@ -102,7 +102,7 @@ describe('RolePermissionPanel', () => {
     async () => {
       renderPanel();
 
-      await screen.findByRole('heading', { name: '权限管理', level: 3 });
+      await screen.findByRole('button', { name: /新建角色/ });
 
       fireEvent.click(screen.getByRole('button', { name: /新建角色/ }));
 

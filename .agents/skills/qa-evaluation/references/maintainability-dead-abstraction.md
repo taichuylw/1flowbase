@@ -1,0 +1,52 @@
+# Maintainability / Dead Abstraction Gate
+
+## Goal
+
+评估过度抽象、无用代码和空转封装时，只产出证据驱动的 QA 报告与 warning。不得因为“看起来多余”直接要求删除；任何清理、合并或重构都必须先得到用户明确同意。
+
+## When To Use
+
+- 用户明确提到过度抽象、无用代码、空转封装、死代码、冗余封装、无意义 helper / manager / utils。
+- 评估范围命中公共接口、共享组件、service / repository / mapper、adapter、wrapper、兼容层、测试夹具或长期未触达代码。
+- `repo-hygiene`、编译器、lint、测试覆盖或调用图证据显示存在未使用导出、过期兼容、重复薄封装、目录膨胀或文件职责发散。
+
+## Core Standard
+
+抽象只有在隐藏复杂度、承载 invariant、适配外部边界、隔离依赖、表达领域概念，或服务两个以上真实消费者时才成立。否则默认作为 maintainability warning 审查，不直接进入修复。
+
+## Evidence Checklist
+
+- 调用方证据：`rg` 调用点、导出点、路由注册、组件引用、测试引用或构建产物引用。
+- 行为证据：测试结果、运行路径、用户流程、API 调用样例或日志显示该代码是否仍参与主路径。
+- 边界证据：该层是否执行校验、事务、权限、审计、错误映射、外部协议适配或领域 invariant。
+- 历史证据：最近 churn、废弃标记、`remove_by`、issue / spec 说明或兼容计划。
+- 成本证据：新增层级是否扩大 blast radius、测试矩阵、目录压力、文件职责或理解成本。
+
+没有上述证据时，只能写 `未验证，不下确定结论`，不能把“命名像 helper”当成无用代码结论。
+
+## Warning Signals
+
+- 只有一个真实调用方，且只转发参数、不隐藏复杂度、不承载 invariant 的 wrapper / adapter / service。
+- `manager`、`helper`、`utils`、`process`、`handler` 等命名无法说明具体领域对象或动作。
+- 为了“以后可能复用”保留的抽象没有第二消费者、没有 spec、没有 owner，也没有停止条件。
+- DTO / mapper / view model / adapter 多层转换字段完全同构，且没有契约隔离、敏感字段过滤或边界适配。
+- 兼容分支、旧字段、旧路由、旧组件或测试夹具没有 `deprecated` / `remove_by` / owner / warning，也没有覆盖它仍被需要的证据。
+- 导出、组件、路由、脚本、fixture 或测试 helper 没有消费者，且构建、测试或运行路径不能证明它仍有效。
+
+## Non-Issues
+
+- 单消费者抽象如果守住外部协议、权限、事务、错误映射、领域 invariant 或第三方依赖边界，不按空转封装报告。
+- 暂时只有一个调用方但已有已批准 L1 / L2 / L3 计划、明确 owner 和停止条件，不按无用代码报告；可列为跟踪 warning。
+- 测试 helper 如果显著降低重复场景搭建成本，且测试名和断言仍清楚，不按无意义 helper 报告。
+
+## Severity Hints
+
+- `High`：空转抽象污染公共 API、状态入口、数据一致性、前后端契约、插件边界、核心写路径或关键测试可信度。
+- `Medium`：局部 wrapper / helper / service 无真实职责，已经增加理解成本、测试成本、blast radius 或重复修改概率。
+- `Low` warning：无消费者的小导出、过期注释、低风险废弃分支、命名含糊但暂未影响主路径。
+
+## Output Rules
+
+- Findings 和 warnings 都必须写位置、证据、为什么是问题、建议修正方向。
+- 对 maintainability warning，默认使用“建议修正方向”，不要写成已授权修改。
+- 报告必须明确：修复、删除、合并抽象或改公共接口前，需要用户明确同意。

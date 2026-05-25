@@ -55,6 +55,12 @@ function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
   return message.compatibilityModeLabel ?? message.compatibilityMode ?? '—';
 }
 
+function formatNullableNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('zh-CN')
+    : '-';
+}
+
 function ConversationLogDetail({
   message,
   onLoadArtifact
@@ -100,9 +106,23 @@ function ConversationLogDetail({
               children: messageCompatibilityModeLabel(message)
             },
             {
-              key: 'nodeCount',
-              label: '节点数',
-              children: `${message.traceSummary.length}`
+              key: 'totalTokens',
+              label: '总 tokens',
+              children: formatNullableNumber(message.statistics?.total_tokens)
+            },
+            {
+              key: 'uniqueNodeCount',
+              label: '真实节点数',
+              children: formatNullableNumber(
+                message.statistics?.unique_node_count
+              )
+            },
+            {
+              key: 'toolCallbackCount',
+              label: '工具回调次数',
+              children: formatNullableNumber(
+                message.statistics?.tool_callback_count
+              )
             },
             {
               key: 'startedAt',
