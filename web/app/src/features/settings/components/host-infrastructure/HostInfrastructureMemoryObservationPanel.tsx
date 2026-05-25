@@ -336,16 +336,19 @@ function MemoryStatsChart({
       series: [
         {
           name: 'Entries',
-          type: 'bar',
-          barMaxWidth: 24,
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { color: '#1677ff' },
+          lineStyle: { width: 3 },
+          areaStyle: {
             color: {
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: '#1677ff' },
-                { offset: 1, color: '#69c0ff' }
+                { offset: 0, color: 'rgba(22, 119, 255, 0.2)' },
+                { offset: 1, color: 'rgba(22, 119, 255, 0)' }
               ]
             }
           },
@@ -353,16 +356,19 @@ function MemoryStatsChart({
         },
         {
           name: 'Sensitive',
-          type: 'bar',
-          barMaxWidth: 24,
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { color: '#ff4d4f' },
+          lineStyle: { width: 3 },
+          areaStyle: {
             color: {
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: '#ff4d4f' },
-                { offset: 1, color: '#ff9c9f' }
+                { offset: 0, color: 'rgba(255, 77, 79, 0.15)' },
+                { offset: 1, color: 'rgba(255, 77, 79, 0)' }
               ]
             }
           },
@@ -370,17 +376,20 @@ function MemoryStatsChart({
         },
         {
           name: 'Value bytes',
-          type: 'bar',
-          barMaxWidth: 24,
+          type: 'line',
+          smooth: true,
           yAxisIndex: 1,
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { color: '#52c41a' },
+          lineStyle: { width: 3, type: 'dashed' },
+          areaStyle: {
             color: {
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: '#52c41a' },
-                { offset: 1, color: '#95de64' }
+                { offset: 0, color: 'rgba(82, 196, 26, 0.1)' },
+                { offset: 1, color: 'rgba(82, 196, 26, 0)' }
               ]
             }
           },
