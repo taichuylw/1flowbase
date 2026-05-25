@@ -478,7 +478,7 @@ describe('ModelProvidersPage - instances modal', () => {
       fireEvent.click(await screen.findByRole('button', { name: '添加' }));
 
       expect(await screen.findByText('API 密钥授权配置')).toBeInTheDocument();
-      expect(screen.getByRole('switch', { name: '加入主实例' })).toBeChecked();
+      expect(screen.getByRole('switch', { name: '注入主实例' })).toBeChecked();
 
       fireEvent.change(screen.getByLabelText('API Endpoint'), {
         target: { value: 'https://api.openai.com/v1' }
@@ -486,7 +486,7 @@ describe('ModelProvidersPage - instances modal', () => {
       fireEvent.change(screen.getByLabelText('API Key'), {
         target: { value: 'super-secret' }
       });
-      fireEvent.change(screen.getByLabelText('凭据名称'), {
+      fireEvent.change(screen.getByLabelText('名称'), {
         target: { value: 'OpenAI Draft' }
       });
 
@@ -514,7 +514,9 @@ describe('ModelProvidersPage - instances modal', () => {
       fireEvent.click(await screen.findByText('gpt-4o-mini'));
       expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: '添加模型' }));
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: '添加' })
+      );
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
       });
@@ -563,18 +565,18 @@ describe('ModelProvidersPage - instances modal', () => {
       ).toBeGreaterThanOrEqual(1);
       expect(within(modal).getByText('聚合视图')).toBeInTheDocument();
       expect(
-        within(modal).getByRole('switch', { name: '新实例自动加入主实例' })
+        within(modal).getByRole('switch', { name: '新实例自动注入主实例' })
       ).toBeInTheDocument();
       expect(
         within(modal).queryByRole('combobox', { name: '主实例' })
       ).not.toBeInTheDocument();
       expect(
         within(modal).getByRole('switch', {
-          name: '加入主实例 OpenAI Production'
+          name: '注入主实例 OpenAI Production'
         })
       ).toBeInTheDocument();
       expect(
-        within(modal).getByRole('switch', { name: '加入主实例 OpenAI Backup' })
+        within(modal).getByRole('switch', { name: '注入主实例 OpenAI Backup' })
       ).toBeInTheDocument();
       expect(
         within(modal).getAllByText(/gpt-4o-mini/i).length
@@ -653,7 +655,7 @@ describe('ModelProvidersPage - instances modal', () => {
       expect(await screen.findByText('编辑 API 密钥配置')).toBeInTheDocument();
       expect(screen.getByText('OpenAI Compatible 实例')).toBeInTheDocument();
       expect(
-        screen.getByRole('switch', { name: '新实例自动加入主实例' })
+        screen.getByRole('switch', { name: '新实例自动注入主实例' })
       ).toBeInTheDocument();
     }
   );

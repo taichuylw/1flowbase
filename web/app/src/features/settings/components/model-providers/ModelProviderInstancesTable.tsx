@@ -118,11 +118,11 @@ export function ModelProviderInstancesTable({
               <div className="model-provider-panel__instance-header-side">
                 <div className="model-provider-panel__instance-inclusion-card">
                   <span className="model-provider-panel__instance-stat-label">
-                    加入主实例
+                    注入主实例
                   </span>
                   <div className="model-provider-panel__instance-inclusion-row">
                     <Switch
-                      aria-label={`加入主实例 ${instance.display_name}`}
+                      aria-label={`注入主实例 ${instance.display_name}`}
                       checked={instance.included_in_main}
                       disabled={!canManage || updatingInstanceId === instance.id}
                       onClick={(_, event) => {

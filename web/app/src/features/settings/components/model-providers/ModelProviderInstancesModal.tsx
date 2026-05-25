@@ -125,10 +125,10 @@ export function ModelProviderInstancesModal({
               className="model-provider-panel__main-instance-toggle"
             >
               <Typography.Text type="secondary">
-                新实例自动加入主实例
+                新实例自动注入主实例
               </Typography.Text>
               <Switch
-                aria-label="新实例自动加入主实例"
+                aria-label="新实例自动注入主实例"
                 checked={mainInstance?.auto_include_new_instances ?? false}
                 disabled={!canManage || updatingMainInstance}
                 onChange={onToggleAutoIncludeNewInstances}

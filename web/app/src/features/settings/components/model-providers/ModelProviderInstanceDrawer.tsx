@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  Alert,
   AutoComplete,
   Button,
   Drawer,
@@ -20,7 +19,6 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   PlusOutlined,
-  SettingOutlined,
   ImportOutlined
 } from '@ant-design/icons';
 
@@ -621,65 +619,63 @@ function ModelProviderInstanceDrawerContent({
       >
         {catalogEntry ? (
           <>
-            <div className="model-provider-drawer__header-card">
-              <div className="model-provider-drawer__header-title">
-                <ApiOutlined style={{ fontSize: 20, color: 'var(--ant-color-primary)' }} />
-                <Typography.Title level={4} style={{ margin: 0 }}>
-                  {catalogEntry.display_name}
-                </Typography.Title>
-              </div>
-              <div className="model-provider-drawer__header-tags">
-                <Tag color="blue">{catalogEntry.provider_code}</Tag>
-                <Tag color="cyan">{catalogEntry.protocol}</Tag>
-                <Tag color="purple">发现模式: {catalogEntry.model_discovery_mode}</Tag>
-                <Tag color="gold">预置模型: {catalogEntry.predefined_models.length}</Tag>
-              </div>
-            </div>
-
-            <Alert
-              className="model-provider-drawer__alert-banner"
-              message="实例权限与共享"
-              description="当前 workspace 内的成员均可使用此凭据实例。为了您的安全，敏感凭据仅会在服务器中加密存储，而不会在任何前端接口中回显。"
-              type="info"
-              showIcon
-            />
-
             <div className="model-provider-drawer__card">
-              <div className="model-provider-drawer__card-title">
-                <SettingOutlined />
-                <span>基础设置</span>
-              </div>
-              <div className="model-provider-drawer__card-body">
-                <Form.Item
-                  label="凭据名称"
-                  name="display_name"
-                  rules={[{ required: true, message: '请填写凭据名称' }]}
-                >
-                  <Input placeholder="例如：OpenAI Production" />
-                </Form.Item>
-
-                <div className="model-provider-drawer__switch-row" style={{ marginTop: 16 }}>
-                  <div className="model-provider-drawer__switch-info">
-                    <span className="model-provider-drawer__switch-label">加入主实例</span>
-                    <span className="model-provider-drawer__switch-desc">
-                      开启后，此实例下启用的模型将汇总至全局主实例的聚合视图中，方便统一调用。
-                    </span>
-                  </div>
-                  <Form.Item
-                    name="included_in_main"
-                    valuePropName="checked"
-                    noStyle
-                  >
-                    <Switch aria-label="加入主实例" />
-                  </Form.Item>
+              <div className="model-provider-drawer__card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ApiOutlined style={{ color: 'var(--ant-color-primary)' }} />
+                  <span>{catalogEntry.display_name}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', fontWeight: 'normal', fontSize: '12px' }}>
+                  <Tag color="blue" style={{ margin: 0 }}>{catalogEntry.provider_code}</Tag>
+                  <Tag color="cyan" style={{ margin: 0 }}>{catalogEntry.protocol}</Tag>
+                  <Tag color="purple" style={{ margin: 0 }}>发现模式: {catalogEntry.model_discovery_mode}</Tag>
+                  <Tag color="gold" style={{ margin: 0 }}>预置模型: {catalogEntry.predefined_models.length}</Tag>
                 </div>
               </div>
+              <div className="model-provider-drawer__card-body">
+                <Flex gap={16} align="flex-start">
+                  <div style={{ flex: 1 }}>
+                    <Form.Item
+                      label="名称"
+                      name="display_name"
+                      rules={[{ required: true, message: '请填写名称' }]}
+                      style={{ marginBottom: 0 }}
+                    >
+                      <Input placeholder="例如：OpenAI Production" />
+                    </Form.Item>
+                  </div>
+                  <div style={{ flex: 'none' }}>
+                    <Form.Item
+                      label="注入主实例"
+                      name="included_in_main"
+                      valuePropName="checked"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <Switch aria-label="注入主实例" />
+                    </Form.Item>
+                  </div>
+                </Flex>
+              </div>
             </div>
 
             <div className="model-provider-drawer__card">
-              <div className="model-provider-drawer__card-title">
-                <CheckCircleOutlined />
-                <span>连接配置</span>
+              <div className="model-provider-drawer__card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircleOutlined />
+                  <span>连接配置</span>
+                </div>
+                <div>
+                  <Button
+                    size="small"
+                    loading={previewingModels}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handlePreviewModels().catch(() => undefined);
+                    }}
+                  >
+                    检测
+                  </Button>
+                </div>
               </div>
               <div className="model-provider-drawer__card-body">
                 {primaryConfigFields.map(renderConfigField)}
@@ -697,17 +693,6 @@ function ModelProviderInstanceDrawerContent({
                     />
                   </div>
                 ) : null}
-
-                <div className="model-provider-drawer__test-btn-wrapper">
-                  <Button
-                    loading={previewingModels}
-                    onClick={() => {
-                      void handlePreviewModels().catch(() => undefined);
-                    }}
-                  >
-                    检测
-                  </Button>
-                </div>
               </div>
             </div>
 
@@ -718,8 +703,8 @@ function ModelProviderInstanceDrawerContent({
               </div>
               <div className="model-provider-drawer__card-body">
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                  <Flex align="center" gap={12} style={{ width: '100%' }} wrap="wrap">
-                    <div style={{ flex: 1, minWidth: 200 }}>
+                  <Flex align="center" gap={12} style={{ width: '100%' }}>
+                    <div style={{ flex: 1 }}>
                       <CachedModelSelect
                         modelIds={previewModels.map((model) => model.model_id)}
                         ariaLabel="缓存模型"
@@ -730,40 +715,36 @@ function ModelProviderInstanceDrawerContent({
                         onChange={applyCachedModelSelection}
                       />
                     </div>
-                    <Space size={8}>
-                      {previewModels.length > 0 && (
-                        <Button
-                          type="primary"
-                          ghost
-                          icon={<ImportOutlined />}
-                          onClick={() => {
-                            setConfiguredModels((current) => {
-                              const existingIds = new Set(current.map((row) => row.model_id.trim()));
-                              const newRows = [...current];
-                              for (const pm of previewModels) {
-                                const id = pm.model_id.trim();
-                                if (id && !existingIds.has(id)) {
-                                  newRows.push({
-                                    key: nextConfiguredModelKey(),
-                                    model_id: id,
-                                    context_window_input: '',
-                                    context_window_error: null,
-                                    enabled: true
-                                  });
-                                  existingIds.add(id);
-                                }
+                    <Button type="dashed" aria-label="添加" onClick={() => appendConfiguredModelRow()}>
+                      添加
+                    </Button>
+                    {previewModels.length > 0 && (
+                      <Button
+                        type="primary"
+                        onClick={() => {
+                          setConfiguredModels((current) => {
+                            const existingIds = new Set(current.map((row) => row.model_id.trim()));
+                            const newRows = [...current];
+                            for (const pm of previewModels) {
+                              const id = pm.model_id.trim();
+                              if (id && !existingIds.has(id)) {
+                                newRows.push({
+                                  key: nextConfiguredModelKey(),
+                                  model_id: id,
+                                  context_window_input: '',
+                                  context_window_error: null,
+                                  enabled: true
+                                });
+                                existingIds.add(id);
                               }
-                              return newRows;
-                            });
-                          }}
-                        >
-                          导入全部已发现模型
-                        </Button>
-                      )}
-                      <Button type="dashed" icon={<PlusOutlined />} aria-label="添加模型" onClick={() => appendConfiguredModelRow()}>
-                        添加模型
+                            }
+                            return newRows;
+                          });
+                        }}
+                      >
+                        全部导入
                       </Button>
-                    </Space>
+                    )}
                   </Flex>
 
                   <div className="model-provider-drawer__model-table">
@@ -887,7 +868,7 @@ function ModelProviderInstanceDrawerContent({
                       >
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description="还没有配置模型，点击“添加模型”或使用检测自动导入。"
+                          description="还没有配置模型，点击“添加”或使用检测自动导入。"
                         />
                       </div>
                     )}

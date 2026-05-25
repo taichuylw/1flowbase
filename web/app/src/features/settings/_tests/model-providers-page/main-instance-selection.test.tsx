@@ -494,7 +494,7 @@ describe('ModelProvidersPage - main instance selection', () => {
 
       const modal = await openProviderInstancesModal();
       const autoIncludeSwitch = within(modal).getByRole('switch', {
-        name: '新实例自动加入主实例'
+        name: '新实例自动注入主实例'
       });
       expect(autoIncludeSwitch).toBeChecked();
       fireEvent.click(autoIncludeSwitch);
@@ -512,7 +512,7 @@ describe('ModelProvidersPage - main instance selection', () => {
       });
 
       const includedSwitch = within(modal).getByRole('switch', {
-        name: '加入主实例 OpenAI Backup'
+        name: '注入主实例 OpenAI Backup'
       });
       expect(includedSwitch).not.toBeChecked();
       fireEvent.click(includedSwitch);
@@ -548,11 +548,11 @@ describe('ModelProvidersPage - main instance selection', () => {
       ).toBeGreaterThanOrEqual(1);
       expect(
         within(modal).getByRole('switch', {
-          name: '加入主实例 OpenAI Production'
+          name: '注入主实例 OpenAI Production'
         })
       ).toBeInTheDocument();
       expect(
-        within(modal).getByRole('switch', { name: '加入主实例 OpenAI Backup' })
+        within(modal).getByRole('switch', { name: '注入主实例 OpenAI Backup' })
       ).toBeInTheDocument();
     }
   );

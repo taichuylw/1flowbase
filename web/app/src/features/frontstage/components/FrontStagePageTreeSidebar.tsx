@@ -203,6 +203,11 @@ function renderTreeNode({
   const childNodes = node.children ?? [];
   const title = getNodeTitle(node);
   const isDragging = draggedNodeId === node.id;
+  const draggedNode = draggedNodeId
+    ? findNodeById(pageTree, draggedNodeId)
+    : null;
+  const canDropInsideGroup =
+    node.kind === 'group' && level === 0 && draggedNode?.kind === 'page';
   const isInsideDropTarget =
     dropIndicator?.targetNodeId === node.id &&
     dropIndicator.position === 'inside';
