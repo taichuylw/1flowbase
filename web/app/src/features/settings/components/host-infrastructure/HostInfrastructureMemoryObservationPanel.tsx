@@ -11,7 +11,6 @@ import {
   Descriptions,
   Drawer,
   Empty,
-  Modal,
   Space,
   Table,
   Tabs,
@@ -97,7 +96,6 @@ export function HostInfrastructureMemoryObservationPanel({
     useState<SettingsHostInfrastructureMemoryEntry | null>(null);
   const [revealedEntry, setRevealedEntry] =
     useState<SettingsHostInfrastructureMemoryEntryValue | null>(null);
-  const [modal, modalContextHolder] = Modal.useModal();
   const queryClient = useQueryClient();
 
   const overviewQuery = useQuery({
@@ -241,16 +239,9 @@ export function HostInfrastructureMemoryObservationPanel({
             {canReveal ? (
               <Button
                 icon={<EyeOutlined />}
-                disabled={revealMutation.isPending}
+                loading={revealMutation.isPending}
                 onClick={() => {
-                  modal.confirm({
-                    title: '查看内存 value',
-                    content:
-                      '这个操作可能展示用户输入、运行日志、模型输出或业务记录，并会写入审计日志。',
-                    okText: '查看并记录审计',
-                    cancelText: '取消',
-                    onOk: () => revealMutation.mutateAsync(entry)
-                  });
+                  revealMutation.mutate(entry);
                 }}
                 size="small"
               >
@@ -261,7 +252,7 @@ export function HostInfrastructureMemoryObservationPanel({
         )
       }
     ],
-    [canReveal, modal, revealMutation]
+    [canReveal, revealMutation]
   );
 
   if (overviewQuery.isError) {
@@ -286,7 +277,6 @@ export function HostInfrastructureMemoryObservationPanel({
 
   return (
     <Space direction="vertical" size={16} className="host-memory-panel">
-      {modalContextHolder}
       <div className="host-memory-panel__toolbar">
         <Space size={[8, 8]} wrap>
           <Tag color="blue">{contracts.length} contracts</Tag>

@@ -358,7 +358,7 @@ describe('HostInfrastructurePanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('reveals memory value after explicit confirmation', async () => {
+  test('reveals memory value directly for manage users', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
     api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
@@ -426,15 +426,15 @@ describe('HostInfrastructurePanel', () => {
 
     fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
     fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: '查看并记录审计' })
-    );
 
     await waitFor(() => {
       expect(
         api.revealSettingsHostInfrastructureMemoryEntry
       ).toHaveBeenCalledWith('session-store', 'session:1', 'csrf-123');
     });
+    expect(
+      screen.queryByRole('button', { name: '查看并记录审计' })
+    ).not.toBeInTheDocument();
     expect(await screen.findByText('Entry value')).toBeInTheDocument();
     expect(screen.getByLabelText('Memory value JSON')).toHaveTextContent(
       'succeeded'
