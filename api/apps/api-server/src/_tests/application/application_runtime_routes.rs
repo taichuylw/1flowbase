@@ -1,7 +1,8 @@
 use std::{fs, path::Path};
 
 use crate::_tests::support::{
-    login_and_capture_cookie, test_app, test_app_with_database_url, write_provider_manifest_v2,
+    login_and_capture_cookie, test_api_state_with_database_url, test_app,
+    test_app_with_database_url, test_config, write_provider_manifest_v2,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -1015,7 +1016,8 @@ async fn external_agent_opaque_boundary_keeps_external_trust_level() {
 
 #[tokio::test]
 async fn application_runtime_routes_start_node_preview_and_query_logs() {
-    let app = test_app().await;
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
     let application_id =
@@ -1203,6 +1205,24 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     assert_eq!(
         detail_payload["data"]["node_runs"][0]["node_alias"].as_str(),
         Some("LLM")
+    );
+    let cache_entries = state
+        .infrastructure
+        .cache_store()
+        .list_cache_entries("application-logs")
+        .await
+        .unwrap();
+    assert!(
+        cache_entries
+            .iter()
+            .any(|entry| entry.key.contains(":summary-page:")),
+        "application log summary-page cache entry missing: {cache_entries:?}"
+    );
+    assert!(
+        cache_entries.iter().any(|entry| {
+            entry.key.contains(":run-detail:") && entry.key.contains(flow_run_id.as_str())
+        }),
+        "application log run-detail cache entry missing: {cache_entries:?}"
     );
     let scoped_node_run = app
         .clone()
@@ -1677,7 +1697,8 @@ async fn application_runtime_routes_logs_are_paginated_and_newest_first() {
 
 #[tokio::test]
 async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
-    let app = test_app().await;
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
     let application_id =
@@ -1723,6 +1744,18 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
     );
     let detail =
         wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
+    let cache_entries = state
+        .infrastructure
+        .cache_store()
+        .list_cache_entries("application-logs")
+        .await
+        .unwrap();
+    assert!(
+        !cache_entries
+            .iter()
+            .any(|entry| { entry.key.contains(":run-detail:") && entry.key.contains(run_id) }),
+        "waiting run detail must not be cached: {cache_entries:?}"
+    );
     let checkpoint_id = detail["checkpoints"][0]["id"].as_str().unwrap();
 
     let resume = app
