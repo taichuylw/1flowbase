@@ -54,6 +54,8 @@ docker compose up -d
 - `ghcr.io/taichuy/1flowbase-api-server:${FLOWBASE_API_SERVER_VERSION}`
 - `ghcr.io/taichuy/1flowbase-plugin-runner:${FLOWBASE_PLUGIN_RUNNER_VERSION}`
 
+默认使用每个组件镜像的 `latest` tag；生产部署或需要可复现回滚时，可以在 `.env` 里把单个组件 pin 到具体版本，例如 `FLOWBASE_WEB_VERSION=v0.1.1`。
+
 `web` 镜像内置 nginx，用于托管前端静态文件并把 `/api`、`/health`、`/openapi.json` 反代到 `api:7800`。生产部署默认不挂载后端二进制和前端 `dist`，这些构建产物必须随镜像 tag 发布。
 
 默认持久化和可编辑配置都在 `docker/` 下：
@@ -97,4 +99,4 @@ cd docker
 FLOWBASE_WEB_VERSION=local FLOWBASE_API_SERVER_VERSION=local FLOWBASE_PLUGIN_RUNNER_VERSION=local docker compose up -d
 ```
 
-CI 发布镜像时也会继续使用 GitHub Actions cache，因此同一镜像的后续构建会复用远端缓存。镜像按组件 manifest 版本自动发布：`web/app/package.json` 的 `version` 变化只发布 `1flowbase-web:vX.Y.Z`，`api/apps/api-server/Cargo.toml` 的 `version` 变化只发布 `1flowbase-api-server:vX.Y.Z`，`api/apps/plugin-runner/Cargo.toml` 的 `version` 变化只发布 `1flowbase-plugin-runner:vX.Y.Z`。普通源码提交不会发布镜像。
+CI 发布镜像时也会继续使用 GitHub Actions cache，因此同一镜像的后续构建会复用远端缓存。镜像按组件 manifest 版本自动发布：`web/app/package.json` 的 `version` 变化只发布 `1flowbase-web:vX.Y.Z` 并更新 `1flowbase-web:latest`，`api/apps/api-server/Cargo.toml` 的 `version` 变化只发布 `1flowbase-api-server:vX.Y.Z` 并更新 `1flowbase-api-server:latest`，`api/apps/plugin-runner/Cargo.toml` 的 `version` 变化只发布 `1flowbase-plugin-runner:vX.Y.Z` 并更新 `1flowbase-plugin-runner:latest`。普通源码提交不会发布镜像。

@@ -114,7 +114,9 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

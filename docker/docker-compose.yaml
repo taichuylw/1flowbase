@@ -20,7 +20,7 @@ services:
       retries: 20
 
   plugin-runner:
-    image: ghcr.io/taichuy/1flowbase-plugin-runner:${FLOWBASE_PLUGIN_RUNNER_VERSION:-v0.1.0}
+    image: ghcr.io/taichuy/1flowbase-plugin-runner:${FLOWBASE_PLUGIN_RUNNER_VERSION:-latest}
     restart: unless-stopped
     env_file:
       - ./plugin-runner/plugin-runner.env
@@ -28,7 +28,7 @@ services:
       - "7801"
 
   api:
-    image: ghcr.io/taichuy/1flowbase-api-server:${FLOWBASE_API_SERVER_VERSION:-v0.1.0}
+    image: ghcr.io/taichuy/1flowbase-api-server:${FLOWBASE_API_SERVER_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       db:
@@ -63,7 +63,7 @@ services:
       - ./api/plugins/host-extension/dropins:/app/api/plugins/host-extension/dropins
 
   web:
-    image: ghcr.io/taichuy/1flowbase-web:${FLOWBASE_WEB_VERSION:-v0.1.0}
+    image: ghcr.io/taichuy/1flowbase-web:${FLOWBASE_WEB_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       api:
