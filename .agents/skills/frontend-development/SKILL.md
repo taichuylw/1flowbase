@@ -1,6 +1,6 @@
 ---
 name: frontend-development
-description: "Use for 1flowbase frontend work in web/: implementing, fixing, refactoring, reviewing, or planning UI pages, app shell, routes, navigation, workspace flows, node UI, schema UI, components, interactions, responsive layout, visual structure, or frontend state boundaries. Also use when a request mentions UI/UX, page改版, 样式, 交互, 前端, React, Ant Design, screenshot/image-led changes, vague page requirements, or requirement refinement before implementation."
+description: "Use for 1flowbase frontend work in web/: implementing, fixing, refactoring, reviewing, or planning UI pages, app shell, routes, navigation, workspace flows, node UI, schema UI, components, interactions, responsive layout, visual structure, chart/reporting UI, ECharts host rendering, low-code JS Block chart primitives, or frontend state boundaries. Also use when a request mentions UI/UX, page改版, 样式, 交互, 前端, React, Ant Design, ECharts, 报表, 图表, screenshot/image-led changes, vague page requirements, or requirement refinement before implementation."
 ---
 
 # Frontend Development
@@ -15,6 +15,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - 改动壳层列表、抽屉、编排画布、`Inspector`、节点组件等核心前端表面
 - 新增节点类型，或调整节点详情、节点卡片、节点运行态、节点定义目录结构
 - 改动 `schema ui` 合同、runtime、renderer registry、overlay shell 或节点 schema adapter
+- 新增或调整报表 / 图表 UI、`echarts` 宿主渲染、低代码 JS Block 图表 primitive / facade
 - 调整页面级流程、交互流、视觉结构或页面模块关系
 - 需要决定入口、层级、下钻路径、`Drawer / Inspector / Page / Dialog` 等交互落点
 - 评估是否拆文件、拆组件、拆 hooks，或处理前端职责边界漂移
@@ -81,6 +82,14 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - Verification chain: 共享样式或第三方 slot 走 `check-style-boundary`；浏览器级证据走 `Playwright / page-debug / style-boundary`
 - Frontend test runtime chain: `web/package.json` 与 `web/app/package.json` 的测试入口应继续走仓库脚本包装器；本地资源限制统一从 `.1flowbase.verify.local.json` 读取，不要用裸 `pnpm exec vitest/turbo` 替代标准入口
 
+## Chart / Reporting Rule
+
+- Target: 报表 / 图表能力默认以 `echarts` 作为宿主渲染依赖；低代码 JS Block 只拿到受控 `Chart / EChart` primitive / facade，不直接拿真实 React 组件、DOM、`echarts` 实例或任意 npm 包。
+- Budget: 第一版只开放可 JSON 校验的 `option`、尺寸、主题 token 和声明式事件桥接；不开放 formatter 函数、custom series、任意 HTML tooltip、外部图片、地图资源、raw instance 或用户侧 resize / dispose。
+- Placement: `echarts` 依赖和内部渲染组件归 `@1flowbase/block-renderer` 或明确可信 feature owner；不要新增 `echarts-for-react` / 其它 wrapper，除非先说明维护收益、安全影响和替代验证。
+- Evidence: 新增 Chart primitive 时必须同步 `page-protocol` primitive / schema 校验、`antd-facade` factory、`block-renderer` 渲染与单元测试；涉及页面展示再补目标页面或 style-boundary 证据。
+- Stop condition: 一旦需求需要用户函数、外部资源、跨区块共享实例、地图扩展或直接暴露 ECharts API，停止实现并回到 `problem-framing` 做 contract / 安全边界决策。
+
 ## Common Mistakes
 
 - 为了“统一”过早抽组件或 hooks
@@ -90,6 +99,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - 把协议拼装、数据转换、渲染混写
 - 用 `finished_at ?? started_at`、字符串拼接、ID 拆解、前端枚举映射、mock 数据或局部缓存冒充后端没有返回的业务字段
 - 为了快速展示，在前端实现本应由后端定义的排序、筛选、权限、状态原因、统计计数或跨对象聚合真值
+- 在低代码 JS Block 中允许用户直接 import `echarts` / `echarts-for-react`，或把图表 formatter、HTML tooltip、外部资源当作普通 JSON option 放行
 - 把节点定义、schema contract、renderer registry、consumer UI 再次堆回同一文件
 - 把第三方组件内部 DOM 当成自家 DOM 递归覆盖，或为了修单点视觉问题裸写 `.ant-*`
 - 只改导航文案，不同步 `route id / path / selected state` 真值层

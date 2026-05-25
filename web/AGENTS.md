@@ -32,6 +32,8 @@
 
 ## Local Rules
 - 优先复用 `@1flowbase/ui` 与 `antd`，不要重复造轮子。
+- 报表 / 图表能力默认以 `echarts` 作为宿主渲染依赖；不要新增 `echarts-for-react` 或其它图表 wrapper，除非先说明维护收益、安全影响和替代验证。
+- 低代码 JS Block 图表只能通过受控 `Chart / EChart` primitive / facade 暴露；用户代码不得直接 import `echarts` 或任意 npm 包，图表 `option` 第一版必须是可校验 JSON，不开放 formatter 函数、custom series、HTML tooltip、外部图片或地图资源。
 - UI 禁止出现内部提示词、调试文本、占位文案、mock 文案、`TODO/FIXME`、异常对象、原始 JSON。
 - 未开放功能不要写 `placeholder / reserved / later`；改为隐藏入口或正式“未开放/建设中”状态。
 - 仅开发辅助信息允许在 `import.meta.env.DEV` 下渲染。
