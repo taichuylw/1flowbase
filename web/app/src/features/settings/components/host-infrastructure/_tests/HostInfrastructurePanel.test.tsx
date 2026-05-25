@@ -597,6 +597,8 @@ describe('HostInfrastructurePanel', () => {
       await screen.findByRole('tab', { name: /Sessions/ })
     ).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
+    expect(screen.getByText('session-store')).toBeInTheDocument();
+    expect(screen.queryByText('Provider')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
 

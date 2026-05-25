@@ -79,6 +79,21 @@
   overflow: auto;
 }
 
+.host-memory-panel__contract-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.host-memory-panel__contract-summary .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .host-cache-panel__section-title,
 .host-memory-panel__section-title {
   margin-bottom: 8px;
