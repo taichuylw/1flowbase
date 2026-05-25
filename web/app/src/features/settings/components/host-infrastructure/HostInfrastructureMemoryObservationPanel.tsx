@@ -527,16 +527,28 @@ export function HostInfrastructureMemoryObservationPanel({
                     {activeContract ? (
                       <>
                         <div className="host-memory-panel__contract-summary">
-                          <Typography.Text strong>
+                          <Typography.Text
+                            className="host-memory-panel__contract-summary-item"
+                            strong
+                          >
                             {activeContract.contract_code}
                           </Typography.Text>
-                          <Typography.Text type="secondary">
+                          <Typography.Text
+                            className="host-memory-panel__contract-summary-item"
+                            type="secondary"
+                          >
                             {activeContract.provider_code ?? 'unknown'}
                           </Typography.Text>
-                          <Tag color="red">
+                          <Tag
+                            className="host-memory-panel__contract-summary-tag"
+                            color="red"
+                          >
                             sensitive {activeContract.sensitive_entry_count}
                           </Tag>
-                          <Typography.Text type="secondary">
+                          <Typography.Text
+                            className="host-memory-panel__contract-summary-item"
+                            type="secondary"
+                          >
                             {formatBytes(activeContract.total_value_size_bytes)}
                           </Typography.Text>
                         </div>

@@ -83,15 +83,25 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 6px;
   overflow: hidden;
+}
+
+.host-memory-panel__contract-summary-item {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(360px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.host-memory-panel__contract-summary .ant-typography {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.host-memory-panel__contract-summary-tag {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
 }
 
 .host-cache-panel__section-title,
