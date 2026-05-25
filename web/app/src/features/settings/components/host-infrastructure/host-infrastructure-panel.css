@@ -35,8 +35,7 @@
   gap: 12px;
 }
 
-.host-cache-panel__layout,
-.host-memory-panel__layout {
+.host-cache-panel__layout {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 16px;
@@ -45,6 +44,19 @@
 
 .host-memory-panel__tabs {
   min-width: 0;
+}
+
+.host-memory-panel__tab-pane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-memory-panel__content {
+  min-width: 0;
+  gap: 16px;
+  background: transparent;
 }
 
 .host-memory-panel__tab-label {
@@ -72,6 +84,22 @@
 .host-memory-panel__tree,
 .host-memory-panel__entries {
   min-width: 0;
+}
+
+.host-memory-panel__tree {
+  width: 320px !important;
+  min-width: 260px !important;
+  max-width: 320px !important;
+  flex: 0 0 320px !important;
+  background: transparent !important;
+}
+
+.host-memory-panel__entries {
+  flex: 1 1 auto;
+}
+
+.host-memory-panel__entries > .ant-space {
+  width: 100%;
 }
 
 .host-memory-panel__tree-body {
@@ -164,9 +192,19 @@
     flex-direction: column;
   }
 
-  .host-cache-panel__layout,
-  .host-memory-panel__layout {
+  .host-cache-panel__layout {
     grid-template-columns: 1fr;
+  }
+
+  .host-memory-panel__content {
+    flex-direction: column;
+  }
+
+  .host-memory-panel__tree {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
   }
 
   .host-memory-panel__tab-label {

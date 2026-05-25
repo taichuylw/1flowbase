@@ -597,7 +597,21 @@ describe('HostInfrastructurePanel', () => {
       await screen.findByRole('tab', { name: /Sessions/ })
     ).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
-    expect(screen.getByText('session-store')).toBeInTheDocument();
+    const memoryLayout = screen
+      .getByText('session-store')
+      .closest('.host-memory-panel__tab-pane');
+    expect(memoryLayout).not.toBeNull();
+    expect(
+      memoryLayout?.querySelector('.ant-layout.host-memory-panel__content')
+    ).not.toBeNull();
+    expect(
+      memoryLayout?.querySelector('.ant-layout-sider.host-memory-panel__tree')
+    ).not.toBeNull();
+    expect(
+      memoryLayout?.querySelector(
+        '.ant-layout-content.host-memory-panel__entries'
+      )
+    ).not.toBeNull();
     expect(screen.queryByText('Provider')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();

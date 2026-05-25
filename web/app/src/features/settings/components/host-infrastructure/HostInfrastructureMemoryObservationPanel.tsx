@@ -12,6 +12,7 @@ import {
   Drawer,
   Empty,
   Input,
+  Layout,
   Space,
   Table,
   Tabs,
@@ -518,42 +519,44 @@ export function HostInfrastructureMemoryObservationPanel({
             ),
             children:
               contract.contract_code === resolvedActiveContractCode ? (
-                <div className="host-memory-panel__layout">
-                  <Space
-                    direction="vertical"
-                    size={12}
-                    className="host-memory-panel__tree"
-                  >
-                    {activeContract ? (
-                      <>
-                        <div className="host-memory-panel__contract-summary">
-                          <Typography.Text
-                            className="host-memory-panel__contract-summary-item"
-                            strong
-                          >
-                            {activeContract.contract_code}
-                          </Typography.Text>
-                          <Typography.Text
-                            className="host-memory-panel__contract-summary-item"
-                            type="secondary"
-                          >
-                            {activeContract.provider_code ?? 'unknown'}
-                          </Typography.Text>
-                          <Tag
-                            className="host-memory-panel__contract-summary-tag"
-                            color="red"
-                          >
-                            sensitive {activeContract.sensitive_entry_count}
-                          </Tag>
-                          <Typography.Text
-                            className="host-memory-panel__contract-summary-item"
-                            type="secondary"
-                          >
-                            {formatBytes(activeContract.total_value_size_bytes)}
-                          </Typography.Text>
-                        </div>
+                <div className="host-memory-panel__tab-pane">
+                  {activeContract ? (
+                    <div className="host-memory-panel__contract-summary">
+                      <Typography.Text
+                        className="host-memory-panel__contract-summary-item"
+                        strong
+                      >
+                        {activeContract.contract_code}
+                      </Typography.Text>
+                      <Typography.Text
+                        className="host-memory-panel__contract-summary-item"
+                        type="secondary"
+                      >
+                        {activeContract.provider_code ?? 'unknown'}
+                      </Typography.Text>
+                      <Tag
+                        className="host-memory-panel__contract-summary-tag"
+                        color="red"
+                      >
+                        sensitive {activeContract.sensitive_entry_count}
+                      </Tag>
+                      <Typography.Text
+                        className="host-memory-panel__contract-summary-item"
+                        type="secondary"
+                      >
+                        {formatBytes(activeContract.total_value_size_bytes)}
+                      </Typography.Text>
+                    </div>
+                  ) : null}
 
-                        {!activeContract.supported ||
+                  <Layout className="host-memory-panel__content">
+                    <Layout.Sider
+                      className="host-memory-panel__tree"
+                      theme="light"
+                      width={320}
+                    >
+                      {activeContract ? (
+                        !activeContract.supported ||
                         !activeContract.capabilities.list_tree ? (
                           <Alert
                             type="warning"
@@ -589,123 +592,125 @@ export function HostInfrastructureMemoryObservationPanel({
                               }}
                             />
                           </div>
-                        )}
-                      </>
-                    ) : (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="请选择内存 contract"
-                      />
-                    )}
-                  </Space>
-
-                  <Space
-                    direction="vertical"
-                    size={12}
-                    className="host-memory-panel__entries"
-                  >
-                    <div className="host-memory-panel__entries-header">
-                      <Space direction="vertical" size={2}>
-                        <Typography.Text strong>Entries</Typography.Text>
-                        <Typography.Text type="secondary">
-                          {selectedInspectionPath
-                            ? formatInspectionPath(selectedInspectionPath)
-                            : '未选择路径'}
-                        </Typography.Text>
-                      </Space>
-                      <Input.Search
-                        allowClear
-                        disabled={!canSearchEntries}
-                        value={searchText}
-                        onChange={(event) => setSearchText(event.target.value)}
-                        onSearch={(value) => {
-                          if (!canSearchEntries) {
-                            return;
-                          }
-                          setSubmittedSearch(value.trim());
-                          setEntryCursor(null);
-                          setCursorHistory([]);
-                        }}
-                        size="small"
-                        style={{ maxWidth: 240 }}
-                      />
-                    </div>
-
-                    {!selectedInspectionPath ? (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="请选择 tree 节点"
-                      />
-                    ) : entriesQuery.isError ? (
-                      <Alert
-                        type="error"
-                        showIcon
-                        message="内存 entry 连接失败。"
-                        description="无法读取当前路径的 entries。"
-                      />
-                    ) : entriesQuery.isSuccess && !entries.length ? (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description="暂无内存 entry"
-                      />
-                    ) : (
-                      <>
-                        <Table
-                          rowKey={(entry) => entry.entry_ref}
-                          columns={entryColumns}
-                          dataSource={entries}
-                          loading={
-                            entriesQuery.isLoading || entriesQuery.isFetching
-                          }
-                          pagination={false}
-                          size="small"
+                        )
+                      ) : (
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description="请选择内存 contract"
                         />
+                      )}
+                    </Layout.Sider>
+
+                    <Layout.Content className="host-memory-panel__entries">
+                      <Space direction="vertical" size={12}>
                         <div className="host-memory-panel__entries-header">
-                          <Typography.Text type="secondary">
-                            {entriesQuery.data
-                              ? `${formatBytes(
-                                  entriesQuery.data.emitted_bytes
-                                )} emitted`
-                              : null}
-                          </Typography.Text>
-                          <Space size={8}>
-                            <Button
-                              size="small"
-                              disabled={!cursorHistory.length}
-                              onClick={() => {
-                                setCursorHistory((current) => {
-                                  const previousCursor = current.at(-1) ?? null;
-                                  const nextHistory = current.slice(0, -1);
-                                  setEntryCursor(previousCursor || null);
-                                  return nextHistory;
-                                });
-                              }}
-                            >
-                              上一页
-                            </Button>
-                            <Button
-                              size="small"
-                              disabled={!entriesQuery.data?.next_cursor}
-                              onClick={() => {
-                                const nextCursor =
-                                  entriesQuery.data?.next_cursor;
-                                if (!nextCursor) {
-                                  return;
-                                }
-                                setCursorHistory((current) => [
-                                  ...current,
-                                  entryCursor ?? ''
-                                ]);
-                                setEntryCursor(nextCursor);
-                              }}
-                            >
-                              下一页
-                            </Button>
+                          <Space direction="vertical" size={2}>
+                            <Typography.Text strong>Entries</Typography.Text>
+                            <Typography.Text type="secondary">
+                              {selectedInspectionPath
+                                ? formatInspectionPath(selectedInspectionPath)
+                                : '未选择路径'}
+                            </Typography.Text>
                           </Space>
+                          <Input.Search
+                            allowClear
+                            disabled={!canSearchEntries}
+                            value={searchText}
+                            onChange={(event) =>
+                              setSearchText(event.target.value)
+                            }
+                            onSearch={(value) => {
+                              if (!canSearchEntries) {
+                                return;
+                              }
+                              setSubmittedSearch(value.trim());
+                              setEntryCursor(null);
+                              setCursorHistory([]);
+                            }}
+                            size="small"
+                            style={{ maxWidth: 240 }}
+                          />
                         </div>
-                      </>
-                    )}
-                  </Space>
+
+                        {!selectedInspectionPath ? (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="请选择 tree 节点"
+                          />
+                        ) : entriesQuery.isError ? (
+                          <Alert
+                            type="error"
+                            showIcon
+                            message="内存 entry 连接失败。"
+                            description="无法读取当前路径的 entries。"
+                          />
+                        ) : entriesQuery.isSuccess && !entries.length ? (
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description="暂无内存 entry"
+                          />
+                        ) : (
+                          <>
+                            <Table
+                              rowKey={(entry) => entry.entry_ref}
+                              columns={entryColumns}
+                              dataSource={entries}
+                              loading={
+                                entriesQuery.isLoading ||
+                                entriesQuery.isFetching
+                              }
+                              pagination={false}
+                              size="small"
+                            />
+                            <div className="host-memory-panel__entries-header">
+                              <Typography.Text type="secondary">
+                                {entriesQuery.data
+                                  ? `${formatBytes(
+                                      entriesQuery.data.emitted_bytes
+                                    )} emitted`
+                                  : null}
+                              </Typography.Text>
+                              <Space size={8}>
+                                <Button
+                                  size="small"
+                                  disabled={!cursorHistory.length}
+                                  onClick={() => {
+                                    setCursorHistory((current) => {
+                                      const previousCursor =
+                                        current.at(-1) ?? null;
+                                      const nextHistory = current.slice(0, -1);
+                                      setEntryCursor(previousCursor || null);
+                                      return nextHistory;
+                                    });
+                                  }}
+                                >
+                                  上一页
+                                </Button>
+                                <Button
+                                  size="small"
+                                  disabled={!entriesQuery.data?.next_cursor}
+                                  onClick={() => {
+                                    const nextCursor =
+                                      entriesQuery.data?.next_cursor;
+                                    if (!nextCursor) {
+                                      return;
+                                    }
+                                    setCursorHistory((current) => [
+                                      ...current,
+                                      entryCursor ?? ''
+                                    ]);
+                                    setEntryCursor(nextCursor);
+                                  }}
+                                >
+                                  下一页
+                                </Button>
+                              </Space>
+                            </div>
+                          </>
+                        )}
+                      </Space>
+                    </Layout.Content>
+                  </Layout>
                 </div>
               ) : null
           }))}
