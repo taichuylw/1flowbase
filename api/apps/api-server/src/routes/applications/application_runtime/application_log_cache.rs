@@ -28,35 +28,12 @@ pub(super) fn summary_page_cache_key(
     )
 }
 
-pub(super) fn run_detail_cache_key(
-    workspace_id: Uuid,
-    application_id: Uuid,
-    run_id: Uuid,
-) -> String {
-    format!(
-        "application-logs:run-detail:v1:workspace:{workspace_id}:application:{application_id}:run:{run_id}"
-    )
-}
-
 pub(super) fn summary_page_cache_ttl(page: i64) -> Duration {
     if page <= 1 {
         Duration::minutes(5)
     } else {
         Duration::minutes(15)
     }
-}
-
-pub(super) fn run_detail_cache_ttl() -> Duration {
-    Duration::hours(6)
-}
-
-pub(super) fn is_terminal_status(status: domain::FlowRunStatus) -> bool {
-    matches!(
-        status,
-        domain::FlowRunStatus::Succeeded
-            | domain::FlowRunStatus::Failed
-            | domain::FlowRunStatus::Cancelled
-    )
 }
 
 fn is_terminal_status_str(status: &str) -> bool {

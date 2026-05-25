@@ -1859,17 +1859,6 @@ pub async fn get_application_run_detail(
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
-    let cache = state.infrastructure.cache_store();
-    let cache_key =
-        application_log_cache::run_detail_cache_key(context.actor.current_workspace_id, id, run_id);
-
-    if let Some(cached) =
-        application_log_cache::read::<ApplicationRunDetailResponse>(cache.as_ref(), &cache_key)
-            .await
-    {
-        return Ok(Json(ApiSuccess::new(cached)));
-    }
-
     let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
         &state.store,
         id,
@@ -1884,18 +1873,7 @@ pub async fn get_application_run_detail(
         detail,
     )
     .await?;
-    let cacheable = application_log_cache::is_terminal_status(detail.flow_run.status);
     let response = to_application_run_detail_response(&application, detail);
-
-    if cacheable {
-        application_log_cache::write(
-            cache.as_ref(),
-            &cache_key,
-            &response,
-            application_log_cache::run_detail_cache_ttl(),
-        )
-        .await;
-    }
 
     Ok(Json(ApiSuccess::new(response)))
 }

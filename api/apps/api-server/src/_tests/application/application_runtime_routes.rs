@@ -1279,10 +1279,10 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         Some("总结退款政策")
     );
     assert!(
-        cache_entries.iter().any(|entry| {
+        !cache_entries.iter().any(|entry| {
             entry.key.contains(":run-detail:") && entry.key.contains(flow_run_id.as_str())
         }),
-        "application log run-detail cache entry missing: {cache_entries:?}"
+        "application log run-detail must not be cached: {cache_entries:?}"
     );
     let scoped_node_run = app
         .clone()
