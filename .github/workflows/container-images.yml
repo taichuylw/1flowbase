@@ -29,7 +29,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: container-images-${{ github.ref }}
+  group: container-images-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.component || github.ref }}
   cancel-in-progress: true
 
 jobs:
