@@ -35,6 +35,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../../../api/host-infrastructure', () => api);
 
 import { HostInfrastructurePanel } from '../HostInfrastructurePanel';
+import { HostInfrastructureMemoryObservationPanel } from '../HostInfrastructureMemoryObservationPanel';
 
 function renderPanel(canManage = true) {
   const queryClient = new QueryClient({
@@ -55,6 +56,29 @@ function renderPanel(canManage = true) {
   return render(
     <QueryClientProvider client={queryClient}>
       <HostInfrastructurePanel canManage={canManage} />
+    </QueryClientProvider>
+  );
+}
+
+function renderMemoryObservationPanel(canManage = true) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+
+  useAuthStore.getState().setAuthenticated({
+    csrfToken: 'csrf-123',
+    actor: {
+      id: 'user-1',
+      account: 'root',
+      effective_display_role: 'root',
+      current_workspace_id: 'workspace-1'
+    },
+    me: null
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <HostInfrastructureMemoryObservationPanel canManage={canManage} />
     </QueryClientProvider>
   );
 }
@@ -112,6 +136,9 @@ describe('HostInfrastructurePanel', () => {
     expect(screen.getByText('inactive')).toBeInTheDocument();
     expect(screen.getByText('storage-ephemeral')).toBeInTheDocument();
     expect(screen.getByText('cache-store')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: '内存观察' })
+    ).not.toBeInTheDocument();
   });
 
   test('renders pending restart state without claiming provider is active', async () => {
@@ -260,9 +287,7 @@ describe('HostInfrastructurePanel', () => {
       ]
     });
 
-    renderPanel(true);
-
-    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
+    renderMemoryObservationPanel(true);
 
     expect(
       await screen.findByRole('tab', { name: 'Sessions' })
@@ -283,9 +308,7 @@ describe('HostInfrastructurePanel', () => {
       contracts: []
     });
 
-    renderPanel(true);
-
-    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
+    renderMemoryObservationPanel(true);
 
     expect(
       await screen.findByText('暂无可观察内存 contract')
@@ -339,9 +362,7 @@ describe('HostInfrastructurePanel', () => {
       ]
     });
 
-    renderPanel(false);
-
-    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
+    renderMemoryObservationPanel(false);
 
     expect(
       await screen.findByText('当前视图只展示 metadata。')
@@ -422,9 +443,7 @@ describe('HostInfrastructurePanel', () => {
       value: { flow_run: { status: 'succeeded' } }
     });
 
-    renderPanel(true);
-
-    fireEvent.click(await screen.findByRole('tab', { name: '内存观察' }));
+    renderMemoryObservationPanel(true);
     fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
 
     await waitFor(() => {

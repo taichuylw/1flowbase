@@ -3,6 +3,7 @@ import { Suspense, lazy, type ReactNode } from 'react';
 import { LoadingState } from '../../../../shared/ui/loading-state/LoadingState';
 import { MemberManagementPanel } from '../../components/MemberManagementPanel';
 import { RolePermissionPanel } from '../../components/RolePermissionPanel';
+import { SettingsSectionSurface } from '../../components/SettingsSectionSurface';
 import { SystemRuntimePanel } from '../../components/SystemRuntimePanel';
 import type { SettingsSectionKey } from '../../lib/settings-sections';
 import { SettingsDataModelsSection } from './SettingsDataModelsSection';
@@ -22,6 +23,13 @@ const HostInfrastructurePanel = lazy(() =>
   import('../../components/host-infrastructure/HostInfrastructurePanel').then(
     (module) => ({
       default: module.HostInfrastructurePanel
+    })
+  )
+);
+const HostInfrastructureMemoryObservationPanel = lazy(() =>
+  import('../../components/host-infrastructure/HostInfrastructureMemoryObservationPanel').then(
+    (module) => ({
+      default: module.HostInfrastructureMemoryObservationPanel
     })
   )
 );
@@ -77,6 +85,16 @@ export function SettingsSectionBody({
       return (
         <SettingsSectionBoundary>
           <HostInfrastructurePanel canManage={canManageHostInfrastructure} />
+        </SettingsSectionBoundary>
+      );
+    case 'memory-observation':
+      return (
+        <SettingsSectionBoundary>
+          <SettingsSectionSurface title="内存观察" hideHeader heightMode="fill">
+            <HostInfrastructureMemoryObservationPanel
+              canManage={canManageHostInfrastructure}
+            />
+          </SettingsSectionSurface>
         </SettingsSectionBoundary>
       );
     case 'roles':
