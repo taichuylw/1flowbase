@@ -91,7 +91,10 @@
   min-width: 260px !important;
   max-width: 320px !important;
   flex: 0 0 320px !important;
-  background: transparent !important;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 6px;
+  background: var(--ant-color-bg-container) !important;
+  padding: 12px;
 }
 
 .host-memory-panel__entries {
@@ -105,6 +108,32 @@
 .host-memory-panel__tree-body {
   min-width: 0;
   overflow: auto;
+}
+
+.host-memory-panel__tree-panel {
+  width: 100%;
+}
+
+.host-memory-panel__tree-node-title {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-memory-panel__tree-node-title .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.host-memory-panel__tree-node-title .ant-tag {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
+}
+
+.host-memory-panel__tree-search-value {
+  color: var(--ant-color-error);
 }
 
 .host-memory-panel__contract-summary {

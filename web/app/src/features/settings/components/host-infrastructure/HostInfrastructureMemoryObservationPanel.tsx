@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Key, type ReactNode } from 'react';
 
 import {
   EyeOutlined,
@@ -98,7 +98,15 @@ function formatInspectionPath(path: string[]) {
 
 type MemoryTreeDataNode = DataNode & {
   inspectionPath: string[];
+  label: string;
+  parentKey?: Key;
   children?: MemoryTreeDataNode[];
+};
+
+type MemoryTreeSearchItem = {
+  key: Key;
+  parentKey?: Key;
+  title: string;
 };
 
 function findTreeKeyByPath(
@@ -123,22 +131,71 @@ function findTreeKeyByPath(
 
 function toTreeData(
   nodes: SettingsHostInfrastructureMemoryTreeNode[],
-  loadedChildren: Record<string, SettingsHostInfrastructureMemoryTreeNode[]>
+  loadedChildren: Record<string, SettingsHostInfrastructureMemoryTreeNode[]>,
+  searchValue: string,
+  parentKey?: Key
 ): MemoryTreeDataNode[] {
   return nodes.map((node) => ({
     key: node.node_ref,
-    title: (
-      <Space size={6}>
-        <Typography.Text>{node.label}</Typography.Text>
-        <Tag>{node.entry_count}</Tag>
-      </Space>
-    ),
+    label: node.label,
+    parentKey,
+    title: renderTreeTitle(node.label, node.entry_count, searchValue),
     isLeaf: !node.has_children,
     inspectionPath: node.inspection_path,
     children: loadedChildren[node.node_ref]
-      ? toTreeData(loadedChildren[node.node_ref], loadedChildren)
+      ? toTreeData(
+          loadedChildren[node.node_ref],
+          loadedChildren,
+          searchValue,
+          node.node_ref
+        )
       : undefined
   }));
+}
+
+function renderTreeTitle(
+  label: string,
+  entryCount: number,
+  searchValue: string
+): ReactNode {
+  const trimmedSearchValue = searchValue.trim();
+  const index = trimmedSearchValue
+    ? label.toLowerCase().indexOf(trimmedSearchValue.toLowerCase())
+    : -1;
+  const labelNode =
+    index > -1 ? (
+      <span>
+        {label.slice(0, index)}
+        <span className="host-memory-panel__tree-search-value">
+          {label.slice(index, index + trimmedSearchValue.length)}
+        </span>
+        {label.slice(index + trimmedSearchValue.length)}
+      </span>
+    ) : (
+      <span>{label}</span>
+    );
+
+  return (
+    <span className="host-memory-panel__tree-node-title">
+      <Typography.Text>{labelNode}</Typography.Text>
+      <Tag>{entryCount}</Tag>
+    </span>
+  );
+}
+
+function collectTreeSearchItems(
+  nodes: MemoryTreeDataNode[],
+  items: MemoryTreeSearchItem[] = []
+): MemoryTreeSearchItem[] {
+  for (const node of nodes) {
+    items.push({
+      key: node.key,
+      parentKey: node.parentKey,
+      title: node.label
+    });
+    collectTreeSearchItems(node.children ?? [], items);
+  }
+  return items;
 }
 
 export function HostInfrastructureMemoryObservationPanel({
@@ -157,6 +214,9 @@ export function HostInfrastructureMemoryObservationPanel({
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
+  const [treeSearchText, setTreeSearchText] = useState('');
+  const [treeExpandedKeys, setTreeExpandedKeys] = useState<Key[]>([]);
+  const [treeAutoExpandParent, setTreeAutoExpandParent] = useState(true);
   const [loadedTreeChildren, setLoadedTreeChildren] = useState<
     Record<string, SettingsHostInfrastructureMemoryTreeNode[]>
   >({});
@@ -266,6 +326,9 @@ export function HostInfrastructureMemoryObservationPanel({
     setCursorHistory([]);
     setSubmittedSearch('');
     setSearchText('');
+    setTreeSearchText('');
+    setTreeExpandedKeys([]);
+    setTreeAutoExpandParent(true);
   }, [resolvedActiveContractCode]);
 
   const refreshMemoryQueries = async (contractCode: string | null) => {
@@ -309,8 +372,32 @@ export function HostInfrastructureMemoryObservationPanel({
   });
 
   const rootNodes = rootTreeQuery.data?.nodes ?? [];
-  const treeData = toTreeData(rootNodes, loadedTreeChildren);
+  const treeData = useMemo(
+    () => toTreeData(rootNodes, loadedTreeChildren, treeSearchText),
+    [loadedTreeChildren, rootNodes, treeSearchText]
+  );
+  const treeSearchItems = useMemo(
+    () => collectTreeSearchItems(treeData),
+    [treeData]
+  );
   const selectedTreeKey = findTreeKeyByPath(treeData, selectedInspectionPath);
+
+  const updateTreeSearchText = (value: string) => {
+    setTreeSearchText(value);
+    const normalizedValue = value.trim().toLowerCase();
+    if (!normalizedValue) {
+      setTreeExpandedKeys([]);
+      setTreeAutoExpandParent(false);
+      return;
+    }
+    const matchedParentKeys = treeSearchItems
+      .filter((item) => item.title.toLowerCase().includes(normalizedValue))
+      .map((item) => item.parentKey)
+      .filter((key): key is Key => key != null)
+      .filter((key, index, keys) => keys.indexOf(key) === index);
+    setTreeExpandedKeys(matchedParentKeys);
+    setTreeAutoExpandParent(true);
+  };
 
   const loadTreeChildren = async (treeNode: DataNode) => {
     if (!resolvedActiveContractCode) {
@@ -575,23 +662,44 @@ export function HostInfrastructureMemoryObservationPanel({
                             description="暂无内存节点"
                           />
                         ) : (
-                          <div className="host-memory-panel__tree-body">
-                            <Tree
-                              treeData={treeData}
-                              loadData={loadTreeChildren}
-                              selectedKeys={
-                                selectedTreeKey ? [selectedTreeKey] : []
+                          <Space
+                            direction="vertical"
+                            size={8}
+                            className="host-memory-panel__tree-panel"
+                          >
+                            <Input.Search
+                              allowClear
+                              placeholder="Search tree"
+                              size="small"
+                              value={treeSearchText}
+                              onChange={(event) =>
+                                updateTreeSearchText(event.target.value)
                               }
-                              onSelect={(_, info) => {
-                                const node = info.node as DataNode & {
-                                  inspectionPath?: string[];
-                                };
-                                if (node.inspectionPath) {
-                                  selectInspectionPath(node.inspectionPath);
-                                }
-                              }}
                             />
-                          </div>
+                            <div className="host-memory-panel__tree-body">
+                              <Tree
+                                autoExpandParent={treeAutoExpandParent}
+                                expandedKeys={treeExpandedKeys}
+                                treeData={treeData}
+                                loadData={loadTreeChildren}
+                                selectedKeys={
+                                  selectedTreeKey ? [selectedTreeKey] : []
+                                }
+                                onExpand={(keys) => {
+                                  setTreeExpandedKeys(keys);
+                                  setTreeAutoExpandParent(false);
+                                }}
+                                onSelect={(_, info) => {
+                                  const node = info.node as DataNode & {
+                                    inspectionPath?: string[];
+                                  };
+                                  if (node.inspectionPath) {
+                                    selectInspectionPath(node.inspectionPath);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </Space>
                         )
                       ) : (
                         <Empty

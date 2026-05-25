@@ -613,6 +613,12 @@ describe('HostInfrastructurePanel', () => {
       )
     ).not.toBeNull();
     expect(screen.queryByText('Provider')).not.toBeInTheDocument();
+    const treeSearch = screen.getByPlaceholderText('Search tree');
+    fireEvent.change(treeSearch, { target: { value: 'space' } });
+    expect(await screen.findByText('space')).toHaveClass(
+      'host-memory-panel__tree-search-value'
+    );
+    fireEvent.change(treeSearch, { target: { value: '' } });
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
 
