@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1.7
+
+FROM rust:1-slim-bookworm AS builder
+
+WORKDIR /workspace/api
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends build-essential ca-certificates curl pkg-config \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY api/Cargo.toml api/Cargo.lock ./
+COPY api/apps ./apps
+COPY api/crates ./crates
+
+RUN --mount=type=cache,id=1flowbase-cargo-registry,sharing=locked,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=1flowbase-cargo-git,sharing=locked,target=/usr/local/cargo/git \
+    --mount=type=cache,id=1flowbase-rust-target,sharing=locked,target=/workspace/api/target-cache \
+    CARGO_TARGET_DIR=/workspace/api/target-cache \
+      cargo build --release -p api-server --bin api-server \
+    && cp /workspace/api/target-cache/release/api-server /workspace/api/api-server
+
+FROM debian:bookworm-slim AS runtime
+
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid "${APP_GID}" flowbase \
+  && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin flowbase
+
+COPY --from=builder /workspace/api/api-server /usr/local/bin/api-server
+COPY api/plugins /app/api/plugins
+
+RUN mkdir -p \
+    /app/api/storage \
+    /app/api/plugins/packages \
+    /app/api/plugins/installed \
+    /app/api/plugins/host-extension/dropins \
+  && chown -R flowbase:flowbase /app
+
+USER flowbase
+
+EXPOSE 7800
+
+ENTRYPOINT ["/usr/local/bin/api-server"]

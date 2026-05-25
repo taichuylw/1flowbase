@@ -56,6 +56,19 @@ cargo run -p plugin-runner --bin plugin-runner
 *   API 服务地址：`http://127.0.0.1:7800`
 *   插件运行器地址：`http://127.0.0.1:7801`
 
+### Docker 一键部署
+
+```bash
+cd docker
+cp .env.example .env
+cp api/api.env.example api/api.env
+cp plugin-runner/plugin-runner.env.example plugin-runner/plugin-runner.env
+cp postgres/postgres.env.example postgres/postgres.env
+docker compose up -d
+```
+
+整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。默认访问地址：`http://127.0.0.1:3100`。
+
 ---
 
 ## ⚙️ 脚本启动
