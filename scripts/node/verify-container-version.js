@@ -7,24 +7,38 @@ const COMPONENTS = {
   web: {
     manifest: 'web/app/package.json',
     readVersion(file) {
-      return JSON.parse(fs.readFileSync(file, 'utf8')).version;
+      return readWebPackageVersion(fs.readFileSync(file, 'utf8'));
     },
+    readVersionSource: readWebPackageVersion,
   },
   'api-server': {
     manifest: 'api/apps/api-server/Cargo.toml',
     readVersion: readCargoPackageVersion,
+    readVersionSource: readCargoPackageVersionSource,
   },
   'plugin-runner': {
     manifest: 'api/apps/plugin-runner/Cargo.toml',
     readVersion: readCargoPackageVersion,
+    readVersionSource: readCargoPackageVersionSource,
   },
 };
 
+function readWebPackageVersion(source) {
+  const version = JSON.parse(source).version;
+  if (!version) {
+    throw new Error('package.json must declare a version');
+  }
+  return version;
+}
+
 function readCargoPackageVersion(file) {
-  const source = fs.readFileSync(file, 'utf8');
+  return readCargoPackageVersionSource(fs.readFileSync(file, 'utf8'), file);
+}
+
+function readCargoPackageVersionSource(source, label = 'Cargo.toml') {
   const match = source.match(/^version\s*=\s*"([^"]+)"/m);
   if (!match) {
-    throw new Error(`${file} must declare an explicit package version`);
+    throw new Error(`${label} must declare an explicit package version`);
   }
   return match[1];
 }
@@ -34,7 +48,44 @@ function fail(message) {
   process.exit(1);
 }
 
-const [, , component, imageTag] = process.argv;
+const [, , commandOrComponent, maybeComponentOrTag] = process.argv;
+
+if (commandOrComponent === 'print-tag') {
+  const component = maybeComponentOrTag;
+  const config = COMPONENTS[component];
+  if (!config) {
+    fail(`Unknown component: ${component}`);
+  }
+  const repoRoot = path.resolve(__dirname, '..', '..');
+  const manifestPath = path.join(repoRoot, config.manifest);
+  console.log(`v${config.readVersion(manifestPath)}`);
+  process.exit(0);
+}
+
+if (commandOrComponent === 'read-stdin-version') {
+  const component = maybeComponentOrTag;
+  const config = COMPONENTS[component];
+  if (!config) {
+    fail(`Unknown component: ${component}`);
+  }
+
+  let source = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    source += chunk;
+  });
+  process.stdin.on('end', () => {
+    try {
+      console.log(config.readVersionSource(source));
+    } catch (error) {
+      fail(error.message);
+    }
+  });
+  return;
+}
+
+const component = commandOrComponent;
+const imageTag = maybeComponentOrTag;
 
 if (!component || !imageTag) {
   fail('Usage: node scripts/node/verify-container-version.js <web|api-server|plugin-runner> <vX.Y.Z>');

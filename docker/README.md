@@ -97,4 +97,4 @@ cd docker
 FLOWBASE_WEB_VERSION=local FLOWBASE_API_SERVER_VERSION=local FLOWBASE_PLUGIN_RUNNER_VERSION=local docker compose up -d
 ```
 
-CI 发布镜像时也会继续使用 GitHub Actions cache，因此同一镜像的后续 tag 构建会复用远端缓存。镜像按组件版本 tag 发布：`web/v0.1.0` 只发布 `1flowbase-web:v0.1.0`，`api-server/v0.1.0` 只发布 `1flowbase-api-server:v0.1.0`，`plugin-runner/v0.1.0` 只发布 `1flowbase-plugin-runner:v0.1.0`。
+CI 发布镜像时也会继续使用 GitHub Actions cache，因此同一镜像的后续构建会复用远端缓存。镜像按组件 manifest 版本自动发布：`web/app/package.json` 的 `version` 变化只发布 `1flowbase-web:vX.Y.Z`，`api/apps/api-server/Cargo.toml` 的 `version` 变化只发布 `1flowbase-api-server:vX.Y.Z`，`api/apps/plugin-runner/Cargo.toml` 的 `version` 变化只发布 `1flowbase-plugin-runner:vX.Y.Z`。普通源码提交不会发布镜像。
