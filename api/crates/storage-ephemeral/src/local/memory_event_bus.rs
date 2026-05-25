@@ -5,13 +5,27 @@ use std::{
 
 use async_trait::async_trait;
 use control_plane::ports::{
-    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities, EventBus,
+    ensure_ephemeral_payload_size, ephemeral_metadata_size_bytes, EphemeralEntrySnapshot,
+    EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities, EphemeralValueRevealMode,
+    EventBus,
 };
 use tokio::sync::Mutex;
 
 #[derive(Clone, Default)]
 pub struct MemoryEventBus {
-    topics: Arc<Mutex<HashMap<String, VecDeque<serde_json::Value>>>>,
+    inner: Arc<Mutex<EventBusState>>,
+}
+
+#[derive(Default)]
+struct EventBusState {
+    topics: HashMap<String, VecDeque<EventBusEntry>>,
+    next_sequence: u64,
+}
+
+#[derive(Clone)]
+struct EventBusEntry {
+    sequence: u64,
+    payload: serde_json::Value,
 }
 
 impl MemoryEventBus {
@@ -19,13 +33,8 @@ impl MemoryEventBus {
         Self::default()
     }
 
-    fn entry_key(topic: &str, index: usize) -> String {
-        format!("{topic}#{index}")
-    }
-
-    fn parse_entry_key(key: &str) -> Option<(&str, usize)> {
-        let (topic, index) = key.rsplit_once('#')?;
-        Some((topic, index.parse().ok()?))
+    fn entry_key(topic: &str, sequence: u64) -> String {
+        format!("{topic}:{sequence}")
     }
 
     fn value_size_bytes(value: &serde_json::Value) -> u64 {
@@ -34,27 +43,28 @@ impl MemoryEventBus {
             .unwrap_or(0)
     }
 
-    fn entry_snapshot(
-        topic: &str,
-        index: usize,
-        value: &serde_json::Value,
-    ) -> EphemeralEntrySnapshot {
+    fn entry_snapshot(topic: &str, entry: &EventBusEntry) -> EphemeralEntrySnapshot {
+        let entry_ref = entry.sequence.to_string();
+        let metadata = serde_json::json!({
+            "topic": topic,
+            "sequence": entry.sequence,
+        });
         EphemeralEntrySnapshot {
             contract_code: "event-bus".to_string(),
             group_code: Some(topic.to_string()),
-            key: Self::entry_key(topic, index),
+            entry_ref: entry_ref.clone(),
+            key: Self::entry_key(topic, entry.sequence),
+            inspection_path: vec![topic.to_string(), entry_ref],
             entry_kind: "event".to_string(),
             status: "buffered".to_string(),
             owner: None,
-            value_size_bytes: Self::value_size_bytes(value),
+            value_size_bytes: Self::value_size_bytes(&entry.payload),
+            metadata_size_bytes: ephemeral_metadata_size_bytes(&metadata),
             ttl_seconds: None,
             created_at_unix: None,
             expires_at_unix: None,
             sensitive: true,
-            metadata: serde_json::json!({
-                "topic": topic,
-                "index": index,
-            }),
+            metadata,
         }
     }
 }
@@ -62,22 +72,27 @@ impl MemoryEventBus {
 #[async_trait]
 impl EventBus for MemoryEventBus {
     async fn publish(&self, topic: &str, payload: serde_json::Value) -> anyhow::Result<()> {
-        self.topics
-            .lock()
-            .await
+        ensure_ephemeral_payload_size(&payload)?;
+        let mut state = self.inner.lock().await;
+        state.next_sequence += 1;
+        let sequence = state.next_sequence;
+        state
+            .topics
             .entry(topic.to_string())
             .or_default()
-            .push_back(payload);
+            .push_back(EventBusEntry { sequence, payload });
         Ok(())
     }
 
     async fn poll(&self, topic: &str) -> anyhow::Result<Option<serde_json::Value>> {
         Ok(self
-            .topics
+            .inner
             .lock()
             .await
+            .topics
             .get_mut(topic)
-            .and_then(VecDeque::pop_front))
+            .and_then(VecDeque::pop_front)
+            .map(|entry| entry.payload))
     }
 
     fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
@@ -85,14 +100,14 @@ impl EventBus for MemoryEventBus {
     }
 
     async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
-        let topics = self.topics.lock().await;
-        let mut entries = topics
+        let state = self.inner.lock().await;
+        let mut entries = state
+            .topics
             .iter()
             .flat_map(|(topic, values)| {
                 values
                     .iter()
-                    .enumerate()
-                    .map(|(index, value)| Self::entry_snapshot(topic, index, value))
+                    .map(|entry| Self::entry_snapshot(topic, entry))
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
@@ -106,22 +121,25 @@ impl EventBus for MemoryEventBus {
 
     async fn reveal_ephemeral_entry(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
-        let Some((topic, index)) = Self::parse_entry_key(key) else {
+        let Some(sequence) = entry_ref.parse::<u64>().ok() else {
             return Ok(None);
         };
-        let topics = self.topics.lock().await;
-        let Some(value) = topics
-            .get(topic)
-            .and_then(|values| values.get(index))
-            .cloned()
-        else {
+        let state = self.inner.lock().await;
+        let Some((topic, entry)) = state.topics.iter().find_map(|(topic, entries)| {
+            entries
+                .iter()
+                .find(|entry| entry.sequence == sequence)
+                .map(|entry| (topic.clone(), entry.clone()))
+        }) else {
             return Ok(None);
         };
-        Ok(Some(EphemeralEntryValueSnapshot {
-            metadata: Self::entry_snapshot(topic, index, &value),
-            value,
-        }))
+        Ok(Some(EphemeralEntryValueSnapshot::from_value(
+            Self::entry_snapshot(&topic, &entry),
+            entry.payload,
+            reveal_mode,
+        )))
     }
 }

@@ -1,4 +1,4 @@
-use control_plane::ports::{DistributedLock, EventBus, TaskQueue};
+use control_plane::ports::{DistributedLock, EphemeralValueRevealMode, EventBus, TaskQueue};
 use serde_json::json;
 use storage_ephemeral::{MemoryDistributedLock, MemoryEventBus, MemoryTaskQueue};
 use time::Duration;
@@ -31,12 +31,12 @@ async fn memory_distributed_lock_exposes_ephemeral_inspection_snapshots() {
     assert!(!entries[0].sensitive);
 
     let revealed = lock
-        .reveal_ephemeral_entry("workflow:compile")
+        .reveal_ephemeral_entry("workflow:compile", EphemeralValueRevealMode::Full)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(revealed.metadata.key, "workflow:compile");
-    assert_eq!(revealed.value["owner"], "worker-a");
+    assert_eq!(revealed.value.unwrap()["owner"], "worker-a");
 }
 
 #[tokio::test]
@@ -80,19 +80,31 @@ async fn memory_event_bus_exposes_ephemeral_inspection_snapshots_without_polling
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].contract_code, "event-bus");
     assert_eq!(entries[0].group_code.as_deref(), Some("plugin.install"));
-    assert_eq!(entries[0].key, "plugin.install#0");
+    assert_eq!(entries[0].key, "plugin.install:1");
     assert!(entries[0].sensitive);
 
     let revealed = bus
-        .reveal_ephemeral_entry("plugin.install#0")
+        .reveal_ephemeral_entry(&entries[0].entry_ref, EphemeralValueRevealMode::Full)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(revealed.value, json!({ "id": 1 }));
+    assert_eq!(revealed.value.unwrap(), json!({ "id": 1 }));
     assert_eq!(
         bus.poll("plugin.install").await.unwrap(),
         Some(json!({ "id": 1 }))
     );
+}
+
+#[tokio::test]
+async fn memory_event_bus_rejects_oversized_payloads() {
+    let bus = MemoryEventBus::new();
+
+    let result = bus
+        .publish("large", json!({ "blob": "x".repeat(2 * 1024 * 1024) }))
+        .await;
+
+    assert!(result.is_err());
+    assert_eq!(bus.list_ephemeral_entries().await.unwrap(), Vec::new());
 }
 
 #[tokio::test]
@@ -151,12 +163,28 @@ async fn memory_task_queue_exposes_ephemeral_inspection_snapshots() {
     assert!(entries[0].sensitive);
 
     let revealed = queue
-        .reveal_ephemeral_entry(&task_id)
+        .reveal_ephemeral_entry(&task_id, EphemeralValueRevealMode::Full)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(revealed.metadata.key, task_id);
-    assert_eq!(revealed.value, json!({ "file": "a" }));
+    assert_eq!(revealed.value.unwrap(), json!({ "file": "a" }));
+}
+
+#[tokio::test]
+async fn memory_task_queue_rejects_oversized_payloads() {
+    let queue = MemoryTaskQueue::new("flowbase:task");
+
+    let result = queue
+        .enqueue(
+            "preview",
+            json!({ "blob": "x".repeat(2 * 1024 * 1024) }),
+            None,
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert_eq!(queue.list_ephemeral_entries().await.unwrap(), Vec::new());
 }
 
 #[tokio::test]

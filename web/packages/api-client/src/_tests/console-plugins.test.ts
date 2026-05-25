@@ -8,6 +8,8 @@ import {
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
   listConsoleHostInfrastructureMemoryEntries,
+  listConsoleHostInfrastructureMemoryTree,
+  searchConsoleHostInfrastructureMemoryEntries,
   revealConsoleHostInfrastructureMemoryEntry,
   revealConsoleHostInfrastructureCacheEntry
 } from '../console-plugins';
@@ -87,11 +89,36 @@ describe('console-plugins host infrastructure memory client', () => {
     });
   });
 
-  test('points memory entries at the selected contract route', async () => {
+  test('points memory entries at the selected contract route with cursor params', async () => {
     await expect(
-      listConsoleHostInfrastructureMemoryEntries('session-store')
+      listConsoleHostInfrastructureMemoryEntries('session-store', {
+        inspection_path: ['workspace-1', 'user-1'],
+        cursor: 'cursor-1',
+        limit: 25,
+        byte_limit: 4096
+      })
     ).resolves.toMatchObject({
-      path: '/api/console/settings/host-infrastructure/memory/contracts/session-store/entries'
+      path: '/api/console/settings/host-infrastructure/memory/contracts/session-store/entries?path=workspace-1%2Fuser-1&cursor=cursor-1&limit=25&byte_limit=4096'
+    });
+  });
+
+  test('points memory tree and search at paged inspection routes', async () => {
+    await expect(
+      listConsoleHostInfrastructureMemoryTree('cache-store', {
+        inspection_path: ['application-logs'],
+        limit: 10
+      })
+    ).resolves.toMatchObject({
+      path: '/api/console/settings/host-infrastructure/memory/contracts/cache-store/tree?path=application-logs&limit=10'
+    });
+    await expect(
+      searchConsoleHostInfrastructureMemoryEntries('cache-store', {
+        q: 'run:2',
+        inspection_path: ['application-logs'],
+        limit: 10
+      })
+    ).resolves.toMatchObject({
+      path: '/api/console/settings/host-infrastructure/memory/contracts/cache-store/entries/search?path=application-logs&limit=10&q=run%3A2'
     });
   });
 
@@ -100,12 +127,13 @@ describe('console-plugins host infrastructure memory client', () => {
       revealConsoleHostInfrastructureMemoryEntry(
         'session-store',
         'session:1',
-        'csrf-123'
+        'csrf-123',
+        'full'
       )
     ).resolves.toMatchObject({
       path: '/api/console/settings/host-infrastructure/memory/contracts/session-store/entries/reveal',
       method: 'POST',
-      body: { key: 'session:1' },
+      body: { entry_ref: 'session:1', reveal_mode: 'full' },
       csrfToken: 'csrf-123'
     });
   });

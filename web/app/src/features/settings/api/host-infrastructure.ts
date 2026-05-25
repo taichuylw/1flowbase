@@ -5,10 +5,12 @@ import {
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
   listConsoleHostInfrastructureMemoryEntries,
+  listConsoleHostInfrastructureMemoryTree,
   listConsoleHostInfrastructureProviders,
   revealConsoleHostInfrastructureCacheEntry,
   revealConsoleHostInfrastructureMemoryEntry,
   saveConsoleHostInfrastructureProviderConfig,
+  searchConsoleHostInfrastructureMemoryEntries,
   type ConsoleCacheEntryMetadata,
   type ConsoleCacheEntryValue,
   type ConsoleCacheDomain,
@@ -20,6 +22,11 @@ import {
   type ConsoleMemoryContractSummary,
   type ConsoleMemoryEntryMetadata,
   type ConsoleMemoryEntryValue,
+  type ConsoleMemoryPageRequest,
+  type ConsoleMemoryRevealMode,
+  type ConsoleMemorySearchRequest,
+  type ConsoleMemoryTreeNode,
+  type ConsoleHostInfrastructureMemoryTree,
   type SaveConsoleHostInfrastructureProviderConfigInput
 } from '@1flowbase/api-client';
 
@@ -41,6 +48,15 @@ export type SettingsHostInfrastructureMemoryContract =
 export type SettingsHostInfrastructureMemoryEntry = ConsoleMemoryEntryMetadata;
 export type SettingsHostInfrastructureMemoryEntryValue =
   ConsoleMemoryEntryValue;
+export type SettingsHostInfrastructureMemoryTree =
+  ConsoleHostInfrastructureMemoryTree;
+export type SettingsHostInfrastructureMemoryTreeNode = ConsoleMemoryTreeNode;
+export type SettingsHostInfrastructureMemoryPageRequest =
+  ConsoleMemoryPageRequest;
+export type SettingsHostInfrastructureMemorySearchRequest =
+  ConsoleMemorySearchRequest;
+export type SettingsHostInfrastructureMemoryRevealMode =
+  ConsoleMemoryRevealMode;
 
 export type SaveSettingsHostInfrastructureProviderConfigInput =
   SaveConsoleHostInfrastructureProviderConfigInput;
@@ -77,7 +93,8 @@ export function settingsHostInfrastructureCacheEntriesQueryKey(
 }
 
 export function settingsHostInfrastructureMemoryEntriesQueryKey(
-  contractCode: string | null
+  contractCode: string | null,
+  request?: SettingsHostInfrastructureMemoryPageRequest
 ) {
   return [
     'settings',
@@ -85,7 +102,48 @@ export function settingsHostInfrastructureMemoryEntriesQueryKey(
     'memory',
     'contracts',
     contractCode,
-    'entries'
+    'entries',
+    request?.inspection_path ?? [],
+    request?.cursor ?? null,
+    request?.limit ?? null,
+    request?.byte_limit ?? null
+  ] as const;
+}
+
+export function settingsHostInfrastructureMemoryTreeQueryKey(
+  contractCode: string | null,
+  request?: SettingsHostInfrastructureMemoryPageRequest
+) {
+  return [
+    'settings',
+    'host-infrastructure',
+    'memory',
+    'contracts',
+    contractCode,
+    'tree',
+    request?.inspection_path ?? [],
+    request?.cursor ?? null,
+    request?.limit ?? null,
+    request?.byte_limit ?? null
+  ] as const;
+}
+
+export function settingsHostInfrastructureMemorySearchQueryKey(
+  contractCode: string | null,
+  request?: SettingsHostInfrastructureMemorySearchRequest
+) {
+  return [
+    'settings',
+    'host-infrastructure',
+    'memory',
+    'contracts',
+    contractCode,
+    'search',
+    request?.q ?? '',
+    request?.inspection_path ?? [],
+    request?.cursor ?? null,
+    request?.limit ?? null,
+    request?.byte_limit ?? null
   ] as const;
 }
 
@@ -108,9 +166,24 @@ export function fetchSettingsHostInfrastructureCacheEntries(
 }
 
 export function fetchSettingsHostInfrastructureMemoryEntries(
-  contractCode: string
+  contractCode: string,
+  request?: SettingsHostInfrastructureMemoryPageRequest
 ) {
-  return listConsoleHostInfrastructureMemoryEntries(contractCode);
+  return listConsoleHostInfrastructureMemoryEntries(contractCode, request);
+}
+
+export function fetchSettingsHostInfrastructureMemoryTree(
+  contractCode: string,
+  request?: SettingsHostInfrastructureMemoryPageRequest
+) {
+  return listConsoleHostInfrastructureMemoryTree(contractCode, request);
+}
+
+export function searchSettingsHostInfrastructureMemoryEntries(
+  contractCode: string,
+  request: SettingsHostInfrastructureMemorySearchRequest
+) {
+  return searchConsoleHostInfrastructureMemoryEntries(contractCode, request);
 }
 
 export function revealSettingsHostInfrastructureCacheEntry(
@@ -123,13 +196,15 @@ export function revealSettingsHostInfrastructureCacheEntry(
 
 export function revealSettingsHostInfrastructureMemoryEntry(
   contractCode: string,
-  key: string,
-  csrfToken: string
+  entryRef: string,
+  csrfToken: string,
+  revealMode: SettingsHostInfrastructureMemoryRevealMode = 'preview'
 ) {
   return revealConsoleHostInfrastructureMemoryEntry(
     contractCode,
-    key,
-    csrfToken
+    entryRef,
+    csrfToken,
+    revealMode
   );
 }
 

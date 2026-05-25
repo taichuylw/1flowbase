@@ -162,6 +162,7 @@ async fn host_infrastructure_memory_routes_list_categories_and_reveal_with_audit
     assert_eq!(first_session["sensitive"], true);
     assert!(first_session.as_object().unwrap().get("value").is_none());
     let session_key = first_session["key"].as_str().unwrap();
+    let session_entry_ref = first_session["entry_ref"].as_str().unwrap();
 
     let reveal_response = app
         .clone()
@@ -172,7 +173,9 @@ async fn host_infrastructure_memory_routes_list_categories_and_reveal_with_audit
                 .header("cookie", &cookie)
                 .header("x-csrf-token", &csrf)
                 .header("content-type", "application/json")
-                .body(Body::from(json!({ "key": session_key }).to_string()))
+                .body(Body::from(
+                    json!({ "entry_ref": session_entry_ref, "reveal_mode": "full" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await
@@ -189,6 +192,159 @@ async fn host_infrastructure_memory_routes_list_categories_and_reveal_with_audit
     assert_eq!(audit_payload["contract_code"], "session-store");
     assert_eq!(audit_payload["key"], session_key);
     assert!(audit_payload.as_object().unwrap().get("value").is_none());
+}
+
+#[tokio::test]
+async fn host_infrastructure_memory_routes_page_tree_search_and_reveal_policy() {
+    let (state, _database_url) = test_api_state_with_database_url().await;
+    let large_value = "x".repeat(300 * 1024);
+    for index in 0..3 {
+        state
+            .infrastructure
+            .cache_store()
+            .set_json(
+                &format!("application-logs:run:{index}"),
+                json!({ "index": index, "blob": large_value }),
+                Some(time::Duration::seconds(60)),
+            )
+            .await
+            .unwrap();
+    }
+    state
+        .infrastructure
+        .cache_store()
+        .set_json(
+            "runtime-records:row:0",
+            json!({ "index": 0 }),
+            Some(time::Duration::seconds(60)),
+        )
+        .await
+        .unwrap();
+
+    let app = crate::app_with_state_and_config(state, &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let tree_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/settings/host-infrastructure/memory/contracts/cache-store/tree?limit=1&byte_limit=512")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(tree_response.status(), StatusCode::OK);
+    let tree_payload = response_json(tree_response).await;
+    assert_eq!(
+        tree_payload["data"]["nodes"][0]["inspection_path"][0],
+        "application-logs"
+    );
+    assert!(tree_payload["data"]["next_cursor"].as_str().is_some());
+    assert!(tree_payload["data"]["emitted_bytes"].as_u64().unwrap() <= 512);
+
+    let entries_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/settings/host-infrastructure/memory/contracts/cache-store/entries?path=application-logs&limit=1&byte_limit=1024")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(entries_response.status(), StatusCode::OK);
+    let entries_payload = response_json(entries_response).await;
+    let first_entry = &entries_payload["data"]["entries"][0];
+    assert_eq!(first_entry["contract_code"], "cache-store");
+    assert_eq!(first_entry["inspection_path"][0], "application-logs");
+    assert!(first_entry["entry_ref"]
+        .as_str()
+        .unwrap()
+        .starts_with("application-logs:run:"));
+    assert!(first_entry["metadata_size_bytes"].as_u64().unwrap() > 0);
+    assert!(first_entry.as_object().unwrap().get("value").is_none());
+    assert!(entries_payload["data"]["next_cursor"].as_str().is_some());
+    assert!(entries_payload["data"]["emitted_bytes"].as_u64().unwrap() <= 1024);
+
+    let search_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/settings/host-infrastructure/memory/contracts/cache-store/entries/search?q=run:2&limit=10")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(search_response.status(), StatusCode::OK);
+    let search_payload = response_json(search_response).await;
+    assert_eq!(
+        search_payload["data"]["entries"].as_array().unwrap().len(),
+        1
+    );
+    assert!(search_payload["data"]["entries"][0]["entry_ref"]
+        .as_str()
+        .unwrap()
+        .ends_with("run:2"));
+
+    let entry_ref = first_entry["entry_ref"].as_str().unwrap();
+    let preview_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/settings/host-infrastructure/memory/contracts/cache-store/entries/reveal")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "entry_ref": entry_ref, "reveal_mode": "preview" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview_response.status(), StatusCode::OK);
+    let preview_payload = response_json(preview_response).await;
+    assert_eq!(preview_payload["data"]["reveal_mode"], "preview");
+    assert_eq!(preview_payload["data"]["value_state"], "preview");
+    assert!(preview_payload["data"]["value"].is_null());
+    assert!(
+        preview_payload["data"]["value_preview"]
+            .as_str()
+            .unwrap()
+            .len()
+            <= 8192
+    );
+
+    let full_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/settings/host-infrastructure/memory/contracts/cache-store/entries/reveal")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "entry_ref": entry_ref, "reveal_mode": "full" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(full_response.status(), StatusCode::OK);
+    let full_payload = response_json(full_response).await;
+    assert_eq!(full_payload["data"]["reveal_mode"], "full");
+    assert_eq!(full_payload["data"]["value_state"], "value_too_large");
+    assert!(full_payload["data"]["value"].is_null());
 }
 
 #[tokio::test]
@@ -254,7 +410,7 @@ async fn host_infrastructure_memory_routes_keep_viewer_metadata_only() {
         .unwrap();
     assert_eq!(entries_response.status(), StatusCode::OK);
     let entries_payload = response_json(entries_response).await;
-    let cache_key = entries_payload["data"]["entries"][0]["key"]
+    let cache_entry_ref = entries_payload["data"]["entries"][0]["entry_ref"]
         .as_str()
         .unwrap();
 
@@ -267,7 +423,7 @@ async fn host_infrastructure_memory_routes_keep_viewer_metadata_only() {
                 .header("cookie", &viewer_cookie)
                 .header("x-csrf-token", &viewer_csrf)
                 .header("content-type", "application/json")
-                .body(Body::from(json!({ "key": cache_key }).to_string()))
+                .body(Body::from(json!({ "entry_ref": cache_entry_ref }).to_string()))
                 .unwrap(),
         )
         .await

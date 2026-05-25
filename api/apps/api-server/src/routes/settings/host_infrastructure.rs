@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use access_control::ensure_permission;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     routing::{get, post, put},
     Json, Router,
@@ -17,8 +17,10 @@ use control_plane::{
     ports::{
         AuthRepository, CacheDomainSnapshot, CacheEntrySnapshot, CacheInspectionCapabilities,
         CacheStore, DistributedLock, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
-        EphemeralInspectionCapabilities, EventBus, RateLimitStore, RuntimeEventStream,
-        SessionStore, TaskQueue,
+        EphemeralInspectionCapabilities, EphemeralInspectionEntryPage,
+        EphemeralInspectionPageRequest, EphemeralInspectionSummarySnapshot,
+        EphemeralInspectionTreeNodeSnapshot, EphemeralInspectionTreePage, EphemeralValueRevealMode,
+        EventBus, RateLimitStore, RuntimeEventStream, SessionStore, TaskQueue,
     },
 };
 use plugin_framework::provider_contract::{
@@ -179,7 +181,17 @@ pub struct ClearCacheDomainResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MemoryInspectionCapabilitiesResponse {
     pub list_entries: bool,
+    pub list_tree: bool,
+    pub search_entries: bool,
     pub reveal_value: bool,
+    pub default_page_size: u64,
+    pub max_page_size: u64,
+    pub default_byte_limit: u64,
+    pub max_byte_limit: u64,
+    pub default_preview_size_bytes: u64,
+    pub max_full_value_size_bytes: u64,
+    pub max_value_size_bytes: u64,
+    pub max_payload_size_bytes: u64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -204,11 +216,14 @@ pub struct MemoryOverviewResponse {
 pub struct MemoryEntryMetadataResponse {
     pub contract_code: String,
     pub group_code: Option<String>,
+    pub entry_ref: String,
     pub key: String,
+    pub inspection_path: Vec<String>,
     pub entry_kind: String,
     pub status: String,
     pub owner: Option<String>,
     pub value_size_bytes: u64,
+    pub metadata_size_bytes: u64,
     pub ttl_seconds: Option<i64>,
     pub created_at_unix: Option<i64>,
     pub expires_at_unix: Option<i64>,
@@ -224,19 +239,76 @@ pub struct MemoryEntriesResponse {
     pub provider_code: Option<String>,
     pub capabilities: MemoryInspectionCapabilitiesResponse,
     pub supported: bool,
+    pub inspection_path: Vec<String>,
     pub entries: Vec<MemoryEntryMetadataResponse>,
+    pub next_cursor: Option<String>,
+    pub limit: u64,
+    pub byte_limit: u64,
+    pub emitted_bytes: u64,
+    pub truncated_by_byte_limit: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MemoryTreeNodeResponse {
+    pub node_ref: String,
+    pub label: String,
+    pub inspection_path: Vec<String>,
+    pub depth: u64,
+    pub entry_count: u64,
+    pub sensitive_entry_count: u64,
+    pub total_value_size_bytes: u64,
+    pub has_children: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MemoryTreeResponse {
+    pub contract_code: String,
+    pub label: String,
+    pub provider_code: Option<String>,
+    pub capabilities: MemoryInspectionCapabilitiesResponse,
+    pub supported: bool,
+    pub inspection_path: Vec<String>,
+    pub nodes: Vec<MemoryTreeNodeResponse>,
+    pub next_cursor: Option<String>,
+    pub limit: u64,
+    pub byte_limit: u64,
+    pub emitted_bytes: u64,
+    pub truncated_by_byte_limit: bool,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct MemoryEntryKeyBody {
-    pub key: String,
+pub struct MemoryPageQuery {
+    pub path: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+    pub byte_limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MemorySearchQuery {
+    pub q: String,
+    pub path: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+    pub byte_limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MemoryEntryRevealBody {
+    pub entry_ref: String,
+    pub reveal_mode: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MemoryEntryValueResponse {
     pub metadata: MemoryEntryMetadataResponse,
+    pub reveal_mode: String,
+    pub value_state: String,
     #[schema(value_type = Object)]
-    pub value: serde_json::Value,
+    pub value: Option<serde_json::Value>,
+    pub value_preview: Option<String>,
+    pub preview_size_bytes: u64,
+    pub full_value_size_bytes: u64,
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
@@ -248,6 +320,14 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/settings/host-infrastructure/memory/contracts/:contract_code/entries",
             get(list_host_infrastructure_memory_entries),
+        )
+        .route(
+            "/settings/host-infrastructure/memory/contracts/:contract_code/entries/search",
+            get(search_host_infrastructure_memory_entries),
+        )
+        .route(
+            "/settings/host-infrastructure/memory/contracts/:contract_code/tree",
+            get(list_host_infrastructure_memory_tree),
         )
         .route(
             "/settings/host-infrastructure/memory/contracts/:contract_code/entries/reveal",
@@ -315,21 +395,18 @@ pub async fn list_host_infrastructure_memory_entries(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path(contract_code): Path<String>,
+    Query(query): Query<MemoryPageQuery>,
 ) -> Result<Json<ApiSuccess<MemoryEntriesResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     ensure_memory_view(&context.actor)?;
     let label = memory_contract_label(&contract_code)?;
     let target = memory_inspection_target(&state, &contract_code)?;
     let capabilities = target.capabilities();
-    let entries = if capabilities.list_entries {
-        target
-            .list_entries()
-            .await?
-            .into_iter()
-            .map(to_memory_entry_metadata_response)
-            .collect()
+    let page_request = memory_page_request(query.path, query.cursor, query.limit, query.byte_limit);
+    let page = if capabilities.list_entries {
+        target.list_entry_page(page_request).await?
     } else {
-        Vec::new()
+        empty_memory_entry_page(page_request)
     };
 
     Ok(Json(ApiSuccess::new(MemoryEntriesResponse {
@@ -341,14 +418,118 @@ pub async fn list_host_infrastructure_memory_entries(
             .map(ToString::to_string),
         capabilities: capabilities.into(),
         supported: memory_contract_supported(capabilities),
-        entries,
+        inspection_path: page.inspection_path,
+        entries: page
+            .entries
+            .into_iter()
+            .map(to_memory_entry_metadata_response)
+            .collect(),
+        next_cursor: page.next_cursor,
+        limit: page.limit,
+        byte_limit: page.byte_limit,
+        emitted_bytes: page.emitted_bytes,
+        truncated_by_byte_limit: page.truncated_by_byte_limit,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/settings/host-infrastructure/memory/contracts/{contract_code}/tree",
+    params(("contract_code" = String, Path)),
+    responses((status = 200, body = MemoryTreeResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_host_infrastructure_memory_tree(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(contract_code): Path<String>,
+    Query(query): Query<MemoryPageQuery>,
+) -> Result<Json<ApiSuccess<MemoryTreeResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_memory_view(&context.actor)?;
+    let label = memory_contract_label(&contract_code)?;
+    let target = memory_inspection_target(&state, &contract_code)?;
+    let capabilities = target.capabilities();
+    let page_request = memory_page_request(query.path, query.cursor, query.limit, query.byte_limit);
+    let page = if capabilities.list_tree {
+        target.list_tree(page_request).await?
+    } else {
+        empty_memory_tree_page(page_request)
+    };
+
+    Ok(Json(ApiSuccess::new(MemoryTreeResponse {
+        contract_code: contract_code.clone(),
+        label: label.to_string(),
+        provider_code: state
+            .infrastructure
+            .default_provider(&contract_code)
+            .map(ToString::to_string),
+        capabilities: capabilities.into(),
+        supported: memory_contract_supported(capabilities),
+        inspection_path: page.inspection_path,
+        nodes: page
+            .nodes
+            .into_iter()
+            .map(to_memory_tree_node_response)
+            .collect(),
+        next_cursor: page.next_cursor,
+        limit: page.limit,
+        byte_limit: page.byte_limit,
+        emitted_bytes: page.emitted_bytes,
+        truncated_by_byte_limit: page.truncated_by_byte_limit,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/settings/host-infrastructure/memory/contracts/{contract_code}/entries/search",
+    params(("contract_code" = String, Path)),
+    responses((status = 200, body = MemoryEntriesResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn search_host_infrastructure_memory_entries(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(contract_code): Path<String>,
+    Query(query): Query<MemorySearchQuery>,
+) -> Result<Json<ApiSuccess<MemoryEntriesResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_memory_view(&context.actor)?;
+    let label = memory_contract_label(&contract_code)?;
+    let target = memory_inspection_target(&state, &contract_code)?;
+    let capabilities = target.capabilities();
+    let page_request = memory_page_request(query.path, query.cursor, query.limit, query.byte_limit);
+    let page = if capabilities.search_entries {
+        target.search_entry_page(&query.q, page_request).await?
+    } else {
+        empty_memory_entry_page(page_request)
+    };
+
+    Ok(Json(ApiSuccess::new(MemoryEntriesResponse {
+        contract_code: contract_code.clone(),
+        label: label.to_string(),
+        provider_code: state
+            .infrastructure
+            .default_provider(&contract_code)
+            .map(ToString::to_string),
+        capabilities: capabilities.into(),
+        supported: memory_contract_supported(capabilities),
+        inspection_path: page.inspection_path,
+        entries: page
+            .entries
+            .into_iter()
+            .map(to_memory_entry_metadata_response)
+            .collect(),
+        next_cursor: page.next_cursor,
+        limit: page.limit,
+        byte_limit: page.byte_limit,
+        emitted_bytes: page.emitted_bytes,
+        truncated_by_byte_limit: page.truncated_by_byte_limit,
     })))
 }
 
 #[utoipa::path(
     post,
     path = "/api/console/settings/host-infrastructure/memory/contracts/{contract_code}/entries/reveal",
-    request_body = MemoryEntryKeyBody,
+    request_body = MemoryEntryRevealBody,
     params(("contract_code" = String, Path)),
     responses((status = 200, body = MemoryEntryValueResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
 )]
@@ -356,7 +537,7 @@ pub async fn reveal_host_infrastructure_memory_entry(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path(contract_code): Path<String>,
-    Json(body): Json<MemoryEntryKeyBody>,
+    Json(body): Json<MemoryEntryRevealBody>,
 ) -> Result<Json<ApiSuccess<MemoryEntryValueResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
@@ -368,8 +549,9 @@ pub async fn reveal_host_infrastructure_memory_entry(
         return Err(ControlPlaneError::InvalidInput("memory_inspection_unsupported").into());
     }
 
+    let reveal_mode = parse_memory_reveal_mode(body.reveal_mode.as_deref())?;
     let value = target
-        .reveal_entry(&body.key)
+        .reveal_entry(&body.entry_ref, reveal_mode)
         .await?
         .ok_or(ControlPlaneError::NotFound("memory_entry"))?;
     append_memory_audit(
@@ -379,11 +561,15 @@ pub async fn reveal_host_infrastructure_memory_entry(
         serde_json::json!({
             "contract_code": value.metadata.contract_code.clone(),
             "group_code": value.metadata.group_code.clone(),
+            "entry_ref": value.metadata.entry_ref.clone(),
             "key": value.metadata.key.clone(),
+            "inspection_path": value.metadata.inspection_path.clone(),
             "entry_kind": value.metadata.entry_kind.clone(),
             "status": value.metadata.status.clone(),
             "owner": value.metadata.owner.clone(),
             "value_size_bytes": value.metadata.value_size_bytes,
+            "reveal_mode": format_memory_reveal_mode(value.reveal_mode),
+            "value_state": format_memory_value_state(value.value_state),
             "sensitive": value.metadata.sensitive,
         }),
     )
@@ -391,7 +577,12 @@ pub async fn reveal_host_infrastructure_memory_entry(
 
     Ok(Json(ApiSuccess::new(MemoryEntryValueResponse {
         metadata: to_memory_entry_metadata_response(value.metadata),
+        reveal_mode: format_memory_reveal_mode(value.reveal_mode),
+        value_state: format_memory_value_state(value.value_state),
         value: value.value,
+        value_preview: value.value_preview,
+        preview_size_bytes: value.preview_size_bytes,
+        full_value_size_bytes: value.full_value_size_bytes,
     })))
 }
 
@@ -665,28 +856,83 @@ impl MemoryInspectionTarget {
         }
     }
 
-    async fn list_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+    async fn summarize_entries(&self) -> anyhow::Result<EphemeralInspectionSummarySnapshot> {
         match self {
-            Self::Session(store) => store.list_ephemeral_entries().await,
-            Self::Cache(store) => store.list_ephemeral_entries().await,
-            Self::RateLimit(store) => store.list_ephemeral_entries().await,
-            Self::Lock(store) => store.list_ephemeral_entries().await,
-            Self::TaskQueue(store) => store.list_ephemeral_entries().await,
-            Self::EventBus(store) => store.list_ephemeral_entries().await,
-            Self::RuntimeEvents(stream) => stream.list_ephemeral_entries().await,
-            Self::Unsupported => Ok(Vec::new()),
+            Self::Session(store) => store.summarize_ephemeral_entries().await,
+            Self::Cache(store) => store.summarize_ephemeral_entries().await,
+            Self::RateLimit(store) => store.summarize_ephemeral_entries().await,
+            Self::Lock(store) => store.summarize_ephemeral_entries().await,
+            Self::TaskQueue(store) => store.summarize_ephemeral_entries().await,
+            Self::EventBus(store) => store.summarize_ephemeral_entries().await,
+            Self::RuntimeEvents(stream) => stream.summarize_ephemeral_entries().await,
+            Self::Unsupported => Ok(EphemeralInspectionSummarySnapshot::empty()),
         }
     }
 
-    async fn reveal_entry(&self, key: &str) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+    async fn list_tree(
+        &self,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionTreePage> {
         match self {
-            Self::Session(store) => store.reveal_ephemeral_entry(key).await,
-            Self::Cache(store) => store.reveal_ephemeral_entry(key).await,
-            Self::RateLimit(store) => store.reveal_ephemeral_entry(key).await,
-            Self::Lock(store) => store.reveal_ephemeral_entry(key).await,
-            Self::TaskQueue(store) => store.reveal_ephemeral_entry(key).await,
-            Self::EventBus(store) => store.reveal_ephemeral_entry(key).await,
-            Self::RuntimeEvents(stream) => stream.reveal_ephemeral_entry(key).await,
+            Self::Session(store) => store.list_ephemeral_tree(request).await,
+            Self::Cache(store) => store.list_ephemeral_tree(request).await,
+            Self::RateLimit(store) => store.list_ephemeral_tree(request).await,
+            Self::Lock(store) => store.list_ephemeral_tree(request).await,
+            Self::TaskQueue(store) => store.list_ephemeral_tree(request).await,
+            Self::EventBus(store) => store.list_ephemeral_tree(request).await,
+            Self::RuntimeEvents(stream) => stream.list_ephemeral_tree(request).await,
+            Self::Unsupported => Ok(empty_memory_tree_page(request)),
+        }
+    }
+
+    async fn list_entry_page(
+        &self,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionEntryPage> {
+        match self {
+            Self::Session(store) => store.list_ephemeral_entry_page(request).await,
+            Self::Cache(store) => store.list_ephemeral_entry_page(request).await,
+            Self::RateLimit(store) => store.list_ephemeral_entry_page(request).await,
+            Self::Lock(store) => store.list_ephemeral_entry_page(request).await,
+            Self::TaskQueue(store) => store.list_ephemeral_entry_page(request).await,
+            Self::EventBus(store) => store.list_ephemeral_entry_page(request).await,
+            Self::RuntimeEvents(stream) => stream.list_ephemeral_entry_page(request).await,
+            Self::Unsupported => Ok(empty_memory_entry_page(request)),
+        }
+    }
+
+    async fn search_entry_page(
+        &self,
+        query: &str,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionEntryPage> {
+        match self {
+            Self::Session(store) => store.search_ephemeral_entry_page(query, request).await,
+            Self::Cache(store) => store.search_ephemeral_entry_page(query, request).await,
+            Self::RateLimit(store) => store.search_ephemeral_entry_page(query, request).await,
+            Self::Lock(store) => store.search_ephemeral_entry_page(query, request).await,
+            Self::TaskQueue(store) => store.search_ephemeral_entry_page(query, request).await,
+            Self::EventBus(store) => store.search_ephemeral_entry_page(query, request).await,
+            Self::RuntimeEvents(stream) => stream.search_ephemeral_entry_page(query, request).await,
+            Self::Unsupported => Ok(empty_memory_entry_page(request)),
+        }
+    }
+
+    async fn reveal_entry(
+        &self,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        match self {
+            Self::Session(store) => store.reveal_ephemeral_entry(entry_ref, reveal_mode).await,
+            Self::Cache(store) => store.reveal_ephemeral_entry(entry_ref, reveal_mode).await,
+            Self::RateLimit(store) => store.reveal_ephemeral_entry(entry_ref, reveal_mode).await,
+            Self::Lock(store) => store.reveal_ephemeral_entry(entry_ref, reveal_mode).await,
+            Self::TaskQueue(store) => store.reveal_ephemeral_entry(entry_ref, reveal_mode).await,
+            Self::EventBus(store) => store.reveal_ephemeral_entry(entry_ref, reveal_mode).await,
+            Self::RuntimeEvents(stream) => {
+                stream.reveal_ephemeral_entry(entry_ref, reveal_mode).await
+            }
             Self::Unsupported => Ok(None),
         }
     }
@@ -758,7 +1004,90 @@ fn memory_inspection_target(
 }
 
 fn memory_contract_supported(capabilities: EphemeralInspectionCapabilities) -> bool {
-    capabilities.list_entries || capabilities.reveal_value
+    capabilities.list_entries
+        || capabilities.list_tree
+        || capabilities.search_entries
+        || capabilities.reveal_value
+}
+
+fn memory_page_request(
+    path: Option<String>,
+    cursor: Option<String>,
+    limit: Option<usize>,
+    byte_limit: Option<usize>,
+) -> EphemeralInspectionPageRequest {
+    EphemeralInspectionPageRequest::new(
+        memory_query_path(path),
+        cursor.filter(|value| !value.is_empty()),
+        limit,
+        byte_limit,
+    )
+}
+
+fn memory_query_path(path: Option<String>) -> Vec<String> {
+    path.unwrap_or_default()
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn empty_memory_entry_page(
+    request: EphemeralInspectionPageRequest,
+) -> EphemeralInspectionEntryPage {
+    EphemeralInspectionEntryPage {
+        inspection_path: request.inspection_path,
+        entries: Vec::new(),
+        next_cursor: None,
+        limit: request.limit as u64,
+        byte_limit: request.byte_limit as u64,
+        emitted_bytes: 0,
+        truncated_by_byte_limit: false,
+    }
+}
+
+fn empty_memory_tree_page(request: EphemeralInspectionPageRequest) -> EphemeralInspectionTreePage {
+    EphemeralInspectionTreePage {
+        inspection_path: request.inspection_path,
+        nodes: Vec::new(),
+        next_cursor: None,
+        limit: request.limit as u64,
+        byte_limit: request.byte_limit as u64,
+        emitted_bytes: 0,
+        truncated_by_byte_limit: false,
+    }
+}
+
+fn parse_memory_reveal_mode(
+    reveal_mode: Option<&str>,
+) -> Result<EphemeralValueRevealMode, ApiError> {
+    match reveal_mode.unwrap_or("preview") {
+        "metadata" => Ok(EphemeralValueRevealMode::Metadata),
+        "preview" => Ok(EphemeralValueRevealMode::Preview),
+        "full" => Ok(EphemeralValueRevealMode::Full),
+        _ => Err(ControlPlaneError::InvalidInput("memory_reveal_mode").into()),
+    }
+}
+
+fn format_memory_reveal_mode(reveal_mode: EphemeralValueRevealMode) -> String {
+    match reveal_mode {
+        EphemeralValueRevealMode::Metadata => "metadata",
+        EphemeralValueRevealMode::Preview => "preview",
+        EphemeralValueRevealMode::Full => "full",
+    }
+    .to_string()
+}
+
+fn format_memory_value_state(
+    value_state: control_plane::ports::EphemeralEntryValueState,
+) -> String {
+    match value_state {
+        control_plane::ports::EphemeralEntryValueState::Hidden => "hidden",
+        control_plane::ports::EphemeralEntryValueState::Available => "available",
+        control_plane::ports::EphemeralEntryValueState::Preview => "preview",
+        control_plane::ports::EphemeralEntryValueState::ValueTooLarge => "value_too_large",
+    }
+    .to_string()
 }
 
 async fn memory_contract_summary(
@@ -768,17 +1097,11 @@ async fn memory_contract_summary(
 ) -> Result<MemoryContractSummaryResponse, ApiError> {
     let target = memory_inspection_target(state, contract_code)?;
     let capabilities = target.capabilities();
-    let entries = if capabilities.list_entries {
-        target.list_entries().await?
+    let summary = if memory_contract_supported(capabilities) {
+        target.summarize_entries().await?
     } else {
-        Vec::new()
+        EphemeralInspectionSummarySnapshot::empty()
     };
-    let entry_count = entries.len() as u64;
-    let sensitive_entry_count = entries.iter().filter(|entry| entry.sensitive).count() as u64;
-    let total_value_size_bytes = entries
-        .iter()
-        .map(|entry| entry.value_size_bytes)
-        .sum::<u64>();
 
     Ok(MemoryContractSummaryResponse {
         contract_code: contract_code.to_string(),
@@ -788,9 +1111,9 @@ async fn memory_contract_summary(
             .default_provider(contract_code)
             .map(ToString::to_string),
         capabilities: capabilities.into(),
-        entry_count,
-        sensitive_entry_count,
-        total_value_size_bytes,
+        entry_count: summary.entry_count,
+        sensitive_entry_count: summary.sensitive_entry_count,
+        total_value_size_bytes: summary.total_value_size_bytes,
         supported: memory_contract_supported(capabilities),
     })
 }
@@ -907,7 +1230,17 @@ impl From<EphemeralInspectionCapabilities> for MemoryInspectionCapabilitiesRespo
     fn from(capabilities: EphemeralInspectionCapabilities) -> Self {
         Self {
             list_entries: capabilities.list_entries,
+            list_tree: capabilities.list_tree,
+            search_entries: capabilities.search_entries,
             reveal_value: capabilities.reveal_value,
+            default_page_size: capabilities.default_page_size,
+            max_page_size: capabilities.max_page_size,
+            default_byte_limit: capabilities.default_byte_limit,
+            max_byte_limit: capabilities.max_byte_limit,
+            default_preview_size_bytes: capabilities.default_preview_size_bytes,
+            max_full_value_size_bytes: capabilities.max_full_value_size_bytes,
+            max_value_size_bytes: capabilities.max_value_size_bytes,
+            max_payload_size_bytes: capabilities.max_payload_size_bytes,
         }
     }
 }
@@ -916,16 +1249,34 @@ fn to_memory_entry_metadata_response(entry: EphemeralEntrySnapshot) -> MemoryEnt
     MemoryEntryMetadataResponse {
         contract_code: entry.contract_code,
         group_code: entry.group_code,
+        entry_ref: entry.entry_ref,
         key: entry.key,
+        inspection_path: entry.inspection_path,
         entry_kind: entry.entry_kind,
         status: entry.status,
         owner: entry.owner,
         value_size_bytes: entry.value_size_bytes,
+        metadata_size_bytes: entry.metadata_size_bytes,
         ttl_seconds: entry.ttl_seconds,
         created_at_unix: entry.created_at_unix,
         expires_at_unix: entry.expires_at_unix,
         sensitive: entry.sensitive,
         metadata: entry.metadata,
+    }
+}
+
+fn to_memory_tree_node_response(
+    node: EphemeralInspectionTreeNodeSnapshot,
+) -> MemoryTreeNodeResponse {
+    MemoryTreeNodeResponse {
+        node_ref: node.node_ref,
+        label: node.label,
+        inspection_path: node.inspection_path,
+        depth: node.depth,
+        entry_count: node.entry_count,
+        sensitive_entry_count: node.sensitive_entry_count,
+        total_value_size_bytes: node.total_value_size_bytes,
+        has_children: node.has_children,
     }
 }
 

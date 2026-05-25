@@ -5,8 +5,9 @@ use std::{
 
 use async_trait::async_trait;
 use control_plane::ports::{
-    ClaimedTask, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
-    EphemeralInspectionCapabilities, TaskQueue,
+    ensure_ephemeral_payload_size, ephemeral_metadata_size_bytes, ClaimedTask,
+    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities,
+    EphemeralValueRevealMode, TaskQueue,
 };
 use time::OffsetDateTime;
 use tokio::sync::Mutex;
@@ -81,14 +82,24 @@ impl MemoryTaskQueue {
     fn entry_snapshot(&self, entry: &TaskEntry) -> EphemeralEntrySnapshot {
         let now = OffsetDateTime::now_utc();
         let queue = self.queue_without_namespace(&entry.queue);
+        let status = Self::task_status(entry, now);
+        let metadata = serde_json::json!({
+            "queue": queue.clone(),
+            "idempotency_key": entry.idempotency_key,
+            "claimed_by": entry.claimed_by,
+            "claim_expires_at_unix": entry.claim_expires_at.map(|value| value.unix_timestamp()),
+        });
         EphemeralEntrySnapshot {
             contract_code: "task-queue".to_string(),
             group_code: Some(queue.clone()),
+            entry_ref: entry.task_id.clone(),
             key: entry.task_id.clone(),
+            inspection_path: vec![queue, status.clone(), entry.task_id.clone()],
             entry_kind: "task".to_string(),
-            status: Self::task_status(entry, now),
+            status,
             owner: entry.claimed_by.clone(),
             value_size_bytes: Self::value_size_bytes(entry),
+            metadata_size_bytes: ephemeral_metadata_size_bytes(&metadata),
             ttl_seconds: entry
                 .claim_expires_at
                 .map(|expires_at| (expires_at - now).whole_seconds().max(0)),
@@ -97,12 +108,7 @@ impl MemoryTaskQueue {
                 .claim_expires_at
                 .map(|expires_at| expires_at.unix_timestamp()),
             sensitive: true,
-            metadata: serde_json::json!({
-                "queue": queue,
-                "idempotency_key": entry.idempotency_key,
-                "claimed_by": entry.claimed_by,
-                "claim_expires_at_unix": entry.claim_expires_at.map(|value| value.unix_timestamp()),
-            }),
+            metadata,
         }
     }
 }
@@ -115,6 +121,7 @@ impl TaskQueue for MemoryTaskQueue {
         payload: serde_json::Value,
         idempotency_key: Option<&str>,
     ) -> anyhow::Result<String> {
+        ensure_ephemeral_payload_size(&payload)?;
         let queue_key = self.queue_key(queue);
         let idempotency_key = idempotency_key
             .filter(|value| !value.is_empty())
@@ -265,15 +272,17 @@ impl TaskQueue for MemoryTaskQueue {
 
     async fn reveal_ephemeral_entry(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
         let state = self.inner.lock().await;
-        let Some(entry) = state.tasks.get(key) else {
+        let Some(entry) = state.tasks.get(entry_ref) else {
             return Ok(None);
         };
-        Ok(Some(EphemeralEntryValueSnapshot {
-            metadata: self.entry_snapshot(entry),
-            value: entry.payload.clone(),
-        }))
+        Ok(Some(EphemeralEntryValueSnapshot::from_value(
+            self.entry_snapshot(entry),
+            entry.payload.clone(),
+            reveal_mode,
+        )))
     }
 }

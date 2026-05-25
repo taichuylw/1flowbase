@@ -5,8 +5,8 @@ use std::{
 
 use async_trait::async_trait;
 use control_plane::ports::{
-    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities,
-    RateLimitDecision, RateLimitStore,
+    ephemeral_metadata_size_bytes, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
+    EphemeralInspectionCapabilities, EphemeralValueRevealMode, RateLimitDecision, RateLimitStore,
 };
 use moka::{future::Cache, Expiry};
 use time::OffsetDateTime;
@@ -80,9 +80,19 @@ impl MokaRateLimitStore {
 
     fn entry_snapshot(key: String, window: &RateLimitWindow) -> EphemeralEntrySnapshot {
         let now = OffsetDateTime::now_utc();
+        let metadata = serde_json::json!({
+            "count": window.count,
+            "reset_at_unix": window.reset_at.unix_timestamp(),
+        });
         EphemeralEntrySnapshot {
             contract_code: "rate-limit-store".to_string(),
             group_code: key.split_once(':').map(|(group, _)| group.to_string()),
+            entry_ref: key.clone(),
+            inspection_path: key
+                .split(':')
+                .filter(|segment| !segment.is_empty())
+                .map(ToString::to_string)
+                .collect(),
             key,
             entry_kind: "rate_limit_window".to_string(),
             status: if window.reset_at > now {
@@ -92,14 +102,12 @@ impl MokaRateLimitStore {
             },
             owner: None,
             value_size_bytes: Self::value_size_bytes(window),
+            metadata_size_bytes: ephemeral_metadata_size_bytes(&metadata),
             ttl_seconds: Some((window.reset_at - now).whole_seconds().max(0)),
             created_at_unix: None,
             expires_at_unix: Some(window.reset_at.unix_timestamp()),
             sensitive: false,
-            metadata: serde_json::json!({
-                "count": window.count,
-                "reset_at_unix": window.reset_at.unix_timestamp(),
-            }),
+            metadata,
         }
     }
 }
@@ -168,18 +176,22 @@ impl RateLimitStore for MokaRateLimitStore {
 
     async fn reveal_ephemeral_entry(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
-        let Some(window) = self.cache.get(&self.namespaced_key(key)).await else {
+        let Some(window) = self.cache.get(&self.namespaced_key(entry_ref)).await else {
             return Ok(None);
         };
-        Ok(Some(EphemeralEntryValueSnapshot {
-            metadata: Self::entry_snapshot(key.to_string(), &window),
-            value: serde_json::json!({
+        let metadata = Self::entry_snapshot(entry_ref.to_string(), &window);
+        let value = serde_json::json!({
                 "count": window.count,
                 "reset_at_unix": window.reset_at.unix_timestamp(),
-            }),
-        }))
+        });
+        Ok(Some(EphemeralEntryValueSnapshot::from_value(
+            metadata,
+            value,
+            reveal_mode,
+        )))
     }
 }
 

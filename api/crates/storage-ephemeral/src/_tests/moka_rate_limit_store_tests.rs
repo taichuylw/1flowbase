@@ -1,4 +1,4 @@
-use control_plane::ports::RateLimitStore;
+use control_plane::ports::{EphemeralValueRevealMode, RateLimitStore};
 use storage_ephemeral::MokaRateLimitStore;
 use time::Duration;
 
@@ -99,10 +99,10 @@ async fn moka_rate_limit_store_exposes_ephemeral_inspection_snapshots() {
     assert_eq!(entries[0].metadata["count"], 1);
 
     let revealed = store
-        .reveal_ephemeral_entry("actor:1")
+        .reveal_ephemeral_entry("actor:1", EphemeralValueRevealMode::Full)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(revealed.metadata.key, "actor:1");
-    assert_eq!(revealed.value["count"], 1);
+    assert_eq!(revealed.value.unwrap()["count"], 1);
 }

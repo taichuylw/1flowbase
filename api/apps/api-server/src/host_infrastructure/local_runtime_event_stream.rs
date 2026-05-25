@@ -8,7 +8,8 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use control_plane::ports::{
-    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities,
+    ensure_ephemeral_payload_size, ephemeral_metadata_size_bytes, EphemeralEntrySnapshot,
+    EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities, EphemeralValueRevealMode,
     RuntimeEventCloseReason, RuntimeEventDurability, RuntimeEventEnvelope,
     RuntimeEventOverflowBehavior, RuntimeEventPayload, RuntimeEventStream,
     RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
@@ -80,10 +81,27 @@ impl LocalRuntimeEventStream {
     }
 
     fn event_snapshot(event: &RuntimeEventEnvelope, run_closed: bool) -> EphemeralEntrySnapshot {
+        let key = Self::entry_key(event.run_id, event.sequence);
+        let metadata = serde_json::json!({
+            "run_id": event.run_id,
+            "node_run_id": event.node_run_id,
+            "sequence": event.sequence,
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+            "source": event.source,
+            "durability": event.durability,
+            "persist_required": event.persist_required,
+            "trace_visible": event.trace_visible,
+            "delta_index": event.delta_index,
+            "content_type": event.content_type,
+            "text_size_bytes": event.text.as_ref().map(|value| value.len()),
+        });
         EphemeralEntrySnapshot {
             contract_code: "runtime-event-stream".to_string(),
             group_code: Some(event.run_id.to_string()),
-            key: Self::entry_key(event.run_id, event.sequence),
+            entry_ref: key.clone(),
+            key,
+            inspection_path: vec![event.run_id.to_string(), event.sequence.to_string()],
             entry_kind: "runtime_event".to_string(),
             status: if run_closed {
                 "closed".to_string()
@@ -92,24 +110,12 @@ impl LocalRuntimeEventStream {
             },
             owner: event.node_run_id.map(|value| value.to_string()),
             value_size_bytes: Self::event_value_size_bytes(event),
+            metadata_size_bytes: ephemeral_metadata_size_bytes(&metadata),
             ttl_seconds: None,
             created_at_unix: Some(event.occurred_at.unix_timestamp()),
             expires_at_unix: None,
             sensitive: true,
-            metadata: serde_json::json!({
-                "run_id": event.run_id,
-                "node_run_id": event.node_run_id,
-                "sequence": event.sequence,
-                "event_id": event.event_id,
-                "event_type": event.event_type,
-                "source": event.source,
-                "durability": event.durability,
-                "persist_required": event.persist_required,
-                "trace_visible": event.trace_visible,
-                "delta_index": event.delta_index,
-                "content_type": event.content_type,
-                "text_size_bytes": event.text.as_ref().map(|value| value.len()),
-            }),
+            metadata,
         }
     }
 }
@@ -229,6 +235,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         run_id: Uuid,
         event: RuntimeEventPayload,
     ) -> Result<RuntimeEventEnvelope> {
+        ensure_ephemeral_payload_size(&event.payload)?;
         let run = self.run(run_id)?;
 
         let envelope = {
@@ -400,9 +407,10 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
 
     async fn reveal_ephemeral_entry(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> Result<Option<EphemeralEntryValueSnapshot>> {
-        let Some((run_id, sequence)) = Self::parse_entry_key(key) else {
+        let Some((run_id, sequence)) = Self::parse_entry_key(entry_ref) else {
             return Ok(None);
         };
         let Some(run) = self
@@ -423,9 +431,10 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         else {
             return Ok(None);
         };
-        Ok(Some(EphemeralEntryValueSnapshot {
-            metadata: Self::event_snapshot(&event, closed),
-            value: event.payload,
-        }))
+        Ok(Some(EphemeralEntryValueSnapshot::from_value(
+            Self::event_snapshot(&event, closed),
+            event.payload,
+            reveal_mode,
+        )))
     }
 }

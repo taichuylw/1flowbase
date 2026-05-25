@@ -227,7 +227,17 @@ export interface ClearConsoleCacheDomainResult {
 
 export interface ConsoleMemoryObservationCapabilities {
   list_entries: boolean;
+  list_tree: boolean;
+  search_entries: boolean;
   reveal_value: boolean;
+  default_page_size: number;
+  max_page_size: number;
+  default_byte_limit: number;
+  max_byte_limit: number;
+  default_preview_size_bytes: number;
+  max_full_value_size_bytes: number;
+  max_value_size_bytes: number;
+  max_payload_size_bytes: number;
 }
 
 export interface ConsoleMemoryContractSummary {
@@ -244,11 +254,14 @@ export interface ConsoleMemoryContractSummary {
 export interface ConsoleMemoryEntryMetadata {
   contract_code: string;
   group_code: string | null;
+  entry_ref: string;
   key: string;
+  inspection_path: string[];
   entry_kind: string;
   status: string;
   owner: string | null;
   value_size_bytes: number;
+  metadata_size_bytes: number;
   ttl_seconds: number | null;
   created_at_unix: number | null;
   expires_at_unix: number | null;
@@ -267,12 +280,67 @@ export interface ConsoleHostInfrastructureMemoryEntries {
   provider_code: string | null;
   capabilities: ConsoleMemoryObservationCapabilities;
   supported: boolean;
+  inspection_path: string[];
   entries: ConsoleMemoryEntryMetadata[];
+  next_cursor: string | null;
+  limit: number;
+  byte_limit: number;
+  emitted_bytes: number;
+  truncated_by_byte_limit: boolean;
 }
+
+export interface ConsoleMemoryTreeNode {
+  node_ref: string;
+  label: string;
+  inspection_path: string[];
+  depth: number;
+  entry_count: number;
+  sensitive_entry_count: number;
+  total_value_size_bytes: number;
+  has_children: boolean;
+}
+
+export interface ConsoleHostInfrastructureMemoryTree {
+  contract_code: string;
+  label: string;
+  provider_code: string | null;
+  capabilities: ConsoleMemoryObservationCapabilities;
+  supported: boolean;
+  inspection_path: string[];
+  nodes: ConsoleMemoryTreeNode[];
+  next_cursor: string | null;
+  limit: number;
+  byte_limit: number;
+  emitted_bytes: number;
+  truncated_by_byte_limit: boolean;
+}
+
+export type ConsoleMemoryRevealMode = 'metadata' | 'preview' | 'full';
+export type ConsoleMemoryValueState =
+  | 'hidden'
+  | 'available'
+  | 'preview'
+  | 'value_too_large';
 
 export interface ConsoleMemoryEntryValue {
   metadata: ConsoleMemoryEntryMetadata;
-  value: unknown;
+  reveal_mode: ConsoleMemoryRevealMode;
+  value_state: ConsoleMemoryValueState;
+  value: unknown | null;
+  value_preview: string | null;
+  preview_size_bytes: number;
+  full_value_size_bytes: number;
+}
+
+export interface ConsoleMemoryPageRequest {
+  inspection_path?: string[];
+  cursor?: string | null;
+  limit?: number;
+  byte_limit?: number;
+}
+
+export interface ConsoleMemorySearchRequest extends ConsoleMemoryPageRequest {
+  q: string;
 }
 
 function buildPluginCatalogPath(
@@ -295,6 +363,39 @@ function buildPluginCatalogPath(
 
   const queryString = params.toString();
   return queryString ? `${path}?${queryString}` : path;
+}
+
+function buildMemoryInspectionPath(
+  path: string,
+  request?: ConsoleMemoryPageRequest
+) {
+  if (!request) {
+    return path;
+  }
+  const params = new URLSearchParams();
+  if (request.inspection_path?.length) {
+    params.set('path', request.inspection_path.join('/'));
+  }
+  if (request.cursor) {
+    params.set('cursor', request.cursor);
+  }
+  if (request.limit != null) {
+    params.set('limit', String(request.limit));
+  }
+  if (request.byte_limit != null) {
+    params.set('byte_limit', String(request.byte_limit));
+  }
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
+}
+
+function buildMemorySearchPath(
+  path: string,
+  request: ConsoleMemorySearchRequest
+) {
+  const basePath = buildMemoryInspectionPath(path, request);
+  const separator = basePath.includes('?') ? '&' : '?';
+  return `${basePath}${separator}q=${encodeURIComponent(request.q)}`;
 }
 
 export function listConsolePluginCatalog(
@@ -541,20 +642,57 @@ export function getConsoleHostInfrastructureMemoryOverview(baseUrl?: string) {
 
 export function listConsoleHostInfrastructureMemoryEntries(
   contractCode: string,
+  request?: ConsoleMemoryPageRequest,
   baseUrl?: string
 ) {
   return apiFetch<ConsoleHostInfrastructureMemoryEntries>({
-    path: `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
-      contractCode
-    )}/entries`,
+    path: buildMemoryInspectionPath(
+      `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
+        contractCode
+      )}/entries`,
+      request
+    ),
+    baseUrl
+  });
+}
+
+export function listConsoleHostInfrastructureMemoryTree(
+  contractCode: string,
+  request?: ConsoleMemoryPageRequest,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleHostInfrastructureMemoryTree>({
+    path: buildMemoryInspectionPath(
+      `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
+        contractCode
+      )}/tree`,
+      request
+    ),
+    baseUrl
+  });
+}
+
+export function searchConsoleHostInfrastructureMemoryEntries(
+  contractCode: string,
+  request: ConsoleMemorySearchRequest,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleHostInfrastructureMemoryEntries>({
+    path: buildMemorySearchPath(
+      `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
+        contractCode
+      )}/entries/search`,
+      request
+    ),
     baseUrl
   });
 }
 
 export function revealConsoleHostInfrastructureMemoryEntry(
   contractCode: string,
-  key: string,
+  entryRef: string,
   csrfToken: string,
+  revealMode: ConsoleMemoryRevealMode = 'preview',
   baseUrl?: string
 ) {
   return apiFetch<ConsoleMemoryEntryValue>({
@@ -562,7 +700,7 @@ export function revealConsoleHostInfrastructureMemoryEntry(
       contractCode
     )}/entries/reveal`,
     method: 'POST',
-    body: { key },
+    body: { entry_ref: entryRef, reveal_mode: revealMode },
     csrfToken,
     baseUrl
   });

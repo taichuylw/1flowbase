@@ -16,9 +16,50 @@ pub trait SessionStore: Send + Sync {
         Ok(Vec::new())
     }
 
+    async fn summarize_ephemeral_entries(
+        &self,
+    ) -> anyhow::Result<EphemeralInspectionSummarySnapshot> {
+        Ok(summarize_ephemeral_entries(
+            &self.list_ephemeral_entries().await?,
+        ))
+    }
+
+    async fn list_ephemeral_tree(
+        &self,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionTreePage> {
+        Ok(paginate_ephemeral_tree(
+            self.list_ephemeral_entries().await?,
+            request,
+        ))
+    }
+
+    async fn list_ephemeral_entry_page(
+        &self,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionEntryPage> {
+        Ok(paginate_ephemeral_entries(
+            self.list_ephemeral_entries().await?,
+            request,
+        ))
+    }
+
+    async fn search_ephemeral_entry_page(
+        &self,
+        query: &str,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionEntryPage> {
+        Ok(search_ephemeral_entries(
+            self.list_ephemeral_entries().await?,
+            query,
+            request,
+        ))
+    }
+
     async fn reveal_ephemeral_entry(
         &self,
-        _key: &str,
+        _entry_ref: &str,
+        _reveal_mode: EphemeralValueRevealMode,
     ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
         Ok(None)
     }
@@ -53,11 +94,42 @@ where
         (**self).list_ephemeral_entries().await
     }
 
+    async fn summarize_ephemeral_entries(
+        &self,
+    ) -> anyhow::Result<EphemeralInspectionSummarySnapshot> {
+        (**self).summarize_ephemeral_entries().await
+    }
+
+    async fn list_ephemeral_tree(
+        &self,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionTreePage> {
+        (**self).list_ephemeral_tree(request).await
+    }
+
+    async fn list_ephemeral_entry_page(
+        &self,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionEntryPage> {
+        (**self).list_ephemeral_entry_page(request).await
+    }
+
+    async fn search_ephemeral_entry_page(
+        &self,
+        query: &str,
+        request: EphemeralInspectionPageRequest,
+    ) -> anyhow::Result<EphemeralInspectionEntryPage> {
+        (**self).search_ephemeral_entry_page(query, request).await
+    }
+
     async fn reveal_ephemeral_entry(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
-        (**self).reveal_ephemeral_entry(key).await
+        (**self)
+            .reveal_ephemeral_entry(entry_ref, reveal_mode)
+            .await
     }
 }
 

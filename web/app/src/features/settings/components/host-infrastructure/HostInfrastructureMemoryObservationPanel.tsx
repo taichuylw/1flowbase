@@ -11,13 +11,15 @@ import {
   Descriptions,
   Drawer,
   Empty,
+  Input,
   Space,
   Table,
-  Tabs,
   Tag,
+  Tree,
   Typography
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { DataNode } from 'antd/es/tree';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '../../../../state/auth-store';
@@ -25,12 +27,17 @@ import { JsonPreviewBlock } from '../../../../shared/ui/json-preview/JsonPreview
 import {
   fetchSettingsHostInfrastructureMemoryEntries,
   fetchSettingsHostInfrastructureMemoryOverview,
+  fetchSettingsHostInfrastructureMemoryTree,
   revealSettingsHostInfrastructureMemoryEntry,
+  searchSettingsHostInfrastructureMemoryEntries,
   settingsHostInfrastructureMemoryEntriesQueryKey,
   settingsHostInfrastructureMemoryOverviewQueryKey,
+  settingsHostInfrastructureMemorySearchQueryKey,
+  settingsHostInfrastructureMemoryTreeQueryKey,
   type SettingsHostInfrastructureMemoryContract,
   type SettingsHostInfrastructureMemoryEntry,
-  type SettingsHostInfrastructureMemoryEntryValue
+  type SettingsHostInfrastructureMemoryEntryValue,
+  type SettingsHostInfrastructureMemoryTreeNode
 } from '../../api/host-infrastructure';
 
 function formatBytes(value: number) {
@@ -83,6 +90,55 @@ function resolveCanReveal(
   );
 }
 
+function formatInspectionPath(path: string[]) {
+  return path.length ? path.join(' / ') : 'root';
+}
+
+type MemoryTreeDataNode = DataNode & {
+  inspectionPath: string[];
+  children?: MemoryTreeDataNode[];
+};
+
+function findTreeKeyByPath(
+  nodes: MemoryTreeDataNode[],
+  inspectionPath: string[] | null
+): string | null {
+  if (!inspectionPath) {
+    return null;
+  }
+  const requestedPath = inspectionPath.join('\u001f');
+  for (const node of nodes) {
+    if (node.inspectionPath.join('\u001f') === requestedPath) {
+      return String(node.key);
+    }
+    const childKey = findTreeKeyByPath(node.children ?? [], inspectionPath);
+    if (childKey) {
+      return childKey;
+    }
+  }
+  return null;
+}
+
+function toTreeData(
+  nodes: SettingsHostInfrastructureMemoryTreeNode[],
+  loadedChildren: Record<string, SettingsHostInfrastructureMemoryTreeNode[]>
+): MemoryTreeDataNode[] {
+  return nodes.map((node) => ({
+    key: node.node_ref,
+    title: (
+      <Space size={6}>
+        <Typography.Text>{node.label}</Typography.Text>
+        <Tag>{node.entry_count}</Tag>
+      </Space>
+    ),
+    isLeaf: !node.has_children,
+    inspectionPath: node.inspection_path,
+    children: loadedChildren[node.node_ref]
+      ? toTreeData(loadedChildren[node.node_ref], loadedChildren)
+      : undefined
+  }));
+}
+
 export function HostInfrastructureMemoryObservationPanel({
   canManage
 }: {
@@ -92,6 +148,16 @@ export function HostInfrastructureMemoryObservationPanel({
   const [activeContractCode, setActiveContractCode] = useState<string | null>(
     null
   );
+  const [selectedInspectionPath, setSelectedInspectionPath] = useState<
+    string[] | null
+  >(null);
+  const [entryCursor, setEntryCursor] = useState<string | null>(null);
+  const [cursorHistory, setCursorHistory] = useState<string[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [submittedSearch, setSubmittedSearch] = useState('');
+  const [loadedTreeChildren, setLoadedTreeChildren] = useState<
+    Record<string, SettingsHostInfrastructureMemoryTreeNode[]>
+  >({});
   const [metadataEntry, setMetadataEntry] =
     useState<SettingsHostInfrastructureMemoryEntry | null>(null);
   const [revealedEntry, setRevealedEntry] =
@@ -106,18 +172,70 @@ export function HostInfrastructureMemoryObservationPanel({
   const activeContract = contracts.find(
     (contract) => contract.contract_code === activeContractCode
   );
+  const pageSize = activeContract?.capabilities.default_page_size ?? 50;
   const canListEntries = Boolean(
     activeContract?.supported && activeContract.capabilities.list_entries
   );
-
+  const canListTree = Boolean(
+    activeContract?.supported && activeContract.capabilities.list_tree
+  );
+  const canSearchEntries = Boolean(
+    activeContract?.supported && activeContract.capabilities.search_entries
+  );
+  const entryRequest = selectedInspectionPath
+    ? {
+        inspection_path: selectedInspectionPath,
+        cursor: entryCursor,
+        limit: pageSize
+      }
+    : undefined;
   const entriesQuery = useQuery({
-    queryKey:
-      settingsHostInfrastructureMemoryEntriesQueryKey(activeContractCode),
+    queryKey: submittedSearch
+      ? canSearchEntries
+        ? settingsHostInfrastructureMemorySearchQueryKey(
+            activeContractCode,
+            entryRequest
+              ? { ...entryRequest, q: submittedSearch }
+              : { q: submittedSearch }
+          )
+        : settingsHostInfrastructureMemoryEntriesQueryKey(
+            activeContractCode,
+            entryRequest
+          )
+      : settingsHostInfrastructureMemoryEntriesQueryKey(
+          activeContractCode,
+          entryRequest
+        ),
+    queryFn: () => {
+      if (!activeContractCode || !entryRequest) {
+        return Promise.resolve(null);
+      }
+      if (submittedSearch && canSearchEntries) {
+        return searchSettingsHostInfrastructureMemoryEntries(
+          activeContractCode,
+          { ...entryRequest, q: submittedSearch }
+        );
+      }
+      return fetchSettingsHostInfrastructureMemoryEntries(
+        activeContractCode,
+        entryRequest
+      );
+    },
+    enabled: Boolean(activeContractCode && canListEntries && entryRequest)
+  });
+  const rootTreeQuery = useQuery({
+    queryKey: settingsHostInfrastructureMemoryTreeQueryKey(activeContractCode, {
+      inspection_path: [],
+      limit: pageSize
+    }),
     queryFn: () =>
       activeContractCode
-        ? fetchSettingsHostInfrastructureMemoryEntries(activeContractCode)
+        ? fetchSettingsHostInfrastructureMemoryTree(activeContractCode, {
+            inspection_path: [],
+            limit: pageSize
+          })
         : Promise.resolve(null),
-    enabled: Boolean(activeContractCode && canListEntries)
+    enabled: Boolean(activeContractCode && canListTree)
   });
   const entries = entriesQuery.data?.entries ?? [];
   const canReveal = resolveCanReveal(
@@ -127,16 +245,13 @@ export function HostInfrastructureMemoryObservationPanel({
   );
 
   useEffect(() => {
-    if (
-      activeContractCode &&
-      contracts.some(
-        (contract) => contract.contract_code === activeContractCode
-      )
-    ) {
-      return;
-    }
-    setActiveContractCode(contracts[0]?.contract_code ?? null);
-  }, [activeContractCode, contracts]);
+    setLoadedTreeChildren({});
+    setSelectedInspectionPath(null);
+    setEntryCursor(null);
+    setCursorHistory([]);
+    setSubmittedSearch('');
+    setSearchText('');
+  }, [activeContractCode]);
 
   const refreshMemoryQueries = async (contractCode: string | null) => {
     await Promise.all([
@@ -144,26 +259,81 @@ export function HostInfrastructureMemoryObservationPanel({
         queryKey: settingsHostInfrastructureMemoryOverviewQueryKey
       }),
       queryClient.invalidateQueries({
-        queryKey: settingsHostInfrastructureMemoryEntriesQueryKey(contractCode)
+        queryKey: [
+          'settings',
+          'host-infrastructure',
+          'memory',
+          'contracts',
+          contractCode
+        ]
       })
     ]);
   };
 
   const revealMutation = useMutation({
-    mutationFn: async (entry: SettingsHostInfrastructureMemoryEntry) => {
+    mutationFn: async ({
+      entry,
+      revealMode
+    }: {
+      entry: SettingsHostInfrastructureMemoryEntry;
+      revealMode: 'preview' | 'full';
+    }) => {
       if (!csrfToken) {
         throw new Error('csrf_missing');
       }
       return revealSettingsHostInfrastructureMemoryEntry(
         entry.contract_code,
-        entry.key,
-        csrfToken
+        entry.entry_ref,
+        csrfToken,
+        revealMode
       );
     },
     onSuccess: (value) => {
       setRevealedEntry(value);
     }
   });
+
+  const rootNodes = rootTreeQuery.data?.nodes ?? [];
+  const treeData = toTreeData(rootNodes, loadedTreeChildren);
+  const selectedTreeKey = findTreeKeyByPath(treeData, selectedInspectionPath);
+
+  const loadTreeChildren = async (treeNode: DataNode) => {
+    if (!activeContractCode) {
+      return;
+    }
+    const node = treeNode as DataNode & {
+      inspectionPath?: string[];
+      isLeaf?: boolean;
+    };
+    if (node.isLeaf || !node.inspectionPath) {
+      return;
+    }
+    const response = await queryClient.fetchQuery({
+      queryKey: settingsHostInfrastructureMemoryTreeQueryKey(
+        activeContractCode,
+        { inspection_path: node.inspectionPath, limit: pageSize }
+      ),
+      queryFn: () =>
+        fetchSettingsHostInfrastructureMemoryTree(activeContractCode, {
+          inspection_path: node.inspectionPath,
+          limit: pageSize
+        })
+    });
+    setLoadedTreeChildren((current) => ({
+      ...current,
+      [String(node.key)]: response.nodes
+    }));
+  };
+
+  const selectContract = (contractCode: string) => {
+    setActiveContractCode(contractCode);
+  };
+
+  const selectInspectionPath = (path: string[]) => {
+    setSelectedInspectionPath(path);
+    setEntryCursor(null);
+    setCursorHistory([]);
+  };
 
   const entryColumns = useMemo<
     ColumnsType<SettingsHostInfrastructureMemoryEntry>
@@ -241,7 +411,7 @@ export function HostInfrastructureMemoryObservationPanel({
                 icon={<EyeOutlined />}
                 loading={revealMutation.isPending}
                 onClick={() => {
-                  revealMutation.mutate(entry);
+                  revealMutation.mutate({ entry, revealMode: 'preview' });
                 }}
                 size="small"
               >
@@ -292,7 +462,11 @@ export function HostInfrastructureMemoryObservationPanel({
           onClick={() => {
             void refreshMemoryQueries(activeContractCode);
           }}
-          loading={overviewQuery.isFetching || entriesQuery.isFetching}
+          loading={
+            overviewQuery.isFetching ||
+            entriesQuery.isFetching ||
+            rootTreeQuery.isFetching
+          }
         >
           刷新
         </Button>
@@ -315,72 +489,195 @@ export function HostInfrastructureMemoryObservationPanel({
       ) : null}
 
       {contracts.length ? (
-        <Tabs
-          activeKey={activeContractCode ?? undefined}
-          onChange={setActiveContractCode}
-          items={contracts.map((contract) => ({
-            key: contract.contract_code,
-            label: contract.label,
-            children: (
-              <Space
-                direction="vertical"
-                size={16}
-                className="host-memory-panel__contract"
-              >
-                <Descriptions bordered size="small" column={{ xs: 1, md: 3 }}>
+        <div className="host-memory-panel__layout">
+          <Space
+            direction="vertical"
+            size={12}
+            className="host-memory-panel__tree"
+          >
+            <Typography.Text className="host-memory-panel__section-title">
+              Contracts
+            </Typography.Text>
+            <Space
+              direction="vertical"
+              size={8}
+              className="host-memory-panel__contract-list"
+            >
+              {contracts.map((contract) => (
+                <button
+                  key={contract.contract_code}
+                  type="button"
+                  className={
+                    contract.contract_code === activeContractCode
+                      ? 'host-memory-panel__contract-button host-memory-panel__contract-button--active'
+                      : 'host-memory-panel__contract-button'
+                  }
+                  onClick={() => selectContract(contract.contract_code)}
+                >
+                  <Typography.Text strong>{contract.label}</Typography.Text>
+                  <Typography.Text type="secondary">
+                    {contract.entry_count} entries ·{' '}
+                    {formatBytes(contract.total_value_size_bytes)}
+                  </Typography.Text>
+                </button>
+              ))}
+            </Space>
+
+            {activeContract ? (
+              <>
+                <Descriptions bordered size="small" column={1}>
                   <Descriptions.Item label="Contract">
-                    {contract.contract_code}
+                    {activeContract.contract_code}
                   </Descriptions.Item>
                   <Descriptions.Item label="Provider">
-                    {contract.provider_code ?? 'unknown'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Supported">
-                    {contract.supported ? 'yes' : 'no'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Entries">
-                    {contract.entry_count}
+                    {activeContract.provider_code ?? 'unknown'}
                   </Descriptions.Item>
                   <Descriptions.Item label="Sensitive">
-                    {contract.sensitive_entry_count}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Value size">
-                    {formatBytes(contract.total_value_size_bytes)}
+                    {activeContract.sensitive_entry_count}
                   </Descriptions.Item>
                 </Descriptions>
 
-                {!contract.supported || !contract.capabilities.list_entries ? (
+                {!activeContract.supported ||
+                !activeContract.capabilities.list_tree ? (
                   <Alert
                     type="warning"
                     showIcon
-                    message="当前 contract 不支持 entry inspection。"
-                    description="可用能力会随 provider 暴露；当前无法列出这个 contract 的内存 entry。"
+                    message="当前 contract 不支持 tree inspection。"
                   />
-                ) : entriesQuery.isError ? (
-                  <Alert
-                    type="error"
-                    showIcon
-                    message="内存 entry 连接失败。"
-                    description="无法读取当前 contract 的 entries。"
-                  />
-                ) : entriesQuery.isSuccess && !entries.length ? (
+                ) : rootTreeQuery.isError ? (
+                  <Alert type="error" showIcon message="内存树加载失败。" />
+                ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="暂无内存 entry"
+                    description="暂无内存节点"
                   />
                 ) : (
-                  <Table
-                    rowKey={(entry) => `${entry.group_code}:${entry.key}`}
-                    columns={entryColumns}
-                    dataSource={entries}
-                    loading={entriesQuery.isLoading || overviewQuery.isLoading}
-                    pagination={false}
-                    size="small"
+                  <Tree
+                    treeData={treeData}
+                    loadData={loadTreeChildren}
+                    selectedKeys={selectedTreeKey ? [selectedTreeKey] : []}
+                    onSelect={(_, info) => {
+                      const node = info.node as DataNode & {
+                        inspectionPath?: string[];
+                      };
+                      if (node.inspectionPath) {
+                        selectInspectionPath(node.inspectionPath);
+                      }
+                    }}
                   />
                 )}
+              </>
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="请选择内存 contract"
+              />
+            )}
+          </Space>
+
+          <Space
+            direction="vertical"
+            size={12}
+            className="host-memory-panel__entries"
+          >
+            <div className="host-memory-panel__entries-header">
+              <Space direction="vertical" size={2}>
+                <Typography.Text strong>Entries</Typography.Text>
+                <Typography.Text type="secondary">
+                  {selectedInspectionPath
+                    ? formatInspectionPath(selectedInspectionPath)
+                    : '未选择路径'}
+                </Typography.Text>
               </Space>
-            )
-          }))}
-        />
+              <Input.Search
+                allowClear
+                disabled={!canSearchEntries}
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                onSearch={(value) => {
+                  if (!canSearchEntries) {
+                    return;
+                  }
+                  setSubmittedSearch(value.trim());
+                  setEntryCursor(null);
+                  setCursorHistory([]);
+                }}
+                size="small"
+                style={{ maxWidth: 240 }}
+              />
+            </div>
+
+            {!selectedInspectionPath ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="请选择 tree 节点"
+              />
+            ) : entriesQuery.isError ? (
+              <Alert
+                type="error"
+                showIcon
+                message="内存 entry 连接失败。"
+                description="无法读取当前路径的 entries。"
+              />
+            ) : entriesQuery.isSuccess && !entries.length ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="暂无内存 entry"
+              />
+            ) : (
+              <>
+                <Table
+                  rowKey={(entry) => entry.entry_ref}
+                  columns={entryColumns}
+                  dataSource={entries}
+                  loading={entriesQuery.isLoading || entriesQuery.isFetching}
+                  pagination={false}
+                  size="small"
+                />
+                <div className="host-memory-panel__entries-header">
+                  <Typography.Text type="secondary">
+                    {entriesQuery.data
+                      ? `${formatBytes(entriesQuery.data.emitted_bytes)} emitted`
+                      : null}
+                  </Typography.Text>
+                  <Space size={8}>
+                    <Button
+                      size="small"
+                      disabled={!cursorHistory.length}
+                      onClick={() => {
+                        setCursorHistory((current) => {
+                          const previousCursor = current.at(-1) ?? null;
+                          const nextHistory = current.slice(0, -1);
+                          setEntryCursor(previousCursor || null);
+                          return nextHistory;
+                        });
+                      }}
+                    >
+                      上一页
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={!entriesQuery.data?.next_cursor}
+                      onClick={() => {
+                        const nextCursor = entriesQuery.data?.next_cursor;
+                        if (!nextCursor) {
+                          return;
+                        }
+                        setCursorHistory((current) => [
+                          ...current,
+                          entryCursor ?? ''
+                        ]);
+                        setEntryCursor(nextCursor);
+                      }}
+                    >
+                      下一页
+                    </Button>
+                  </Space>
+                </div>
+              </>
+            )}
+          </Space>
+        </div>
       ) : null}
 
       <Drawer
@@ -405,6 +702,12 @@ export function HostInfrastructureMemoryObservationPanel({
               </Descriptions.Item>
               <Descriptions.Item label="Key">
                 {metadataEntry.key}
+              </Descriptions.Item>
+              <Descriptions.Item label="Entry ref">
+                {metadataEntry.entry_ref}
+              </Descriptions.Item>
+              <Descriptions.Item label="Path">
+                {formatInspectionPath(metadataEntry.inspection_path)}
               </Descriptions.Item>
               <Descriptions.Item label="Owner">
                 {metadataEntry.owner ?? 'unknown'}
@@ -450,17 +753,65 @@ export function HostInfrastructureMemoryObservationPanel({
               <Descriptions.Item label="Key">
                 {revealedEntry.metadata.key}
               </Descriptions.Item>
+              <Descriptions.Item label="Entry ref">
+                {revealedEntry.metadata.entry_ref}
+              </Descriptions.Item>
+              <Descriptions.Item label="Value state">
+                {revealedEntry.value_state}
+              </Descriptions.Item>
+              <Descriptions.Item label="Reveal mode">
+                {revealedEntry.reveal_mode}
+              </Descriptions.Item>
               <Descriptions.Item label="Size">
                 {formatBytes(revealedEntry.metadata.value_size_bytes)}
               </Descriptions.Item>
             </Descriptions>
-            <JsonPreviewBlock
-              title="Memory value"
-              value={revealedEntry.value}
-              collapsible={false}
-              height="360px"
-              copySuccessMessage="已复制内存 JSON"
-            />
+            {revealedEntry.value_state === 'available' ? (
+              <JsonPreviewBlock
+                title="Memory value"
+                value={revealedEntry.value}
+                collapsible={false}
+                height="360px"
+                copySuccessMessage="已复制内存 JSON"
+              />
+            ) : revealedEntry.value_preview ? (
+              <Space direction="vertical" size={8}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="preview"
+                  description={`${formatBytes(
+                    revealedEntry.preview_size_bytes
+                  )} of ${formatBytes(revealedEntry.full_value_size_bytes)}`}
+                />
+                <Typography.Paragraph code copyable>
+                  {revealedEntry.value_preview}
+                </Typography.Paragraph>
+              </Space>
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                message="value_too_large"
+                description={`${formatBytes(
+                  revealedEntry.full_value_size_bytes
+                )} exceeds full reveal limit.`}
+              />
+            )}
+            {canReveal && revealedEntry.value_state === 'preview' ? (
+              <Button
+                icon={<EyeOutlined />}
+                loading={revealMutation.isPending}
+                onClick={() =>
+                  revealMutation.mutate({
+                    entry: revealedEntry.metadata,
+                    revealMode: 'full'
+                  })
+                }
+              >
+                Full reveal
+              </Button>
+            ) : null}
           </Space>
         ) : null}
       </Drawer>

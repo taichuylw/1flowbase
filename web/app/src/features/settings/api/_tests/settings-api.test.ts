@@ -204,27 +204,99 @@ vi.mock('@1flowbase/api-client', () => ({
     provider_code: 'local',
     capabilities: {
       list_entries: true,
-      reveal_value: true
+      list_tree: true,
+      search_entries: true,
+      reveal_value: true,
+      default_page_size: 50,
+      max_page_size: 200,
+      default_byte_limit: 65536,
+      max_byte_limit: 262144,
+      default_preview_size_bytes: 8192,
+      max_full_value_size_bytes: 262144
     },
     supported: true,
-    entries: []
+    inspection_path: [],
+    entries: [],
+    next_cursor: null,
+    limit: 50,
+    byte_limit: 65536,
+    emitted_bytes: 0,
+    truncated_by_byte_limit: false
+  }),
+  listConsoleHostInfrastructureMemoryTree: vi.fn().mockResolvedValue({
+    contract_code: 'session-store',
+    label: 'Sessions',
+    provider_code: 'local',
+    capabilities: {
+      list_entries: true,
+      list_tree: true,
+      search_entries: true,
+      reveal_value: true,
+      default_page_size: 50,
+      max_page_size: 200,
+      default_byte_limit: 65536,
+      max_byte_limit: 262144,
+      default_preview_size_bytes: 8192,
+      max_full_value_size_bytes: 262144
+    },
+    supported: true,
+    inspection_path: [],
+    nodes: [],
+    next_cursor: null,
+    limit: 50,
+    byte_limit: 65536,
+    emitted_bytes: 0,
+    truncated_by_byte_limit: false
+  }),
+  searchConsoleHostInfrastructureMemoryEntries: vi.fn().mockResolvedValue({
+    contract_code: 'session-store',
+    label: 'Sessions',
+    provider_code: 'local',
+    capabilities: {
+      list_entries: true,
+      list_tree: true,
+      search_entries: true,
+      reveal_value: true,
+      default_page_size: 50,
+      max_page_size: 200,
+      default_byte_limit: 65536,
+      max_byte_limit: 262144,
+      default_preview_size_bytes: 8192,
+      max_full_value_size_bytes: 262144
+    },
+    supported: true,
+    inspection_path: [],
+    entries: [],
+    next_cursor: null,
+    limit: 50,
+    byte_limit: 65536,
+    emitted_bytes: 0,
+    truncated_by_byte_limit: false
   }),
   revealConsoleHostInfrastructureMemoryEntry: vi.fn().mockResolvedValue({
     metadata: {
       contract_code: 'session-store',
       group_code: 'sessions',
+      entry_ref: 'session:1',
       key: 'session:1',
+      inspection_path: ['sessions', 'session:1'],
       entry_kind: 'session',
       status: 'active',
       owner: null,
       value_size_bytes: 12,
+      metadata_size_bytes: 2,
       ttl_seconds: null,
       created_at_unix: null,
       expires_at_unix: null,
       sensitive: true,
       metadata: {}
     },
-    value: { ok: true }
+    reveal_mode: 'preview',
+    value_state: 'available',
+    value: { ok: true },
+    value_preview: null,
+    preview_size_bytes: 12,
+    full_value_size_bytes: 12
   }),
   getConsoleHostInfrastructureCacheOverview: vi.fn().mockResolvedValue({
     provider_code: 'local',
@@ -321,6 +393,8 @@ import {
   listConsoleHostInfrastructureProviders,
   getConsoleHostInfrastructureMemoryOverview,
   listConsoleHostInfrastructureMemoryEntries,
+  listConsoleHostInfrastructureMemoryTree,
+  searchConsoleHostInfrastructureMemoryEntries,
   revealConsoleHostInfrastructureMemoryEntry,
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
@@ -424,14 +498,18 @@ import {
   fetchSettingsHostInfrastructureCacheOverview,
   fetchSettingsHostInfrastructureMemoryEntries,
   fetchSettingsHostInfrastructureMemoryOverview,
+  fetchSettingsHostInfrastructureMemoryTree,
   fetchSettingsHostInfrastructureProviders,
   revealSettingsHostInfrastructureMemoryEntry,
   revealSettingsHostInfrastructureCacheEntry,
   saveSettingsHostInfrastructureProviderConfig,
+  searchSettingsHostInfrastructureMemoryEntries,
   settingsHostInfrastructureCacheEntriesQueryKey,
   settingsHostInfrastructureCacheOverviewQueryKey,
   settingsHostInfrastructureMemoryEntriesQueryKey,
   settingsHostInfrastructureMemoryOverviewQueryKey,
+  settingsHostInfrastructureMemorySearchQueryKey,
+  settingsHostInfrastructureMemoryTreeQueryKey,
   settingsHostInfrastructureProvidersQueryKey
 } from '../host-infrastructure';
 
@@ -1109,32 +1187,94 @@ describe('settings api wrappers', () => {
       'memory'
     ]);
     expect(
-      settingsHostInfrastructureMemoryEntriesQueryKey('session-store')
+      settingsHostInfrastructureMemoryEntriesQueryKey('session-store', {
+        inspection_path: ['workspace-1'],
+        cursor: 'cursor-1',
+        limit: 25
+      })
     ).toEqual([
       'settings',
       'host-infrastructure',
       'memory',
       'contracts',
       'session-store',
-      'entries'
+      'entries',
+      ['workspace-1'],
+      'cursor-1',
+      25,
+      null
+    ]);
+    expect(
+      settingsHostInfrastructureMemoryTreeQueryKey('session-store', {
+        inspection_path: []
+      })
+    ).toEqual([
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      'session-store',
+      'tree',
+      [],
+      null,
+      null,
+      null
+    ]);
+    expect(
+      settingsHostInfrastructureMemorySearchQueryKey('session-store', {
+        q: 'session',
+        inspection_path: ['workspace-1']
+      })
+    ).toEqual([
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      'session-store',
+      'search',
+      'session',
+      ['workspace-1'],
+      null,
+      null,
+      null
     ]);
 
     await fetchSettingsHostInfrastructureMemoryOverview();
-    await fetchSettingsHostInfrastructureMemoryEntries('session-store');
+    await fetchSettingsHostInfrastructureMemoryEntries('session-store', {
+      inspection_path: ['workspace-1']
+    });
+    await fetchSettingsHostInfrastructureMemoryTree('session-store', {
+      inspection_path: []
+    });
+    await searchSettingsHostInfrastructureMemoryEntries('session-store', {
+      q: 'session',
+      inspection_path: ['workspace-1']
+    });
     await revealSettingsHostInfrastructureMemoryEntry(
       'session-store',
       'session:1',
-      'csrf-123'
+      'csrf-123',
+      'full'
     );
 
     expect(getConsoleHostInfrastructureMemoryOverview).toHaveBeenCalledTimes(1);
     expect(listConsoleHostInfrastructureMemoryEntries).toHaveBeenCalledWith(
-      'session-store'
+      'session-store',
+      { inspection_path: ['workspace-1'] }
+    );
+    expect(listConsoleHostInfrastructureMemoryTree).toHaveBeenCalledWith(
+      'session-store',
+      { inspection_path: [] }
+    );
+    expect(searchConsoleHostInfrastructureMemoryEntries).toHaveBeenCalledWith(
+      'session-store',
+      { q: 'session', inspection_path: ['workspace-1'] }
     );
     expect(revealConsoleHostInfrastructureMemoryEntry).toHaveBeenCalledWith(
       'session-store',
       'session:1',
-      'csrf-123'
+      'csrf-123',
+      'full'
     );
   });
 

@@ -4,6 +4,7 @@ mod application_public_api;
 mod bootstrap_tests;
 mod capability_plugin_runtime_tests;
 mod data_source_service_tests;
+mod ephemeral_inspection_contract_tests;
 mod external_agent_bridge_tests;
 mod file_management_bootstrap_tests;
 mod file_management_service_tests;

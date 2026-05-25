@@ -242,6 +242,35 @@ async fn local_runtime_event_stream_rejects_append_after_close() {
 }
 
 #[tokio::test]
+async fn local_runtime_event_stream_rejects_oversized_payloads() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+
+    let err = stream
+        .append(
+            run_id,
+            RuntimeEventPayload {
+                event_type: "debug_blob".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::Ephemeral,
+                persist_required: false,
+                trace_visible: true,
+                payload: json!({ "blob": "x".repeat(2 * 1024 * 1024) }),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("ephemeral_payload_too_large"));
+    assert!(stream.replay(run_id, Some(0), 10).await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn local_runtime_event_stream_open_run_reopens_closed_run_for_resume_phase() {
     let stream = LocalRuntimeEventStream::new();
     let run_id = Uuid::now_v7();

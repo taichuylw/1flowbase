@@ -16,19 +16,79 @@ const api = vi.hoisted(() => ({
     'memory'
   ],
   settingsHostInfrastructureMemoryEntriesQueryKey: vi.fn(
-    (contractCode: string | null) => [
+    (
+      contractCode: string | null,
+      request?: {
+        inspection_path?: string[];
+        cursor?: string | null;
+        limit?: number;
+        byte_limit?: number;
+      }
+    ) => [
       'settings',
       'host-infrastructure',
       'memory',
       'contracts',
       contractCode,
-      'entries'
+      'entries',
+      request?.inspection_path ?? [],
+      request?.cursor ?? null,
+      request?.limit ?? null,
+      request?.byte_limit ?? null
+    ]
+  ),
+  settingsHostInfrastructureMemoryTreeQueryKey: vi.fn(
+    (
+      contractCode: string | null,
+      request?: {
+        inspection_path?: string[];
+        cursor?: string | null;
+        limit?: number;
+        byte_limit?: number;
+      }
+    ) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'tree',
+      request?.inspection_path ?? [],
+      request?.cursor ?? null,
+      request?.limit ?? null,
+      request?.byte_limit ?? null
+    ]
+  ),
+  settingsHostInfrastructureMemorySearchQueryKey: vi.fn(
+    (
+      contractCode: string | null,
+      request?: {
+        q?: string;
+        inspection_path?: string[];
+        cursor?: string | null;
+        limit?: number;
+        byte_limit?: number;
+      }
+    ) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'search',
+      request?.q ?? '',
+      request?.inspection_path ?? [],
+      request?.cursor ?? null,
+      request?.limit ?? null,
+      request?.byte_limit ?? null
     ]
   ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
   fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
   fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryTree: vi.fn(),
+  searchSettingsHostInfrastructureMemoryEntries: vi.fn(),
   revealSettingsHostInfrastructureMemoryEntry: vi.fn()
 }));
 
@@ -240,7 +300,7 @@ describe('HostInfrastructurePanel', () => {
     ).toBeInTheDocument();
   });
 
-  test('renders memory contract tabs and metadata entries', async () => {
+  test('loads memory tree and paged entries after selecting a path', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
     api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
@@ -251,6 +311,8 @@ describe('HostInfrastructurePanel', () => {
           provider_code: 'local',
           capabilities: {
             list_entries: true,
+            list_tree: true,
+            search_entries: true,
             reveal_value: true
           },
           entry_count: 2,
@@ -260,38 +322,129 @@ describe('HostInfrastructurePanel', () => {
         }
       ]
     });
-    api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
-      contract_code: 'session-store',
-      label: 'Sessions',
-      provider_code: 'local',
-      capabilities: {
-        list_entries: true,
-        reveal_value: true
-      },
-      supported: true,
-      entries: [
-        {
+    api.fetchSettingsHostInfrastructureMemoryTree.mockImplementation(
+      (_contractCode: string, request?: { inspection_path?: string[] }) =>
+        Promise.resolve({
           contract_code: 'session-store',
-          group_code: 'sessions',
-          key: 'session:1',
-          entry_kind: 'session',
-          status: 'active',
-          owner: 'user-1',
-          value_size_bytes: 1024,
-          ttl_seconds: 60,
-          created_at_unix: 1_700_000_000,
-          expires_at_unix: 1_700_000_060,
-          sensitive: true,
-          metadata: { workspace_id: 'workspace-1' }
-        }
-      ]
+          label: 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          supported: true,
+          inspection_path: request?.inspection_path ?? [],
+          nodes: request?.inspection_path?.length
+            ? [
+                {
+                  node_ref: 'opaque-user-node',
+                  label: 'user-1',
+                  inspection_path: ['workspace-1', 'user-1'],
+                  depth: 2,
+                  entry_count: 2,
+                  sensitive_entry_count: 1,
+                  total_value_size_bytes: 2048,
+                  has_children: false
+                }
+              ]
+            : [
+                {
+                  node_ref: 'opaque-workspace-node',
+                  label: 'workspace-1',
+                  inspection_path: ['workspace-1'],
+                  depth: 1,
+                  entry_count: 2,
+                  sensitive_entry_count: 1,
+                  total_value_size_bytes: 2048,
+                  has_children: true
+                }
+              ],
+          next_cursor: null,
+          limit: 50,
+          byte_limit: 65536,
+          emitted_bytes: 128,
+          truncated_by_byte_limit: false
+        })
+    );
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockImplementation(
+      (
+        _contractCode: string,
+        request?: { cursor?: string | null; inspection_path?: string[] }
+      ) =>
+        Promise.resolve({
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          supported: true,
+          inspection_path: request?.inspection_path ?? [
+            'workspace-1',
+            'user-1'
+          ],
+          entries: [
+            {
+              contract_code: 'session-store',
+              group_code: 'sessions',
+              entry_ref:
+                request?.cursor === 'cursor-2' ? 'session:2' : 'session:1',
+              key: request?.cursor === 'cursor-2' ? 'session:2' : 'session:1',
+              inspection_path: [
+                'workspace-1',
+                'user-1',
+                request?.cursor === 'cursor-2' ? 'session:2' : 'session:1'
+              ],
+              entry_kind: 'session',
+              status: 'active',
+              owner: 'user-1',
+              value_size_bytes: 1024,
+              metadata_size_bytes: 32,
+              ttl_seconds: 60,
+              created_at_unix: 1_700_000_000,
+              expires_at_unix: 1_700_000_060,
+              sensitive: true,
+              metadata: { workspace_id: 'workspace-1' }
+            }
+          ],
+          next_cursor: request?.cursor === 'cursor-2' ? null : 'cursor-2',
+          limit: 50,
+          byte_limit: 65536,
+          emitted_bytes: 256,
+          truncated_by_byte_limit: false
+        })
+    );
+
+    const { container } = renderMemoryObservationPanel(true);
+
+    expect(await screen.findByText('Sessions')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        api.fetchSettingsHostInfrastructureMemoryEntries
+      ).not.toHaveBeenCalled();
     });
 
-    renderMemoryObservationPanel(true);
+    fireEvent.click(await screen.findByText('Sessions'));
+    expect(await screen.findByText('workspace-1')).toBeInTheDocument();
+    expect(api.fetchSettingsHostInfrastructureMemoryTree).toHaveBeenCalledWith(
+      'session-store',
+      { inspection_path: [], limit: 50 }
+    );
+    const workspaceSwitcher = container.querySelector('.ant-tree-switcher');
+    expect(workspaceSwitcher).not.toBeNull();
+    fireEvent.click(workspaceSwitcher as Element);
+    expect(await screen.findByText('user-1')).toBeInTheDocument();
+    expect(api.fetchSettingsHostInfrastructureMemoryTree).toHaveBeenCalledWith(
+      'session-store',
+      { inspection_path: ['workspace-1'], limit: 50 }
+    );
+    fireEvent.click(screen.getByText('user-1'));
 
-    expect(
-      await screen.findByRole('tab', { name: 'Sessions' })
-    ).toBeInTheDocument();
     expect(await screen.findByText('session:1')).toBeInTheDocument();
     expect(screen.getByText('1m 0s')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Metadata/ })).toBeEnabled();
@@ -299,6 +452,17 @@ describe('HostInfrastructurePanel', () => {
     expect(
       screen.queryByRole('button', { name: /清理/ })
     ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+    expect(await screen.findByText('session:2')).toBeInTheDocument();
+    expect(
+      api.fetchSettingsHostInfrastructureMemoryEntries
+    ).toHaveBeenCalledWith('session-store', {
+      inspection_path: ['workspace-1', 'user-1'],
+      cursor: 'cursor-2',
+      limit: 50
+    });
+    fireEvent.click(screen.getByRole('button', { name: '上一页' }));
+    expect(await screen.findByText('session:1')).toBeInTheDocument();
   });
 
   test('explains when memory observation succeeds but there are no contracts', async () => {
@@ -326,6 +490,8 @@ describe('HostInfrastructurePanel', () => {
           provider_code: 'local',
           capabilities: {
             list_entries: true,
+            list_tree: true,
+            search_entries: true,
             reveal_value: true
           },
           entry_count: 1,
@@ -335,31 +501,72 @@ describe('HostInfrastructurePanel', () => {
         }
       ]
     });
+    api.fetchSettingsHostInfrastructureMemoryTree.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
+      capabilities: {
+        list_entries: true,
+        list_tree: true,
+        search_entries: true,
+        reveal_value: true
+      },
+      supported: true,
+      inspection_path: [],
+      nodes: [
+        {
+          node_ref: 'workspace-1',
+          label: 'workspace-1',
+          inspection_path: ['workspace-1'],
+          depth: 1,
+          entry_count: 1,
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 1024,
+          has_children: false
+        }
+      ],
+      next_cursor: null,
+      limit: 50,
+      byte_limit: 65536,
+      emitted_bytes: 128,
+      truncated_by_byte_limit: false
+    });
     api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
       contract_code: 'session-store',
       label: 'Sessions',
       provider_code: 'local',
       capabilities: {
         list_entries: true,
+        list_tree: true,
+        search_entries: true,
         reveal_value: true
       },
       supported: true,
+      inspection_path: ['workspace-1'],
       entries: [
         {
           contract_code: 'session-store',
           group_code: 'sessions',
+          entry_ref: 'session:1',
           key: 'session:1',
+          inspection_path: ['workspace-1', 'session:1'],
           entry_kind: 'session',
           status: 'active',
           owner: null,
           value_size_bytes: 1024,
+          metadata_size_bytes: 2,
           ttl_seconds: null,
           created_at_unix: null,
           expires_at_unix: null,
           sensitive: true,
           metadata: {}
         }
-      ]
+      ],
+      next_cursor: null,
+      limit: 50,
+      byte_limit: 65536,
+      emitted_bytes: 128,
+      truncated_by_byte_limit: false
     });
 
     renderMemoryObservationPanel(false);
@@ -367,6 +574,8 @@ describe('HostInfrastructurePanel', () => {
     expect(
       await screen.findByText('当前视图只展示 metadata。')
     ).toBeInTheDocument();
+    fireEvent.click(await screen.findByText('Sessions'));
+    fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: /Metadata/ })
@@ -390,6 +599,8 @@ describe('HostInfrastructurePanel', () => {
           provider_code: 'local',
           capabilities: {
             list_entries: true,
+            list_tree: true,
+            search_entries: true,
             reveal_value: true
           },
           entry_count: 1,
@@ -399,57 +610,113 @@ describe('HostInfrastructurePanel', () => {
         }
       ]
     });
+    api.fetchSettingsHostInfrastructureMemoryTree.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
+      capabilities: {
+        list_entries: true,
+        list_tree: true,
+        search_entries: true,
+        reveal_value: true
+      },
+      supported: true,
+      inspection_path: [],
+      nodes: [
+        {
+          node_ref: 'workspace-1',
+          label: 'workspace-1',
+          inspection_path: ['workspace-1'],
+          depth: 1,
+          entry_count: 1,
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 1024,
+          has_children: false
+        }
+      ],
+      next_cursor: null,
+      limit: 50,
+      byte_limit: 65536,
+      emitted_bytes: 128,
+      truncated_by_byte_limit: false
+    });
     api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
       contract_code: 'session-store',
       label: 'Sessions',
       provider_code: 'local',
       capabilities: {
         list_entries: true,
+        list_tree: true,
+        search_entries: true,
         reveal_value: true
       },
       supported: true,
+      inspection_path: ['workspace-1'],
       entries: [
         {
           contract_code: 'session-store',
           group_code: 'sessions',
+          entry_ref: 'session:1',
           key: 'session:1',
+          inspection_path: ['workspace-1', 'session:1'],
           entry_kind: 'session',
           status: 'active',
           owner: null,
           value_size_bytes: 1024,
+          metadata_size_bytes: 2,
           ttl_seconds: null,
           created_at_unix: null,
           expires_at_unix: null,
           sensitive: true,
           metadata: {}
         }
-      ]
+      ],
+      next_cursor: null,
+      limit: 50,
+      byte_limit: 65536,
+      emitted_bytes: 128,
+      truncated_by_byte_limit: false
     });
     api.revealSettingsHostInfrastructureMemoryEntry.mockResolvedValue({
       metadata: {
         contract_code: 'session-store',
         group_code: 'sessions',
+        entry_ref: 'session:1',
         key: 'session:1',
+        inspection_path: ['workspace-1', 'session:1'],
         entry_kind: 'session',
         status: 'active',
         owner: null,
         value_size_bytes: 1024,
+        metadata_size_bytes: 2,
         ttl_seconds: null,
         created_at_unix: null,
         expires_at_unix: null,
         sensitive: true,
         metadata: {}
       },
-      value: { flow_run: { status: 'succeeded' } }
+      reveal_mode: 'preview',
+      value_state: 'available',
+      value: { flow_run: { status: 'succeeded' } },
+      value_preview: null,
+      preview_size_bytes: 1024,
+      full_value_size_bytes: 1024
     });
 
     renderMemoryObservationPanel(true);
+    fireEvent.click(await screen.findByText('Sessions'));
+    fireEvent.click(await screen.findByText('workspace-1'));
     fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
 
     await waitFor(() => {
       expect(
         api.revealSettingsHostInfrastructureMemoryEntry
-      ).toHaveBeenCalledWith('session-store', 'session:1', 'csrf-123');
+      ).toHaveBeenCalledWith(
+        'session-store',
+        'session:1',
+        'csrf-123',
+        'preview'
+      );
     });
     expect(
       screen.queryByRole('button', { name: '查看并记录审计' })
@@ -458,5 +725,152 @@ describe('HostInfrastructurePanel', () => {
     expect(screen.getByLabelText('Memory value JSON')).toHaveTextContent(
       'succeeded'
     );
+  });
+
+  test('shows preview state before full reveal reports oversized value', async () => {
+    api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
+    api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
+      can_manage: true,
+      contracts: [
+        {
+          contract_code: 'cache-store',
+          label: 'Cache',
+          provider_code: 'local',
+          capabilities: {
+            list_entries: true,
+            list_tree: true,
+            search_entries: true,
+            reveal_value: true
+          },
+          entry_count: 1,
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 400000,
+          supported: true
+        }
+      ]
+    });
+    api.fetchSettingsHostInfrastructureMemoryTree.mockResolvedValue({
+      contract_code: 'cache-store',
+      label: 'Cache',
+      provider_code: 'local',
+      capabilities: {
+        list_entries: true,
+        list_tree: true,
+        search_entries: true,
+        reveal_value: true
+      },
+      supported: true,
+      inspection_path: [],
+      nodes: [
+        {
+          node_ref: 'application-logs',
+          label: 'application-logs',
+          inspection_path: ['application-logs'],
+          depth: 1,
+          entry_count: 1,
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 400000,
+          has_children: false
+        }
+      ],
+      next_cursor: null,
+      limit: 50,
+      byte_limit: 65536,
+      emitted_bytes: 128,
+      truncated_by_byte_limit: false
+    });
+    api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
+      contract_code: 'cache-store',
+      label: 'Cache',
+      provider_code: 'local',
+      capabilities: {
+        list_entries: true,
+        list_tree: true,
+        search_entries: true,
+        reveal_value: true
+      },
+      supported: true,
+      inspection_path: ['application-logs'],
+      entries: [
+        {
+          contract_code: 'cache-store',
+          group_code: 'application-logs',
+          entry_ref: 'application-logs:run:1',
+          key: 'application-logs:run:1',
+          inspection_path: ['application-logs', 'run', '1'],
+          entry_kind: 'cache_entry',
+          status: 'active',
+          owner: null,
+          value_size_bytes: 400000,
+          metadata_size_bytes: 24,
+          ttl_seconds: null,
+          created_at_unix: null,
+          expires_at_unix: null,
+          sensitive: true,
+          metadata: { domain_code: 'application-logs' }
+        }
+      ],
+      next_cursor: null,
+      limit: 50,
+      byte_limit: 65536,
+      emitted_bytes: 128,
+      truncated_by_byte_limit: false
+    });
+    api.revealSettingsHostInfrastructureMemoryEntry.mockImplementation(
+      async (
+        _contractCode: string,
+        _entryRef: string,
+        _csrfToken: string,
+        revealMode: 'preview' | 'full'
+      ) => ({
+        metadata: {
+          contract_code: 'cache-store',
+          group_code: 'application-logs',
+          entry_ref: 'application-logs:run:1',
+          key: 'application-logs:run:1',
+          inspection_path: ['application-logs', 'run', '1'],
+          entry_kind: 'cache_entry',
+          status: 'active',
+          owner: null,
+          value_size_bytes: 400000,
+          metadata_size_bytes: 24,
+          ttl_seconds: null,
+          created_at_unix: null,
+          expires_at_unix: null,
+          sensitive: true,
+          metadata: { domain_code: 'application-logs' }
+        },
+        reveal_mode: revealMode,
+        value_state: revealMode === 'preview' ? 'preview' : 'value_too_large',
+        value: null,
+        value_preview: revealMode === 'preview' ? '{"blob":"xxxx' : null,
+        preview_size_bytes: revealMode === 'preview' ? 12 : 0,
+        full_value_size_bytes: 400000
+      })
+    );
+
+    renderMemoryObservationPanel(true);
+    fireEvent.click(await screen.findByText('Cache'));
+    fireEvent.click(await screen.findByText('application-logs'));
+    fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
+
+    expect((await screen.findAllByText('preview')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Reveal mode')).toBeInTheDocument();
+    expect(screen.getByText('{"blob":"xxxx')).toBeInTheDocument();
+    fireEvent.click(await screen.findByText('Full reveal'));
+
+    await waitFor(() => {
+      expect(
+        api.revealSettingsHostInfrastructureMemoryEntry
+      ).toHaveBeenCalledWith(
+        'cache-store',
+        'application-logs:run:1',
+        'csrf-123',
+        'full'
+      );
+    });
+    expect(
+      (await screen.findAllByText('value_too_large')).length
+    ).toBeGreaterThan(0);
   });
 });

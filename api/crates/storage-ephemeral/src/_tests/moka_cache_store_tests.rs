@@ -114,6 +114,27 @@ async fn moka_cache_store_supports_ephemeral_set_if_absent() {
 }
 
 #[tokio::test]
+async fn moka_cache_store_rejects_oversized_ephemeral_values() {
+    let store = MokaCacheStore::new("flowbase:test", 128);
+    let oversized = json!({ "blob": "x".repeat(2 * 1024 * 1024) });
+
+    let set_result = CacheStore::set_json(&store, "large:value", oversized.clone(), None).await;
+    assert!(set_result.is_err());
+    assert_eq!(
+        CacheStore::get_json(&store, "large:value").await.unwrap(),
+        None
+    );
+
+    let set_if_absent_result =
+        EphemeralKvStore::set_if_absent_json(&store, "large:lease", oversized, None).await;
+    assert!(set_if_absent_result.is_err());
+    assert_eq!(
+        CacheStore::get_json(&store, "large:lease").await.unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
 async fn moka_cache_store_exposes_cache_inspection_snapshots() {
     let store = MokaCacheStore::new("flowbase:test", 128);
 

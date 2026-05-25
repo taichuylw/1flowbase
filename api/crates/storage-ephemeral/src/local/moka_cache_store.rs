@@ -6,9 +6,10 @@ use std::{
 
 use async_trait::async_trait;
 use control_plane::ports::{
-    CacheDomainSnapshot, CacheEntrySnapshot, CacheEntryValueSnapshot, CacheInspectionCapabilities,
-    CacheStore, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
-    EphemeralInspectionCapabilities,
+    ensure_ephemeral_value_size, ephemeral_metadata_size_bytes, CacheDomainSnapshot,
+    CacheEntrySnapshot, CacheEntryValueSnapshot, CacheInspectionCapabilities, CacheStore,
+    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities,
+    EphemeralValueRevealMode,
 };
 use moka::{future::Cache, Expiry};
 use time::OffsetDateTime;
@@ -93,6 +94,13 @@ impl MokaCacheStore {
 
     fn key_matches_domain(key: &str, domain_code: &str) -> bool {
         Self::domain_code(key) == domain_code
+    }
+
+    fn inspection_path(key: &str) -> Vec<String> {
+        key.split(':')
+            .filter(|segment| !segment.is_empty())
+            .map(ToString::to_string)
+            .collect()
     }
 
     fn ttl_to_std(ttl: Option<time::Duration>) -> Option<StdDuration> {
@@ -189,14 +197,18 @@ impl MokaCacheStore {
         metadata: serde_json::Value,
     ) -> EphemeralEntrySnapshot {
         let json_entry = Self::json_entry_snapshot(key, entry);
+        let metadata_size_bytes = ephemeral_metadata_size_bytes(&metadata);
         EphemeralEntrySnapshot {
             contract_code: contract_code.to_string(),
             group_code,
+            entry_ref: json_entry.key.clone(),
+            inspection_path: Self::inspection_path(&json_entry.key),
             key: json_entry.key,
             entry_kind: entry_kind.to_string(),
             status: "active".to_string(),
             owner: None,
             value_size_bytes: json_entry.value_size_bytes,
+            metadata_size_bytes,
             ttl_seconds: json_entry.ttl_seconds,
             created_at_unix: json_entry.created_at_unix,
             expires_at_unix: json_entry.expires_at_unix,
@@ -245,6 +257,7 @@ impl CacheStore for MokaCacheStore {
         value: serde_json::Value,
         ttl: Option<time::Duration>,
     ) -> anyhow::Result<()> {
+        ensure_ephemeral_value_size(&value)?;
         self.set_entry(key, value, ttl).await;
         Ok(())
     }
@@ -398,14 +411,15 @@ impl CacheStore for MokaCacheStore {
 
     async fn reveal_ephemeral_entry(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
-        let Some(entry) = self.get_entry(key).await else {
+        let Some(entry) = self.get_entry(entry_ref).await else {
             return Ok(None);
         };
-        let domain_code = Self::domain_code(key).to_string();
+        let domain_code = Self::domain_code(entry_ref).to_string();
         let metadata = Self::ephemeral_entry_snapshot(
-            key.to_string(),
+            entry_ref.to_string(),
             &entry,
             "cache-store",
             "cache_entry",
@@ -413,10 +427,11 @@ impl CacheStore for MokaCacheStore {
             true,
             serde_json::json!({ "domain_code": domain_code }),
         );
-        Ok(Some(EphemeralEntryValueSnapshot {
+        Ok(Some(EphemeralEntryValueSnapshot::from_value(
             metadata,
-            value: entry.value,
-        }))
+            entry.value,
+            reveal_mode,
+        )))
     }
 }
 
@@ -428,6 +443,7 @@ impl EphemeralKvStore for MokaCacheStore {
         value: serde_json::Value,
         ttl: Option<time::Duration>,
     ) -> anyhow::Result<()> {
+        ensure_ephemeral_value_size(&value)?;
         self.set_entry(key, value, ttl).await;
         Ok(())
     }
@@ -451,6 +467,7 @@ impl EphemeralKvStore for MokaCacheStore {
         value: serde_json::Value,
         ttl: Option<time::Duration>,
     ) -> anyhow::Result<bool> {
+        ensure_ephemeral_value_size(&value)?;
         let _guard = self.set_if_absent_guard.lock().await;
         let namespaced_key = self.namespaced_key(key);
         if self.cache.get(&namespaced_key).await.is_some() {

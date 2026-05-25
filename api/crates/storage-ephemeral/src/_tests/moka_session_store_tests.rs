@@ -1,4 +1,4 @@
-use control_plane::ports::SessionStore;
+use control_plane::ports::{EphemeralValueRevealMode, SessionStore};
 use domain::SessionRecord;
 use storage_ephemeral::MokaSessionStore;
 use time::OffsetDateTime;
@@ -84,10 +84,10 @@ async fn moka_session_store_exposes_ephemeral_inspection_snapshots() {
     assert!(entries[0].sensitive);
 
     let revealed = store
-        .reveal_ephemeral_entry(&session.session_id)
+        .reveal_ephemeral_entry(&session.session_id, EphemeralValueRevealMode::Full)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(revealed.metadata.key, session.session_id);
-    assert_eq!(revealed.value["session_id"], session.session_id);
+    assert_eq!(revealed.value.unwrap()["session_id"], session.session_id);
 }

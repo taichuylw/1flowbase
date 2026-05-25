@@ -1,7 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use control_plane::ports::{EphemeralEntrySnapshot, EphemeralEntryValueSnapshot};
+use control_plane::ports::{
+    ephemeral_metadata_size_bytes, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
+    EphemeralValueRevealMode,
+};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 
@@ -42,9 +45,19 @@ impl MemoryLeaseStore {
 
     fn entry_snapshot(key: String, entry: &LeaseEntry) -> EphemeralEntrySnapshot {
         let now = OffsetDateTime::now_utc();
+        let metadata = serde_json::json!({
+            "owner": entry.owner,
+            "expires_at_unix": entry.expires_at.unix_timestamp(),
+        });
         EphemeralEntrySnapshot {
             contract_code: "distributed-lock".to_string(),
             group_code: key.split_once(':').map(|(group, _)| group.to_string()),
+            entry_ref: key.clone(),
+            inspection_path: key
+                .split(':')
+                .filter(|segment| !segment.is_empty())
+                .map(ToString::to_string)
+                .collect(),
             key,
             entry_kind: "lock".to_string(),
             status: if entry.expires_at > now {
@@ -59,14 +72,12 @@ impl MemoryLeaseStore {
             }))
             .map(|bytes| bytes.len() as u64)
             .unwrap_or(0),
+            metadata_size_bytes: ephemeral_metadata_size_bytes(&metadata),
             ttl_seconds: Some((entry.expires_at - now).whole_seconds().max(0)),
             created_at_unix: None,
             expires_at_unix: Some(entry.expires_at.unix_timestamp()),
             sensitive: false,
-            metadata: serde_json::json!({
-                "owner": entry.owner,
-                "expires_at_unix": entry.expires_at.unix_timestamp(),
-            }),
+            metadata,
         }
     }
 
@@ -91,21 +102,25 @@ impl MemoryLeaseStore {
 
     pub(crate) async fn reveal_ephemeral_entry_for_inspection(
         &self,
-        key: &str,
+        entry_ref: &str,
+        reveal_mode: EphemeralValueRevealMode,
     ) -> Option<EphemeralEntryValueSnapshot> {
-        let namespaced_key = self.namespaced_key(key);
+        let namespaced_key = self.namespaced_key(entry_ref);
         let map = self.inner.read().await;
         let entry = map.get(&namespaced_key)?;
         if entry.expires_at <= OffsetDateTime::now_utc() {
             return None;
         }
-        Some(EphemeralEntryValueSnapshot {
-            metadata: Self::entry_snapshot(key.to_string(), entry),
-            value: serde_json::json!({
+        let metadata = Self::entry_snapshot(entry_ref.to_string(), entry);
+        let value = serde_json::json!({
                 "owner": entry.owner,
                 "expires_at_unix": entry.expires_at.unix_timestamp(),
-            }),
-        })
+        });
+        Some(EphemeralEntryValueSnapshot::from_value(
+            metadata,
+            value,
+            reveal_mode,
+        ))
     }
 }
 
