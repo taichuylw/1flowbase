@@ -1,13 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
 const {
+  buildTemporaryFrontendCommand,
   collectRelationshipViolations,
   createProbeUrl,
   formatBoundaryFailure,
   formatRelationshipFailure,
   isStyleBoundaryFrontendReady,
   parseCliArgs,
+  resolveStyleBoundaryBaseUrl,
+  resolveStyleBoundaryFrontendHost,
+  resolveTemporaryFrontendPort,
   resolveSceneIds
 } = require('../core.js');
 
@@ -73,6 +78,122 @@ test('createProbeUrl targets the dedicated Vite entry', () => {
     createProbeUrl('http://127.0.0.1:3100', 'page.home'),
     'http://127.0.0.1:3100/style-boundary.html?scene=page.home'
   );
+});
+
+test('resolveStyleBoundaryBaseUrl defaults to the user frontend and respects explicit hosts', () => {
+  assert.equal(resolveStyleBoundaryBaseUrl({}), 'http://127.0.0.1:3100');
+  assert.equal(
+    resolveStyleBoundaryBaseUrl({
+      STYLE_BOUNDARY_BASE_URL: ' http://127.0.0.1:3199/ '
+    }),
+    'http://127.0.0.1:3199'
+  );
+});
+
+test('resolveTemporaryFrontendPort never selects the user frontend port', async () => {
+  const probedPorts = [];
+  const port = await resolveTemporaryFrontendPort(
+    {},
+    {
+      isPortAvailable: async (candidate) => {
+        probedPorts.push(candidate);
+        return candidate === 3101;
+      }
+    }
+  );
+
+  assert.equal(port, 3101);
+  assert.deepEqual(probedPorts, [3101]);
+
+  await assert.rejects(
+    () =>
+      resolveTemporaryFrontendPort(
+        { STYLE_BOUNDARY_PORT: '3100' },
+        { isPortAvailable: async () => true }
+      ),
+    /3100/u
+  );
+});
+
+test('buildTemporaryFrontendCommand runs Vite on the isolated style-boundary port', () => {
+  const command = buildTemporaryFrontendCommand('/repo', 3101, { PATH: '' });
+
+  assert.equal(command.cwd, path.join('/repo', 'web'));
+  assert.deepEqual(command.args, [
+    '--filter',
+    '@1flowbase/web',
+    'dev',
+    '--host',
+    '127.0.0.1',
+    '--port',
+    '3101',
+    '--strictPort'
+  ]);
+  assert.equal(command.args.includes('3100'), false);
+});
+
+test('resolveStyleBoundaryFrontendHost starts an isolated host when the user frontend is not ready', async () => {
+  const calls = [];
+  const frontend = {
+    baseUrl: 'http://127.0.0.1:3101',
+    stop: async () => {}
+  };
+
+  const host = await resolveStyleBoundaryFrontendHost(
+    {},
+    '/repo',
+    'page.home',
+    {},
+    {
+      isStyleBoundaryFrontendReady: async (_browser, baseUrl, sceneId) => {
+        calls.push(['probe', baseUrl, sceneId]);
+        return false;
+      },
+      resolveTemporaryFrontendPort: async () => {
+        calls.push(['resolve-port']);
+        return 3101;
+      },
+      startTemporaryFrontend: (repoRoot, port, options) => {
+        calls.push(['start', repoRoot, port, options.env]);
+        return frontend;
+      },
+      waitForTemporaryFrontendReady: async (_browser, startedFrontend, sceneId) => {
+        calls.push(['wait', startedFrontend.baseUrl, sceneId]);
+      },
+      writeStdout: () => {}
+    }
+  );
+
+  assert.equal(host, frontend);
+  assert.deepEqual(calls, [
+    ['probe', 'http://127.0.0.1:3100', 'page.home'],
+    ['resolve-port'],
+    ['start', '/repo', 3101, {}],
+    ['wait', 'http://127.0.0.1:3101', 'page.home']
+  ]);
+});
+
+test('resolveStyleBoundaryFrontendHost does not start a fallback when an explicit host is not ready', async () => {
+  let started = false;
+
+  await assert.rejects(
+    () =>
+      resolveStyleBoundaryFrontendHost(
+        {},
+        '/repo',
+        'page.home',
+        { STYLE_BOUNDARY_BASE_URL: 'http://127.0.0.1:3199' },
+        {
+          isStyleBoundaryFrontendReady: async () => false,
+          startTemporaryFrontend: () => {
+            started = true;
+          },
+          writeStdout: () => {}
+        }
+      ),
+    /STYLE_BOUNDARY_BASE_URL/u
+  );
+  assert.equal(started, false);
 });
 
 test('isStyleBoundaryFrontendReady reuses an already running style-boundary host', async () => {

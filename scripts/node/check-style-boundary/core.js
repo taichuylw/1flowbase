@@ -1,10 +1,21 @@
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createRequire } = require('node:module');
-const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
+const {
+  buildNodePreferredEnv,
+  resolvePnpmBinaryFromPath
+} = require('../testing/node-runtime.js');
 
 const MODES = new Set(['component', 'page', 'file', 'all-pages']);
+const USER_FRONTEND_PORT = 3100;
+const DEFAULT_STYLE_BOUNDARY_BASE_URL = `http://127.0.0.1:${USER_FRONTEND_PORT}`;
+const DEFAULT_TEMPORARY_FRONTEND_PORT = 3101;
+const TEMPORARY_FRONTEND_HOST = '127.0.0.1';
+const TEMPORARY_FRONTEND_STARTUP_TIMEOUT_MS = 30_000;
+const TEMPORARY_FRONTEND_POLL_INTERVAL_MS = 500;
+const TEMPORARY_FRONTEND_STOP_TIMEOUT_MS = 5_000;
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -83,31 +94,261 @@ function createProbeUrl(baseUrl, sceneId) {
   return `${baseUrl}/style-boundary.html?scene=${encodeURIComponent(sceneId)}`;
 }
 
-async function ensureFrontendHost(repoRoot) {
-  await new Promise((resolve, reject) => {
-    const child = spawn(
-      resolveNodeBinaryFromPath(process.env),
-      [
-        path.join(repoRoot, 'scripts', 'node', 'dev-up.js'),
-        'ensure',
-        '--frontend-only',
-        '--skip-docker'
-      ],
-      {
-        cwd: repoRoot,
-        stdio: 'inherit'
-      }
-    );
+function hasExplicitStyleBoundaryBaseUrl(env = process.env) {
+  return typeof env.STYLE_BOUNDARY_BASE_URL === 'string' &&
+    env.STYLE_BOUNDARY_BASE_URL.trim() !== '';
+}
 
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
+function resolveStyleBoundaryBaseUrl(env = process.env) {
+  if (hasExplicitStyleBoundaryBaseUrl(env)) {
+    return env.STYLE_BOUNDARY_BASE_URL.trim().replace(/\/+$/u, '');
+  }
+
+  return DEFAULT_STYLE_BOUNDARY_BASE_URL;
+}
+
+function parseTemporaryFrontendPort(rawPort) {
+  const port = Number(rawPort);
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`STYLE_BOUNDARY_PORT must be an integer between 1 and 65535: ${rawPort}`);
+  }
+
+  if (port === USER_FRONTEND_PORT) {
+    throw new Error(`STYLE_BOUNDARY_PORT must not be ${USER_FRONTEND_PORT}; that port belongs to the user frontend`);
+  }
+
+  return port;
+}
+
+async function isPortAvailable(port, host = TEMPORARY_FRONTEND_HOST) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    let settled = false;
+    const finish = (available) => {
+      if (settled) {
         return;
       }
 
-      reject(new Error(`dev-up ensure failed with exit code ${code}`));
+      settled = true;
+      server.removeAllListeners();
+      resolve(available);
+    };
+
+    server.unref();
+    server.once('error', () => finish(false));
+    server.listen({ host, port }, () => {
+      server.close(() => finish(true));
     });
   });
+}
+
+async function findAvailableTemporaryFrontendPort(startPort, deps = {}) {
+  const isCandidateAvailable = deps.isPortAvailable || isPortAvailable;
+
+  for (let candidate = startPort; candidate <= 65535; candidate += 1) {
+    if (candidate === USER_FRONTEND_PORT) {
+      continue;
+    }
+
+    if (await isCandidateAvailable(candidate, TEMPORARY_FRONTEND_HOST)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`No available style-boundary frontend port found after ${startPort}`);
+}
+
+async function resolveTemporaryFrontendPort(env = process.env, deps = {}) {
+  const configuredPort = env.STYLE_BOUNDARY_PORT;
+  const isCandidateAvailable = deps.isPortAvailable || isPortAvailable;
+
+  if (typeof configuredPort === 'string' && configuredPort.trim() !== '') {
+    const port = parseTemporaryFrontendPort(configuredPort.trim());
+
+    if (!(await isCandidateAvailable(port, TEMPORARY_FRONTEND_HOST))) {
+      throw new Error(`STYLE_BOUNDARY_PORT ${port} is already in use`);
+    }
+
+    return port;
+  }
+
+  return findAvailableTemporaryFrontendPort(DEFAULT_TEMPORARY_FRONTEND_PORT, deps);
+}
+
+function buildTemporaryFrontendCommand(repoRoot, port, env = process.env) {
+  const runtime = buildNodePreferredEnv(env);
+
+  return {
+    command: resolvePnpmBinaryFromPath(runtime.env) || 'pnpm',
+    args: [
+      '--filter',
+      '@1flowbase/web',
+      'dev',
+      '--host',
+      TEMPORARY_FRONTEND_HOST,
+      '--port',
+      String(port),
+      '--strictPort'
+    ],
+    cwd: path.join(repoRoot, 'web'),
+    env: runtime.env
+  };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function formatTemporaryFrontendExit(exitState) {
+  if (exitState.error) {
+    return exitState.error.message;
+  }
+
+  if (exitState.signal) {
+    return `signal ${exitState.signal}`;
+  }
+
+  return `exit code ${exitState.code}`;
+}
+
+async function stopTemporaryFrontendProcess(child, exitPromise) {
+  if (
+    child.exitCode !== null ||
+    child.signalCode !== null ||
+    !child.pid
+  ) {
+    return;
+  }
+
+  const kill = (signal) => {
+    try {
+      if (process.platform !== 'win32') {
+        process.kill(-child.pid, signal);
+        return;
+      }
+
+      child.kill(signal);
+    } catch (_error) {
+      try {
+        child.kill(signal);
+      } catch {
+        // The temporary process already exited between the readiness probe and cleanup.
+      }
+    }
+  };
+
+  kill('SIGTERM');
+  const stopped = await Promise.race([
+    exitPromise,
+    delay(TEMPORARY_FRONTEND_STOP_TIMEOUT_MS).then(() => null)
+  ]);
+
+  if (stopped) {
+    return;
+  }
+
+  kill('SIGKILL');
+  await Promise.race([
+    exitPromise,
+    delay(TEMPORARY_FRONTEND_STOP_TIMEOUT_MS)
+  ]);
+}
+
+function startTemporaryFrontend(repoRoot, port, deps = {}) {
+  const command = buildTemporaryFrontendCommand(repoRoot, port, deps.env || process.env);
+  const spawnImpl = deps.spawnImpl || spawn;
+  let exitState = null;
+  const child = spawnImpl(command.command, command.args, {
+    cwd: command.cwd,
+    env: command.env,
+    stdio: 'inherit',
+    detached: process.platform !== 'win32'
+  });
+  const exitPromise = new Promise((resolve) => {
+    child.once('error', (error) => {
+      exitState = { error };
+      resolve(exitState);
+    });
+    child.once('exit', (code, signal) => {
+      exitState = { code, signal };
+      resolve(exitState);
+    });
+  });
+
+  return {
+    baseUrl: `http://${TEMPORARY_FRONTEND_HOST}:${port}`,
+    child,
+    getExitState: () => exitState,
+    stop: () => stopTemporaryFrontendProcess(child, exitPromise)
+  };
+}
+
+async function waitForTemporaryFrontendReady(browser, frontend, sceneId, options = {}) {
+  const timeoutMs = options.timeoutMs || TEMPORARY_FRONTEND_STARTUP_TIMEOUT_MS;
+  const pollIntervalMs = options.pollIntervalMs || TEMPORARY_FRONTEND_POLL_INTERVAL_MS;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const exitState = frontend.getExitState();
+
+    if (exitState) {
+      throw new Error(
+        `style-boundary temporary frontend exited before ready: ${formatTemporaryFrontendExit(exitState)}`
+      );
+    }
+
+    if (await isStyleBoundaryFrontendReady(browser, frontend.baseUrl, sceneId)) {
+      return;
+    }
+
+    await delay(Math.min(pollIntervalMs, Math.max(deadline - Date.now(), 0)));
+  }
+
+  throw new Error(
+    `style-boundary temporary frontend was not ready at ${frontend.baseUrl} within ${timeoutMs}ms`
+  );
+}
+
+async function resolveStyleBoundaryFrontendHost(
+  browser,
+  repoRoot,
+  sceneId,
+  env = process.env,
+  deps = {}
+) {
+  const baseUrl = resolveStyleBoundaryBaseUrl(env);
+  const isReady = deps.isStyleBoundaryFrontendReady || isStyleBoundaryFrontendReady;
+  const resolvePort = deps.resolveTemporaryFrontendPort || resolveTemporaryFrontendPort;
+  const startFrontend = deps.startTemporaryFrontend || startTemporaryFrontend;
+  const waitForReady = deps.waitForTemporaryFrontendReady || waitForTemporaryFrontendReady;
+  const writeStdout = deps.writeStdout || ((message) => process.stdout.write(message));
+
+  if (await isReady(browser, baseUrl, sceneId)) {
+    return {
+      baseUrl,
+      stop: async () => {}
+    };
+  }
+
+  if (hasExplicitStyleBoundaryBaseUrl(env)) {
+    throw new Error(`style-boundary frontend is not ready at STYLE_BOUNDARY_BASE_URL=${baseUrl}`);
+  }
+
+  const port = await resolvePort(env, deps);
+  const frontend = startFrontend(repoRoot, port, { env });
+
+  writeStdout(`[1flowbase-style-boundary] starting isolated frontend ${frontend.baseUrl}\n`);
+
+  try {
+    await waitForReady(browser, frontend, sceneId);
+    return frontend;
+  } catch (error) {
+    await frontend.stop();
+    throw error;
+  }
 }
 
 async function isStyleBoundaryFrontendReady(browser, baseUrl, sceneId) {
@@ -630,20 +871,24 @@ async function main(argv) {
   const manifest = loadManifest(repoRoot);
   const sceneIds = resolveSceneIds(manifest, options);
   const uploadsDir = ensureUploadsDir(repoRoot);
-  const baseUrl = 'http://127.0.0.1:3100';
 
   const { chromium } = loadPlaywright(repoRoot);
   const browser = await chromium.launch({
     channel: 'chrome',
     headless: true
   });
+  let frontendHost = {
+    baseUrl: resolveStyleBoundaryBaseUrl(process.env),
+    stop: async () => {}
+  };
 
   try {
-    const frontendReady = await isStyleBoundaryFrontendReady(browser, baseUrl, sceneIds[0]);
-
-    if (!frontendReady) {
-      await ensureFrontendHost(repoRoot);
-    }
+    frontendHost = await resolveStyleBoundaryFrontendHost(
+      browser,
+      repoRoot,
+      sceneIds[0],
+      process.env
+    );
 
     for (const sceneId of sceneIds) {
       const scene = manifest.find((entry) => entry.id === sceneId);
@@ -652,7 +897,7 @@ async function main(argv) {
         throw new Error(`Unknown style boundary scene: ${sceneId}`);
       }
 
-      const result = await runScene(browser, baseUrl, scene);
+      const result = await runScene(browser, frontendHost.baseUrl, scene);
 
       if (
         result.violations.length > 0 ||
@@ -679,11 +924,13 @@ async function main(argv) {
       await result.page.close();
     }
   } finally {
+    await frontendHost.stop();
     await browser.close();
   }
 }
 
 module.exports = {
+  buildTemporaryFrontendCommand,
   collectRelationshipViolations,
   createProbeUrl,
   formatBoundaryFailure,
@@ -691,5 +938,8 @@ module.exports = {
   isStyleBoundaryFrontendReady,
   main,
   parseCliArgs,
+  resolveStyleBoundaryBaseUrl,
+  resolveStyleBoundaryFrontendHost,
+  resolveTemporaryFrontendPort,
   resolveSceneIds
 };
