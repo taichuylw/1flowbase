@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import {
   Alert,
+  Badge,
   Button,
   Descriptions,
   Drawer,
@@ -178,7 +179,12 @@ function renderTreeTitle(
   return (
     <span className="host-memory-panel__tree-node-title">
       <Typography.Text>{labelNode}</Typography.Text>
-      <Tag>{entryCount}</Tag>
+      <Badge
+        className="host-memory-panel__tree-node-count"
+        count={entryCount}
+        overflowCount={999999}
+        size="small"
+      />
     </span>
   );
 }
@@ -599,9 +605,12 @@ export function HostInfrastructureMemoryObservationPanel({
             label: (
               <span className="host-memory-panel__tab-label">
                 <span>{contract.label}</span>
-                <Tag className="host-memory-panel__tab-count">
-                  {contract.entry_count}
-                </Tag>
+                <Badge
+                  className="host-memory-panel__tab-count"
+                  count={contract.entry_count}
+                  overflowCount={999999}
+                  size="small"
+                />
               </span>
             ),
             children:

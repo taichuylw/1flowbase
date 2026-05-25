@@ -597,6 +597,9 @@ describe('HostInfrastructurePanel', () => {
       await screen.findByRole('tab', { name: /Sessions/ })
     ).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('tab', { name: /Sessions/ }).querySelector('.ant-badge')
+    ).not.toBeNull();
     const memoryLayout = screen
       .getByText('session-store')
       .closest('.host-memory-panel__tab-pane');
@@ -618,6 +621,11 @@ describe('HostInfrastructurePanel', () => {
     expect(await screen.findByText('space')).toHaveClass(
       'host-memory-panel__tree-search-value'
     );
+    expect(
+      memoryLayout?.querySelector(
+        '.host-memory-panel__tree-node-count.ant-badge'
+      )
+    ).not.toBeNull();
     fireEvent.change(treeSearch, { target: { value: '' } });
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();

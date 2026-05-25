@@ -76,7 +76,7 @@
 
 .host-memory-panel__tab-count {
   flex: 0 0 auto;
-  margin-inline-end: 0;
+  line-height: 1;
 }
 
 .host-cache-panel__domains,
@@ -127,9 +127,9 @@
   text-overflow: ellipsis;
 }
 
-.host-memory-panel__tree-node-title .ant-tag {
+.host-memory-panel__tree-node-count {
   flex: 0 0 auto;
-  margin-inline-end: 0;
+  line-height: 1;
 }
 
 .host-memory-panel__tree-search-value {
