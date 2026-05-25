@@ -1484,17 +1484,11 @@ export function HostInfrastructureMemoryObservationPanel({
                               className="host-memory-panel__tree-panel"
                               style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}
                             >
-                              <Input.Search
-                                allowClear
-                                placeholder="Search tree"
-                                size="small"
-                                value={treeSearchText}
-                                onChange={(event) =>
-                                  updateTreeSearchText(event.target.value)
-                                }
-                              />
+
                               <div className="host-memory-panel__tree-body" style={{ flex: '1 1 0%', overflow: 'auto' }}>
                                 <Tree
+                                  blockNode
+                                  indent={8}
                                   autoExpandParent={treeAutoExpandParent}
                                   expandedKeys={treeExpandedKeys}
                                   treeData={treeData}

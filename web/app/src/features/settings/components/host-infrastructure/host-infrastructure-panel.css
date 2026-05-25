@@ -86,7 +86,7 @@
   border: 1px solid var(--ant-color-border-secondary, #f0f0f0) !important;
   border-radius: 8px !important;
   background: var(--ant-color-bg-container, #ffffff) !important;
-  padding: 14px 12px !important;
+  padding: 12px 8px !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01) !important;
   display: flex;
   flex-direction: column;
@@ -470,15 +470,80 @@
   border-color: #fca5a5;
 }
 
-/* Tree node select feedback */
+/* Tree node select feedback & VS Code-style directory tree styling */
+.host-memory-panel__tree .ant-tree-treenode {
+  width: 100%;
+  white-space: nowrap !important;
+  padding: 1px 0 !important;
+  align-items: center !important;
+  border-radius: 4px;
+}
+
+.host-memory-panel__tree .ant-tree-node-content-wrapper {
+  padding: 2px 4px !important;
+  border-radius: 4px !important;
+  transition: all 0.15s ease;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 .host-memory-panel__tree .ant-tree-node-selected {
-  background-color: #e6f4ff !important;
-  color: #1677ff !important;
-  font-weight: 500;
+  background-color: var(--ant-color-primary-bg, #e6f4ff) !important;
+  color: var(--ant-color-primary, #1677ff) !important;
+  font-weight: 500 !important;
 }
 
 .host-memory-panel__tree .ant-tree-node-content-wrapper:hover {
-  background-color: #f5f5f5 !important;
+  background-color: var(--ant-color-fill-alter, #f5f5f5) !important;
+}
+
+/* Elegant Tree Switcher Styling - Centered and compact */
+.host-memory-panel__tree .ant-tree-switcher {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 14px !important;
+  height: 22px !important;
+  line-height: 22px !important;
+  cursor: pointer;
+  color: var(--ant-color-text-secondary, #8c8c8c) !important;
+  transition: color 0.15s, transform 0.15s;
+  align-self: center;
+  margin-right: 0;
+}
+
+.host-memory-panel__tree .ant-tree-switcher:hover {
+  color: var(--ant-color-primary, #1677ff) !important;
+}
+
+.host-memory-panel__tree .ant-tree-switcher .ant-tree-switcher-icon {
+  font-size: 9px !important;
+  display: inline-block;
+}
+
+/* VS Code Directory Indent Guides */
+.host-memory-panel__tree .ant-tree-indent {
+  align-self: stretch;
+}
+
+.host-memory-panel__tree .ant-tree-indent-unit {
+  position: relative;
+  width: 8px !important;
+}
+
+.host-memory-panel__tree .ant-tree-indent-unit::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  border-left: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  opacity: 0.6;
 }
 
 /* Button micro animations */

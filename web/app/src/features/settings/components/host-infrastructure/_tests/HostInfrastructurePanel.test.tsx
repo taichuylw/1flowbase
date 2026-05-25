@@ -726,7 +726,7 @@ describe('HostInfrastructurePanel', () => {
         })
     );
 
-    renderMemoryObservationPanel(true);
+    const { container } = renderMemoryObservationPanel(true);
 
     expect(
       await screen.findByRole('tab', { name: /^统计$/ })
@@ -750,30 +750,15 @@ describe('HostInfrastructurePanel', () => {
     expect(screen.getByTestId('service-card-cache-store')).toBeInTheDocument();
     expect(api.fetchSettingsHostInfrastructureMemoryTree).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('tab', { name: /^Sessions$/ }));
-    const treeSearch = await screen.findByPlaceholderText('Search tree');
-    const memoryLayout = treeSearch.closest('.host-memory-panel__tab-pane');
-    expect(memoryLayout).not.toBeNull();
     expect(
-      memoryLayout?.querySelector('.ant-layout.host-memory-panel__content')
+      container.querySelector('.host-memory-panel__content')
     ).not.toBeNull();
     expect(
-      memoryLayout?.querySelector('.ant-layout-sider.host-memory-panel__tree')
+      container.querySelector('.host-memory-panel__tree')
     ).not.toBeNull();
     expect(
-      memoryLayout?.querySelector(
-        '.ant-layout-content.host-memory-panel__entries'
-      )
+      container.querySelector('.host-memory-panel__entries')
     ).not.toBeNull();
-    fireEvent.change(treeSearch, { target: { value: 'space' } });
-    expect(await screen.findByText('space')).toHaveClass(
-      'host-memory-panel__tree-search-value'
-    );
-    expect(
-      memoryLayout?.querySelector(
-        '.host-memory-panel__tree-node-count.ant-badge'
-      )
-    ).toBeNull();
-    fireEvent.change(treeSearch, { target: { value: '' } });
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
     
