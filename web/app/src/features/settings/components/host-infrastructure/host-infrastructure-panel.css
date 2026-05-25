@@ -82,14 +82,30 @@
 }
 
 .host-memory-panel__tree {
-  width: 320px !important;
-  min-width: 260px !important;
-  max-width: 320px !important;
-  flex: 0 0 320px !important;
   border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--ant-color-bg-container) !important;
-  padding: 12px;
+  padding: 14px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01);
+  display: flex;
+  flex-direction: column;
+}
+
+.host-memory-panel__resize-handle {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 0.2s, width 0.2s;
+  margin: 0 -3px;
+  z-index: 10;
+  position: relative;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.host-memory-panel__resize-handle:hover,
+.host-memory-panel__resize-handle:active {
+  background-color: var(--ant-color-primary, #1677ff);
 }
 
 .host-memory-panel__entries {
@@ -148,15 +164,79 @@
 .host-memory-panel__stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
-.host-memory-panel__stats-grid .ant-statistic-title {
+.host-memory-panel__stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.host-memory-panel__stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.host-memory-panel__stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  font-size: 20px;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.host-memory-panel__stat-card--blue {
+  border-left: 4px solid #3b82f6;
+}
+.host-memory-panel__stat-card--blue .host-memory-panel__stat-icon {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.host-memory-panel__stat-card--rose {
+  border-left: 4px solid #f43f5e;
+}
+.host-memory-panel__stat-card--rose .host-memory-panel__stat-icon {
+  background: #fff1f2;
+  color: #f43f5e;
+}
+
+.host-memory-panel__stat-card--emerald {
+  border-left: 4px solid #10b981;
+}
+.host-memory-panel__stat-card--emerald .host-memory-panel__stat-icon {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.host-memory-panel__stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.host-memory-panel__stat-content .ant-statistic-title {
   margin-bottom: 2px;
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.host-memory-panel__stats-grid .ant-statistic-content {
-  font-size: 18px;
+.host-memory-panel__stat-content .ant-statistic-content-value {
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ant-color-text);
 }
 
 .host-memory-panel__stats {
@@ -164,11 +244,60 @@
 }
 
 .host-memory-panel__stats-overview {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.host-memory-panel__stats-chart-wrapper {
+  width: 100%;
+  padding: 16px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.host-memory-panel__breakdown-section {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  min-width: 0;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.host-memory-panel__breakdown-header {
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  padding-bottom: 8px;
+}
+
+.host-memory-panel__breakdown-tabs {
+  width: 100%;
+}
+
+.host-memory-panel__breakdown-content {
+  padding-top: 12px;
+}
+
+.host-memory-panel__breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 16px;
   align-items: stretch;
+}
+
+.host-memory-panel__breakdown-chart {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s;
+}
+
+.host-memory-panel__breakdown-chart:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .host-memory-panel__stats-chart {
@@ -230,6 +359,54 @@
   max-width: min(420px, 40vw);
 }
 
+.host-memory-panel__tree-panel .ant-input-search-button {
+  background-color: var(--ant-color-primary, #1677ff) !important;
+  border-color: var(--ant-color-primary, #1677ff) !important;
+}
+
+.host-memory-panel__tree-panel .ant-input-affix-wrapper:focus,
+.host-memory-panel__tree-panel .ant-input-affix-wrapper-focused,
+.host-memory-panel__entries-header .ant-input-affix-wrapper:focus,
+.host-memory-panel__entries-header .ant-input-affix-wrapper-focused {
+  border-color: var(--ant-color-primary-hover, #40a9ff) !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15) !important;
+}
+
+/* Beautiful tag colors inside memory entries table */
+.host-memory-panel__entries .ant-tag {
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-weight: 500;
+  border: 1px solid var(--ant-color-border-secondary);
+}
+
+.host-memory-panel__entries .ant-tag-red {
+  color: #ef4444;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+/* Tree node select feedback */
+.host-memory-panel__tree .ant-tree-node-selected {
+  background-color: #e6f4ff !important;
+  color: #1677ff !important;
+  font-weight: 500;
+}
+
+.host-memory-panel__tree .ant-tree-node-content-wrapper:hover {
+  background-color: #f5f5f5 !important;
+}
+
+/* Button micro animations */
+.host-memory-panel__entries .ant-btn-sm {
+  border-radius: 4px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.host-memory-panel__entries .ant-btn-sm:hover {
+  transform: scale(1.02);
+}
+
 @media (max-width: 840px) {
   .host-cache-panel__toolbar,
   .host-memory-panel__toolbar,
@@ -257,6 +434,10 @@
   }
 
   .host-memory-panel__stats-overview {
+    flex-direction: column;
+  }
+
+  .host-memory-panel__breakdown-grid {
     grid-template-columns: 1fr;
   }
 

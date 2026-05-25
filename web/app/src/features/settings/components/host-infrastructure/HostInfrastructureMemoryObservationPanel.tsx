@@ -7,7 +7,7 @@ import {
   type ReactNode
 } from 'react';
 
-import { BarChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
@@ -18,7 +18,10 @@ import { CanvasRenderer } from 'echarts/renderers';
 import {
   EyeOutlined,
   FileSearchOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  DatabaseOutlined,
+  SafetyCertificateOutlined,
+  PieChartOutlined
 } from '@ant-design/icons';
 import {
   Alert,
@@ -34,7 +37,8 @@ import {
   Tabs,
   Tag,
   Tree,
-  Typography
+  Typography,
+  Switch
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { DataNode } from 'antd/es/tree';
@@ -42,6 +46,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '../../../../state/auth-store';
 import { JsonPreviewBlock } from '../../../../shared/ui/json-preview/JsonPreviewBlock';
+import './host-infrastructure-panel.css';
 import {
   fetchSettingsHostInfrastructureMemoryEntries,
   fetchSettingsHostInfrastructureMemoryOverview,
@@ -64,6 +69,8 @@ import {
 
 echarts.use([
   BarChart,
+  LineChart,
+  PieChart,
   GridComponent,
   LegendComponent,
   TooltipComponent,
@@ -238,23 +245,44 @@ function MemoryStatsChart({
     const labels = stats.map((item) => item.label);
 
     chart.setOption({
-      color: ['#1677ff', '#52c41a', '#faad14'],
       tooltip: {
-        trigger: 'axis'
+        trigger: 'axis',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderColor: '#f0f0f0',
+        borderWidth: 1,
+        textStyle: {
+          color: '#1f1f1f',
+          fontSize: 12
+        },
+        shadowBlur: 10,
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffsetX: 0,
+        shadowOffsetY: 2
       },
       legend: {
-        top: 0
+        top: 8,
+        itemGap: 16,
+        textStyle: {
+          color: '#555555',
+          fontSize: 12
+        }
       },
       grid: {
-        top: 44,
-        right: 56,
-        bottom: 48,
-        left: 48
+        top: 56,
+        right: 48,
+        bottom: 56,
+        left: 56
       },
       xAxis: {
         type: 'category',
         data: labels,
+        axisLine: {
+          lineStyle: {
+            color: '#f0f0f0'
+          }
+        },
         axisLabel: {
+          color: '#8c8c8c',
           interval: 0,
           rotate: stats.length > 4 ? 20 : 0
         }
@@ -262,28 +290,89 @@ function MemoryStatsChart({
       yAxis: [
         {
           type: 'value',
-          name: 'Entries'
+          name: 'Entries',
+          nameTextStyle: {
+            color: '#8c8c8c'
+          },
+          axisLabel: {
+            color: '#8c8c8c'
+          },
+          splitLine: {
+            lineStyle: {
+              color: '#f5f5f5'
+            }
+          }
         },
         {
           type: 'value',
-          name: 'Bytes'
+          name: 'Bytes',
+          nameTextStyle: {
+            color: '#8c8c8c'
+          },
+          axisLabel: {
+            color: '#8c8c8c',
+            formatter: (value: number) => {
+              if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(0)}M`;
+              if (value >= 1024) return `${(value / 1024).toFixed(0)}K`;
+              return `${value}B`;
+            }
+          },
+          splitLine: {
+            show: false
+          }
         }
       ],
       series: [
         {
           name: 'Entries',
           type: 'bar',
+          barMaxWidth: 24,
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: '#3b82f6' },
+                { offset: 1, color: '#93c5fd' }
+              ]
+            }
+          },
           data: stats.map((item) => item.entry_count)
         },
         {
           name: 'Sensitive',
           type: 'bar',
+          barMaxWidth: 24,
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: '#f43f5e' },
+                { offset: 1, color: '#fca5a5' }
+              ]
+            }
+          },
           data: stats.map((item) => item.sensitive_entry_count)
         },
         {
           name: 'Value bytes',
           type: 'bar',
+          barMaxWidth: 24,
           yAxisIndex: 1,
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: '#10b981' },
+                { offset: 1, color: '#6ee7b7' }
+              ]
+            }
+          },
           data: stats.map((item) => item.total_value_size_bytes)
         }
       ]
@@ -307,6 +396,197 @@ function MemoryStatsChart({
       className="host-memory-panel__stats-chart"
       role="img"
     />
+  );
+}
+
+function MemoryBreakdownChart({
+  option,
+  height = '280px'
+}: {
+  option: echarts.EChartsOption;
+  height?: string;
+}) {
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = echarts.init(chartRef.current);
+    chart.setOption(option);
+
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize();
+    });
+    resizeObserver.observe(chartRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      chart.dispose();
+    };
+  }, [option]);
+
+  return (
+    <div
+      ref={chartRef}
+      style={{ width: '100%', height }}
+      className="host-memory-panel__breakdown-chart"
+    />
+  );
+}
+
+const getServiceDetailOptions = (
+  label: string,
+  entryCount: number,
+  sensitiveCount: number,
+  valueBytes: number
+) => {
+  const regularCount = Math.max(0, entryCount - sensitiveCount);
+  return {
+    donut: {
+      title: {
+        text: `${label} 数据敏感类型占比`,
+        left: 'center',
+        top: '40%',
+        textStyle: { fontSize: 13, fontWeight: 600 }
+      },
+      tooltip: { trigger: 'item' },
+      legend: { bottom: '0%', left: 'center' },
+      series: [
+        {
+          name: label,
+          type: 'pie',
+          radius: ['45%', '70%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: false,
+          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          label: { show: false },
+          data: [
+            { value: regularCount, name: '普通数据', itemStyle: { color: '#3b82f6' } },
+            { value: sensitiveCount, name: '敏感数据', itemStyle: { color: '#f43f5e' } }
+          ]
+        }
+      ]
+    },
+    bar: {
+      title: {
+        text: `${label} 指标体量配比`,
+        left: 'left',
+        textStyle: { fontSize: 13, fontWeight: 600 }
+      },
+      tooltip: { trigger: 'axis' },
+      legend: { top: 0, right: 0 },
+      grid: { top: '25%', bottom: '15%', left: '12%', right: '12%' },
+      xAxis: { type: 'category', data: ['项数 (Entries)', '值容量 (Bytes)'] },
+      yAxis: [
+        {
+          type: 'value',
+          name: 'Entries',
+          position: 'left',
+          axisLabel: { formatter: '{value}' }
+        },
+        {
+          type: 'value',
+          name: 'Bytes',
+          position: 'right',
+          axisLabel: {
+            formatter: (value: number) => {
+              if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(0)}M`;
+              if (value >= 1024) return `${(value / 1024).toFixed(0)}K`;
+              return `${value}B`;
+            }
+          },
+          splitLine: { show: false }
+        }
+      ],
+      series: [
+        {
+          name: '项数 (Entries)',
+          type: 'bar',
+          barMaxWidth: 32,
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: '#3b82f6'
+          },
+          data: [entryCount, 0]
+        },
+        {
+          name: '值容量 (Bytes)',
+          type: 'bar',
+          barMaxWidth: 32,
+          yAxisIndex: 1,
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: '#10b981'
+          },
+          data: [0, valueBytes]
+        }
+      ]
+    }
+  };
+};
+
+function MemoryServiceBreakdownPane({
+  stats
+}: {
+  stats: SettingsHostInfrastructureMemoryStats[];
+}) {
+  const [activeSubTab, setActiveSubTab] = useState<string>('all');
+
+  const selectedStat = stats.find((item) => item.contract_code === activeSubTab);
+  const entryCount = selectedStat?.entry_count ?? 0;
+  const sensitiveCount = selectedStat?.sensitive_entry_count ?? 0;
+  const valueBytes = selectedStat?.total_value_size_bytes ?? 0;
+  const label = selectedStat?.label ?? '';
+
+  const renderCharts = () => {
+    if (activeSubTab === 'all') {
+      return (
+        <div className="host-memory-panel__stats-chart-wrapper">
+          <MemoryStatsChart stats={stats} />
+        </div>
+      );
+    }
+
+    const opts = getServiceDetailOptions(label, entryCount, sensitiveCount, valueBytes);
+    return (
+      <div className="host-memory-panel__breakdown-grid">
+        <MemoryBreakdownChart option={opts.donut} />
+        <MemoryBreakdownChart option={opts.bar} />
+      </div>
+    );
+  };
+
+  const tabItems = [
+    { key: 'all', label: '全局对比' },
+    ...stats.map((item) => ({
+      key: item.contract_code,
+      label: `${item.label} 报表`
+    }))
+  ];
+
+  return (
+    <div className="host-memory-panel__breakdown-section">
+      <div className="host-memory-panel__breakdown-header">
+        <Typography.Text strong style={{ fontSize: 14 }}>
+          各服务细分报表
+        </Typography.Text>
+      </div>
+      <Tabs
+        activeKey={activeSubTab}
+        onChange={setActiveSubTab}
+        type="card"
+        size="small"
+        className="host-memory-panel__breakdown-tabs"
+        items={tabItems.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          children: (
+            <div className="host-memory-panel__breakdown-content">
+              {renderCharts()}
+            </div>
+          )
+        }))}
+      />
+    </div>
   );
 }
 
@@ -379,29 +659,51 @@ function MemoryStatsOverviewPane({
           </Typography.Text>
         </div>
         <div className="host-memory-panel__stats-grid">
-          <Statistic
-            title="Entries"
-            value={data?.entry_count ?? 0}
-            formatter={(value) => `${value} entries`}
-            loading={isLoading}
-          />
-          <Statistic
-            title="Sensitive"
-            value={data?.sensitive_entry_count ?? 0}
-            formatter={(value) => `${value} sensitive`}
-            loading={isLoading}
-          />
-          <Statistic
-            title="Value size"
-            value={formatBytes(data?.total_value_size_bytes ?? 0)}
-            loading={isLoading}
-          />
+          <div className="host-memory-panel__stat-card host-memory-panel__stat-card--blue">
+            <div className="host-memory-panel__stat-icon">
+              <DatabaseOutlined />
+            </div>
+            <div className="host-memory-panel__stat-content">
+              <Statistic
+                title="Entries"
+                value={data?.entry_count ?? 0}
+                formatter={(value) => `${value} entries`}
+                loading={isLoading}
+              />
+            </div>
+          </div>
+
+          <div className="host-memory-panel__stat-card host-memory-panel__stat-card--rose">
+            <div className="host-memory-panel__stat-icon">
+              <SafetyCertificateOutlined />
+            </div>
+            <div className="host-memory-panel__stat-content">
+              <Statistic
+                title="Sensitive"
+                value={data?.sensitive_entry_count ?? 0}
+                formatter={(value) => `${value} sensitive`}
+                loading={isLoading}
+              />
+            </div>
+          </div>
+
+          <div className="host-memory-panel__stat-card host-memory-panel__stat-card--emerald">
+            <div className="host-memory-panel__stat-icon">
+              <PieChartOutlined />
+            </div>
+            <div className="host-memory-panel__stat-content">
+              <Statistic
+                title="Value size"
+                value={formatBytes(data?.total_value_size_bytes ?? 0)}
+                loading={isLoading}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       {stats.length ? (
         <div className="host-memory-panel__stats-overview">
-          <MemoryStatsChart stats={stats} />
           <Table
             rowKey={(item) => item.contract_code}
             columns={columns}
@@ -409,7 +711,9 @@ function MemoryStatsOverviewPane({
             loading={isLoading}
             pagination={false}
             size="small"
+            style={{ width: '100%' }}
           />
+          <MemoryServiceBreakdownPane stats={stats} />
         </div>
       ) : (
         <Empty
@@ -445,7 +749,46 @@ export function HostInfrastructureMemoryObservationPanel({
     useState<SettingsHostInfrastructureMemoryEntry | null>(null);
   const [revealedEntry, setRevealedEntry] =
     useState<SettingsHostInfrastructureMemoryEntryValue | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const queryClient = useQueryClient();
+
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const dragInfoRef = useRef<{ isDragging: boolean; startX: number; startWidth: number } | null>(null);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragInfoRef.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startWidth: sidebarWidth
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!dragInfoRef.current || !dragInfoRef.current.isDragging) {
+      return;
+    }
+    const deltaX = e.clientX - dragInfoRef.current.startX;
+    const newWidth = Math.max(260, Math.min(600, dragInfoRef.current.startWidth + deltaX));
+    setSidebarWidth(newWidth);
+  };
+
+  const handleMouseUp = () => {
+    if (dragInfoRef.current) {
+      dragInfoRef.current.isDragging = false;
+    }
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   const overviewQuery = useQuery({
     queryKey: settingsHostInfrastructureMemoryOverviewQueryKey,
@@ -577,6 +920,14 @@ export function HostInfrastructureMemoryObservationPanel({
       })
     ]);
   };
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      void refreshMemoryQueries(resolvedActiveContractCode);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, resolvedActiveContractCode]);
 
   const revealMutation = useMutation({
     mutationFn: async ({
@@ -789,20 +1140,32 @@ export function HostInfrastructureMemoryObservationPanel({
             最近刷新: {formatUpdatedAt(overviewQuery.dataUpdatedAt)}
           </Typography.Text>
         </Space>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => {
-            void refreshMemoryQueries(resolvedActiveContractCode);
-          }}
-          loading={
-            overviewQuery.isFetching ||
-            entriesQuery.isFetching ||
-            rootTreeQuery.isFetching ||
-            statsOverviewQuery.isFetching
-          }
-        >
-          刷新
-        </Button>
+        <Space size={12} align="center">
+          <Space size={6} align="center">
+            <Switch
+              checked={autoRefresh}
+              onChange={(checked) => setAutoRefresh(checked)}
+              size="small"
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              自动刷新 (30s)
+            </Typography.Text>
+          </Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              void refreshMemoryQueries(resolvedActiveContractCode);
+            }}
+            loading={
+              overviewQuery.isFetching ||
+              entriesQuery.isFetching ||
+              rootTreeQuery.isFetching ||
+              statsOverviewQuery.isFetching
+            }
+          >
+            刷新
+          </Button>
+        </Space>
       </div>
 
       {resolvedActiveContractCode && !canReveal ? (
@@ -853,7 +1216,13 @@ export function HostInfrastructureMemoryObservationPanel({
                       <Layout.Sider
                         className="host-memory-panel__tree"
                         theme="light"
-                        width={320}
+                        width={sidebarWidth}
+                        style={{
+                          width: sidebarWidth,
+                          minWidth: sidebarWidth,
+                          maxWidth: sidebarWidth,
+                          flex: `0 0 ${sidebarWidth}px`
+                        }}
                       >
                         {activeContract ? (
                           !activeContract.supported ||
@@ -921,6 +1290,11 @@ export function HostInfrastructureMemoryObservationPanel({
                           />
                         )}
                       </Layout.Sider>
+
+                      <div
+                        className="host-memory-panel__resize-handle"
+                        onMouseDown={startResizing}
+                      />
 
                       <Layout.Content className="host-memory-panel__entries">
                         <Space direction="vertical" size={12}>

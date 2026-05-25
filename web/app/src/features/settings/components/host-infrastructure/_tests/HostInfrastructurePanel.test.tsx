@@ -130,7 +130,9 @@ vi.mock('echarts/core', () => ({
   use: vi.fn()
 }));
 vi.mock('echarts/charts', () => ({
-  BarChart: {}
+  BarChart: {},
+  LineChart: {},
+  PieChart: {}
 }));
 vi.mock('echarts/components', () => ({
   GridComponent: {},
@@ -723,12 +725,12 @@ describe('HostInfrastructurePanel', () => {
     renderMemoryObservationPanel(true);
 
     expect(
-      await screen.findByRole('tab', { name: /统计/ })
+      await screen.findByRole('tab', { name: /^统计$/ })
     ).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /Sessions/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Sessions$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Cache$/ })).toBeInTheDocument();
     expect(
-      screen.getByRole('tab', { name: /Sessions/ }).querySelector('.ant-badge')
+      screen.getByRole('tab', { name: /^Sessions$/ }).querySelector('.ant-badge')
     ).toBeNull();
     expect(await screen.findByText('Memory statistics')).toBeInTheDocument();
     expect(await screen.findByText('3 entries')).toBeInTheDocument();
@@ -741,7 +743,7 @@ describe('HostInfrastructurePanel', () => {
       expect(echartsMock.chart.setOption).toHaveBeenCalled();
     });
     expect(api.fetchSettingsHostInfrastructureMemoryTree).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('tab', { name: /Sessions/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Sessions$/ }));
     const treeSearch = await screen.findByPlaceholderText('Search tree');
     const memoryLayout = treeSearch.closest('.host-memory-panel__tab-pane');
     expect(memoryLayout).not.toBeNull();
@@ -768,8 +770,8 @@ describe('HostInfrastructurePanel', () => {
     fireEvent.change(treeSearch, { target: { value: '' } });
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Cache/ }));
+    
+    fireEvent.click(screen.getByRole('tab', { name: /^Cache$/ }));
 
     expect(await screen.findByText('application-cache')).toBeInTheDocument();
     expect(screen.queryByText('session:1')).not.toBeInTheDocument();
