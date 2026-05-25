@@ -1318,24 +1318,28 @@ export function HostInfrastructureMemoryObservationPanel({
         width: canReveal ? 220 : 120,
         render: (_, entry) => (
           <Space size={4}>
-            <Button
-              icon={<FileSearchOutlined />}
-              onClick={() => setMetadataEntry(entry)}
-              size="small"
-            >
-              Metadata
-            </Button>
-            {canReveal ? (
+            <Tooltip title="查看这条 entry 的元信息，不读取真实 value。">
               <Button
-                icon={<EyeOutlined />}
-                loading={revealMutation.isPending}
-                onClick={() => {
-                  revealMutation.mutate({ entry, revealMode: 'preview' });
-                }}
+                icon={<FileSearchOutlined />}
+                onClick={() => setMetadataEntry(entry)}
                 size="small"
               >
-                Reveal
+                Metadata
               </Button>
+            </Tooltip>
+            {canReveal ? (
+              <Tooltip title="请求后端读取真实 value，默认先展示 preview，可能包含敏感内容。">
+                <Button
+                  icon={<EyeOutlined />}
+                  loading={revealMutation.isPending}
+                  onClick={() => {
+                    revealMutation.mutate({ entry, revealMode: 'preview' });
+                  }}
+                  size="small"
+                >
+                  Reveal
+                </Button>
+              </Tooltip>
             ) : null}
           </Space>
         )
