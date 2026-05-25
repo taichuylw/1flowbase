@@ -46,7 +46,8 @@ import {
   Tag,
   Tree,
   Typography,
-  Switch
+  Switch,
+  Radio
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { DataNode } from 'antd/es/tree';
@@ -242,18 +243,68 @@ function collectTreeSearchItems(
 }
 
 function MemoryStatsChart({
-  stats
+  historyData,
+  stats,
+  metricMode
 }: {
+  historyData: Array<{
+    timestamp: string;
+    contracts: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }>;
+  }>;
   stats: SettingsHostInfrastructureMemoryStats[];
+  metricMode: 'entries' | 'bytes';
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!chartRef.current) {
+    if (!chartRef.current || !historyData.length) {
       return;
     }
     const chart = echarts.init(chartRef.current);
-    const labels = stats.map((item) => item.label);
+    const timestamps = historyData.map((h) => h.timestamp);
+
+    const colors = [
+      '#1677ff', // Sessions (Blue)
+      '#722ed1', // Cache (Purple)
+      '#faad14', // Rate Limits (Gold)
+      '#13c2c2', // Locks (Cyan)
+      '#fa8c16', // Task Queue (Orange)
+      '#52c41a', // Event Bus (Green)
+      '#eb2f96'  // Runtime Events (Magenta)
+    ];
+
+    const series = stats.map((item, idx) => {
+      const color = colors[idx % colors.length];
+      const dataPoints = historyData.map((h) => {
+        const val = h.contracts[item.contract_code];
+        if (metricMode === 'entries') {
+          return val ? val.entryCount : 0;
+        } else {
+          return val ? val.valueBytes : 0;
+        }
+      });
+
+      return {
+        name: item.label,
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        itemStyle: { color },
+        lineStyle: { width: 3 },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: `${color}1a` },
+              { offset: 1, color: `${color}00` }
+            ]
+          }
+        },
+        data: dataPoints
+      };
+    });
 
     chart.setOption({
       tooltip: {
@@ -281,121 +332,42 @@ function MemoryStatsChart({
       grid: {
         top: 56,
         right: 48,
-        bottom: 56,
+        bottom: 48,
         left: 56
       },
       xAxis: {
         type: 'category',
-        data: labels,
+        data: timestamps,
+        boundaryGap: false,
         axisLine: {
           lineStyle: {
             color: '#f0f0f0'
           }
         },
         axisLabel: {
-          color: '#8c8c8c',
-          interval: 0,
-          rotate: stats.length > 4 ? 20 : 0
+          color: '#8c8c8c'
         }
       },
-      yAxis: [
-        {
-          type: 'value',
-          name: 'Entries',
-          nameTextStyle: {
-            color: '#8c8c8c'
-          },
-          axisLabel: {
-            color: '#8c8c8c'
-          },
-          splitLine: {
-            lineStyle: {
-              color: '#f5f5f5'
-            }
+      yAxis: {
+        type: 'value',
+        name: metricMode === 'entries' ? 'Entries count' : 'Bytes size',
+        nameTextStyle: {
+          color: '#8c8c8c'
+        },
+        axisLabel: {
+          color: '#8c8c8c',
+          formatter: (value: number) => {
+            if (metricMode === 'entries') return String(value);
+            return formatBytes(value);
           }
         },
-        {
-          type: 'value',
-          name: 'Bytes',
-          nameTextStyle: {
-            color: '#8c8c8c'
-          },
-          axisLabel: {
-            color: '#8c8c8c',
-            formatter: (value: number) => {
-              if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(0)}M`;
-              if (value >= 1024) return `${(value / 1024).toFixed(0)}K`;
-              return `${value}B`;
-            }
-          },
-          splitLine: {
-            show: false
+        splitLine: {
+          lineStyle: {
+            color: '#f5f5f5'
           }
         }
-      ],
-      series: [
-        {
-          name: 'Entries',
-          type: 'line',
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 6,
-          itemStyle: { color: '#1677ff' },
-          lineStyle: { width: 3 },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(22, 119, 255, 0.2)' },
-                { offset: 1, color: 'rgba(22, 119, 255, 0)' }
-              ]
-            }
-          },
-          data: stats.map((item) => item.entry_count)
-        },
-        {
-          name: 'Sensitive',
-          type: 'line',
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 6,
-          itemStyle: { color: '#ff4d4f' },
-          lineStyle: { width: 3 },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(255, 77, 79, 0.15)' },
-                { offset: 1, color: 'rgba(255, 77, 79, 0)' }
-              ]
-            }
-          },
-          data: stats.map((item) => item.sensitive_entry_count)
-        },
-        {
-          name: 'Value bytes',
-          type: 'line',
-          smooth: true,
-          yAxisIndex: 1,
-          symbol: 'circle',
-          symbolSize: 6,
-          itemStyle: { color: '#52c41a' },
-          lineStyle: { width: 3, type: 'dashed' },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(82, 196, 26, 0.1)' },
-                { offset: 1, color: 'rgba(82, 196, 26, 0)' }
-              ]
-            }
-          },
-          data: stats.map((item) => item.total_value_size_bytes)
-        }
-      ]
+      },
+      series
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -407,7 +379,7 @@ function MemoryStatsChart({
       resizeObserver.disconnect();
       chart.dispose();
     };
-  }, [stats]);
+  }, [historyData, stats, metricMode]);
 
   return (
     <div
@@ -730,19 +702,41 @@ const getCustomServiceChartOption = (
 };
 
 function MemoryServiceBreakdownPane({
-  stats
+  stats,
+  historyData,
+  metricMode,
+  setMetricMode
 }: {
   stats: SettingsHostInfrastructureMemoryStats[];
+  historyData: Array<{
+    timestamp: string;
+    contracts: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }>;
+  }>;
+  metricMode: 'entries' | 'bytes';
+  setMetricMode: (mode: 'entries' | 'bytes') => void;
 }) {
   return (
     <div className="host-memory-panel__breakdown-section">
-      <div className="host-memory-panel__breakdown-header">
+      <div className="host-memory-panel__breakdown-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography.Text strong style={{ fontSize: 14 }}>
           全局服务容量对比
         </Typography.Text>
+        <Radio.Group
+          value={metricMode}
+          onChange={(e) => setMetricMode(e.target.value)}
+          size="small"
+          buttonStyle="solid"
+        >
+          <Radio.Button value="entries">条目数量 (Entries)</Radio.Button>
+          <Radio.Button value="bytes">容量空间 (Bytes)</Radio.Button>
+        </Radio.Group>
       </div>
       <div className="host-memory-panel__stats-chart-wrapper">
-        <MemoryStatsChart stats={stats} />
+        <MemoryStatsChart
+          historyData={historyData}
+          stats={stats}
+          metricMode={metricMode}
+        />
       </div>
 
       <div className="host-memory-panel__breakdown-header" style={{ marginTop: 24 }}>
@@ -842,6 +836,37 @@ function MemoryStatsOverviewPane({
   isLoading: boolean;
 }) {
   const stats = data?.contracts ?? [];
+  const [metricMode, setMetricMode] = useState<'entries' | 'bytes'>('entries');
+  const [historyData, setHistoryData] = useState<
+    Array<{
+      timestamp: string;
+      contracts: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }>;
+    }>
+  >([]);
+
+  useEffect(() => {
+    if (!data) return;
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const contractsMap: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }> = {};
+    for (const c of data.contracts) {
+      contractsMap[c.contract_code] = {
+        entryCount: c.entry_count,
+        sensitiveCount: c.sensitive_entry_count,
+        valueBytes: c.total_value_size_bytes
+      };
+    }
+
+    setHistoryData((prev) => {
+      if (prev.length > 0 && prev[prev.length - 1].timestamp === now) {
+        return prev;
+      }
+      const next = [...prev, { timestamp: now, contracts: contractsMap }];
+      if (next.length > 12) {
+        return next.slice(next.length - 12);
+      }
+      return next;
+    });
+  }, [data]);
   const columns = useMemo<ColumnsType<SettingsHostInfrastructureMemoryStats>>(
     () => [
       {
@@ -955,7 +980,12 @@ function MemoryStatsOverviewPane({
             size="small"
             style={{ width: '100%' }}
           />
-          <MemoryServiceBreakdownPane stats={stats} />
+          <MemoryServiceBreakdownPane
+            stats={stats}
+            historyData={historyData}
+            metricMode={metricMode}
+            setMetricMode={setMetricMode}
+          />
         </div>
       ) : (
         <Empty
