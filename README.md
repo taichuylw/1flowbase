@@ -60,14 +60,12 @@ cargo run -p plugin-runner --bin plugin-runner
 
 ```bash
 cd docker
-cp .env.example .env
-cp api/api.env.example api/api.env
-cp plugin-runner/plugin-runner.env.example plugin-runner/plugin-runner.env
-cp postgres/postgres.env.example postgres/postgres.env
 docker compose up -d
 ```
 
-整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。默认访问地址：`http://127.0.0.1:3100`。
+整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。默认访问地址：`http://127.0.0.1:3100`，初始 root 账号为 `root`，密码为 `1flowbase`。
+
+生产部署时再复制 `docker/.env.example` 为 `docker/.env`，修改数据库密码、`API_PROVIDER_SECRET_MASTER_KEY` 和 root 密码。
 
 ---
 

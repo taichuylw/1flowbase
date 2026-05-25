@@ -4,13 +4,12 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    env_file:
-      - ./postgres/postgres.env
     command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-300}"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-1flowbase}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1flowbase}
+      POSTGRES_INITDB_ARGS: "${POSTGRES_INITDB_ARGS:---encoding=UTF8 --locale=C}"
     volumes:
       - ./postgres/data/pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,8 +21,9 @@ services:
   plugin-runner:
     image: ghcr.io/taichuy/1flowbase-plugin-runner:${FLOWBASE_PLUGIN_RUNNER_VERSION:-latest}
     restart: unless-stopped
-    env_file:
-      - ./plugin-runner/plugin-runner.env
+    environment:
+      RUST_LOG: ${PLUGIN_RUNNER_RUST_LOG:-info}
+      PLUGIN_RUNNER_ADDR: 0.0.0.0:7801
     expose:
       - "7801"
 
@@ -35,23 +35,31 @@ services:
         condition: service_healthy
       plugin-runner:
         condition: service_started
-    env_file:
-      - ./api/api.env
     environment:
+      RUST_LOG: ${API_RUST_LOG:-info}
       API_ENV: ${API_ENV:-production}
-      API_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}@db:5432/${POSTGRES_DB:-1flowbase}
+      API_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-1flowbase}@db:5432/${POSTGRES_DB:-1flowbase}
       API_SERVER_ADDR: 0.0.0.0:7800
       API_PLUGIN_RUNNER_INTERNAL_BASE_URL: http://plugin-runner:7801
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3100,http://127.0.0.1:3100}
+      API_COOKIE_NAME: ${API_COOKIE_NAME:-flowbase_console_session}
+      API_SESSION_TTL_DAYS: ${API_SESSION_TTL_DAYS:-7}
+      API_DATABASE_POOL_MAX_CONNECTIONS: ${API_DATABASE_POOL_MAX_CONNECTIONS:-5}
       API_PROVIDER_INSTALL_ROOT: /app/api/plugins
       API_HOST_EXTENSION_DROPIN_ROOT: /app/api/plugins/host-extension/dropins
-      API_PROVIDER_SECRET_MASTER_KEY: ${API_PROVIDER_SECRET_MASTER_KEY:?set API_PROVIDER_SECRET_MASTER_KEY in docker/.env}
+      API_PROVIDER_SECRET_MASTER_KEY: ${API_PROVIDER_SECRET_MASTER_KEY:-change-me-provider-secret-master-key}
       API_OFFICIAL_PLUGIN_REPOSITORY: ${API_OFFICIAL_PLUGIN_REPOSITORY:-taichuy/1flowbase-official-plugins}
       API_OFFICIAL_PLUGIN_REGISTRY_URL: ${API_OFFICIAL_PLUGIN_REGISTRY_URL:-https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/official-registry.json}
+      API_PLUGIN_SET: ${API_PLUGIN_SET:-default}
+      API_SECRET_RESOLVER: ${API_SECRET_RESOLVER:-env}
+      API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS: ${API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS:-false}
+      API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS: ${API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS:-false}
+      API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON: >-
+        ${API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON:-[{"key_id":"official-key-2026-04","algorithm":"ed25519","public_key_pem":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAuk3oonNd85FNP8CBRKj8RVvpdbhreoJiCguEJXPSgwg=\n-----END PUBLIC KEY-----"}]}
       BOOTSTRAP_WORKSPACE_NAME: ${BOOTSTRAP_WORKSPACE_NAME:-1flowbase}
       BOOTSTRAP_ROOT_ACCOUNT: ${BOOTSTRAP_ROOT_ACCOUNT:-root}
       BOOTSTRAP_ROOT_EMAIL: ${BOOTSTRAP_ROOT_EMAIL:-root@example.com}
-      BOOTSTRAP_ROOT_PASSWORD: ${BOOTSTRAP_ROOT_PASSWORD:?set BOOTSTRAP_ROOT_PASSWORD in docker/.env}
+      BOOTSTRAP_ROOT_PASSWORD: ${BOOTSTRAP_ROOT_PASSWORD:-1flowbase}
       BOOTSTRAP_ROOT_NAME: ${BOOTSTRAP_ROOT_NAME:-Root}
       BOOTSTRAP_ROOT_NICKNAME: ${BOOTSTRAP_ROOT_NICKNAME:-Root}
     expose:

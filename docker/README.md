@@ -17,29 +17,43 @@ docker compose -f .\docker-compose.middleware.yaml up -d
 
 ## 使用 GHCR 镜像启动整套服务
 
-首次部署先复制配置模板：
+新机器可以直接启动：
+
+```bash
+cd docker
+docker compose up -d
+```
+
+如果本机只有旧版 Compose，也可以把 `docker compose` 替换为 `docker-compose`。
+
+默认启动值用于本地快速体验：
+
+- web 访问端口：`3100`
+- PostgreSQL 用户：`postgres`
+- PostgreSQL 密码：`1flowbase`
+- 初始 root 账号：`root`
+- 初始 root 密码：`1flowbase`
+
+生产部署或需要固定配置时，再复制统一配置模板：
 
 ```bash
 cd docker
 cp .env.example .env
-cp api/api.env.example api/api.env
-cp plugin-runner/plugin-runner.env.example plugin-runner/plugin-runner.env
-cp postgres/postgres.env.example postgres/postgres.env
 ```
 
-编辑 `.env`，至少修改：
+编辑 `.env`，重点修改：
 
 - `POSTGRES_PASSWORD`
 - `API_PROVIDER_SECRET_MASTER_KEY`
 - `BOOTSTRAP_ROOT_PASSWORD`
 
-启动：
+然后启动：
 
 ```bash
 docker compose up -d
 ```
 
-如果本机只有旧版 Compose，也可以把 `docker compose` 替换为 `docker-compose`。
+镜像版本、端口、数据库、API、插件运行器和初始化 root 账号配置都集中在 `docker/.env.example`。不再需要复制 `api/api.env`、`plugin-runner/plugin-runner.env` 或 `postgres/postgres.env`。
 
 默认服务：
 
