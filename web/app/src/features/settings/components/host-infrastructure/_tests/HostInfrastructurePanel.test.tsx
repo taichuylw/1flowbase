@@ -132,12 +132,15 @@ vi.mock('echarts/core', () => ({
 vi.mock('echarts/charts', () => ({
   BarChart: {},
   LineChart: {},
-  PieChart: {}
+  PieChart: {},
+  FunnelChart: {},
+  GaugeChart: {}
 }));
 vi.mock('echarts/components', () => ({
   GridComponent: {},
   LegendComponent: {},
-  TooltipComponent: {}
+  TooltipComponent: {},
+  TitleComponent: {}
 }));
 vi.mock('echarts/renderers', () => ({
   CanvasRenderer: {}
@@ -742,6 +745,8 @@ describe('HostInfrastructurePanel', () => {
     await waitFor(() => {
       expect(echartsMock.chart.setOption).toHaveBeenCalled();
     });
+    expect(await screen.findByTestId('service-card-session-store')).toBeInTheDocument();
+    expect(screen.getByTestId('service-card-cache-store')).toBeInTheDocument();
     expect(api.fetchSettingsHostInfrastructureMemoryTree).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('tab', { name: /^Sessions$/ }));
     const treeSearch = await screen.findByPlaceholderText('Search tree');

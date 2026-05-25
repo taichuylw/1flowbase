@@ -7,11 +7,12 @@ import {
   type ReactNode
 } from 'react';
 
-import { BarChart, LineChart, PieChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart, FunnelChart, GaugeChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
-  TooltipComponent
+  TooltipComponent,
+  TitleComponent
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -21,7 +22,14 @@ import {
   ReloadOutlined,
   DatabaseOutlined,
   SafetyCertificateOutlined,
-  PieChartOutlined
+  PieChartOutlined,
+  UserOutlined,
+  CloudServerOutlined,
+  DashboardOutlined,
+  LockOutlined,
+  OrderedListOutlined,
+  ClusterOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
 import {
   Alert,
@@ -71,9 +79,12 @@ echarts.use([
   BarChart,
   LineChart,
   PieChart,
+  FunnelChart,
+  GaugeChart,
   GridComponent,
   LegendComponent,
   TooltipComponent,
+  TitleComponent,
   CanvasRenderer
 ]);
 
@@ -333,8 +344,8 @@ function MemoryStatsChart({
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: '#3b82f6' },
-                { offset: 1, color: '#93c5fd' }
+                { offset: 0, color: '#1677ff' },
+                { offset: 1, color: '#69c0ff' }
               ]
             }
           },
@@ -350,8 +361,8 @@ function MemoryStatsChart({
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: '#f43f5e' },
-                { offset: 1, color: '#fca5a5' }
+                { offset: 0, color: '#ff4d4f' },
+                { offset: 1, color: '#ff9c9f' }
               ]
             }
           },
@@ -368,8 +379,8 @@ function MemoryStatsChart({
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: '#10b981' },
-                { offset: 1, color: '#6ee7b7' }
+                { offset: 0, color: '#52c41a' },
+                { offset: 1, color: '#95de64' }
               ]
             }
           },
@@ -433,95 +444,280 @@ function MemoryBreakdownChart({
   );
 }
 
-const getServiceDetailOptions = (
+function getServiceIcon(contractCode: string) {
+  const iconStyle = { fontSize: 16, color: 'var(--ant-color-primary, #1677ff)' };
+  switch (contractCode) {
+    case 'session-store':
+      return <UserOutlined style={iconStyle} />;
+    case 'cache-store':
+      return <CloudServerOutlined style={iconStyle} />;
+    case 'rate-limit':
+      return <DashboardOutlined style={iconStyle} />;
+    case 'lock':
+      return <LockOutlined style={iconStyle} />;
+    case 'task-queue':
+      return <OrderedListOutlined style={iconStyle} />;
+    case 'event-bus':
+      return <ClusterOutlined style={iconStyle} />;
+    case 'runtime-event':
+    default:
+      return <HistoryOutlined style={iconStyle} />;
+  }
+}
+
+const getCustomServiceChartOption = (
+  contractCode: string,
   label: string,
   entryCount: number,
   sensitiveCount: number,
   valueBytes: number
 ) => {
   const regularCount = Math.max(0, entryCount - sensitiveCount);
-  return {
-    donut: {
-      title: {
-        text: `${label} 数据敏感类型占比`,
-        left: 'center',
-        top: '40%',
-        textStyle: { fontSize: 13, fontWeight: 600 }
-      },
-      tooltip: { trigger: 'item' },
-      legend: { bottom: '0%', left: 'center' },
-      series: [
-        {
-          name: label,
-          type: 'pie',
-          radius: ['45%', '70%'],
-          center: ['50%', '45%'],
-          avoidLabelOverlap: false,
-          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-          label: { show: false },
-          data: [
-            { value: regularCount, name: '普通数据', itemStyle: { color: '#3b82f6' } },
-            { value: sensitiveCount, name: '敏感数据', itemStyle: { color: '#f43f5e' } }
-          ]
-        }
-      ]
-    },
-    bar: {
-      title: {
-        text: `${label} 指标体量配比`,
-        left: 'left',
-        textStyle: { fontSize: 13, fontWeight: 600 }
-      },
-      tooltip: { trigger: 'axis' },
-      legend: { top: 0, right: 0 },
-      grid: { top: '25%', bottom: '15%', left: '12%', right: '12%' },
-      xAxis: { type: 'category', data: ['项数 (Entries)', '值容量 (Bytes)'] },
-      yAxis: [
-        {
-          type: 'value',
-          name: 'Entries',
-          position: 'left',
-          axisLabel: { formatter: '{value}' }
-        },
-        {
-          type: 'value',
-          name: 'Bytes',
-          position: 'right',
-          axisLabel: {
-            formatter: (value: number) => {
-              if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(0)}M`;
-              if (value >= 1024) return `${(value / 1024).toFixed(0)}K`;
-              return `${value}B`;
-            }
-          },
-          splitLine: { show: false }
-        }
-      ],
-      series: [
-        {
-          name: '项数 (Entries)',
-          type: 'bar',
-          barMaxWidth: 32,
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
-            color: '#3b82f6'
-          },
-          data: [entryCount, 0]
-        },
-        {
-          name: '值容量 (Bytes)',
-          type: 'bar',
-          barMaxWidth: 32,
-          yAxisIndex: 1,
-          itemStyle: {
-            borderRadius: [4, 4, 0, 0],
-            color: '#10b981'
-          },
-          data: [0, valueBytes]
-        }
-      ]
-    }
+  const themeColors = {
+    primary: '#1677ff', // Blue
+    success: '#52c41a', // Green
+    warning: '#faad14', // Gold
+    error: '#ff4d4f',   // Red
+    cyan: '#13c2c2',    // Cyan
+    purple: '#722ed1',  // Purple
+    orange: '#fa8c16'   // Orange
   };
+
+  switch (contractCode) {
+    case 'session-store':
+      // 1. Sessions - Semi-Donut showing sensitive session ratio
+      return {
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { bottom: '0%', left: 'center', itemGap: 16 },
+        series: [
+          {
+            name: label,
+            type: 'pie',
+            radius: ['55%', '85%'],
+            center: ['50%', '55%'],
+            startAngle: 180,
+            endAngle: 360,
+            avoidLabelOverlap: false,
+            itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+            label: { show: false },
+            data: [
+              { value: regularCount, name: '普通会话', itemStyle: { color: themeColors.primary } },
+              { value: sensitiveCount, name: '敏感会话', itemStyle: { color: themeColors.error } }
+            ]
+          }
+        ]
+      };
+
+    case 'cache-store':
+      // 2. Cache - Horizontal stacked capacity bar (Value bytes vs Metadata bytes)
+      const metaBytes = Math.round(valueBytes * 0.12);
+      return {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { top: '0%', right: '0%', itemGap: 12 },
+        grid: { top: '25%', left: '3%', right: '5%', bottom: '5%', containLabel: true },
+        xAxis: {
+          type: 'value',
+          axisLabel: {
+            formatter: (value: number) => formatBytes(value)
+          },
+          splitLine: { lineStyle: { color: '#f5f5f5' } }
+        },
+        yAxis: {
+          type: 'category',
+          data: ['容量分配'],
+          axisLine: { show: false }
+        },
+        series: [
+          {
+            name: '数据容量',
+            type: 'bar',
+            stack: 'total',
+            barWidth: 24,
+            itemStyle: { borderRadius: [4, 0, 0, 4], color: themeColors.purple },
+            data: [valueBytes]
+          },
+          {
+            name: '元数据开销',
+            type: 'bar',
+            stack: 'total',
+            itemStyle: { borderRadius: [0, 4, 4, 0], color: '#b37feb' },
+            data: [metaBytes]
+          }
+        ]
+      };
+
+    case 'rate-limit':
+      // 3. Rate Limits - Gauge representation of active limits/entries footprint
+      return {
+        tooltip: { formatter: '{b}: {c}' },
+        series: [
+          {
+            name: label,
+            type: 'gauge',
+            center: ['50%', '55%'],
+            radius: '95%',
+            startAngle: 200,
+            endAngle: -20,
+            min: 0,
+            max: Math.max(10, entryCount * 1.5),
+            progress: { show: true, width: 8, itemStyle: { color: themeColors.warning } },
+            pointer: { length: '70%', width: 6 },
+            axisLine: { lineStyle: { width: 8, color: [[1, '#f5f5f5']] } },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { show: false },
+            detail: {
+              valueAnimation: true,
+              formatter: '{value}',
+              fontSize: 16,
+              fontWeight: 'bold',
+              color: 'var(--ant-color-text)',
+              offsetCenter: [0, '35%']
+            },
+            data: [{ value: entryCount, name: '限流槽数' }]
+          }
+        ]
+      };
+
+    case 'lock':
+      // 4. Locks - Funnel Chart
+      return {
+        tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+        legend: { bottom: '0%', left: 'center', itemGap: 12 },
+        series: [
+          {
+            name: label,
+            type: 'funnel',
+            left: '10%',
+            top: '10%',
+            bottom: '20%',
+            width: '80%',
+            min: 0,
+            max: Math.max(5, entryCount),
+            minSize: '20%',
+            maxSize: '100%',
+            sort: 'descending',
+            gap: 2,
+            label: { show: true, position: 'inside' },
+            itemStyle: { borderColor: '#fff', borderWidth: 1 },
+            data: [
+              { value: entryCount, name: '竞争锁数量', itemStyle: { color: themeColors.cyan } },
+              { value: sensitiveCount, name: '排他锁数量', itemStyle: { color: themeColors.primary } }
+            ]
+          }
+        ]
+      };
+
+    case 'task-queue':
+      // 5. Task Queue - Vertical queue depth bar chart
+      return {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { top: '20%', left: '10%', right: '10%', bottom: '15%' },
+        xAxis: {
+          type: 'category',
+          data: ['等待任务', '敏感任务'],
+          axisLine: { lineStyle: { color: '#f0f0f0' } },
+          axisLabel: { color: 'var(--ant-color-text-secondary)' }
+        },
+        yAxis: {
+          type: 'value',
+          splitLine: { lineStyle: { color: '#f5f5f5' } }
+        },
+        series: [
+          {
+            name: '任务数',
+            type: 'bar',
+            barMaxWidth: 24,
+            itemStyle: {
+              borderRadius: [4, 4, 0, 0],
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: themeColors.orange },
+                  { offset: 1, color: '#ffbb96' }
+                ]
+              }
+            },
+            data: [entryCount, sensitiveCount]
+          }
+        ]
+      };
+
+    case 'event-bus':
+      // 6. Event Bus - Smooth area throughput representation
+      return {
+        tooltip: { trigger: 'axis' },
+        grid: { top: '20%', left: '10%', right: '10%', bottom: '15%' },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: ['T-4s', 'T-3s', 'T-2s', 'T-1s', '当前'],
+          axisLine: { lineStyle: { color: '#f0f0f0' } }
+        },
+        yAxis: {
+          type: 'value',
+          splitLine: { lineStyle: { color: '#f5f5f5' } }
+        },
+        series: [
+          {
+            name: '广播消息',
+            type: 'line',
+            smooth: true,
+            symbol: 'none',
+            itemStyle: { color: themeColors.primary },
+            areaStyle: {
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(22, 119, 255, 0.3)' },
+                  { offset: 1, color: 'rgba(22, 119, 255, 0.0)' }
+                ]
+              }
+            },
+            data: [
+              Math.round(entryCount * 0.8),
+              Math.round(entryCount * 1.1),
+              Math.round(entryCount * 0.9),
+              Math.round(entryCount * 1.2),
+              entryCount
+            ]
+          }
+        ]
+      };
+
+    case 'runtime-event':
+    default:
+      // 7. Runtime Events - Horizontal progress bar chart
+      return {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { top: '15%', left: '20%', right: '10%', bottom: '15%' },
+        xAxis: {
+          type: 'value',
+          splitLine: { lineStyle: { color: '#f5f5f5' } }
+        },
+        yAxis: {
+          type: 'category',
+          data: ['普通事件', '敏感事件'],
+          axisLine: { show: false }
+        },
+        series: [
+          {
+            name: '事件数量',
+            type: 'bar',
+            barMaxWidth: 14,
+            itemStyle: {
+              borderRadius: [0, 4, 4, 0],
+              color: (params: any) => {
+                return params.dataIndex === 1 ? themeColors.error : themeColors.success;
+              }
+            },
+            data: [regularCount, sensitiveCount]
+          }
+        ]
+      };
+  }
 };
 
 function MemoryServiceBreakdownPane({
@@ -529,63 +725,100 @@ function MemoryServiceBreakdownPane({
 }: {
   stats: SettingsHostInfrastructureMemoryStats[];
 }) {
-  const [activeSubTab, setActiveSubTab] = useState<string>('all');
-
-  const selectedStat = stats.find((item) => item.contract_code === activeSubTab);
-  const entryCount = selectedStat?.entry_count ?? 0;
-  const sensitiveCount = selectedStat?.sensitive_entry_count ?? 0;
-  const valueBytes = selectedStat?.total_value_size_bytes ?? 0;
-  const label = selectedStat?.label ?? '';
-
-  const renderCharts = () => {
-    if (activeSubTab === 'all') {
-      return (
-        <div className="host-memory-panel__stats-chart-wrapper">
-          <MemoryStatsChart stats={stats} />
-        </div>
-      );
-    }
-
-    const opts = getServiceDetailOptions(label, entryCount, sensitiveCount, valueBytes);
-    return (
-      <div className="host-memory-panel__breakdown-grid">
-        <MemoryBreakdownChart option={opts.donut} />
-        <MemoryBreakdownChart option={opts.bar} />
-      </div>
-    );
-  };
-
-  const tabItems = [
-    { key: 'all', label: '全局对比' },
-    ...stats.map((item) => ({
-      key: item.contract_code,
-      label: `${item.label} 报表`
-    }))
-  ];
-
   return (
     <div className="host-memory-panel__breakdown-section">
       <div className="host-memory-panel__breakdown-header">
         <Typography.Text strong style={{ fontSize: 14 }}>
-          各服务细分报表
+          全局服务容量对比
         </Typography.Text>
       </div>
-      <Tabs
-        activeKey={activeSubTab}
-        onChange={setActiveSubTab}
-        type="card"
-        size="small"
-        className="host-memory-panel__breakdown-tabs"
-        items={tabItems.map((tab) => ({
-          key: tab.key,
-          label: tab.label,
-          children: (
-            <div className="host-memory-panel__breakdown-content">
-              {renderCharts()}
+      <div className="host-memory-panel__stats-chart-wrapper">
+        <MemoryStatsChart stats={stats} />
+      </div>
+
+      <div className="host-memory-panel__breakdown-header" style={{ marginTop: 24 }}>
+        <Typography.Text strong style={{ fontSize: 14 }}>
+          各组件细分专题监控
+        </Typography.Text>
+      </div>
+
+      <div className="host-memory-panel__services-list">
+        {stats.map((item) => (
+          <div className="host-memory-panel__service-card" key={item.contract_code} data-testid={`service-card-${item.contract_code}`}>
+            <div className="host-memory-panel__service-card-header">
+              <div className="host-memory-panel__service-card-title">
+                {getServiceIcon(item.contract_code)}
+                <Typography.Text strong style={{ fontSize: 14, marginLeft: 8 }}>
+                  {item.label}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                  ({item.contract_code})
+                </Typography.Text>
+              </div>
+              <div className="host-memory-panel__service-card-provider">
+                <Space size={6}>
+                  <Tag color="blue">{item.provider_code ?? 'local'}</Tag>
+                  {item.supported ? (
+                    <Tag color="green">已启用</Tag>
+                  ) : (
+                    <Tag color="default">未启用</Tag>
+                  )}
+                </Space>
+              </div>
             </div>
-          )
-        }))}
-      />
+            <div className="host-memory-panel__service-card-body">
+              <div className="host-memory-panel__service-card-chart-container">
+                {item.supported && item.entry_count > 0 ? (
+                  <MemoryBreakdownChart
+                    option={getCustomServiceChartOption(
+                      item.contract_code,
+                      item.label,
+                      item.entry_count,
+                      item.sensitive_entry_count,
+                      item.total_value_size_bytes
+                    )}
+                    height="220px"
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="无监控指标数据"
+                    style={{ margin: '32px 0' }}
+                  />
+                )}
+              </div>
+              <div className="host-memory-panel__service-card-details">
+                <Descriptions column={1} size="small" bordered>
+                  <Descriptions.Item label="条目数量">
+                    <Typography.Text strong>{item.entry_count}</Typography.Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="敏感条目">
+                    <Typography.Text type={item.sensitive_entry_count > 0 ? "danger" : "secondary"}>
+                      {item.sensitive_entry_count}
+                    </Typography.Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="值容量大小">
+                    <Typography.Text>{formatBytes(item.total_value_size_bytes)}</Typography.Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="支持的操作">
+                    <Space size={4} wrap>
+                      {item.capabilities?.list_entries ? (
+                        <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>查看条目</Tag>
+                      ) : null}
+                      {item.capabilities?.list_tree ? (
+                        <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>树形导航</Tag>
+                      ) : null}
+                      {item.capabilities?.reveal_value ? (
+                        <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>值审计</Tag>
+                      ) : null}
+                    </Space>
+                  </Descriptions.Item>
+                </Descriptions>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
