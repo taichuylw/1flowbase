@@ -159,6 +159,26 @@
   font-size: 18px;
 }
 
+.host-memory-panel__stats {
+  width: 100%;
+}
+
+.host-memory-panel__stats-overview {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.host-memory-panel__stats-chart {
+  min-width: 0;
+  min-height: 320px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 6px;
+  background: var(--ant-color-bg-container);
+}
+
 .host-cache-panel__section-title,
 .host-memory-panel__section-title {
   margin-bottom: 8px;
@@ -234,6 +254,14 @@
 
   .host-memory-panel__stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .host-memory-panel__stats-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .host-memory-panel__stats-chart {
+    min-height: 260px;
   }
 
   .host-memory-panel__tree {

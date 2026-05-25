@@ -31,6 +31,8 @@ keywords:
 
 `2026-05-25 21` 追加实现边界：overview/tree 不再携带 `entry_count`、`sensitive_entry_count`、`total_value_size_bytes`；统计改为独立 `/settings/host-infrastructure/memory/contracts/{contract_code}/stats` 查询。前端顶部先使用 Ant Design `Statistic` 做轻量统计报表，不新增通用报表组件或图表依赖；后续如果需要趋势/分布报表，再基于独立 stats/query 接口演进。
 
+`2026-05-25 22` 追加报表边界：内存观察页第一个 tab 固定为“统计”，统计总览使用独立 `/settings/host-infrastructure/memory/stats` 聚合接口，后续 contract tabs 只负责 tree + entries 下钻。ECharts 直接作为宿主渲染依赖使用，不新增 wrapper；统计查询不挂到 overview/tree/entries/reveal 链路上。
+
 ## 谁在做什么？
 
 用户在 `2026-05-25 20` 确认易失层不需要历史兼容，因为重启后内存内容自然消失；下一步准备把方案挂到 GitHub issue 上。AI 负责把设计收敛成 issue 树，不进入实现。

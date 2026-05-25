@@ -138,6 +138,8 @@ use utoipa::OpenApi;
         crate::routes::host_infrastructure::list_host_infrastructure_providers,
         crate::routes::host_infrastructure::save_host_infrastructure_provider_config,
         crate::routes::host_infrastructure::get_host_infrastructure_memory_overview,
+        crate::routes::host_infrastructure::get_host_infrastructure_memory_stats_overview,
+        crate::routes::host_infrastructure::get_host_infrastructure_memory_stats,
         crate::routes::host_infrastructure::list_host_infrastructure_memory_entries,
         crate::routes::host_infrastructure::list_host_infrastructure_memory_tree,
         crate::routes::host_infrastructure::search_host_infrastructure_memory_entries,

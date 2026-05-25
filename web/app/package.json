@@ -25,6 +25,7 @@
     "@xyflow/react": "^12.10.2",
     "antd": "^5.24.6",
     "copy-to-clipboard": "^4.0.2",
+    "echarts": "6.1.0",
     "lexical": "^0.43.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.0.0",

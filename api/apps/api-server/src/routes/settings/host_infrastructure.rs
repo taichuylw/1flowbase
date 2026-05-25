@@ -223,6 +223,14 @@ pub struct MemoryStatsResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct MemoryStatsOverviewResponse {
+    pub inspection_path: Vec<String>,
+    pub contracts: Vec<MemoryStatsResponse>,
+    pub entry_count: u64,
+    pub sensitive_entry_count: u64,
+    pub total_value_size_bytes: u64,
+}
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MemoryEntryMetadataResponse {
     pub contract_code: String,
     pub group_code: Option<String>,
@@ -330,6 +338,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(get_host_infrastructure_memory_overview),
         )
         .route(
+            "/settings/host-infrastructure/memory/stats",
+            get(get_host_infrastructure_memory_stats_overview),
+        )
+        .route(
             "/settings/host-infrastructure/memory/contracts/:contract_code/entries",
             get(list_host_infrastructure_memory_entries),
         )
@@ -403,6 +415,36 @@ pub async fn get_host_infrastructure_memory_overview(
 
 #[utoipa::path(
     get,
+    path = "/api/console/settings/host-infrastructure/memory/stats",
+    responses((status = 200, body = MemoryStatsOverviewResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn get_host_infrastructure_memory_stats_overview(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<MemoryStatsOverviewResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_memory_view(&context.actor)?;
+    let inspection_path = Vec::new();
+    let mut contracts = Vec::new();
+    let mut total = EphemeralInspectionSummarySnapshot::empty();
+    for (contract_code, label) in memory_contract_definitions() {
+        let stats =
+            memory_contract_stats_response(&state, contract_code, label, &inspection_path).await?;
+        total.entry_count += stats.entry_count;
+        total.sensitive_entry_count += stats.sensitive_entry_count;
+        total.total_value_size_bytes += stats.total_value_size_bytes;
+        contracts.push(stats);
+    }
+    Ok(Json(ApiSuccess::new(MemoryStatsOverviewResponse {
+        inspection_path,
+        contracts,
+        entry_count: total.entry_count,
+        sensitive_entry_count: total.sensitive_entry_count,
+        total_value_size_bytes: total.total_value_size_bytes,
+    })))
+}
+#[utoipa::path(
+    get,
     path = "/api/console/settings/host-infrastructure/memory/contracts/{contract_code}/entries",
     params(("contract_code" = String, Path)),
     responses((status = 200, body = MemoryEntriesResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
@@ -463,29 +505,11 @@ pub async fn get_host_infrastructure_memory_stats(
     let context = require_session(&state, &headers).await?;
     ensure_memory_view(&context.actor)?;
     let label = memory_contract_label(&contract_code)?;
-    let target = memory_inspection_target(&state, &contract_code)?;
-    let capabilities = target.capabilities();
     let inspection_path = memory_query_path(query.path);
-    let summary = if memory_contract_supported(capabilities) {
-        target.summarize_entries_at_path(&inspection_path).await?
-    } else {
-        EphemeralInspectionSummarySnapshot::empty()
-    };
+    let stats =
+        memory_contract_stats_response(&state, &contract_code, label, &inspection_path).await?;
 
-    Ok(Json(ApiSuccess::new(MemoryStatsResponse {
-        contract_code: contract_code.clone(),
-        label: label.to_string(),
-        provider_code: state
-            .infrastructure
-            .default_provider(&contract_code)
-            .map(ToString::to_string),
-        capabilities: capabilities.into(),
-        supported: memory_contract_supported(capabilities),
-        inspection_path,
-        entry_count: summary.entry_count,
-        sensitive_entry_count: summary.sensitive_entry_count,
-        total_value_size_bytes: summary.total_value_size_bytes,
-    })))
+    Ok(Json(ApiSuccess::new(stats)))
 }
 
 #[utoipa::path(
@@ -1197,6 +1221,34 @@ async fn memory_contract_summary(
     })
 }
 
+async fn memory_contract_stats_response(
+    state: &ApiState,
+    contract_code: &str,
+    label: &str,
+    inspection_path: &[String],
+) -> Result<MemoryStatsResponse, ApiError> {
+    let target = memory_inspection_target(state, contract_code)?;
+    let capabilities = target.capabilities();
+    let summary = if memory_contract_supported(capabilities) {
+        target.summarize_entries_at_path(inspection_path).await?
+    } else {
+        EphemeralInspectionSummarySnapshot::empty()
+    };
+    Ok(MemoryStatsResponse {
+        contract_code: contract_code.to_string(),
+        label: label.to_string(),
+        provider_code: state
+            .infrastructure
+            .default_provider(contract_code)
+            .map(ToString::to_string),
+        capabilities: capabilities.into(),
+        supported: memory_contract_supported(capabilities),
+        inspection_path: inspection_path.to_vec(),
+        entry_count: summary.entry_count,
+        sensitive_entry_count: summary.sensitive_entry_count,
+        total_value_size_bytes: summary.total_value_size_bytes,
+    })
+}
 fn to_provider_response(
     provider: HostInfrastructureProviderConfigView,
 ) -> HostInfrastructureProviderConfigResponse {

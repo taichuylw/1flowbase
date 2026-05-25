@@ -283,6 +283,14 @@ export interface ConsoleMemoryStats {
   total_value_size_bytes: number;
 }
 
+export interface ConsoleMemoryStatsOverview {
+  inspection_path: string[];
+  contracts: ConsoleMemoryStats[];
+  entry_count: number;
+  sensitive_entry_count: number;
+  total_value_size_bytes: number;
+}
+
 export interface ConsoleHostInfrastructureMemoryEntries {
   contract_code: string;
   label: string;
@@ -642,6 +650,15 @@ export function clearConsoleHostInfrastructureCacheDomain(
 export function getConsoleHostInfrastructureMemoryOverview(baseUrl?: string) {
   return apiFetch<ConsoleHostInfrastructureMemoryOverview>({
     path: '/api/console/settings/host-infrastructure/memory',
+    baseUrl
+  });
+}
+
+export function getConsoleHostInfrastructureMemoryStatsOverview(
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleMemoryStatsOverview>({
+    path: '/api/console/settings/host-infrastructure/memory/stats',
     baseUrl
   });
 }

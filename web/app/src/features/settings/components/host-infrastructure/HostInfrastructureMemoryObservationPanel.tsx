@@ -1,5 +1,20 @@
-import { useEffect, useMemo, useState, type Key, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Key,
+  type ReactNode
+} from 'react';
 
+import { BarChart } from 'echarts/charts';
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent
+} from 'echarts/components';
+import * as echarts from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
 import {
   EyeOutlined,
   FileSearchOutlined,
@@ -30,20 +45,32 @@ import { JsonPreviewBlock } from '../../../../shared/ui/json-preview/JsonPreview
 import {
   fetchSettingsHostInfrastructureMemoryEntries,
   fetchSettingsHostInfrastructureMemoryOverview,
-  fetchSettingsHostInfrastructureMemoryStats,
+  fetchSettingsHostInfrastructureMemoryStatsOverview,
   fetchSettingsHostInfrastructureMemoryTree,
   revealSettingsHostInfrastructureMemoryEntry,
   searchSettingsHostInfrastructureMemoryEntries,
   settingsHostInfrastructureMemoryEntriesQueryKey,
   settingsHostInfrastructureMemoryOverviewQueryKey,
   settingsHostInfrastructureMemorySearchQueryKey,
-  settingsHostInfrastructureMemoryStatsQueryKey,
+  settingsHostInfrastructureMemoryStatsOverviewQueryKey,
   settingsHostInfrastructureMemoryTreeQueryKey,
   type SettingsHostInfrastructureMemoryContract,
   type SettingsHostInfrastructureMemoryEntry,
   type SettingsHostInfrastructureMemoryEntryValue,
+  type SettingsHostInfrastructureMemoryStats,
+  type SettingsHostInfrastructureMemoryStatsOverview,
   type SettingsHostInfrastructureMemoryTreeNode
 } from '../../api/host-infrastructure';
+
+echarts.use([
+  BarChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  CanvasRenderer
+]);
+
+const MEMORY_STATS_TAB_KEY = 'stats-overview';
 
 function formatBytes(value: number) {
   if (value < 1024) {
@@ -196,15 +223,211 @@ function collectTreeSearchItems(
   return items;
 }
 
+function MemoryStatsChart({
+  stats
+}: {
+  stats: SettingsHostInfrastructureMemoryStats[];
+}) {
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!chartRef.current) {
+      return;
+    }
+    const chart = echarts.init(chartRef.current);
+    const labels = stats.map((item) => item.label);
+
+    chart.setOption({
+      color: ['#1677ff', '#52c41a', '#faad14'],
+      tooltip: {
+        trigger: 'axis'
+      },
+      legend: {
+        top: 0
+      },
+      grid: {
+        top: 44,
+        right: 56,
+        bottom: 48,
+        left: 48
+      },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: {
+          interval: 0,
+          rotate: stats.length > 4 ? 20 : 0
+        }
+      },
+      yAxis: [
+        {
+          type: 'value',
+          name: 'Entries'
+        },
+        {
+          type: 'value',
+          name: 'Bytes'
+        }
+      ],
+      series: [
+        {
+          name: 'Entries',
+          type: 'bar',
+          data: stats.map((item) => item.entry_count)
+        },
+        {
+          name: 'Sensitive',
+          type: 'bar',
+          data: stats.map((item) => item.sensitive_entry_count)
+        },
+        {
+          name: 'Value bytes',
+          type: 'bar',
+          yAxisIndex: 1,
+          data: stats.map((item) => item.total_value_size_bytes)
+        }
+      ]
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      chart.resize();
+    });
+    resizeObserver.observe(chartRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      chart.dispose();
+    };
+  }, [stats]);
+
+  return (
+    <div
+      ref={chartRef}
+      aria-label="Memory statistics chart"
+      className="host-memory-panel__stats-chart"
+      role="img"
+    />
+  );
+}
+
+function MemoryStatsOverviewPane({
+  data,
+  isError,
+  isLoading
+}: {
+  data: SettingsHostInfrastructureMemoryStatsOverview | undefined;
+  isError: boolean;
+  isLoading: boolean;
+}) {
+  const stats = data?.contracts ?? [];
+  const columns = useMemo<ColumnsType<SettingsHostInfrastructureMemoryStats>>(
+    () => [
+      {
+        title: 'Contract',
+        dataIndex: 'label',
+        key: 'label',
+        render: (label: string, item) => (
+          <Space direction="vertical" size={0}>
+            <Typography.Text strong>{label}</Typography.Text>
+            <Typography.Text type="secondary">
+              {item.contract_code}
+            </Typography.Text>
+          </Space>
+        )
+      },
+      {
+        title: 'Provider',
+        dataIndex: 'provider_code',
+        key: 'provider_code',
+        width: 140,
+        render: (providerCode: string | null) => providerCode ?? 'unknown'
+      },
+      {
+        title: 'Entries',
+        dataIndex: 'entry_count',
+        key: 'entry_count',
+        width: 120
+      },
+      {
+        title: 'Sensitive',
+        dataIndex: 'sensitive_entry_count',
+        key: 'sensitive_entry_count',
+        width: 120
+      },
+      {
+        title: 'Value size',
+        dataIndex: 'total_value_size_bytes',
+        key: 'total_value_size_bytes',
+        width: 140,
+        render: (size: number) => formatBytes(size)
+      }
+    ],
+    []
+  );
+
+  if (isError) {
+    return <Alert type="warning" showIcon message="统计加载失败。" />;
+  }
+
+  return (
+    <Space direction="vertical" size={16} className="host-memory-panel__stats">
+      <div className="host-memory-panel__stats-report">
+        <div className="host-memory-panel__stats-report-header">
+          <Typography.Text strong>Memory statistics</Typography.Text>
+          <Typography.Text type="secondary">
+            {formatInspectionPath(data?.inspection_path ?? [])}
+          </Typography.Text>
+        </div>
+        <div className="host-memory-panel__stats-grid">
+          <Statistic
+            title="Entries"
+            value={data?.entry_count ?? 0}
+            formatter={(value) => `${value} entries`}
+            loading={isLoading}
+          />
+          <Statistic
+            title="Sensitive"
+            value={data?.sensitive_entry_count ?? 0}
+            formatter={(value) => `${value} sensitive`}
+            loading={isLoading}
+          />
+          <Statistic
+            title="Value size"
+            value={formatBytes(data?.total_value_size_bytes ?? 0)}
+            loading={isLoading}
+          />
+        </div>
+      </div>
+
+      {stats.length ? (
+        <div className="host-memory-panel__stats-overview">
+          <MemoryStatsChart stats={stats} />
+          <Table
+            rowKey={(item) => item.contract_code}
+            columns={columns}
+            dataSource={stats}
+            loading={isLoading}
+            pagination={false}
+            size="small"
+          />
+        </div>
+      ) : (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="暂无统计数据"
+        />
+      )}
+    </Space>
+  );
+}
+
 export function HostInfrastructureMemoryObservationPanel({
   canManage
 }: {
   canManage: boolean;
 }) {
   const csrfToken = useAuthStore((state) => state.csrfToken);
-  const [activeContractCode, setActiveContractCode] = useState<string | null>(
-    null
-  );
+  const [activeTabKey, setActiveTabKey] = useState(MEMORY_STATS_TAB_KEY);
   const [selectedInspectionPath, setSelectedInspectionPath] = useState<
     string[] | null
   >(null);
@@ -230,13 +453,17 @@ export function HostInfrastructureMemoryObservationPanel({
   });
   const contracts = overviewQuery.data?.contracts ?? [];
   const resolvedActiveContractCode =
-    activeContractCode &&
-    contracts.some((contract) => contract.contract_code === activeContractCode)
-      ? activeContractCode
-      : (contracts[0]?.contract_code ?? null);
+    activeTabKey !== MEMORY_STATS_TAB_KEY &&
+    contracts.some((contract) => contract.contract_code === activeTabKey)
+      ? activeTabKey
+      : null;
   const activeContract = contracts.find(
     (contract) => contract.contract_code === resolvedActiveContractCode
   );
+  const resolvedActiveTabKey =
+    resolvedActiveContractCode || activeTabKey === MEMORY_STATS_TAB_KEY
+      ? activeTabKey
+      : MEMORY_STATS_TAB_KEY;
   const pageSize = activeContract?.capabilities.default_page_size ?? 50;
   const canListEntries = Boolean(
     activeContract?.supported && activeContract.capabilities.list_entries
@@ -290,6 +517,11 @@ export function HostInfrastructureMemoryObservationPanel({
       resolvedActiveContractCode && canListEntries && entryRequest
     )
   });
+  const statsOverviewQuery = useQuery({
+    queryKey: settingsHostInfrastructureMemoryStatsOverviewQueryKey,
+    queryFn: fetchSettingsHostInfrastructureMemoryStatsOverview,
+    enabled: Boolean(contracts.length)
+  });
   const rootTreeQuery = useQuery({
     queryKey: settingsHostInfrastructureMemoryTreeQueryKey(
       resolvedActiveContractCode,
@@ -309,22 +541,6 @@ export function HostInfrastructureMemoryObservationPanel({
           )
         : Promise.resolve(null),
     enabled: Boolean(resolvedActiveContractCode && canListTree)
-  });
-  const statsQuery = useQuery({
-    queryKey: settingsHostInfrastructureMemoryStatsQueryKey(
-      resolvedActiveContractCode,
-      { inspection_path: [] }
-    ),
-    queryFn: () =>
-      resolvedActiveContractCode
-        ? fetchSettingsHostInfrastructureMemoryStats(
-            resolvedActiveContractCode,
-            {
-              inspection_path: []
-            }
-          )
-        : Promise.resolve(null),
-    enabled: Boolean(resolvedActiveContractCode && activeContract?.supported)
   });
   const entries = entriesQuery.data?.entries ?? [];
   const canReveal = resolveCanReveal(
@@ -441,8 +657,8 @@ export function HostInfrastructureMemoryObservationPanel({
     }));
   };
 
-  const selectContract = (contractCode: string) => {
-    setActiveContractCode(contractCode);
+  const selectTab = (tabKey: string) => {
+    setActiveTabKey(tabKey);
   };
 
   const selectInspectionPath = (path: string[]) => {
@@ -582,53 +798,14 @@ export function HostInfrastructureMemoryObservationPanel({
             overviewQuery.isFetching ||
             entriesQuery.isFetching ||
             rootTreeQuery.isFetching ||
-            statsQuery.isFetching
+            statsOverviewQuery.isFetching
           }
         >
           刷新
         </Button>
       </div>
 
-      {activeContract ? (
-        <div className="host-memory-panel__stats-report">
-          <div className="host-memory-panel__stats-report-header">
-            <Typography.Text strong>Memory stats</Typography.Text>
-            <Typography.Text type="secondary">
-              {activeContract.contract_code}
-              {activeContract.provider_code
-                ? ` · ${activeContract.provider_code}`
-                : ''}
-            </Typography.Text>
-          </div>
-          {statsQuery.isError ? (
-            <Alert type="warning" showIcon message="统计加载失败。" />
-          ) : (
-            <div className="host-memory-panel__stats-grid">
-              <Statistic
-                title="Entries"
-                value={statsQuery.data?.entry_count ?? 0}
-                formatter={(value) => `${value} entries`}
-                loading={statsQuery.isLoading}
-              />
-              <Statistic
-                title="Sensitive"
-                value={statsQuery.data?.sensitive_entry_count ?? 0}
-                formatter={(value) => `${value} sensitive`}
-                loading={statsQuery.isLoading}
-              />
-              <Statistic
-                title="Value size"
-                value={formatBytes(
-                  statsQuery.data?.total_value_size_bytes ?? 0
-                )}
-                loading={statsQuery.isLoading}
-              />
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {!canReveal ? (
+      {resolvedActiveContractCode && !canReveal ? (
         <Alert
           type="info"
           showIcon
@@ -646,205 +823,223 @@ export function HostInfrastructureMemoryObservationPanel({
 
       {contracts.length ? (
         <Tabs
-          activeKey={resolvedActiveContractCode ?? undefined}
+          activeKey={resolvedActiveTabKey}
           className="host-memory-panel__tabs"
-          items={contracts.map((contract) => ({
-            key: contract.contract_code,
-            label: (
-              <span className="host-memory-panel__tab-label">
-                <span>{contract.label}</span>
-              </span>
-            ),
-            children:
-              contract.contract_code === resolvedActiveContractCode ? (
+          items={[
+            {
+              key: MEMORY_STATS_TAB_KEY,
+              label: '统计',
+              children: (
                 <div className="host-memory-panel__tab-pane">
-                  <Layout className="host-memory-panel__content">
-                    <Layout.Sider
-                      className="host-memory-panel__tree"
-                      theme="light"
-                      width={320}
-                    >
-                      {activeContract ? (
-                        !activeContract.supported ||
-                        !activeContract.capabilities.list_tree ? (
-                          <Alert
-                            type="warning"
-                            showIcon
-                            message="当前 contract 不支持 tree inspection。"
-                          />
-                        ) : rootTreeQuery.isError ? (
-                          <Alert
-                            type="error"
-                            showIcon
-                            message="内存树加载失败。"
-                          />
-                        ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
+                  <MemoryStatsOverviewPane
+                    data={statsOverviewQuery.data}
+                    isError={statsOverviewQuery.isError}
+                    isLoading={statsOverviewQuery.isLoading}
+                  />
+                </div>
+              )
+            },
+            ...contracts.map((contract) => ({
+              key: contract.contract_code,
+              label: (
+                <span className="host-memory-panel__tab-label">
+                  <span>{contract.label}</span>
+                </span>
+              ),
+              children:
+                contract.contract_code === resolvedActiveContractCode ? (
+                  <div className="host-memory-panel__tab-pane">
+                    <Layout className="host-memory-panel__content">
+                      <Layout.Sider
+                        className="host-memory-panel__tree"
+                        theme="light"
+                        width={320}
+                      >
+                        {activeContract ? (
+                          !activeContract.supported ||
+                          !activeContract.capabilities.list_tree ? (
+                            <Alert
+                              type="warning"
+                              showIcon
+                              message="当前 contract 不支持 tree inspection。"
+                            />
+                          ) : rootTreeQuery.isError ? (
+                            <Alert
+                              type="error"
+                              showIcon
+                              message="内存树加载失败。"
+                            />
+                          ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
+                            <Empty
+                              image={Empty.PRESENTED_IMAGE_SIMPLE}
+                              description="暂无内存节点"
+                            />
+                          ) : (
+                            <Space
+                              direction="vertical"
+                              size={8}
+                              className="host-memory-panel__tree-panel"
+                            >
+                              <Input.Search
+                                allowClear
+                                placeholder="Search tree"
+                                size="small"
+                                value={treeSearchText}
+                                onChange={(event) =>
+                                  updateTreeSearchText(event.target.value)
+                                }
+                              />
+                              <div className="host-memory-panel__tree-body">
+                                <Tree
+                                  autoExpandParent={treeAutoExpandParent}
+                                  expandedKeys={treeExpandedKeys}
+                                  treeData={treeData}
+                                  loadData={loadTreeChildren}
+                                  selectedKeys={
+                                    selectedTreeKey ? [selectedTreeKey] : []
+                                  }
+                                  onExpand={(keys) => {
+                                    setTreeExpandedKeys(keys);
+                                    setTreeAutoExpandParent(false);
+                                  }}
+                                  onSelect={(_, info) => {
+                                    const node = info.node as DataNode & {
+                                      inspectionPath?: string[];
+                                    };
+                                    if (node.inspectionPath) {
+                                      selectInspectionPath(node.inspectionPath);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </Space>
+                          )
+                        ) : (
                           <Empty
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description="暂无内存节点"
+                            description="请选择内存 contract"
                           />
-                        ) : (
-                          <Space
-                            direction="vertical"
-                            size={8}
-                            className="host-memory-panel__tree-panel"
-                          >
+                        )}
+                      </Layout.Sider>
+
+                      <Layout.Content className="host-memory-panel__entries">
+                        <Space direction="vertical" size={12}>
+                          <div className="host-memory-panel__entries-header">
+                            <Space direction="vertical" size={2}>
+                              <Typography.Text strong>Entries</Typography.Text>
+                              <Typography.Text type="secondary">
+                                {selectedInspectionPath
+                                  ? formatInspectionPath(selectedInspectionPath)
+                                  : '未选择路径'}
+                              </Typography.Text>
+                            </Space>
                             <Input.Search
                               allowClear
-                              placeholder="Search tree"
-                              size="small"
-                              value={treeSearchText}
+                              disabled={!canSearchEntries}
+                              value={searchText}
                               onChange={(event) =>
-                                updateTreeSearchText(event.target.value)
+                                setSearchText(event.target.value)
                               }
-                            />
-                            <div className="host-memory-panel__tree-body">
-                              <Tree
-                                autoExpandParent={treeAutoExpandParent}
-                                expandedKeys={treeExpandedKeys}
-                                treeData={treeData}
-                                loadData={loadTreeChildren}
-                                selectedKeys={
-                                  selectedTreeKey ? [selectedTreeKey] : []
+                              onSearch={(value) => {
+                                if (!canSearchEntries) {
+                                  return;
                                 }
-                                onExpand={(keys) => {
-                                  setTreeExpandedKeys(keys);
-                                  setTreeAutoExpandParent(false);
-                                }}
-                                onSelect={(_, info) => {
-                                  const node = info.node as DataNode & {
-                                    inspectionPath?: string[];
-                                  };
-                                  if (node.inspectionPath) {
-                                    selectInspectionPath(node.inspectionPath);
-                                  }
-                                }}
-                              />
-                            </div>
-                          </Space>
-                        )
-                      ) : (
-                        <Empty
-                          image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description="请选择内存 contract"
-                        />
-                      )}
-                    </Layout.Sider>
-
-                    <Layout.Content className="host-memory-panel__entries">
-                      <Space direction="vertical" size={12}>
-                        <div className="host-memory-panel__entries-header">
-                          <Space direction="vertical" size={2}>
-                            <Typography.Text strong>Entries</Typography.Text>
-                            <Typography.Text type="secondary">
-                              {selectedInspectionPath
-                                ? formatInspectionPath(selectedInspectionPath)
-                                : '未选择路径'}
-                            </Typography.Text>
-                          </Space>
-                          <Input.Search
-                            allowClear
-                            disabled={!canSearchEntries}
-                            value={searchText}
-                            onChange={(event) =>
-                              setSearchText(event.target.value)
-                            }
-                            onSearch={(value) => {
-                              if (!canSearchEntries) {
-                                return;
-                              }
-                              setSubmittedSearch(value.trim());
-                              setEntryCursor(null);
-                              setCursorHistory([]);
-                            }}
-                            size="small"
-                            style={{ maxWidth: 240 }}
-                          />
-                        </div>
-
-                        {!selectedInspectionPath ? (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description="请选择 tree 节点"
-                          />
-                        ) : entriesQuery.isError ? (
-                          <Alert
-                            type="error"
-                            showIcon
-                            message="内存 entry 连接失败。"
-                            description="无法读取当前路径的 entries。"
-                          />
-                        ) : entriesQuery.isSuccess && !entries.length ? (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description="暂无内存 entry"
-                          />
-                        ) : (
-                          <>
-                            <Table
-                              rowKey={(entry) => entry.entry_ref}
-                              columns={entryColumns}
-                              dataSource={entries}
-                              loading={
-                                entriesQuery.isLoading ||
-                                entriesQuery.isFetching
-                              }
-                              pagination={false}
+                                setSubmittedSearch(value.trim());
+                                setEntryCursor(null);
+                                setCursorHistory([]);
+                              }}
                               size="small"
+                              style={{ maxWidth: 240 }}
                             />
-                            <div className="host-memory-panel__entries-header">
-                              <Typography.Text type="secondary">
-                                {entriesQuery.data
-                                  ? `${formatBytes(
-                                      entriesQuery.data.emitted_bytes
-                                    )} emitted`
-                                  : null}
-                              </Typography.Text>
-                              <Space size={8}>
-                                <Button
-                                  size="small"
-                                  disabled={!cursorHistory.length}
-                                  onClick={() => {
-                                    setCursorHistory((current) => {
-                                      const previousCursor =
-                                        current.at(-1) ?? null;
-                                      const nextHistory = current.slice(0, -1);
-                                      setEntryCursor(previousCursor || null);
-                                      return nextHistory;
-                                    });
-                                  }}
-                                >
-                                  上一页
-                                </Button>
-                                <Button
-                                  size="small"
-                                  disabled={!entriesQuery.data?.next_cursor}
-                                  onClick={() => {
-                                    const nextCursor =
-                                      entriesQuery.data?.next_cursor;
-                                    if (!nextCursor) {
-                                      return;
-                                    }
-                                    setCursorHistory((current) => [
-                                      ...current,
-                                      entryCursor ?? ''
-                                    ]);
-                                    setEntryCursor(nextCursor);
-                                  }}
-                                >
-                                  下一页
-                                </Button>
-                              </Space>
-                            </div>
-                          </>
-                        )}
-                      </Space>
-                    </Layout.Content>
-                  </Layout>
-                </div>
-              ) : null
-          }))}
-          onChange={selectContract}
+                          </div>
+
+                          {!selectedInspectionPath ? (
+                            <Empty
+                              image={Empty.PRESENTED_IMAGE_SIMPLE}
+                              description="请选择 tree 节点"
+                            />
+                          ) : entriesQuery.isError ? (
+                            <Alert
+                              type="error"
+                              showIcon
+                              message="内存 entry 连接失败。"
+                              description="无法读取当前路径的 entries。"
+                            />
+                          ) : entriesQuery.isSuccess && !entries.length ? (
+                            <Empty
+                              image={Empty.PRESENTED_IMAGE_SIMPLE}
+                              description="暂无内存 entry"
+                            />
+                          ) : (
+                            <>
+                              <Table
+                                rowKey={(entry) => entry.entry_ref}
+                                columns={entryColumns}
+                                dataSource={entries}
+                                loading={
+                                  entriesQuery.isLoading ||
+                                  entriesQuery.isFetching
+                                }
+                                pagination={false}
+                                size="small"
+                              />
+                              <div className="host-memory-panel__entries-header">
+                                <Typography.Text type="secondary">
+                                  {entriesQuery.data
+                                    ? `${formatBytes(
+                                        entriesQuery.data.emitted_bytes
+                                      )} emitted`
+                                    : null}
+                                </Typography.Text>
+                                <Space size={8}>
+                                  <Button
+                                    size="small"
+                                    disabled={!cursorHistory.length}
+                                    onClick={() => {
+                                      setCursorHistory((current) => {
+                                        const previousCursor =
+                                          current.at(-1) ?? null;
+                                        const nextHistory = current.slice(
+                                          0,
+                                          -1
+                                        );
+                                        setEntryCursor(previousCursor || null);
+                                        return nextHistory;
+                                      });
+                                    }}
+                                  >
+                                    上一页
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    disabled={!entriesQuery.data?.next_cursor}
+                                    onClick={() => {
+                                      const nextCursor =
+                                        entriesQuery.data?.next_cursor;
+                                      if (!nextCursor) {
+                                        return;
+                                      }
+                                      setCursorHistory((current) => [
+                                        ...current,
+                                        entryCursor ?? ''
+                                      ]);
+                                      setEntryCursor(nextCursor);
+                                    }}
+                                  >
+                                    下一页
+                                  </Button>
+                                </Space>
+                              </div>
+                            </>
+                          )}
+                        </Space>
+                      </Layout.Content>
+                    </Layout>
+                  </div>
+                ) : null
+            }))
+          ]}
+          onChange={selectTab}
         />
       ) : null}
 

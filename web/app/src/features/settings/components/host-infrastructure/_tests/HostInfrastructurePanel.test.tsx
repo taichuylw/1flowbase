@@ -4,6 +4,15 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { resetAuthStore, useAuthStore } from '../../../../../state/auth-store';
 
+const echartsMock = vi.hoisted(() => ({
+  chart: {
+    dispose: vi.fn(),
+    resize: vi.fn(),
+    setOption: vi.fn()
+  },
+  init: vi.fn()
+}));
+
 const api = vi.hoisted(() => ({
   settingsHostInfrastructureProvidersQueryKey: [
     'settings',
@@ -14,6 +23,12 @@ const api = vi.hoisted(() => ({
     'settings',
     'host-infrastructure',
     'memory'
+  ],
+  settingsHostInfrastructureMemoryStatsOverviewQueryKey: [
+    'settings',
+    'host-infrastructure',
+    'memory',
+    'stats'
   ],
   settingsHostInfrastructureMemoryEntriesQueryKey: vi.fn(
     (
@@ -102,6 +117,7 @@ const api = vi.hoisted(() => ({
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
   fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryStatsOverview: vi.fn(),
   fetchSettingsHostInfrastructureMemoryStats: vi.fn(),
   fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
   fetchSettingsHostInfrastructureMemoryTree: vi.fn(),
@@ -109,6 +125,21 @@ const api = vi.hoisted(() => ({
   revealSettingsHostInfrastructureMemoryEntry: vi.fn()
 }));
 
+vi.mock('echarts/core', () => ({
+  init: echartsMock.init,
+  use: vi.fn()
+}));
+vi.mock('echarts/charts', () => ({
+  BarChart: {}
+}));
+vi.mock('echarts/components', () => ({
+  GridComponent: {},
+  LegendComponent: {},
+  TooltipComponent: {}
+}));
+vi.mock('echarts/renderers', () => ({
+  CanvasRenderer: {}
+}));
 vi.mock('../../../api/host-infrastructure', () => api);
 
 import { HostInfrastructurePanel } from '../HostInfrastructurePanel';
@@ -167,9 +198,17 @@ describe('HostInfrastructurePanel', () => {
   });
 
   beforeEach(() => {
+    echartsMock.init.mockReturnValue(echartsMock.chart);
     api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
       contracts: []
+    });
+    api.fetchSettingsHostInfrastructureMemoryStatsOverview.mockResolvedValue({
+      inspection_path: [],
+      contracts: [],
+      entry_count: 0,
+      sensitive_entry_count: 0,
+      total_value_size_bytes: 0
     });
     api.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue({
       contract_code: 'session-store',
@@ -356,6 +395,34 @@ describe('HostInfrastructurePanel', () => {
       sensitive_entry_count: 1,
       total_value_size_bytes: 2048
     });
+    api.fetchSettingsHostInfrastructureMemoryStatsOverview.mockResolvedValue({
+      inspection_path: [],
+      entry_count: 3,
+      sensitive_entry_count: 1,
+      total_value_size_bytes: 3072,
+      contracts: [
+        {
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          supported: true,
+          inspection_path: [],
+          entry_count: 2,
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 2048
+        },
+        {
+          contract_code: 'cache-store',
+          label: 'Cache',
+          provider_code: 'local',
+          supported: true,
+          inspection_path: [],
+          entry_count: 1,
+          sensitive_entry_count: 0,
+          total_value_size_bytes: 1024
+        }
+      ]
+    });
     api.fetchSettingsHostInfrastructureMemoryTree.mockImplementation(
       (_contractCode: string, request?: { inspection_path?: string[] }) =>
         Promise.resolve({
@@ -450,14 +517,16 @@ describe('HostInfrastructurePanel', () => {
 
     const { container } = renderMemoryObservationPanel(true);
 
-    expect(await screen.findByText('Sessions')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('tab', { name: 'Sessions' })
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(
         api.fetchSettingsHostInfrastructureMemoryEntries
       ).not.toHaveBeenCalled();
     });
 
-    fireEvent.click(await screen.findByText('Sessions'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sessions' }));
     expect(await screen.findByText('workspace-1')).toBeInTheDocument();
     expect(api.fetchSettingsHostInfrastructureMemoryTree).toHaveBeenCalledWith(
       'session-store',
@@ -533,6 +602,34 @@ describe('HostInfrastructurePanel', () => {
       entry_count: 2,
       sensitive_entry_count: 1,
       total_value_size_bytes: 2048
+    });
+    api.fetchSettingsHostInfrastructureMemoryStatsOverview.mockResolvedValue({
+      inspection_path: [],
+      entry_count: 3,
+      sensitive_entry_count: 1,
+      total_value_size_bytes: 3072,
+      contracts: [
+        {
+          contract_code: 'session-store',
+          label: 'Sessions',
+          provider_code: 'local',
+          supported: true,
+          inspection_path: [],
+          entry_count: 2,
+          sensitive_entry_count: 1,
+          total_value_size_bytes: 2048
+        },
+        {
+          contract_code: 'cache-store',
+          label: 'Cache',
+          provider_code: 'local',
+          supported: true,
+          inspection_path: [],
+          entry_count: 1,
+          sensitive_entry_count: 0,
+          total_value_size_bytes: 1024
+        }
+      ]
     });
     api.fetchSettingsHostInfrastructureMemoryTree.mockImplementation(
       (contractCode: string) =>
@@ -626,16 +723,25 @@ describe('HostInfrastructurePanel', () => {
     renderMemoryObservationPanel(true);
 
     expect(
-      await screen.findByRole('tab', { name: /Sessions/ })
+      await screen.findByRole('tab', { name: /统计/ })
     ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Sessions/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
     expect(
       screen.getByRole('tab', { name: /Sessions/ }).querySelector('.ant-badge')
     ).toBeNull();
-    expect(await screen.findByText('Memory stats')).toBeInTheDocument();
-    expect(await screen.findByText('2 entries')).toBeInTheDocument();
+    expect(await screen.findByText('Memory statistics')).toBeInTheDocument();
+    expect(await screen.findByText('3 entries')).toBeInTheDocument();
     expect(await screen.findByText('1 sensitive')).toBeInTheDocument();
-    expect(await screen.findByText('2.0 KB')).toBeInTheDocument();
+    expect(await screen.findByText('3.0 KB')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Memory statistics chart')
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(echartsMock.chart.setOption).toHaveBeenCalled();
+    });
+    expect(api.fetchSettingsHostInfrastructureMemoryTree).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('tab', { name: /Sessions/ }));
     const treeSearch = await screen.findByPlaceholderText('Search tree');
     const memoryLayout = treeSearch.closest('.host-memory-panel__tab-pane');
     expect(memoryLayout).not.toBeNull();
@@ -650,7 +756,6 @@ describe('HostInfrastructurePanel', () => {
         '.ant-layout-content.host-memory-panel__entries'
       )
     ).not.toBeNull();
-    expect(screen.queryByText('Provider')).not.toBeInTheDocument();
     fireEvent.change(treeSearch, { target: { value: 'space' } });
     expect(await screen.findByText('space')).toHaveClass(
       'host-memory-panel__tree-search-value'
@@ -785,10 +890,10 @@ describe('HostInfrastructurePanel', () => {
 
     renderMemoryObservationPanel(false);
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sessions' }));
     expect(
       await screen.findByText('当前视图只展示 metadata。')
     ).toBeInTheDocument();
-    fireEvent.click(await screen.findByText('Sessions'));
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
     expect(
@@ -918,7 +1023,7 @@ describe('HostInfrastructurePanel', () => {
     });
 
     renderMemoryObservationPanel(true);
-    fireEvent.click(await screen.findByText('Sessions'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sessions' }));
     fireEvent.click(await screen.findByText('workspace-1'));
     fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
 
@@ -1064,7 +1169,7 @@ describe('HostInfrastructurePanel', () => {
     );
 
     renderMemoryObservationPanel(true);
-    fireEvent.click(await screen.findByText('Cache'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Cache' }));
     fireEvent.click(await screen.findByText('application-logs'));
     fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
 

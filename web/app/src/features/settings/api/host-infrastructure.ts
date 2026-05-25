@@ -2,6 +2,7 @@ import {
   clearConsoleHostInfrastructureCacheDomain,
   clearConsoleHostInfrastructureCacheEntry,
   getConsoleHostInfrastructureMemoryOverview,
+  getConsoleHostInfrastructureMemoryStatsOverview,
   getConsoleHostInfrastructureMemoryStats,
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
@@ -17,6 +18,7 @@ import {
   type ConsoleCacheDomain,
   type ConsoleHostInfrastructureMemoryEntries,
   type ConsoleHostInfrastructureMemoryOverview,
+  type ConsoleMemoryStatsOverview,
   type ConsoleMemoryStats,
   type ConsoleHostInfrastructureProviderConfig,
   type ConsoleHostInfrastructureCacheEntries,
@@ -47,6 +49,8 @@ export type SettingsHostInfrastructureMemoryEntries =
   ConsoleHostInfrastructureMemoryEntries;
 export type SettingsHostInfrastructureMemoryContract =
   ConsoleMemoryContractSummary;
+export type SettingsHostInfrastructureMemoryStatsOverview =
+  ConsoleMemoryStatsOverview;
 export type SettingsHostInfrastructureMemoryStats = ConsoleMemoryStats;
 export type SettingsHostInfrastructureMemoryEntry = ConsoleMemoryEntryMetadata;
 export type SettingsHostInfrastructureMemoryEntryValue =
@@ -80,6 +84,13 @@ export const settingsHostInfrastructureMemoryOverviewQueryKey = [
   'settings',
   'host-infrastructure',
   'memory'
+] as const;
+
+export const settingsHostInfrastructureMemoryStatsOverviewQueryKey = [
+  'settings',
+  'host-infrastructure',
+  'memory',
+  'stats'
 ] as const;
 
 export function settingsHostInfrastructureCacheEntriesQueryKey(
@@ -175,6 +186,10 @@ export function fetchSettingsHostInfrastructureCacheOverview() {
 
 export function fetchSettingsHostInfrastructureMemoryOverview() {
   return getConsoleHostInfrastructureMemoryOverview();
+}
+
+export function fetchSettingsHostInfrastructureMemoryStatsOverview() {
+  return getConsoleHostInfrastructureMemoryStatsOverview();
 }
 
 export function fetchSettingsHostInfrastructureMemoryStats(

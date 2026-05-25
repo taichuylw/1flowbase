@@ -9,6 +9,15 @@ import {
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+const echartsMock = vi.hoisted(() => ({
+  chart: {
+    dispose: vi.fn(),
+    resize: vi.fn(),
+    setOption: vi.fn()
+  },
+  init: vi.fn()
+}));
+
 const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
   fetchSettingsMembers: vi.fn(),
@@ -135,6 +144,12 @@ const hostInfrastructureApi = vi.hoisted(() => ({
     'host-infrastructure',
     'memory'
   ],
+  settingsHostInfrastructureMemoryStatsOverviewQueryKey: [
+    'settings',
+    'host-infrastructure',
+    'memory',
+    'stats'
+  ],
   settingsHostInfrastructureMemoryEntriesQueryKey: vi.fn(
     (contractCode: string | null) => [
       'settings',
@@ -178,6 +193,7 @@ const hostInfrastructureApi = vi.hoisted(() => ({
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
   fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryStatsOverview: vi.fn(),
   fetchSettingsHostInfrastructureMemoryStats: vi.fn(),
   fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
   fetchSettingsHostInfrastructureMemoryTree: vi.fn(),
@@ -238,6 +254,21 @@ vi.mock('../api/system-runtime', () => systemRuntimeApi);
 vi.mock('../api/file-management', () => fileManagementApi);
 vi.mock('../api/host-infrastructure', () => hostInfrastructureApi);
 vi.mock('../api/data-models', () => dataModelsApi);
+vi.mock('echarts/core', () => ({
+  init: echartsMock.init,
+  use: vi.fn()
+}));
+vi.mock('echarts/charts', () => ({
+  BarChart: {}
+}));
+vi.mock('echarts/components', () => ({
+  GridComponent: {},
+  LegendComponent: {},
+  TooltipComponent: {}
+}));
+vi.mock('echarts/renderers', () => ({
+  CanvasRenderer: {}
+}));
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
 }));
@@ -308,6 +339,7 @@ function renderApp(pathname: string) {
 
 describe('SettingsPage', () => {
   beforeEach(() => {
+    echartsMock.init.mockReturnValue(echartsMock.chart);
     resetAuthStore();
     useBreakpointSpy.mockReturnValue({
       xs: true,
@@ -510,6 +542,15 @@ describe('SettingsPage', () => {
       {
         can_manage: true,
         contracts: []
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryStatsOverview.mockResolvedValue(
+      {
+        inspection_path: [],
+        contracts: [],
+        entry_count: 0,
+        sensitive_entry_count: 0,
+        total_value_size_bytes: 0
       }
     );
     hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue(
@@ -844,6 +885,32 @@ describe('SettingsPage', () => {
         total_value_size_bytes: 317
       }
     );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryStatsOverview.mockResolvedValue(
+      {
+        inspection_path: [],
+        entry_count: 1,
+        sensitive_entry_count: 1,
+        total_value_size_bytes: 317,
+        contracts: [
+          {
+            contract_code: 'session-store',
+            label: 'Sessions',
+            provider_code: 'local',
+            capabilities: {
+              list_entries: true,
+              list_tree: true,
+              search_entries: true,
+              reveal_value: true
+            },
+            supported: true,
+            inspection_path: [],
+            entry_count: 1,
+            sensitive_entry_count: 1,
+            total_value_size_bytes: 317
+          }
+        ]
+      }
+    );
     hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryTree.mockResolvedValue(
       {
         contract_code: 'session-store',
@@ -927,6 +994,10 @@ describe('SettingsPage', () => {
     expect(
       await screen.findByRole('tab', { name: 'Sessions' }, { timeout: 10000 })
     ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('tab', { name: '统计' }, { timeout: 10000 })
+    ).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Sessions' }));
     fireEvent.click(
       await screen.findByText('00000000-0000-0000-0000-000000000001')
     );

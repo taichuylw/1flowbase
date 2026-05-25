@@ -174,6 +174,38 @@ async fn host_infrastructure_memory_routes_list_categories_and_reveal_with_audit
             >= 1
     );
 
+    let stats_overview_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/settings/host-infrastructure/memory/stats")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stats_overview_response.status(), StatusCode::OK);
+    let stats_overview_payload = response_json(stats_overview_response).await;
+    assert_eq!(stats_overview_payload["data"]["inspection_path"], json!([]));
+    assert!(
+        stats_overview_payload["data"]["entry_count"]
+            .as_u64()
+            .unwrap()
+            >= stats_payload["data"]["entry_count"].as_u64().unwrap()
+    );
+    assert!(stats_overview_payload["data"]["contracts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|contract| contract["contract_code"] == "session-store"));
+    assert!(stats_overview_payload["data"]["contracts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|contract| contract["inspection_path"] == json!([])));
+
     let entries_response = app
         .clone()
         .oneshot(
