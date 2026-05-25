@@ -2,7 +2,7 @@
 memory_type: project
 title: 易失层内存观察改为树状路径与分页方向
 created_at: 2026-05-25 20
-updated_at: 2026-05-25 20
+updated_at: 2026-05-25 21
 decision_policy: verify_before_decision
 scope:
   - api/crates/storage-ephemeral
@@ -28,6 +28,8 @@ keywords:
 实现后的边界仍是：后端提供 `inspection_path`、cursor 和 metadata；前端不解析 storage key；bulk list/tree/search 只传 metadata；value reveal 走 metadata / preview / full mode 并有 value size 上限。当前 local in-memory providers 使用轻量 metadata snapshot 后分页，没有引入持久化 provider 索引重构。
 
 `2026-05-25` 追加交互边界：`/settings/memory-observation` 按不同 ephemeral contract 使用 Ant Design Tabs 分区；每个 tab 内固定左侧树状 inspection path、右侧 entries table；查看 metadata/value/preview JSON 统一复用 `JsonPreviewBlock`，保留行号、复制和放大查看。
+
+`2026-05-25 21` 追加实现边界：overview/tree 不再携带 `entry_count`、`sensitive_entry_count`、`total_value_size_bytes`；统计改为独立 `/settings/host-infrastructure/memory/contracts/{contract_code}/stats` 查询。前端顶部先使用 Ant Design `Statistic` 做轻量统计报表，不新增通用报表组件或图表依赖；后续如果需要趋势/分布报表，再基于独立 stats/query 接口演进。
 
 ## 谁在做什么？
 

@@ -1,5 +1,11 @@
 /* eslint-disable testing-library/no-node-access */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -139,10 +145,43 @@ const hostInfrastructureApi = vi.hoisted(() => ({
       'entries'
     ]
   ),
+  settingsHostInfrastructureMemoryTreeQueryKey: vi.fn(
+    (contractCode: string | null) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'tree'
+    ]
+  ),
+  settingsHostInfrastructureMemoryStatsQueryKey: vi.fn(
+    (contractCode: string | null) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'stats'
+    ]
+  ),
+  settingsHostInfrastructureMemorySearchQueryKey: vi.fn(
+    (contractCode: string | null) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'search'
+    ]
+  ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
   fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryStats: vi.fn(),
   fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryTree: vi.fn(),
+  searchSettingsHostInfrastructureMemoryEntries: vi.fn(),
   revealSettingsHostInfrastructureMemoryEntry: vi.fn()
 }));
 
@@ -473,6 +512,33 @@ describe('SettingsPage', () => {
         contracts: []
       }
     );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue(
+      {
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
+        supported: true,
+        inspection_path: [],
+        entry_count: 0,
+        sensitive_entry_count: 0,
+        total_value_size_bytes: 0
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryTree.mockResolvedValue(
+      {
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
+        supported: true,
+        inspection_path: [],
+        nodes: [],
+        next_cursor: null,
+        limit: 50,
+        byte_limit: 65536,
+        emitted_bytes: 0,
+        truncated_by_byte_limit: false
+      }
+    );
     hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue(
       {
         contract_code: 'session-store',
@@ -751,14 +817,60 @@ describe('SettingsPage', () => {
             provider_code: 'local',
             capabilities: {
               list_entries: true,
+              list_tree: true,
+              search_entries: true,
               reveal_value: true
             },
-            entry_count: 1,
-            sensitive_entry_count: 1,
-            total_value_size_bytes: 317,
             supported: true
           }
         ]
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue(
+      {
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
+        capabilities: {
+          list_entries: true,
+          list_tree: true,
+          search_entries: true,
+          reveal_value: true
+        },
+        supported: true,
+        inspection_path: [],
+        entry_count: 1,
+        sensitive_entry_count: 1,
+        total_value_size_bytes: 317
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryTree.mockResolvedValue(
+      {
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
+        capabilities: {
+          list_entries: true,
+          list_tree: true,
+          search_entries: true,
+          reveal_value: true
+        },
+        supported: true,
+        inspection_path: [],
+        nodes: [
+          {
+            node_ref: 'root-session-node',
+            label: '00000000-0000-0000-0000-000000000001',
+            inspection_path: ['00000000-0000-0000-0000-000000000001'],
+            depth: 1,
+            has_children: false
+          }
+        ],
+        next_cursor: null,
+        limit: 50,
+        byte_limit: 65536,
+        emitted_bytes: 0,
+        truncated_by_byte_limit: false
       }
     );
     hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue(
@@ -768,25 +880,39 @@ describe('SettingsPage', () => {
         provider_code: 'local',
         capabilities: {
           list_entries: true,
+          list_tree: true,
+          search_entries: true,
           reveal_value: true
         },
         supported: true,
+        inspection_path: ['00000000-0000-0000-0000-000000000001'],
         entries: [
           {
             contract_code: 'session-store',
             group_code: '00000000-0000-0000-0000-000000000001',
+            entry_ref: 'session:1',
             key: 'session:1',
+            inspection_path: [
+              '00000000-0000-0000-0000-000000000001',
+              'session:1'
+            ],
             entry_kind: 'session',
             status: 'active',
             owner: 'user-1',
             value_size_bytes: 317,
+            metadata_size_bytes: 2,
             ttl_seconds: 600,
             created_at_unix: 1_700_000_000,
             expires_at_unix: 1_700_000_600,
             sensitive: true,
             metadata: {}
           }
-        ]
+        ],
+        next_cursor: null,
+        limit: 50,
+        byte_limit: 65536,
+        emitted_bytes: 128,
+        truncated_by_byte_limit: false
       }
     );
 
@@ -801,6 +927,9 @@ describe('SettingsPage', () => {
     expect(
       await screen.findByRole('tab', { name: 'Sessions' }, { timeout: 10000 })
     ).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByText('00000000-0000-0000-0000-000000000001')
+    );
     expect(await screen.findByText('session:1')).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: 'Provider 配置' })

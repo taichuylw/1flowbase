@@ -200,9 +200,6 @@ pub struct MemoryContractSummaryResponse {
     pub label: String,
     pub provider_code: Option<String>,
     pub capabilities: MemoryInspectionCapabilitiesResponse,
-    pub entry_count: u64,
-    pub sensitive_entry_count: u64,
-    pub total_value_size_bytes: u64,
     pub supported: bool,
 }
 
@@ -210,6 +207,19 @@ pub struct MemoryContractSummaryResponse {
 pub struct MemoryOverviewResponse {
     pub can_manage: bool,
     pub contracts: Vec<MemoryContractSummaryResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MemoryStatsResponse {
+    pub contract_code: String,
+    pub label: String,
+    pub provider_code: Option<String>,
+    pub capabilities: MemoryInspectionCapabilitiesResponse,
+    pub supported: bool,
+    pub inspection_path: Vec<String>,
+    pub entry_count: u64,
+    pub sensitive_entry_count: u64,
+    pub total_value_size_bytes: u64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -254,9 +264,6 @@ pub struct MemoryTreeNodeResponse {
     pub label: String,
     pub inspection_path: Vec<String>,
     pub depth: u64,
-    pub entry_count: u64,
-    pub sensitive_entry_count: u64,
-    pub total_value_size_bytes: u64,
     pub has_children: bool,
 }
 
@@ -282,6 +289,11 @@ pub struct MemoryPageQuery {
     pub cursor: Option<String>,
     pub limit: Option<usize>,
     pub byte_limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MemoryPathQuery {
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -320,6 +332,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/settings/host-infrastructure/memory/contracts/:contract_code/entries",
             get(list_host_infrastructure_memory_entries),
+        )
+        .route(
+            "/settings/host-infrastructure/memory/contracts/:contract_code/stats",
+            get(get_host_infrastructure_memory_stats),
         )
         .route(
             "/settings/host-infrastructure/memory/contracts/:contract_code/entries/search",
@@ -429,6 +445,46 @@ pub async fn list_host_infrastructure_memory_entries(
         byte_limit: page.byte_limit,
         emitted_bytes: page.emitted_bytes,
         truncated_by_byte_limit: page.truncated_by_byte_limit,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/settings/host-infrastructure/memory/contracts/{contract_code}/stats",
+    params(("contract_code" = String, Path)),
+    responses((status = 200, body = MemoryStatsResponse), (status = 401, body = crate::error_response::ErrorBody), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn get_host_infrastructure_memory_stats(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(contract_code): Path<String>,
+    Query(query): Query<MemoryPathQuery>,
+) -> Result<Json<ApiSuccess<MemoryStatsResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_memory_view(&context.actor)?;
+    let label = memory_contract_label(&contract_code)?;
+    let target = memory_inspection_target(&state, &contract_code)?;
+    let capabilities = target.capabilities();
+    let inspection_path = memory_query_path(query.path);
+    let summary = if memory_contract_supported(capabilities) {
+        target.summarize_entries_at_path(&inspection_path).await?
+    } else {
+        EphemeralInspectionSummarySnapshot::empty()
+    };
+
+    Ok(Json(ApiSuccess::new(MemoryStatsResponse {
+        contract_code: contract_code.clone(),
+        label: label.to_string(),
+        provider_code: state
+            .infrastructure
+            .default_provider(&contract_code)
+            .map(ToString::to_string),
+        capabilities: capabilities.into(),
+        supported: memory_contract_supported(capabilities),
+        inspection_path,
+        entry_count: summary.entry_count,
+        sensitive_entry_count: summary.sensitive_entry_count,
+        total_value_size_bytes: summary.total_value_size_bytes,
     })))
 }
 
@@ -856,17 +912,22 @@ impl MemoryInspectionTarget {
         }
     }
 
-    async fn summarize_entries(&self) -> anyhow::Result<EphemeralInspectionSummarySnapshot> {
-        match self {
-            Self::Session(store) => store.summarize_ephemeral_entries().await,
-            Self::Cache(store) => store.summarize_ephemeral_entries().await,
-            Self::RateLimit(store) => store.summarize_ephemeral_entries().await,
-            Self::Lock(store) => store.summarize_ephemeral_entries().await,
-            Self::TaskQueue(store) => store.summarize_ephemeral_entries().await,
-            Self::EventBus(store) => store.summarize_ephemeral_entries().await,
-            Self::RuntimeEvents(stream) => stream.summarize_ephemeral_entries().await,
-            Self::Unsupported => Ok(EphemeralInspectionSummarySnapshot::empty()),
-        }
+    async fn summarize_entries_at_path(
+        &self,
+        inspection_path: &[String],
+    ) -> anyhow::Result<EphemeralInspectionSummarySnapshot> {
+        let entries = match self {
+            Self::Session(store) => store.list_ephemeral_entries().await?,
+            Self::Cache(store) => store.list_ephemeral_entries().await?,
+            Self::RateLimit(store) => store.list_ephemeral_entries().await?,
+            Self::Lock(store) => store.list_ephemeral_entries().await?,
+            Self::TaskQueue(store) => store.list_ephemeral_entries().await?,
+            Self::EventBus(store) => store.list_ephemeral_entries().await?,
+            Self::RuntimeEvents(stream) => stream.list_ephemeral_entries().await?,
+            Self::Unsupported => Vec::new(),
+        };
+
+        Ok(summarize_memory_entries_at_path(entries, inspection_path))
     }
 
     async fn list_tree(
@@ -1032,6 +1093,32 @@ fn memory_query_path(path: Option<String>) -> Vec<String> {
         .collect()
 }
 
+fn memory_path_has_prefix(path: &[String], prefix: &[String]) -> bool {
+    path.len() >= prefix.len()
+        && path
+            .iter()
+            .zip(prefix.iter())
+            .all(|(left, right)| left == right)
+}
+
+fn summarize_memory_entries_at_path(
+    entries: Vec<EphemeralEntrySnapshot>,
+    inspection_path: &[String],
+) -> EphemeralInspectionSummarySnapshot {
+    let mut summary = EphemeralInspectionSummarySnapshot::empty();
+
+    for entry in entries
+        .into_iter()
+        .filter(|entry| memory_path_has_prefix(&entry.inspection_path, inspection_path))
+    {
+        summary.entry_count += 1;
+        summary.sensitive_entry_count += u64::from(entry.sensitive);
+        summary.total_value_size_bytes += entry.value_size_bytes;
+    }
+
+    summary
+}
+
 fn empty_memory_entry_page(
     request: EphemeralInspectionPageRequest,
 ) -> EphemeralInspectionEntryPage {
@@ -1097,11 +1184,6 @@ async fn memory_contract_summary(
 ) -> Result<MemoryContractSummaryResponse, ApiError> {
     let target = memory_inspection_target(state, contract_code)?;
     let capabilities = target.capabilities();
-    let summary = if memory_contract_supported(capabilities) {
-        target.summarize_entries().await?
-    } else {
-        EphemeralInspectionSummarySnapshot::empty()
-    };
 
     Ok(MemoryContractSummaryResponse {
         contract_code: contract_code.to_string(),
@@ -1111,9 +1193,6 @@ async fn memory_contract_summary(
             .default_provider(contract_code)
             .map(ToString::to_string),
         capabilities: capabilities.into(),
-        entry_count: summary.entry_count,
-        sensitive_entry_count: summary.sensitive_entry_count,
-        total_value_size_bytes: summary.total_value_size_bytes,
         supported: memory_contract_supported(capabilities),
     })
 }
@@ -1273,9 +1352,6 @@ fn to_memory_tree_node_response(
         label: node.label,
         inspection_path: node.inspection_path,
         depth: node.depth,
-        entry_count: node.entry_count,
-        sensitive_entry_count: node.sensitive_entry_count,
-        total_value_size_bytes: node.total_value_size_bytes,
         has_children: node.has_children,
     }
 }

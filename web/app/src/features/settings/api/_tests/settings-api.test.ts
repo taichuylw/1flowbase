@@ -198,6 +198,16 @@ vi.mock('@1flowbase/api-client', () => ({
     can_manage: true,
     contracts: []
   }),
+  getConsoleHostInfrastructureMemoryStats: vi.fn().mockResolvedValue({
+    contract_code: 'session-store',
+    label: 'Sessions',
+    provider_code: 'local',
+    supported: true,
+    inspection_path: [],
+    entry_count: 0,
+    sensitive_entry_count: 0,
+    total_value_size_bytes: 0
+  }),
   listConsoleHostInfrastructureMemoryEntries: vi.fn().mockResolvedValue({
     contract_code: 'session-store',
     label: 'Sessions',
@@ -392,6 +402,7 @@ import {
   getConsolePluginTask,
   listConsoleHostInfrastructureProviders,
   getConsoleHostInfrastructureMemoryOverview,
+  getConsoleHostInfrastructureMemoryStats,
   listConsoleHostInfrastructureMemoryEntries,
   listConsoleHostInfrastructureMemoryTree,
   searchConsoleHostInfrastructureMemoryEntries,
@@ -498,6 +509,7 @@ import {
   fetchSettingsHostInfrastructureCacheOverview,
   fetchSettingsHostInfrastructureMemoryEntries,
   fetchSettingsHostInfrastructureMemoryOverview,
+  fetchSettingsHostInfrastructureMemoryStats,
   fetchSettingsHostInfrastructureMemoryTree,
   fetchSettingsHostInfrastructureProviders,
   revealSettingsHostInfrastructureMemoryEntry,
@@ -508,6 +520,7 @@ import {
   settingsHostInfrastructureCacheOverviewQueryKey,
   settingsHostInfrastructureMemoryEntriesQueryKey,
   settingsHostInfrastructureMemoryOverviewQueryKey,
+  settingsHostInfrastructureMemoryStatsQueryKey,
   settingsHostInfrastructureMemorySearchQueryKey,
   settingsHostInfrastructureMemoryTreeQueryKey,
   settingsHostInfrastructureProvidersQueryKey
@@ -1221,6 +1234,19 @@ describe('settings api wrappers', () => {
       null
     ]);
     expect(
+      settingsHostInfrastructureMemoryStatsQueryKey('session-store', {
+        inspection_path: ['workspace-1']
+      })
+    ).toEqual([
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      'session-store',
+      'stats',
+      ['workspace-1']
+    ]);
+    expect(
       settingsHostInfrastructureMemorySearchQueryKey('session-store', {
         q: 'session',
         inspection_path: ['workspace-1']
@@ -1246,6 +1272,9 @@ describe('settings api wrappers', () => {
     await fetchSettingsHostInfrastructureMemoryTree('session-store', {
       inspection_path: []
     });
+    await fetchSettingsHostInfrastructureMemoryStats('session-store', {
+      inspection_path: ['workspace-1']
+    });
     await searchSettingsHostInfrastructureMemoryEntries('session-store', {
       q: 'session',
       inspection_path: ['workspace-1']
@@ -1265,6 +1294,10 @@ describe('settings api wrappers', () => {
     expect(listConsoleHostInfrastructureMemoryTree).toHaveBeenCalledWith(
       'session-store',
       { inspection_path: [] }
+    );
+    expect(getConsoleHostInfrastructureMemoryStats).toHaveBeenCalledWith(
+      'session-store',
+      { inspection_path: ['workspace-1'] }
     );
     expect(searchConsoleHostInfrastructureMemoryEntries).toHaveBeenCalledWith(
       'session-store',

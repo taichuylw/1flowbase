@@ -140,8 +140,39 @@ async fn host_infrastructure_memory_routes_list_categories_and_reveal_with_audit
         let summary = contract_summary(&overview_payload, contract_code);
         assert_eq!(summary["provider_code"], "local");
         assert_eq!(summary["supported"], true);
-        assert!(summary["entry_count"].as_u64().unwrap() >= 1);
+        assert!(summary.as_object().unwrap().get("entry_count").is_none());
     }
+
+    let stats_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/settings/host-infrastructure/memory/contracts/session-store/stats")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stats_response.status(), StatusCode::OK);
+    let stats_payload = response_json(stats_response).await;
+    assert_eq!(stats_payload["data"]["contract_code"], "session-store");
+    assert_eq!(stats_payload["data"]["provider_code"], "local");
+    assert_eq!(stats_payload["data"]["inspection_path"], json!([]));
+    assert!(stats_payload["data"]["entry_count"].as_u64().unwrap() >= 1);
+    assert!(
+        stats_payload["data"]["sensitive_entry_count"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert!(
+        stats_payload["data"]["total_value_size_bytes"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
 
     let entries_response = app
         .clone()

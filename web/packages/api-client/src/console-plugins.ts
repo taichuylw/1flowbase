@@ -245,9 +245,6 @@ export interface ConsoleMemoryContractSummary {
   label: string;
   provider_code: string | null;
   capabilities: ConsoleMemoryObservationCapabilities;
-  entry_count: number;
-  sensitive_entry_count: number;
-  total_value_size_bytes: number;
   supported: boolean;
 }
 
@@ -274,6 +271,18 @@ export interface ConsoleHostInfrastructureMemoryOverview {
   contracts: ConsoleMemoryContractSummary[];
 }
 
+export interface ConsoleMemoryStats {
+  contract_code: string;
+  label: string;
+  provider_code: string | null;
+  capabilities: ConsoleMemoryObservationCapabilities;
+  supported: boolean;
+  inspection_path: string[];
+  entry_count: number;
+  sensitive_entry_count: number;
+  total_value_size_bytes: number;
+}
+
 export interface ConsoleHostInfrastructureMemoryEntries {
   contract_code: string;
   label: string;
@@ -294,9 +303,6 @@ export interface ConsoleMemoryTreeNode {
   label: string;
   inspection_path: string[];
   depth: number;
-  entry_count: number;
-  sensitive_entry_count: number;
-  total_value_size_bytes: number;
   has_children: boolean;
 }
 
@@ -636,6 +642,22 @@ export function clearConsoleHostInfrastructureCacheDomain(
 export function getConsoleHostInfrastructureMemoryOverview(baseUrl?: string) {
   return apiFetch<ConsoleHostInfrastructureMemoryOverview>({
     path: '/api/console/settings/host-infrastructure/memory',
+    baseUrl
+  });
+}
+
+export function getConsoleHostInfrastructureMemoryStats(
+  contractCode: string,
+  request?: ConsoleMemoryPageRequest,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleMemoryStats>({
+    path: buildMemoryInspectionPath(
+      `/api/console/settings/host-infrastructure/memory/contracts/${encodeURIComponent(
+        contractCode
+      )}/stats`,
+      request
+    ),
     baseUrl
   });
 }

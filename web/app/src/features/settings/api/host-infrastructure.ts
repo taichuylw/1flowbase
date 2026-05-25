@@ -2,6 +2,7 @@ import {
   clearConsoleHostInfrastructureCacheDomain,
   clearConsoleHostInfrastructureCacheEntry,
   getConsoleHostInfrastructureMemoryOverview,
+  getConsoleHostInfrastructureMemoryStats,
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
   listConsoleHostInfrastructureMemoryEntries,
@@ -16,6 +17,7 @@ import {
   type ConsoleCacheDomain,
   type ConsoleHostInfrastructureMemoryEntries,
   type ConsoleHostInfrastructureMemoryOverview,
+  type ConsoleMemoryStats,
   type ConsoleHostInfrastructureProviderConfig,
   type ConsoleHostInfrastructureCacheEntries,
   type ConsoleHostInfrastructureCacheOverview,
@@ -45,6 +47,7 @@ export type SettingsHostInfrastructureMemoryEntries =
   ConsoleHostInfrastructureMemoryEntries;
 export type SettingsHostInfrastructureMemoryContract =
   ConsoleMemoryContractSummary;
+export type SettingsHostInfrastructureMemoryStats = ConsoleMemoryStats;
 export type SettingsHostInfrastructureMemoryEntry = ConsoleMemoryEntryMetadata;
 export type SettingsHostInfrastructureMemoryEntryValue =
   ConsoleMemoryEntryValue;
@@ -128,6 +131,21 @@ export function settingsHostInfrastructureMemoryTreeQueryKey(
   ] as const;
 }
 
+export function settingsHostInfrastructureMemoryStatsQueryKey(
+  contractCode: string | null,
+  request?: Pick<SettingsHostInfrastructureMemoryPageRequest, 'inspection_path'>
+) {
+  return [
+    'settings',
+    'host-infrastructure',
+    'memory',
+    'contracts',
+    contractCode,
+    'stats',
+    request?.inspection_path ?? []
+  ] as const;
+}
+
 export function settingsHostInfrastructureMemorySearchQueryKey(
   contractCode: string | null,
   request?: SettingsHostInfrastructureMemorySearchRequest
@@ -157,6 +175,13 @@ export function fetchSettingsHostInfrastructureCacheOverview() {
 
 export function fetchSettingsHostInfrastructureMemoryOverview() {
   return getConsoleHostInfrastructureMemoryOverview();
+}
+
+export function fetchSettingsHostInfrastructureMemoryStats(
+  contractCode: string,
+  request?: Pick<SettingsHostInfrastructureMemoryPageRequest, 'inspection_path'>
+) {
+  return getConsoleHostInfrastructureMemoryStats(contractCode, request);
 }
 
 export function fetchSettingsHostInfrastructureCacheEntries(

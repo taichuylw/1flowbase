@@ -59,6 +59,22 @@ const api = vi.hoisted(() => ({
       request?.byte_limit ?? null
     ]
   ),
+  settingsHostInfrastructureMemoryStatsQueryKey: vi.fn(
+    (
+      contractCode: string | null,
+      request?: {
+        inspection_path?: string[];
+      }
+    ) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'stats',
+      request?.inspection_path ?? []
+    ]
+  ),
   settingsHostInfrastructureMemorySearchQueryKey: vi.fn(
     (
       contractCode: string | null,
@@ -86,6 +102,7 @@ const api = vi.hoisted(() => ({
   fetchSettingsHostInfrastructureProviders: vi.fn(),
   saveSettingsHostInfrastructureProviderConfig: vi.fn(),
   fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryStats: vi.fn(),
   fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
   fetchSettingsHostInfrastructureMemoryTree: vi.fn(),
   searchSettingsHostInfrastructureMemoryEntries: vi.fn(),
@@ -153,6 +170,16 @@ describe('HostInfrastructurePanel', () => {
     api.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue({
       can_manage: true,
       contracts: []
+    });
+    api.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
+      supported: true,
+      inspection_path: [],
+      entry_count: 0,
+      sensitive_entry_count: 0,
+      total_value_size_bytes: 0
     });
     api.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue({
       contract_code: 'session-store',
@@ -315,12 +342,19 @@ describe('HostInfrastructurePanel', () => {
             search_entries: true,
             reveal_value: true
           },
-          entry_count: 2,
-          sensitive_entry_count: 1,
-          total_value_size_bytes: 2048,
           supported: true
         }
       ]
+    });
+    api.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
+      supported: true,
+      inspection_path: [],
+      entry_count: 2,
+      sensitive_entry_count: 1,
+      total_value_size_bytes: 2048
     });
     api.fetchSettingsHostInfrastructureMemoryTree.mockImplementation(
       (_contractCode: string, request?: { inspection_path?: string[] }) =>
@@ -343,9 +377,6 @@ describe('HostInfrastructurePanel', () => {
                   label: 'user-1',
                   inspection_path: ['workspace-1', 'user-1'],
                   depth: 2,
-                  entry_count: 2,
-                  sensitive_entry_count: 1,
-                  total_value_size_bytes: 2048,
                   has_children: false
                 }
               ]
@@ -355,9 +386,6 @@ describe('HostInfrastructurePanel', () => {
                   label: 'workspace-1',
                   inspection_path: ['workspace-1'],
                   depth: 1,
-                  entry_count: 2,
-                  sensitive_entry_count: 1,
-                  total_value_size_bytes: 2048,
                   has_children: true
                 }
               ],
@@ -480,9 +508,6 @@ describe('HostInfrastructurePanel', () => {
             search_entries: true,
             reveal_value: true
           },
-          entry_count: 1,
-          sensitive_entry_count: 0,
-          total_value_size_bytes: 512,
           supported: true
         },
         {
@@ -495,12 +520,19 @@ describe('HostInfrastructurePanel', () => {
             search_entries: true,
             reveal_value: true
           },
-          entry_count: 1,
-          sensitive_entry_count: 0,
-          total_value_size_bytes: 1024,
           supported: true
         }
       ]
+    });
+    api.fetchSettingsHostInfrastructureMemoryStats.mockResolvedValue({
+      contract_code: 'session-store',
+      label: 'Sessions',
+      provider_code: 'local',
+      supported: true,
+      inspection_path: [],
+      entry_count: 2,
+      sensitive_entry_count: 1,
+      total_value_size_bytes: 2048
     });
     api.fetchSettingsHostInfrastructureMemoryTree.mockImplementation(
       (contractCode: string) =>
@@ -599,10 +631,13 @@ describe('HostInfrastructurePanel', () => {
     expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
     expect(
       screen.getByRole('tab', { name: /Sessions/ }).querySelector('.ant-badge')
-    ).not.toBeNull();
-    const memoryLayout = screen
-      .getByText('session-store')
-      .closest('.host-memory-panel__tab-pane');
+    ).toBeNull();
+    expect(await screen.findByText('Memory stats')).toBeInTheDocument();
+    expect(await screen.findByText('2 entries')).toBeInTheDocument();
+    expect(await screen.findByText('1 sensitive')).toBeInTheDocument();
+    expect(await screen.findByText('2.0 KB')).toBeInTheDocument();
+    const treeSearch = await screen.findByPlaceholderText('Search tree');
+    const memoryLayout = treeSearch.closest('.host-memory-panel__tab-pane');
     expect(memoryLayout).not.toBeNull();
     expect(
       memoryLayout?.querySelector('.ant-layout.host-memory-panel__content')
@@ -616,7 +651,6 @@ describe('HostInfrastructurePanel', () => {
       )
     ).not.toBeNull();
     expect(screen.queryByText('Provider')).not.toBeInTheDocument();
-    const treeSearch = screen.getByPlaceholderText('Search tree');
     fireEvent.change(treeSearch, { target: { value: 'space' } });
     expect(await screen.findByText('space')).toHaveClass(
       'host-memory-panel__tree-search-value'
@@ -625,7 +659,7 @@ describe('HostInfrastructurePanel', () => {
       memoryLayout?.querySelector(
         '.host-memory-panel__tree-node-count.ant-badge'
       )
-    ).not.toBeNull();
+    ).toBeNull();
     fireEvent.change(treeSearch, { target: { value: '' } });
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();

@@ -7,7 +7,6 @@ import {
 } from '@ant-design/icons';
 import {
   Alert,
-  Badge,
   Button,
   Descriptions,
   Drawer,
@@ -15,6 +14,7 @@ import {
   Input,
   Layout,
   Space,
+  Statistic,
   Table,
   Tabs,
   Tag,
@@ -30,12 +30,14 @@ import { JsonPreviewBlock } from '../../../../shared/ui/json-preview/JsonPreview
 import {
   fetchSettingsHostInfrastructureMemoryEntries,
   fetchSettingsHostInfrastructureMemoryOverview,
+  fetchSettingsHostInfrastructureMemoryStats,
   fetchSettingsHostInfrastructureMemoryTree,
   revealSettingsHostInfrastructureMemoryEntry,
   searchSettingsHostInfrastructureMemoryEntries,
   settingsHostInfrastructureMemoryEntriesQueryKey,
   settingsHostInfrastructureMemoryOverviewQueryKey,
   settingsHostInfrastructureMemorySearchQueryKey,
+  settingsHostInfrastructureMemoryStatsQueryKey,
   settingsHostInfrastructureMemoryTreeQueryKey,
   type SettingsHostInfrastructureMemoryContract,
   type SettingsHostInfrastructureMemoryEntry,
@@ -140,7 +142,7 @@ function toTreeData(
     key: node.node_ref,
     label: node.label,
     parentKey,
-    title: renderTreeTitle(node.label, node.entry_count, searchValue),
+    title: renderTreeTitle(node.label, searchValue),
     isLeaf: !node.has_children,
     inspectionPath: node.inspection_path,
     children: loadedChildren[node.node_ref]
@@ -154,11 +156,7 @@ function toTreeData(
   }));
 }
 
-function renderTreeTitle(
-  label: string,
-  entryCount: number,
-  searchValue: string
-): ReactNode {
+function renderTreeTitle(label: string, searchValue: string): ReactNode {
   const trimmedSearchValue = searchValue.trim();
   const index = trimmedSearchValue
     ? label.toLowerCase().indexOf(trimmedSearchValue.toLowerCase())
@@ -179,12 +177,6 @@ function renderTreeTitle(
   return (
     <span className="host-memory-panel__tree-node-title">
       <Typography.Text>{labelNode}</Typography.Text>
-      <Badge
-        className="host-memory-panel__tree-node-count"
-        count={entryCount}
-        overflowCount={999999}
-        size="small"
-      />
     </span>
   );
 }
@@ -317,6 +309,22 @@ export function HostInfrastructureMemoryObservationPanel({
           )
         : Promise.resolve(null),
     enabled: Boolean(resolvedActiveContractCode && canListTree)
+  });
+  const statsQuery = useQuery({
+    queryKey: settingsHostInfrastructureMemoryStatsQueryKey(
+      resolvedActiveContractCode,
+      { inspection_path: [] }
+    ),
+    queryFn: () =>
+      resolvedActiveContractCode
+        ? fetchSettingsHostInfrastructureMemoryStats(
+            resolvedActiveContractCode,
+            {
+              inspection_path: []
+            }
+          )
+        : Promise.resolve(null),
+    enabled: Boolean(resolvedActiveContractCode && activeContract?.supported)
   });
   const entries = entriesQuery.data?.entries ?? [];
   const canReveal = resolveCanReveal(
@@ -573,12 +581,52 @@ export function HostInfrastructureMemoryObservationPanel({
           loading={
             overviewQuery.isFetching ||
             entriesQuery.isFetching ||
-            rootTreeQuery.isFetching
+            rootTreeQuery.isFetching ||
+            statsQuery.isFetching
           }
         >
           刷新
         </Button>
       </div>
+
+      {activeContract ? (
+        <div className="host-memory-panel__stats-report">
+          <div className="host-memory-panel__stats-report-header">
+            <Typography.Text strong>Memory stats</Typography.Text>
+            <Typography.Text type="secondary">
+              {activeContract.contract_code}
+              {activeContract.provider_code
+                ? ` · ${activeContract.provider_code}`
+                : ''}
+            </Typography.Text>
+          </div>
+          {statsQuery.isError ? (
+            <Alert type="warning" showIcon message="统计加载失败。" />
+          ) : (
+            <div className="host-memory-panel__stats-grid">
+              <Statistic
+                title="Entries"
+                value={statsQuery.data?.entry_count ?? 0}
+                formatter={(value) => `${value} entries`}
+                loading={statsQuery.isLoading}
+              />
+              <Statistic
+                title="Sensitive"
+                value={statsQuery.data?.sensitive_entry_count ?? 0}
+                formatter={(value) => `${value} sensitive`}
+                loading={statsQuery.isLoading}
+              />
+              <Statistic
+                title="Value size"
+                value={formatBytes(
+                  statsQuery.data?.total_value_size_bytes ?? 0
+                )}
+                loading={statsQuery.isLoading}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {!canReveal ? (
         <Alert
@@ -605,46 +653,11 @@ export function HostInfrastructureMemoryObservationPanel({
             label: (
               <span className="host-memory-panel__tab-label">
                 <span>{contract.label}</span>
-                <Badge
-                  className="host-memory-panel__tab-count"
-                  count={contract.entry_count}
-                  overflowCount={999999}
-                  size="small"
-                />
               </span>
             ),
             children:
               contract.contract_code === resolvedActiveContractCode ? (
                 <div className="host-memory-panel__tab-pane">
-                  {activeContract ? (
-                    <div className="host-memory-panel__contract-summary">
-                      <Typography.Text
-                        className="host-memory-panel__contract-summary-item"
-                        strong
-                      >
-                        {activeContract.contract_code}
-                      </Typography.Text>
-                      <Typography.Text
-                        className="host-memory-panel__contract-summary-item"
-                        type="secondary"
-                      >
-                        {activeContract.provider_code ?? 'unknown'}
-                      </Typography.Text>
-                      <Tag
-                        className="host-memory-panel__contract-summary-tag"
-                        color="red"
-                      >
-                        sensitive {activeContract.sensitive_entry_count}
-                      </Tag>
-                      <Typography.Text
-                        className="host-memory-panel__contract-summary-item"
-                        type="secondary"
-                      >
-                        {formatBytes(activeContract.total_value_size_bytes)}
-                      </Typography.Text>
-                    </div>
-                  ) : null}
-
                   <Layout className="host-memory-panel__content">
                     <Layout.Sider
                       className="host-memory-panel__tree"

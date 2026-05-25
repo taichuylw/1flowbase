@@ -5,6 +5,7 @@ import {
   clearConsoleHostInfrastructureCacheDomain,
   clearConsoleHostInfrastructureCacheEntry,
   getConsoleHostInfrastructureMemoryOverview,
+  getConsoleHostInfrastructureMemoryStats,
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
   listConsoleHostInfrastructureMemoryEntries,
@@ -86,6 +87,16 @@ describe('console-plugins host infrastructure memory client', () => {
       getConsoleHostInfrastructureMemoryOverview()
     ).resolves.toMatchObject({
       path: '/api/console/settings/host-infrastructure/memory'
+    });
+  });
+
+  test('points memory stats at the dedicated contract stats route', async () => {
+    await expect(
+      getConsoleHostInfrastructureMemoryStats('session-store', {
+        inspection_path: ['workspace-1', 'user-1']
+      })
+    ).resolves.toMatchObject({
+      path: '/api/console/settings/host-infrastructure/memory/contracts/session-store/stats?path=workspace-1%2Fuser-1'
     });
   });
 
