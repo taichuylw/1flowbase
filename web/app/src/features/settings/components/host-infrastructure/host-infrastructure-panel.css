@@ -55,8 +55,9 @@
 
 .host-memory-panel__content {
   min-width: 0;
-  gap: 16px;
+  gap: 6px !important; /* Compact 6px gap between left and right cards */
   background: transparent;
+  height: 580px; /* Fixed height for the observation layout */
 }
 
 .host-memory-panel__tab-label {
@@ -82,34 +83,54 @@
 }
 
 .host-memory-panel__tree {
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 8px;
-  background: var(--ant-color-bg-container) !important;
-  padding: 14px 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0) !important;
+  border-radius: 8px !important;
+  background: var(--ant-color-bg-container, #ffffff) !important;
+  padding: 14px 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01) !important;
   display: flex;
   flex-direction: column;
+  height: 100% !important;
 }
 
 .host-memory-panel__resize-handle {
   width: 6px;
   cursor: col-resize;
   background: transparent;
-  transition: background-color 0.2s, width 0.2s;
-  margin: 0 -3px;
+  margin: 0; /* Keep centered in the 6px gap without overlap */
   z-index: 10;
   position: relative;
   align-self: stretch;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.host-memory-panel__resize-handle:hover,
-.host-memory-panel__resize-handle:active {
+.host-memory-panel__resize-handle::after {
+  content: "";
+  width: 2px;
+  height: 100%;
+  background-color: var(--ant-color-border-secondary, #f0f0f0);
+  transition: background-color 0.2s, width 0.2s;
+}
+
+.host-memory-panel__resize-handle:hover::after,
+.host-memory-panel__resize-handle:active::after {
   background-color: var(--ant-color-primary, #1677ff);
+  width: 4px;
 }
 
 .host-memory-panel__entries {
   flex: 1 1 auto;
+  height: 100% !important;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0) !important;
+  border-radius: 8px !important;
+  background: var(--ant-color-bg-container, #ffffff) !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01) !important;
+  display: flex;
+  flex-direction: column;
 }
 
 .host-memory-panel__entries > .ant-space {
@@ -118,7 +139,8 @@
 
 .host-memory-panel__tree-body {
   min-width: 0;
-  overflow: auto;
+  overflow: auto !important;
+  flex: 1 1 0%;
 }
 
 .host-memory-panel__tree-panel {
@@ -130,12 +152,24 @@
   max-width: 100%;
   align-items: center;
   gap: 8px;
+  white-space: nowrap !important;
 }
 
 .host-memory-panel__tree-node-title .ant-typography {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+}
+
+.host-memory-panel__tree .ant-tree-node-content-wrapper {
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+.host-memory-panel__tree .ant-tree-treenode {
+  width: 100%;
+  white-space: nowrap !important;
 }
 
 .host-memory-panel__tree-search-value {

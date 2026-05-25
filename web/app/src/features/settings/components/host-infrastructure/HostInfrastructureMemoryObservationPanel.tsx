@@ -47,7 +47,8 @@ import {
   Tree,
   Typography,
   Switch,
-  Radio
+  Radio,
+  Tooltip
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { DataNode } from 'antd/es/tree';
@@ -1243,17 +1244,35 @@ export function HostInfrastructureMemoryObservationPanel({
         title: 'Key',
         dataIndex: 'key',
         key: 'key',
+        width: 220,
         render: (key: string) => (
-          <Typography.Text copyable className="host-memory-panel__key">
-            {key}
-          </Typography.Text>
+          <Tooltip title={key} placement="topLeft">
+            <Typography.Text
+              copyable
+              ellipsis={{ tooltip: false }}
+              style={{ maxWidth: 160, display: 'inline-block', verticalAlign: 'middle' }}
+              className="host-memory-panel__key"
+            >
+              {key}
+            </Typography.Text>
+          </Tooltip>
         )
       },
       {
         title: 'Group',
         dataIndex: 'group_code',
         key: 'group_code',
-        width: 140
+        width: 160,
+        render: (group: string) => (
+          <Tooltip title={group} placement="topLeft">
+            <Typography.Text
+              ellipsis={{ tooltip: false }}
+              style={{ maxWidth: 120, display: 'inline-block', verticalAlign: 'middle' }}
+            >
+              {group}
+            </Typography.Text>
+          </Tooltip>
+        )
       },
       {
         title: 'Kind',
@@ -1461,10 +1480,9 @@ export function HostInfrastructureMemoryObservationPanel({
                               description="暂无内存节点"
                             />
                           ) : (
-                            <Space
-                              direction="vertical"
-                              size={8}
+                            <div
                               className="host-memory-panel__tree-panel"
+                              style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}
                             >
                               <Input.Search
                                 allowClear
@@ -1475,7 +1493,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                   updateTreeSearchText(event.target.value)
                                 }
                               />
-                              <div className="host-memory-panel__tree-body">
+                              <div className="host-memory-panel__tree-body" style={{ flex: '1 1 0%', overflow: 'auto' }}>
                                 <Tree
                                   autoExpandParent={treeAutoExpandParent}
                                   expandedKeys={treeExpandedKeys}
@@ -1498,7 +1516,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                   }}
                                 />
                               </div>
-                            </Space>
+                            </div>
                           )
                         ) : (
                           <Empty
@@ -1514,7 +1532,7 @@ export function HostInfrastructureMemoryObservationPanel({
                       />
 
                       <Layout.Content className="host-memory-panel__entries">
-                        <Space direction="vertical" size={12}>
+                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                           <div className="host-memory-panel__entries-header">
                             <Space direction="vertical" size={2}>
                               <Typography.Text strong>Entries</Typography.Text>
@@ -1563,17 +1581,19 @@ export function HostInfrastructureMemoryObservationPanel({
                             />
                           ) : (
                             <>
-                              <Table
-                                rowKey={(entry) => entry.entry_ref}
-                                columns={entryColumns}
-                                dataSource={entries}
-                                loading={
-                                  entriesQuery.isLoading ||
-                                  entriesQuery.isFetching
-                                }
-                                pagination={false}
-                                size="small"
-                              />
+                              <div className="host-memory-panel__table-wrapper" style={{ flex: '1 1 0%', overflow: 'auto' }}>
+                                <Table
+                                  rowKey={(entry) => entry.entry_ref}
+                                  columns={entryColumns}
+                                  dataSource={entries}
+                                  loading={
+                                    entriesQuery.isLoading ||
+                                    entriesQuery.isFetching
+                                  }
+                                  pagination={false}
+                                  size="small"
+                                />
+                              </div>
                               <div className="host-memory-panel__entries-header">
                                 <Typography.Text type="secondary">
                                   {entriesQuery.data
@@ -1623,7 +1643,7 @@ export function HostInfrastructureMemoryObservationPanel({
                               </div>
                             </>
                           )}
-                        </Space>
+                        </div>
                       </Layout.Content>
                     </Layout>
                   </div>
