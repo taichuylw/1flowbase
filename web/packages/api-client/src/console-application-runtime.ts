@@ -3,9 +3,7 @@ import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { ApiClientError } from './errors';
 import { apiFetch } from './transport';
 
-export {
-  getConsoleApplicationRunConversationMessages
-} from './console-application-run-conversation';
+export { getConsoleApplicationRunConversationMessages } from './console-application-run-conversation';
 
 export type ConsoleFlowRunMode =
   | 'debug_node_preview'
@@ -97,6 +95,7 @@ export interface GetConsoleApplicationRunsInput {
   time_range_days?: number;
   sort_by?: 'created_at' | 'started_at' | 'finished_at' | 'updated_at';
   sort_order?: 'asc' | 'desc';
+  cache_mode?: 'default' | 'refresh';
 }
 
 export interface ConsoleFlowRunDetail {
@@ -234,8 +233,7 @@ export interface ConsoleDebugVariableCacheKey {
   variable_key: string;
 }
 
-export interface UpsertConsoleDebugVariableCacheEntryInput
-  extends ConsoleDebugVariableCacheKey {
+export interface UpsertConsoleDebugVariableCacheEntryInput extends ConsoleDebugVariableCacheKey {
   value: unknown;
 }
 
@@ -544,11 +542,7 @@ function dispatchSseEvent(
   }
 
   const rawPayload = JSON.parse(dataLines.join('\n'));
-  const parsedPayload = normalizeStreamPayload(
-    rawPayload,
-    eventType,
-    eventId
-  );
+  const parsedPayload = normalizeStreamPayload(rawPayload, eventType, eventId);
 
   if (!parsedPayload) {
     return;
@@ -627,8 +621,7 @@ function normalizeFromEnvelope(
   } = {
     event_id: toOptionalString(raw.event_id) ?? fallbackEventId,
     run_id: toOptionalString(raw.run_id),
-    sequence:
-      typeof raw.sequence === 'number' ? raw.sequence : undefined,
+    sequence: typeof raw.sequence === 'number' ? raw.sequence : undefined,
     created_at: toOptionalString(raw.created_at),
     delta_index:
       raw.delta_index === null || typeof raw.delta_index === 'number'
@@ -678,10 +671,10 @@ function normalizeFromEnvelope(
       node_type: isNonEmptyString(payload.node_type)
         ? String(payload.node_type)
         : 'node',
-      title: isNonEmptyString(payload.title)
-        ? String(payload.title)
-        : 'node',
-      input_payload: isRecord(payload.input_payload) ? payload.input_payload : {},
+      title: isNonEmptyString(payload.title) ? String(payload.title) : 'node',
+      input_payload: isRecord(payload.input_payload)
+        ? payload.input_payload
+        : {},
       started_at: toOptionalString(payload.started_at)
     };
   }
@@ -707,9 +700,10 @@ function normalizeFromEnvelope(
         ? payload.debug_payload
         : {},
       started_at: toOptionalString(payload.started_at),
-      finished_at: payload.finished_at === null
-        ? null
-        : toOptionalString(payload.finished_at)
+      finished_at:
+        payload.finished_at === null
+          ? null
+          : toOptionalString(payload.finished_at)
     };
   }
 
@@ -841,7 +835,9 @@ function normalizeFromEnvelope(
   return null;
 }
 
-function isKnownStreamEventType(type: string): type is ConsoleFlowDebugStreamEvent['type'] {
+function isKnownStreamEventType(
+  type: string
+): type is ConsoleFlowDebugStreamEvent['type'] {
   return (
     type === 'flow_accepted' ||
     type === 'flow_started' ||
@@ -861,10 +857,7 @@ function isKnownStreamEventType(type: string): type is ConsoleFlowDebugStreamEve
 }
 
 function isConsoleFlowDebugEventEnvelope(raw: Record<string, unknown>) {
-  return (
-    typeof raw.event_type === 'string' &&
-    isRecord(raw.payload)
-  );
+  return typeof raw.event_type === 'string' && isRecord(raw.payload);
 }
 
 function normalizeNullableString(value: unknown): string | null | undefined {
@@ -1080,6 +1073,9 @@ export function getConsoleApplicationRuns(
   }
   if (input.sort_order !== undefined) {
     searchParams.set('sort_order', input.sort_order);
+  }
+  if (input.cache_mode !== undefined && input.cache_mode !== 'default') {
+    searchParams.set('cache_mode', input.cache_mode);
   }
   return apiFetch<ConsoleApplicationRunsPage>({
     path:

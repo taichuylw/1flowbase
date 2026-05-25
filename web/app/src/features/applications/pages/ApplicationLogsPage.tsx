@@ -1,10 +1,11 @@
 import {
+  ReloadOutlined,
   SearchOutlined,
   SortAscendingOutlined,
   SortDescendingOutlined
 } from '@ant-design/icons';
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { Button, Empty, Input } from 'antd';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { App, Button, Empty, Input, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelect';
@@ -15,6 +16,7 @@ import {
   applicationRunsQueryKey,
   fetchApplicationRunDetail,
   fetchApplicationRuns,
+  type FetchApplicationRunsInput,
   fetchRuntimeDebugArtifact,
   type ApplicationRunSortField,
   type ApplicationRunSortOrder,
@@ -201,26 +203,23 @@ export function ApplicationLogsPage({
     useState<ApplicationRunSortField>(DEFAULT_SORT_BY);
   const [sortOrder, setSortOrder] =
     useState<ApplicationRunSortOrder>(DEFAULT_SORT_ORDER);
+  const [refreshingRuns, setRefreshingRuns] = useState(false);
   const [activeFloatingWindow, setActiveFloatingWindow] = useState<
     'conversation-log' | 'run-detail'
   >('run-detail');
+  const { message } = App.useApp();
+  const queryClient = useQueryClient();
   const runsTableConfiguration = useApplicationRunsTableConfiguration();
+  const runsInput: FetchApplicationRunsInput = {
+    page,
+    pageSize: PAGE_SIZE,
+    timeRangeDays: timeRange === 'all' ? null : Number(timeRange),
+    sortBy,
+    sortOrder
+  };
   const runsQuery = useQuery({
-    queryKey: applicationRunsQueryKey(applicationId, {
-      page,
-      pageSize: PAGE_SIZE,
-      timeRangeDays: timeRange === 'all' ? null : Number(timeRange),
-      sortBy,
-      sortOrder
-    }),
-    queryFn: () =>
-      fetchApplicationRuns(applicationId, {
-        page,
-        pageSize: PAGE_SIZE,
-        timeRangeDays: timeRange === 'all' ? null : Number(timeRange),
-        sortBy,
-        sortOrder
-      })
+    queryKey: applicationRunsQueryKey(applicationId, runsInput),
+    queryFn: () => fetchApplicationRuns(applicationId, runsInput)
   });
   const refetchRuns = runsQuery.refetch;
   const runsPage = runsQuery.data;
@@ -286,6 +285,24 @@ export function ApplicationLogsPage({
     setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'));
   }
 
+  async function refreshRunsFromDurable() {
+    setRefreshingRuns(true);
+    try {
+      const refreshedRuns = await fetchApplicationRuns(applicationId, {
+        ...runsInput,
+        cacheMode: 'refresh'
+      });
+      queryClient.setQueryData(
+        applicationRunsQueryKey(applicationId, runsInput),
+        refreshedRuns
+      );
+    } catch {
+      message.error('刷新失败');
+    } finally {
+      setRefreshingRuns(false);
+    }
+  }
+
   if (runsQuery.isPending) {
     return null;
   }
@@ -343,6 +360,16 @@ export function ApplicationLogsPage({
           onChange={(event) => setKeywordSearch(event.target.value)}
         />
         <div className="application-logs-page__filter-actions">
+          <Tooltip title="刷新日志">
+            <Button
+              aria-label="刷新日志"
+              icon={<ReloadOutlined aria-hidden="true" />}
+              loading={refreshingRuns}
+              onClick={() => {
+                void refreshRunsFromDurable();
+              }}
+            />
+          </Tooltip>
           <ApplicationRunsTableColumnSettings
             configuration={runsTableConfiguration}
           />

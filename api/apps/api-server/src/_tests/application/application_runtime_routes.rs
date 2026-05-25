@@ -1218,6 +1218,66 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
             .any(|entry| entry.key.contains(":summary-page:")),
         "application log summary-page cache entry missing: {cache_entries:?}"
     );
+    let summary_cache_key = cache_entries
+        .iter()
+        .find(|entry| entry.key.contains(":summary-page:"))
+        .expect("summary-page cache entry must exist")
+        .key
+        .clone();
+    let mut stale_page = list_payload["data"].clone();
+    stale_page["items"][0]["title"] = json!("stale cache title");
+    state
+        .infrastructure
+        .cache_store()
+        .set_json(
+            &summary_cache_key,
+            stale_page,
+            Some(time::Duration::minutes(5)),
+        )
+        .await
+        .unwrap();
+    let cached_list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(cached_list.status(), StatusCode::OK);
+    let cached_list_body = to_bytes(cached_list.into_body(), usize::MAX).await.unwrap();
+    let cached_list_payload: Value = serde_json::from_slice(&cached_list_body).unwrap();
+    assert_eq!(
+        cached_list_payload["data"]["items"][0]["title"].as_str(),
+        Some("stale cache title")
+    );
+    let refreshed_list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs?cache_mode=refresh"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(refreshed_list.status(), StatusCode::OK);
+    let refreshed_list_body = to_bytes(refreshed_list.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let refreshed_list_payload: Value = serde_json::from_slice(&refreshed_list_body).unwrap();
+    assert_eq!(
+        refreshed_list_payload["data"]["items"][0]["title"].as_str(),
+        Some("总结退款政策")
+    );
     assert!(
         cache_entries.iter().any(|entry| {
             entry.key.contains(":run-detail:") && entry.key.contains(flow_run_id.as_str())

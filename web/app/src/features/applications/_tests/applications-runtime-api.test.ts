@@ -69,7 +69,7 @@ describe('applications runtime api', () => {
   });
 
   test('passes the resolved base url to runtime read requests', async () => {
-    await fetchApplicationRuns('app-1');
+    await fetchApplicationRuns('app-1', { cacheMode: 'refresh' });
     await fetchApplicationRunDetail('app-1', 'run-1');
     await fetchRuntimeDebugStream('app-1', 'run-1');
 
@@ -78,6 +78,7 @@ describe('applications runtime api', () => {
       expect.objectContaining({
         page: 1,
         page_size: 20,
+        cache_mode: 'refresh',
         sort_by: 'started_at',
         sort_order: 'desc'
       }),

@@ -40,9 +40,9 @@ pub(super) fn run_detail_cache_key(
 
 pub(super) fn summary_page_cache_ttl(page: i64) -> Duration {
     if page <= 1 {
-        Duration::seconds(10)
-    } else {
         Duration::minutes(5)
+    } else {
+        Duration::minutes(15)
     }
 }
 
@@ -109,5 +109,16 @@ where
 
     if let Err(error) = cache.set_json(key, value, Some(ttl)).await {
         warn!(cache_key = key, error = %error, "failed to write application log cache");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn summary_page_cache_ttl_keeps_first_page_fresher_than_older_pages() {
+        assert_eq!(summary_page_cache_ttl(1), Duration::minutes(5));
+        assert_eq!(summary_page_cache_ttl(2), Duration::minutes(15));
     }
 }

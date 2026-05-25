@@ -82,6 +82,7 @@ pub struct ApplicationRunsQuery {
     pub time_range_days: Option<i64>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
+    pub cache_mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -507,6 +508,10 @@ fn normalize_application_run_sort_order(input: Option<&str>) -> &'static str {
         "asc" => "asc",
         _ => "desc",
     }
+}
+
+fn should_refresh_application_run_logs(cache_mode: Option<&str>) -> bool {
+    matches!(cache_mode, Some("refresh"))
 }
 
 fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
@@ -1584,7 +1589,8 @@ pub async fn get_runtime_debug_artifact(
         ("page_size" = Option<i64>, Query, description = "Page size"),
         ("time_range_days" = Option<i64>, Query, description = "Optional created-at day window"),
         ("sort_by" = Option<String>, Query, description = "Sort field: created_at, started_at, finished_at or updated_at"),
-        ("sort_order" = Option<String>, Query, description = "Sort direction: asc or desc")
+        ("sort_order" = Option<String>, Query, description = "Sort direction: asc or desc"),
+        ("cache_mode" = Option<String>, Query, description = "Read mode: refresh bypasses application log cache reads")
     ),
     responses(
         (status = 200, body = FlowRunSummaryPageResponse),
@@ -1606,6 +1612,7 @@ pub async fn list_application_runs(
     let created_after = application_runs_created_after(&query);
     let sort_by = normalize_application_run_sort_by(query.sort_by.as_deref()).to_string();
     let sort_order = normalize_application_run_sort_order(query.sort_order.as_deref()).to_string();
+    let refresh_cache = should_refresh_application_run_logs(query.cache_mode.as_deref());
     let cache = state.infrastructure.cache_store();
     let cache_key = application_log_cache::summary_page_cache_key(
         context.actor.current_workspace_id,
@@ -1617,10 +1624,13 @@ pub async fn list_application_runs(
         &sort_order,
     );
 
-    if let Some(cached) =
-        application_log_cache::read::<FlowRunSummaryPageResponse>(cache.as_ref(), &cache_key).await
-    {
-        return Ok(Json(ApiSuccess::new(cached)));
+    if !refresh_cache {
+        if let Some(cached) =
+            application_log_cache::read::<FlowRunSummaryPageResponse>(cache.as_ref(), &cache_key)
+                .await
+        {
+            return Ok(Json(ApiSuccess::new(cached)));
+        }
     }
 
     let runs_page =

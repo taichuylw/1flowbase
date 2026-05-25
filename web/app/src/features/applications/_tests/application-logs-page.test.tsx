@@ -18,6 +18,7 @@ const runtimeApi = vi.hoisted(() => ({
       timeRangeDays?: number | null;
       sortBy?: 'started_at' | 'finished_at' | 'created_at';
       sortOrder?: 'asc' | 'desc';
+      cacheMode?: 'default' | 'refresh';
     }
   ) =>
     [
@@ -935,48 +936,58 @@ describe('ApplicationLogsPage', () => {
         meta: {}
       }
     });
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            id: 'user-1',
-            account: 'root',
-            email: 'root@example.com',
-            phone: null,
-            nickname: 'Root',
-            name: 'Root',
-            avatar_url: null,
-            introduction: '',
-            preferred_locale: null,
-            effective_display_role: 'root',
-            permissions: [],
-            meta: {
-              ui: {
-                data_tables: {
-                  'applications.logs.runs': {
-                    visibleColumnKeys: [
-                      'title',
-                      'status',
-                      'run_mode',
-                      'authorized_account',
-                      'started_at',
-                      'duration',
-                      'action'
-                    ],
-                    columnWidths: {}
-                  }
-                }
-              }
-            }
-          },
-          meta: null
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
+    const hiddenColumnsMeta = {
+      ui: {
+        data_tables: {
+          'applications.logs.runs': {
+            visibleColumnKeys: [
+              'title',
+              'status',
+              'run_mode',
+              'authorized_account',
+              'started_at',
+              'duration',
+              'action'
+            ],
+            columnWidths: {}
+          }
         }
-      )
-    );
+      }
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const method = init?.method ?? 'GET';
+        const meta =
+          url.includes('/api/console/me/meta') && method === 'PATCH'
+            ? hiddenColumnsMeta
+            : {};
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              id: 'user-1',
+              account: 'root',
+              email: 'root@example.com',
+              phone: null,
+              nickname: 'Root',
+              name: 'Root',
+              avatar_url: null,
+              introduction: '',
+              preferred_locale: null,
+              effective_display_role: 'root',
+              permissions: [],
+              meta
+            },
+            meta: null
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        );
+      });
     const { unmount } = render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />
@@ -1040,6 +1051,57 @@ describe('ApplicationLogsPage', () => {
       ).not.toBeInTheDocument();
     });
     fetchMock.mockRestore();
+  });
+
+  test('refreshes runs from durable source', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('公开 API 退款总结')).toBeInTheDocument();
+
+    runtimeApi.fetchApplicationRuns.mockResolvedValueOnce(
+      applicationRunsPage([
+        {
+          id: 'run-2',
+          run_mode: 'published_api_run' as const,
+          status: 'succeeded',
+          target_node_id: 'node-llm',
+          title: '刷新后的日志',
+          expand_id: 'customer-43',
+          authorized_account: 'root',
+          compatibility_mode: 'openai-responses-v1',
+          statistics: {
+            total_tokens: 60,
+            unique_node_count: 3,
+            tool_callback_count: 20
+          },
+          started_at: '2026-04-17T10:00:00Z',
+          finished_at: '2026-04-17T10:00:01Z',
+          created_at: '2026-04-17T10:00:00Z',
+          updated_at: '2026-04-17T10:00:01Z'
+        }
+      ])
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '刷新日志' }));
+
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith(
+        'app-1',
+        {
+          page: 1,
+          pageSize: 20,
+          timeRangeDays: 7,
+          sortBy: 'started_at',
+          sortOrder: 'desc',
+          cacheMode: 'refresh'
+        }
+      );
+    });
+    expect(await screen.findByText('刷新后的日志')).toBeInTheDocument();
   });
 
   test('places table field configuration with the filters', async () => {
