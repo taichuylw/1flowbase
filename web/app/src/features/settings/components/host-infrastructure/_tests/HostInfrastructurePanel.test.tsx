@@ -134,7 +134,8 @@ vi.mock('echarts/charts', () => ({
   LineChart: {},
   PieChart: {},
   FunnelChart: {},
-  GaugeChart: {}
+  GaugeChart: {},
+  RadarChart: {}
 }));
 vi.mock('echarts/components', () => ({
   GridComponent: {},

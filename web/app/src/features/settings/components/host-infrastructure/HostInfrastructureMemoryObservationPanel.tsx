@@ -7,7 +7,7 @@ import {
   type ReactNode
 } from 'react';
 
-import { BarChart, LineChart, PieChart, FunnelChart, GaugeChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart, FunnelChart, GaugeChart, RadarChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
@@ -82,6 +82,7 @@ echarts.use([
   PieChart,
   FunnelChart,
   GaugeChart,
+  RadarChart,
   GridComponent,
   LegendComponent,
   TooltipComponent,
@@ -243,131 +244,133 @@ function collectTreeSearchItems(
 }
 
 function MemoryStatsChart({
-  historyData,
-  stats,
-  metricMode
+  stats
 }: {
-  historyData: Array<{
-    timestamp: string;
-    contracts: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }>;
-  }>;
   stats: SettingsHostInfrastructureMemoryStats[];
-  metricMode: 'entries' | 'bytes';
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!chartRef.current || !historyData.length) {
+    if (!chartRef.current || !stats.length) {
       return;
     }
     const chart = echarts.init(chartRef.current);
-    const timestamps = historyData.map((h) => h.timestamp);
 
-    const colors = [
-      '#1677ff', // Sessions (Blue)
-      '#722ed1', // Cache (Purple)
-      '#faad14', // Rate Limits (Gold)
-      '#13c2c2', // Locks (Cyan)
-      '#fa8c16', // Task Queue (Orange)
-      '#52c41a', // Event Bus (Green)
-      '#eb2f96'  // Runtime Events (Magenta)
-    ];
+    const indicators = stats.map((item) => ({
+      name: item.label,
+      max: Math.max(5, ...stats.map((s) => s.entry_count))
+    }));
 
-    const series = stats.map((item, idx) => {
-      const color = colors[idx % colors.length];
-      const dataPoints = historyData.map((h) => {
-        const val = h.contracts[item.contract_code];
-        if (metricMode === 'entries') {
-          return val ? val.entryCount : 0;
-        } else {
-          return val ? val.valueBytes : 0;
-        }
-      });
-
-      return {
-        name: item.label,
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        itemStyle: { color },
-        lineStyle: { width: 3 },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: `${color}1a` },
-              { offset: 1, color: `${color}00` }
-            ]
-          }
-        },
-        data: dataPoints
-      };
-    });
+    const bytesIndicators = stats.map((item) => ({
+      name: item.label,
+      max: Math.max(1024, ...stats.map((s) => s.total_value_size_bytes))
+    }));
 
     chart.setOption({
       tooltip: {
-        trigger: 'axis',
+        trigger: 'item',
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderColor: '#f0f0f0',
         borderWidth: 1,
-        textStyle: {
-          color: '#1f1f1f',
-          fontSize: 12
-        },
-        shadowBlur: 10,
-        shadowColor: 'rgba(0, 0, 0, 0.05)',
-        shadowOffsetX: 0,
-        shadowOffsetY: 2
+        textStyle: { color: '#1f1f1f', fontSize: 12 }
       },
       legend: {
         top: 8,
         itemGap: 16,
-        textStyle: {
-          color: '#555555',
-          fontSize: 12
-        }
+        textStyle: { color: '#555555', fontSize: 12 },
+        data: ['总条目 (Entries)', '敏感条目 (Sensitive)', '值容量 (Bytes)']
       },
-      grid: {
-        top: 56,
-        right: 48,
-        bottom: 48,
-        left: 56
-      },
-      xAxis: {
-        type: 'category',
-        data: timestamps,
-        boundaryGap: false,
-        axisLine: {
-          lineStyle: {
-            color: '#f0f0f0'
+      radar: [
+        {
+          indicator: indicators,
+          center: ['28%', '58%'],
+          radius: '65%',
+          splitNumber: 4,
+          shape: 'circle',
+          axisName: {
+            color: '#8c8c8c',
+            fontSize: 11
+          },
+          splitLine: {
+            lineStyle: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
+          },
+          splitArea: {
+            show: false
+          },
+          axisLine: {
+            lineStyle: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
           }
         },
-        axisLabel: {
-          color: '#8c8c8c'
-        }
-      },
-      yAxis: {
-        type: 'value',
-        name: metricMode === 'entries' ? 'Entries count' : 'Bytes size',
-        nameTextStyle: {
-          color: '#8c8c8c'
-        },
-        axisLabel: {
-          color: '#8c8c8c',
-          formatter: (value: number) => {
-            if (metricMode === 'entries') return String(value);
-            return formatBytes(value);
+        {
+          indicator: bytesIndicators,
+          center: ['72%', '58%'],
+          radius: '65%',
+          splitNumber: 4,
+          shape: 'circle',
+          axisName: {
+            color: '#8c8c8c',
+            fontSize: 11
+          },
+          splitLine: {
+            lineStyle: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
+          },
+          splitArea: {
+            show: false
+          },
+          axisLine: {
+            lineStyle: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
           }
-        },
-        splitLine: {
-          lineStyle: {
-            color: '#f5f5f5'
-          }
         }
-      },
-      series
+      ],
+      series: [
+        {
+          type: 'radar',
+          radarIndex: 0,
+          data: [
+            {
+              value: stats.map((s) => s.entry_count),
+              name: '总条目 (Entries)',
+              symbol: 'circle',
+              symbolSize: 4,
+              itemStyle: { color: '#1677ff' },
+              lineStyle: { width: 2 },
+              areaStyle: { color: 'rgba(22, 119, 255, 0.15)' }
+            },
+            {
+              value: stats.map((s) => s.sensitive_entry_count),
+              name: '敏感条目 (Sensitive)',
+              symbol: 'circle',
+              symbolSize: 4,
+              itemStyle: { color: '#ff4d4f' },
+              lineStyle: { width: 2 },
+              areaStyle: { color: 'rgba(255, 77, 79, 0.15)' }
+            }
+          ]
+        },
+        {
+          type: 'radar',
+          radarIndex: 1,
+          data: [
+            {
+              value: stats.map((s) => s.total_value_size_bytes),
+              name: '值容量 (Bytes)',
+              symbol: 'circle',
+              symbolSize: 4,
+              itemStyle: { color: '#52c41a' },
+              lineStyle: { width: 2 },
+              areaStyle: { color: 'rgba(82, 196, 26, 0.15)' }
+            }
+          ]
+        }
+      ]
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -379,7 +382,7 @@ function MemoryStatsChart({
       resizeObserver.disconnect();
       chart.dispose();
     };
-  }, [historyData, stats, metricMode]);
+  }, [stats]);
 
   return (
     <div
@@ -702,41 +705,19 @@ const getCustomServiceChartOption = (
 };
 
 function MemoryServiceBreakdownPane({
-  stats,
-  historyData,
-  metricMode,
-  setMetricMode
+  stats
 }: {
   stats: SettingsHostInfrastructureMemoryStats[];
-  historyData: Array<{
-    timestamp: string;
-    contracts: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }>;
-  }>;
-  metricMode: 'entries' | 'bytes';
-  setMetricMode: (mode: 'entries' | 'bytes') => void;
 }) {
   return (
     <div className="host-memory-panel__breakdown-section">
-      <div className="host-memory-panel__breakdown-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="host-memory-panel__breakdown-header">
         <Typography.Text strong style={{ fontSize: 14 }}>
           全局服务容量对比
         </Typography.Text>
-        <Radio.Group
-          value={metricMode}
-          onChange={(e) => setMetricMode(e.target.value)}
-          size="small"
-          buttonStyle="solid"
-        >
-          <Radio.Button value="entries">条目数量 (Entries)</Radio.Button>
-          <Radio.Button value="bytes">容量空间 (Bytes)</Radio.Button>
-        </Radio.Group>
       </div>
       <div className="host-memory-panel__stats-chart-wrapper">
-        <MemoryStatsChart
-          historyData={historyData}
-          stats={stats}
-          metricMode={metricMode}
-        />
+        <MemoryStatsChart stats={stats} />
       </div>
 
       <div className="host-memory-panel__breakdown-header" style={{ marginTop: 24 }}>
@@ -836,37 +817,6 @@ function MemoryStatsOverviewPane({
   isLoading: boolean;
 }) {
   const stats = data?.contracts ?? [];
-  const [metricMode, setMetricMode] = useState<'entries' | 'bytes'>('entries');
-  const [historyData, setHistoryData] = useState<
-    Array<{
-      timestamp: string;
-      contracts: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }>;
-    }>
-  >([]);
-
-  useEffect(() => {
-    if (!data) return;
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const contractsMap: Record<string, { entryCount: number; sensitiveCount: number; valueBytes: number }> = {};
-    for (const c of data.contracts) {
-      contractsMap[c.contract_code] = {
-        entryCount: c.entry_count,
-        sensitiveCount: c.sensitive_entry_count,
-        valueBytes: c.total_value_size_bytes
-      };
-    }
-
-    setHistoryData((prev) => {
-      if (prev.length > 0 && prev[prev.length - 1].timestamp === now) {
-        return prev;
-      }
-      const next = [...prev, { timestamp: now, contracts: contractsMap }];
-      if (next.length > 12) {
-        return next.slice(next.length - 12);
-      }
-      return next;
-    });
-  }, [data]);
   const columns = useMemo<ColumnsType<SettingsHostInfrastructureMemoryStats>>(
     () => [
       {
@@ -980,12 +930,7 @@ function MemoryStatsOverviewPane({
             size="small"
             style={{ width: '100%' }}
           />
-          <MemoryServiceBreakdownPane
-            stats={stats}
-            historyData={historyData}
-            metricMode={metricMode}
-            setMetricMode={setMetricMode}
-          />
+          <MemoryServiceBreakdownPane stats={stats} />
         </div>
       ) : (
         <Empty
