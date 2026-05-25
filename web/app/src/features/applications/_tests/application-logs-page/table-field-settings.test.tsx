@@ -18,6 +18,7 @@ const runtimeApi = vi.hoisted(() => ({
       timeRangeDays?: number | null;
       sortBy?: 'started_at' | 'finished_at' | 'created_at';
       sortOrder?: 'asc' | 'desc';
+      cacheMode?: 'default' | 'refresh';
     }
   ) =>
     [
@@ -306,48 +307,58 @@ describe('ApplicationLogsPage - table field settings', () => {
         meta: {}
       }
     });
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            id: 'user-1',
-            account: 'root',
-            email: 'root@example.com',
-            phone: null,
-            nickname: 'Root',
-            name: 'Root',
-            avatar_url: null,
-            introduction: '',
-            preferred_locale: null,
-            effective_display_role: 'root',
-            permissions: [],
-            meta: {
-              ui: {
-                data_tables: {
-                  'applications.logs.runs': {
-                    visibleColumnKeys: [
-                      'title',
-                      'status',
-                      'run_mode',
-                      'authorized_account',
-                      'started_at',
-                      'duration',
-                      'action'
-                    ],
-                    columnWidths: {}
-                  }
-                }
-              }
-            }
-          },
-          meta: null
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
+    const hiddenColumnsMeta = {
+      ui: {
+        data_tables: {
+          'applications.logs.runs': {
+            visibleColumnKeys: [
+              'title',
+              'status',
+              'run_mode',
+              'authorized_account',
+              'started_at',
+              'duration',
+              'action'
+            ],
+            columnWidths: {}
+          }
         }
-      )
-    );
+      }
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const method = init?.method ?? 'GET';
+        const meta =
+          url.includes('/api/console/me/meta') && method === 'PATCH'
+            ? hiddenColumnsMeta
+            : {};
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              id: 'user-1',
+              account: 'root',
+              email: 'root@example.com',
+              phone: null,
+              nickname: 'Root',
+              name: 'Root',
+              avatar_url: null,
+              introduction: '',
+              preferred_locale: null,
+              effective_display_role: 'root',
+              permissions: [],
+              meta
+            },
+            meta: null
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        );
+      });
     const { unmount } = render(
       <AppProviders>
         <ApplicationLogsPage applicationId="app-1" />

@@ -253,7 +253,11 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
 
     await expect(
-      getConsoleApplicationRuns('app-1', {}, 'http://127.0.0.1:7800')
+      getConsoleApplicationRuns(
+        'app-1',
+        { cache_mode: 'refresh' },
+        'http://127.0.0.1:7800'
+      )
     ).resolves.toMatchObject({
       items: [
         {
@@ -270,7 +274,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       ]
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs?page=1&page_size=20',
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs?page=1&page_size=20&cache_mode=refresh',
       expect.objectContaining({ method: 'GET' })
     );
   });
@@ -322,11 +326,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
 
     await expect(
-      getConsoleApplicationRunDetail(
-        'app-1',
-        'run-1',
-        'http://127.0.0.1:7800'
-      )
+      getConsoleApplicationRunDetail('app-1', 'run-1', 'http://127.0.0.1:7800')
     ).resolves.toMatchObject({
       run: {
         application_type: 'agent_flow',

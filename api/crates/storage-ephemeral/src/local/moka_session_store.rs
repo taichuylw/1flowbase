@@ -1,6 +1,10 @@
 use async_trait::async_trait;
-use control_plane::ports::SessionStore;
+use control_plane::ports::{
+    EphemeralEntrySnapshot, EphemeralEntryValueSnapshot, EphemeralInspectionCapabilities,
+    SessionStore,
+};
 use domain::SessionRecord;
+use time::OffsetDateTime;
 
 use crate::{
     session_store::{is_session_expired, session_ttl},
@@ -26,6 +30,32 @@ impl MokaSessionStore {
             .map(serde_json::from_value::<SessionRecord>)
             .transpose()
             .map_err(Into::into)
+    }
+
+    fn session_snapshot(
+        session: &SessionRecord,
+        value_size_bytes: u64,
+        created_at_unix: Option<i64>,
+    ) -> EphemeralEntrySnapshot {
+        let now = OffsetDateTime::now_utc().unix_timestamp();
+        EphemeralEntrySnapshot {
+            contract_code: "session-store".to_string(),
+            group_code: Some(session.current_workspace_id.to_string()),
+            key: session.session_id.clone(),
+            entry_kind: "session".to_string(),
+            status: "active".to_string(),
+            owner: Some(session.user_id.to_string()),
+            value_size_bytes,
+            ttl_seconds: Some((session.expires_at_unix - now).max(0)),
+            created_at_unix,
+            expires_at_unix: Some(session.expires_at_unix),
+            sensitive: true,
+            metadata: serde_json::json!({
+                "tenant_id": session.tenant_id,
+                "current_workspace_id": session.current_workspace_id,
+                "session_version": session.session_version,
+            }),
+        }
     }
 }
 
@@ -77,5 +107,52 @@ impl SessionStore for MokaSessionStore {
         self.kv
             .set_json(session_id, serde_json::to_value(&session)?, Some(ttl))
             .await
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::supported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        let mut entries = self
+            .kv
+            .list_json_entries_for_inspection()
+            .await
+            .into_iter()
+            .filter_map(|entry| {
+                let session = serde_json::from_value::<SessionRecord>(entry.value).ok()?;
+                if is_session_expired(&session) {
+                    return None;
+                }
+                Some(Self::session_snapshot(
+                    &session,
+                    entry.value_size_bytes,
+                    entry.created_at_unix,
+                ))
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.key.cmp(&right.key));
+        Ok(entries)
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        let Some(entry) = self.kv.reveal_json_entry_for_inspection(key).await else {
+            return Ok(None);
+        };
+        let session = serde_json::from_value::<SessionRecord>(entry.value.clone())?;
+        if is_session_expired(&session) {
+            return Ok(None);
+        }
+        Ok(Some(EphemeralEntryValueSnapshot {
+            metadata: Self::session_snapshot(
+                &session,
+                entry.value_size_bytes,
+                entry.created_at_unix,
+            ),
+            value: entry.value,
+        }))
     }
 }

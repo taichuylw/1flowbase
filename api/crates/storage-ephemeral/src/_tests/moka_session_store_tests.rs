@@ -65,3 +65,29 @@ async fn moka_session_store_touch_with_expired_deadline_deletes_session() {
 
     assert_eq!(store.get("session-1").await.unwrap(), None);
 }
+
+#[tokio::test]
+async fn moka_session_store_exposes_ephemeral_inspection_snapshots() {
+    let store = MokaSessionStore::new("flowbase:session", 128);
+    let session = fixture_session_with_expiry(OffsetDateTime::now_utc().unix_timestamp() + 60);
+
+    store.put(session.clone()).await.unwrap();
+
+    let capabilities = store.ephemeral_inspection_capabilities();
+    assert!(capabilities.list_entries);
+    assert!(capabilities.reveal_value);
+    let entries = store.list_ephemeral_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].contract_code, "session-store");
+    assert_eq!(entries[0].key, session.session_id);
+    assert_eq!(entries[0].owner, Some(session.user_id.to_string()));
+    assert!(entries[0].sensitive);
+
+    let revealed = store
+        .reveal_ephemeral_entry(&session.session_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(revealed.metadata.key, session.session_id);
+    assert_eq!(revealed.value["session_id"], session.session_id);
+}

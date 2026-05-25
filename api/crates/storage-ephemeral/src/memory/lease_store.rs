@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use control_plane::ports::{EphemeralEntrySnapshot, EphemeralEntryValueSnapshot};
 use time::OffsetDateTime;
 use tokio::sync::RwLock;
 
@@ -30,8 +31,81 @@ impl MemoryLeaseStore {
         format!("{}:{}", self.namespace, key)
     }
 
+    fn key_without_namespace(&self, key: &str) -> Option<String> {
+        key.strip_prefix(&format!("{}:", self.namespace))
+            .map(ToString::to_string)
+    }
+
     fn expires_at(ttl: time::Duration) -> OffsetDateTime {
         OffsetDateTime::now_utc() + ttl
+    }
+
+    fn entry_snapshot(key: String, entry: &LeaseEntry) -> EphemeralEntrySnapshot {
+        let now = OffsetDateTime::now_utc();
+        EphemeralEntrySnapshot {
+            contract_code: "distributed-lock".to_string(),
+            group_code: key.split_once(':').map(|(group, _)| group.to_string()),
+            key,
+            entry_kind: "lock".to_string(),
+            status: if entry.expires_at > now {
+                "active".to_string()
+            } else {
+                "expired".to_string()
+            },
+            owner: Some(entry.owner.clone()),
+            value_size_bytes: serde_json::to_vec(&serde_json::json!({
+                "owner": entry.owner,
+                "expires_at_unix": entry.expires_at.unix_timestamp(),
+            }))
+            .map(|bytes| bytes.len() as u64)
+            .unwrap_or(0),
+            ttl_seconds: Some((entry.expires_at - now).whole_seconds().max(0)),
+            created_at_unix: None,
+            expires_at_unix: Some(entry.expires_at.unix_timestamp()),
+            sensitive: false,
+            metadata: serde_json::json!({
+                "owner": entry.owner,
+                "expires_at_unix": entry.expires_at.unix_timestamp(),
+            }),
+        }
+    }
+
+    pub(crate) async fn list_ephemeral_entries_for_inspection(
+        &self,
+    ) -> Vec<EphemeralEntrySnapshot> {
+        let now = OffsetDateTime::now_utc();
+        let mut entries = self
+            .inner
+            .read()
+            .await
+            .iter()
+            .filter(|(_, entry)| entry.expires_at > now)
+            .filter_map(|(key, entry)| {
+                self.key_without_namespace(key)
+                    .map(|key| Self::entry_snapshot(key, entry))
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.key.cmp(&right.key));
+        entries
+    }
+
+    pub(crate) async fn reveal_ephemeral_entry_for_inspection(
+        &self,
+        key: &str,
+    ) -> Option<EphemeralEntryValueSnapshot> {
+        let namespaced_key = self.namespaced_key(key);
+        let map = self.inner.read().await;
+        let entry = map.get(&namespaced_key)?;
+        if entry.expires_at <= OffsetDateTime::now_utc() {
+            return None;
+        }
+        Some(EphemeralEntryValueSnapshot {
+            metadata: Self::entry_snapshot(key.to_string(), entry),
+            value: serde_json::json!({
+                "owner": entry.owner,
+                "expires_at_unix": entry.expires_at.unix_timestamp(),
+            }),
+        })
     }
 }
 

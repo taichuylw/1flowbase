@@ -2,7 +2,8 @@ use super::*;
 
 #[tokio::test]
 async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
-    let app = test_app().await;
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
     let application_id =
@@ -48,6 +49,18 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
     );
     let detail =
         wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
+    let cache_entries = state
+        .infrastructure
+        .cache_store()
+        .list_cache_entries("application-logs")
+        .await
+        .unwrap();
+    assert!(
+        !cache_entries
+            .iter()
+            .any(|entry| { entry.key.contains(":run-detail:") && entry.key.contains(run_id) }),
+        "waiting run detail must not be cached: {cache_entries:?}"
+    );
     let checkpoint_id = detail["checkpoints"][0]["id"].as_str().unwrap();
 
     let resume = app

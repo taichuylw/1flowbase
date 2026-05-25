@@ -16,6 +16,30 @@ async fn memory_distributed_lock_checks_owner() {
 }
 
 #[tokio::test]
+async fn memory_distributed_lock_exposes_ephemeral_inspection_snapshots() {
+    let lock = MemoryDistributedLock::new("flowbase:lock");
+
+    lock.acquire("workflow:compile", "worker-a", Duration::seconds(30))
+        .await
+        .unwrap();
+
+    let entries = lock.list_ephemeral_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].contract_code, "distributed-lock");
+    assert_eq!(entries[0].key, "workflow:compile");
+    assert_eq!(entries[0].owner.as_deref(), Some("worker-a"));
+    assert!(!entries[0].sensitive);
+
+    let revealed = lock
+        .reveal_ephemeral_entry("workflow:compile")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(revealed.metadata.key, "workflow:compile");
+    assert_eq!(revealed.value["owner"], "worker-a");
+}
+
+#[tokio::test]
 async fn memory_event_bus_delivers_by_topic_in_fifo_order() {
     let bus = MemoryEventBus::new();
 
@@ -41,6 +65,33 @@ async fn memory_event_bus_delivers_by_topic_in_fifo_order() {
     assert_eq!(
         bus.poll("runtime.debug").await.unwrap(),
         Some(json!({ "id": 3 }))
+    );
+}
+
+#[tokio::test]
+async fn memory_event_bus_exposes_ephemeral_inspection_snapshots_without_polling() {
+    let bus = MemoryEventBus::new();
+
+    bus.publish("plugin.install", json!({ "id": 1 }))
+        .await
+        .unwrap();
+
+    let entries = bus.list_ephemeral_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].contract_code, "event-bus");
+    assert_eq!(entries[0].group_code.as_deref(), Some("plugin.install"));
+    assert_eq!(entries[0].key, "plugin.install#0");
+    assert!(entries[0].sensitive);
+
+    let revealed = bus
+        .reveal_ephemeral_entry("plugin.install#0")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(revealed.value, json!({ "id": 1 }));
+    assert_eq!(
+        bus.poll("plugin.install").await.unwrap(),
+        Some(json!({ "id": 1 }))
     );
 }
 
@@ -81,6 +132,31 @@ async fn memory_task_queue_idempotency_claim_ack_and_fail_are_worker_checked() {
     assert_eq!(reclaimed.task_id, task_id);
     assert_eq!(reclaimed.claimed_by, "worker-b");
     assert!(queue.ack("preview", &task_id, "worker-b").await.unwrap());
+}
+
+#[tokio::test]
+async fn memory_task_queue_exposes_ephemeral_inspection_snapshots() {
+    let queue = MemoryTaskQueue::new("flowbase:task");
+    let task_id = queue
+        .enqueue("preview", json!({ "file": "a" }), Some("preview:file:a"))
+        .await
+        .unwrap();
+
+    let entries = queue.list_ephemeral_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].contract_code, "task-queue");
+    assert_eq!(entries[0].group_code.as_deref(), Some("preview"));
+    assert_eq!(entries[0].key, task_id);
+    assert_eq!(entries[0].status, "pending");
+    assert!(entries[0].sensitive);
+
+    let revealed = queue
+        .reveal_ephemeral_entry(&task_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(revealed.metadata.key, task_id);
+    assert_eq!(revealed.value, json!({ "file": "a" }));
 }
 
 #[tokio::test]

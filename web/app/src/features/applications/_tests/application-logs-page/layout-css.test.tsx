@@ -11,6 +11,7 @@ const runtimeApi = vi.hoisted(() => ({
       timeRangeDays?: number | null;
       sortBy?: 'started_at' | 'finished_at' | 'created_at';
       sortOrder?: 'asc' | 'desc';
+      cacheMode?: 'default' | 'refresh';
     }
   ) =>
     [

@@ -3,6 +3,111 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheInspectionCapabilities {
+    pub list_domains: bool,
+    pub list_entries: bool,
+    pub reveal_value: bool,
+    pub clear_entry: bool,
+    pub clear_domain: bool,
+}
+
+impl CacheInspectionCapabilities {
+    pub const fn unsupported() -> Self {
+        Self {
+            list_domains: false,
+            list_entries: false,
+            reveal_value: false,
+            clear_entry: false,
+            clear_domain: false,
+        }
+    }
+
+    pub const fn supported() -> Self {
+        Self {
+            list_domains: true,
+            list_entries: true,
+            reveal_value: true,
+            clear_entry: true,
+            clear_domain: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CacheDomainSnapshot {
+    pub domain_code: String,
+    pub entry_count: u64,
+    pub total_value_size_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CacheEntrySnapshot {
+    pub domain_code: String,
+    pub key: String,
+    pub value_size_bytes: u64,
+    pub ttl_seconds: Option<i64>,
+    pub created_at_unix: Option<i64>,
+    pub expires_at_unix: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CacheEntryValueSnapshot {
+    pub metadata: CacheEntrySnapshot,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EphemeralInspectionCapabilities {
+    pub list_entries: bool,
+    pub reveal_value: bool,
+}
+
+impl EphemeralInspectionCapabilities {
+    pub const fn unsupported() -> Self {
+        Self {
+            list_entries: false,
+            reveal_value: false,
+        }
+    }
+
+    pub const fn supported() -> Self {
+        Self {
+            list_entries: true,
+            reveal_value: true,
+        }
+    }
+
+    pub const fn metadata_only() -> Self {
+        Self {
+            list_entries: true,
+            reveal_value: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EphemeralEntrySnapshot {
+    pub contract_code: String,
+    pub group_code: Option<String>,
+    pub key: String,
+    pub entry_kind: String,
+    pub status: String,
+    pub owner: Option<String>,
+    pub value_size_bytes: u64,
+    pub ttl_seconds: Option<i64>,
+    pub created_at_unix: Option<i64>,
+    pub expires_at_unix: Option<i64>,
+    pub sensitive: bool,
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EphemeralEntryValueSnapshot {
+    pub metadata: EphemeralEntrySnapshot,
+    pub value: serde_json::Value,
+}
+
 #[async_trait]
 pub trait CacheStore: Send + Sync {
     async fn get_json(&self, key: &str) -> anyhow::Result<Option<serde_json::Value>>;
@@ -24,6 +129,52 @@ pub trait CacheStore: Send + Sync {
     async fn delete(&self, key: &str) -> anyhow::Result<()>;
 
     async fn touch(&self, key: &str, ttl: time::Duration) -> anyhow::Result<bool>;
+
+    fn inspection_capabilities(&self) -> CacheInspectionCapabilities {
+        CacheInspectionCapabilities::unsupported()
+    }
+
+    async fn list_cache_domains(&self) -> anyhow::Result<Vec<CacheDomainSnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn list_cache_entries(
+        &self,
+        _domain_code: &str,
+    ) -> anyhow::Result<Vec<CacheEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_cache_entry(
+        &self,
+        _domain_code: &str,
+        _key: &str,
+    ) -> anyhow::Result<Option<CacheEntryValueSnapshot>> {
+        Ok(None)
+    }
+
+    async fn clear_cache_entry(&self, _domain_code: &str, _key: &str) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
+    async fn clear_cache_domain(&self, _domain_code: &str) -> anyhow::Result<u64> {
+        Ok(0)
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }
 
 #[async_trait]
@@ -33,6 +184,21 @@ pub trait DistributedLock: Send + Sync {
     async fn renew(&self, key: &str, owner: &str, ttl: time::Duration) -> anyhow::Result<bool>;
 
     async fn release(&self, key: &str, owner: &str) -> anyhow::Result<bool>;
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }
 
 #[async_trait]
@@ -40,6 +206,21 @@ pub trait EventBus: Send + Sync {
     async fn publish(&self, topic: &str, payload: serde_json::Value) -> anyhow::Result<()>;
 
     async fn poll(&self, topic: &str) -> anyhow::Result<Option<serde_json::Value>>;
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -76,6 +257,21 @@ pub trait TaskQueue: Send + Sync {
         worker: &str,
         reason: &str,
     ) -> anyhow::Result<bool>;
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,6 +291,21 @@ pub trait RateLimitStore: Send + Sync {
     ) -> anyhow::Result<RateLimitDecision>;
 
     async fn reset(&self, key: &str) -> anyhow::Result<()>;
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -269,4 +480,19 @@ pub trait RuntimeEventStream: Send + Sync {
     async fn close_run(&self, run_id: Uuid, reason: RuntimeEventCloseReason) -> anyhow::Result<()>;
 
     async fn trim(&self, run_id: Uuid, policy: RuntimeEventTrimPolicy) -> anyhow::Result<()>;
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }

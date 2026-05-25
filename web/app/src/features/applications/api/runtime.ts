@@ -28,6 +28,7 @@ export type ApplicationRunSortField =
   | 'finished_at'
   | 'updated_at';
 export type ApplicationRunSortOrder = 'asc' | 'desc';
+export type ApplicationRunCacheMode = 'default' | 'refresh';
 
 export interface FetchApplicationRunsInput {
   page?: number;
@@ -35,6 +36,7 @@ export interface FetchApplicationRunsInput {
   timeRangeDays?: number | null;
   sortBy?: ApplicationRunSortField;
   sortOrder?: ApplicationRunSortOrder;
+  cacheMode?: ApplicationRunCacheMode;
 }
 
 export const applicationRunsQueryKey = (
@@ -97,13 +99,17 @@ export function fetchApplicationRuns(
       page_size: input.pageSize ?? 20,
       time_range_days: input.timeRangeDays ?? undefined,
       sort_by: input.sortBy ?? 'started_at',
-      sort_order: input.sortOrder ?? 'desc'
+      sort_order: input.sortOrder ?? 'desc',
+      cache_mode: input.cacheMode ?? 'default'
     },
     getApplicationsApiBaseUrl()
   );
 }
 
-export function fetchApplicationRunDetail(applicationId: string, runId: string) {
+export function fetchApplicationRunDetail(
+  applicationId: string,
+  runId: string
+) {
   return getConsoleApplicationRunDetail(
     applicationId,
     runId,

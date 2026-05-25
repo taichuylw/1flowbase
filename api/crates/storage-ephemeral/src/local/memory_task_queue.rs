@@ -4,7 +4,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use control_plane::ports::{ClaimedTask, TaskQueue};
+use control_plane::ports::{
+    ClaimedTask, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
+    EphemeralInspectionCapabilities, TaskQueue,
+};
 use time::OffsetDateTime;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -44,6 +47,13 @@ impl MemoryTaskQueue {
         format!("{}:{}", self.namespace, queue)
     }
 
+    fn queue_without_namespace(&self, queue: &str) -> String {
+        queue
+            .strip_prefix(&format!("{}:", self.namespace))
+            .unwrap_or(queue)
+            .to_string()
+    }
+
     fn claimed_task(entry: &TaskEntry) -> Option<ClaimedTask> {
         Some(ClaimedTask {
             task_id: entry.task_id.clone(),
@@ -52,6 +62,48 @@ impl MemoryTaskQueue {
             idempotency_key: entry.idempotency_key.clone(),
             claim_expires_at_unix: entry.claim_expires_at?.unix_timestamp(),
         })
+    }
+
+    fn value_size_bytes(entry: &TaskEntry) -> u64 {
+        serde_json::to_vec(&entry.payload)
+            .map(|bytes| bytes.len() as u64)
+            .unwrap_or(0)
+    }
+
+    fn task_status(entry: &TaskEntry, now: OffsetDateTime) -> String {
+        match (&entry.claimed_by, entry.claim_expires_at) {
+            (Some(_), Some(expires_at)) if expires_at > now => "claimed".to_string(),
+            (Some(_), Some(_)) => "claim_expired".to_string(),
+            _ => "pending".to_string(),
+        }
+    }
+
+    fn entry_snapshot(&self, entry: &TaskEntry) -> EphemeralEntrySnapshot {
+        let now = OffsetDateTime::now_utc();
+        let queue = self.queue_without_namespace(&entry.queue);
+        EphemeralEntrySnapshot {
+            contract_code: "task-queue".to_string(),
+            group_code: Some(queue.clone()),
+            key: entry.task_id.clone(),
+            entry_kind: "task".to_string(),
+            status: Self::task_status(entry, now),
+            owner: entry.claimed_by.clone(),
+            value_size_bytes: Self::value_size_bytes(entry),
+            ttl_seconds: entry
+                .claim_expires_at
+                .map(|expires_at| (expires_at - now).whole_seconds().max(0)),
+            created_at_unix: None,
+            expires_at_unix: entry
+                .claim_expires_at
+                .map(|expires_at| expires_at.unix_timestamp()),
+            sensitive: true,
+            metadata: serde_json::json!({
+                "queue": queue,
+                "idempotency_key": entry.idempotency_key,
+                "claimed_by": entry.claimed_by,
+                "claim_expires_at_unix": entry.claim_expires_at.map(|value| value.unix_timestamp()),
+            }),
+        }
     }
 }
 
@@ -190,5 +242,38 @@ impl TaskQueue for MemoryTaskQueue {
         entry.claimed_by = None;
         entry.claim_expires_at = None;
         Ok(true)
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::supported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        let state = self.inner.lock().await;
+        let mut entries = state
+            .tasks
+            .values()
+            .map(|entry| self.entry_snapshot(entry))
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| {
+            left.group_code
+                .cmp(&right.group_code)
+                .then(left.key.cmp(&right.key))
+        });
+        Ok(entries)
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        let state = self.inner.lock().await;
+        let Some(entry) = state.tasks.get(key) else {
+            return Ok(None);
+        };
+        Ok(Some(EphemeralEntryValueSnapshot {
+            metadata: self.entry_snapshot(entry),
+            value: entry.payload.clone(),
+        }))
     }
 }

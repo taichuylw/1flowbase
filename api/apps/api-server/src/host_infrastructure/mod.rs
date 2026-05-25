@@ -77,6 +77,10 @@ impl HostInfrastructureRegistry {
         self.cache_store = Some(cache_store);
     }
 
+    pub fn registered_cache_store(&self) -> Option<Arc<dyn CacheStore>> {
+        self.cache_store.clone()
+    }
+
     pub fn cache_store(&self) -> Arc<dyn CacheStore> {
         self.cache_store
             .clone()
@@ -85,6 +89,10 @@ impl HostInfrastructureRegistry {
 
     pub fn set_distributed_lock(&mut self, distributed_lock: Arc<dyn DistributedLock>) {
         self.distributed_lock = Some(distributed_lock);
+    }
+
+    pub fn registered_distributed_lock(&self) -> Option<Arc<dyn DistributedLock>> {
+        self.distributed_lock.clone()
     }
 
     pub fn distributed_lock(&self) -> Arc<dyn DistributedLock> {
@@ -97,6 +105,10 @@ impl HostInfrastructureRegistry {
         self.event_bus = Some(event_bus);
     }
 
+    pub fn registered_event_bus(&self) -> Option<Arc<dyn EventBus>> {
+        self.event_bus.clone()
+    }
+
     pub fn event_bus(&self) -> Arc<dyn EventBus> {
         self.event_bus
             .clone()
@@ -107,6 +119,10 @@ impl HostInfrastructureRegistry {
         self.task_queue = Some(task_queue);
     }
 
+    pub fn registered_task_queue(&self) -> Option<Arc<dyn TaskQueue>> {
+        self.task_queue.clone()
+    }
+
     pub fn task_queue(&self) -> Arc<dyn TaskQueue> {
         self.task_queue
             .clone()
@@ -115,6 +131,10 @@ impl HostInfrastructureRegistry {
 
     pub fn set_rate_limit_store(&mut self, rate_limit_store: Arc<dyn RateLimitStore>) {
         self.rate_limit_store = Some(rate_limit_store);
+    }
+
+    pub fn registered_rate_limit_store(&self) -> Option<Arc<dyn RateLimitStore>> {
+        self.rate_limit_store.clone()
     }
 
     pub fn rate_limit_store(&self) -> Arc<dyn RateLimitStore> {

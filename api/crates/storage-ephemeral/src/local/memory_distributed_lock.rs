@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use control_plane::ports::DistributedLock;
+use control_plane::ports::{
+    DistributedLock, EphemeralEntrySnapshot, EphemeralEntryValueSnapshot,
+    EphemeralInspectionCapabilities,
+};
 
 use crate::{LeaseStore, MemoryLeaseStore};
 
@@ -36,5 +39,20 @@ impl DistributedLock for MemoryDistributedLock {
 
     async fn release(&self, key: &str, owner: &str) -> anyhow::Result<bool> {
         self.leases.release(key, owner).await
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::supported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(self.leases.list_ephemeral_entries_for_inspection().await)
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(self.leases.reveal_ephemeral_entry_for_inspection(key).await)
     }
 }

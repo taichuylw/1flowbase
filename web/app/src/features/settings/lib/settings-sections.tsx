@@ -4,6 +4,7 @@ export type SettingsSectionKey =
   | 'docs'
   | 'system-runtime'
   | 'host-infrastructure'
+  | 'memory-observation'
   | 'files'
   | 'data-models'
   | 'model-providers'
@@ -35,6 +36,12 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
     key: 'host-infrastructure',
     label: '基础设施',
     to: '/settings/host-infrastructure',
+    requiredPermissions: ['plugin_config.view.all']
+  },
+  {
+    key: 'memory-observation',
+    label: '内存观察',
+    to: '/settings/memory-observation',
     requiredPermissions: ['plugin_config.view.all']
   },
   {

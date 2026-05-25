@@ -18,6 +18,7 @@ const runtimeApi = vi.hoisted(() => ({
       timeRangeDays?: number | null;
       sortBy?: 'started_at' | 'finished_at' | 'created_at';
       sortOrder?: 'asc' | 'desc';
+      cacheMode?: 'default' | 'refresh';
     }
   ) =>
     [
@@ -280,6 +281,57 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
     innerWidthSpy = undefined;
     dateNowSpy?.mockRestore();
     dateNowSpy = undefined;
+  });
+
+  test('refreshes runs from durable source', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('公开 API 退款总结')).toBeInTheDocument();
+
+    runtimeApi.fetchApplicationRuns.mockResolvedValueOnce(
+      applicationRunsPage([
+        {
+          id: 'run-2',
+          run_mode: 'published_api_run' as const,
+          status: 'succeeded',
+          target_node_id: 'node-llm',
+          title: '刷新后的日志',
+          expand_id: 'customer-43',
+          authorized_account: 'root',
+          compatibility_mode: 'openai-responses-v1',
+          statistics: {
+            total_tokens: 60,
+            unique_node_count: 3,
+            tool_callback_count: 20
+          },
+          started_at: '2026-04-17T10:00:00Z',
+          finished_at: '2026-04-17T10:00:01Z',
+          created_at: '2026-04-17T10:00:00Z',
+          updated_at: '2026-04-17T10:00:01Z'
+        }
+      ])
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '刷新日志' }));
+
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith(
+        'app-1',
+        {
+          page: 1,
+          pageSize: 20,
+          timeRangeDays: 7,
+          sortBy: 'started_at',
+          sortOrder: 'desc',
+          cacheMode: 'refresh'
+        }
+      );
+    });
+    expect(await screen.findByText('刷新后的日志')).toBeInTheDocument();
   });
 
   test('sizes log filter selects from their longest option label', async () => {

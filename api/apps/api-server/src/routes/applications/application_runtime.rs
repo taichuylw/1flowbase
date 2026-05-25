@@ -39,6 +39,7 @@ use crate::{
 };
 
 use super::debug_run_stream;
+mod application_log_cache;
 mod application_logs;
 pub(crate) mod debug_variable_cache;
 pub(crate) mod debug_variable_snapshot;
@@ -81,6 +82,7 @@ pub struct ApplicationRunsQuery {
     pub time_range_days: Option<i64>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
+    pub cache_mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -94,7 +96,7 @@ pub struct CompleteCallbackTaskBody {
     pub response_payload: serde_json::Value,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct FlowRunSummaryResponse {
     pub id: String,
     pub application_id: String,
@@ -119,7 +121,7 @@ pub struct FlowRunSummaryResponse {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct FlowRunSummaryPageResponse {
     pub items: Vec<FlowRunSummaryResponse>,
     pub total: i64,
@@ -127,7 +129,7 @@ pub struct FlowRunSummaryPageResponse {
     pub page_size: i64,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct FlowRunResponse {
     pub id: String,
     pub application_id: String,
@@ -191,7 +193,7 @@ pub struct ApplicationConversationMessagesPageResponse {
     pub page: ApplicationConversationMessagesPageInfoResponse,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct NodeRunResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -209,7 +211,7 @@ pub struct NodeRunResponse {
     pub finished_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct CheckpointResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -222,7 +224,7 @@ pub struct CheckpointResponse {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct CallbackTaskResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -236,7 +238,7 @@ pub struct CallbackTaskResponse {
     pub completed_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct RunEventResponse {
     pub id: String,
     pub flow_run_id: String,
@@ -247,7 +249,7 @@ pub struct RunEventResponse {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunDetailResponse {
     pub run: application_logs::ApplicationRunLogResponse,
     pub statistics: application_logs::ApplicationRunStatisticsResponse,
@@ -506,6 +508,10 @@ fn normalize_application_run_sort_order(input: Option<&str>) -> &'static str {
         "asc" => "asc",
         _ => "desc",
     }
+}
+
+fn should_refresh_application_run_logs(cache_mode: Option<&str>) -> bool {
+    matches!(cache_mode, Some("refresh"))
 }
 
 fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
@@ -1583,7 +1589,8 @@ pub async fn get_runtime_debug_artifact(
         ("page_size" = Option<i64>, Query, description = "Page size"),
         ("time_range_days" = Option<i64>, Query, description = "Optional created-at day window"),
         ("sort_by" = Option<String>, Query, description = "Sort field: created_at, started_at, finished_at or updated_at"),
-        ("sort_order" = Option<String>, Query, description = "Sort direction: asc or desc")
+        ("sort_order" = Option<String>, Query, description = "Sort direction: asc or desc"),
+        ("cache_mode" = Option<String>, Query, description = "Read mode: refresh bypasses application log cache reads")
     ),
     responses(
         (status = 200, body = FlowRunSummaryPageResponse),
@@ -1600,21 +1607,42 @@ pub async fn list_application_runs(
 ) -> Result<Json<ApiSuccess<FlowRunSummaryPageResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
+    let page = query.page.unwrap_or(1).max(1);
+    let page_size = query.page_size.unwrap_or(20).clamp(1, 100);
+    let created_after = application_runs_created_after(&query);
+    let sort_by = normalize_application_run_sort_by(query.sort_by.as_deref()).to_string();
+    let sort_order = normalize_application_run_sort_order(query.sort_order.as_deref()).to_string();
+    let refresh_cache = should_refresh_application_run_logs(query.cache_mode.as_deref());
+    let cache = state.infrastructure.cache_store();
+    let cache_key = application_log_cache::summary_page_cache_key(
+        context.actor.current_workspace_id,
+        id,
+        &query,
+        page,
+        page_size,
+        &sort_by,
+        &sort_order,
+    );
+
+    if !refresh_cache {
+        if let Some(cached) =
+            application_log_cache::read::<FlowRunSummaryPageResponse>(cache.as_ref(), &cache_key)
+                .await
+        {
+            return Ok(Json(ApiSuccess::new(cached)));
+        }
+    }
 
     let runs_page =
         <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
             &state.store,
             id,
             control_plane::ports::ListApplicationRunsPageInput {
-                page: query.page.unwrap_or(1),
-                page_size: query.page_size.unwrap_or(20),
-                created_after: application_runs_created_after(&query),
-                sort_by: Some(
-                    normalize_application_run_sort_by(query.sort_by.as_deref()).to_string(),
-                ),
-                sort_order: Some(
-                    normalize_application_run_sort_order(query.sort_order.as_deref()).to_string(),
-                ),
+                page,
+                page_size,
+                created_after,
+                sort_by: Some(sort_by),
+                sort_order: Some(sort_order),
             },
         )
         .await?;
@@ -1634,12 +1662,24 @@ pub async fn list_application_runs(
         ));
     }
 
-    Ok(Json(ApiSuccess::new(FlowRunSummaryPageResponse {
+    let response = FlowRunSummaryPageResponse {
         items,
         total: runs_page.total,
         page: runs_page.page,
         page_size: runs_page.page_size,
-    })))
+    };
+
+    if application_log_cache::summary_page_cacheable(&response) {
+        application_log_cache::write(
+            cache.as_ref(),
+            &cache_key,
+            &response,
+            application_log_cache::summary_page_cache_ttl(page),
+        )
+        .await;
+    }
+
+    Ok(Json(ApiSuccess::new(response)))
 }
 
 #[utoipa::path(
@@ -1819,7 +1859,6 @@ pub async fn get_application_run_detail(
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
-
     let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
         &state.store,
         id,
@@ -1834,11 +1873,9 @@ pub async fn get_application_run_detail(
         detail,
     )
     .await?;
+    let response = to_application_run_detail_response(&application, detail);
 
-    Ok(Json(ApiSuccess::new(to_application_run_detail_response(
-        &application,
-        detail,
-    ))))
+    Ok(Json(ApiSuccess::new(response)))
 }
 
 #[utoipa::path(

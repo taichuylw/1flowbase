@@ -29,6 +29,9 @@ pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
         )
         .expect("local storage-ephemeral provider registration should be unique");
     registry
+        .register_default_provider("session-store", LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
+        .expect("local session-store provider registration should be unique");
+    registry
         .register_default_provider("cache-store", LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
         .expect("local cache-store provider registration should be unique");
     registry

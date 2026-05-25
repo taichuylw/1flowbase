@@ -7,6 +7,21 @@ pub trait SessionStore: Send + Sync {
     async fn get(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>>;
     async fn delete(&self, session_id: &str) -> anyhow::Result<()>;
     async fn touch(&self, session_id: &str, expires_at_unix: i64) -> anyhow::Result<()>;
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        EphemeralInspectionCapabilities::unsupported()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        Ok(Vec::new())
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        _key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        Ok(None)
+    }
 }
 
 #[async_trait]
@@ -28,6 +43,21 @@ where
 
     async fn touch(&self, session_id: &str, expires_at_unix: i64) -> anyhow::Result<()> {
         (**self).touch(session_id, expires_at_unix).await
+    }
+
+    fn ephemeral_inspection_capabilities(&self) -> EphemeralInspectionCapabilities {
+        (**self).ephemeral_inspection_capabilities()
+    }
+
+    async fn list_ephemeral_entries(&self) -> anyhow::Result<Vec<EphemeralEntrySnapshot>> {
+        (**self).list_ephemeral_entries().await
+    }
+
+    async fn reveal_ephemeral_entry(
+        &self,
+        key: &str,
+    ) -> anyhow::Result<Option<EphemeralEntryValueSnapshot>> {
+        (**self).reveal_ephemeral_entry(key).await
     }
 }
 

@@ -124,8 +124,26 @@ const hostInfrastructureApi = vi.hoisted(() => ({
     'host-infrastructure',
     'providers'
   ],
+  settingsHostInfrastructureMemoryOverviewQueryKey: [
+    'settings',
+    'host-infrastructure',
+    'memory'
+  ],
+  settingsHostInfrastructureMemoryEntriesQueryKey: vi.fn(
+    (contractCode: string | null) => [
+      'settings',
+      'host-infrastructure',
+      'memory',
+      'contracts',
+      contractCode,
+      'entries'
+    ]
+  ),
   fetchSettingsHostInfrastructureProviders: vi.fn(),
-  saveSettingsHostInfrastructureProviderConfig: vi.fn()
+  saveSettingsHostInfrastructureProviderConfig: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryOverview: vi.fn(),
+  fetchSettingsHostInfrastructureMemoryEntries: vi.fn(),
+  revealSettingsHostInfrastructureMemoryEntry: vi.fn()
 }));
 
 const dataModelsApi = vi.hoisted(() => ({
@@ -449,6 +467,25 @@ describe('SettingsPage', () => {
     hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
       []
     );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue(
+      {
+        can_manage: true,
+        contracts: []
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue(
+      {
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
+        capabilities: {
+          list_entries: true,
+          reveal_value: true
+        },
+        supported: true,
+        entries: []
+      }
+    );
     dataModelsApi.fetchSettingsDataSourceInstances.mockResolvedValue([
       {
         id: 'main_source',
@@ -644,9 +681,10 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/data-models');
     });
-    expect(
-      await screen.findByRole('link', { name: '数据源' })
-    ).toHaveAttribute('href', '/settings/data-models');
+    expect(await screen.findByRole('link', { name: '数据源' })).toHaveAttribute(
+      'href',
+      '/settings/data-models'
+    );
     expect(dataModelsApi.fetchSettingsDataSourceInstances).toHaveBeenCalled();
     expect(
       await screen.findByText('主数据源', {}, { timeout: 10000 })
@@ -674,7 +712,7 @@ describe('SettingsPage', () => {
     ).toHaveBeenCalled();
   });
 
-  test('shows 基础设施 when plugin_config.view.all is the only visible settings section', async () => {
+  test('shows 基础设施 and 内存观察 when plugin_config.view.all is present', async () => {
     authenticateWithPermissions([
       'route_page.view.all',
       'plugin_config.view.all'
@@ -686,10 +724,87 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/host-infrastructure');
     });
     expect(
+      await screen.findByRole('link', { name: '内存观察' }, { timeout: 10000 })
+    ).toHaveAttribute('href', '/settings/memory-observation');
+    expect(
       await screen.findByText(
         '安装、配置和启用会保存为待应用变更，重启 api-server 一次后生效。'
       )
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: '内存观察' })
+    ).not.toBeInTheDocument();
+  });
+
+  test('renders memory observation as a settings section route', async () => {
+    authenticateWithPermissions([
+      'route_page.view.all',
+      'plugin_config.view.all'
+    ]);
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryOverview.mockResolvedValue(
+      {
+        can_manage: true,
+        contracts: [
+          {
+            contract_code: 'session-store',
+            label: 'Sessions',
+            provider_code: 'local',
+            capabilities: {
+              list_entries: true,
+              reveal_value: true
+            },
+            entry_count: 1,
+            sensitive_entry_count: 1,
+            total_value_size_bytes: 317,
+            supported: true
+          }
+        ]
+      }
+    );
+    hostInfrastructureApi.fetchSettingsHostInfrastructureMemoryEntries.mockResolvedValue(
+      {
+        contract_code: 'session-store',
+        label: 'Sessions',
+        provider_code: 'local',
+        capabilities: {
+          list_entries: true,
+          reveal_value: true
+        },
+        supported: true,
+        entries: [
+          {
+            contract_code: 'session-store',
+            group_code: '00000000-0000-0000-0000-000000000001',
+            key: 'session:1',
+            entry_kind: 'session',
+            status: 'active',
+            owner: 'user-1',
+            value_size_bytes: 317,
+            ttl_seconds: 600,
+            created_at_unix: 1_700_000_000,
+            expires_at_unix: 1_700_000_600,
+            sensitive: true,
+            metadata: {}
+          }
+        ]
+      }
+    );
+
+    renderApp('/settings/memory-observation');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/memory-observation');
+    });
+    expect(
+      await screen.findByRole('link', { name: '内存观察' }, { timeout: 10000 })
+    ).toHaveAttribute('href', '/settings/memory-observation');
+    expect(
+      await screen.findByRole('tab', { name: 'Sessions' }, { timeout: 10000 })
+    ).toBeInTheDocument();
+    expect(await screen.findByText('session:1')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'Provider 配置' })
+    ).not.toBeInTheDocument();
   });
 
   test('shows 文件管理 when file_table.view.own is the only visible settings section', async () => {

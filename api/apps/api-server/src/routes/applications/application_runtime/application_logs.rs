@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -7,7 +7,7 @@ use super::{
     CallbackTaskResponse, CheckpointResponse, FlowRunResponse, NodeRunResponse, RunEventResponse,
 };
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunSubjectResponse {
     pub kind: String,
     pub id: Option<String>,
@@ -17,7 +17,7 @@ pub struct ApplicationRunSubjectResponse {
     pub target_node_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunActorResponse {
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -26,7 +26,7 @@ pub struct ApplicationRunActorResponse {
     pub display_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunCorrelationResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key_id: Option<String>,
@@ -44,7 +44,7 @@ pub struct ApplicationRunCorrelationResponse {
     pub idempotency_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunLogResponse {
     pub id: String,
     pub application_id: String,
@@ -65,14 +65,14 @@ pub struct ApplicationRunLogResponse {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunStatisticsResponse {
     pub total_tokens: Option<i64>,
     pub unique_node_count: i64,
     pub tool_callback_count: i64,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunTypedDetailResponse {
     pub kind: String,
     pub flow_run: FlowRunResponse,

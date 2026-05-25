@@ -17,7 +17,11 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
 
   return (
     <SettingsSectionSurface title="基础设施" hideHeader heightMode="fill">
-      <Space direction="vertical" size={16} className="host-infrastructure-panel">
+      <Space
+        direction="vertical"
+        size={16}
+        className="host-infrastructure-panel"
+      >
         <Alert
           type="info"
           showIcon
