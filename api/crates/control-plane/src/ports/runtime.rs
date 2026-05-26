@@ -718,6 +718,18 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         flow_run_id: Uuid,
         after_sequence: i64,
     ) -> anyhow::Result<Vec<domain::RuntimeEventRecord>>;
+    async fn list_runtime_event_backfill_page(
+        &self,
+        flow_run_id: Uuid,
+        after_stream_sequence: i64,
+        limit: usize,
+    ) -> anyhow::Result<Vec<domain::RuntimeEventRecord>> {
+        let mut records = self
+            .list_runtime_events(flow_run_id, after_stream_sequence)
+            .await?;
+        records.truncate(limit.max(1));
+        Ok(records)
+    }
     async fn list_runtime_items(
         &self,
         flow_run_id: Uuid,
@@ -754,6 +766,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
     ) -> anyhow::Result<ApplicationRunLogSummaryPage> {
         let _ = (application_id, input);
         anyhow::bail!("list_application_run_logs_page not implemented")
+    }
+    async fn get_application_run_monitoring_report(
+        &self,
+        application_id: Uuid,
+        input: GetApplicationRunMonitoringReportInput,
+    ) -> anyhow::Result<ApplicationRunMonitoringReport> {
+        let _ = (application_id, input);
+        anyhow::bail!("get_application_run_monitoring_report not implemented")
     }
     async fn list_application_conversation_runs_page(
         &self,
@@ -798,6 +818,149 @@ pub struct ApplicationRunLogSummaryPage {
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GetApplicationRunMonitoringReportInput {
+    pub started_from: Option<OffsetDateTime>,
+    pub started_to: Option<OffsetDateTime>,
+    pub bucket: String,
+    pub slow_run_threshold_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringReport {
+    pub overview: ApplicationRunMonitoringOverview,
+    pub duration: ApplicationRunMonitoringDuration,
+    pub tokens: ApplicationRunMonitoringTokens,
+    pub tool_callbacks: ApplicationRunMonitoringToolCallbacks,
+    pub nodes: ApplicationRunMonitoringNodes,
+    pub concurrency: ApplicationRunMonitoringConcurrency,
+    pub tokens_trend: Vec<ApplicationRunMonitoringTokenTrendPoint>,
+    pub protocols: Vec<ApplicationRunMonitoringProtocolBreakdown>,
+    pub sources: Vec<ApplicationRunMonitoringSourceBreakdown>,
+    pub authorized_accounts: Vec<ApplicationRunMonitoringAuthorizedAccountUsage>,
+    pub external_users: Vec<ApplicationRunMonitoringExternalUserUsage>,
+    pub api_keys: Vec<ApplicationRunMonitoringApiKeyUsage>,
+    pub external_conversations: Vec<ApplicationRunMonitoringExternalConversationUsage>,
+    pub slowest_runs: Vec<ApplicationRunMonitoringRunRank>,
+    pub high_token_runs: Vec<ApplicationRunMonitoringRunRank>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringOverview {
+    pub total_count: i64,
+    pub success_count: i64,
+    pub failed_count: i64,
+    pub cancelled_count: i64,
+    pub success_rate: f64,
+    pub failed_rate: f64,
+    pub running_count_included: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringDuration {
+    pub duration_recorded_count: i64,
+    pub avg_duration_ms: f64,
+    pub p50_duration_ms: f64,
+    pub p95_duration_ms: f64,
+    pub slow_run_rate: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringTokens {
+    pub total_tokens_sum: i64,
+    pub avg_tokens_per_run: f64,
+    pub token_recorded_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringToolCallbacks {
+    pub total_tool_callback_count: i64,
+    pub avg_tool_callback_count: f64,
+    pub runs_with_tool_callback: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringNodes {
+    pub avg_unique_node_count: f64,
+    pub max_unique_node_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationRunMonitoringConcurrency {
+    pub peak_concurrency: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationRunMonitoringTokenTrendPoint {
+    pub bucket_start: OffsetDateTime,
+    pub run_count: i64,
+    pub total_tokens: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringProtocolBreakdown {
+    pub protocol: String,
+    pub request_count: i64,
+    pub success_rate: f64,
+    pub avg_duration_ms: f64,
+    pub total_tokens: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringSourceBreakdown {
+    pub source: String,
+    pub request_count: i64,
+    pub success_rate: f64,
+    pub total_tokens: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringAuthorizedAccountUsage {
+    pub authorized_account: Option<String>,
+    pub request_count: i64,
+    pub total_tokens: i64,
+    pub avg_duration_ms: f64,
+    pub failed_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringExternalUserUsage {
+    pub external_user: Option<String>,
+    pub request_count: i64,
+    pub total_tokens: i64,
+    pub avg_duration_ms: f64,
+    pub failed_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringApiKeyUsage {
+    pub api_key_id: Uuid,
+    pub request_count: i64,
+    pub total_tokens: i64,
+    pub avg_duration_ms: f64,
+    pub failed_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringExternalConversationUsage {
+    pub external_conversation_id: Option<String>,
+    pub request_count: i64,
+    pub total_tokens: i64,
+    pub avg_duration_ms: f64,
+    pub failed_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringRunRank {
+    pub flow_run_id: Uuid,
+    pub title: String,
+    pub status: domain::FlowRunStatus,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+    pub duration_ms: Option<f64>,
+    pub total_tokens: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

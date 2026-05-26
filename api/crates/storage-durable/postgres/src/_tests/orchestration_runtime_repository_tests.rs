@@ -6,10 +6,11 @@ use control_plane::{
         ApplicationRepository, AttachCompiledPlanToFlowRunInput, CreateApplicationInput,
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
-        FlowRepository, GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        ListApplicationRunsPageInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
-        UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
-        UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        FlowRepository, GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
+        LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationRunsPageInput,
+        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
+        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
+        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
     },
 };
 use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
@@ -1288,6 +1289,73 @@ async fn orchestration_runtime_repository_batch_appends_run_and_runtime_events()
 }
 
 #[tokio::test]
+async fn orchestration_runtime_repository_lists_runtime_event_backfill_page_by_stream_sequence() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-04-17 09:00:00 UTC);
+    let run = seed_flow_run(&store, &seeded, &compiled, started_at).await;
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_runtime_events(
+        &store,
+        &[
+            AppendRuntimeEventInput {
+                flow_run_id: run.id,
+                node_run_id: None,
+                span_id: None,
+                parent_span_id: None,
+                event_type: "text_delta".into(),
+                layer: domain::RuntimeEventLayer::ProviderRaw,
+                source: domain::RuntimeEventSource::Host,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+                item_id: None,
+                ledger_ref: None,
+                payload: json!({
+                    "text": "hello",
+                    "sequence_start": 10,
+                    "sequence_end": 100
+                }),
+                visibility: domain::RuntimeEventVisibility::Workspace,
+                durability: domain::RuntimeEventDurability::Durable,
+            },
+            AppendRuntimeEventInput {
+                flow_run_id: run.id,
+                node_run_id: None,
+                span_id: None,
+                parent_span_id: None,
+                event_type: "flow_finished".into(),
+                layer: domain::RuntimeEventLayer::AgentTransition,
+                source: domain::RuntimeEventSource::Host,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+                item_id: None,
+                ledger_ref: None,
+                payload: json!({
+                    "status": "succeeded",
+                    "stream_sequence": 101
+                }),
+                visibility: domain::RuntimeEventVisibility::Workspace,
+                durability: domain::RuntimeEventDurability::Durable,
+            },
+        ],
+    )
+    .await
+    .unwrap();
+
+    let page =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_runtime_event_backfill_page(
+            &store, run.id, 50, 1,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(page.len(), 1);
+    assert_eq!(page[0].event_type, "text_delta");
+    assert_eq!(page[0].payload["sequence_end"], 100);
+}
+
+#[tokio::test]
 async fn orchestration_runtime_repository_serializes_concurrent_run_event_sequences() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
@@ -1610,6 +1678,295 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
     assert_eq!(logs.items[0].total_tokens, Some(7));
     assert_eq!(logs.items[0].unique_node_count, 2);
     assert_eq!(logs.items[0].tool_callback_count, 2);
+}
+
+#[tokio::test]
+async fn application_run_logs_and_monitoring_read_static_summaries_only() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-05-24 10:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "完成" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(5)),
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query("delete from application_run_log_summaries where flow_run_id = $1")
+        .bind(run.id)
+        .execute(store.pool())
+        .await
+        .unwrap();
+
+    let logs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationRunsPageInput {
+                page: 1,
+                page_size: 20,
+                created_after: Some(started_at - Duration::minutes(1)),
+                sort_by: Some("created_at".to_string()),
+                sort_order: Some("desc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(logs.total, 0);
+    assert!(logs.items.is_empty());
+
+    let report =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
+            &store,
+            seeded.application_id,
+            GetApplicationRunMonitoringReportInput {
+                started_from: Some(started_at - Duration::minutes(1)),
+                started_to: Some(started_at + Duration::minutes(1)),
+                bucket: "hour".to_string(),
+                slow_run_threshold_ms: 30_000,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(report.overview.total_count, 0);
+}
+
+#[tokio::test]
+async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_started_at() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-05-24 09:00:00 UTC);
+
+    let console_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    let console_first_node = seed_node_run_for(
+        &store,
+        &console_run,
+        "node-llm",
+        "llm",
+        "LLM",
+        json!({ "prompt": "总结退款政策" }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+    let _console_second_node = seed_node_run_for(
+        &store,
+        &console_run,
+        "node-tool",
+        "tool",
+        "Tool",
+        json!({ "tool_name": "lookup_order" }),
+        started_at + Duration::seconds(2),
+    )
+    .await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_node_run(
+        &store,
+        &UpdateNodeRunInput {
+            node_run_id: console_first_node.id,
+            status: NodeRunStatus::Succeeded,
+            output_payload: json!({ "answer": "ok" }),
+            error_payload: None,
+            metrics_payload: json!({ "usage": { "total_tokens": 100 } }),
+            debug_payload: json!({}),
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_callback_task(
+        &store,
+        &CreateCallbackTaskInput {
+            flow_run_id: console_run.id,
+            node_run_id: console_first_node.id,
+            callback_kind: "llm_tool_calls".to_string(),
+            request_payload: json!({
+                "tool_calls": [{ "id": "call-1" }, { "id": "call-2" }]
+            }),
+            external_ref_payload: None,
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: console_run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "完成" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(5)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let public_run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "published-api-run".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "Customer refund".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({ "message": "refund" }),
+            started_at: started_at + Duration::seconds(2),
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("customer-1".to_string()),
+            external_conversation_id: Some("conversation-1".to_string()),
+            external_trace_id: Some("trace-1".to_string()),
+            compatibility_mode: Some("openai-responses-v1".to_string()),
+            idempotency_key: Some("idem-1".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+    let public_node = seed_node_run_for(
+        &store,
+        &public_run,
+        "node-llm",
+        "llm",
+        "LLM",
+        json!({ "prompt": "退款" }),
+        started_at + Duration::seconds(3),
+    )
+    .await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_node_run(
+        &store,
+        &UpdateNodeRunInput {
+            node_run_id: public_node.id,
+            status: NodeRunStatus::Failed,
+            output_payload: json!({}),
+            error_payload: Some(json!({ "message": "timeout" })),
+            metrics_payload: json!({ "usage": { "total_tokens": 400 } }),
+            debug_payload: json!({}),
+            finished_at: Some(started_at + Duration::seconds(12)),
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: public_run.id,
+            status: FlowRunStatus::Failed,
+            output_payload: json!({}),
+            error_payload: Some(json!({ "message": "timeout" })),
+            finished_at: Some(started_at + Duration::seconds(42)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let outside_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at - Duration::days(10),
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: outside_run.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(started_at - Duration::days(10) + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let report =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
+            &store,
+            seeded.application_id,
+            GetApplicationRunMonitoringReportInput {
+                started_from: Some(started_at - Duration::minutes(1)),
+                started_to: Some(started_at + Duration::minutes(10)),
+                bucket: "hour".to_string(),
+                slow_run_threshold_ms: 30_000,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(report.overview.total_count, 2);
+    assert_eq!(report.overview.success_count, 1);
+    assert_eq!(report.overview.failed_count, 1);
+    assert_eq!(report.overview.cancelled_count, 0);
+    assert_eq!(report.overview.running_count_included, false);
+    assert_eq!(report.duration.duration_recorded_count, 2);
+    assert_eq!(report.duration.avg_duration_ms.round() as i64, 22_500);
+    assert_eq!(report.duration.p50_duration_ms.round() as i64, 22_500);
+    assert_eq!(report.duration.p95_duration_ms.round() as i64, 38_250);
+    assert_eq!(report.duration.slow_run_rate, 0.5);
+    assert_eq!(report.tokens.total_tokens_sum, 500);
+    assert_eq!(report.tokens.avg_tokens_per_run, 250.0);
+    assert_eq!(report.tokens.token_recorded_count, 2);
+    assert_eq!(report.tool_callbacks.total_tool_callback_count, 2);
+    assert_eq!(report.tool_callbacks.runs_with_tool_callback, 1);
+    assert_eq!(report.nodes.avg_unique_node_count, 1.5);
+    assert_eq!(report.nodes.max_unique_node_count, 2);
+    assert_eq!(report.concurrency.peak_concurrency, 2);
+    assert_eq!(report.tokens_trend[0].total_tokens, 500);
+    assert_eq!(report.protocols[0].protocol, "default");
+    assert_eq!(report.protocols[1].protocol, "openai-responses-v1");
+    assert_eq!(report.sources[0].source, "console");
+    assert_eq!(report.sources[1].source, "public_api");
+    assert_eq!(
+        report.external_users[0].external_user.as_deref(),
+        Some("customer-1")
+    );
+    assert_eq!(report.api_keys[0].api_key_id, api_key_id);
+    assert_eq!(
+        report.external_conversations[0]
+            .external_conversation_id
+            .as_deref(),
+        Some("conversation-1")
+    );
+    assert_eq!(report.slowest_runs[0].flow_run_id, public_run.id);
+    assert_eq!(report.high_token_runs[0].flow_run_id, public_run.id);
 }
 
 #[tokio::test]

@@ -105,7 +105,7 @@ where
             event.node_run_id,
             event.event_type,
             event.source,
-            event.payload,
+            payload_with_stream_sequence(event.payload, event.sequence, event.sequence),
         ));
     }
 
@@ -391,6 +391,7 @@ fn flush_pending_delta(
             "node_run_id": node_run_id,
             "text": pending.text,
             "content_type": pending.content_type,
+            "stream_sequence": pending.sequence_end,
             "sequence_start": pending.sequence_start,
             "sequence_end": pending.sequence_end,
             "event_ids": pending.event_ids,
@@ -409,6 +410,25 @@ fn flush_pending_delta(
             },
         }),
     ));
+}
+
+fn payload_with_stream_sequence(
+    mut payload: Value,
+    sequence_start: i64,
+    sequence_end: i64,
+) -> Value {
+    if let Some(object) = payload.as_object_mut() {
+        object
+            .entry("stream_sequence")
+            .or_insert_with(|| json!(sequence_end));
+        object
+            .entry("sequence_start")
+            .or_insert_with(|| json!(sequence_start));
+        object
+            .entry("sequence_end")
+            .or_insert_with(|| json!(sequence_end));
+    }
+    payload
 }
 
 fn build_runtime_event_input(

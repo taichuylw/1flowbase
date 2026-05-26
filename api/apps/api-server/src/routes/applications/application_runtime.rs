@@ -41,6 +41,7 @@ use crate::{
 use super::debug_run_stream;
 mod application_log_cache;
 mod application_logs;
+pub(crate) mod application_monitoring;
 pub(crate) mod debug_variable_cache;
 pub(crate) mod debug_variable_snapshot;
 mod runtime_debug_artifacts;
@@ -329,6 +330,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(get_runtime_debug_artifact),
         )
         .route("/applications/:id/logs/runs", get(list_application_runs))
+        .route(
+            "/applications/:id/monitoring/run-metrics",
+            get(application_monitoring::get_application_run_monitoring_report),
+        )
         .route(
             "/applications/:id/logs/conversations/:conversation_id/messages",
             get(list_application_conversation_messages),
@@ -1210,6 +1215,7 @@ pub async fn start_flow_debug_run_stream(
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(debug_run_stream::send_runtime_event_stream(
         state.runtime_event_stream.clone(),
+        Arc::new(state.store.clone()),
         run_id,
         debug_run_stream_from_sequence(run_id, &stream_query, &headers),
         sender,
@@ -1314,6 +1320,7 @@ pub async fn subscribe_flow_debug_run_stream(
     let (sender, receiver) = mpsc::channel(32);
     tokio::spawn(debug_run_stream::send_runtime_event_stream(
         state.runtime_event_stream.clone(),
+        Arc::new(state.store.clone()),
         run_id,
         debug_run_stream_from_sequence(run_id, &stream_query, &headers),
         sender,

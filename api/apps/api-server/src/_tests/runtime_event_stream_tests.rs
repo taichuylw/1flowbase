@@ -5,6 +5,7 @@ use control_plane::ports::{
     RuntimeEventStream, RuntimeEventStreamPolicy, RuntimeEventTrimPolicy,
 };
 use serde_json::json;
+use time::{Duration as TimeDuration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::host_infrastructure::LocalRuntimeEventStream;
@@ -358,4 +359,98 @@ async fn local_runtime_event_stream_close_wakes_live_subscription() {
         .await
         .expect("close_run should wake live subscribers");
     assert!(closed.is_none());
+}
+
+#[test]
+fn runtime_event_stream_debug_default_keeps_closed_runs_for_two_hours() {
+    assert_eq!(
+        RuntimeEventStreamPolicy::debug_default().ttl,
+        TimeDuration::hours(2)
+    );
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_expires_finished_run_after_closed_retention() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream
+        .close_run(run_id, RuntimeEventCloseReason::Finished)
+        .await
+        .unwrap();
+    stream
+        .set_run_timestamps_for_tests(
+            run_id,
+            OffsetDateTime::now_utc() - TimeDuration::hours(3),
+            Some(OffsetDateTime::now_utc() - TimeDuration::hours(2) - TimeDuration::seconds(1)),
+        )
+        .unwrap();
+
+    assert!(stream.list_ephemeral_entries().await.unwrap().is_empty());
+    let err = match stream.subscribe(run_id, Some(0)).await {
+        Ok(_) => panic!("expected expired stream to be removed"),
+        Err(error) => error,
+    };
+    assert!(err.to_string().contains("runtime event stream is not open"));
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_keeps_waiting_run_for_twenty_four_hours() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream
+        .close_run(run_id, RuntimeEventCloseReason::WaitingCallback)
+        .await
+        .unwrap();
+    stream
+        .set_run_timestamps_for_tests(
+            run_id,
+            OffsetDateTime::now_utc() - TimeDuration::hours(3),
+            Some(OffsetDateTime::now_utc() - TimeDuration::hours(23)),
+        )
+        .unwrap();
+
+    assert_eq!(stream.list_ephemeral_entries().await.unwrap().len(), 1);
+
+    stream
+        .set_run_timestamps_for_tests(
+            run_id,
+            OffsetDateTime::now_utc() - TimeDuration::hours(25),
+            Some(OffsetDateTime::now_utc() - TimeDuration::hours(24) - TimeDuration::seconds(1)),
+        )
+        .unwrap();
+
+    assert!(stream.list_ephemeral_entries().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn local_runtime_event_stream_expires_orphan_open_run_after_seventy_two_hours() {
+    let stream = LocalRuntimeEventStream::new();
+    let run_id = Uuid::now_v7();
+
+    stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    stream.append(run_id, heartbeat()).await.unwrap();
+    stream
+        .set_run_timestamps_for_tests(
+            run_id,
+            OffsetDateTime::now_utc() - TimeDuration::hours(72) - TimeDuration::seconds(1),
+            None,
+        )
+        .unwrap();
+
+    assert!(stream.list_ephemeral_entries().await.unwrap().is_empty());
 }

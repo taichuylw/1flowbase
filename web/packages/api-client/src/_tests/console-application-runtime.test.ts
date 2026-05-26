@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunDetail,
+  getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRunNodeLastRun,
   getConsoleApplicationRuns,
   getConsoleDebugVariableSnapshot,
@@ -208,6 +209,90 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         method: 'GET',
         credentials: 'include'
       })
+    );
+  });
+
+  test('fetches application run monitoring report by started_at window', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            meta: {
+              started_from: '2026-05-01T00:00:00Z',
+              started_to: null,
+              bucket: 'day',
+              slow_run_threshold_ms: 30000
+            },
+            overview: {
+              total_count: 2,
+              success_count: 1,
+              failed_count: 1,
+              cancelled_count: 0,
+              success_rate: 0.5,
+              failed_rate: 0.5,
+              running_count_included: false
+            },
+            duration: {
+              duration_recorded_count: 2,
+              avg_duration_ms: 22500,
+              p50_duration_ms: 22500,
+              p95_duration_ms: 38250,
+              slow_run_rate: 0.5
+            },
+            tokens: {
+              total_tokens_sum: 500,
+              avg_tokens_per_run: 250,
+              token_recorded_count: 2
+            },
+            tool_callbacks: {
+              total_tool_callback_count: 2,
+              avg_tool_callback_count: 1,
+              runs_with_tool_callback: 1
+            },
+            nodes: {
+              avg_unique_node_count: 1.5,
+              max_unique_node_count: 2
+            },
+            concurrency: {
+              peak_concurrency: 2
+            },
+            tokens_trend: [],
+            protocols: [],
+            sources: [],
+            authorized_accounts: [],
+            external_users: [],
+            api_keys: [],
+            external_conversations: [],
+            slowest_runs: [],
+            high_token_runs: []
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunMonitoringReport(
+        'app-1',
+        {
+          time_range_days: 7,
+          bucket: 'day'
+        },
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      overview: {
+        total_count: 2,
+        running_count_included: false
+      },
+      duration: {
+        slow_run_rate: 0.5
+      }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/monitoring/run-metrics?time_range_days=7&bucket=day',
+      expect.objectContaining({ method: 'GET' })
     );
   });
 

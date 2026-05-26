@@ -14,10 +14,13 @@ use control_plane::ports::{
     RuntimeEventOverflowBehavior, RuntimeEventPayload, RuntimeEventStream,
     RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
 };
+use time::{Duration as TimeDuration, OffsetDateTime};
 use tokio::sync::{broadcast, mpsc, watch};
 use uuid::Uuid;
 
 const DEFAULT_BROADCAST_CAPACITY: usize = 1024;
+const WAITING_RUN_RETENTION: TimeDuration = TimeDuration::hours(24);
+const ORPHAN_RUN_RETENTION: TimeDuration = TimeDuration::hours(72);
 
 #[derive(Clone)]
 pub struct LocalRuntimeEventStream {
@@ -32,6 +35,9 @@ struct LocalRunEventStream {
     closed_sender: watch::Sender<bool>,
     policy: RuntimeEventStreamPolicy,
     closed: AtomicBool,
+    close_reason: Mutex<Option<RuntimeEventCloseReason>>,
+    closed_at: Mutex<Option<OffsetDateTime>>,
+    last_event_at: Mutex<OffsetDateTime>,
 }
 
 impl Default for LocalRuntimeEventStream {
@@ -57,12 +63,38 @@ impl LocalRuntimeEventStream {
     }
 
     fn run(&self, run_id: Uuid) -> Result<Arc<LocalRunEventStream>> {
+        self.purge_expired_runs();
         self.runs
             .lock()
             .expect("runtime event stream runs lock poisoned")
             .get(&run_id)
             .cloned()
             .ok_or_else(|| anyhow!("runtime event stream is not open"))
+    }
+
+    fn purge_expired_runs(&self) {
+        let now = OffsetDateTime::now_utc();
+        self.runs
+            .lock()
+            .expect("runtime event stream runs lock poisoned")
+            .retain(|_, run| !run.expired_at(now));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_run_timestamps_for_tests(
+        &self,
+        run_id: Uuid,
+        last_event_at: OffsetDateTime,
+        closed_at: Option<OffsetDateTime>,
+    ) -> Result<()> {
+        let run = self.run(run_id)?;
+        *run.last_event_at
+            .lock()
+            .expect("runtime event last event lock poisoned") = last_event_at;
+        *run.closed_at
+            .lock()
+            .expect("runtime event closed_at lock poisoned") = closed_at;
+        Ok(())
     }
 
     fn entry_key(run_id: Uuid, sequence: i64) -> String {
@@ -80,8 +112,14 @@ impl LocalRuntimeEventStream {
             .unwrap_or(0)
     }
 
-    fn event_snapshot(event: &RuntimeEventEnvelope, run_closed: bool) -> EphemeralEntrySnapshot {
+    fn event_snapshot(
+        event: &RuntimeEventEnvelope,
+        run: &LocalRunEventStream,
+        now: OffsetDateTime,
+    ) -> EphemeralEntrySnapshot {
         let key = Self::entry_key(event.run_id, event.sequence);
+        let expires_at = run.retention_deadline();
+        let ttl_seconds = Some((expires_at - now).whole_seconds().max(0));
         let metadata = serde_json::json!({
             "run_id": event.run_id,
             "node_run_id": event.node_run_id,
@@ -95,6 +133,7 @@ impl LocalRuntimeEventStream {
             "delta_index": event.delta_index,
             "content_type": event.content_type,
             "text_size_bytes": event.text.as_ref().map(|value| value.len()),
+            "retention_expires_at_unix": expires_at.unix_timestamp(),
         });
         EphemeralEntrySnapshot {
             contract_code: "runtime-event-stream".to_string(),
@@ -103,7 +142,7 @@ impl LocalRuntimeEventStream {
             key,
             inspection_path: vec![event.run_id.to_string(), event.sequence.to_string()],
             entry_kind: "runtime_event".to_string(),
-            status: if run_closed {
+            status: if run.closed.load(Ordering::SeqCst) {
                 "closed".to_string()
             } else {
                 "open".to_string()
@@ -111,9 +150,9 @@ impl LocalRuntimeEventStream {
             owner: event.node_run_id.map(|value| value.to_string()),
             value_size_bytes: Self::event_value_size_bytes(event),
             metadata_size_bytes: ephemeral_metadata_size_bytes(&metadata),
-            ttl_seconds: None,
+            ttl_seconds,
             created_at_unix: Some(event.occurred_at.unix_timestamp()),
-            expires_at_unix: None,
+            expires_at_unix: Some(expires_at.unix_timestamp()),
             sensitive: true,
             metadata,
         }
@@ -124,6 +163,7 @@ impl LocalRunEventStream {
     fn new(policy: RuntimeEventStreamPolicy, broadcast_capacity: usize) -> Self {
         let (broadcaster, _) = broadcast::channel(broadcast_capacity);
         let (closed_sender, _) = watch::channel(false);
+        let now = OffsetDateTime::now_utc();
         Self {
             next_sequence: AtomicI64::new(1),
             ring: Mutex::new(VecDeque::new()),
@@ -131,7 +171,41 @@ impl LocalRunEventStream {
             closed_sender,
             policy,
             closed: AtomicBool::new(false),
+            close_reason: Mutex::new(None),
+            closed_at: Mutex::new(None),
+            last_event_at: Mutex::new(now),
         }
+    }
+
+    fn retention_duration(&self) -> TimeDuration {
+        match *self
+            .close_reason
+            .lock()
+            .expect("runtime event close reason lock poisoned")
+        {
+            Some(RuntimeEventCloseReason::WaitingHuman)
+            | Some(RuntimeEventCloseReason::WaitingCallback) => WAITING_RUN_RETENTION,
+            Some(_) => self.policy.ttl,
+            None => ORPHAN_RUN_RETENTION,
+        }
+    }
+
+    fn retention_deadline(&self) -> OffsetDateTime {
+        let start = self
+            .closed_at
+            .lock()
+            .expect("runtime event closed_at lock poisoned")
+            .unwrap_or_else(|| {
+                *self
+                    .last_event_at
+                    .lock()
+                    .expect("runtime event last event lock poisoned")
+            });
+        start + self.retention_duration()
+    }
+
+    fn expired_at(&self, now: OffsetDateTime) -> bool {
+        now >= self.retention_deadline()
     }
 
     fn replay_from_ring(
@@ -208,6 +282,7 @@ fn send_retained_after_sequence(
 #[async_trait::async_trait]
 impl RuntimeEventStream for LocalRuntimeEventStream {
     async fn open_run(&self, run_id: Uuid, policy: RuntimeEventStreamPolicy) -> Result<()> {
+        self.purge_expired_runs();
         let mut runs = self
             .runs
             .lock()
@@ -246,6 +321,9 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
 
             let sequence = run.next_sequence.fetch_add(1, Ordering::SeqCst);
             let envelope = RuntimeEventEnvelope::new(run_id, sequence, event);
+            *run.last_event_at
+                .lock()
+                .expect("runtime event last event lock poisoned") = envelope.occurred_at;
             ring.push_back(envelope.clone());
             run.trim_overflow(&mut ring);
             envelope
@@ -351,10 +429,16 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         self.run(run_id)?.replay_from_ring(from_sequence, limit)
     }
 
-    async fn close_run(&self, run_id: Uuid, _reason: RuntimeEventCloseReason) -> Result<()> {
+    async fn close_run(&self, run_id: Uuid, reason: RuntimeEventCloseReason) -> Result<()> {
         let run = self.run(run_id)?;
         let _ring = run.ring.lock().expect("runtime event ring lock poisoned");
         if !run.closed.swap(true, Ordering::SeqCst) {
+            *run.close_reason
+                .lock()
+                .expect("runtime event close reason lock poisoned") = Some(reason);
+            *run.closed_at
+                .lock()
+                .expect("runtime event closed_at lock poisoned") = Some(OffsetDateTime::now_utc());
             let _ = run.closed_sender.send(true);
         }
         Ok(())
@@ -380,6 +464,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
     }
 
     async fn list_ephemeral_entries(&self) -> Result<Vec<EphemeralEntrySnapshot>> {
+        self.purge_expired_runs();
         let runs = self
             .runs
             .lock()
@@ -388,12 +473,12 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             .cloned()
             .collect::<Vec<_>>();
         let mut entries = Vec::new();
+        let now = OffsetDateTime::now_utc();
         for run in runs {
-            let closed = run.closed.load(Ordering::SeqCst);
             let ring = run.ring.lock().expect("runtime event ring lock poisoned");
             entries.extend(
                 ring.iter()
-                    .map(|event| Self::event_snapshot(event, closed))
+                    .map(|event| Self::event_snapshot(event, &run, now))
                     .collect::<Vec<_>>(),
             );
         }
@@ -410,6 +495,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         entry_ref: &str,
         reveal_mode: EphemeralValueRevealMode,
     ) -> Result<Option<EphemeralEntryValueSnapshot>> {
+        self.purge_expired_runs();
         let Some((run_id, sequence)) = Self::parse_entry_key(entry_ref) else {
             return Ok(None);
         };
@@ -422,7 +508,6 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
         else {
             return Ok(None);
         };
-        let closed = run.closed.load(Ordering::SeqCst);
         let ring = run.ring.lock().expect("runtime event ring lock poisoned");
         let Some(event) = ring
             .iter()
@@ -432,7 +517,7 @@ impl RuntimeEventStream for LocalRuntimeEventStream {
             return Ok(None);
         };
         Ok(Some(EphemeralEntryValueSnapshot::from_value(
-            Self::event_snapshot(&event, closed),
+            Self::event_snapshot(&event, &run, OffsetDateTime::now_utc()),
             event.payload,
             reveal_mode,
         )))

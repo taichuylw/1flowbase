@@ -22,11 +22,11 @@ use control_plane::{
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
-        GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        ListApplicationConversationRunsPageInput, ListApplicationRunsPageInput,
-        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
-        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
+        LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
+        ListApplicationRunsPageInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+        UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
+        UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
         UpsertDebugVariableCacheEntryInput,
     },
 };
@@ -383,6 +383,21 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         PgControlPlaneStore::list_runtime_events(self, flow_run_id, after_sequence).await
     }
 
+    async fn list_runtime_event_backfill_page(
+        &self,
+        flow_run_id: Uuid,
+        after_stream_sequence: i64,
+        limit: usize,
+    ) -> Result<Vec<domain::RuntimeEventRecord>> {
+        PgControlPlaneStore::list_runtime_event_backfill_page(
+            self,
+            flow_run_id,
+            after_stream_sequence,
+            limit,
+        )
+        .await
+    }
+
     async fn list_runtime_items(
         &self,
         flow_run_id: Uuid,
@@ -436,6 +451,15 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: control_plane::ports::ListApplicationRunsPageInput,
     ) -> Result<control_plane::ports::ApplicationRunLogSummaryPage> {
         PgControlPlaneStore::list_application_run_logs_page(self, application_id, input).await
+    }
+
+    async fn get_application_run_monitoring_report(
+        &self,
+        application_id: Uuid,
+        input: GetApplicationRunMonitoringReportInput,
+    ) -> Result<control_plane::ports::ApplicationRunMonitoringReport> {
+        PgControlPlaneStore::get_application_run_monitoring_report(self, application_id, input)
+            .await
     }
 
     async fn list_application_conversation_runs_page(

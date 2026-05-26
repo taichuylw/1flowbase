@@ -1133,7 +1133,7 @@ pub struct RuntimeEventStreamPolicy {
 impl RuntimeEventStreamPolicy {
     pub fn debug_default() -> Self {
         Self {
-            ttl: time::Duration::minutes(30),
+            ttl: time::Duration::hours(2),
             max_events: 20_000,
             max_bytes: 16 * 1024 * 1024,
             overflow_behavior: RuntimeEventOverflowBehavior::DropOldEphemeralKeepRequired,

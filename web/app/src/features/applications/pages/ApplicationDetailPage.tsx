@@ -6,7 +6,10 @@ import { ApiClientError } from '@1flowbase/api-client';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import { PermissionDeniedState } from '../../../shared/ui/PermissionDeniedState';
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
-import { applicationDetailQueryKey, fetchApplicationDetail } from '../api/applications';
+import {
+  applicationDetailQueryKey,
+  fetchApplicationDetail
+} from '../api/applications';
 import { ApplicationSectionState } from '../components/ApplicationSectionState';
 import {
   getApplicationSections,
@@ -28,13 +31,20 @@ const ApplicationApiPage = lazy(() =>
     default: module.ApplicationApiPage
   }))
 );
+const ApplicationMonitoringPage = lazy(() =>
+  import('./ApplicationMonitoringPage').then((module) => ({
+    default: module.ApplicationMonitoringPage
+  }))
+);
 
 function ApplicationSectionFallback() {
   return <LoadingState compact />;
 }
 
 function ApplicationSectionBoundary({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<ApplicationSectionFallback />}>{children}</Suspense>;
+  return (
+    <Suspense fallback={<ApplicationSectionFallback />}>{children}</Suspense>
+  );
 }
 
 export function ApplicationDetailPage({
@@ -84,6 +94,10 @@ export function ApplicationDetailPage({
       <ApplicationSectionBoundary>
         <ApplicationApiPage application={application} />
       </ApplicationSectionBoundary>
+    ) : requestedSectionKey === 'monitoring' ? (
+      <ApplicationSectionBoundary>
+        <ApplicationMonitoringPage applicationId={applicationId} />
+      </ApplicationSectionBoundary>
     ) : (
       <ApplicationSectionState
         application={application}
@@ -96,9 +110,7 @@ export function ApplicationDetailPage({
       pageTitle={application.name}
       navItems={getApplicationSections(applicationId)}
       activeKey={requestedSectionKey}
-      contentWidth={
-        requestedSectionKey === 'orchestration' ? 'full' : 'wide'
-      }
+      contentWidth={requestedSectionKey === 'orchestration' ? 'full' : 'wide'}
       heightMode={
         requestedSectionKey === 'logs' || requestedSectionKey === 'api'
           ? 'viewport'

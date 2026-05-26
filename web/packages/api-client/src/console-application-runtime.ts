@@ -89,6 +89,147 @@ export interface ConsoleApplicationRunsPage {
   page_size: number;
 }
 
+export type ConsoleApplicationRunMonitoringBucket =
+  | 'hour'
+  | 'day'
+  | 'week'
+  | 'month';
+
+export interface GetConsoleApplicationRunMonitoringReportInput {
+  from?: string;
+  to?: string;
+  time_range_days?: number;
+  bucket?: ConsoleApplicationRunMonitoringBucket;
+}
+
+export interface ConsoleApplicationRunMonitoringMeta {
+  started_from: string | null;
+  started_to: string | null;
+  bucket: ConsoleApplicationRunMonitoringBucket;
+  slow_run_threshold_ms: number;
+}
+
+export interface ConsoleApplicationRunMonitoringOverview {
+  total_count: number;
+  success_count: number;
+  failed_count: number;
+  cancelled_count: number;
+  success_rate: number;
+  failed_rate: number;
+  running_count_included: boolean;
+}
+
+export interface ConsoleApplicationRunMonitoringDuration {
+  duration_recorded_count: number;
+  avg_duration_ms: number;
+  p50_duration_ms: number;
+  p95_duration_ms: number;
+  slow_run_rate: number;
+}
+
+export interface ConsoleApplicationRunMonitoringTokens {
+  total_tokens_sum: number;
+  avg_tokens_per_run: number;
+  token_recorded_count: number;
+}
+
+export interface ConsoleApplicationRunMonitoringToolCallbacks {
+  total_tool_callback_count: number;
+  avg_tool_callback_count: number;
+  runs_with_tool_callback: number;
+}
+
+export interface ConsoleApplicationRunMonitoringNodes {
+  avg_unique_node_count: number;
+  max_unique_node_count: number;
+}
+
+export interface ConsoleApplicationRunMonitoringConcurrency {
+  peak_concurrency: number;
+}
+
+export interface ConsoleApplicationRunMonitoringTokenTrendPoint {
+  bucket_start: string;
+  run_count: number;
+  total_tokens: number;
+}
+
+export interface ConsoleApplicationRunMonitoringProtocolBreakdown {
+  protocol: string;
+  request_count: number;
+  success_rate: number;
+  avg_duration_ms: number;
+  total_tokens: number;
+}
+
+export interface ConsoleApplicationRunMonitoringSourceBreakdown {
+  source: string;
+  request_count: number;
+  success_rate: number;
+  total_tokens: number;
+}
+
+export interface ConsoleApplicationRunMonitoringAuthorizedAccountUsage {
+  authorized_account: string | null;
+  request_count: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+  failed_count: number;
+}
+
+export interface ConsoleApplicationRunMonitoringExternalUserUsage {
+  external_user: string | null;
+  request_count: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+  failed_count: number;
+}
+
+export interface ConsoleApplicationRunMonitoringApiKeyUsage {
+  api_key_id: string;
+  request_count: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+  failed_count: number;
+}
+
+export interface ConsoleApplicationRunMonitoringExternalConversationUsage {
+  external_conversation_id: string | null;
+  request_count: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+  failed_count: number;
+}
+
+export interface ConsoleApplicationRunMonitoringRunRank {
+  flow_run_id: string;
+  title: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  total_tokens: number | null;
+}
+
+export interface ConsoleApplicationRunMonitoringReport {
+  meta: ConsoleApplicationRunMonitoringMeta;
+  overview: ConsoleApplicationRunMonitoringOverview;
+  duration: ConsoleApplicationRunMonitoringDuration;
+  tokens: ConsoleApplicationRunMonitoringTokens;
+  tool_callbacks: ConsoleApplicationRunMonitoringToolCallbacks;
+  nodes: ConsoleApplicationRunMonitoringNodes;
+  concurrency: ConsoleApplicationRunMonitoringConcurrency;
+  tokens_trend: ConsoleApplicationRunMonitoringTokenTrendPoint[];
+  protocols: ConsoleApplicationRunMonitoringProtocolBreakdown[];
+  sources: ConsoleApplicationRunMonitoringSourceBreakdown[];
+  authorized_accounts: ConsoleApplicationRunMonitoringAuthorizedAccountUsage[];
+  external_users: ConsoleApplicationRunMonitoringExternalUserUsage[];
+  api_keys: ConsoleApplicationRunMonitoringApiKeyUsage[];
+  external_conversations: ConsoleApplicationRunMonitoringExternalConversationUsage[];
+  slowest_runs: ConsoleApplicationRunMonitoringRunRank[];
+  high_token_runs: ConsoleApplicationRunMonitoringRunRank[];
+}
+
 export interface GetConsoleApplicationRunsInput {
   page?: number;
   page_size?: number;
@@ -1081,6 +1222,34 @@ export function getConsoleApplicationRuns(
     path:
       `/api/console/applications/${applicationId}/logs/runs?` +
       searchParams.toString(),
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunMonitoringReport(
+  applicationId: string,
+  input: GetConsoleApplicationRunMonitoringReportInput = {},
+  baseUrl?: string
+) {
+  const searchParams = new URLSearchParams();
+  if (input.from !== undefined) {
+    searchParams.set('from', input.from);
+  }
+  if (input.to !== undefined) {
+    searchParams.set('to', input.to);
+  }
+  if (input.time_range_days !== undefined) {
+    searchParams.set('time_range_days', String(input.time_range_days));
+  }
+  if (input.bucket !== undefined) {
+    searchParams.set('bucket', input.bucket);
+  }
+  const query = searchParams.toString();
+
+  return apiFetch<ConsoleApplicationRunMonitoringReport>({
+    path:
+      `/api/console/applications/${applicationId}/monitoring/run-metrics` +
+      (query ? `?${query}` : ''),
     baseUrl
   });
 }

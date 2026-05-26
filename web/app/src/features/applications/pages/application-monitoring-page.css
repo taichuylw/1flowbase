@@ -1,0 +1,133 @@
+.application-monitoring-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  padding-inline-end: 16px;
+  padding-bottom: 32px;
+}
+
+.application-monitoring-page__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.application-monitoring-page__toolbar-status {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.application-monitoring-page__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.application-monitoring-metric,
+.application-monitoring-panel {
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(11, 31, 24, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(11, 31, 24, 0.05);
+}
+
+.application-monitoring-metric {
+  padding: 14px 16px;
+}
+
+.application-monitoring-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.application-monitoring-panel .ant-typography {
+  margin: 0;
+}
+
+.application-monitoring-page__chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.application-monitoring-chart {
+  width: 100%;
+  height: 260px;
+  min-height: 260px;
+}
+
+.application-monitoring-page__table-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.application-monitoring-page__quality-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  gap: 12px 18px;
+  align-items: center;
+}
+
+.application-monitoring-page__quality-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(11, 31, 24, 0.68);
+}
+
+.application-monitoring-page__quality-grid strong {
+  text-align: right;
+  font-weight: 650;
+}
+
+.application-monitoring-panel .ant-table-wrapper {
+  min-width: 0;
+}
+
+.application-monitoring-panel .ant-table {
+  font-size: 13px;
+}
+
+.application-monitoring-panel .ant-table-cell {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .application-monitoring-page__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .application-monitoring-page__chart-grid,
+  .application-monitoring-page__table-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .application-monitoring-page {
+    padding-inline-end: 0;
+  }
+
+  .application-monitoring-page__toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .application-monitoring-page__toolbar-status {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .application-monitoring-page__metrics {
+    grid-template-columns: 1fr;
+  }
+}

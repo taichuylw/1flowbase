@@ -86,6 +86,7 @@ async fn runtime_event_persister_persists_delta_cursor_and_artifact_metadata() {
     assert_eq!(event.payload["event_type"], "text_delta");
     assert_eq!(event.payload["node_run_id"], node_run_id.to_string());
     assert_eq!(event.payload["content_type"], "text");
+    assert_eq!(event.payload["stream_sequence"], 8);
     assert_eq!(event.payload["sequence_start"], 7);
     assert_eq!(event.payload["sequence_end"], 8);
     assert_eq!(
@@ -191,6 +192,9 @@ async fn runtime_event_persister_flushes_pending_delta_before_cancelled_terminal
     assert_eq!(runtime_events[0].event_type, "text_delta");
     assert_eq!(runtime_events[0].payload["text"], "正在回答");
     assert_eq!(runtime_events[1].event_type, "flow_cancelled");
+    assert_eq!(runtime_events[1].payload["stream_sequence"], 9);
+    assert_eq!(runtime_events[1].payload["sequence_start"], 9);
+    assert_eq!(runtime_events[1].payload["sequence_end"], 9);
     assert_eq!(
         runtime_events[1].layer,
         domain::RuntimeEventLayer::AgentTransition

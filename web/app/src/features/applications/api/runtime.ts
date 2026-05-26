@@ -2,10 +2,20 @@ import {
   completeConsoleCallbackTask,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunDetail,
+  getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
   type ConsoleApplicationRunsPage,
+  type ConsoleApplicationRunMonitoringApiKeyUsage,
+  type ConsoleApplicationRunMonitoringAuthorizedAccountUsage,
+  type ConsoleApplicationRunMonitoringBucket,
+  type ConsoleApplicationRunMonitoringExternalConversationUsage,
+  type ConsoleApplicationRunMonitoringExternalUserUsage,
+  type ConsoleApplicationRunMonitoringProtocolBreakdown,
+  type ConsoleApplicationRunMonitoringReport,
+  type ConsoleApplicationRunMonitoringRunRank,
+  type ConsoleApplicationRunMonitoringSourceBreakdown,
   type ConsoleApplicationConversationMessagesPage,
   resumeConsoleFlowRun,
   type ConsoleApplicationRunDetail,
@@ -18,6 +28,24 @@ import { getApplicationsApiBaseUrl } from './applications';
 export type ApplicationRunSummary = ConsoleApplicationRunSummary;
 export type ApplicationRunsPage = ConsoleApplicationRunsPage;
 export type ApplicationRunDetail = ConsoleApplicationRunDetail;
+export type ApplicationRunMonitoringBucket =
+  ConsoleApplicationRunMonitoringBucket;
+export type ApplicationRunMonitoringReport =
+  ConsoleApplicationRunMonitoringReport;
+export type ApplicationRunMonitoringApiKeyUsage =
+  ConsoleApplicationRunMonitoringApiKeyUsage;
+export type ApplicationRunMonitoringAuthorizedAccountUsage =
+  ConsoleApplicationRunMonitoringAuthorizedAccountUsage;
+export type ApplicationRunMonitoringExternalConversationUsage =
+  ConsoleApplicationRunMonitoringExternalConversationUsage;
+export type ApplicationRunMonitoringExternalUserUsage =
+  ConsoleApplicationRunMonitoringExternalUserUsage;
+export type ApplicationRunMonitoringProtocolBreakdown =
+  ConsoleApplicationRunMonitoringProtocolBreakdown;
+export type ApplicationRunMonitoringRunRank =
+  ConsoleApplicationRunMonitoringRunRank;
+export type ApplicationRunMonitoringSourceBreakdown =
+  ConsoleApplicationRunMonitoringSourceBreakdown;
 export type ApplicationConversationMessagesPage =
   ConsoleApplicationConversationMessagesPage;
 export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
@@ -29,6 +57,11 @@ export type ApplicationRunSortField =
   | 'updated_at';
 export type ApplicationRunSortOrder = 'asc' | 'desc';
 export type ApplicationRunCacheMode = 'default' | 'refresh';
+
+export interface FetchApplicationRunMonitoringReportInput {
+  timeRangeDays?: number | null;
+  bucket?: ApplicationRunMonitoringBucket;
+}
 
 export interface FetchApplicationRunsInput {
   page?: number;
@@ -88,6 +121,20 @@ export const applicationRuntimeDebugStreamQueryKey = (
     'debug-stream'
   ] as const;
 
+export const applicationRunMonitoringReportQueryKey = (
+  applicationId: string,
+  input: FetchApplicationRunMonitoringReportInput = {}
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'monitoring',
+    'run-metrics',
+    input.timeRangeDays ?? 7,
+    input.bucket ?? 'day'
+  ] as const;
+
 export function fetchApplicationRuns(
   applicationId: string,
   input: FetchApplicationRunsInput = {}
@@ -101,6 +148,20 @@ export function fetchApplicationRuns(
       sort_by: input.sortBy ?? 'started_at',
       sort_order: input.sortOrder ?? 'desc',
       cache_mode: input.cacheMode ?? 'default'
+    },
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunMonitoringReport(
+  applicationId: string,
+  input: FetchApplicationRunMonitoringReportInput = {}
+) {
+  return getConsoleApplicationRunMonitoringReport(
+    applicationId,
+    {
+      time_range_days: input.timeRangeDays ?? 7,
+      bucket: input.bucket ?? 'day'
     },
     getApplicationsApiBaseUrl()
   );

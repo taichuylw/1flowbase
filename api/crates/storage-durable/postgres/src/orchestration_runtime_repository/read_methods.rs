@@ -70,6 +70,71 @@ impl PgControlPlaneStore {
         rows.into_iter().map(map_runtime_event_record).collect()
     }
 
+    async fn list_runtime_event_backfill_page(
+        &self,
+        flow_run_id: Uuid,
+        after_stream_sequence: i64,
+        limit: usize,
+    ) -> Result<Vec<domain::RuntimeEventRecord>> {
+        let limit = i64::try_from(limit.max(1)).unwrap_or(i64::MAX);
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                flow_run_id,
+                node_run_id,
+                span_id,
+                parent_span_id,
+                sequence,
+                event_type,
+                layer,
+                source,
+                trust_level,
+                item_id,
+                ledger_ref,
+                payload,
+                visibility,
+                durability,
+                created_at
+            from runtime_events
+            where flow_run_id = $1
+              and coalesce(
+                    case
+                      when payload ->> 'sequence_end' ~ '^-?[0-9]+$'
+                      then (payload ->> 'sequence_end')::bigint
+                    end,
+                    case
+                      when payload ->> 'stream_sequence' ~ '^-?[0-9]+$'
+                      then (payload ->> 'stream_sequence')::bigint
+                    end,
+                    sequence
+                  ) > $2
+            order by
+                coalesce(
+                    case
+                      when payload ->> 'sequence_end' ~ '^-?[0-9]+$'
+                      then (payload ->> 'sequence_end')::bigint
+                    end,
+                    case
+                      when payload ->> 'stream_sequence' ~ '^-?[0-9]+$'
+                      then (payload ->> 'stream_sequence')::bigint
+                    end,
+                    sequence
+                ) asc,
+                sequence asc,
+                id asc
+            limit $3
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(after_stream_sequence)
+        .bind(limit)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_runtime_event_record).collect()
+    }
+
     async fn list_runtime_items(
         &self,
         flow_run_id: Uuid,
