@@ -187,6 +187,7 @@ export interface ConsoleApplicationRunMonitoringExternalUserUsage {
 
 export interface ConsoleApplicationRunMonitoringApiKeyUsage {
   api_key_id: string;
+  api_key_name_snapshot: string | null;
   request_count: number;
   total_tokens: number;
   avg_duration_ms: number;

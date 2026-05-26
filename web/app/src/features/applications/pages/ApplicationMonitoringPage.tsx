@@ -136,9 +136,26 @@ const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
         else if (value < 0.98) color = '#faad14';
         return (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 550 }}>{formatPercent(value)}</span>
-            <div style={{ width: 36, height: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${value * 100}%`, height: '100%', background: color, borderRadius: 3 }} />
+            <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 550 }}>
+              {formatPercent(value)}
+            </span>
+            <div
+              style={{
+                width: 36,
+                height: 6,
+                background: 'rgba(0,0,0,0.04)',
+                borderRadius: 3,
+                overflow: 'hidden'
+              }}
+            >
+              <div
+                style={{
+                  width: `${value * 100}%`,
+                  height: '100%',
+                  background: color,
+                  borderRadius: 3
+                }}
+              />
             </div>
           </div>
         );
@@ -194,9 +211,26 @@ const sourceColumns: ColumnsType<ApplicationRunMonitoringSourceBreakdown> = [
       else if (value < 0.98) color = '#faad14';
       return (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 550 }}>{formatPercent(value)}</span>
-          <div style={{ width: 36, height: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ width: `${value * 100}%`, height: '100%', background: color, borderRadius: 3 }} />
+          <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 550 }}>
+            {formatPercent(value)}
+          </span>
+          <div
+            style={{
+              width: 36,
+              height: 6,
+              background: 'rgba(0,0,0,0.04)',
+              borderRadius: 3,
+              overflow: 'hidden'
+            }}
+          >
+            <div
+              style={{
+                width: `${value * 100}%`,
+                height: '100%',
+                background: color,
+                borderRadius: 3
+              }}
+            />
           </div>
         </div>
       );
@@ -218,13 +252,20 @@ function usageColumns<
     avg_duration_ms: number;
     failed_count: number;
   }
->(label: string, key: keyof T, maxRequests = 0, maxTokens = 0): ColumnsType<T> {
+>(
+  label: string,
+  key: keyof T,
+  maxRequests = 0,
+  maxTokens = 0,
+  renderDimension?: (value: T[keyof T], record: T) => ReactNode
+): ColumnsType<T> {
   return [
     {
       title: label,
       dataIndex: key as string,
       key: key as string,
-      render: (value: string | null) => value ?? '-'
+      render: (value: T[keyof T], record: T) =>
+        renderDimension?.(value, record) ?? value ?? '-'
     },
     {
       title: '请求数',
@@ -235,9 +276,18 @@ function usageColumns<
         const pct = maxRequests > 0 ? (value / maxRequests) * 100 : 0;
         return (
           <div className="table-cell-progress">
-            <span className="table-cell-progress__value">{formatInteger(value)}</span>
+            <span className="table-cell-progress__value">
+              {formatInteger(value)}
+            </span>
             <div className="table-cell-progress__bar-bg">
-              <div className="table-cell-progress__bar" style={{ width: `${pct}%`, background: '#e6f4ff', borderRight: '2px solid #1677ff' }} />
+              <div
+                className="table-cell-progress__bar"
+                style={{
+                  width: `${pct}%`,
+                  background: '#e6f4ff',
+                  borderRight: '2px solid #1677ff'
+                }}
+              />
             </div>
           </div>
         );
@@ -249,8 +299,19 @@ function usageColumns<
       key: 'failed_count',
       align: 'right',
       render: (value: number) => {
-        if (value === 0) return <span style={{ color: 'var(--ant-color-text-secondary)', opacity: 0.6 }}>0</span>;
-        return <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{formatInteger(value)}</span>;
+        if (value === 0)
+          return (
+            <span
+              style={{ color: 'var(--ant-color-text-secondary)', opacity: 0.6 }}
+            >
+              0
+            </span>
+          );
+        return (
+          <span style={{ color: '#ff4d4f', fontWeight: 600 }}>
+            {formatInteger(value)}
+          </span>
+        );
       }
     },
     {
@@ -278,9 +339,18 @@ function usageColumns<
         const pct = maxTokens > 0 ? (value / maxTokens) * 100 : 0;
         return (
           <div className="table-cell-progress">
-            <span className="table-cell-progress__value">{formatInteger(value)}</span>
+            <span className="table-cell-progress__value">
+              {formatInteger(value)}
+            </span>
             <div className="table-cell-progress__bar-bg">
-              <div className="table-cell-progress__bar" style={{ width: `${pct}%`, background: '#f9f0ff', borderRight: '2px solid #722ed1' }} />
+              <div
+                className="table-cell-progress__bar"
+                style={{
+                  width: `${pct}%`,
+                  background: '#f9f0ff',
+                  borderRight: '2px solid #722ed1'
+                }}
+              />
             </div>
           </div>
         );
@@ -520,7 +590,10 @@ function buildProtocolOption(report: ApplicationRunMonitoringReport) {
 }
 
 function buildSourceOption(report: ApplicationRunMonitoringReport) {
-  const totalRequests = report.sources.reduce((sum, item) => sum + item.request_count, 0);
+  const totalRequests = report.sources.reduce(
+    (sum, item) => sum + item.request_count,
+    0
+  );
   return {
     color: ['#1677ff', '#52c41a', '#faad14'],
     tooltip: {
@@ -587,7 +660,7 @@ function RunRankList({ runs, metricType }: RunRankListProps) {
   const maxVal = Math.max(
     1,
     ...runs.map((r) =>
-      metricType === 'duration' ? r.duration_ms ?? 0 : r.total_tokens ?? 0
+      metricType === 'duration' ? (r.duration_ms ?? 0) : (r.total_tokens ?? 0)
     )
   );
 
@@ -595,7 +668,9 @@ function RunRankList({ runs, metricType }: RunRankListProps) {
     <div className="run-rank-list">
       {runs.map((run, index) => {
         const val =
-          metricType === 'duration' ? run.duration_ms ?? 0 : run.total_tokens ?? 0;
+          metricType === 'duration'
+            ? (run.duration_ms ?? 0)
+            : (run.total_tokens ?? 0);
         const pct = (val / maxVal) * 100;
         const displayVal =
           metricType === 'duration' ? formatDuration(val) : formatInteger(val);
@@ -620,7 +695,9 @@ function RunRankList({ runs, metricType }: RunRankListProps) {
               </div>
               <div className="run-rank-item__sub">
                 <span>ID: {run.flow_run_id}</span>
-                <span className="run-rank-item__time">{formatTime(run.started_at)}</span>
+                <span className="run-rank-item__time">
+                  {formatTime(run.started_at)}
+                </span>
               </div>
             </div>
             <div className="run-rank-item__metric">
@@ -674,7 +751,10 @@ export function ApplicationMonitoringPage({
   const maxAuthTokens = useMemo(
     () =>
       report
-        ? Math.max(1, ...report.authorized_accounts.map((item) => item.total_tokens))
+        ? Math.max(
+            1,
+            ...report.authorized_accounts.map((item) => item.total_tokens)
+          )
         : 1,
     [report?.authorized_accounts]
   );
@@ -682,7 +762,10 @@ export function ApplicationMonitoringPage({
   const maxExtUserRequests = useMemo(
     () =>
       report
-        ? Math.max(1, ...report.external_users.map((item) => item.request_count))
+        ? Math.max(
+            1,
+            ...report.external_users.map((item) => item.request_count)
+          )
         : 1,
     [report?.external_users]
   );
@@ -954,7 +1037,10 @@ export function ApplicationMonitoringPage({
                 <ApiOutlined /> 平均工具回调
               </span>
               <span className="quality-metric-item__value">
-                {formatDecimal(report.tool_callbacks.avg_tool_callback_count, 1)}
+                {formatDecimal(
+                  report.tool_callbacks.avg_tool_callback_count,
+                  1
+                )}
               </span>
             </div>
           </div>
@@ -1003,7 +1089,9 @@ export function ApplicationMonitoringPage({
               'API Key',
               'api_key_id',
               maxApiKeyRequests,
-              maxApiKeyTokens
+              maxApiKeyTokens,
+              (_value, record) =>
+                record.api_key_name_snapshot ?? record.api_key_id
             )}
             dataSource={report.api_keys}
             rowKey="api_key_id"
