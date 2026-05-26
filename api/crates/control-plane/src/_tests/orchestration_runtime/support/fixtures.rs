@@ -590,6 +590,14 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
             .await
     }
 
+    pub async fn seed_application_with_second_llm_failure_flow(
+        &self,
+        name: &str,
+    ) -> SeededPreviewApplication {
+        self.seed_application_with_document(name, build_second_llm_failure_flow_document)
+            .await
+    }
+
     pub async fn seed_application_with_multi_instance_provider_flow(
         &self,
         name: &str,
@@ -936,6 +944,87 @@ fn build_human_input_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -
                 { "id": "edge-start-llm", "source": "node-start", "target": "node-llm", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] },
                 { "id": "edge-llm-human", "source": "node-llm", "target": "node-human", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] },
                 { "id": "edge-human-answer", "source": "node-human", "target": "node-answer", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+fn build_second_llm_failure_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {
+    json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": { "flowId": flow_id.to_string(), "name": "Support Agent", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": []
+                },
+                {
+                    "id": "node-llm",
+                    "type": "llm",
+                    "alias": "LLM",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": {
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "gpt-5.4-mini"
+                        }
+                    },
+                    "bindings": {
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-1", "role": "user", "content": { "kind": "templated_text", "value": "{{node-start.query}}" } }] }
+                    },
+                    "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+                },
+                {
+                    "id": "node-llm-2",
+                    "type": "llm",
+                    "alias": "LLM2",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 480, "y": 0 },
+                    "configVersion": 1,
+                    "config": {
+                        "model_provider": {
+                            "provider_code": "fixture_provider",
+                            "model_id": "gpt-5.4-mini"
+                        }
+                    },
+                    "bindings": {
+                        "prompt_messages": { "kind": "prompt_messages", "value": [{ "id": "user-2", "role": "user", "content": { "kind": "templated_text", "value": "{{node-llm.text}}" } }] }
+                    },
+                    "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+                },
+                {
+                    "id": "node-answer",
+                    "type": "answer",
+                    "alias": "Answer",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 720, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {
+                        "answer_template": { "kind": "templated_text", "value": "{{ node-llm.text }}\n----\n{{ node-llm-2.text }}" }
+                    },
+                    "outputs": [{ "key": "answer", "title": "对话输出", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                { "id": "edge-start-llm", "source": "node-start", "target": "node-llm", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] },
+                { "id": "edge-llm-llm2", "source": "node-llm", "target": "node-llm-2", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] },
+                { "id": "edge-llm2-answer", "source": "node-llm-2", "target": "node-answer", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
             ]
         },
         "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }

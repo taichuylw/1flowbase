@@ -405,7 +405,6 @@ where
                     execution.error_payload.as_ref(),
                     &execution.debug_payload,
                 );
-                last_output_payload = public_output_payload.clone();
                 let refs = persist_llm_context_observability(
                     &service.repository,
                     flow_run.id,
@@ -604,6 +603,7 @@ where
                     )
                     .await;
                 }
+                last_output_payload = public_output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "plugin_node" => {
@@ -621,7 +621,6 @@ where
                     execution.error_payload.as_ref(),
                     &execution.debug_payload,
                 );
-                last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
                 } else {
@@ -692,6 +691,7 @@ where
                     .await;
                 }
 
+                last_output_payload = public_output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "data_model_list" | "data_model_get" | "data_model_create" | "data_model_update"
@@ -828,7 +828,6 @@ where
                     execution.error_payload.as_ref(),
                     &json!({}),
                 );
-                last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
                 } else {
@@ -888,6 +887,7 @@ where
                     .await;
                 }
 
+                last_output_payload = public_output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "template_transform" | "answer" => {
@@ -1100,7 +1100,6 @@ where
                     execution.error_payload.as_ref(),
                     &execution.debug_payload,
                 );
-                last_output_payload = public_output_payload.clone();
                 let node_status = if execution.error_payload.is_some() {
                     domain::NodeRunStatus::Failed
                 } else {
@@ -1171,6 +1170,7 @@ where
                     .await;
                 }
 
+                last_output_payload = public_output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             other => {

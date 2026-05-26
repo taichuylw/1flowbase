@@ -28,6 +28,65 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
 }
 
 #[tokio::test]
+async fn live_run_failure_keeps_previous_successful_llm_output() {
+    use plugin_framework::provider_contract::{ProviderFinishReason, ProviderInvocationResult};
+
+    let service = OrchestrationRuntimeService::for_tests_with_provider_results(vec![
+        ProviderInvocationResult {
+            final_content: Some("first answer".to_string()),
+            finish_reason: Some(ProviderFinishReason::Stop),
+            ..ProviderInvocationResult::default()
+        },
+        ProviderInvocationResult {
+            finish_reason: Some(ProviderFinishReason::Error),
+            ..ProviderInvocationResult::default()
+        },
+    ]);
+    let seeded = service
+        .seed_application_with_second_llm_failure_flow("Support Agent")
+        .await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "hi" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let failed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(failed.flow_run.status, domain::FlowRunStatus::Failed);
+    assert_eq!(
+        failed.flow_run.output_payload["text"],
+        json!("first answer")
+    );
+    assert_eq!(
+        node_run(&failed, "node-llm").status,
+        domain::NodeRunStatus::Succeeded
+    );
+    assert_eq!(
+        node_run(&failed, "node-llm-2").status,
+        domain::NodeRunStatus::Failed
+    );
+    assert!(failed
+        .node_runs
+        .iter()
+        .all(|node_run| node_run.node_id != "node-answer"));
+}
+
+#[tokio::test]
 async fn start_node_debug_preview_rejects_ambiguous_stable_provider_model_binding() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service
