@@ -237,6 +237,26 @@ describe('application public API client', () => {
     ]);
   });
 
+  test('passes pagination and search through application-scoped docs operations route', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({ id: 'openai-compatible-api', operations: [] })
+      );
+
+    await fetchConsoleApplicationApiDocsCategoryOperations(
+      'app-1',
+      'openai-compatible-api',
+      { offset: 20, limit: 20, q: 'chat completion' },
+      'http://localhost:7800',
+      'zh_Hans'
+    );
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      'http://localhost:7800/api/console/applications/app-1/api-docs/categories/openai-compatible-api/operations?locale=zh_Hans&offset=20&limit=20&q=chat+completion'
+    ]);
+  });
+
   test('keeps public runtime path examples application-id-free', () => {
     expect(Object.values(APPLICATION_PUBLIC_RUNTIME_PATHS)).toEqual([
       '/api/v1/agent/runs',

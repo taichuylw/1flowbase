@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Result, Tabs } from 'antd';
+import { Alert, Button, Result } from 'antd';
 
 import { useAuthStore } from '../../../state/auth-store';
 import {
@@ -62,14 +62,6 @@ export function ApplicationApiPage({
     return <Result status="info" title="正在加载公开 API 状态" />;
   }
 
-  const tabs = [
-    {
-      key: 'docs',
-      label: 'API 文档',
-      children: <ApplicationApiDocsPanel applicationId={application.id} />
-    }
-  ];
-
   return (
     <div className="application-api-page">
       <ApplicationApiStatusBar
@@ -101,7 +93,7 @@ export function ApplicationApiPage({
           }
         />
       ) : null}
-      <Tabs items={tabs} destroyOnHidden={false} />
+      <ApplicationApiDocsPanel applicationId={application.id} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use api_server::openapi_docs::build_api_docs_registry;
+use api_server::openapi_docs::{build_api_docs_registry, paginate_category_operations};
 
 #[test]
 fn registry_requires_operation_id_for_every_operation() {
@@ -161,6 +161,44 @@ fn registry_groups_catalog_by_api_prefix_and_singletons_for_non_api_paths() {
     let singleton_category = registry.category_operations("single:health").unwrap();
     assert_eq!(singleton_category.operations.len(), 1);
     assert_eq!(singleton_category.operations[0].id, "health");
+}
+
+#[test]
+fn category_operations_pagination_returns_stable_pages() {
+    let canonical = json!({
+        "openapi": "3.1.0",
+        "info": { "title": "T", "version": "1" },
+        "paths": {
+            "/api/console/api-keys": {
+                "post": { "operationId": "create_api_key", "summary": "Create API key" }
+            },
+            "/api/console/members": {
+                "get": { "operationId": "list_members", "summary": "List members" }
+            },
+            "/api/console/workspace": {
+                "get": { "operationId": "get_workspace", "summary": "Get workspace" }
+            }
+        }
+    });
+    let registry = build_api_docs_registry(canonical).expect("catalog should build");
+    let console_operations = registry
+        .category_operations("console")
+        .expect("console operations should exist");
+
+    let first_page = paginate_category_operations(console_operations, 0, 2);
+    assert_eq!(first_page.operations.len(), 2);
+    assert_eq!(first_page.total, 3);
+    assert_eq!(first_page.offset, 0);
+    assert_eq!(first_page.limit, 2);
+    assert!(first_page.has_more);
+    assert_eq!(first_page.next_offset, Some(2));
+
+    let second_page = paginate_category_operations(console_operations, 2, 2);
+    assert_eq!(second_page.operations.len(), 1);
+    assert_eq!(second_page.offset, 2);
+    assert_eq!(second_page.next_offset, None);
+    assert!(!second_page.has_more);
+    assert_ne!(first_page.operations[0].id, second_page.operations[0].id);
 }
 
 #[test]

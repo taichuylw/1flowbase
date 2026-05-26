@@ -563,12 +563,21 @@ describe('settings api wrappers', () => {
     ]);
 
     await fetchSettingsApiDocsCatalog();
-    await fetchSettingsApiDocsCategoryOperations('console');
+    await fetchSettingsApiDocsCategoryOperations('console', {
+      offset: 20,
+      limit: 20,
+      q: 'members'
+    });
     await fetchSettingsApiDocsOperationSpec('op-1');
 
     expect(fetchConsoleApiDocsCatalog).toHaveBeenCalledTimes(1);
     expect(fetchConsoleApiDocsCategoryOperations).toHaveBeenCalledWith(
-      'console'
+      'console',
+      {
+        offset: 20,
+        limit: 20,
+        q: 'members'
+      }
     );
     expect(fetchConsoleApiOperationSpec).toHaveBeenCalledWith('op-1');
   });

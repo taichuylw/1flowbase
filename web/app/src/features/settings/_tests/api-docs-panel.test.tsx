@@ -333,7 +333,10 @@ describe('ApiDocsPanel', () => {
     expect(await screen.findByRole('button', { name: /patch \/api\/console\/me/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /get \/api\/console\/members/i })).toBeInTheDocument();
     expect(screen.getByText('选择接口后查看详情')).toBeInTheDocument();
-    expect(docsApi.fetchSettingsApiDocsCategoryOperations).toHaveBeenCalledWith('console');
+    expect(docsApi.fetchSettingsApiDocsCategoryOperations).toHaveBeenCalledWith(
+      'console',
+      { offset: 0, limit: 20, q: null }
+    );
     expect(docsApi.fetchSettingsApiDocsOperationSpec).not.toHaveBeenCalled();
   });
 
@@ -407,7 +410,10 @@ describe('ApiDocsPanel', () => {
       'true'
     );
     expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent('/health');
-    expect(docsApi.fetchSettingsApiDocsCategoryOperations).toHaveBeenCalledWith('single:health');
+    expect(docsApi.fetchSettingsApiDocsCategoryOperations).toHaveBeenCalledWith(
+      'single:health',
+      { offset: 0, limit: 20, q: null }
+    );
     expect(docsApi.fetchSettingsApiDocsOperationSpec).toHaveBeenCalledWith('health');
   });
 
@@ -428,7 +434,41 @@ describe('ApiDocsPanel', () => {
 
     expect(cssSource).not.toContain('min-height: 720px');
     expect(cssSource).not.toContain('.api-docs-panel__detail-viewer {\n  overflow: hidden;');
-    expect(cssSource).toContain('.api-docs-panel__detail-viewer {\n  min-width: 0;\n  height: 100%;\n}');
+    expect(cssSource).toMatch(
+      /\.api-docs-panel__detail-viewer\s*\{[^}]*min-width:\s*0;[^}]*height:\s*100%;[^}]*\}/s
+    );
+  });
+
+  test('keeps the docs workspace fixed while each side owns its own scroll', async () => {
+    const cssSource = await readFile(
+      path.resolve(process.cwd(), 'src/shared/ui/api-docs/api-docs-explorer.css'),
+      'utf8'
+    );
+    const rootBlock = cssSource.match(
+      /\.api-docs-panel\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const workspaceBlock = cssSource.match(
+      /\.api-docs-panel__workspace\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const paneBodyBlock = cssSource.match(
+      /\.api-docs-panel__pane-body\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const detailScrollBlock = Array.from(
+      cssSource.matchAll(/(?:^|\n)\.api-docs-panel__detail\s*\{[\s\S]*?\n\}/g)
+    )
+      .map((match) => match[0])
+      .find((block) => block.includes('display: flex;'));
+
+    expect(rootBlock).toContain('grid-template-rows: auto minmax(0, 1fr);');
+    expect(rootBlock).toContain('height: 100%;');
+    expect(rootBlock).toContain('overflow: hidden;');
+    expect(workspaceBlock).toContain('align-items: stretch;');
+    expect(workspaceBlock).toContain('min-height: 0;');
+    expect(workspaceBlock).toContain('overflow: hidden;');
+    expect(paneBodyBlock).toContain('flex: 1 1 auto;');
+    expect(paneBodyBlock).toContain('overflow-y: auto;');
+    expect(detailScrollBlock).toContain('display: flex;');
+    expect(detailScrollBlock).toContain('overflow-y: auto;');
   });
 
   test('normalizes Scalar deep links into raw endpoint paths before copying', () => {

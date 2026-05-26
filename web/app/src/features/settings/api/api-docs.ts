@@ -3,11 +3,14 @@ import {
   fetchConsoleApiDocsCategoryOperations,
   fetchConsoleApiOperationSpec,
   type ConsoleApiDocsCatalog,
-  type ConsoleApiDocsCategoryOperations
+  type ConsoleApiDocsCategoryOperations,
+  type ConsoleApiDocsCategoryOperationsRequest
 } from '@1flowbase/api-client';
 
 export type SettingsApiDocsCatalog = ConsoleApiDocsCatalog;
 export type SettingsApiDocsCategoryOperations = ConsoleApiDocsCategoryOperations;
+export type SettingsApiDocsCategoryOperationsRequest =
+  ConsoleApiDocsCategoryOperationsRequest;
 
 export const settingsApiDocsCatalogQueryKey = ['settings', 'docs', 'catalog'] as const;
 export const settingsApiDocsCategoryOperationsQueryKey = (categoryId: string) =>
@@ -20,9 +23,10 @@ export function fetchSettingsApiDocsCatalog(): Promise<SettingsApiDocsCatalog> {
 }
 
 export function fetchSettingsApiDocsCategoryOperations(
-  categoryId: string
+  categoryId: string,
+  request?: SettingsApiDocsCategoryOperationsRequest
 ): Promise<SettingsApiDocsCategoryOperations> {
-  return fetchConsoleApiDocsCategoryOperations(categoryId);
+  return fetchConsoleApiDocsCategoryOperations(categoryId, request);
 }
 
 export function fetchSettingsApiDocsOperationSpec(operationId: string) {

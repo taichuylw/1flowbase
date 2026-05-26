@@ -143,7 +143,7 @@ describe('ApplicationApiPage', () => {
     publicApi.fetchApplicationApiKeys.mockResolvedValue([]);
   });
 
-  test('renders API section shell with status, tabs, and publish action', async () => {
+  test('renders API section shell with status, docs panel, and publish action', async () => {
     renderWithProviders(<ApplicationApiPage application={application} />);
 
     expect(await screen.findByText('需要先发布公开 API')).toBeInTheDocument();
@@ -160,7 +160,8 @@ describe('ApplicationApiPage', () => {
     expect(
       screen.queryByRole('tab', { name: 'API Keys' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'API 文档' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'API 文档' })).not.toBeInTheDocument();
+    expect(screen.getByText('docs explorer')).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: 'Native API' })
     ).not.toBeInTheDocument();
@@ -181,7 +182,7 @@ describe('ApplicationApiPage', () => {
     ).toBeInTheDocument();
   });
 
-  test('does not duplicate endpoint summaries above the API tabs', async () => {
+  test('does not duplicate endpoint summaries above the API docs panel', async () => {
     publicApi.fetchApplicationApiPublication.mockResolvedValue({
       id: 'publication-1',
       version_sequence: 1,
@@ -203,7 +204,8 @@ describe('ApplicationApiPage', () => {
     expect(
       within(statusCard).queryByText('/api/v1/agent/runs')
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'API 文档' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'API 文档' })).not.toBeInTheDocument();
+    expect(screen.getByText('docs explorer')).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: 'Native API' })
     ).not.toBeInTheDocument();
@@ -313,7 +315,8 @@ describe('ApplicationApiPage', () => {
     expect(
       screen.queryByRole('tab', { name: 'API Keys' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'API 文档' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'API 文档' })).not.toBeInTheDocument();
+    expect(screen.getByText('docs explorer')).toBeInTheDocument();
   });
 
   test('shows created token once without writing it to storage or URL', async () => {

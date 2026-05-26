@@ -6,8 +6,13 @@ const explorerState = vi.hoisted(() => ({
     queryState: { categoryId: string | null; operationId: string | null };
     catalogQueryKey: readonly unknown[];
     categoryOperationsQueryKey: (categoryId: string) => readonly unknown[];
+    fetchCategoryOperations: (
+      categoryId: string,
+      request?: { offset?: number; limit?: number; q?: string | null }
+    ) => Promise<unknown>;
     operationSpecQueryKey: (operationId: string) => readonly unknown[];
     showAllOperationsWhenNoCategory?: boolean;
+    selectFirstCategoryWhenEmpty?: boolean;
     onQueryStateChange: (next: {
       categoryId: string | null;
       operationId: string | null;
@@ -15,6 +20,51 @@ const explorerState = vi.hoisted(() => ({
   }
 }));
 
+const publicApi = vi.hoisted(() => ({
+  applicationApiDocsCatalogQueryKey: vi.fn(
+    (applicationId: string, locale?: string | null) =>
+      [
+        'applications',
+        applicationId,
+        'public-api',
+        'docs',
+        'catalog',
+        locale ?? 'default'
+      ] as const
+  ),
+  applicationApiDocsCategoryOperationsQueryKey: vi.fn(
+    (applicationId: string, categoryId: string, locale?: string | null) =>
+      [
+        'applications',
+        applicationId,
+        'public-api',
+        'docs',
+        'category',
+        categoryId,
+        'operations',
+        locale ?? 'default'
+      ] as const
+  ),
+  applicationApiDocsOperationSpecQueryKey: vi.fn(
+    (applicationId: string, operationId: string, locale?: string | null) =>
+      [
+        'applications',
+        applicationId,
+        'public-api',
+        'docs',
+        'operation',
+        operationId,
+        'openapi',
+        locale ?? 'default'
+      ] as const
+  ),
+  fetchApplicationApiDocsCatalog: vi.fn(),
+  fetchApplicationApiDocsCategoryOperations: vi.fn(),
+  fetchApplicationApiDocsOperationSpec: vi.fn(),
+  getApplicationApiDocsLocale: vi.fn(() => 'zh_Hans')
+}));
+
+vi.mock('../api/public-api', () => publicApi);
 vi.mock('../../../shared/ui/api-docs/ApiDocsExplorer', () => ({
   ApiDocsExplorer: (props: typeof explorerState.lastProps) => {
     explorerState.lastProps = props;
@@ -59,7 +109,8 @@ describe('ApplicationApiDocsPanel', () => {
       categoryId: null,
       operationId: null
     });
-    expect(explorerState.lastProps?.showAllOperationsWhenNoCategory).toBe(true);
+    expect(explorerState.lastProps?.showAllOperationsWhenNoCategory).toBeUndefined();
+    expect(explorerState.lastProps?.selectFirstCategoryWhenEmpty).toBe(true);
     expect(explorerState.lastProps?.catalogQueryKey).toEqual([
       'applications',
       'app-1',
@@ -82,6 +133,18 @@ describe('ApplicationApiDocsPanel', () => {
       'operations',
       'zh_Hans'
     ]);
+    void explorerState.lastProps?.fetchCategoryOperations(
+      'openai-compatible-api',
+      { offset: 20, limit: 20, q: 'chat' }
+    );
+    expect(
+      publicApi.fetchApplicationApiDocsCategoryOperations
+    ).toHaveBeenCalledWith(
+      'app-1',
+      'openai-compatible-api',
+      { offset: 20, limit: 20, q: 'chat' },
+      'zh_Hans'
+    );
     expect(
       explorerState.lastProps?.operationSpecQueryKey(
         'applicationOpenAiCreateChatCompletion'

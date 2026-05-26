@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 vi.mock('@scalar/api-reference-react', () => ({
@@ -65,6 +65,107 @@ const operationsByCategory = {
 };
 
 describe('ApiDocsExplorer', () => {
+  test('loads the next operations page when the selected category list scrolls near the bottom', async () => {
+    const pagedOperations = Array.from({ length: 25 }, (_, index) => ({
+      id: `op_${index}`,
+      method: 'GET',
+      path: `/api/v1/items/${index}`,
+      summary: `Operation ${index}`,
+      description: `Operation ${index}`,
+      tags: ['native'],
+      group: 'application-native-api',
+      deprecated: false
+    }));
+    const fetchCategoryOperations = vi.fn(
+      (
+        categoryId: string,
+        request?: { offset?: number; limit?: number; q?: string | null }
+      ) => {
+        const offset = request?.offset ?? 0;
+        const limit = request?.limit ?? 20;
+        const operations = pagedOperations.slice(offset, offset + limit);
+
+        return Promise.resolve({
+          id: categoryId,
+          label: 'Application Native API',
+          operations,
+          total: pagedOperations.length,
+          offset,
+          limit,
+          has_more: offset + operations.length < pagedOperations.length,
+          next_offset:
+            offset + operations.length < pagedOperations.length
+              ? offset + operations.length
+              : null
+        });
+      }
+    );
+
+    const { container } = render(
+      <AppProviders>
+        <ApiDocsExplorer
+          queryState={{
+            categoryId: 'application-native-api',
+            operationId: null
+          }}
+          onQueryStateChange={vi.fn()}
+          catalogQueryKey={['api-docs', 'catalog']}
+          fetchCatalog={() => Promise.resolve(catalog)}
+          categoryOperationsQueryKey={(categoryId) => [
+            'api-docs',
+            'category',
+            categoryId
+          ]}
+          fetchCategoryOperations={fetchCategoryOperations}
+          operationSpecQueryKey={(operationId) => [
+            'api-docs',
+            'operation',
+            operationId
+          ]}
+          fetchOperationSpec={() => Promise.resolve({})}
+          baseServerUrl="http://127.0.0.1:3100"
+        />
+      </AppProviders>
+    );
+
+    expect(
+      await screen.findByRole('button', { name: /get \/api\/v1\/items\/0/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /get \/api\/v1\/items\/24/i })
+    ).not.toBeInTheDocument();
+    expect(fetchCategoryOperations).toHaveBeenCalledWith(
+      'application-native-api',
+      { offset: 0, limit: 20, q: null }
+    );
+
+    const scrollArea = container.querySelector(
+      '.api-docs-panel__pane-body'
+    ) as HTMLElement | null;
+    expect(scrollArea).not.toBeNull();
+    Object.defineProperty(scrollArea!, 'scrollHeight', {
+      value: 1200,
+      configurable: true
+    });
+    Object.defineProperty(scrollArea!, 'clientHeight', {
+      value: 400,
+      configurable: true
+    });
+    Object.defineProperty(scrollArea!, 'scrollTop', {
+      value: 700,
+      configurable: true
+    });
+    fireEvent.scroll(scrollArea!);
+
+    expect(
+      await screen.findByRole('button', { name: /get \/api\/v1\/items\/24/i })
+    ).toBeInTheDocument();
+    expect(fetchCategoryOperations).toHaveBeenCalledWith(
+      'application-native-api',
+      { offset: 20, limit: 20, q: null }
+    );
+  });
+
   test('shows all operations by default when no category is selected and aggregation is enabled', async () => {
     const fetchCategoryOperations = vi.fn((categoryId: string) =>
       Promise.resolve(
@@ -99,10 +200,16 @@ describe('ApiDocsExplorer', () => {
 
     expect(await screen.findByRole('combobox', { name: '接口分类' })).toBeInTheDocument();
     await waitFor(() => {
-      expect(fetchCategoryOperations).toHaveBeenCalledWith('application-native-api');
+      expect(fetchCategoryOperations).toHaveBeenCalledWith(
+        'application-native-api',
+        { offset: 0, limit: 20 }
+      );
     });
     await waitFor(() => {
-      expect(fetchCategoryOperations).toHaveBeenCalledWith('openai-compatible-api');
+      expect(fetchCategoryOperations).toHaveBeenCalledWith(
+        'openai-compatible-api',
+        { offset: 0, limit: 20 }
+      );
     });
     expect(await screen.findByText('全部分类 共 3 个接口')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /post \/api\/v1\/agent\/runs/i })).toBeInTheDocument();

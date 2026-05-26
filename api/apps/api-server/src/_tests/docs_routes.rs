@@ -441,6 +441,67 @@ async fn docs_operation_route_returns_404_for_unknown_operation() {
 }
 
 #[tokio::test]
+async fn docs_category_operations_route_paginates_twenty_at_a_time() {
+    let app = test_app().await;
+    let (cookie, _) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let first_page_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/docs/categories/console/operations")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_page_response.status(), StatusCode::OK);
+    let first_page_payload: Value = serde_json::from_slice(
+        &to_bytes(first_page_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let first_page_operations = first_page_payload["data"]["operations"].as_array().unwrap();
+
+    assert_eq!(first_page_operations.len(), 20);
+    assert!(first_page_payload["data"]["total"].as_u64().unwrap() > 20);
+    assert_eq!(first_page_payload["data"]["offset"], json!(0));
+    assert_eq!(first_page_payload["data"]["limit"], json!(20));
+    assert_eq!(first_page_payload["data"]["has_more"], json!(true));
+    assert_eq!(first_page_payload["data"]["next_offset"], json!(20));
+
+    let first_operation_id = first_page_operations[0]["id"].clone();
+    let second_page_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/docs/categories/console/operations?offset=20&limit=20")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_page_response.status(), StatusCode::OK);
+    let second_page_payload: Value = serde_json::from_slice(
+        &to_bytes(second_page_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let second_page_operations = second_page_payload["data"]["operations"]
+        .as_array()
+        .unwrap();
+
+    assert_eq!(second_page_operations.len(), 20);
+    assert_eq!(second_page_payload["data"]["offset"], json!(20));
+    assert_eq!(second_page_payload["data"]["limit"], json!(20));
+    assert_ne!(second_page_operations[0]["id"], first_operation_id);
+}
+
+#[tokio::test]
 async fn docs_category_route_returns_404_for_unknown_category() {
     let app = test_app().await;
     let (cookie, _) = login_and_capture_cookie(&app, "root", "change-me").await;

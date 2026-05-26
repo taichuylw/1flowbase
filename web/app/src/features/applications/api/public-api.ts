@@ -13,6 +13,7 @@ import {
   type ConsoleApplicationApiKey,
   type ConsoleApplicationApiMapping,
   type ConsoleApplicationApiPublication,
+  type ConsoleApiDocsCategoryOperationsRequest,
   type CreatedConsoleApplicationApiKey
 } from '@1flowbase/api-client';
 
@@ -22,6 +23,8 @@ export type ApplicationApiKey = ConsoleApplicationApiKey;
 export type CreatedApplicationApiKey = CreatedConsoleApplicationApiKey;
 export type ApplicationApiMapping = ConsoleApplicationApiMapping;
 export type ApplicationApiPublication = ConsoleApplicationApiPublication;
+export type ApplicationApiDocsCategoryOperationsRequest =
+  ConsoleApiDocsCategoryOperationsRequest;
 
 function normalizeApplicationApiDocsLocale(locale: string | null | undefined) {
   if (!locale) {
@@ -207,11 +210,13 @@ export function fetchApplicationApiDocsCatalog(
 export function fetchApplicationApiDocsCategoryOperations(
   applicationId: string,
   categoryId: string,
+  request: ApplicationApiDocsCategoryOperationsRequest = {},
   locale = getApplicationApiDocsLocale()
 ) {
   return fetchConsoleApplicationApiDocsCategoryOperations(
     applicationId,
     categoryId,
+    request,
     getApplicationsApiBaseUrl(),
     locale
   );
