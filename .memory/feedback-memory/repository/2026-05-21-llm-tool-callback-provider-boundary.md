@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: llm-tool-callback-provider-boundary
-summary: 1flowbase 运行时/Native 形状是 provider 唯一真值层；供应商 wire shape 只能由 provider 插件源码适配，plugin host 不替插件改写 tool_calls 或私有协议事件。
+summary: 1flowbase 运行时/Native 形状是 provider 唯一真值层；供应商 wire shape 只能由 provider 插件源码适配，plugin host 不替插件改写 tool_calls、私有协议事件或 WebSocket/SSE 传输降级策略。
 keywords:
   - llm tool callback
   - tool_calls
@@ -11,9 +11,10 @@ keywords:
   - native truth
   - openai compatible
   - openai responses
+  - websocket fallback
 created_at: 2026-05-21 17
-updated_at: 2026-05-26 15
-last_verified_at: 2026-05-26 15
+updated_at: 2026-05-26 20
+last_verified_at: 2026-05-26 20
 decision_policy: direct_reference
 scope:
   - api/crates/orchestration-runtime
@@ -27,7 +28,9 @@ scope:
 
 ## 规则
 
-处理 LLM tool callback、assistant `tool_calls` 历史、tool result continuation 或 provider stream terminal event 时，运行时与 1flowbase Native API 保持中立 `ProviderInvocationInput` / `ProviderToolCall` / `ProviderStreamEvent` 语义作为唯一真值。`plugin-runner` / provider host 只把 1flowbase native truth 交给 provider 插件，不替插件改写成某个供应商 wire shape。外部供应商协议需要的字段形状，例如 OpenAI-compatible 的 `type:function` + `function.arguments` 字符串，或 OpenAI Responses WebSocket 的 `response.done` 终止事件，由对应 provider 插件源码自己适配。
+处理 LLM tool callback、assistant `tool_calls` 历史、tool result continuation 或 provider stream terminal event 时，运行时与 1flowbase Native API 保持中立 `ProviderInvocationInput` / `ProviderToolCall` / `ProviderStreamEvent` 语义作为唯一真值。`plugin-runner` / provider host 只把 1flowbase native truth 交给 provider 插件，不替插件改写成某个供应商 wire shape 或传输策略。外部供应商协议需要的字段形状，例如 OpenAI-compatible 的 `type:function` + `function.arguments` 字符串、OpenAI Responses WebSocket 的 `response.done` 终止事件，或 WebSocket close 后是否降级到 HTTP SSE，由对应 provider 插件源码自己适配。
+
+OpenAI Responses WebSocket 中，`response.created` 只代表上游生命周期开始，不代表已经向 1flowbase runtime 输出了可见内容；它不能单独阻断 HTTP SSE fallback。只有已经 emit 过 text/reasoning/tool 可见事件，或收到 `response.failed` / `response.incomplete` / failed `response.done` 这类语义失败时，才应禁止 fallback，避免重复输出或吞掉真实供应商错误。
 
 ## 原因
 
@@ -38,4 +41,5 @@ scope:
 - 修改 `ProviderInvocationInput.messages[].tool_calls`、`ProviderToolCall`、LLM 节点输出或 continuation history。
 - 修复供应商返回 `missing field type`、`function.arguments` 类型不匹配等协议反序列化错误。
 - 修复 OpenAI Responses API 插件的 SSE / WebSocket 事件名、终止事件、tool call 或 tool result 映射。
+- 修复 OpenAI Responses API 插件的 WebSocket/SSE 传输降级，尤其是 `response.created` 后无可见输出即 close 的场景。
 - 新增非 OpenAI provider 协议适配时，优先在 provider 插件源码处理，不改 `plugin-runner` 通用 host、运行时 checkpoint、Native public API 或 api-server 通用 runtime port。
