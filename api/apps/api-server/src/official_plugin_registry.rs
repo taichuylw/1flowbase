@@ -14,11 +14,14 @@ use serde_json::{json, Value};
 
 use crate::config::ResolvedOfficialPluginSourceConfig;
 
+const GITHUB_RAW_CONTENT_BASE_URL: &str = "https://raw.githubusercontent.com/";
+
 #[derive(Clone)]
 pub struct ApiOfficialPluginRegistry {
     source_kind: String,
     source_label: String,
     registry_url: String,
+    github_proxy_url: Option<String>,
     trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
     client: Client,
 }
@@ -28,10 +31,13 @@ impl ApiOfficialPluginRegistry {
         source: ResolvedOfficialPluginSourceConfig,
         trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
     ) -> Self {
+        let registry_url =
+            rewrite_github_raw_url(&source.registry_url, source.github_proxy_url.as_deref());
         Self {
             source_kind: source.source_kind,
             source_label: source.source_label,
-            registry_url: source.registry_url,
+            registry_url,
+            github_proxy_url: source.github_proxy_url,
             trusted_public_keys,
             client: Client::new(),
         }
@@ -94,13 +100,18 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
                         namespace,
                         protocol: entry.protocol,
                         latest_version: entry.latest_version,
-                        icon: entry.icon,
+                        icon: entry.icon.map(|url| {
+                            rewrite_github_raw_url(&url, self.github_proxy_url.as_deref())
+                        }),
                         selected_artifact: OfficialPluginArtifact {
                             os: selected.os,
                             arch: selected.arch,
                             libc: selected.libc,
                             rust_target: selected.rust_target,
-                            download_url: selected.download_url,
+                            download_url: rewrite_github_raw_url(
+                                &selected.download_url,
+                                self.github_proxy_url.as_deref(),
+                            ),
                             checksum: selected.checksum,
                             signature_algorithm: selected.signature_algorithm,
                             signing_key_id: selected.signing_key_id,
@@ -119,14 +130,16 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
         &self,
         entry: &OfficialPluginSourceEntry,
     ) -> Result<DownloadedOfficialPluginPackage> {
+        let download_url = rewrite_github_raw_url(
+            &entry.selected_artifact.download_url,
+            self.github_proxy_url.as_deref(),
+        );
         Ok(DownloadedOfficialPluginPackage {
             file_name: format!(
                 "{}-{}.1flowbasepkg",
                 entry.provider_code, entry.latest_version
             ),
-            package_bytes: self
-                .download_bytes(&entry.selected_artifact.download_url)
-                .await?,
+            package_bytes: self.download_bytes(&download_url).await?,
         })
     }
 
@@ -201,6 +214,22 @@ pub fn select_artifact_for_host(
             }
         })
         .filter(|artifact| artifact.os == host.os && artifact.arch == host.arch)
+}
+
+pub(crate) fn rewrite_github_raw_url(url: &str, github_proxy_url: Option<&str>) -> String {
+    let Some(github_proxy_url) = github_proxy_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return url.to_string();
+    };
+    let github_proxy_url = github_proxy_url.trim_end_matches('/');
+    let proxied_raw_prefix = format!("{github_proxy_url}/{GITHUB_RAW_CONTENT_BASE_URL}");
+    if url.starts_with(&proxied_raw_prefix) || !url.starts_with(GITHUB_RAW_CONTENT_BASE_URL) {
+        return url.to_string();
+    }
+
+    format!("{github_proxy_url}/{url}")
 }
 
 fn default_trust_mode() -> String {

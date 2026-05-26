@@ -45,6 +45,7 @@ pub struct ApiConfig {
     pub official_plugin_repository: String,
     pub official_plugin_default_registry_url: String,
     pub official_plugin_mirror_registry_url: Option<String>,
+    pub official_plugin_github_proxy_url: Option<String>,
     pub official_plugin_trusted_public_keys_json: String,
     pub bootstrap_workspace_name: String,
     pub bootstrap_root_account: String,
@@ -59,6 +60,7 @@ pub struct ResolvedOfficialPluginSourceConfig {
     pub source_kind: String,
     pub source_label: String,
     pub registry_url: String,
+    pub github_proxy_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,6 +135,10 @@ impl ApiConfig {
             .get("API_OFFICIAL_PLUGIN_MIRROR_REGISTRY_URL")
             .cloned()
             .filter(|value| !value.trim().is_empty());
+        let official_plugin_github_proxy_url = map
+            .get("API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL")
+            .cloned()
+            .filter(|value| !value.trim().is_empty());
         let official_plugin_trusted_public_keys_json = map
             .get("API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON")
             .cloned()
@@ -180,6 +186,7 @@ impl ApiConfig {
             official_plugin_repository,
             official_plugin_default_registry_url,
             official_plugin_mirror_registry_url,
+            official_plugin_github_proxy_url,
             official_plugin_trusted_public_keys_json,
             bootstrap_workspace_name: get("BOOTSTRAP_WORKSPACE_NAME")?,
             bootstrap_root_account: get("BOOTSTRAP_ROOT_ACCOUNT")?,
@@ -206,6 +213,7 @@ impl ApiConfig {
                 source_kind: "mirror_registry".into(),
                 source_label: "镜像源".into(),
                 registry_url: mirror_url,
+                github_proxy_url: self.official_plugin_github_proxy_url.clone(),
             };
         }
 
@@ -213,6 +221,7 @@ impl ApiConfig {
             source_kind: "official_registry".into(),
             source_label: "官方源".into(),
             registry_url: self.official_plugin_default_registry_url.clone(),
+            github_proxy_url: self.official_plugin_github_proxy_url.clone(),
         }
     }
 

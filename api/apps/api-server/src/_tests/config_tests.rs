@@ -405,3 +405,34 @@ fn api_config_prefers_mirror_registry_when_present() {
         "https://mirror.example.com/official-registry.json"
     );
 }
+
+#[test]
+fn api_config_reads_official_plugin_github_proxy_url() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_EPHEMERAL_BACKEND", "memory"),
+        (
+            "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL",
+            "https://gh-proxy.com/",
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert_eq!(
+        config.official_plugin_github_proxy_url.as_deref(),
+        Some("https://gh-proxy.com/")
+    );
+
+    let resolved = config.resolve_official_plugin_source();
+    assert_eq!(
+        resolved.github_proxy_url.as_deref(),
+        Some("https://gh-proxy.com/")
+    );
+}

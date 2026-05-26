@@ -50,6 +50,7 @@ services:
       API_PROVIDER_SECRET_MASTER_KEY: ${API_PROVIDER_SECRET_MASTER_KEY:-change-me-provider-secret-master-key}
       API_OFFICIAL_PLUGIN_REPOSITORY: ${API_OFFICIAL_PLUGIN_REPOSITORY:-taichuy/1flowbase-official-plugins}
       API_OFFICIAL_PLUGIN_REGISTRY_URL: ${API_OFFICIAL_PLUGIN_REGISTRY_URL:-https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/official-registry.json}
+      # API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL: ${API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-https://gh-proxy.com/}
       API_PLUGIN_SET: ${API_PLUGIN_SET:-default}
       API_SECRET_RESOLVER: ${API_SECRET_RESOLVER:-env}
       API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS: ${API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS:-false}
