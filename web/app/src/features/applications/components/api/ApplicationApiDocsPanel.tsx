@@ -13,9 +13,11 @@ import {
 } from '../../api/public-api';
 
 export function ApplicationApiDocsPanel({
-  applicationId
+  applicationId,
+  toolbarPortalId
 }: {
   applicationId: string;
+  toolbarPortalId?: string;
 }) {
   const docsLocale = useMemo(() => getApplicationApiDocsLocale(), []);
   const [queryState, setQueryState] = useState<{
@@ -71,6 +73,7 @@ export function ApplicationApiDocsPanel({
         }
         baseServerUrl={getApplicationsApiBaseUrl}
         selectFirstCategoryWhenEmpty
+        toolbarPortalId={toolbarPortalId}
       />
     </section>
   );

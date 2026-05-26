@@ -8,11 +8,13 @@ export function ApplicationApiStatusBar({
   publication,
   loading,
   onToggleEnabled,
+  toolbar,
   children
 }: {
   publication: ApplicationApiPublication | null;
   loading?: boolean;
   onToggleEnabled?: (enabled: boolean) => void;
+  toolbar?: ReactNode;
   children?: ReactNode;
 }) {
   if (!publication) {
@@ -25,6 +27,7 @@ export function ApplicationApiStatusBar({
             message="当前应用还没有已发布的公开 API 版本"
             description="发布后，应用 API Key 会自动绑定当前 active publication；公开 URL 不包含 application_id。"
           />
+          <div className="application-api-status__docs-toolbar">{toolbar}</div>
           <div className="application-api-status__actions">{children}</div>
         </div>
       </section>
@@ -34,7 +37,7 @@ export function ApplicationApiStatusBar({
   return (
     <section aria-label="公开 API 状态" className="application-api-status">
       <div className="application-api-status__header">
-        <Space align="center" wrap>
+        <Space className="application-api-status__summary" align="center" wrap>
           <Typography.Text strong>公开 API</Typography.Text>
           <Switch
             checked={publication.api_enabled}
@@ -47,6 +50,7 @@ export function ApplicationApiStatusBar({
             active publication v{publication.version_sequence}
           </Typography.Text>
         </Space>
+        <div className="application-api-status__docs-toolbar">{toolbar}</div>
         <div className="application-api-status__actions">{children}</div>
       </div>
     </section>

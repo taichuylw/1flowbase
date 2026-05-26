@@ -26,6 +26,7 @@ export function ApplicationApiPage({
 }) {
   const csrfToken = useAuthStore((state) => state.csrfToken) ?? '';
   const queryClient = useQueryClient();
+  const docsToolbarId = `application-api-docs-toolbar-${application.id}`;
   const publicationQuery = useQuery({
     queryKey: applicationApiPublicationQueryKey(application.id),
     queryFn: () => fetchApplicationApiPublication(application.id),
@@ -68,6 +69,12 @@ export function ApplicationApiPage({
         publication={publication}
         loading={statusMutation.isPending}
         onToggleEnabled={(enabled) => statusMutation.mutate(enabled)}
+        toolbar={
+          <div
+            id={docsToolbarId}
+            className="application-api-status__docs-toolbar-target"
+          />
+        }
       >
         <ApplicationApiKeysPanel
           applicationId={application.id}
@@ -93,7 +100,10 @@ export function ApplicationApiPage({
           }
         />
       ) : null}
-      <ApplicationApiDocsPanel applicationId={application.id} />
+      <ApplicationApiDocsPanel
+        applicationId={application.id}
+        toolbarPortalId={docsToolbarId}
+      />
     </div>
   );
 }

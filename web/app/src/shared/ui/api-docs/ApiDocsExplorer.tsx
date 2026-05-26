@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { UIEvent } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ApiReferenceReact } from '@scalar/api-reference-react';
 import '@scalar/api-reference-react/style.css';
@@ -100,6 +101,7 @@ export interface ApiDocsExplorerProps<TAuthenticationSnapshot = unknown> {
   baseServerUrl: string | (() => string);
   showAllOperationsWhenNoCategory?: boolean;
   selectFirstCategoryWhenEmpty?: boolean;
+  toolbarPortalId?: string;
   authentication?: {
     queryKey: QueryKey;
     queryFn: () => Promise<TAuthenticationSnapshot>;
@@ -138,9 +140,12 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   baseServerUrl,
   showAllOperationsWhenNoCategory = false,
   selectFirstCategoryWhenEmpty = false,
+  toolbarPortalId,
   authentication
 }: ApiDocsExplorerProps<TAuthenticationSnapshot>) {
   const [operationSearch, setOperationSearch] = useState('');
+  const [toolbarPortalElement, setToolbarPortalElement] =
+    useState<HTMLElement | null>(null);
   const deferredOperationSearch = useDeferredValue(operationSearch);
   const normalizedOperationSearch = useMemo(
     () => normalizeSearchText(deferredOperationSearch),
@@ -282,6 +287,15 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
       ),
     [categoryOperationsQuery.data?.pages, selectedCategory?.label, selectedCategoryId]
   );
+
+  useEffect(() => {
+    if (!toolbarPortalId) {
+      setToolbarPortalElement(null);
+      return;
+    }
+
+    setToolbarPortalElement(document.getElementById(toolbarPortalId));
+  }, [toolbarPortalId]);
   const operations: ApiDocsOperationWithCategory[] =
     showAllOperationsWhenNoCategory && !selectedCategoryId
       ? allCategoryOperations
@@ -568,7 +582,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   } else {
     content = (
       <>
-        {renderCategorySelector()}
+        {toolbarPortalElement ? null : renderCategorySelector()}
         <div className="api-docs-panel__workspace">
           {renderOperationPane()}
           <section className="api-docs-panel__detail" aria-label="API 文档详情">
@@ -579,5 +593,18 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     );
   }
 
-  return <div className="api-docs-panel">{content}</div>;
+  return (
+    <div
+      className={
+        toolbarPortalElement
+          ? 'api-docs-panel api-docs-panel--external-toolbar'
+          : 'api-docs-panel'
+      }
+    >
+      {toolbarPortalElement && !catalogQuery.isLoading && !catalogQuery.isError
+        ? createPortal(renderCategorySelector(), toolbarPortalElement)
+        : null}
+      {content}
+    </div>
+  );
 }

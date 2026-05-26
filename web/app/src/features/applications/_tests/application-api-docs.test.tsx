@@ -13,6 +13,7 @@ const explorerState = vi.hoisted(() => ({
     operationSpecQueryKey: (operationId: string) => readonly unknown[];
     showAllOperationsWhenNoCategory?: boolean;
     selectFirstCategoryWhenEmpty?: boolean;
+    toolbarPortalId?: string;
     onQueryStateChange: (next: {
       categoryId: string | null;
       operationId: string | null;
@@ -111,6 +112,7 @@ describe('ApplicationApiDocsPanel', () => {
     });
     expect(explorerState.lastProps?.showAllOperationsWhenNoCategory).toBeUndefined();
     expect(explorerState.lastProps?.selectFirstCategoryWhenEmpty).toBe(true);
+    expect(explorerState.lastProps?.toolbarPortalId).toBeUndefined();
     expect(explorerState.lastProps?.catalogQueryKey).toEqual([
       'applications',
       'app-1',

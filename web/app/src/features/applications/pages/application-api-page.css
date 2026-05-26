@@ -56,12 +56,29 @@
 }
 
 .application-api-status__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(280px, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   width: 100%;
   min-width: 0;
+}
+
+.application-api-status__summary {
+  min-width: 0;
+}
+
+.application-api-status__docs-toolbar,
+.application-api-status__docs-toolbar-target {
+  min-width: 0;
+}
+
+.application-api-status__docs-toolbar .api-docs-panel__toolbar {
+  gap: 16px;
+}
+
+.application-api-status__docs-toolbar .api-docs-panel__category-select {
+  width: min(620px, 100%);
 }
 
 .application-api-status__actions {
@@ -144,7 +161,7 @@
 
   .application-api-status__header {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .application-api-mapping-grid {
