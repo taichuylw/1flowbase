@@ -13,6 +13,7 @@ const DEFAULT_SESSION_COOKIE_NAME: &str = "flowbase_console_session";
 const SESSION_COOKIE_SECURITY_SCHEME: &str = "sessionCookie";
 const CSRF_HEADER_SECURITY_SCHEME: &str = "csrfHeader";
 const CSRF_HEADER_NAME: &str = "x-csrf-token";
+pub const DOCS_OPERATIONS_PAGE_SIZE: usize = 20;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct DocsCatalogOperation {
@@ -38,6 +39,18 @@ pub struct DocsCatalogCategoryOperations {
     pub id: String,
     pub label: String,
     pub operations: Vec<DocsCatalogOperation>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct DocsCatalogCategoryOperationsPage {
+    pub id: String,
+    pub label: String,
+    pub operations: Vec<DocsCatalogOperation>,
+    pub total: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub has_more: bool,
+    pub next_offset: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -88,6 +101,73 @@ pub fn build_default_api_docs_registry_with_cookie_name(
 
 pub fn build_api_docs_registry(canonical: Value) -> Result<ApiDocsRegistry> {
     build_api_docs_registry_with_cookie_name(canonical, DEFAULT_SESSION_COOKIE_NAME)
+}
+
+pub fn paginate_category_operations(
+    category_operations: &DocsCatalogCategoryOperations,
+    offset: usize,
+    limit: usize,
+) -> DocsCatalogCategoryOperationsPage {
+    let total = category_operations.operations.len();
+    let effective_limit = limit.max(1);
+    let start = offset.min(total);
+    let end = start.saturating_add(effective_limit).min(total);
+    let next_offset = if end < total { Some(end) } else { None };
+
+    DocsCatalogCategoryOperationsPage {
+        id: category_operations.id.clone(),
+        label: category_operations.label.clone(),
+        operations: category_operations.operations[start..end].to_vec(),
+        total,
+        offset: start,
+        limit: effective_limit,
+        has_more: next_offset.is_some(),
+        next_offset,
+    }
+}
+
+fn normalize_docs_operation_search_text(input: &str) -> String {
+    input
+        .chars()
+        .flat_map(char::to_lowercase)
+        .filter(|character| !matches!(character, ' ' | '\t' | '\n' | '\r' | '-' | '/' | ':' | '_'))
+        .collect()
+}
+
+fn operation_search_text(operation: &DocsCatalogOperation) -> String {
+    normalize_docs_operation_search_text(&format!(
+        "{} {} {} {} {} {}",
+        operation.method,
+        operation.path,
+        operation.summary.as_deref().unwrap_or_default(),
+        operation.description.as_deref().unwrap_or_default(),
+        operation.group,
+        operation.id
+    ))
+}
+
+pub fn filter_category_operations(
+    category_operations: &DocsCatalogCategoryOperations,
+    query: Option<&str>,
+) -> DocsCatalogCategoryOperations {
+    let Some(normalized_query) = query.map(normalize_docs_operation_search_text) else {
+        return category_operations.clone();
+    };
+
+    if normalized_query.is_empty() {
+        return category_operations.clone();
+    }
+
+    DocsCatalogCategoryOperations {
+        id: category_operations.id.clone(),
+        label: category_operations.label.clone(),
+        operations: category_operations
+            .operations
+            .iter()
+            .filter(|operation| operation_search_text(operation).contains(&normalized_query))
+            .cloned()
+            .collect(),
+    }
 }
 
 fn build_api_docs_registry_with_cookie_name(

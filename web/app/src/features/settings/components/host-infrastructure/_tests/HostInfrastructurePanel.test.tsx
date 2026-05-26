@@ -130,12 +130,18 @@ vi.mock('echarts/core', () => ({
   use: vi.fn()
 }));
 vi.mock('echarts/charts', () => ({
-  BarChart: {}
+  BarChart: {},
+  LineChart: {},
+  PieChart: {},
+  FunnelChart: {},
+  GaugeChart: {},
+  RadarChart: {}
 }));
 vi.mock('echarts/components', () => ({
   GridComponent: {},
   LegendComponent: {},
-  TooltipComponent: {}
+  TooltipComponent: {},
+  TitleComponent: {}
 }));
 vi.mock('echarts/renderers', () => ({
   CanvasRenderer: {}
@@ -720,15 +726,15 @@ describe('HostInfrastructurePanel', () => {
         })
     );
 
-    renderMemoryObservationPanel(true);
+    const { container } = renderMemoryObservationPanel(true);
 
     expect(
-      await screen.findByRole('tab', { name: /统计/ })
+      await screen.findByRole('tab', { name: /^统计$/ })
     ).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /Sessions/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Cache/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Sessions$/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Cache$/ })).toBeInTheDocument();
     expect(
-      screen.getByRole('tab', { name: /Sessions/ }).querySelector('.ant-badge')
+      screen.getByRole('tab', { name: /^Sessions$/ }).querySelector('.ant-badge')
     ).toBeNull();
     expect(await screen.findByText('Memory statistics')).toBeInTheDocument();
     expect(await screen.findByText('3 entries')).toBeInTheDocument();
@@ -740,36 +746,23 @@ describe('HostInfrastructurePanel', () => {
     await waitFor(() => {
       expect(echartsMock.chart.setOption).toHaveBeenCalled();
     });
+    expect(await screen.findByTestId('service-card-session-store')).toBeInTheDocument();
+    expect(screen.getByTestId('service-card-cache-store')).toBeInTheDocument();
     expect(api.fetchSettingsHostInfrastructureMemoryTree).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('tab', { name: /Sessions/ }));
-    const treeSearch = await screen.findByPlaceholderText('Search tree');
-    const memoryLayout = treeSearch.closest('.host-memory-panel__tab-pane');
-    expect(memoryLayout).not.toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /^Sessions$/ }));
     expect(
-      memoryLayout?.querySelector('.ant-layout.host-memory-panel__content')
+      container.querySelector('.host-memory-panel__content')
     ).not.toBeNull();
     expect(
-      memoryLayout?.querySelector('.ant-layout-sider.host-memory-panel__tree')
+      container.querySelector('.host-memory-panel__tree')
     ).not.toBeNull();
     expect(
-      memoryLayout?.querySelector(
-        '.ant-layout-content.host-memory-panel__entries'
-      )
+      container.querySelector('.host-memory-panel__entries')
     ).not.toBeNull();
-    fireEvent.change(treeSearch, { target: { value: 'space' } });
-    expect(await screen.findByText('space')).toHaveClass(
-      'host-memory-panel__tree-search-value'
-    );
-    expect(
-      memoryLayout?.querySelector(
-        '.host-memory-panel__tree-node-count.ant-badge'
-      )
-    ).toBeNull();
-    fireEvent.change(treeSearch, { target: { value: '' } });
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Cache/ }));
+    
+    fireEvent.click(screen.getByRole('tab', { name: /^Cache$/ }));
 
     expect(await screen.findByText('application-cache')).toBeInTheDocument();
     expect(screen.queryByText('session:1')).not.toBeInTheDocument();

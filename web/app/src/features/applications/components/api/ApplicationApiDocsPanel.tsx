@@ -13,9 +13,11 @@ import {
 } from '../../api/public-api';
 
 export function ApplicationApiDocsPanel({
-  applicationId
+  applicationId,
+  toolbarPortalId
 }: {
   applicationId: string;
+  toolbarPortalId?: string;
 }) {
   const docsLocale = useMemo(() => getApplicationApiDocsLocale(), []);
   const [queryState, setQueryState] = useState<{
@@ -47,10 +49,11 @@ export function ApplicationApiDocsPanel({
             docsLocale
           )
         }
-        fetchCategoryOperations={(categoryId) =>
+        fetchCategoryOperations={(categoryId, request) =>
           fetchApplicationApiDocsCategoryOperations(
             applicationId,
             categoryId,
+            request,
             docsLocale
           )
         }
@@ -69,7 +72,8 @@ export function ApplicationApiDocsPanel({
           )
         }
         baseServerUrl={getApplicationsApiBaseUrl}
-        showAllOperationsWhenNoCategory
+        selectFirstCategoryWhenEmpty
+        toolbarPortalId={toolbarPortalId}
       />
     </section>
   );

@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import type { UIEvent } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ApiReferenceReact } from '@scalar/api-reference-react';
 import '@scalar/api-reference-react/style.css';
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { Empty, Input, Result, Select, Spin, Typography } from 'antd';
+import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
+import { Result, Select, Spin, Typography } from 'antd';
 
 import './api-docs-explorer.css';
+import { ApiDocsOperationListPane } from './ApiDocsOperationListPane';
 
 type ScalarReferenceConfiguration = Exclude<
   Parameters<typeof ApiReferenceReact>[0]['configuration'],
@@ -16,6 +19,7 @@ type ScalarAuthenticationConfiguration =
 type ScalarDocumentContent = ScalarReferenceConfiguration['content'];
 
 const emptyCategories: ApiDocsCatalogCategory[] = [];
+const apiDocsOperationsPageSize = 20;
 
 export interface ApiDocsCatalogOperation {
   id: string;
@@ -44,6 +48,17 @@ export interface ApiDocsCategoryOperations {
   id: string;
   label: string;
   operations: ApiDocsCatalogOperation[];
+  total?: number;
+  offset?: number;
+  limit?: number;
+  has_more?: boolean;
+  next_offset?: number | null;
+}
+
+export interface ApiDocsCategoryOperationsRequest {
+  offset?: number;
+  limit?: number;
+  q?: string | null;
 }
 
 export interface ApiDocsExplorerQueryState {
@@ -61,7 +76,7 @@ type CategorySelectOption = {
   searchText: string;
 };
 
-type ApiDocsOperationWithCategory = ApiDocsCatalogOperation & {
+export type ApiDocsOperationWithCategory = ApiDocsCatalogOperation & {
   categoryId: string | null;
   categoryLabel: string | null;
 };
@@ -76,7 +91,8 @@ export interface ApiDocsExplorerProps<TAuthenticationSnapshot = unknown> {
   fetchCatalog: () => Promise<ApiDocsCatalog>;
   categoryOperationsQueryKey: (categoryId: string) => QueryKey;
   fetchCategoryOperations: (
-    categoryId: string
+    categoryId: string,
+    request?: ApiDocsCategoryOperationsRequest
   ) => Promise<ApiDocsCategoryOperations>;
   operationSpecQueryKey: (operationId: string) => QueryKey;
   fetchOperationSpec: (
@@ -84,6 +100,8 @@ export interface ApiDocsExplorerProps<TAuthenticationSnapshot = unknown> {
   ) => Promise<ScalarDocumentContent>;
   baseServerUrl: string | (() => string);
   showAllOperationsWhenNoCategory?: boolean;
+  selectFirstCategoryWhenEmpty?: boolean;
+  toolbarPortalId?: string;
   authentication?: {
     queryKey: QueryKey;
     queryFn: () => Promise<TAuthenticationSnapshot>;
@@ -121,9 +139,18 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   fetchOperationSpec,
   baseServerUrl,
   showAllOperationsWhenNoCategory = false,
+  selectFirstCategoryWhenEmpty = false,
+  toolbarPortalId,
   authentication
 }: ApiDocsExplorerProps<TAuthenticationSnapshot>) {
   const [operationSearch, setOperationSearch] = useState('');
+  const [toolbarPortalElement, setToolbarPortalElement] =
+    useState<HTMLElement | null>(null);
+  const deferredOperationSearch = useDeferredValue(operationSearch);
+  const normalizedOperationSearch = useMemo(
+    () => normalizeSearchText(deferredOperationSearch),
+    [deferredOperationSearch]
+  );
   const catalogQuery = useQuery({
     queryKey: catalogQueryKey,
     queryFn: fetchCatalog
@@ -161,16 +188,70 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     selectedCategoryId
   ]);
 
-  const categoryOperationsQuery = useQuery({
-    queryKey: categoryOperationsQueryKey(selectedCategoryId ?? ''),
-    queryFn: () => fetchCategoryOperations(selectedCategoryId!),
+  useEffect(() => {
+    if (
+      catalogQuery.isLoading ||
+      !selectFirstCategoryWhenEmpty ||
+      showAllOperationsWhenNoCategory ||
+      queryState.categoryId ||
+      categories.length === 0
+    ) {
+      return;
+    }
+
+    onQueryStateChange(
+      { categoryId: categories[0].id, operationId: null },
+      'replace'
+    );
+  }, [
+    catalogQuery.isLoading,
+    categories,
+    onQueryStateChange,
+    queryState.categoryId,
+    selectFirstCategoryWhenEmpty,
+    showAllOperationsWhenNoCategory
+  ]);
+
+  const categoryOperationsQuery = useInfiniteQuery({
+    queryKey: [
+      ...categoryOperationsQueryKey(selectedCategoryId ?? ''),
+      'search',
+      normalizedOperationSearch,
+      'page-size',
+      apiDocsOperationsPageSize
+    ],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchCategoryOperations(selectedCategoryId!, {
+        offset: Number(pageParam),
+        limit: apiDocsOperationsPageSize,
+        q: deferredOperationSearch.trim() || null
+      }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more) {
+        return undefined;
+      }
+
+      return (
+        lastPage.next_offset ??
+        (lastPage.offset ?? 0) + lastPage.operations.length
+      );
+    },
     enabled: Boolean(selectedCategoryId)
   });
 
   const allCategoryOperationsQueries = useQueries({
     queries: categories.map((category) => ({
-      queryKey: categoryOperationsQueryKey(category.id),
-      queryFn: () => fetchCategoryOperations(category.id),
+      queryKey: [
+        ...categoryOperationsQueryKey(category.id),
+        'page-size',
+        apiDocsOperationsPageSize
+      ],
+      queryFn: () =>
+        fetchCategoryOperations(category.id, {
+          offset: 0,
+          limit: apiDocsOperationsPageSize
+        }),
       enabled: showAllOperationsWhenNoCategory && !selectedCategoryId
     }))
   });
@@ -197,13 +278,24 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   );
   const selectedCategoryOperations = useMemo(
     () =>
-      (categoryOperationsQuery.data?.operations ?? []).map((operation) => ({
-        ...operation,
-        categoryId: selectedCategoryId,
-        categoryLabel: selectedCategory?.label ?? null
-      })),
-    [categoryOperationsQuery.data?.operations, selectedCategory?.label, selectedCategoryId]
+      (categoryOperationsQuery.data?.pages.flatMap((page) => page.operations) ?? []).map(
+        (operation) => ({
+          ...operation,
+          categoryId: selectedCategoryId,
+          categoryLabel: selectedCategory?.label ?? null
+        })
+      ),
+    [categoryOperationsQuery.data?.pages, selectedCategory?.label, selectedCategoryId]
   );
+
+  useEffect(() => {
+    if (!toolbarPortalId) {
+      setToolbarPortalElement(null);
+      return;
+    }
+
+    setToolbarPortalElement(document.getElementById(toolbarPortalId));
+  }, [toolbarPortalId]);
   const operations: ApiDocsOperationWithCategory[] =
     showAllOperationsWhenNoCategory && !selectedCategoryId
       ? allCategoryOperations
@@ -214,6 +306,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   const selectedOperation =
     operations.find((operation) => operation.id === selectedOperationId) ??
     null;
+  const selectedCategoryOperationTotal =
+    categoryOperationsQuery.data?.pages[0]?.total ??
+    selectedCategory?.operation_count ??
+    selectedCategoryOperations.length;
 
   const filteredOperations = useMemo(() => {
     const normalizedQuery = normalizeSearchText(operationSearch);
@@ -231,9 +327,15 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     if (
       !selectedCategoryId ||
       categoryOperationsQuery.isLoading ||
+      categoryOperationsQuery.isFetchingNextPage ||
       !queryState.operationId ||
       selectedOperationId
     ) {
+      return;
+    }
+
+    if (categoryOperationsQuery.hasNextPage) {
+      void categoryOperationsQuery.fetchNextPage();
       return;
     }
 
@@ -243,6 +345,9 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     );
   }, [
     categoryOperationsQuery.isLoading,
+    categoryOperationsQuery.isFetchingNextPage,
+    categoryOperationsQuery.hasNextPage,
+    categoryOperationsQuery.fetchNextPage,
     onQueryStateChange,
     queryState.operationId,
     selectedCategoryId,
@@ -280,6 +385,24 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     queryFn: () => authentication!.queryFn(),
     enabled: Boolean(authentication && selectedOperationId)
   });
+
+  function handleOperationPaneScroll(event: UIEvent<HTMLDivElement>) {
+    if (
+      !selectedCategoryId ||
+      !categoryOperationsQuery.hasNextPage ||
+      categoryOperationsQuery.isFetchingNextPage
+    ) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    const distanceToBottom =
+      target.scrollHeight - target.scrollTop - target.clientHeight;
+
+    if (distanceToBottom <= 160) {
+      void categoryOperationsQuery.fetchNextPage();
+    }
+  }
 
   function renderCategorySelector() {
     return (
@@ -347,165 +470,32 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   }
 
   function renderOperationPane() {
-    if (categories.length === 0) {
-      return (
-        <section className="api-docs-panel__pane" aria-label="接口列表">
-          <div className="api-docs-panel__pane-header">
-            <div className="api-docs-panel__pane-copy">
-              <Typography.Text strong>接口列表</Typography.Text>
-              <Typography.Text type="secondary">
-                当前暂无可访问分类
-              </Typography.Text>
-            </div>
-          </div>
-          <div className="api-docs-panel__pane-body">
-            <Empty
-              description="暂无接口分类"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          </div>
-        </section>
-      );
-    }
-
-    if (!selectedCategoryId && !showAllOperationsWhenNoCategory) {
-      return (
-        <section className="api-docs-panel__pane" aria-label="接口列表">
-          <div className="api-docs-panel__pane-header">
-            <div className="api-docs-panel__pane-copy">
-              <Typography.Text strong>接口列表</Typography.Text>
-              <Typography.Text type="secondary">
-                在上方先选分类后展示接口
-              </Typography.Text>
-            </div>
-          </div>
-          <div className="api-docs-panel__pane-body">
-            <Result
-              status="info"
-              title="选择一个分类后查看接口列表"
-              subTitle="分类选择放在头部，下方列表只负责当前分类下的接口浏览。"
-            />
-          </div>
-        </section>
-      );
-    }
-
-    if (
-      selectedCategoryId
-        ? categoryOperationsQuery.isLoading
-        : allCategoryOperationsLoading
-    ) {
-      return (
-        <section className="api-docs-panel__pane" aria-label="接口列表">
-          <div className="api-docs-panel__pane-header">
-            <div className="api-docs-panel__pane-copy">
-              <Typography.Text strong>接口列表</Typography.Text>
-              <Typography.Text type="secondary">
-                正在加载 {selectedCategory?.label ?? '全部分类'} 的接口
-              </Typography.Text>
-            </div>
-          </div>
-          <div className="api-docs-panel__pane-state">
-            <Spin size="large" />
-          </div>
-        </section>
-      );
-    }
-
-    if (
-      selectedCategoryId
-        ? categoryOperationsQuery.isError
-        : allCategoryOperationsError
-    ) {
-      return (
-        <section className="api-docs-panel__pane" aria-label="接口列表">
-          <div className="api-docs-panel__pane-header">
-            <div className="api-docs-panel__pane-copy">
-              <Typography.Text strong>接口列表</Typography.Text>
-              <Typography.Text type="secondary">
-                {selectedCategoryId ? '当前分类' : '全部分类'}接口加载失败
-              </Typography.Text>
-            </div>
-          </div>
-          <div className="api-docs-panel__pane-body">
-            <Result
-              status="error"
-              title="接口列表加载失败"
-              subTitle="请刷新后重试，或切换到其他分类。"
-            />
-          </div>
-        </section>
-      );
-    }
-
     return (
-      <section className="api-docs-panel__pane" aria-label="接口列表">
-        <div className="api-docs-panel__pane-header">
-          <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>接口列表</Typography.Text>
-            <Typography.Text type="secondary">
-              {selectedCategory?.label ?? '全部分类'} 共 {operations.length} 个接口
-            </Typography.Text>
-          </div>
-        </div>
-        <div className="api-docs-panel__pane-toolbar">
-          <Input
-            aria-label="搜索接口"
-            allowClear
-            placeholder="搜索接口"
-            value={operationSearch}
-            onChange={(event) => setOperationSearch(event.target.value)}
-          />
-        </div>
-        <div className="api-docs-panel__pane-body">
-          {!operations.length ? (
-            <Empty
-              description={selectedCategoryId ? '当前分类暂无接口' : '暂无接口'}
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          ) : filteredOperations.length === 0 ? (
-            <Empty
-              description="未找到匹配接口"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          ) : (
-            <div className="api-docs-panel__list">
-              {filteredOperations.map((operation) => (
-                <button
-                  key={operation.id}
-                  type="button"
-                  className="api-docs-panel__list-button api-docs-panel__list-button--operation"
-                  aria-pressed={selectedOperationId === operation.id}
-                  onClick={() =>
-                    onQueryStateChange({
-                      categoryId: selectedCategoryId,
-                      operationId: operation.id
-                    })
-                  }
-                >
-                  <span className="api-docs-panel__list-button-main">
-                    <span className="api-docs-panel__operation-heading">
-                      <span
-                        className={`api-docs-panel__operation-method api-docs-panel__operation-method--${operation.method.toLowerCase()}`}
-                      >
-                        {operation.method}
-                      </span>
-                      <span className="api-docs-panel__operation-path">
-                        {operation.path}
-                      </span>
-                    </span>
-                    <span className="api-docs-panel__list-button-subtitle">
-                      {operation.summary ??
-                        operation.description ??
-                        operation.id}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+      <ApiDocsOperationListPane
+        categoriesLength={categories.length}
+        selectedCategoryId={selectedCategoryId}
+        selectedCategoryLabel={selectedCategory?.label ?? null}
+        showAllOperationsWhenNoCategory={showAllOperationsWhenNoCategory}
+        loading={
+          selectedCategoryId
+            ? categoryOperationsQuery.isLoading
+            : allCategoryOperationsLoading
+        }
+        error={
+          selectedCategoryId
+            ? categoryOperationsQuery.isError
+            : allCategoryOperationsError
+        }
+        operations={operations}
+        filteredOperations={filteredOperations}
+        selectedOperationId={selectedOperationId}
+        operationSearch={operationSearch}
+        selectedCategoryOperationTotal={selectedCategoryOperationTotal}
+        fetchingNextPage={categoryOperationsQuery.isFetchingNextPage}
+        onOperationSearchChange={setOperationSearch}
+        onOperationScroll={handleOperationPaneScroll}
+        onQueryStateChange={onQueryStateChange}
+      />
     );
   }
 
@@ -592,7 +582,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   } else {
     content = (
       <>
-        {renderCategorySelector()}
+        {toolbarPortalElement ? null : renderCategorySelector()}
         <div className="api-docs-panel__workspace">
           {renderOperationPane()}
           <section className="api-docs-panel__detail" aria-label="API 文档详情">
@@ -603,5 +593,18 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     );
   }
 
-  return <div className="api-docs-panel">{content}</div>;
+  return (
+    <div
+      className={
+        toolbarPortalElement
+          ? 'api-docs-panel api-docs-panel--external-toolbar'
+          : 'api-docs-panel'
+      }
+    >
+      {toolbarPortalElement && !catalogQuery.isLoading && !catalogQuery.isError
+        ? createPortal(renderCategorySelector(), toolbarPortalElement)
+        : null}
+      {content}
+    </div>
+  );
 }

@@ -27,6 +27,17 @@ export interface ConsoleApiDocsCategoryOperations {
   id: string;
   label: string;
   operations: ConsoleApiDocsCatalogOperation[];
+  total?: number;
+  offset?: number;
+  limit?: number;
+  has_more?: boolean;
+  next_offset?: number | null;
+}
+
+export interface ConsoleApiDocsCategoryOperationsRequest {
+  offset?: number;
+  limit?: number;
+  q?: string | null;
 }
 
 export function fetchConsoleApiDocsCatalog(
@@ -40,10 +51,27 @@ export function fetchConsoleApiDocsCatalog(
 
 export function fetchConsoleApiDocsCategoryOperations(
   categoryId: string,
+  request: ConsoleApiDocsCategoryOperationsRequest = {},
   baseUrl?: string
 ): Promise<ConsoleApiDocsCategoryOperations> {
+  const params = new URLSearchParams();
+
+  if (request.offset !== undefined) {
+    params.set('offset', String(request.offset));
+  }
+
+  if (request.limit !== undefined) {
+    params.set('limit', String(request.limit));
+  }
+
+  if (request.q) {
+    params.set('q', request.q);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+
   return apiFetch<ConsoleApiDocsCategoryOperations>({
-    path: `/api/console/docs/categories/${encodeURIComponent(categoryId)}/operations`,
+    path: `/api/console/docs/categories/${encodeURIComponent(categoryId)}/operations${query}`,
     baseUrl
   });
 }

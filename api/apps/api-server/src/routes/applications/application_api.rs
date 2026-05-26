@@ -42,7 +42,10 @@ use crate::{
     },
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
-    openapi_docs::{DocsCatalog, DocsCatalogCategoryOperations},
+    openapi_docs::{
+        filter_category_operations, paginate_category_operations, DocsCatalog,
+        DocsCatalogCategoryOperationsPage, DOCS_OPERATIONS_PAGE_SIZE,
+    },
     response::ApiSuccess,
 };
 
@@ -107,6 +110,25 @@ pub struct ApplicationApiMappingBody {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ApplicationApiDocsQuery {
     pub locale: Option<String>,
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+    pub q: Option<String>,
+}
+
+impl ApplicationApiDocsQuery {
+    fn offset(&self) -> usize {
+        self.offset.unwrap_or(0)
+    }
+
+    fn limit(&self) -> usize {
+        self.limit
+            .unwrap_or(DOCS_OPERATIONS_PAGE_SIZE)
+            .clamp(1, DOCS_OPERATIONS_PAGE_SIZE)
+    }
+
+    fn search_query(&self) -> Option<&str> {
+        self.q.as_deref()
+    }
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -692,10 +714,13 @@ pub async fn get_application_api_docs_catalog(
     params(
         ("application_id" = Uuid, Path, description = "Application id"),
         ("category_id" = String, Path, description = "Application public API docs category id"),
-        ("locale" = Option<String>, Query, description = "Requested docs locale")
+        ("locale" = Option<String>, Query, description = "Requested docs locale"),
+        ("offset" = Option<usize>, Query, description = "Operations page offset"),
+        ("limit" = Option<usize>, Query, description = "Operations page size, max 20"),
+        ("q" = Option<String>, Query, description = "Operation search query")
     ),
     responses(
-        (status = 200, body = DocsCatalogCategoryOperations),
+        (status = 200, body = DocsCatalogCategoryOperationsPage),
         (status = 401, body = crate::error_response::ErrorBody),
         (status = 403, body = crate::error_response::ErrorBody),
         (status = 404, body = crate::error_response::ErrorBody)
@@ -706,14 +731,23 @@ pub async fn get_application_api_docs_category_operations(
     Query(query): Query<ApplicationApiDocsQuery>,
     headers: HeaderMap,
     Path((application_id, category_id)): Path<(Uuid, String)>,
-) -> Result<Json<ApiSuccess<DocsCatalogCategoryOperations>>, ApiError> {
-    let context =
-        load_application_public_docs_context(&state, &headers, application_id, query.locale)
-            .await?;
+) -> Result<Json<ApiSuccess<DocsCatalogCategoryOperationsPage>>, ApiError> {
+    let context = load_application_public_docs_context(
+        &state,
+        &headers,
+        application_id,
+        query.locale.clone(),
+    )
+    .await?;
     let operations = build_application_public_docs_category_operations(&context, &category_id)
         .ok_or(ControlPlaneError::NotFound("application_api_docs_category"))?;
+    let filtered_operations = filter_category_operations(&operations, query.search_query());
 
-    Ok(Json(ApiSuccess::new(operations)))
+    Ok(Json(ApiSuccess::new(paginate_category_operations(
+        &filtered_operations,
+        query.offset(),
+        query.limit(),
+    ))))
 }
 
 #[utoipa::path(

@@ -99,7 +99,11 @@ export function ApplicationDetailPage({
       contentWidth={
         requestedSectionKey === 'orchestration' ? 'full' : 'wide'
       }
-      heightMode={requestedSectionKey === 'logs' ? 'viewport' : 'natural'}
+      heightMode={
+        requestedSectionKey === 'logs' || requestedSectionKey === 'api'
+          ? 'viewport'
+          : 'natural'
+      }
     >
       {content}
     </SectionPageLayout>

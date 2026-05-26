@@ -1,6 +1,7 @@
 import type {
   ConsoleApiDocsCatalog,
-  ConsoleApiDocsCategoryOperations
+  ConsoleApiDocsCategoryOperations,
+  ConsoleApiDocsCategoryOperationsRequest
 } from '../console-api-docs';
 import { apiFetch, apiFetchVoid } from '../transport';
 
@@ -86,6 +87,33 @@ function buildApplicationApiDocsPath(path: string, locale?: string | null) {
   const params = new URLSearchParams();
   params.set('locale', locale);
   return `${path}?${params.toString()}`;
+}
+
+function buildApplicationApiDocsCategoryOperationsPath(
+  path: string,
+  request: ConsoleApiDocsCategoryOperationsRequest = {},
+  locale?: string | null
+) {
+  const params = new URLSearchParams();
+
+  if (locale) {
+    params.set('locale', locale);
+  }
+
+  if (request.offset !== undefined) {
+    params.set('offset', String(request.offset));
+  }
+
+  if (request.limit !== undefined) {
+    params.set('limit', String(request.limit));
+  }
+
+  if (request.q) {
+    params.set('q', request.q);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+  return `${path}${query}`;
 }
 
 export function listConsoleApplicationApiKeys(
@@ -211,11 +239,35 @@ export function fetchConsoleApplicationApiDocsCategoryOperations(
   categoryId: string,
   baseUrl?: string,
   locale?: string | null
+): Promise<ConsoleApiDocsCategoryOperations>;
+export function fetchConsoleApplicationApiDocsCategoryOperations(
+  applicationId: string,
+  categoryId: string,
+  request?: ConsoleApiDocsCategoryOperationsRequest,
+  baseUrl?: string,
+  locale?: string | null
+): Promise<ConsoleApiDocsCategoryOperations>;
+export function fetchConsoleApplicationApiDocsCategoryOperations(
+  applicationId: string,
+  categoryId: string,
+  requestOrBaseUrl: ConsoleApiDocsCategoryOperationsRequest | string = {},
+  baseUrlOrLocale?: string | null,
+  locale?: string | null
 ): Promise<ConsoleApiDocsCategoryOperations> {
+  const request =
+    typeof requestOrBaseUrl === 'string' ? {} : requestOrBaseUrl;
+  const baseUrl =
+    typeof requestOrBaseUrl === 'string'
+      ? requestOrBaseUrl
+      : (baseUrlOrLocale ?? undefined);
+  const docsLocale =
+    typeof requestOrBaseUrl === 'string' ? baseUrlOrLocale : locale;
+
   return apiFetch<ConsoleApiDocsCategoryOperations>({
-    path: buildApplicationApiDocsPath(
+    path: buildApplicationApiDocsCategoryOperationsPath(
       `/api/console/applications/${applicationId}/api-docs/categories/${encodeURIComponent(categoryId)}/operations`,
-      locale
+      request,
+      docsLocale
     ),
     baseUrl
   });

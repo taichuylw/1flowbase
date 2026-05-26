@@ -2,26 +2,54 @@ use std::sync::Arc;
 
 use access_control::ensure_permission;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     routing::get,
     Json, Router,
 };
 use control_plane::errors::ControlPlaneError;
 use control_plane::model_definition::ModelDefinitionService;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
     app_state::ApiState,
     error_response::ApiError,
     middleware::require_session::require_session,
-    openapi_docs::{DocsCatalog, DocsCatalogCategoryOperations},
+    openapi_docs::{
+        filter_category_operations, paginate_category_operations, DocsCatalog,
+        DocsCatalogCategoryOperationsPage, DOCS_OPERATIONS_PAGE_SIZE,
+    },
     response::ApiSuccess,
     runtime_data_model_docs,
 };
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct DocsCategoryOperationsQuery {
+    #[param(minimum = 0)]
+    pub offset: Option<usize>,
+    #[param(minimum = 1, maximum = 20)]
+    pub limit: Option<usize>,
+    pub q: Option<String>,
+}
+
+impl DocsCategoryOperationsQuery {
+    fn offset(&self) -> usize {
+        self.offset.unwrap_or(0)
+    }
+
+    fn limit(&self) -> usize {
+        self.limit
+            .unwrap_or(DOCS_OPERATIONS_PAGE_SIZE)
+            .clamp(1, DOCS_OPERATIONS_PAGE_SIZE)
+    }
+
+    fn search_query(&self) -> Option<&str> {
+        self.q.as_deref()
+    }
+}
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DataModelOpenApiDocumentResponse {
@@ -146,8 +174,9 @@ pub async fn get_docs_catalog(
 pub async fn get_category_operations(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
+    Query(query): Query<DocsCategoryOperationsQuery>,
     Path(category_id): Path<String>,
-) -> Result<Json<ApiSuccess<DocsCatalogCategoryOperations>>, ApiError> {
+) -> Result<Json<ApiSuccess<DocsCatalogCategoryOperationsPage>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     ensure_permission(&context.actor, "api_reference.view.all")
         .map_err(ControlPlaneError::PermissionDenied)?;
@@ -157,18 +186,26 @@ pub async fn get_category_operations(
         if models.is_empty() {
             return Err(ControlPlaneError::NotFound("category_id").into());
         }
-        return Ok(Json(ApiSuccess::new(
-            runtime_data_model_docs::build_category_operations(&models),
-        )));
+        let operations = runtime_data_model_docs::build_category_operations(&models);
+        let filtered_operations = filter_category_operations(&operations, query.search_query());
+        return Ok(Json(ApiSuccess::new(paginate_category_operations(
+            &filtered_operations,
+            query.offset(),
+            query.limit(),
+        ))));
     }
 
     let operations = state
         .api_docs
         .category_operations(&category_id)
-        .cloned()
         .ok_or(ControlPlaneError::NotFound("category_id"))?;
+    let filtered_operations = filter_category_operations(operations, query.search_query());
 
-    Ok(Json(ApiSuccess::new(operations)))
+    Ok(Json(ApiSuccess::new(paginate_category_operations(
+        &filtered_operations,
+        query.offset(),
+        query.limit(),
+    ))))
 }
 
 pub async fn get_category_openapi(
