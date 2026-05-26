@@ -1,10 +1,14 @@
 import {
   ApiOutlined,
   ClockCircleOutlined,
+  CloseCircleOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
+  HourglassOutlined,
   NodeIndexOutlined,
   QuestionCircleOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -13,7 +17,6 @@ import {
   Radio,
   Result,
   Space,
-  Statistic,
   Table,
   Tooltip,
   Typography
@@ -127,14 +130,35 @@ const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
       dataIndex: 'success_rate',
       key: 'success_rate',
       align: 'right',
-      render: (value: number) => formatPercent(value)
+      render: (value: number) => {
+        let color = '#52c41a';
+        if (value < 0.9) color = '#ff4d4f';
+        else if (value < 0.98) color = '#faad14';
+        return (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 550 }}>{formatPercent(value)}</span>
+            <div style={{ width: 36, height: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${value * 100}%`, height: '100%', background: color, borderRadius: 3 }} />
+            </div>
+          </div>
+        );
+      }
     },
     {
       title: '平均耗时',
       dataIndex: 'avg_duration_ms',
       key: 'avg_duration_ms',
       align: 'right',
-      render: (value: number) => formatDuration(value)
+      render: (value: number) => {
+        let color = 'processing';
+        if (value > 1000) color = 'volcano';
+        else if (value > 500) color = 'warning';
+        return (
+          <span className={`duration-tag duration-tag--${color}`}>
+            {formatDuration(value)}
+          </span>
+        );
+      }
     },
     {
       title: 'Tokens',
@@ -164,7 +188,19 @@ const sourceColumns: ColumnsType<ApplicationRunMonitoringSourceBreakdown> = [
     dataIndex: 'success_rate',
     key: 'success_rate',
     align: 'right',
-    render: (value: number) => formatPercent(value)
+    render: (value: number) => {
+      let color = '#52c41a';
+      if (value < 0.9) color = '#ff4d4f';
+      else if (value < 0.98) color = '#faad14';
+      return (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ minWidth: 42, textAlign: 'right', fontWeight: 550 }}>{formatPercent(value)}</span>
+          <div style={{ width: 36, height: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ width: `${value * 100}%`, height: '100%', background: color, borderRadius: 3 }} />
+          </div>
+        </div>
+      );
+    }
   },
   {
     title: 'Tokens',
@@ -182,7 +218,7 @@ function usageColumns<
     avg_duration_ms: number;
     failed_count: number;
   }
->(label: string, key: keyof T): ColumnsType<T> {
+>(label: string, key: keyof T, maxRequests = 0, maxTokens = 0): ColumnsType<T> {
   return [
     {
       title: label,
@@ -195,28 +231,60 @@ function usageColumns<
       dataIndex: 'request_count',
       key: 'request_count',
       align: 'right',
-      render: (value: number) => formatInteger(value)
+      render: (value: number) => {
+        const pct = maxRequests > 0 ? (value / maxRequests) * 100 : 0;
+        return (
+          <div className="table-cell-progress">
+            <span className="table-cell-progress__value">{formatInteger(value)}</span>
+            <div className="table-cell-progress__bar-bg">
+              <div className="table-cell-progress__bar" style={{ width: `${pct}%`, background: '#e6f4ff', borderRight: '2px solid #1677ff' }} />
+            </div>
+          </div>
+        );
+      }
     },
     {
       title: '失败数',
       dataIndex: 'failed_count',
       key: 'failed_count',
       align: 'right',
-      render: (value: number) => formatInteger(value)
+      render: (value: number) => {
+        if (value === 0) return <span style={{ color: 'var(--ant-color-text-secondary)', opacity: 0.6 }}>0</span>;
+        return <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{formatInteger(value)}</span>;
+      }
     },
     {
       title: '平均耗时',
       dataIndex: 'avg_duration_ms',
       key: 'avg_duration_ms',
       align: 'right',
-      render: (value: number) => formatDuration(value)
+      render: (value: number) => {
+        let color = 'processing';
+        if (value > 1000) color = 'volcano';
+        else if (value > 500) color = 'warning';
+        return (
+          <span className={`duration-tag duration-tag--${color}`}>
+            {formatDuration(value)}
+          </span>
+        );
+      }
     },
     {
       title: 'Tokens',
       dataIndex: 'total_tokens',
       key: 'total_tokens',
       align: 'right',
-      render: (value: number) => formatInteger(value)
+      render: (value: number) => {
+        const pct = maxTokens > 0 ? (value / maxTokens) * 100 : 0;
+        return (
+          <div className="table-cell-progress">
+            <span className="table-cell-progress__value">{formatInteger(value)}</span>
+            <div className="table-cell-progress__bar-bg">
+              <div className="table-cell-progress__bar" style={{ width: `${pct}%`, background: '#f9f0ff', borderRight: '2px solid #722ed1' }} />
+            </div>
+          </div>
+        );
+      }
     }
   ];
 }
@@ -300,37 +368,88 @@ function MonitoringTable<T extends object>({
 
 function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
   return {
-    color: ['#1677ff', '#00a36c'],
+    color: ['#1677ff'],
     grid: {
-      left: 44,
+      left: 54,
       right: 20,
       top: 28,
       bottom: 34
     },
     tooltip: {
-      trigger: 'axis'
+      trigger: 'axis',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#f0f0f0',
+      borderWidth: 1,
+      textStyle: { color: '#1f1f1f', fontSize: 12 }
     },
     xAxis: {
       type: 'category',
       data: report.tokens_trend.map((point) =>
         new Date(point.bucket_start).toLocaleDateString()
-      )
+      ),
+      axisLine: {
+        lineStyle: {
+          color: '#f0f0f0'
+        }
+      },
+      axisLabel: {
+        color: '#8c8c8c'
+      }
     },
-    yAxis: {
-      type: 'value'
-    },
+    yAxis: [
+      {
+        type: 'value',
+        axisLine: { show: false },
+        axisLabel: { color: '#8c8c8c' },
+        splitLine: {
+          lineStyle: {
+            color: 'rgba(0, 0, 0, 0.05)',
+            type: 'dashed'
+          }
+        }
+      }
+    ],
     series: [
       {
         name: 'Tokens',
         type: 'line',
         smooth: true,
+        symbol: 'circle',
         symbolSize: 6,
+        showSymbol: false,
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(22, 119, 255, 0.25)' },
+              { offset: 1, color: 'rgba(22, 119, 255, 0.01)' }
+            ]
+          }
+        },
         data: report.tokens_trend.map((point) => point.total_tokens)
       },
       {
         name: '运行数',
         type: 'bar',
-        yAxisIndex: 0,
+        barMaxWidth: 16,
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: '#34d399' },
+              { offset: 1, color: '#059669' }
+            ]
+          }
+        },
         data: report.tokens_trend.map((point) => point.run_count)
       }
     ]
@@ -339,27 +458,61 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
 
 function buildProtocolOption(report: ApplicationRunMonitoringReport) {
   return {
-    color: ['#1677ff'],
     grid: {
-      left: 44,
+      left: 54,
       right: 20,
       top: 20,
       bottom: 38
     },
     tooltip: {
-      trigger: 'axis'
+      trigger: 'axis',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#f0f0f0',
+      borderWidth: 1,
+      textStyle: { color: '#1f1f1f', fontSize: 12 }
     },
     xAxis: {
       type: 'category',
-      data: report.protocols.map((item) => item.protocol)
+      data: report.protocols.map((item) => item.protocol),
+      axisLine: {
+        lineStyle: {
+          color: '#f0f0f0'
+        }
+      },
+      axisLabel: {
+        color: '#8c8c8c'
+      }
     },
     yAxis: {
-      type: 'value'
+      type: 'value',
+      axisLine: { show: false },
+      axisLabel: { color: '#8c8c8c' },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(0, 0, 0, 0.05)',
+          type: 'dashed'
+        }
+      }
     },
     series: [
       {
         name: '请求数',
         type: 'bar',
+        barMaxWidth: 24,
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: '#1677ff' },
+              { offset: 1, color: '#85a5ff' }
+            ]
+          }
+        },
         data: report.protocols.map((item) => item.request_count)
       }
     ]
@@ -367,20 +520,51 @@ function buildProtocolOption(report: ApplicationRunMonitoringReport) {
 }
 
 function buildSourceOption(report: ApplicationRunMonitoringReport) {
+  const totalRequests = report.sources.reduce((sum, item) => sum + item.request_count, 0);
   return {
-    color: ['#1677ff', '#00a36c', '#faad14'],
+    color: ['#1677ff', '#52c41a', '#faad14'],
     tooltip: {
-      trigger: 'item'
+      trigger: 'item',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#f0f0f0',
+      borderWidth: 1,
+      textStyle: { color: '#1f1f1f', fontSize: 12 }
     },
     legend: {
-      bottom: 0
+      bottom: 0,
+      itemGap: 16
+    },
+    title: {
+      text: formatInteger(totalRequests),
+      subtext: '总请求数',
+      left: 'center',
+      top: '38%',
+      textStyle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1f1f1f',
+        fontFamily: 'Outfit, Inter, sans-serif'
+      },
+      subtextStyle: {
+        fontSize: 12,
+        color: '#8c8c8c'
+      }
     },
     series: [
       {
         name: '来源',
         type: 'pie',
-        radius: ['42%', '68%'],
-        center: ['50%', '44%'],
+        radius: ['55%', '75%'],
+        center: ['50%', '46%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 4,
+          borderColor: '#ffffff',
+          borderWidth: 2
+        },
+        label: {
+          show: false
+        },
         data: report.sources.map((item) => ({
           name: sourceLabel(item.source),
           value: item.request_count
@@ -388,6 +572,71 @@ function buildSourceOption(report: ApplicationRunMonitoringReport) {
       }
     ]
   };
+}
+
+interface RunRankListProps {
+  runs: ApplicationRunMonitoringRunRank[];
+  metricType: 'duration' | 'token';
+}
+
+function RunRankList({ runs, metricType }: RunRankListProps) {
+  if (runs.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={null} />;
+  }
+
+  const maxVal = Math.max(
+    1,
+    ...runs.map((r) =>
+      metricType === 'duration' ? r.duration_ms ?? 0 : r.total_tokens ?? 0
+    )
+  );
+
+  return (
+    <div className="run-rank-list">
+      {runs.map((run, index) => {
+        const val =
+          metricType === 'duration' ? run.duration_ms ?? 0 : run.total_tokens ?? 0;
+        const pct = (val / maxVal) * 100;
+        const displayVal =
+          metricType === 'duration' ? formatDuration(val) : formatInteger(val);
+
+        let statusColor = '#8c8c8c';
+        if (run.status === 'succeeded' || run.status === 'success') {
+          statusColor = '#52c41a';
+        } else if (run.status === 'failed' || run.status === 'fail') {
+          statusColor = '#ff4d4f';
+        }
+
+        return (
+          <div key={run.flow_run_id} className="run-rank-item">
+            <div className="run-rank-item__index">#{index + 1}</div>
+            <div className="run-rank-item__info">
+              <div className="run-rank-item__header">
+                <span className="run-rank-item__title">{run.title}</span>
+                <span
+                  className="run-rank-item__status-dot"
+                  style={{ background: statusColor }}
+                />
+              </div>
+              <div className="run-rank-item__sub">
+                <span>ID: {run.flow_run_id}</span>
+                <span className="run-rank-item__time">{formatTime(run.started_at)}</span>
+              </div>
+            </div>
+            <div className="run-rank-item__metric">
+              <div className="run-rank-item__metric-value">{displayVal}</div>
+              <div className="run-rank-item__track">
+                <div
+                  className={`run-rank-item__bar run-rank-item__bar--${metricType}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function ApplicationMonitoringPage({
@@ -411,6 +660,76 @@ export function ApplicationMonitoringPage({
     placeholderData: (previousData) => previousData
   });
   const report = reportQuery.data;
+
+  const maxAuthRequests = useMemo(
+    () =>
+      report
+        ? Math.max(
+            1,
+            ...report.authorized_accounts.map((item) => item.request_count)
+          )
+        : 1,
+    [report?.authorized_accounts]
+  );
+  const maxAuthTokens = useMemo(
+    () =>
+      report
+        ? Math.max(1, ...report.authorized_accounts.map((item) => item.total_tokens))
+        : 1,
+    [report?.authorized_accounts]
+  );
+
+  const maxExtUserRequests = useMemo(
+    () =>
+      report
+        ? Math.max(1, ...report.external_users.map((item) => item.request_count))
+        : 1,
+    [report?.external_users]
+  );
+  const maxExtUserTokens = useMemo(
+    () =>
+      report
+        ? Math.max(1, ...report.external_users.map((item) => item.total_tokens))
+        : 1,
+    [report?.external_users]
+  );
+
+  const maxApiKeyRequests = useMemo(
+    () =>
+      report
+        ? Math.max(1, ...report.api_keys.map((item) => item.request_count))
+        : 1,
+    [report?.api_keys]
+  );
+  const maxApiKeyTokens = useMemo(
+    () =>
+      report
+        ? Math.max(1, ...report.api_keys.map((item) => item.total_tokens))
+        : 1,
+    [report?.api_keys]
+  );
+
+  const maxExtConvRequests = useMemo(
+    () =>
+      report
+        ? Math.max(
+            1,
+            ...report.external_conversations.map((item) => item.request_count)
+          )
+        : 1,
+    [report?.external_conversations]
+  );
+  const maxExtConvTokens = useMemo(
+    () =>
+      report
+        ? Math.max(
+            1,
+            ...report.external_conversations.map((item) => item.total_tokens)
+          )
+        : 1,
+    [report?.external_conversations]
+  );
+
   const activeRangeLabel =
     TIME_RANGE_OPTIONS.find((option) => option.value === timeRangeDays)
       ?.label ?? '过去 7 天';
@@ -479,59 +798,100 @@ export function ApplicationMonitoringPage({
       </div>
 
       <section className="application-monitoring-page__metrics">
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="运行总数"
-            value={statisticValue(report.overview.total_count)}
-          />
+        <div className="application-monitoring-metric application-monitoring-metric--blue">
+          <div className="metric-card__icon-wrapper">
+            <DashboardOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">运行总数</span>
+            <span className="metric-card__value">
+              {formatInteger(report.overview.total_count)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="成功率"
-            value={statisticValue(formatPercent(report.overview.success_rate))}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--green">
+          <div className="metric-card__icon-wrapper">
+            <SafetyCertificateOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">成功率</span>
+            <span className="metric-card__value">
+              {formatPercent(report.overview.success_rate)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="失败数"
-            value={statisticValue(report.overview.failed_count)}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--red">
+          <div className="metric-card__icon-wrapper">
+            <CloseCircleOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">失败数</span>
+            <span className="metric-card__value">
+              {formatInteger(report.overview.failed_count)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="慢请求率"
-            value={statisticValue(formatPercent(report.duration.slow_run_rate))}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--gold">
+          <div className="metric-card__icon-wrapper">
+            <ClockCircleOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">慢请求率</span>
+            <span className="metric-card__value">
+              {formatPercent(report.duration.slow_run_rate)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="P95 耗时"
-            value={statisticValue(
-              formatDuration(report.duration.p95_duration_ms)
-            )}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--cyan">
+          <div className="metric-card__icon-wrapper">
+            <HourglassOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">P95 耗时</span>
+            <span className="metric-card__value">
+              {formatDuration(report.duration.p95_duration_ms)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="Token 总量"
-            value={statisticValue(
-              formatInteger(report.tokens.total_tokens_sum)
-            )}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--purple">
+          <div className="metric-card__icon-wrapper">
+            <DatabaseOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">Token 总量</span>
+            <span className="metric-card__value">
+              {formatInteger(report.tokens.total_tokens_sum)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="工具回调"
-            value={statisticValue(
-              report.tool_callbacks.total_tool_callback_count
-            )}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--orange">
+          <div className="metric-card__icon-wrapper">
+            <ApiOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">工具回调</span>
+            <span className="metric-card__value">
+              {formatInteger(report.tool_callbacks.total_tool_callback_count)}
+            </span>
+          </div>
         </div>
-        <div className="application-monitoring-metric">
-          <Statistic
-            title="峰值并发"
-            value={statisticValue(report.concurrency.peak_concurrency)}
-          />
+
+        <div className="application-monitoring-metric application-monitoring-metric--deep-blue">
+          <div className="metric-card__icon-wrapper">
+            <NodeIndexOutlined />
+          </div>
+          <div className="metric-card__content">
+            <span className="metric-card__title">峰值并发</span>
+            <span className="metric-card__value">
+              {formatInteger(report.concurrency.peak_concurrency)}
+            </span>
+          </div>
         </div>
       </section>
 
@@ -565,26 +925,38 @@ export function ApplicationMonitoringPage({
       <div className="application-monitoring-page__table-grid">
         <MonitoringPanel title="耗时质量">
           <div className="application-monitoring-page__quality-grid">
-            <span>
-              <ClockCircleOutlined /> 平均耗时
-            </span>
-            <strong>{formatDuration(report.duration.avg_duration_ms)}</strong>
-            <span>
-              <DashboardOutlined /> P50 耗时
-            </span>
-            <strong>{formatDuration(report.duration.p50_duration_ms)}</strong>
-            <span>
-              <NodeIndexOutlined /> 平均真实节点数
-            </span>
-            <strong>
-              {formatDecimal(report.nodes.avg_unique_node_count, 1)}
-            </strong>
-            <span>
-              <ApiOutlined /> 平均工具回调
-            </span>
-            <strong>
-              {formatDecimal(report.tool_callbacks.avg_tool_callback_count, 1)}
-            </strong>
+            <div className="quality-metric-item">
+              <span className="quality-metric-item__label">
+                <ClockCircleOutlined /> 平均耗时
+              </span>
+              <span className="quality-metric-item__value">
+                {formatDuration(report.duration.avg_duration_ms)}
+              </span>
+            </div>
+            <div className="quality-metric-item">
+              <span className="quality-metric-item__label">
+                <DashboardOutlined /> P50 耗时
+              </span>
+              <span className="quality-metric-item__value">
+                {formatDuration(report.duration.p50_duration_ms)}
+              </span>
+            </div>
+            <div className="quality-metric-item">
+              <span className="quality-metric-item__label">
+                <NodeIndexOutlined /> 平均真实节点数
+              </span>
+              <span className="quality-metric-item__value">
+                {formatDecimal(report.nodes.avg_unique_node_count, 1)}
+              </span>
+            </div>
+            <div className="quality-metric-item">
+              <span className="quality-metric-item__label">
+                <ApiOutlined /> 平均工具回调
+              </span>
+              <span className="quality-metric-item__value">
+                {formatDecimal(report.tool_callbacks.avg_tool_callback_count, 1)}
+              </span>
+            </div>
           </div>
         </MonitoringPanel>
         <MonitoringPanel title="协议明细">
@@ -603,45 +975,57 @@ export function ApplicationMonitoringPage({
         </MonitoringPanel>
         <MonitoringPanel title="授权账号">
           <MonitoringTable<ApplicationRunMonitoringAuthorizedAccountUsage>
-            columns={usageColumns('账号', 'authorized_account')}
+            columns={usageColumns(
+              '账号',
+              'authorized_account',
+              maxAuthRequests,
+              maxAuthTokens
+            )}
             dataSource={report.authorized_accounts}
             rowKey={(record) => record.authorized_account ?? 'unknown'}
           />
         </MonitoringPanel>
         <MonitoringPanel title="外部用户">
           <MonitoringTable<ApplicationRunMonitoringExternalUserUsage>
-            columns={usageColumns('外部用户', 'external_user')}
+            columns={usageColumns(
+              '外部用户',
+              'external_user',
+              maxExtUserRequests,
+              maxExtUserTokens
+            )}
             dataSource={report.external_users}
             rowKey={(record) => record.external_user ?? 'unknown'}
           />
         </MonitoringPanel>
         <MonitoringPanel title="API Key">
           <MonitoringTable<ApplicationRunMonitoringApiKeyUsage>
-            columns={usageColumns('API Key', 'api_key_id')}
+            columns={usageColumns(
+              'API Key',
+              'api_key_id',
+              maxApiKeyRequests,
+              maxApiKeyTokens
+            )}
             dataSource={report.api_keys}
             rowKey="api_key_id"
           />
         </MonitoringPanel>
         <MonitoringPanel title="外部会话">
           <MonitoringTable<ApplicationRunMonitoringExternalConversationUsage>
-            columns={usageColumns('会话', 'external_conversation_id')}
+            columns={usageColumns(
+              '会话',
+              'external_conversation_id',
+              maxExtConvRequests,
+              maxExtConvTokens
+            )}
             dataSource={report.external_conversations}
             rowKey={(record) => record.external_conversation_id ?? 'unknown'}
           />
         </MonitoringPanel>
         <MonitoringPanel title="最慢运行 Top 10">
-          <MonitoringTable
-            columns={runRankColumns}
-            dataSource={report.slowest_runs}
-            rowKey="flow_run_id"
-          />
+          <RunRankList runs={report.slowest_runs} metricType="duration" />
         </MonitoringPanel>
         <MonitoringPanel title="高 Token 运行 Top 10">
-          <MonitoringTable
-            columns={runRankColumns}
-            dataSource={report.high_token_runs}
-            rowKey="flow_run_id"
-          />
+          <RunRankList runs={report.high_token_runs} metricType="token" />
         </MonitoringPanel>
       </div>
     </div>
