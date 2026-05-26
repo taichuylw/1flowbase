@@ -557,7 +557,7 @@ async fn provider_error_after_live_delta_drains_runtime_event_stream_forwarding(
 }
 
 #[tokio::test]
-async fn provider_error_after_live_delta_keeps_partial_output_out_of_run_state() {
+async fn provider_error_after_live_delta_exposes_error_text_to_answer_contract() {
     let service = OrchestrationRuntimeService::for_tests_with_live_events_then_error(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::TextDelta {
             delta: "partial before error".to_string(),
@@ -589,17 +589,22 @@ async fn provider_error_after_live_delta_keeps_partial_output_out_of_run_state()
         .unwrap();
 
     assert_eq!(failed_detail.flow_run.status, domain::FlowRunStatus::Failed);
-    assert_eq!(failed_detail.flow_run.output_payload, json!({}));
+    assert_eq!(
+        failed_detail.flow_run.output_payload["answer"],
+        json!("provider failed after live events")
+    );
     let llm_node = node_run(&failed_detail, "node-llm");
     assert_eq!(llm_node.status, domain::NodeRunStatus::Failed);
-    assert_eq!(llm_node.output_payload, json!({}));
-    assert!(llm_node.output_payload.get("text").is_none());
+    assert_eq!(
+        llm_node.output_payload["text"],
+        json!("provider failed after live events")
+    );
     assert!(llm_node.output_payload.get("usage").is_none());
     assert!(llm_node.output_payload.get("tool_calls").is_none());
-    assert!(failed_detail
-        .node_runs
-        .iter()
-        .all(|node_run| node_run.node_id != "node-answer"));
+    assert_eq!(
+        node_run(&failed_detail, "node-answer").status,
+        domain::NodeRunStatus::Succeeded
+    );
 }
 
 #[tokio::test]

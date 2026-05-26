@@ -1340,6 +1340,57 @@ async fn downstream_llm_inherits_run_level_tools_from_start_input() {
 }
 
 #[tokio::test]
+async fn failed_llm_public_text_is_available_to_downstream_answer_contract() {
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![
+        final_llm_response("first answer"),
+        ProviderInvocationResult {
+            finish_reason: Some(ProviderFinishReason::Error),
+            ..ProviderInvocationResult::default()
+        },
+    ]);
+    let mut plan = multi_llm_answer_plan();
+    let answer = plan
+        .nodes
+        .get_mut("node-answer")
+        .expect("answer node should exist");
+    answer.dependency_node_ids = vec!["node-llm".to_string(), "node-llm-2".to_string()];
+    answer.bindings = BTreeMap::from([(
+        "answer_template".to_string(),
+        CompiledBinding {
+            kind: "templated_text".to_string(),
+            selector_paths: vec![
+                vec!["node-llm".to_string(), "text".to_string()],
+                vec!["node-llm-2".to_string(), "text".to_string()],
+            ],
+            raw_value: json!("{{ node-llm.text }}\n----\n{{ node-llm-2.text }}"),
+        },
+    )]);
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm-2");
+            assert_eq!(
+                outcome.variable_pool["node-llm-2"]["text"],
+                failure.error_payload["message"]
+            );
+            assert_eq!(
+                outcome.variable_pool["node-answer"]["answer"],
+                json!("first answer\n----\nprovider invocation finished with error")
+            );
+        }
+        other => panic!("expected failed stop reason after answer, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn failover_queue_retries_next_target_before_first_token() {
     let mut plan = base_plan();
     let llm = plan
@@ -1473,8 +1524,14 @@ async fn failover_queue_stops_when_primary_fails_after_finish_error_with_first_t
                 outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
                 json!("provider_invalid_response")
             );
-            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
-            assert!(outcome.variable_pool.get("node-llm").is_none());
+            assert_eq!(
+                outcome.node_traces[1].output_payload["text"],
+                failure.error_payload["message"]
+            );
+            assert_eq!(
+                outcome.variable_pool["node-llm"]["text"],
+                failure.error_payload["message"]
+            );
             assert_eq!(
                 outcome.node_traces[1].metrics_payload["attempts"][0]["failed_after_first_token"],
                 json!(true)
@@ -1870,7 +1927,7 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
 }
 
 #[tokio::test]
-async fn llm_tool_call_finish_without_tool_calls_fails_before_answer() {
+async fn llm_tool_call_finish_without_tool_calls_exposes_error_text_to_answer() {
     let (invoker, _captured_inputs) = sequential_tool_invoker(vec![tool_call_response(Vec::new())]);
 
     let outcome = start_flow_debug_run(
@@ -1892,6 +1949,10 @@ async fn llm_tool_call_finish_without_tool_calls_fails_before_answer() {
                 .as_str()
                 .expect("failure message should be a string")
                 .contains("finish_reason=tool_call"));
+            assert_eq!(
+                outcome.variable_pool["node-answer"]["answer"],
+                failure.error_payload["message"]
+            );
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
@@ -1899,8 +1960,7 @@ async fn llm_tool_call_finish_without_tool_calls_fails_before_answer() {
     assert!(outcome
         .node_traces
         .iter()
-        .all(|trace| trace.node_id != "node-answer"));
-    assert!(outcome.variable_pool.get("node-answer").is_none());
+        .any(|trace| trace.node_id == "node-answer"));
 }
 
 #[tokio::test]
@@ -2279,8 +2339,14 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
                 outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
                 json!("auth_failed")
             );
-            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
-            assert!(outcome.variable_pool.get("node-llm").is_none());
+            assert_eq!(
+                outcome.node_traces[1].output_payload["text"],
+                failure.error_payload["message"]
+            );
+            assert_eq!(
+                outcome.variable_pool["node-llm"]["text"],
+                failure.error_payload["message"]
+            );
             assert!(failure.error_payload["provider_summary"]
                 .as_str()
                 .unwrap()
@@ -2312,15 +2378,21 @@ async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
                 outcome.node_traces[1].error_payload.as_ref().unwrap()["message"],
                 json!("401 401 Unauthorized: Incorrect API key provided")
             );
-            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
-            assert!(outcome.variable_pool.get("node-llm").is_none());
+            assert_eq!(
+                outcome.node_traces[1].output_payload["text"],
+                failure.error_payload["message"]
+            );
+            assert_eq!(
+                outcome.variable_pool["node-llm"]["text"],
+                failure.error_payload["message"]
+            );
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
 }
 
 #[tokio::test]
-async fn llm_failure_after_first_token_does_not_write_public_output_to_variable_pool() {
+async fn llm_failure_after_first_token_writes_error_text_to_public_output() {
     let outcome = start_flow_debug_run(
         &base_plan(),
         &json!({ "node-start": { "query": "退款政策" } }),
@@ -2340,8 +2412,14 @@ async fn llm_failure_after_first_token_does_not_write_public_output_to_variable_
                 outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
                 json!("provider_invalid_response")
             );
-            assert!(outcome.node_traces[1].output_payload.get("text").is_none());
-            assert!(outcome.variable_pool.get("node-llm").is_none());
+            assert_eq!(
+                outcome.node_traces[1].output_payload["text"],
+                failure.error_payload["message"]
+            );
+            assert_eq!(
+                outcome.variable_pool["node-llm"]["text"],
+                failure.error_payload["message"]
+            );
             assert_eq!(
                 outcome.node_traces[1].metrics_payload["attempts"][0]["failed_after_first_token"],
                 json!(true)

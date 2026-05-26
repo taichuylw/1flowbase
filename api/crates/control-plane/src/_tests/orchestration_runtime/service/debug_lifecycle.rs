@@ -28,7 +28,7 @@ async fn start_node_debug_preview_creates_run_node_run_and_events() {
 }
 
 #[tokio::test]
-async fn live_run_failure_keeps_previous_successful_llm_output() {
+async fn live_run_failure_exposes_failed_llm_text_to_answer_contract() {
     use plugin_framework::provider_contract::{ProviderFinishReason, ProviderInvocationResult};
 
     let service = OrchestrationRuntimeService::for_tests_with_provider_results(vec![
@@ -69,8 +69,8 @@ async fn live_run_failure_keeps_previous_successful_llm_output() {
 
     assert_eq!(failed.flow_run.status, domain::FlowRunStatus::Failed);
     assert_eq!(
-        failed.flow_run.output_payload["text"],
-        json!("first answer")
+        failed.flow_run.output_payload["answer"],
+        json!("first answer\n----\nprovider invocation finished with error")
     );
     assert_eq!(
         node_run(&failed, "node-llm").status,
@@ -80,10 +80,10 @@ async fn live_run_failure_keeps_previous_successful_llm_output() {
         node_run(&failed, "node-llm-2").status,
         domain::NodeRunStatus::Failed
     );
-    assert!(failed
-        .node_runs
-        .iter()
-        .all(|node_run| node_run.node_id != "node-answer"));
+    assert_eq!(
+        node_run(&failed, "node-answer").status,
+        domain::NodeRunStatus::Succeeded
+    );
 }
 
 #[tokio::test]

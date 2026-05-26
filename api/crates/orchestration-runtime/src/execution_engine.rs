@@ -187,6 +187,7 @@ where
     I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let mut node_traces = Vec::new();
+    let mut pending_failure: Option<NodeExecutionFailure> = None;
 
     for (index, node_id) in plan
         .topological_order
@@ -269,12 +270,21 @@ where
                 node_traces.push(trace);
 
                 if let Some(error_payload) = execution.error_payload {
+                    variable_pool.insert(
+                        node.node_id.clone(),
+                        project_node_variable_payload(node, &execution.output_payload)?,
+                    );
+                    let failure = NodeExecutionFailure {
+                        node_id: node.node_id.clone(),
+                        node_alias: node.alias.clone(),
+                        error_payload,
+                    };
+                    if can_continue_to_terminal_template_nodes(plan, index) {
+                        pending_failure = Some(failure);
+                        continue;
+                    }
                     return Ok(FlowDebugExecutionOutcome {
-                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
-                            error_payload,
-                        }),
+                        stop_reason: ExecutionStopReason::Failed(failure),
                         variable_pool,
                         checkpoint_snapshot: None,
                         node_traces,
@@ -496,6 +506,15 @@ where
         }
     }
 
+    if let Some(failure) = pending_failure {
+        return Ok(FlowDebugExecutionOutcome {
+            stop_reason: ExecutionStopReason::Failed(failure),
+            variable_pool,
+            checkpoint_snapshot: None,
+            node_traces,
+        });
+    }
+
     Ok(FlowDebugExecutionOutcome {
         stop_reason: ExecutionStopReason::Completed,
         variable_pool,
@@ -574,7 +593,7 @@ where
                     None,
                 ),
                 Vec::new(),
-                false,
+                true,
                 &invocation_messages,
             );
         }
@@ -1812,6 +1831,20 @@ fn template_output_payload(
     Value::Object(payload)
 }
 
+fn can_continue_to_terminal_template_nodes(plan: &CompiledPlan, failed_node_index: usize) -> bool {
+    let mut has_terminal_template_node = false;
+    for node_id in plan.topological_order.iter().skip(failed_node_index + 1) {
+        let Some(node) = plan.nodes.get(node_id) else {
+            return false;
+        };
+        if !matches!(node.node_type.as_str(), "template_transform" | "answer") {
+            return false;
+        }
+        has_terminal_template_node = true;
+    }
+    has_terminal_template_node
+}
+
 fn build_failed_llm_execution(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
@@ -1821,8 +1854,19 @@ fn build_failed_llm_execution(
     include_output_payload: bool,
     invocation_messages: &[Value],
 ) -> Result<LlmNodeExecution> {
+    let mut executor_output = Map::new();
+    executor_output.insert(
+        first_output_key(node),
+        Value::String(failed_llm_output_text(&error_payload)),
+    );
+    executor_output.insert(
+        "provider_route".to_string(),
+        build_llm_provider_route_payload(runtime),
+    );
+    executor_output.insert("finish_reason".to_string(), json!("error"));
+
     let raw = RawNodeExecutionResult {
-        executor_output: Map::new(),
+        executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
         debug_facts: build_llm_debug_facts(runtime, None, invocation_messages, None),
@@ -1841,6 +1885,17 @@ fn build_failed_llm_execution(
         debug_payload: built.debug_payload,
         provider_events,
     })
+}
+
+fn failed_llm_output_text(error_payload: &Value) -> String {
+    error_payload
+        .get("message")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| error_payload.get("error_message").and_then(Value::as_str))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("LLM node failed")
+        .to_string()
 }
 
 fn build_successful_llm_execution(
