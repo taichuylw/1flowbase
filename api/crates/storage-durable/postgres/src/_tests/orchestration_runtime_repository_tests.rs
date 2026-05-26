@@ -1895,6 +1895,12 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     .await
     .unwrap();
 
+    sqlx::query("delete from api_keys where id = $1")
+        .bind(api_key_id)
+        .execute(store.pool())
+        .await
+        .unwrap();
+
     let outside_run = seed_flow_run_with_mode(
         &store,
         &seeded,
@@ -1959,6 +1965,10 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
         Some("customer-1")
     );
     assert_eq!(report.api_keys[0].api_key_id, api_key_id);
+    assert_eq!(
+        report.api_keys[0].api_key_name_snapshot.as_deref(),
+        Some("application api key")
+    );
     assert_eq!(
         report.external_conversations[0]
             .external_conversation_id

@@ -33,6 +33,7 @@ impl PgControlPlaneStore {
                 external_user,
                 authorized_account,
                 api_key_id,
+                api_key_name_snapshot,
                 publication_version_id,
                 external_conversation_id,
                 external_trace_id,
@@ -46,8 +47,9 @@ impl PgControlPlaneStore {
                 created_at,
                 updated_at
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                (select name from api_keys where id = $10),
+                $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
             )
             on conflict (flow_run_id) do update
             set application_id = excluded.application_id,
@@ -59,6 +61,10 @@ impl PgControlPlaneStore {
                 external_user = excluded.external_user,
                 authorized_account = excluded.authorized_account,
                 api_key_id = excluded.api_key_id,
+                api_key_name_snapshot = coalesce(
+                    excluded.api_key_name_snapshot,
+                    application_run_log_summaries.api_key_name_snapshot
+                ),
                 publication_version_id = excluded.publication_version_id,
                 external_conversation_id = excluded.external_conversation_id,
                 external_trace_id = excluded.external_trace_id,
@@ -774,6 +780,9 @@ impl PgControlPlaneStore {
             r#"
             select
                 api_key_id,
+                max(api_key_name_snapshot) filter (
+                    where api_key_name_snapshot is not null
+                ) as api_key_name_snapshot,
                 count(*)::bigint as request_count,
                 coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint as total_tokens,
                 coalesce(
@@ -799,6 +808,7 @@ impl PgControlPlaneStore {
             .into_iter()
             .map(|row| control_plane::ports::ApplicationRunMonitoringApiKeyUsage {
                 api_key_id: row.get("api_key_id"),
+                api_key_name_snapshot: row.get("api_key_name_snapshot"),
                 request_count: row.get("request_count"),
                 total_tokens: row.get("total_tokens"),
                 avg_duration_ms: row.get("avg_duration_ms"),

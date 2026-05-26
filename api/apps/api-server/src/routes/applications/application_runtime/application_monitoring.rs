@@ -153,6 +153,7 @@ pub struct ApplicationRunMonitoringExternalUserUsageResponse {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunMonitoringApiKeyUsageResponse {
     pub api_key_id: String,
+    pub api_key_name_snapshot: Option<String>,
     pub request_count: i64,
     pub total_tokens: i64,
     pub avg_duration_ms: f64,
@@ -369,6 +370,7 @@ fn to_report_response(
             .into_iter()
             .map(|usage| ApplicationRunMonitoringApiKeyUsageResponse {
                 api_key_id: usage.api_key_id.to_string(),
+                api_key_name_snapshot: usage.api_key_name_snapshot,
                 request_count: usage.request_count,
                 total_tokens: usage.total_tokens,
                 avg_duration_ms: usage.avg_duration_ms,

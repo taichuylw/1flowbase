@@ -937,6 +937,7 @@ pub struct ApplicationRunMonitoringExternalUserUsage {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApplicationRunMonitoringApiKeyUsage {
     pub api_key_id: Uuid,
+    pub api_key_name_snapshot: Option<String>,
     pub request_count: i64,
     pub total_tokens: i64,
     pub avg_duration_ms: f64,

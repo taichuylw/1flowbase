@@ -157,6 +157,7 @@ function monitoringReport() {
     api_keys: [
       {
         api_key_id: 'key-1',
+        api_key_name_snapshot: 'Customer API',
         request_count: 5,
         total_tokens: 3000,
         avg_duration_ms: 3200,
@@ -222,6 +223,7 @@ describe('ApplicationMonitoringPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('openai-responses-v1')).toBeInTheDocument();
     expect(screen.getByText('customer-1')).toBeInTheDocument();
+    expect(screen.getByText('Customer API')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
     expect(echartsMock.chart.setOption).toHaveBeenCalled();
   });
