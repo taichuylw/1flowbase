@@ -216,7 +216,10 @@ describe('ApplicationMonitoringPage', () => {
 
     expect(await screen.findByText('12')).toBeInTheDocument();
     expect(screen.getByText('75.0%')).toBeInTheDocument();
-    expect(screen.getByText('运行中数未包含')).toBeInTheDocument();
+    expect(screen.queryByText('运行中数未包含')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '运行统计口径' })
+    ).toBeInTheDocument();
     expect(screen.getByText('openai-responses-v1')).toBeInTheDocument();
     expect(screen.getByText('customer-1')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);

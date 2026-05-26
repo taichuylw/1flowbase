@@ -3,11 +3,11 @@ import {
   ClockCircleOutlined,
   DashboardOutlined,
   NodeIndexOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Alert,
   Button,
   Empty,
   Radio,
@@ -15,6 +15,7 @@ import {
   Space,
   Statistic,
   Table,
+  Tooltip,
   Typography
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -455,6 +456,17 @@ export function ApplicationMonitoringPage({
               ? '正在刷新'
               : `当前范围：${activeRangeLabel}`}
           </Typography.Text>
+          {!report.overview.running_count_included ? (
+            <Tooltip title="仅统计运行已经结束的任务。">
+              <Button
+                aria-label="运行统计口径"
+                className="application-monitoring-page__scope-help"
+                icon={<QuestionCircleOutlined aria-hidden="true" />}
+                size="small"
+                type="text"
+              />
+            </Tooltip>
+          ) : null}
           <Button
             aria-label="刷新监控报表"
             icon={<ReloadOutlined aria-hidden="true" />}
@@ -465,10 +477,6 @@ export function ApplicationMonitoringPage({
           />
         </Space>
       </div>
-
-      {!report.overview.running_count_included ? (
-        <Alert showIcon message="运行中数未包含" type="info" />
-      ) : null}
 
       <section className="application-monitoring-page__metrics">
         <div className="application-monitoring-metric">

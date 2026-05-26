@@ -21,6 +21,10 @@
   white-space: nowrap;
 }
 
+.application-monitoring-page__scope-help {
+  color: rgba(11, 31, 24, 0.56);
+}
+
 .application-monitoring-page__metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
