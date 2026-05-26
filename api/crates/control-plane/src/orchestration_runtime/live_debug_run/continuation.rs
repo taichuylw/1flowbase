@@ -261,6 +261,11 @@ where
         inject_application_environment_variables(&mut variable_pool, &environment_variables);
     }
     inject_system_variables(&mut variable_pool, &flow_run);
+    let runtime_context =
+        orchestration_runtime::execution_engine::ExecutionRuntimeContext::from_plan_input(
+            &compiled_plan,
+            &variable_pool,
+        );
     let mut last_output_payload = json!({});
     let flow_span = append_host_span(
         &service.repository,
@@ -383,6 +388,7 @@ where
                     &resolved_inputs,
                     &rendered_templates,
                     &variable_pool,
+                    &runtime_context,
                     &llm_invoker,
                 )
                 .await;

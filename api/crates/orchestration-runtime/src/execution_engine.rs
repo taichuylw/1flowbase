@@ -35,6 +35,19 @@ pub use crate::code_runtime::{
 const LLM_TOOL_CALLBACK_KIND: &str = "llm_tool_calls";
 const LLM_TOOL_CALLBACK_STATE_KEY: &str = "__llm_tool_callback";
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ExecutionRuntimeContext {
+    tools: Vec<Value>,
+}
+
+impl ExecutionRuntimeContext {
+    pub fn from_plan_input(plan: &CompiledPlan, variable_pool: &Map<String, Value>) -> Self {
+        Self {
+            tools: run_level_provider_tools(plan, variable_pool),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderInvocationOutput {
     pub events: Vec<ProviderStreamEvent>,
@@ -102,8 +115,9 @@ where
         .as_object()
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
+    let runtime_context = ExecutionRuntimeContext::from_plan_input(plan, &variable_pool);
 
-    execute_from(plan, 0, variable_pool, invoker).await
+    execute_from(plan, 0, variable_pool, &runtime_context, invoker).await
 }
 
 pub async fn resume_flow_debug_run<I>(
@@ -121,10 +135,18 @@ where
         .get(waiting_node_id)
         .ok_or_else(|| anyhow!("waiting node not found: {waiting_node_id}"))?;
     let mut variable_pool = checkpoint.variable_pool.clone();
+    let runtime_context = ExecutionRuntimeContext::from_plan_input(plan, &variable_pool);
 
     if pending_llm_tool_callback_state(&variable_pool, waiting_node_id).is_some() {
         append_llm_tool_result_messages(&mut variable_pool, waiting_node_id, resume_payload)?;
-        return execute_from(plan, checkpoint.next_node_index, variable_pool, invoker).await;
+        return execute_from(
+            plan,
+            checkpoint.next_node_index,
+            variable_pool,
+            &runtime_context,
+            invoker,
+        )
+        .await;
     }
 
     let patch = resume_payload
@@ -144,13 +166,21 @@ where
     }
     variable_pool.insert(waiting_node_id.to_string(), Value::Object(patch.clone()));
 
-    execute_from(plan, checkpoint.next_node_index, variable_pool, invoker).await
+    execute_from(
+        plan,
+        checkpoint.next_node_index,
+        variable_pool,
+        &runtime_context,
+        invoker,
+    )
+    .await
 }
 
 async fn execute_from<I>(
     plan: &CompiledPlan,
     next_node_index: usize,
     mut variable_pool: Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
 where
@@ -221,6 +251,7 @@ where
                     &resolved_inputs,
                     &rendered_templates,
                     &variable_pool,
+                    runtime_context,
                     invoker,
                 )
                 .await?;
@@ -478,6 +509,7 @@ pub async fn execute_llm_node<I>(
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
     invoker: &I,
 ) -> Result<LlmNodeExecution>
 where
@@ -504,6 +536,7 @@ where
             resolved_inputs,
             rendered_templates,
             variable_pool,
+            runtime_context,
         );
         let invocation_messages = build_llm_debug_invocation_messages(
             node,
@@ -597,15 +630,18 @@ where
             output.result.final_content.clone(),
             collect_dify_style_deltas(&output.events),
         );
-        let provider_error = first_provider_error(&output.events).cloned().or_else(|| {
-            matches!(finish_reason, Some(ProviderFinishReason::Error)).then(|| {
-                ProviderRuntimeError::normalize(
-                    "invoke",
-                    "provider invocation finished with error",
-                    None,
-                )
-            })
-        });
+        let provider_error = first_provider_error(&output.events)
+            .cloned()
+            .or_else(|| invalid_tool_call_finish_error(finish_reason.as_ref(), &output.result))
+            .or_else(|| {
+                matches!(finish_reason, Some(ProviderFinishReason::Error)).then(|| {
+                    ProviderRuntimeError::normalize(
+                        "invoke",
+                        "provider invocation finished with error",
+                        None,
+                    )
+                })
+            });
         let failed_after_first_token = provider_error.is_some()
             && content_delta_seen_before_terminal_failure(&output.events, finish_reason.as_ref());
         let error_payload = provider_error
@@ -926,6 +962,7 @@ fn build_provider_invocation_input(
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
 ) -> ProviderInvocationInput {
     let previous_response_id =
         pending_llm_tool_callback_previous_response_id(node, runtime, variable_pool);
@@ -952,7 +989,13 @@ fn build_provider_invocation_input(
         provider_config: Value::Null,
         messages,
         system,
-        tools: provider_tools(node, resolved_inputs, rendered_templates, variable_pool),
+        tools: provider_tools(
+            node,
+            resolved_inputs,
+            rendered_templates,
+            variable_pool,
+            runtime_context,
+        ),
         mcp_bindings: Vec::new(),
         response_format: build_response_format(&node.config),
         model_parameters: build_model_parameters(&node.config),
@@ -1558,6 +1601,7 @@ fn provider_tools(
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
 ) -> Vec<Value> {
     for candidate in [
         rendered_templates.get("tools"),
@@ -1598,7 +1642,56 @@ fn provider_tools(
                         .filter(|tools| !tools.is_empty())
                 })
         })
-        .unwrap_or_default()
+        .unwrap_or_else(|| runtime_context.tools.clone())
+}
+
+fn run_level_provider_tools(plan: &CompiledPlan, variable_pool: &Map<String, Value>) -> Vec<Value> {
+    for candidate in [
+        variable_pool.get("tools"),
+        variable_pool
+            .get("compatibility")
+            .and_then(|value| value.get("tools")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(tools) = candidate.as_array() {
+            let provider_tools = provider_tool_payloads(tools);
+            if !provider_tools.is_empty() {
+                return provider_tools;
+            }
+        }
+    }
+
+    for node_id in &plan.topological_order {
+        let Some(start_node) = plan.nodes.get(node_id) else {
+            continue;
+        };
+        if start_node.node_type != "start" {
+            continue;
+        }
+        let Some(payload) = variable_pool.get(node_id) else {
+            continue;
+        };
+        for candidate in [
+            payload.get("tools"),
+            payload
+                .get("compatibility")
+                .and_then(|value| value.get("tools")),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Some(tools) = candidate.as_array() {
+                let provider_tools = provider_tool_payloads(tools);
+                if !provider_tools.is_empty() {
+                    return provider_tools;
+                }
+            }
+        }
+    }
+
+    Vec::new()
 }
 
 fn provider_tool_payloads(tools: &[Value]) -> Vec<Value> {
@@ -2172,6 +2265,19 @@ fn finish_reason_from_events(events: &[ProviderStreamEvent]) -> Option<ProviderF
         ProviderStreamEvent::Finish { reason } => Some(reason.clone()),
         _ => None,
     })
+}
+
+fn invalid_tool_call_finish_error(
+    finish_reason: Option<&ProviderFinishReason>,
+    result: &ProviderInvocationResult,
+) -> Option<ProviderRuntimeError> {
+    (matches!(finish_reason, Some(ProviderFinishReason::ToolCall)) && result.tool_calls.is_empty())
+        .then(|| {
+            ProviderRuntimeError::new(
+                ProviderRuntimeErrorKind::ProviderInvalidResponse,
+                "provider returned finish_reason=tool_call without tool_calls",
+            )
+        })
 }
 
 fn first_provider_error(events: &[ProviderStreamEvent]) -> Option<&ProviderRuntimeError> {

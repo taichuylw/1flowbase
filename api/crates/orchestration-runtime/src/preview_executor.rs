@@ -4,7 +4,9 @@ use serde_json::{json, Map, Value};
 use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
-    execution_engine::{execute_code_node, execute_llm_node, CodeInvoker, ProviderInvoker},
+    execution_engine::{
+        execute_code_node, execute_llm_node, CodeInvoker, ExecutionRuntimeContext, ProviderInvoker,
+    },
     node_errors::build_node_type_not_implemented_error_payload,
 };
 
@@ -76,6 +78,7 @@ where
         .as_object()
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
+    let runtime_context = ExecutionRuntimeContext::from_plan_input(plan, &variable_pool);
     let resolved_inputs = if node.node_type == "start" {
         variable_pool
             .get(target_node_id)
@@ -113,6 +116,7 @@ where
                 &resolved_inputs,
                 &rendered_templates,
                 &variable_pool,
+                &runtime_context,
                 invoker,
             )
             .await?;

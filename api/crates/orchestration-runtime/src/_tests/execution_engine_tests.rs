@@ -773,6 +773,86 @@ fn llm_answer_plan() -> CompiledPlan {
     plan
 }
 
+fn multi_llm_answer_plan() -> CompiledPlan {
+    let mut plan = llm_answer_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-llm".to_string(),
+        "node-llm-2".to_string(),
+        "node-answer".to_string(),
+    ];
+
+    let first_llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("first llm node should exist");
+    first_llm.downstream_node_ids = vec!["node-llm-2".to_string()];
+
+    plan.nodes.insert(
+        "node-llm-2".to_string(),
+        CompiledNode {
+            node_id: "node-llm-2".to_string(),
+            node_type: "llm".to_string(),
+            alias: "LLM2".to_string(),
+            container_id: None,
+            dependency_node_ids: vec!["node-llm".to_string()],
+            downstream_node_ids: vec!["node-answer".to_string()],
+            bindings: BTreeMap::from([(
+                "prompt_messages".to_string(),
+                CompiledBinding {
+                    kind: "prompt_messages".to_string(),
+                    selector_paths: vec![vec!["node-llm".to_string(), "text".to_string()]],
+                    raw_value: json!([
+                        {
+                            "id": "user-2",
+                            "role": "user",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": "Continue from {{ node-llm.text }}"
+                            }
+                        }
+                    ]),
+                },
+            )]),
+            outputs: vec![CompiledOutput {
+                key: "text".to_string(),
+                title: "模型输出".to_string(),
+                value_type: "string".to_string(),
+                selector: Vec::new(),
+            }],
+            config: json!({
+                "provider_instance_id": "provider-ready",
+                "model": "gpt-5.4-mini"
+            }),
+            plugin_runtime: None,
+            llm_runtime: Some(CompiledLlmRuntime {
+                provider_instance_id: "provider-ready".to_string(),
+                provider_code: "fixture_provider".to_string(),
+                protocol: "openai_compatible".to_string(),
+                model: "gpt-5.4-mini".to_string(),
+                routing: None,
+            }),
+            code_runtime: None,
+        },
+    );
+
+    let answer = plan
+        .nodes
+        .get_mut("node-answer")
+        .expect("answer node should exist");
+    answer.dependency_node_ids = vec!["node-llm-2".to_string()];
+    answer.bindings = BTreeMap::from([(
+        "answer_template".to_string(),
+        CompiledBinding {
+            kind: "selector".to_string(),
+            selector_paths: vec![vec!["node-llm-2".to_string(), "text".to_string()]],
+            raw_value: json!(["node-llm-2", "text"]),
+        },
+    )]);
+
+    plan
+}
+
 fn tool_call_response(tool_calls: Vec<ProviderToolCall>) -> ProviderInvocationResult {
     ProviderInvocationResult {
         final_content: Some("need tools".to_string()),
@@ -1202,6 +1282,61 @@ async fn llm_runtime_forwards_compatible_tools_and_tool_history_to_provider() {
     assert_eq!(messages[1]["tool_call_id"], json!("call_123"));
     assert_eq!(messages[2]["role"], json!("user"));
     assert_eq!(messages[2]["content"], json!("Final question"));
+}
+
+#[tokio::test]
+async fn downstream_llm_inherits_run_level_tools_from_start_input() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        final_llm_response("first answer"),
+        final_llm_response("second answer"),
+    ]);
+
+    let outcome = start_flow_debug_run(
+        &multi_llm_answer_plan(),
+        &json!({
+            "node-start": {
+                "query": "List files",
+                "tools": [
+                    {
+                        "name": "list_directory",
+                        "description": "List a directory",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": { "type": "string" }
+                            }
+                        }
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 2);
+    assert_eq!(
+        captured[0].tools[0]["function"]["name"],
+        json!("list_directory")
+    );
+    assert_eq!(
+        captured[1].tools[0]["function"]["name"],
+        json!("list_directory")
+    );
+    assert_eq!(
+        captured[1].tools[0]["function"]["parameters"]["properties"]["path"]["type"],
+        json!("string")
+    );
 }
 
 #[tokio::test]
@@ -1732,6 +1867,40 @@ async fn llm_tool_calls_pause_current_llm_and_skip_downstream_answer() {
         llm_trace.debug_payload["llm_rounds"][0]["finish_reason"],
         json!("tool_call")
     );
+}
+
+#[tokio::test]
+async fn llm_tool_call_finish_without_tool_calls_fails_before_answer() {
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![tool_call_response(Vec::new())]);
+
+    let outcome = start_flow_debug_run(
+        &llm_answer_plan(),
+        &json!({ "node-start": { "query": "weather?" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_kind"],
+                json!("provider_invalid_response")
+            );
+            assert!(failure.error_payload["message"]
+                .as_str()
+                .expect("failure message should be a string")
+                .contains("finish_reason=tool_call"));
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+
+    assert!(outcome
+        .node_traces
+        .iter()
+        .all(|trace| trace.node_id != "node-answer"));
+    assert!(outcome.variable_pool.get("node-answer").is_none());
 }
 
 #[tokio::test]
