@@ -985,14 +985,24 @@ fn build_provider_invocation_input(
 ) -> ProviderInvocationInput {
     let previous_response_id =
         pending_llm_tool_callback_previous_response_id(node, runtime, variable_pool);
-    let prompt_messages = if previous_response_id.is_some() {
-        pending_llm_tool_callback_delta_messages(node, variable_pool).unwrap_or_else(|| {
-            binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
-        })
+    let (system, messages) = if previous_response_id.is_some() {
+        let prompt_messages = pending_llm_tool_callback_delta_messages(node, variable_pool)
+            .unwrap_or_else(|| {
+                binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+            });
+        let (system, messages) = provider_messages_from_prompt_messages(prompt_messages);
+        (
+            system.or_else(|| pending_llm_tool_callback_system(node, variable_pool)),
+            messages,
+        )
     } else {
-        binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+        provider_messages_from_prompt_messages(binding_prompt_messages(
+            node,
+            rendered_templates,
+            resolved_inputs,
+            variable_pool,
+        ))
     };
-    let (system, messages) = provider_messages_from_prompt_messages(prompt_messages);
 
     let trace_context = BTreeMap::from([
         ("node_id".to_string(), node.node_id.clone()),
@@ -1393,6 +1403,14 @@ fn pending_llm_tool_callback_delta_messages(
         .get("delta_messages")?
         .as_array()
         .cloned()
+}
+
+fn pending_llm_tool_callback_system(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> Option<String> {
+    let history = pending_llm_tool_callback_history(node, variable_pool)?;
+    provider_messages_from_prompt_messages(history).0
 }
 
 fn pending_llm_tool_callback_previous_response_id(

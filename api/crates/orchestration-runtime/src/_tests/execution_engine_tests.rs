@@ -2110,7 +2110,7 @@ async fn resume_llm_tool_results_recalls_same_llm_then_enters_downstream() {
 }
 
 #[tokio::test]
-async fn resume_llm_tool_results_passes_native_response_cursor_and_delta_messages() {
+async fn resume_llm_tool_results_passes_native_response_cursor_system_and_delta_messages() {
     let mut waiting_response = tool_call_response(vec![ProviderToolCall {
         id: "call_weather".to_string(),
         name: "lookup_weather".to_string(),
@@ -2119,7 +2119,36 @@ async fn resume_llm_tool_results_passes_native_response_cursor_and_delta_message
     }]);
     waiting_response.response_id = Some("resp_previous".to_string());
     let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![waiting_response]);
-    let plan = llm_answer_plan();
+    let mut plan = llm_answer_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.bindings.insert(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Always answer with current tool evidence."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "{{node-start.query}}"
+                    }
+                }
+            ]),
+        },
+    );
 
     let waiting = start_flow_debug_run(
         &plan,
@@ -2171,6 +2200,10 @@ async fn resume_llm_tool_results_passes_native_response_cursor_and_delta_message
     assert_eq!(
         captured[0].previous_response_id.as_deref(),
         Some("resp_previous")
+    );
+    assert_eq!(
+        captured[0].system.as_deref(),
+        Some("Always answer with current tool evidence.")
     );
     assert_eq!(captured[0].messages.len(), 1);
     assert_eq!(captured[0].messages[0].role, ProviderMessageRole::Tool);
