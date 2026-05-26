@@ -1,5 +1,130 @@
 use super::*;
 
+fn build_answer_only_document(flow_id: &str, answer_text: &str) -> Value {
+    json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": { "flowId": flow_id, "name": "Answer Only", "description": "", "tags": [] },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": []
+                },
+                {
+                    "id": "node-answer",
+                    "type": "answer",
+                    "alias": "Answer",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {
+                        "answer_template": { "kind": "templated_text", "value": answer_text }
+                    },
+                    "outputs": [{ "key": "answer", "title": "对话输出", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                { "id": "edge-start-answer", "source": "node-start", "target": "node-answer", "sourceHandle": null, "targetHandle": null, "containerId": null, "points": [] }
+            ]
+        },
+        "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
+    })
+}
+
+async fn seed_answer_only_application(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    answer_text: &str,
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/applications")
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "application_type": "agent_flow",
+                        "name": "Answer Only",
+                        "description": "runtime",
+                        "icon": "RobotOutlined",
+                        "icon_type": "iconfont",
+                        "icon_background": "#E6F7F2"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let application_id = payload["data"]["id"].as_str().unwrap().to_string();
+
+    let state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(state.status(), StatusCode::OK);
+    let state_body = to_bytes(state.into_body(), usize::MAX).await.unwrap();
+    let state_payload: Value = serde_json::from_slice(&state_body).unwrap();
+    let flow_id = state_payload["data"]["draft"]["document"]["meta"]["flowId"]
+        .as_str()
+        .unwrap();
+
+    let save = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/draft"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "document": build_answer_only_document(flow_id, answer_text),
+                        "change_kind": "logical",
+                        "summary": "seed answer-only flow"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(save.status(), StatusCode::OK);
+    application_id
+}
+
 #[tokio::test]
 async fn application_runtime_routes_start_debug_run_persists_gateway_billing_audit() {
     let (app, database_url) = test_app_with_database_url().await;
@@ -213,6 +338,117 @@ async fn application_runtime_routes_runtime_debug_artifact_full_load_returns_ori
     let full_payload: Value = serde_json::from_slice(&artifact_body).unwrap();
 
     assert_eq!(full_payload["node-start"]["query"], large_query);
+}
+
+#[tokio::test]
+async fn application_runtime_routes_flow_output_offloads_answer_field_without_compressing_sys_env()
+{
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let answer_text = format!("answer:{}", "A".repeat(3_000));
+    let application_id = seed_answer_only_application(&app, &cookie, &csrf, &answer_text).await;
+    let debug_session_id = "runtime-debug-answer-artifact-session";
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "debug_session_id": debug_session_id,
+                        "input_payload": {
+                            "node-start": { "query": "ping" }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
+
+    let detail = wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    assert_eq!(detail["flow_run"]["status"], json!("succeeded"));
+    let flow_output = &detail["flow_run"]["output_payload"];
+    assert!(flow_output.get("__runtime_debug_artifact").is_none());
+    assert_eq!(flow_output["answer"]["__runtime_debug_artifact"], true);
+    assert_eq!(flow_output["answer"]["artifact_scope"], json!("field"));
+    assert_eq!(flow_output["answer"]["field_path"], json!(["answer"]));
+    assert!(flow_output["answer"]["preview"]
+        .as_str()
+        .expect("answer preview should be a string")
+        .contains("answer:"));
+    let answer_artifact_ref = flow_output["answer"]["artifact_ref"]
+        .as_str()
+        .expect("answer artifact ref should exist");
+    let answer_artifact_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/{answer_artifact_ref}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer_artifact_response.status(), StatusCode::OK);
+    let answer_artifact_body = to_bytes(answer_artifact_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let full_answer: Value = serde_json::from_slice(&answer_artifact_body).unwrap();
+    assert_eq!(
+        full_answer
+            .as_str()
+            .expect("answer artifact should be text"),
+        answer_text
+    );
+    assert_eq!(flow_output["sys"]["workflow_run_id"], json!(run_id));
+    assert_eq!(flow_output["env"], json!({}));
+
+    let answer_node_output = detail["node_runs"]
+        .as_array()
+        .expect("node runs should be an array")
+        .iter()
+        .find(|node_run| node_run["node_id"] == json!("node-answer"))
+        .expect("answer node should be present")
+        .get("output_payload")
+        .expect("answer node should have output payload");
+    assert_eq!(
+        answer_node_output["answer"]["__runtime_debug_artifact"],
+        true
+    );
+    assert_eq!(
+        answer_node_output["answer"]["artifact_scope"],
+        json!("field")
+    );
+    assert_eq!(
+        answer_node_output["answer"]["field_path"],
+        json!(["answer"])
+    );
+    assert_eq!(answer_node_output["sys"]["workflow_run_id"], json!(run_id));
+    assert_eq!(answer_node_output["env"], json!({}));
 }
 
 #[tokio::test]

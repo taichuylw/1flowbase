@@ -29,42 +29,8 @@ import './application-run-detail-panel.css';
 
 const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
-
-function findFirstString(value: unknown): string | null {
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const nestedValue = findFirstString(entry);
-
-      if (nestedValue) {
-        return nestedValue;
-      }
-    }
-
-    return null;
-  }
-
-  if (isRecord(value)) {
-    for (const nestedValue of Object.values(value)) {
-      const firstString = findFirstString(nestedValue);
-
-      if (firstString) {
-        return firstString;
-      }
-    }
-  }
-
-  return null;
 }
 
 function mapRunStatusToMessageStatus(
@@ -154,10 +120,7 @@ function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
 function buildConversationLogMessage(
   detail: ApplicationRunDetail
 ): AgentFlowDebugMessage {
-  const assistantContent =
-    extractAssistantOutputText(detail) ||
-    findFirstString(detail.flow_run.output_payload) ||
-    '暂无输出';
+  const assistantContent = extractAssistantOutputText(detail) || '暂无输出';
   const rawOutput =
     Object.keys(detail.flow_run.output_payload).length > 0
       ? detail.flow_run.output_payload

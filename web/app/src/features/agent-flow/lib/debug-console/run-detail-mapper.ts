@@ -11,40 +11,6 @@ import {
   parseAssistantContent
 } from './assistant-content';
 
-function findFirstString(value: unknown): string | null {
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const nextValue = findFirstString(entry);
-
-      if (nextValue) {
-        return nextValue;
-      }
-    }
-
-    return null;
-  }
-
-  if (value && typeof value === 'object') {
-    if (isRuntimeDebugArtifactPreview(value)) {
-      return value.preview.trim().length > 0 ? value.preview : null;
-    }
-
-    for (const entry of Object.values(value as Record<string, unknown>)) {
-      const nextValue = findFirstString(entry);
-
-      if (nextValue) {
-        return nextValue;
-      }
-    }
-  }
-
-  return null;
-}
-
 function summarizePayload(payload: Record<string, unknown> | null | undefined) {
   if (!payload || Object.keys(payload).length === 0) {
     return '';
@@ -152,6 +118,22 @@ function findPreferredOutputText(payload: unknown): string | null {
   return null;
 }
 
+function findAnswerNodeOutputText(detail: FlowDebugRunDetail): string | null {
+  for (const nodeRun of [...detail.node_runs].reverse()) {
+    if (nodeRun.node_type !== 'answer') {
+      continue;
+    }
+
+    const outputText = findPreferredOutputText(nodeRun.output_payload);
+
+    if (outputText) {
+      return outputText;
+    }
+  }
+
+  return null;
+}
+
 function mapMessageStatus(status: string): AgentFlowDebugMessageStatus {
   switch (status) {
     case 'succeeded':
@@ -210,28 +192,24 @@ export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {
     return streamingText;
   }
 
-  const outputPayloadText =
-    findPreferredOutputText(detail.flow_run.output_payload) ??
-    findFirstString(detail.flow_run.output_payload);
+  const outputPayloadText = findPreferredOutputText(
+    detail.flow_run.output_payload
+  );
 
   if (outputPayloadText) {
     return outputPayloadText;
   }
 
-  const preferredNodeRun =
-    [...detail.node_runs]
-      .reverse()
-      .find((nodeRun) => findFirstString(nodeRun.output_payload)) ?? null;
-
-  if (preferredNodeRun) {
-    return findFirstString(preferredNodeRun.output_payload) ?? '';
+  const answerNodeOutputText = findAnswerNodeOutputText(detail);
+  if (answerNodeOutputText) {
+    return answerNodeOutputText;
   }
 
   if (detail.flow_run.error_payload) {
     return summarizePayload(detail.flow_run.error_payload);
   }
 
-  return summarizePayload(detail.flow_run.output_payload);
+  return '';
 }
 
 function extractAssistantContent(detail: FlowDebugRunDetail): string {

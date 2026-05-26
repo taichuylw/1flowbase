@@ -868,10 +868,11 @@ pub async fn offload_application_run_detail_artifacts(
         flow_input_payload
     };
     let (flow_output_payload, flow_output_changed) = writer
-        .offload_value(
+        .offload_payload_fields(
             &flow_scope,
             "flow_output_payload",
             detail.flow_run.output_payload.clone(),
+            Vec::new(),
         )
         .await?;
     let (flow_error_payload, flow_error_changed) = match detail.flow_run.error_payload.clone() {
@@ -1076,10 +1077,6 @@ pub(super) fn application_run_answer(payload: &Value) -> Option<String> {
         {
             return Some(value);
         }
-    }
-
-    if is_runtime_debug_artifact_payload(payload) {
-        return runtime_debug_artifact_preview_text(payload);
     }
 
     let object = payload.as_object()?;
@@ -1596,5 +1593,16 @@ mod tests {
             application_run_answer(&payload),
             Some("退款政策摘要...".into())
         );
+    }
+
+    #[test]
+    fn application_answer_ignores_root_artifact_preview_json() {
+        let payload = json!({
+            "__runtime_debug_artifact": true,
+            "artifact_ref": Uuid::now_v7().to_string(),
+            "preview": "{\"env\":{},\"sys\":{\"workflow_run_id\":\"run-1\"},\"answer\":\"退款政策摘要\"}"
+        });
+
+        assert_eq!(application_run_answer(&payload), None);
     }
 }

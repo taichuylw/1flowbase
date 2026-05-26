@@ -79,6 +79,55 @@ describe('run detail mapper', () => {
     expect(extractAssistantOutputText(detail)).toBe('截断预览内容');
   });
 
+  test('ignores root output artifact preview json and reads answer node output', () => {
+    const detail = baseDetail();
+    detail.flow_run.status = 'succeeded';
+    detail.flow_run.output_payload = {
+      __runtime_debug_artifact: true,
+      is_truncated: true,
+      artifact_ref: 'artifact-flow-output',
+      preview:
+        '{"env":{},"sys":{"workflow_run_id":"flow-run-1"},"answer":"错误的整包 JSON 预览"}'
+    };
+    detail.node_runs = [
+      {
+        id: 'node-run-answer',
+        flow_run_id: 'flow-run-1',
+        node_id: 'node-answer',
+        node_type: 'answer',
+        node_alias: 'Answer',
+        status: 'succeeded',
+        input_payload: {},
+        output_payload: {
+          env: {},
+          sys: { workflow_run_id: 'flow-run-1' },
+          answer: '真正回答'
+        },
+        error_payload: null,
+        metrics_payload: {},
+        debug_payload: {},
+        started_at: '2026-04-26T10:00:00Z',
+        finished_at: '2026-04-26T10:00:01Z'
+      }
+    ];
+
+    expect(extractAssistantOutputText(detail)).toBe('真正回答');
+  });
+
+  test('does not fall back to sys or env strings when answer is missing', () => {
+    const detail = baseDetail();
+    detail.flow_run.status = 'succeeded';
+    detail.flow_run.output_payload = {
+      env: {},
+      sys: {
+        workflow_run_id: 'flow-run-1',
+        app_id: 'app-1'
+      }
+    };
+
+    expect(extractAssistantOutputText(detail)).toBe('');
+  });
+
   test('uses provider text delta events while a run is still producing output', () => {
     const detail = baseDetail();
     detail.flow_run.status = 'running';
