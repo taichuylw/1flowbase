@@ -766,79 +766,6 @@ fn usage_i64(usage: &Value, field: &str) -> Option<i64> {
     usage.get(field).and_then(Value::as_i64)
 }
 
-#[cfg(test)]
-mod tests {
-    use orchestration_runtime::execution_state::{
-        ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure, NodeExecutionTrace,
-    };
-    use serde_json::{json, Map, Value};
-
-    use super::final_flow_output_payload;
-
-    fn trace(
-        node_id: &str,
-        output_payload: Value,
-        error_payload: Option<Value>,
-    ) -> NodeExecutionTrace {
-        NodeExecutionTrace {
-            node_id: node_id.to_string(),
-            node_type: "llm".to_string(),
-            node_alias: node_id.to_string(),
-            input_payload: json!({}),
-            output_payload,
-            error_payload,
-            metrics_payload: json!({}),
-            debug_payload: json!({}),
-            provider_events: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn failed_flow_output_keeps_last_successful_node_payload() {
-        let outcome = FlowDebugExecutionOutcome {
-            stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                node_id: "llm-2".to_string(),
-                node_alias: "LLM2".to_string(),
-                error_payload: json!({ "message": "provider worker ended without result line" }),
-            }),
-            variable_pool: Map::new(),
-            checkpoint_snapshot: None,
-            node_traces: vec![
-                trace("start", json!({}), None),
-                trace("llm-1", json!({ "text": "first answer" }), None),
-                trace(
-                    "llm-2",
-                    json!({}),
-                    Some(json!({ "message": "provider worker ended without result line" })),
-                ),
-            ],
-        };
-
-        assert_eq!(
-            final_flow_output_payload(&outcome),
-            json!({ "text": "first answer" })
-        );
-    }
-
-    #[test]
-    fn completed_flow_output_uses_terminal_node_payload() {
-        let outcome = FlowDebugExecutionOutcome {
-            stop_reason: ExecutionStopReason::Completed,
-            variable_pool: Map::new(),
-            checkpoint_snapshot: None,
-            node_traces: vec![
-                trace("llm-1", json!({ "text": "first answer" }), None),
-                trace("answer", json!({ "answer": "final answer" }), None),
-            ],
-        };
-
-        assert_eq!(
-            final_flow_output_payload(&outcome),
-            json!({ "answer": "final answer" })
-        );
-    }
-}
-
 async fn persist_flow_debug_node_traces<R>(
     repository: &R,
     flow_run_id: Uuid,
@@ -959,4 +886,77 @@ where
     }
 
     Ok(waiting_node_run)
+}
+
+#[cfg(test)]
+mod tests {
+    use orchestration_runtime::execution_state::{
+        ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure, NodeExecutionTrace,
+    };
+    use serde_json::{json, Map, Value};
+
+    use super::final_flow_output_payload;
+
+    fn trace(
+        node_id: &str,
+        output_payload: Value,
+        error_payload: Option<Value>,
+    ) -> NodeExecutionTrace {
+        NodeExecutionTrace {
+            node_id: node_id.to_string(),
+            node_type: "llm".to_string(),
+            node_alias: node_id.to_string(),
+            input_payload: json!({}),
+            output_payload,
+            error_payload,
+            metrics_payload: json!({}),
+            debug_payload: json!({}),
+            provider_events: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn failed_flow_output_keeps_last_successful_node_payload() {
+        let outcome = FlowDebugExecutionOutcome {
+            stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                node_id: "llm-2".to_string(),
+                node_alias: "LLM2".to_string(),
+                error_payload: json!({ "message": "provider worker ended without result line" }),
+            }),
+            variable_pool: Map::new(),
+            checkpoint_snapshot: None,
+            node_traces: vec![
+                trace("start", json!({}), None),
+                trace("llm-1", json!({ "text": "first answer" }), None),
+                trace(
+                    "llm-2",
+                    json!({}),
+                    Some(json!({ "message": "provider worker ended without result line" })),
+                ),
+            ],
+        };
+
+        assert_eq!(
+            final_flow_output_payload(&outcome),
+            json!({ "text": "first answer" })
+        );
+    }
+
+    #[test]
+    fn completed_flow_output_uses_terminal_node_payload() {
+        let outcome = FlowDebugExecutionOutcome {
+            stop_reason: ExecutionStopReason::Completed,
+            variable_pool: Map::new(),
+            checkpoint_snapshot: None,
+            node_traces: vec![
+                trace("llm-1", json!({ "text": "first answer" }), None),
+                trace("answer", json!({ "answer": "final answer" }), None),
+            ],
+        };
+
+        assert_eq!(
+            final_flow_output_payload(&outcome),
+            json!({ "answer": "final answer" })
+        );
+    }
 }

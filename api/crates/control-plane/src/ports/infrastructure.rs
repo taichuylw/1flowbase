@@ -182,18 +182,13 @@ impl EphemeralInspectionSummarySnapshot {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EphemeralValueRevealMode {
     Metadata,
+    #[default]
     Preview,
     Full,
-}
-
-impl Default for EphemeralValueRevealMode {
-    fn default() -> Self {
-        Self::Preview
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -525,7 +520,7 @@ pub fn search_ephemeral_entries(
 }
 
 fn ephemeral_entry_matches_query(entry: &EphemeralEntrySnapshot, query: &str) -> bool {
-    let mut searchable = vec![
+    let mut searchable = [
         entry.entry_ref.as_str(),
         entry.key.as_str(),
         entry.contract_code.as_str(),
