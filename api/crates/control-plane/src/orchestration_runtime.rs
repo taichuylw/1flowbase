@@ -29,6 +29,7 @@ use crate::{
     state_transition::{ensure_flow_run_transition, ensure_node_run_transition},
 };
 
+mod answer_presentation;
 pub(crate) mod compile_context;
 mod data_model_runtime;
 pub mod debug_artifacts;
@@ -246,6 +247,8 @@ struct RuntimeProviderInvoker<R, H> {
     flow_run_id: Option<Uuid>,
     active_node_id: Option<String>,
     active_node_run_id: Option<Uuid>,
+    answer_presentation:
+        Option<Arc<tokio::sync::Mutex<answer_presentation::AnswerPresentationCursor>>>,
 }
 
 pub struct OrchestrationRuntimeService<R, H> {
@@ -303,6 +306,7 @@ where
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            answer_presentation: None,
         }
     }
 
@@ -322,6 +326,7 @@ where
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            answer_presentation: None,
         }
     }
 
@@ -723,6 +728,7 @@ where
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
             flow_run: &flow_run,
+            compiled_plan: Some(&compiled_plan),
             outcome: &outcome,
             trigger_event_type: "flow_run_resumed",
             trigger_event_payload: json!({
@@ -842,6 +848,7 @@ where
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
             flow_run: &flow_run,
+            compiled_plan: Some(&compiled_plan),
             outcome: &outcome,
             trigger_event_type: "flow_run_resumed",
             trigger_event_payload: json!({
@@ -975,6 +982,7 @@ where
         self.persist_flow_debug_outcome(PersistFlowDebugOutcomeInput {
             application_id: command.application_id,
             flow_run,
+            compiled_plan: Some(compiled_plan),
             outcome: &outcome,
             trigger_event_type: "data_model_side_effect_confirmed",
             trigger_event_payload: json!({
@@ -1011,7 +1019,30 @@ where
         &self,
         input: PersistFlowDebugOutcomeInput<'_>,
     ) -> Result<domain::ApplicationRunDetail> {
-        persist_flow_debug_outcome(&self.repository, input).await
+        let flow_run_id = input.flow_run.id;
+        let persisted = persist_flow_debug_outcome(&self.repository, input).await?;
+        if let Some(stream) = &self.runtime_event_stream {
+            for event in &persisted.answer_presentation_events {
+                let mut stream_event = event.clone();
+                stream_event.persist_required = false;
+                if let Err(error) = stream.append(flow_run_id, stream_event).await {
+                    if is_expected_runtime_event_stream_closed_error(&error) {
+                        tracing::debug!(
+                            flow_run_id = %flow_run_id,
+                            error = %error,
+                            "answer presentation stream append skipped because stream is closed"
+                        );
+                    } else {
+                        tracing::warn!(
+                            flow_run_id = %flow_run_id,
+                            error = %error,
+                            "failed to append answer presentation event to stream"
+                        );
+                    }
+                }
+            }
+        }
+        Ok(persisted.detail)
     }
 
     async fn append_published_terminal_audit(
@@ -1074,7 +1105,13 @@ where
 #[async_trait]
 impl<R, H> orchestration_runtime::execution_engine::ProviderInvoker for RuntimeProviderInvoker<R, H>
 where
-    R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
+    R: ModelProviderRepository
+        + OrchestrationRuntimeRepository
+        + PluginRepository
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     H: ProviderRuntimePort + Clone + Send + Sync,
 {
     async fn invoke_llm(
@@ -1144,6 +1181,8 @@ where
             let live_sender = self.live_provider_events.clone();
             let persist_sender = self.persist_events.clone();
             let runtime_event_stream = self.runtime_event_stream.clone();
+            let answer_presentation = self.answer_presentation.clone();
+            let repository = self.repository.clone();
             let flow_run_id = self.flow_run_id;
             let first_token_timing_for_task = first_token_timing.clone();
             let (provider_sender, mut provider_receiver) =
@@ -1169,30 +1208,66 @@ where
                             (&runtime_event_stream, flow_run_id)
                         {
                             let runtime_events = match &event {
-                                ProviderStreamEvent::TextDelta { delta } => think_tag_splitter
-                                    .split(delta)
-                                    .into_iter()
-                                    .map(|part| match part.kind {
-                                        DebugDeltaKind::Text => debug_stream_events::text_delta(
+                                ProviderStreamEvent::TextDelta { delta } => {
+                                    let mut runtime_events = Vec::new();
+                                    let parts = think_tag_splitter.split(delta);
+                                    for part in parts {
+                                        let provider_event = match part.kind {
+                                            DebugDeltaKind::Text => {
+                                                runtime_events.push(
+                                                    debug_stream_events::text_delta(
+                                                        &node_id,
+                                                        node_run_id,
+                                                        part.text.clone(),
+                                                    ),
+                                                );
+                                                ProviderStreamEvent::TextDelta { delta: part.text }
+                                            }
+                                            DebugDeltaKind::Reasoning => {
+                                                runtime_events.push(
+                                                    debug_stream_events::reasoning_delta(
+                                                        &node_id,
+                                                        node_run_id,
+                                                        part.text.clone(),
+                                                    ),
+                                                );
+                                                ProviderStreamEvent::ReasoningDelta {
+                                                    delta: part.text,
+                                                }
+                                            }
+                                        };
+                                        if let Some(answer_presentation) = &answer_presentation {
+                                            runtime_events.extend(
+                                                answer_presentation
+                                                    .lock()
+                                                    .await
+                                                    .push_provider_event(
+                                                        &node_id,
+                                                        node_run_id,
+                                                        &provider_event,
+                                                    ),
+                                            );
+                                        }
+                                    }
+                                    runtime_events
+                                }
+                                ProviderStreamEvent::ReasoningDelta { delta } => {
+                                    let mut runtime_events =
+                                        vec![debug_stream_events::reasoning_delta(
                                             &node_id,
                                             node_run_id,
-                                            part.text,
-                                        ),
-                                        DebugDeltaKind::Reasoning => {
-                                            debug_stream_events::reasoning_delta(
+                                            delta.clone(),
+                                        )];
+                                    if let Some(answer_presentation) = &answer_presentation {
+                                        runtime_events.extend(
+                                            answer_presentation.lock().await.push_provider_event(
                                                 &node_id,
                                                 node_run_id,
-                                                part.text,
-                                            )
-                                        }
-                                    })
-                                    .collect::<Vec<_>>(),
-                                ProviderStreamEvent::ReasoningDelta { delta } => {
-                                    vec![debug_stream_events::reasoning_delta(
-                                        &node_id,
-                                        node_run_id,
-                                        delta.clone(),
-                                    )]
+                                                &event,
+                                            ),
+                                        );
+                                    }
+                                    runtime_events
                                 }
                                 _ => Vec::new(),
                             };
@@ -1203,10 +1278,34 @@ where
                                 continue;
                             };
                             for runtime_event in runtime_events {
+                                let is_answer_presentation =
+                                    debug_stream_events::is_answer_presentation_delta_payload(
+                                        &runtime_event.payload,
+                                    );
+                                if is_answer_presentation {
+                                    if let Err(error) =
+                                        runtime_event_persister::persist_runtime_event_payload(
+                                            &repository,
+                                            flow_run_id,
+                                            &runtime_event,
+                                        )
+                                        .await
+                                    {
+                                        tracing::warn!(
+                                            flow_run_id = %flow_run_id,
+                                            event_type = %runtime_event.event_type,
+                                            error = %error,
+                                            "failed to persist answer presentation runtime event"
+                                        );
+                                    }
+                                }
                                 let event_type = runtime_event.event_type.clone();
                                 let source = runtime_event.source;
-                                if let Err(error) = stream.append(flow_run_id, runtime_event).await
-                                {
+                                let mut stream_event = runtime_event;
+                                if is_answer_presentation {
+                                    stream_event.persist_required = false;
+                                }
+                                if let Err(error) = stream.append(flow_run_id, stream_event).await {
                                     if is_expected_runtime_event_stream_closed_error(&error) {
                                         tracing::debug!(
                                             flow_run_id = %flow_run_id,
@@ -1312,25 +1411,25 @@ fn is_expected_runtime_event_stream_closed_error(error: &anyhow::Error) -> bool 
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DebugDeltaKind {
+pub(super) enum DebugDeltaKind {
     Text,
     Reasoning,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct DebugDeltaPart {
-    kind: DebugDeltaKind,
-    text: String,
+pub(super) struct DebugDeltaPart {
+    pub(super) kind: DebugDeltaKind,
+    pub(super) text: String,
 }
 
 #[derive(Debug, Default)]
-struct ThinkTagStreamSplitter {
+pub(super) struct ThinkTagStreamSplitter {
     inside_think: bool,
     pending: String,
 }
 
 impl ThinkTagStreamSplitter {
-    fn split(&mut self, delta: &str) -> Vec<DebugDeltaPart> {
+    pub(super) fn split(&mut self, delta: &str) -> Vec<DebugDeltaPart> {
         self.pending.push_str(delta);
         let mut parts = Vec::new();
 
@@ -1377,6 +1476,21 @@ impl ThinkTagStreamSplitter {
 
         parts
     }
+
+    pub(super) fn finish(&mut self) -> Vec<DebugDeltaPart> {
+        let text = std::mem::take(&mut self.pending);
+        let mut parts = Vec::new();
+        push_debug_delta_part(
+            &mut parts,
+            if self.inside_think {
+                DebugDeltaKind::Reasoning
+            } else {
+                DebugDeltaKind::Text
+            },
+            text,
+        );
+        parts
+    }
 }
 
 fn push_debug_delta_part(parts: &mut Vec<DebugDeltaPart>, kind: DebugDeltaKind, text: String) {
@@ -1420,6 +1534,26 @@ where
             flow_run_id: Some(flow_run_id),
             active_node_id: self.active_node_id.clone(),
             active_node_run_id: self.active_node_run_id,
+            answer_presentation: self.answer_presentation.clone(),
+        }
+    }
+
+    pub(super) fn with_answer_presentation(
+        &self,
+        answer_presentation: Arc<tokio::sync::Mutex<answer_presentation::AnswerPresentationCursor>>,
+    ) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            persist_events: self.persist_events.clone(),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: self.flow_run_id,
+            active_node_id: self.active_node_id.clone(),
+            active_node_run_id: self.active_node_run_id,
+            answer_presentation: Some(answer_presentation),
         }
     }
 
@@ -1440,6 +1574,7 @@ where
             flow_run_id: self.flow_run_id,
             active_node_id: Some(node_id),
             active_node_run_id: Some(node_run_id),
+            answer_presentation: self.answer_presentation.clone(),
         }
     }
 
@@ -1744,6 +1879,7 @@ mod tests {
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            answer_presentation: None,
         };
 
         let error = invoker
@@ -1785,6 +1921,7 @@ mod tests {
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            answer_presentation: None,
         };
 
         let error = invoker
@@ -1822,6 +1959,7 @@ mod tests {
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            answer_presentation: None,
         };
 
         let resolved = invoker
@@ -1869,6 +2007,7 @@ mod tests {
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            answer_presentation: None,
         };
 
         let error = invoker

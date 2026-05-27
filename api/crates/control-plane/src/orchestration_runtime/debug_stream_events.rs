@@ -1,6 +1,8 @@
 use crate::ports::{RuntimeEventDurability, RuntimeEventPayload, RuntimeEventSource};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use uuid::Uuid;
+
+pub const ANSWER_PRESENTATION_KIND: &str = "answer";
 
 pub fn flow_accepted(run_id: Uuid) -> RuntimeEventPayload {
     RuntimeEventPayload {
@@ -232,6 +234,25 @@ pub fn text_delta(node_id: &str, node_run_id: Uuid, text: String) -> RuntimeEven
     }
 }
 
+pub fn answer_text_delta(
+    answer_node_id: &str,
+    text: String,
+    segment_index: usize,
+    source_node_id: Option<&str>,
+    source_node_run_id: Option<Uuid>,
+    source_output_key: Option<&str>,
+) -> RuntimeEventPayload {
+    answer_delta(
+        "text_delta",
+        answer_node_id,
+        text,
+        segment_index,
+        source_node_id,
+        source_node_run_id,
+        source_output_key,
+    )
+}
+
 pub fn reasoning_delta(node_id: &str, node_run_id: Uuid, text: String) -> RuntimeEventPayload {
     RuntimeEventPayload {
         event_type: "reasoning_delta".to_string(),
@@ -244,6 +265,87 @@ pub fn reasoning_delta(node_id: &str, node_run_id: Uuid, text: String) -> Runtim
             "node_run_id": node_run_id,
             "node_id": node_id,
             "text": text,
+        }),
+    }
+}
+
+pub fn answer_reasoning_delta(
+    answer_node_id: &str,
+    text: String,
+    segment_index: usize,
+    source_node_id: Option<&str>,
+    source_node_run_id: Option<Uuid>,
+    source_output_key: Option<&str>,
+) -> RuntimeEventPayload {
+    answer_delta(
+        "reasoning_delta",
+        answer_node_id,
+        text,
+        segment_index,
+        source_node_id,
+        source_node_run_id,
+        source_output_key,
+    )
+}
+
+pub fn is_answer_presentation_delta_payload(payload: &Value) -> bool {
+    payload
+        .get("presentation")
+        .and_then(Value::as_object)
+        .and_then(|presentation| presentation.get("kind"))
+        .and_then(Value::as_str)
+        == Some(ANSWER_PRESENTATION_KIND)
+}
+
+fn answer_delta(
+    event_type: &str,
+    answer_node_id: &str,
+    text: String,
+    segment_index: usize,
+    source_node_id: Option<&str>,
+    source_node_run_id: Option<Uuid>,
+    source_output_key: Option<&str>,
+) -> RuntimeEventPayload {
+    let mut presentation = Map::new();
+    presentation.insert(
+        "kind".to_string(),
+        Value::String(ANSWER_PRESENTATION_KIND.to_string()),
+    );
+    presentation.insert(
+        "answer_node_id".to_string(),
+        Value::String(answer_node_id.to_string()),
+    );
+    presentation.insert("segment_index".to_string(), json!(segment_index));
+    if let Some(source_node_id) = source_node_id {
+        presentation.insert(
+            "source_node_id".to_string(),
+            Value::String(source_node_id.to_string()),
+        );
+    }
+    if let Some(source_node_run_id) = source_node_run_id {
+        presentation.insert(
+            "source_node_run_id".to_string(),
+            Value::String(source_node_run_id.to_string()),
+        );
+    }
+    if let Some(source_output_key) = source_output_key {
+        presentation.insert(
+            "source_output_key".to_string(),
+            Value::String(source_output_key.to_string()),
+        );
+    }
+
+    RuntimeEventPayload {
+        event_type: event_type.to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: false,
+        payload: json!({
+            "type": event_type,
+            "node_id": answer_node_id,
+            "text": text,
+            "presentation": Value::Object(presentation),
         }),
     }
 }

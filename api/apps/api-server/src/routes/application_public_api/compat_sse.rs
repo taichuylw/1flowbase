@@ -675,6 +675,17 @@ where
                 }
             }
         }
+        if let Some(last_forwarded_durable_sequence) =
+            resume_durable_sequence_before_terminal.as_deref_mut()
+        {
+            advance_durable_cursor_for_forwarded_answer_delta(
+                state,
+                initial_run.id,
+                &event,
+                last_forwarded_durable_sequence,
+            )
+            .await;
+        }
         match forward_single_compatible_runtime_event(
             state,
             initial_run,
@@ -694,6 +705,62 @@ where
     }
 
     CompatibleForwardOutcome::Open { saw_event }
+}
+
+async fn advance_durable_cursor_for_forwarded_answer_delta(
+    state: &ApiState,
+    run_id: uuid::Uuid,
+    event: &RuntimeEventEnvelope,
+    last_forwarded_durable_sequence: &mut i64,
+) {
+    if !is_answer_presentation_delta(event) {
+        return;
+    }
+    let Ok(records) = state
+        .store
+        .list_runtime_events(run_id, *last_forwarded_durable_sequence)
+        .await
+    else {
+        return;
+    };
+    let Some(record) = records.into_iter().find(|record| {
+        record.sequence > *last_forwarded_durable_sequence
+            && durable_record_matches_answer_delta(record, event)
+    }) else {
+        return;
+    };
+
+    *last_forwarded_durable_sequence = record.sequence;
+}
+
+fn durable_record_matches_answer_delta(
+    record: &domain::RuntimeEventRecord,
+    event: &RuntimeEventEnvelope,
+) -> bool {
+    record.event_type == event.event_type
+        && debug_stream_events::is_answer_presentation_delta_payload(&record.payload)
+        && answer_delta_payload_field(&record.payload, "text")
+            == answer_delta_payload_field(&event.payload, "text")
+        && answer_delta_presentation_field(&record.payload, "answer_node_id")
+            == answer_delta_presentation_field(&event.payload, "answer_node_id")
+        && answer_delta_presentation_field(&record.payload, "segment_index")
+            == answer_delta_presentation_field(&event.payload, "segment_index")
+        && answer_delta_presentation_field(&record.payload, "source_node_id")
+            == answer_delta_presentation_field(&event.payload, "source_node_id")
+        && answer_delta_presentation_field(&record.payload, "source_output_key")
+            == answer_delta_presentation_field(&event.payload, "source_output_key")
+}
+
+fn answer_delta_payload_field(payload: &Value, key: &str) -> Option<Value> {
+    payload.get(key).cloned()
+}
+
+fn answer_delta_presentation_field(payload: &Value, key: &str) -> Option<Value> {
+    payload
+        .get("presentation")
+        .and_then(Value::as_object)
+        .and_then(|presentation| presentation.get(key))
+        .cloned()
 }
 
 async fn forward_compatible_runtime_events_without_resume_durable_prefix<F>(
@@ -1014,6 +1081,13 @@ fn is_public_terminal_runtime_event(event_type: &str) -> bool {
     )
 }
 
+fn is_answer_presentation_delta(envelope: &RuntimeEventEnvelope) -> bool {
+    matches!(
+        envelope.event_type.as_str(),
+        "reasoning_delta" | "text_delta"
+    ) && debug_stream_events::is_answer_presentation_delta_payload(&envelope.payload)
+}
+
 pub(crate) fn openai_chat_completion_id_from_run_id(run_id: uuid::Uuid) -> String {
     format!("chatcmpl-{run_id}")
 }
@@ -1049,20 +1123,23 @@ impl OpenAiChatStreamMapper {
         initial_run: &NativeRunResult,
         envelope: RuntimeEventEnvelope,
     ) -> Vec<Result<Event, Infallible>> {
+        let is_answer_presentation_delta = is_answer_presentation_delta(&envelope);
         match envelope.event_type.as_str() {
             "reasoning_delta"
-                if envelope
-                    .text
-                    .as_deref()
-                    .is_some_and(|text| !text.is_empty()) =>
+                if is_answer_presentation_delta
+                    && envelope
+                        .text
+                        .as_deref()
+                        .is_some_and(|text| !text.is_empty()) =>
             {
                 self.emitted_reasoning_delta = true;
             }
             "text_delta"
-                if envelope
-                    .text
-                    .as_deref()
-                    .is_some_and(|text| !text.is_empty()) =>
+                if is_answer_presentation_delta
+                    && envelope
+                        .text
+                        .as_deref()
+                        .is_some_and(|text| !text.is_empty()) =>
             {
                 self.emitted_text_delta = true;
             }
@@ -1149,20 +1226,23 @@ impl OpenAiResponseStreamMapper {
         initial_run: &NativeRunResult,
         envelope: RuntimeEventEnvelope,
     ) -> Vec<Result<Event, Infallible>> {
+        let is_answer_presentation_delta = is_answer_presentation_delta(&envelope);
         match envelope.event_type.as_str() {
             "reasoning_delta"
-                if envelope
-                    .text
-                    .as_deref()
-                    .is_some_and(|text| !text.is_empty()) =>
+                if is_answer_presentation_delta
+                    && envelope
+                        .text
+                        .as_deref()
+                        .is_some_and(|text| !text.is_empty()) =>
             {
                 self.emitted_reasoning_delta = true;
             }
             "text_delta"
-                if envelope
-                    .text
-                    .as_deref()
-                    .is_some_and(|text| !text.is_empty()) =>
+                if is_answer_presentation_delta
+                    && envelope
+                        .text
+                        .as_deref()
+                        .is_some_and(|text| !text.is_empty()) =>
             {
                 self.emitted_text_delta = true;
             }
@@ -1254,16 +1334,19 @@ fn openai_runtime_event_to_sse(
                 "finish_reason": null
             }]
         }))],
-        "text_delta" | "reasoning_delta" => openai_delta_chunk_payload(
-            initial_run,
-            model,
-            chat_completion_id,
-            envelope.event_type.as_str(),
-            envelope.text.unwrap_or_default(),
-        )
-        .map(json_sse)
-        .into_iter()
-        .collect(),
+        "text_delta" | "reasoning_delta" if is_answer_presentation_delta(&envelope) => {
+            openai_delta_chunk_payload(
+                initial_run,
+                model,
+                chat_completion_id,
+                envelope.event_type.as_str(),
+                envelope.text.unwrap_or_default(),
+            )
+            .map(json_sse)
+            .into_iter()
+            .collect()
+        }
+        "text_delta" | "reasoning_delta" => Vec::new(),
         "flow_finished" => vec![
             json_sse(openai_finish_chunk_payload(
                 initial_run,
@@ -1337,14 +1420,14 @@ fn openai_response_runtime_event_to_sse(
                 )
             }),
         )],
-        "text_delta" => vec![event_json_sse(
+        "text_delta" if is_answer_presentation_delta(&envelope) => vec![event_json_sse(
             "response.output_text.delta",
             openai_response_output_text_delta_payload(
                 initial_run,
                 envelope.text.unwrap_or_default(),
             ),
         )],
-        "reasoning_delta" => vec![event_json_sse(
+        "reasoning_delta" if is_answer_presentation_delta(&envelope) => vec![event_json_sse(
             "response.reasoning_text.delta",
             json!({
                 "type": "response.reasoning_text.delta",
@@ -1355,6 +1438,7 @@ fn openai_response_runtime_event_to_sse(
                 "delta": envelope.text.unwrap_or_default()
             }),
         )],
+        "text_delta" | "reasoning_delta" => Vec::new(),
         "flow_finished" => vec![event_json_sse(
             "response.completed",
             json!({
@@ -1733,12 +1817,22 @@ fn terminal_answer_delta_to_runtime_event(
     delta: TerminalAnswerDelta,
 ) -> RuntimeEventEnvelope {
     let payload = match delta.kind {
-        TerminalAnswerDeltaKind::Reasoning => {
-            debug_stream_events::reasoning_delta("assistant", run.id, delta.text)
-        }
-        TerminalAnswerDeltaKind::Text => {
-            debug_stream_events::text_delta("assistant", run.id, delta.text)
-        }
+        TerminalAnswerDeltaKind::Reasoning => debug_stream_events::answer_reasoning_delta(
+            "assistant",
+            delta.text,
+            sequence as usize,
+            None,
+            None,
+            None,
+        ),
+        TerminalAnswerDeltaKind::Text => debug_stream_events::answer_text_delta(
+            "assistant",
+            delta.text,
+            sequence as usize,
+            None,
+            None,
+            None,
+        ),
     };
     RuntimeEventEnvelope::new(run.id, sequence, payload)
 }
@@ -2085,7 +2179,7 @@ mod tests {
         application_public_api::native::{NativeRequiredAction, NativeRunStatus},
         ports::{
             AppendRuntimeEventInput, OrchestrationRuntimeRepository, RuntimeEventCloseReason,
-            RuntimeEventDurability, RuntimeEventSource, RuntimeEventStream,
+            RuntimeEventDurability, RuntimeEventPayload, RuntimeEventSource, RuntimeEventStream,
             RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
         },
     };
@@ -2320,6 +2414,58 @@ mod tests {
             .unwrap();
     }
 
+    #[tokio::test]
+    async fn forwarded_answer_delta_advances_matching_durable_cursor() {
+        let run = native_run();
+        let node_run_id = Uuid::from_u128(0x55555555555555555555555555555555);
+        let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
+        seed_flow_run_for_compat_sse_test(&base_state, &run).await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "text_delta",
+            json!({
+                "type": "text_delta",
+                "node_id": "node-answer",
+                "text": "prior node answer",
+                "presentation": {
+                    "kind": "answer",
+                    "answer_node_id": "node-answer",
+                    "source_node_id": "node-llm",
+                    "source_output_key": "text",
+                    "segment_index": 0
+                }
+            }),
+        )
+        .await;
+        let event = RuntimeEventEnvelope::new(
+            run.id,
+            7,
+            debug_stream_events::answer_text_delta(
+                "node-answer",
+                "prior node answer".to_string(),
+                0,
+                Some("node-llm"),
+                Some(node_run_id),
+                Some("text"),
+            ),
+        );
+        let mut durable_sequence = 0;
+
+        advance_durable_cursor_for_forwarded_answer_delta(
+            &base_state,
+            run.id,
+            &event,
+            &mut durable_sequence,
+        )
+        .await;
+
+        assert!(
+            durable_sequence > 0,
+            "forwarded answer delta should mark matching durable record as consumed"
+        );
+    }
+
     #[test]
     fn openai_delta_chunk_maps_reasoning_to_reasoning_content() {
         let chat_completion_id = "chatcmpl-test";
@@ -2537,7 +2683,7 @@ mod tests {
     }
 
     #[test]
-    fn openai_chat_resume_terminal_answer_fallback_does_not_duplicate_streamed_text() {
+    fn openai_chat_terminal_answer_fallback_ignores_provider_raw_delta() {
         let run = native_run();
         let mut mapper =
             OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
@@ -2558,8 +2704,51 @@ mod tests {
             ),
         );
 
-        assert_eq!(text_events.len(), 1);
-        assert_eq!(terminal_events.len(), 2);
+        assert!(text_events.is_empty());
+        assert_eq!(terminal_events.len(), 3);
+    }
+
+    #[test]
+    fn openai_chat_projects_answer_presentation_delta_not_provider_raw_delta() {
+        let run = native_run();
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+        let provider_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::text_delta(
+                    "node-llm",
+                    Uuid::from_u128(0x55555555555555555555555555555555),
+                    "provider raw".to_string(),
+                ),
+            ),
+        );
+        let presentation_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                2,
+                RuntimeEventPayload {
+                    event_type: "text_delta".to_string(),
+                    source: RuntimeEventSource::Runtime,
+                    durability: RuntimeEventDurability::DurableRequired,
+                    persist_required: true,
+                    trace_visible: false,
+                    payload: json!({
+                        "type": "text_delta",
+                        "node_run_id": Uuid::from_u128(0x66666666666666666666666666666666),
+                        "node_id": "node-answer",
+                        "text": "answer presentation",
+                        "presentation": { "kind": "answer" }
+                    }),
+                },
+            ),
+        );
+
+        assert!(provider_events.is_empty());
+        assert_eq!(presentation_events.len(), 1);
     }
 
     #[tokio::test]
@@ -2589,10 +2778,13 @@ mod tests {
             RuntimeEventEnvelope::new(
                 run.id,
                 1,
-                debug_stream_events::text_delta(
-                    "node-llm",
-                    node_run_id,
+                debug_stream_events::answer_text_delta(
+                    "node-answer",
                     "prior node answer".to_string(),
+                    0,
+                    Some("node-llm"),
+                    Some(node_run_id),
+                    Some("text"),
                 ),
             ),
             RuntimeEventEnvelope::new(
@@ -2729,8 +2921,16 @@ mod tests {
             json!({
                 "type": "text_delta",
                 "event_type": "text_delta",
-                "node_run_id": node_run_id,
+                "node_id": "node-answer",
                 "text": "prior node answer",
+                "presentation": {
+                    "kind": "answer",
+                    "answer_node_id": "node-answer",
+                    "source_node_id": "node-llm",
+                    "source_node_run_id": node_run_id,
+                    "source_output_key": "text",
+                    "segment_index": 0
+                },
                 "stream_sequence": 2,
                 "sequence_start": 2,
                 "sequence_end": 2
@@ -2842,6 +3042,164 @@ mod tests {
             text_index < tool_index,
             "prior LLM text should be projected before the next tool call: {body}"
         );
+        assert!(body.contains("\"finish_reason\":\"tool_calls\""), "{body}");
+        assert!(body.contains("[DONE]"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn openai_chat_live_answer_delta_is_not_duplicated_by_durable_drain() {
+        let mut run = native_run();
+        let node_run_id = Uuid::from_u128(0x77777777777777777777777777777777);
+        let callback_task_id = Uuid::from_u128(0x99999999999999999999999999999999);
+        run.status = NativeRunStatus::Waiting;
+        run.tool_calls = Some(json!([
+            {
+                "id": "call_next",
+                "name": "lookup_next",
+                "arguments": { "query": "next" }
+            }
+        ]));
+        run.required_action = Some(NativeRequiredAction {
+            action_type: "submit_tool_outputs".to_string(),
+            payload: json!({
+                "callback_task_id": callback_task_id,
+                "callback_kind": "llm_tool_calls",
+                "node_run_id": node_run_id,
+                "tool_calls": run.tool_calls.clone().unwrap()
+            }),
+        });
+
+        let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
+        seed_flow_run_for_compat_sse_test(&base_state, &run).await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "text_delta",
+            json!({
+                "type": "text_delta",
+                "event_type": "text_delta",
+                "node_id": "node-answer",
+                "text": "prior node answer",
+                "presentation": {
+                    "kind": "answer",
+                    "answer_node_id": "node-answer",
+                    "source_node_id": "node-llm",
+                    "source_node_run_id": node_run_id,
+                    "source_output_key": "text",
+                    "segment_index": 0
+                }
+            }),
+        )
+        .await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "waiting_callback",
+            json!({
+                "type": "waiting_callback",
+                "run_id": run.id,
+                "status": "waiting_callback",
+                "callback_task_id": callback_task_id,
+                "callback_kind": "llm_tool_calls",
+                "node_run_id": node_run_id,
+                "tool_calls": run.tool_calls.clone().unwrap()
+            }),
+        )
+        .await;
+
+        let subscription_replay = vec![
+            RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+            RuntimeEventEnvelope::new(
+                run.id,
+                2,
+                debug_stream_events::answer_text_delta(
+                    "node-answer",
+                    "prior node answer".to_string(),
+                    0,
+                    Some("node-llm"),
+                    Some(node_run_id),
+                    Some("text"),
+                ),
+            ),
+            RuntimeEventEnvelope::new(
+                run.id,
+                3,
+                RuntimeEventPayload {
+                    event_type: "waiting_callback".to_string(),
+                    source: RuntimeEventSource::Runtime,
+                    durability: RuntimeEventDurability::DurableRequired,
+                    persist_required: true,
+                    trace_visible: true,
+                    payload: json!({
+                        "type": "waiting_callback",
+                        "run_id": run.id,
+                        "status": "waiting_callback",
+                        "callback_task_id": callback_task_id,
+                        "callback_kind": "llm_tool_calls",
+                        "node_run_id": node_run_id,
+                        "tool_calls": run.tool_calls.clone().unwrap()
+                    }),
+                },
+            ),
+        ];
+        let runtime_event_stream = Arc::new(
+            ReplayBeforeFallbackRuntimeEventStream::with_subscription_replay(
+                subscription_replay,
+                Vec::new(),
+            ),
+        );
+        let state = Arc::new(ApiState {
+            store: base_state.store.clone(),
+            infrastructure: base_state.infrastructure.clone(),
+            file_storage_registry: base_state.file_storage_registry.clone(),
+            runtime_engine: base_state.runtime_engine.clone(),
+            provider_runtime: base_state.provider_runtime.clone(),
+            process_started_at: base_state.process_started_at,
+            api_runtime_profile: base_state.api_runtime_profile.clone(),
+            plugin_runner_system: base_state.plugin_runner_system.clone(),
+            official_plugin_source: base_state.official_plugin_source.clone(),
+            provider_install_root: base_state.provider_install_root.clone(),
+            provider_secret_master_key: base_state.provider_secret_master_key.clone(),
+            host_extension_dropin_root: base_state.host_extension_dropin_root.clone(),
+            allow_unverified_filesystem_dropins: base_state.allow_unverified_filesystem_dropins,
+            allow_uploaded_host_extensions: base_state.allow_uploaded_host_extensions,
+            session_store: base_state.session_store.clone(),
+            runtime_event_stream,
+            api_docs: base_state.api_docs.clone(),
+            cookie_name: base_state.cookie_name.clone(),
+            session_ttl_days: base_state.session_ttl_days,
+            bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
+        });
+        let (sender, mut receiver) = mpsc::channel(32);
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            send_compatible_runtime_event_stream(
+                state,
+                run.clone(),
+                Some(0),
+                None,
+                sender,
+                move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+            ),
+        )
+        .await
+        .expect("compatible stream should stop at replayed waiting callback");
+
+        let mut events = Vec::new();
+        while let Some(event) = receiver.recv().await {
+            events.push(event);
+        }
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert_eq!(body.matches("prior node answer").count(), 1, "{body}");
+        assert!(body.contains("lookup_next"), "{body}");
         assert!(body.contains("\"finish_reason\":\"tool_calls\""), "{body}");
         assert!(body.contains("[DONE]"), "{body}");
     }

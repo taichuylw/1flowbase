@@ -288,6 +288,57 @@ async fn live_provider_delta_is_appended_to_runtime_event_stream() {
 }
 
 #[tokio::test]
+async fn answer_template_static_text_is_projected_as_answer_presentation_delta() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service
+        .seed_application_with_second_llm_failure_flow("Support Agent")
+        .await;
+    let stream =
+        std::sync::Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service = service.with_runtime_event_stream(stream.clone());
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: serde_json::json!({ "node-start": { "query": "hello" } }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let presentation_text = service
+        .list_runtime_events(detail.flow_run.id, 0)
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "text_delta")
+        .filter(|event| event.payload["presentation"]["kind"].as_str() == Some("answer"))
+        .filter_map(|event| {
+            event
+                .payload
+                .get("text")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .collect::<String>();
+
+    assert_eq!(presentation_text, detail.flow_run.output_payload["answer"]);
+    assert!(
+        presentation_text.contains("\n----\n"),
+        "Answer Presentation should include static template text: {presentation_text}"
+    );
+}
+
+#[tokio::test]
 async fn live_provider_reasoning_delta_is_appended_to_runtime_event_stream() {
     let service = OrchestrationRuntimeService::for_tests_with_provider_events(vec![
         plugin_framework::provider_contract::ProviderStreamEvent::ReasoningDelta {
@@ -385,11 +436,13 @@ async fn live_provider_text_delta_with_think_tags_is_split_into_reasoning_and_an
     let reasoning_text = events
         .iter()
         .filter(|event| event.event_type == "reasoning_delta")
+        .filter(|event| event.payload["presentation"]["kind"].as_str() == Some("answer"))
         .filter_map(|event| event.payload["text"].as_str())
         .collect::<String>();
     let answer_text = events
         .iter()
         .filter(|event| event.event_type == "text_delta")
+        .filter(|event| event.payload["presentation"]["kind"].as_str() == Some("answer"))
         .filter_map(|event| event.payload["text"].as_str())
         .collect::<String>();
 

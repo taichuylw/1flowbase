@@ -210,6 +210,10 @@ pub(super) fn ensure_compiled_plan_runnable(
             orchestration_runtime::compiled_plan::CompileIssueCode::InvalidCodeIsolationProfile => {
                 "isolation"
             }
+            orchestration_runtime::compiled_plan::CompileIssueCode::DuplicateAnswerPresentationReference
+            | orchestration_runtime::compiled_plan::CompileIssueCode::InvalidAnswerPresentationOrder => {
+                "answer_template"
+            }
         };
         return Err(ControlPlaneError::InvalidInput(field).into());
     }

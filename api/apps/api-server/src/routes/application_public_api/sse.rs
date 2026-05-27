@@ -154,7 +154,7 @@ fn native_sse_payload_for_runtime_event(
                 required_action: None,
             },
         ),
-        "reasoning_delta" => (
+        "reasoning_delta" if is_answer_presentation_delta(&envelope) => (
             "reasoning.delta",
             NativeSsePayload {
                 run_id: initial_run.id,
@@ -171,7 +171,7 @@ fn native_sse_payload_for_runtime_event(
                 required_action: None,
             },
         ),
-        "text_delta" => (
+        "text_delta" if is_answer_presentation_delta(&envelope) => (
             "message.delta",
             NativeSsePayload {
                 run_id: initial_run.id,
@@ -188,6 +188,7 @@ fn native_sse_payload_for_runtime_event(
                 required_action: None,
             },
         ),
+        "reasoning_delta" | "text_delta" => return None,
         "node_started" | "node_finished"
             if include_workflow_events == IncludeWorkflowEvents::Public =>
         {
@@ -330,8 +331,11 @@ fn is_public_terminal_runtime_event(event_type: &str) -> bool {
     )
 }
 
-fn is_public_answer_delta_runtime_event(event_type: &str) -> bool {
-    matches!(event_type, "reasoning_delta" | "text_delta")
+fn is_answer_presentation_delta(envelope: &RuntimeEventEnvelope) -> bool {
+    matches!(
+        envelope.event_type.as_str(),
+        "reasoning_delta" | "text_delta"
+    ) && debug_stream_events::is_answer_presentation_delta_payload(&envelope.payload)
 }
 
 pub async fn send_native_runtime_event_stream(
@@ -355,7 +359,7 @@ pub async fn send_native_runtime_event_stream(
         }
         let event_type = event.event_type.clone();
         let is_terminal = is_public_terminal_runtime_event(&event_type);
-        let is_answer_delta = is_public_answer_delta_runtime_event(&event_type);
+        let is_answer_delta = is_answer_presentation_delta(&event);
         if is_terminal && !emitted_answer_delta {
             let answer_events =
                 terminal_answer_delta_sse_events(&initial_run, include_workflow_events, &event);
@@ -388,7 +392,7 @@ pub async fn send_native_runtime_event_stream(
                 }
                 let event_type = event.event_type.clone();
                 let is_terminal = is_public_terminal_runtime_event(&event_type);
-                let is_answer_delta = is_public_answer_delta_runtime_event(&event_type);
+                let is_answer_delta = is_answer_presentation_delta(&event);
                 if is_terminal && !emitted_answer_delta {
                     let answer_events =
                         terminal_answer_delta_sse_events(&initial_run, include_workflow_events, &event);
@@ -579,12 +583,22 @@ fn terminal_answer_delta_to_runtime_event(
     delta: TerminalAnswerDelta,
 ) -> RuntimeEventEnvelope {
     let payload = match delta.kind {
-        TerminalAnswerDeltaKind::Reasoning => {
-            debug_stream_events::reasoning_delta("assistant", run.id, delta.text)
-        }
-        TerminalAnswerDeltaKind::Text => {
-            debug_stream_events::text_delta("assistant", run.id, delta.text)
-        }
+        TerminalAnswerDeltaKind::Reasoning => debug_stream_events::answer_reasoning_delta(
+            "assistant",
+            delta.text,
+            sequence as usize,
+            None,
+            None,
+            None,
+        ),
+        TerminalAnswerDeltaKind::Text => debug_stream_events::answer_text_delta(
+            "assistant",
+            delta.text,
+            sequence as usize,
+            None,
+            None,
+            None,
+        ),
     };
     RuntimeEventEnvelope::new(run.id, sequence, payload)
 }
@@ -611,7 +625,9 @@ fn terminal_answer_delta_sse_events(
 mod tests {
     use super::*;
     use control_plane::orchestration_runtime::debug_stream_events;
-    use control_plane::ports::RuntimeEventEnvelope;
+    use control_plane::ports::{
+        RuntimeEventDurability, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventSource,
+    };
     use serde_json::json;
     use time::OffsetDateTime;
 
@@ -639,10 +655,13 @@ mod tests {
         let event = RuntimeEventEnvelope::new(
             run.id,
             1,
-            debug_stream_events::reasoning_delta(
-                "node-llm",
-                Uuid::from_u128(0x55555555555555555555555555555555),
+            debug_stream_events::answer_reasoning_delta(
+                "node-answer",
                 "先分析用户问题".to_string(),
+                0,
+                Some("node-llm"),
+                Some(Uuid::from_u128(0x55555555555555555555555555555555)),
+                Some("text"),
             ),
         );
 
@@ -654,6 +673,55 @@ mod tests {
         assert_eq!(event_name, "reasoning.delta");
         assert_eq!(payload["delta"], json!("先分析用户问题"));
         assert_eq!(payload.get("workflow"), None);
+    }
+
+    #[test]
+    fn native_sse_projects_answer_presentation_delta_not_provider_raw_delta() {
+        let run = native_run();
+        let provider_event = RuntimeEventEnvelope::new(
+            run.id,
+            1,
+            debug_stream_events::text_delta(
+                "node-llm",
+                Uuid::from_u128(0x55555555555555555555555555555555),
+                "provider raw".to_string(),
+            ),
+        );
+        let presentation_event = RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "text_delta".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: false,
+                payload: json!({
+                    "type": "text_delta",
+                    "node_run_id": Uuid::from_u128(0x66666666666666666666666666666666),
+                    "node_id": "node-answer",
+                    "text": "answer presentation",
+                    "presentation": { "kind": "answer" }
+                }),
+            },
+        );
+
+        assert!(native_sse_payload_for_runtime_event(
+            &run,
+            IncludeWorkflowEvents::None,
+            provider_event
+        )
+        .is_none());
+        let (event_name, payload) = native_sse_payload_for_runtime_event(
+            &run,
+            IncludeWorkflowEvents::None,
+            presentation_event,
+        )
+        .expect("answer presentation delta should be public native SSE");
+        let payload = serde_json::to_value(payload).expect("payload serializes");
+
+        assert_eq!(event_name, "message.delta");
+        assert_eq!(payload["delta"], json!("answer presentation"));
     }
 
     #[tokio::test]

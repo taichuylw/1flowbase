@@ -176,6 +176,24 @@ async fn complete_llm_tool_callback_resolves_final_llm_debug_refs() {
         completed.flow_run.output_payload["answer"],
         json!("Shanghai is sunny")
     );
+    let presentation_text = service
+        .list_runtime_events(completed.flow_run.id, 0)
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "text_delta")
+        .filter(|event| event.payload["presentation"]["kind"].as_str() == Some("answer"))
+        .filter_map(|event| {
+            event
+                .payload
+                .get("text")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .collect::<String>();
+    assert!(
+        presentation_text.ends_with("Shanghai is sunny"),
+        "callback resume should append final Answer Presentation suffix: {presentation_text}"
+    );
 
     let projections = service
         .list_context_projections(completed.flow_run.id)
@@ -204,6 +222,137 @@ async fn complete_llm_tool_callback_resolves_final_llm_debug_refs() {
         &projections,
         &attempts,
         final_llm_node.id,
+    );
+}
+
+#[tokio::test]
+async fn callback_resume_waiting_again_projects_completed_answer_prefix_before_tool_call() {
+    use plugin_framework::provider_contract::{
+        ProviderFinishReason, ProviderInvocationResult, ProviderToolCall, ProviderUsage,
+    };
+
+    let service = OrchestrationRuntimeService::for_tests_with_provider_results(vec![
+        ProviderInvocationResult {
+            final_content: Some("need first tool".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_weather".to_string(),
+                name: "lookup_weather".to_string(),
+                arguments: json!({ "city": "Shanghai" }),
+                provider_metadata: json!({}),
+            }],
+            usage: ProviderUsage {
+                total_tokens: Some(12),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        ProviderInvocationResult {
+            final_content: Some("LLM1 final".to_string()),
+            usage: ProviderUsage {
+                total_tokens: Some(16),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::Stop),
+            ..ProviderInvocationResult::default()
+        },
+        ProviderInvocationResult {
+            final_content: Some("need second tool".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_policy".to_string(),
+                name: "lookup_policy".to_string(),
+                arguments: json!({ "topic": "refund" }),
+                provider_metadata: json!({}),
+            }],
+            usage: ProviderUsage {
+                total_tokens: Some(20),
+                ..ProviderUsage::default()
+            },
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+    ]);
+    let seeded = service
+        .seed_application_with_second_llm_failure_flow("Support Agent")
+        .await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "天气？" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let first_waiting = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        first_waiting.flow_run.status,
+        domain::FlowRunStatus::WaitingCallback
+    );
+
+    let second_waiting = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: first_waiting.callback_tasks[0].id,
+            response_payload: json!({
+                "tool_results": [
+                    {
+                        "tool_call_id": "call_weather",
+                        "content": "sunny"
+                    }
+                ]
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        second_waiting.flow_run.status,
+        domain::FlowRunStatus::WaitingCallback
+    );
+    let second_callback_task_id = second_waiting.callback_tasks.last().unwrap().id;
+    let runtime_events = service
+        .list_runtime_events(second_waiting.flow_run.id, 0)
+        .await;
+    let presentation_text = runtime_events
+        .iter()
+        .filter(|event| event.event_type == "text_delta")
+        .filter(|event| event.payload["presentation"]["kind"].as_str() == Some("answer"))
+        .filter_map(|event| event.payload["text"].as_str())
+        .collect::<String>();
+    assert_eq!(presentation_text, "LLM1 final\n----\n");
+
+    let waiting_callback_sequence = runtime_events
+        .iter()
+        .find(|event| {
+            event.event_type == "waiting_callback"
+                && event.payload["callback_task_id"].as_str()
+                    == Some(second_callback_task_id.to_string().as_str())
+        })
+        .expect("second waiting callback runtime event should be persisted")
+        .sequence;
+    let last_answer_sequence = runtime_events
+        .iter()
+        .filter(|event| event.event_type == "text_delta")
+        .filter(|event| event.payload["presentation"]["kind"].as_str() == Some("answer"))
+        .map(|event| event.sequence)
+        .max()
+        .expect("answer presentation delta should be persisted");
+    assert!(
+        last_answer_sequence < waiting_callback_sequence,
+        "answer presentation should be durable before waiting callback"
     );
 }
 

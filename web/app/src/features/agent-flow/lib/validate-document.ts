@@ -242,6 +242,165 @@ function getAllowedPublicOutputKeysForNode(
   return new Set(contract.defaults.outputs.map((output) => output.key));
 }
 
+interface AnswerPresentationReference {
+  nodeId: string;
+  outputKey: string;
+}
+
+function collectAnswerPresentationReferences(
+  node: FlowNodeDocument
+): AnswerPresentationReference[] {
+  const binding = node.bindings.answer_template;
+
+  if (!binding) {
+    return [];
+  }
+
+  const selectors =
+    binding.kind === 'selector'
+      ? [binding.value]
+      : binding.kind === 'templated_text'
+        ? parseTemplateSelectorTokens(binding.value)
+        : [];
+
+  return selectors
+    .filter((selector) => selector.length >= 2)
+    .map((selector) => ({
+      nodeId: selector[0],
+      outputKey: selector[1]
+    }));
+}
+
+function buildNodeDependencyMap(
+  document: FlowAuthoringDocument,
+  nodeIds: Set<string>
+): Map<string, Set<string>> {
+  const dependencies = new Map<string, Set<string>>();
+
+  for (const node of document.graph.nodes) {
+    dependencies.set(node.id, new Set());
+  }
+
+  for (const edge of document.graph.edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+      continue;
+    }
+    dependencies.get(edge.target)?.add(edge.source);
+  }
+
+  for (const node of document.graph.nodes) {
+    const nodeDependencies = dependencies.get(node.id);
+    if (!nodeDependencies) {
+      continue;
+    }
+
+    for (const [, binding] of getActiveNodeBindings(node)) {
+      for (const selector of collectBindingSelectors(binding)) {
+        const sourceNodeId = selector[0] ?? '';
+        if (
+          selector.length >= 2 &&
+          !isRuntimeSelectorSource(sourceNodeId) &&
+          nodeIds.has(sourceNodeId) &&
+          sourceNodeId !== node.id
+        ) {
+          nodeDependencies.add(sourceNodeId);
+        }
+      }
+    }
+  }
+
+  return dependencies;
+}
+
+function nodeDependsOn(
+  dependencies: Map<string, Set<string>>,
+  nodeId: string,
+  dependencyNodeId: string
+): boolean {
+  const stack = [nodeId];
+  const visited = new Set<string>();
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+
+    for (const dependency of dependencies.get(current) ?? []) {
+      if (dependency === dependencyNodeId) {
+        return true;
+      }
+      stack.push(dependency);
+    }
+  }
+
+  return false;
+}
+
+function formatAnswerPresentationReference(
+  reference: AnswerPresentationReference,
+  nodeById: Map<string, FlowNodeDocument>
+): string {
+  const node = nodeById.get(reference.nodeId);
+  const nodeLabel = node?.alias.trim() || reference.nodeId;
+
+  return `${nodeLabel}.${reference.outputKey}`;
+}
+
+function validateAnswerPresentationReferences(
+  issues: AgentFlowIssue[],
+  answerNode: FlowNodeDocument,
+  nodeById: Map<string, FlowNodeDocument>,
+  dependencies: Map<string, Set<string>>
+) {
+  const references = collectAnswerPresentationReferences(answerNode);
+  const seen = new Set<string>();
+
+  for (const reference of references) {
+    const key = `${reference.nodeId}.${reference.outputKey}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      continue;
+    }
+
+    pushFieldIssue(
+      issues,
+      answerNode,
+      'bindings.answer_template',
+      'Answer 输出变量重复引用',
+      `同一个输出变量 ${formatAnswerPresentationReference(
+        reference,
+        nodeById
+      )} 在 Answer 模板中只能引用一次。`
+    );
+  }
+
+  for (let index = 0; index < references.length; index += 1) {
+    const current = references[index];
+    for (const later of references.slice(index + 1)) {
+      if (!nodeDependsOn(dependencies, current.nodeId, later.nodeId)) {
+        continue;
+      }
+
+      pushFieldIssue(
+        issues,
+        answerNode,
+        'bindings.answer_template',
+        'Answer 展示顺序违反执行依赖',
+        `当前模板把 ${formatAnswerPresentationReference(
+          current,
+          nodeById
+        )} 放在 ${formatAnswerPresentationReference(
+          later,
+          nodeById
+        )} 前面，但前者依赖后者的执行结果。请按节点依赖顺序调整 Answer 模板。`
+      );
+      break;
+    }
+  }
+}
+
 export function validateDocument(
   document: FlowAuthoringDocument,
   providerOptions?: AgentFlowModelProviderOptions | null,
@@ -249,6 +408,8 @@ export function validateDocument(
 ): AgentFlowIssue[] {
   const issues: AgentFlowIssue[] = [];
   const nodeIds = new Set(document.graph.nodes.map((node) => node.id));
+  const nodeById = new Map(document.graph.nodes.map((node) => [node.id, node]));
+  const dependencies = buildNodeDependencyMap(document, nodeIds);
   const startNodes = document.graph.nodes.filter(
     (node) => node.type === 'start'
   );
@@ -400,6 +561,15 @@ export function validateDocument(
         message:
           '当前 plugin_node 缺少 plugin_id / plugin_version / contribution_code / node_shell / schema_version / plugin_unique_identifier / package_id / contribution_checksum / compiled_contribution_hash / output_schema_snapshot。'
       });
+    }
+
+    if (node.type === 'answer') {
+      validateAnswerPresentationReferences(
+        issues,
+        node,
+        nodeById,
+        dependencies
+      );
     }
 
     for (const [bindingKey, bindingValue] of getActiveNodeBindings(node)) {

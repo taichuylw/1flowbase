@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 
+use crate::answer_presentation::validate_answer_presentation;
 use crate::compiled_plan::{
     CodeExecutorCapability, CodeIsolationProfile, CompileIssue, CompileIssueCode, CompiledBinding,
     CompiledCodeDependency, CompiledCodeRuntime, CompiledLlmRouteTarget, CompiledLlmRouting,
@@ -92,17 +93,21 @@ impl FlowCompiler {
         if schema_version != FLOW_SCHEMA_VERSION {
             bail!("unsupported flow schemaVersion: {schema_version}");
         }
-        let (nodes, topological_order, compile_issues) =
+        let (nodes, topological_order, mut compile_issues) =
             build_nodes_and_topology(document, context)?;
 
-        Ok(CompiledPlan {
+        let mut plan = CompiledPlan {
             flow_id,
             source_draft_id: draft_id.to_string(),
             schema_version,
             topological_order,
             nodes,
-            compile_issues,
-        })
+            compile_issues: Vec::new(),
+        };
+        compile_issues.extend(validate_answer_presentation(&plan));
+        plan.compile_issues = compile_issues;
+
+        Ok(plan)
     }
 }
 

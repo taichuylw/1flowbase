@@ -144,6 +144,102 @@ fn sample_document(flow_id: Uuid) -> serde_json::Value {
     })
 }
 
+fn add_second_llm_and_answer(
+    document: &mut Value,
+    answer_template: &str,
+    llm2_depends_on_llm1: bool,
+) {
+    let nodes = document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("sample graph nodes should be an array");
+    nodes.push(json!({
+        "id": "node-llm-2",
+        "type": "llm",
+        "alias": "LLM2",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 480, "y": 0 },
+        "configVersion": 1,
+        "config": {
+            "model_provider": {
+                "provider_code": "fixture_provider",
+                "model_id": "gpt-5.4-mini"
+            }
+        },
+        "bindings": {
+            "prompt_messages": {
+                "kind": "prompt_messages",
+                "value": [{
+                    "id": "user-2",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": if llm2_depends_on_llm1 { "{{ node-llm.text }}" } else { "{{ node-start.query }}" }
+                    }
+                }]
+            }
+        },
+        "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+    }));
+    nodes.push(json!({
+        "id": "node-answer",
+        "type": "answer",
+        "alias": "Answer",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 720, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {
+            "answer_template": { "kind": "templated_text", "value": answer_template }
+        },
+        "outputs": [{ "key": "answer", "title": "对话输出", "valueType": "string" }]
+    }));
+
+    let edges = document["graph"]["edges"]
+        .as_array_mut()
+        .expect("sample graph edges should be an array");
+    if llm2_depends_on_llm1 {
+        edges.push(json!({
+            "id": "edge-llm-llm2",
+            "source": "node-llm",
+            "target": "node-llm-2",
+            "sourceHandle": null,
+            "targetHandle": null,
+            "containerId": null,
+            "points": []
+        }));
+    } else {
+        edges.push(json!({
+            "id": "edge-start-llm2",
+            "source": "node-start",
+            "target": "node-llm-2",
+            "sourceHandle": null,
+            "targetHandle": null,
+            "containerId": null,
+            "points": []
+        }));
+    }
+    edges.push(json!({
+        "id": "edge-llm-answer",
+        "source": "node-llm",
+        "target": "node-answer",
+        "sourceHandle": null,
+        "targetHandle": null,
+        "containerId": null,
+        "points": []
+    }));
+    edges.push(json!({
+        "id": "edge-llm2-answer",
+        "source": "node-llm-2",
+        "target": "node-answer",
+        "sourceHandle": null,
+        "targetHandle": null,
+        "containerId": null,
+        "points": []
+    }));
+}
+
 fn plugin_document(flow_id: Uuid) -> serde_json::Value {
     json!({
         "schemaVersion": "1flowbase.flow/v2",
@@ -581,6 +677,68 @@ fn code_js_dependency_invalid_imports_report_stable_issue() {
     assert!(plan.compile_issues.iter().any(|issue| {
         issue.node_id == "node-code" && issue.code == CompileIssueCode::InvalidJsDependencyImport
     }));
+}
+
+#[test]
+fn compile_rejects_answer_presentation_reversing_real_dependency_order() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    add_second_llm_and_answer(
+        &mut document,
+        "{{ node-llm-2.text }}\n----\n{{ node-llm.text }}",
+        true,
+    );
+
+    let compiled = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context())
+        .expect("document should compile with answer presentation issue");
+
+    assert!(compiled.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-answer"
+            && issue.code == CompileIssueCode::InvalidAnswerPresentationOrder
+    }));
+}
+
+#[test]
+fn compile_rejects_duplicate_answer_presentation_reference() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    add_second_llm_and_answer(
+        &mut document,
+        "{{ node-llm.text }}\n----\n{{ node-llm.text }}",
+        true,
+    );
+
+    let compiled = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context())
+        .expect("document should compile with answer presentation issue");
+
+    assert!(compiled.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-answer"
+            && issue.code == CompileIssueCode::DuplicateAnswerPresentationReference
+    }));
+}
+
+#[test]
+fn compile_allows_parallel_answer_references_in_template_order() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    add_second_llm_and_answer(
+        &mut document,
+        "{{ node-llm-2.text }}\n----\n{{ node-llm.text }}",
+        false,
+    );
+
+    let compiled = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context())
+        .expect("parallel answer references should compile");
+
+    assert!(
+        compiled.compile_issues.iter().all(|issue| !matches!(
+            issue.code,
+            CompileIssueCode::InvalidAnswerPresentationOrder
+                | CompileIssueCode::DuplicateAnswerPresentationReference
+        )),
+        "parallel presentation order should not create answer issues: {:?}",
+        compiled.compile_issues
+    );
 }
 
 #[test]

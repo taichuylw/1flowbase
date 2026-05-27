@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use time::OffsetDateTime;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::{
     errors::ControlPlaneError,
@@ -239,6 +241,9 @@ where
         .ok_or_else(|| anyhow!("compiled plan not found"))?;
     let compiled_plan: orchestration_runtime::compiled_plan::CompiledPlan =
         serde_json::from_value(compiled_record.plan)?;
+    let answer_presentation =
+        super::super::answer_presentation::AnswerPresentationCursor::from_plan(&compiled_plan)
+            .map(|cursor| Arc::new(Mutex::new(cursor)));
     let invoker = if let Some(live_provider_events) = live_provider_events {
         service.runtime_invoker_with_live_provider_events(
             application.workspace_id,
@@ -248,6 +253,11 @@ where
         service.runtime_invoker(application.workspace_id)
     }
     .for_flow_run(flow_run.id);
+    let invoker = if let Some(answer_presentation) = &answer_presentation {
+        invoker.with_answer_presentation(answer_presentation.clone())
+    } else {
+        invoker
+    };
     let mut variable_pool = flow_run
         .input_payload
         .as_object()
@@ -367,6 +377,15 @@ where
                     },
                 )
                 .await?;
+                emit_answer_presentation_for_node(
+                    service,
+                    flow_run.id,
+                    answer_presentation.as_ref(),
+                    &node.node_id,
+                    node_run.id,
+                    &last_output_payload,
+                )
+                .await;
             }
             "llm" => {
                 let persist_text_run_events = service.runtime_event_stream.is_none();
@@ -439,6 +458,15 @@ where
                         },
                     )
                     .await?;
+                    emit_answer_presentation_for_node(
+                        service,
+                        flow_run.id,
+                        answer_presentation.as_ref(),
+                        &node.node_id,
+                        node_run.id,
+                        &public_output_payload,
+                    )
+                    .await;
                     if can_continue_to_terminal_template_nodes(&compiled_plan, node_index) {
                         pending_failure = Some(error_payload.clone());
                         continue;
@@ -589,6 +617,15 @@ where
                 }
                 last_output_payload = public_output_payload.clone();
                 variable_pool.insert(node.node_id.clone(), public_output_payload);
+                emit_answer_presentation_for_node(
+                    service,
+                    flow_run.id,
+                    answer_presentation.as_ref(),
+                    &node.node_id,
+                    node_run.id,
+                    &last_output_payload,
+                )
+                .await;
             }
             "plugin_node" => {
                 let execution =
@@ -1360,6 +1397,31 @@ fn can_continue_to_terminal_template_nodes(
         has_terminal_template_node = true;
     }
     has_terminal_template_node
+}
+
+async fn emit_answer_presentation_for_node<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: uuid::Uuid,
+    answer_presentation: Option<
+        &Arc<Mutex<super::super::answer_presentation::AnswerPresentationCursor>>,
+    >,
+    node_id: &str,
+    node_run_id: uuid::Uuid,
+    output_payload: &Value,
+) where
+    R: OrchestrationRuntimeRepository,
+{
+    let Some(answer_presentation) = answer_presentation else {
+        return;
+    };
+    let events =
+        answer_presentation
+            .lock()
+            .await
+            .complete_node(node_id, node_run_id, output_payload);
+    for event in events {
+        append_runtime_event(service, flow_run_id, event).await;
+    }
 }
 
 async fn fail_current_live_run_after_node_error<R, H>(

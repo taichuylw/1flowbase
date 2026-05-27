@@ -354,10 +354,9 @@ async fn application_runtime_routes_stream_debug_run_returns_flow_accepted() {
         .to_string();
     let text_delta_events =
         wait_for_persisted_text_delta_events(&app, &cookie, &application_id, &run_id).await;
-    assert_eq!(
-        text_delta_events.len(),
-        1,
-        "streamed debug run should persist one logical durable text_delta event: {text_delta_events:?}"
+    assert!(
+        !text_delta_events.is_empty(),
+        "streamed debug run should persist durable text_delta evidence"
     );
     let text_delta = &text_delta_events[0];
     let text_delta_payload = resolve_runtime_debug_artifact_value(

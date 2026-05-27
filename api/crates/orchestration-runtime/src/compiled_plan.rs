@@ -235,6 +235,8 @@ pub enum CompileIssueCode {
     JsDependencyImportNotEnabled,
     InvalidJsDependencyImport,
     InvalidCodeIsolationProfile,
+    DuplicateAnswerPresentationReference,
+    InvalidAnswerPresentationOrder,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

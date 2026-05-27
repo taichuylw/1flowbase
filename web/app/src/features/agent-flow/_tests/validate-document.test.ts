@@ -44,6 +44,112 @@ function createCodeDocumentWithOutputs(
   return document;
 }
 
+function addSecondLlmNode(
+  document: ReturnType<typeof createDefaultAgentFlowDocument>,
+  dependsOnFirst: boolean
+) {
+  const firstLlm = document.graph.nodes.find((node) => node.id === 'node-llm');
+  const answerNode = document.graph.nodes.find(
+    (node) => node.id === 'node-answer'
+  );
+
+  if (!firstLlm || !answerNode) {
+    throw new Error('expected default LLM and Answer nodes');
+  }
+
+  const secondLlm = {
+    ...createNodeDocument(
+      'llm',
+      'node-llm-2',
+      firstLlm.position.x + 240,
+      firstLlm.position.y
+    ),
+    alias: 'LLM 2',
+    config: firstLlm.config,
+    bindings: dependsOnFirst
+      ? {
+          prompt_messages: {
+            kind: 'prompt_messages' as const,
+            value: [
+              {
+                id: 'user-2',
+                role: 'user' as const,
+                content: {
+                  kind: 'templated_text' as const,
+                  value: '{{node-llm.text}}'
+                }
+              }
+            ]
+          }
+        }
+      : firstLlm.bindings,
+    outputs: firstLlm.outputs
+  };
+
+  document.graph.nodes = [
+    ...document.graph.nodes.filter((node) => node.id !== 'node-answer'),
+    secondLlm,
+    answerNode
+  ];
+  document.graph.edges = document.graph.edges.filter(
+    (edge) => edge.id !== 'edge-llm-answer'
+  );
+
+  if (dependsOnFirst) {
+    document.graph.edges.push(
+      {
+        id: 'edge-llm-llm2',
+        source: 'node-llm',
+        target: 'node-llm-2',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-llm2-answer',
+        source: 'node-llm-2',
+        target: 'node-answer',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    );
+    return;
+  }
+
+  document.graph.edges.push(
+    {
+      id: 'edge-start-llm2',
+      source: 'node-start',
+      target: 'node-llm-2',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    },
+    {
+      id: 'edge-llm-answer',
+      source: 'node-llm',
+      target: 'node-answer',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    },
+    {
+      id: 'edge-llm2-answer',
+      source: 'node-llm-2',
+      target: 'node-answer',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    }
+  );
+}
+
 describe('validateDocument', () => {
   test.each(['__trace'])('flags internal output selector key %s', (key) => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -460,6 +566,96 @@ describe('validateDocument', () => {
         })
       ])
     );
+  });
+
+  test('rejects duplicate Answer presentation output references', () => {
+    const broken = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const answerNode = broken.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('expected default Answer node');
+    }
+
+    answerNode.bindings.answer_template = {
+      kind: 'templated_text',
+      value: '{{node-llm.text}}\n----\n{{node-llm.text}}'
+    };
+
+    const issues = validateDocument(broken);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scope: 'field',
+          level: 'error',
+          nodeId: 'node-answer',
+          fieldKey: 'bindings.answer_template',
+          title: 'Answer 输出变量重复引用'
+        })
+      ])
+    );
+  });
+
+  test('rejects Answer presentation order that reverses a real dependency', () => {
+    const broken = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    addSecondLlmNode(broken, true);
+    const answerNode = broken.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('expected default Answer node');
+    }
+
+    answerNode.bindings.answer_template = {
+      kind: 'templated_text',
+      value: '{{node-llm-2.text}}\n----\n{{node-llm.text}}'
+    };
+
+    const issues = validateDocument(broken);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scope: 'field',
+          level: 'error',
+          nodeId: 'node-answer',
+          fieldKey: 'bindings.answer_template',
+          title: 'Answer 展示顺序违反执行依赖'
+        })
+      ])
+    );
+  });
+
+  test('allows parallel Answer presentation references in template order', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    addSecondLlmNode(document, false);
+    const answerNode = document.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('expected default Answer node');
+    }
+
+    answerNode.bindings.answer_template = {
+      kind: 'templated_text',
+      value: '{{node-llm-2.text}}\n----\n{{node-llm.text}}'
+    };
+
+    const issues = validateDocument(document);
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.nodeId === 'node-answer' &&
+          issue.fieldKey === 'bindings.answer_template' &&
+          (issue.title === 'Answer 展示顺序违反执行依赖' ||
+            issue.title === 'Answer 输出变量重复引用')
+      )
+    ).toBe(false);
   });
 
   test('accepts templated bindings that reference application environment variables', () => {
