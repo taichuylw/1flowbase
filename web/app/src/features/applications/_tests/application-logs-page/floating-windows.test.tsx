@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -508,7 +509,7 @@ describe('ApplicationLogsPage - floating windows', () => {
     ).not.toBeInTheDocument();
   }, 20_000);
 
-  test('refreshes an active conversation log until the run reaches a terminal status', async () => {
+  test('opens a waiting callback conversation log without active polling', async () => {
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
@@ -584,16 +585,17 @@ describe('ApplicationLogsPage - floating windows', () => {
     expect(await screen.findByText('公开 API 工具调用')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
-    expect(await screen.findByText('等待工具结果')).toBeInTheDocument();
-    await waitFor(
-      () => {
-        expect(screen.getByText('最终回答')).toBeInTheDocument();
-      },
-      { timeout: 4_000 }
-    );
     expect(
       runtimeApi.fetchApplicationConversationMessages.mock.calls.length
-    ).toBeGreaterThanOrEqual(2);
+    ).toBe(1);
+    expect(await screen.findByText('等待工具结果')).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    });
+    expect(screen.queryByText('最终回答')).not.toBeInTheDocument();
+    expect(
+      runtimeApi.fetchApplicationConversationMessages.mock.calls.length
+    ).toBe(1);
   }, 8_000);
 
   test('drags and resizes floating run detail window', async () => {

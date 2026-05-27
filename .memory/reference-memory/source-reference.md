@@ -14,8 +14,8 @@ match_when:
   - 需要查找上层相邻项目源码
   - 需要确认前端技术边界参考文档
 created_at: 2026-04-12 19
-updated_at: 2026-05-26 14
-last_verified_at: 2026-05-26 14
+updated_at: 2026-05-27 00
+last_verified_at: 2026-05-27 00
 decision_policy: index_only
 scope:
   - ../1flowbase-latest
@@ -25,6 +25,7 @@ scope:
   - ../1flowbase-project-maintenance
   - ../1flowtap
   - ../AionUi
+  - ../aionui
   - ../Aniu
   - ../agent-search
   - ../aionrs
@@ -69,6 +70,8 @@ scope:
   - 1flow 相关相邻项目源码入口。
 - `../AionUi`
   - AionUI 客户端/产品实现相关源码入口。
+- `../aionui`
+  - 本机当前 AionUI 相邻仓库入口；排查 1flowbase OpenAI-compatible 接入、Aionrs 终止按钮、conversation stop 与客户端工具回调链路时优先看这里。
 - `../aionrs`
   - Aion/Rust 相关实现参考入口。
 - `../dify`
