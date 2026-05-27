@@ -1391,6 +1391,78 @@ async fn failed_llm_public_text_is_available_to_downstream_answer_contract() {
 }
 
 #[tokio::test]
+async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved() {
+    let mut plan = llm_answer_plan();
+    let answer = plan
+        .nodes
+        .get_mut("node-answer")
+        .expect("answer node should exist");
+    answer.bindings = BTreeMap::from([(
+        "answer_template".to_string(),
+        CompiledBinding {
+            kind: "templated_text".to_string(),
+            selector_paths: vec![
+                vec!["node-llm".to_string(), "text".to_string()],
+                vec!["node-llm-1".to_string(), "text".to_string()],
+            ],
+            raw_value: json!("Answer: {{ node-llm.text }}\nMissing: {{ node-llm-1.text }}"),
+        },
+    )]);
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &StubProviderInvoker {
+            fail: false,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: "visible answer".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-answer");
+            assert_eq!(
+                failure.error_payload["error_kind"],
+                json!("prompt_template_unresolved")
+            );
+        }
+        other => panic!("expected answer node failure, got {other:?}"),
+    }
+
+    let answer_trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-answer")
+        .expect("answer trace should exist");
+    assert_eq!(
+        answer_trace.output_payload["answer"],
+        json!("Answer: visible answer\nMissing: ")
+    );
+    assert_eq!(
+        answer_trace.output_payload["error"]["error_kind"],
+        json!("prompt_template_unresolved")
+    );
+    assert_eq!(
+        answer_trace.output_payload["error"]["details"][0]["selector"],
+        json!("node-llm-1.text")
+    );
+    assert_eq!(
+        answer_trace
+            .error_payload
+            .as_ref()
+            .expect("answer trace should keep structured error")["error_kind"],
+        json!("prompt_template_unresolved")
+    );
+    assert_eq!(
+        outcome.variable_pool["node-answer"]["answer"],
+        json!("Answer: visible answer\nMissing: ")
+    );
+}
+
+#[tokio::test]
 async fn failover_queue_retries_next_target_before_first_token() {
     let mut plan = base_plan();
     let llm = plan

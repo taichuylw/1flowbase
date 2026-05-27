@@ -3,6 +3,19 @@ use serde_json::{Map, Value};
 
 use crate::compiled_plan::{CompiledBinding, CompiledNode};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindingResolutionIssue {
+    pub binding_key: String,
+    pub selector: Option<Vec<String>>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnswerNodeInputResolution {
+    pub resolved_inputs: Map<String, Value>,
+    pub issues: Vec<BindingResolutionIssue>,
+}
+
 pub fn resolve_node_inputs(
     node: &CompiledNode,
     variable_pool: &Map<String, Value>,
@@ -22,6 +35,24 @@ pub fn resolve_node_inputs(
     }
 
     Ok(resolved)
+}
+
+pub fn resolve_answer_node_inputs(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> AnswerNodeInputResolution {
+    let mut resolved_inputs = Map::new();
+    let mut issues = Vec::new();
+
+    for (binding_key, binding) in &node.bindings {
+        let value = resolve_answer_binding(binding_key, binding, variable_pool, &mut issues);
+        resolved_inputs.insert(binding_key.clone(), value);
+    }
+
+    AnswerNodeInputResolution {
+        resolved_inputs,
+        issues,
+    }
 }
 
 pub fn render_templated_bindings(
@@ -137,6 +168,77 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
         "data_model_query" => resolve_data_model_query(binding, variable_pool),
         "condition_group" | "state_write" => Ok(binding.raw_value.clone()),
         other => bail!("unsupported binding kind: {other}"),
+    }
+}
+
+fn resolve_answer_binding(
+    binding_key: &str,
+    binding: &CompiledBinding,
+    variable_pool: &Map<String, Value>,
+    issues: &mut Vec<BindingResolutionIssue>,
+) -> Value {
+    match binding.kind.as_str() {
+        "selector" => {
+            let Some(selector) = binding.selector_paths.first() else {
+                issues.push(BindingResolutionIssue {
+                    binding_key: binding_key.to_string(),
+                    selector: None,
+                    message: "selector binding is missing selector path".to_string(),
+                });
+                return Value::Null;
+            };
+            lookup_selector_value(variable_pool, selector).unwrap_or_else(|error| {
+                issues.push(BindingResolutionIssue {
+                    binding_key: binding_key.to_string(),
+                    selector: Some(selector.clone()),
+                    message: error.to_string(),
+                });
+                Value::Null
+            })
+        }
+        "selector_list" => Value::Array(
+            binding
+                .selector_paths
+                .iter()
+                .map(|selector| {
+                    lookup_selector_value(variable_pool, selector).unwrap_or_else(|error| {
+                        issues.push(BindingResolutionIssue {
+                            binding_key: binding_key.to_string(),
+                            selector: Some(selector.clone()),
+                            message: error.to_string(),
+                        });
+                        Value::Null
+                    })
+                })
+                .collect(),
+        ),
+        "templated_text" => binding
+            .raw_value
+            .as_str()
+            .map(|value| {
+                Value::String(render_template_with_issues(
+                    binding_key,
+                    value,
+                    variable_pool,
+                    issues,
+                ))
+            })
+            .unwrap_or_else(|| {
+                issues.push(BindingResolutionIssue {
+                    binding_key: binding_key.to_string(),
+                    selector: None,
+                    message: "templated_text raw_value must be a string".to_string(),
+                });
+                Value::String(String::new())
+            }),
+        _ => resolve_binding(binding, variable_pool).unwrap_or_else(|error| {
+            issues.push(BindingResolutionIssue {
+                binding_key: binding_key.to_string(),
+                selector: None,
+                message: error.to_string(),
+            });
+            Value::Null
+        }),
     }
 }
 
@@ -394,4 +496,53 @@ fn render_template(template: &str, variable_pool: &Map<String, Value>) -> Result
 
     rendered.push_str(&template[cursor..]);
     Ok(rendered)
+}
+
+fn render_template_with_issues(
+    binding_key: &str,
+    template: &str,
+    variable_pool: &Map<String, Value>,
+    issues: &mut Vec<BindingResolutionIssue>,
+) -> String {
+    let mut rendered = String::new();
+    let mut cursor = 0;
+
+    while let Some(start_offset) = template[cursor..].find("{{") {
+        let start = cursor + start_offset;
+        rendered.push_str(&template[cursor..start]);
+        let token_start = start + 2;
+        let Some(end_offset) = template[token_start..].find("}}") else {
+            rendered.push_str(&template[start..]);
+            return rendered;
+        };
+        let token_end = token_start + end_offset;
+        let token = template[token_start..token_end].trim();
+        let selector = token.split('.').map(str::to_string).collect::<Vec<_>>();
+
+        if selector.len() >= 2 {
+            match lookup_selector_value(variable_pool, &selector) {
+                Ok(Value::String(text)) => rendered.push_str(&text),
+                Ok(Value::Null) => rendered.push_str("null"),
+                Ok(value) => rendered.push_str(&value.to_string()),
+                Err(error) => issues.push(BindingResolutionIssue {
+                    binding_key: binding_key.to_string(),
+                    selector: Some(selector),
+                    message: error.to_string(),
+                }),
+            }
+        } else {
+            issues.push(BindingResolutionIssue {
+                binding_key: binding_key.to_string(),
+                selector: Some(selector),
+                message: format!(
+                    "unresolved template selector {token}: selector path must include a source"
+                ),
+            });
+        }
+
+        cursor = token_end + 2;
+    }
+
+    rendered.push_str(&template[cursor..]);
+    rendered
 }
