@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import { AppThemeProvider } from '@1flowbase/ui';
 
+import { AppI18nProvider } from './AppI18nProvider';
+
 export function AppProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(
     () =>
@@ -21,7 +23,9 @@ export function AppProviders({ children }: PropsWithChildren) {
 
   return (
     <AppThemeProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <AppI18nProvider>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </AppI18nProvider>
     </AppThemeProvider>
   );
 }

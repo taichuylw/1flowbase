@@ -29,6 +29,8 @@ import { SignInPage } from '../pages/SignInPage';
 
 describe('SignInPage', () => {
   beforeEach(() => {
+    window.history.pushState({}, '', '/sign-in');
+    window.localStorage.clear();
     navigateSpy.mockReset();
     signInWithPassword.mockReset();
     fetchCurrentMe.mockReset();
@@ -60,13 +62,13 @@ describe('SignInPage', () => {
       </AppProviders>
     );
 
-    fireEvent.change(screen.getByLabelText('账号'), {
+    fireEvent.change(await screen.findByLabelText('Account'), {
       target: { value: 'root' }
     });
-    fireEvent.change(screen.getByLabelText('密码'), {
+    fireEvent.change(screen.getByLabelText('Password'), {
       target: { value: 'change-me' }
     });
-    fireEvent.click(screen.getByRole('button', { name: /登\s*录/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }));
 
     await waitFor(() =>
       expect(signInWithPassword).toHaveBeenCalledWith({
@@ -75,9 +77,7 @@ describe('SignInPage', () => {
       })
     );
     await waitFor(() => expect(fetchCurrentMe).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(navigateSpy).toHaveBeenCalledWith({ to: '/' })
-    );
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith({ to: '/' }));
 
     expect(useAuthStore.getState()).toEqual(
       expect.objectContaining({
@@ -92,5 +92,45 @@ describe('SignInPage', () => {
         })
       })
     );
+  });
+
+  test('defaults the sign-in page copy to English without rendering a language selector', async () => {
+    render(
+      <AppProviders>
+        <SignInPage />
+      </AppProviders>
+    );
+
+    expect(await screen.findByLabelText('Account')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sign in/ })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /language/i })).not.toBeInTheDocument();
+  });
+
+  test('uses the URL language parameter when no cached locale exists', async () => {
+    window.history.pushState({}, '', '/sign-in?language=zh');
+
+    render(
+      <AppProviders>
+        <SignInPage />
+      </AppProviders>
+    );
+
+    expect(await screen.findByLabelText('\u8d26\u53f7')).toBeInTheDocument();
+    expect(screen.getByLabelText('\u5bc6\u7801')).toBeInTheDocument();
+  });
+
+  test('uses cached locale preference before the URL language parameter', async () => {
+    window.history.pushState({}, '', '/sign-in?language=zh');
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'en_US');
+
+    render(
+      <AppProviders>
+        <SignInPage />
+      </AppProviders>
+    );
+
+    expect(await screen.findByLabelText('Account')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sign in/ })).toBeInTheDocument();
   });
 });

@@ -7,6 +7,7 @@ import { Space } from 'antd';
 import { AccountMenu } from './AccountMenu';
 import { FrontstageDesignModeAction } from './FrontstageDesignModeAction';
 import { HelpChromeMenu } from './HelpChromeMenu';
+import { LanguageChromeMenu } from './LanguageChromeMenu';
 import { Navigation } from './Navigation';
 import { SettingsChromeMenu } from './SettingsChromeMenu';
 import { getSecondaryChromeRoutes } from '../routes/route-helpers';
@@ -77,6 +78,7 @@ export function AppShellFrame({
               </span>
             ))}
             <HelpChromeMenu />
+            <LanguageChromeMenu />
           </span>
           <AccountMenu useRouterNavigation={useRouterLinks} />
         </Space>

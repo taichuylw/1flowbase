@@ -1,6 +1,6 @@
 ---
 name: frontend-development
-description: "Use for 1flowbase frontend work in web/: implementing, fixing, refactoring, reviewing, or planning UI pages, app shell, routes, navigation, workspace flows, node UI, schema UI, components, interactions, responsive layout, visual structure, chart/reporting UI, ECharts host rendering, low-code JS Block chart primitives, or frontend state boundaries. Also use when a request mentions UI/UX, page改版, 样式, 交互, 前端, React, Ant Design, ECharts, 报表, 图表, screenshot/image-led changes, vague page requirements, or requirement refinement before implementation."
+description: "Use for 1flowbase frontend work in web/: implementing, fixing, refactoring, reviewing, or planning UI pages, app shell, routes, navigation, workspace flows, node UI, schema UI, i18n/multilingual UI copy, components, interactions, responsive layout, visual structure, chart/reporting UI, ECharts host rendering, low-code JS Block chart primitives, or frontend state boundaries. Also use when a request mentions UI/UX, page改版, 样式, 交互, 多语言, 国际化, i18n, 前端, React, Ant Design, ECharts, 报表, 图表, screenshot/image-led changes, vague page requirements, or requirement refinement before implementation."
 ---
 
 # Frontend Development
@@ -16,6 +16,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - 新增节点类型，或调整节点详情、节点卡片、节点运行态、节点定义目录结构
 - 改动 `schema ui` 合同、runtime、renderer registry、overlay shell 或节点 schema adapter
 - 新增或调整报表 / 图表 UI、`echarts` 宿主渲染、低代码 JS Block 图表 primitive / facade
+- 新增或调整前端多语言文案、`i18n/` 资源目录、语言切换入口或 UI copy key / value 规则
 - 调整页面级流程、交互流、视觉结构或页面模块关系
 - 需要决定入口、层级、下钻路径、`Drawer / Inspector / Page / Dialog` 等交互落点
 - 评估是否拆文件、拆组件、拆 hooks，或处理前端职责边界漂移
@@ -61,6 +62,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - 复查清单与反模式：`references/review-checklist.md`、`references/anti-patterns.md`
 - 实现前设计规则：`problem-framing/references/design-rules.md`
 - 缺业务字段、聚合数据、排序字段或筛选字段时：先联动 `backend-development` 补后端唯一真值，再改前端消费层
+- 多语言资源归属、key / value 语义治理和脚本友好目录规则：`references/i18n-rules.md`
 - 示例与压力场景：`examples/`
 - 命中结构性问题后的完整信息架构诊断：`frontend-logic-design`
 - 前端测试资源限制统一读取仓库根 `.1flowbase.verify.local.json`；调整 `turbo` 并发或 `vitest` worker 时，同步维护 `.1flowbase.verify.local.json.example`，不要把并发重新写死进 `package.json`
@@ -78,6 +80,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - Schema UI split: `shared/schema-ui -> features/*/schema -> features/*/lib/node-definitions`
 - Node implementation chain: `node-definitions -> schema fragments/registry -> renderer -> consumer`
 - Interaction anchor: 先过交互架构 gate，定义主路径、详情规则、反馈位置和模块协作，再决定卡片、区块和装饰怎么落
+- I18n resource chain: UI 文案跟随最近 owner 的 `i18n/`，中央只负责发现、校验和加载；重复 value 先让 `i18n-hygiene` 暴露，再按 owner 语义修正
 - Style chain: `theme token -> first-party wrapper -> explicit slot -> stop`
 - Verification chain: 共享样式或第三方 slot 走 `check-style-boundary`；浏览器级证据走 `Playwright / page-debug / style-boundary`
 - Frontend test runtime chain: `web/package.json` 与 `web/app/package.json` 的测试入口应继续走仓库脚本包装器；本地资源限制统一从 `.1flowbase.verify.local.json` 读取，不要用裸 `pnpm exec vitest/turbo` 替代标准入口
@@ -101,6 +104,7 @@ description: "Use for 1flowbase frontend work in web/: implementing, fixing, ref
 - 为了快速展示，在前端实现本应由后端定义的排序、筛选、权限、状态原因、统计计数或跨对象聚合真值
 - 在低代码 JS Block 中允许用户直接 import `echarts` / `echarts-for-react`，或把图表 formatter、HTML tooltip、外部资源当作普通 JSON option 放行
 - 把节点定义、schema contract、renderer registry、consumer UI 再次堆回同一文件
+- 为了省一个字符串把不同 owner 的业务文案共用同一个 key，或在同一 owner 内维护重复 value
 - 把第三方组件内部 DOM 当成自家 DOM 递归覆盖，或为了修单点视觉问题裸写 `.ant-*`
 - 只改导航文案，不同步 `route id / path / selected state` 真值层
 - 还没过交互架构 gate，就让列表、卡片、抽屉、按钮各自决定点击结果

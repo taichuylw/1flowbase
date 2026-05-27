@@ -1,0 +1,57 @@
+{
+  "profile": {
+    "title": "Personal information",
+    "actions": {
+      "edit": "Edit profile",
+      "cancel": "Cancel",
+      "save": "Save profile"
+    },
+    "drawer": {
+      "title": "Edit personal information"
+    },
+    "fields": {
+      "account": "Account name",
+      "name": "Legal name",
+      "email": "Email",
+      "phone": "Phone",
+      "interfaceLanguage": "Interface language",
+      "permissions": "System permissions",
+      "introduction": "Bio",
+      "avatarUrl": "Avatar URL",
+      "nickname": "Nickname"
+    },
+    "empty": {
+      "permissions": "No explicit permissions",
+      "introduction": "No bio"
+    },
+    "form": {
+      "name": {
+        "label": "Name",
+        "required": "Enter a name.",
+        "extra": "Your legal name, used for backend identity records."
+      },
+      "nickname": {
+        "required": "Enter a nickname.",
+        "extra": "The display name shown in the system."
+      },
+      "email": {
+        "required": "Enter a valid email address."
+      },
+      "interfaceLanguage": {
+        "extra": "Leave blank to use the system-resolved default language."
+      },
+      "avatarUrl": {
+        "extra": "External image URLs are supported.",
+        "placeholder": "https://example.com/avatar.png"
+      },
+      "introduction": {
+        "placeholder": "Briefly introduce yourself..."
+      }
+    },
+    "locale": {
+      "default": "Follow system default",
+      "zhHans": "Simplified Chinese",
+      "enUs": "English"
+    }
+  }
+}

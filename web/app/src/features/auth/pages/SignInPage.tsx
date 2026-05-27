@@ -1,5 +1,6 @@
 import { Alert, Button, Form, Input, Space, Typography, theme } from 'antd';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
@@ -9,6 +10,7 @@ import { HeroAnimation } from '../components/HeroAnimation';
 
 export function SignInPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('auth');
   const { token } = theme.useToken();
   const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -34,7 +36,7 @@ export function SignInPage() {
       });
       await navigate({ to: '/' });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '登录失败，请稍后重试。');
+      setErrorMessage(error instanceof Error ? error.message : t('signIn.errorFallback'));
     } finally {
       setSubmitting(false);
     }
@@ -60,27 +62,27 @@ export function SignInPage() {
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
             <Typography.Title level={2} style={{ margin: 0 }}>
-              1flowbase
+              {t('signIn.title')}
             </Typography.Title>
           </div>
           {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
           <Form layout="vertical" onFinish={handleFinish} autoComplete="off">
             <Form.Item
-              label="账号"
+              label={t('signIn.identifier.label')}
               name="identifier"
-              rules={[{ required: true, message: '请输入账号或邮箱。' }]}
+              rules={[{ required: true, message: t('signIn.identifier.required') }]}
             >
-              <Input placeholder="root / root@example.com" size="large" />
+              <Input placeholder={t('signIn.identifier.placeholder')} size="large" />
             </Form.Item>
             <Form.Item
-              label="密码"
+              label={t('signIn.password.label')}
               name="password"
-              rules={[{ required: true, message: '请输入密码。' }]}
+              rules={[{ required: true, message: t('signIn.password.required') }]}
             >
-              <Input.Password placeholder="请输入密码" size="large" />
+              <Input.Password placeholder={t('signIn.password.placeholder')} size="large" />
             </Form.Item>
             <Button type="primary" htmlType="submit" loading={submitting} block size="large">
-              登录
+              {t('signIn.submit')}
             </Button>
           </Form>
         </Space>
@@ -93,7 +95,7 @@ export function SignInPage() {
               rel="noreferrer" 
               style={{ color: token.colorTextDescription, textDecoration: 'none' }}
             >
-              power by taichuy
+              {t('signIn.footer')}
             </a>
           </Typography.Text>
         </div>
