@@ -6,7 +6,7 @@ import {
   PlayCircleOutlined,
   SaveOutlined
 } from '@ant-design/icons';
-import { Button, Space, Tag, Tooltip, Typography } from 'antd';
+import { Badge, Button, Space, Tag, Tooltip, Typography } from 'antd';
 
 interface AgentFlowOverlayProps {
   applicationName: string;
@@ -21,6 +21,7 @@ interface AgentFlowOverlayProps {
   onOpenEnvironmentVariables: () => void;
   onOpenSystemVariables: () => void;
   onOpenPublish: () => void;
+  issueErrorCount: number;
   publishDisabled: boolean;
 }
 
@@ -37,6 +38,7 @@ export function AgentFlowOverlay({
   onOpenEnvironmentVariables,
   onOpenSystemVariables,
   onOpenPublish,
+  issueErrorCount,
   publishDisabled
 }: AgentFlowOverlayProps) {
   const statusTag = {
@@ -68,12 +70,14 @@ export function AgentFlowOverlay({
         >
           预览
         </Button>
-        <Button
-          aria-label="Issues"
-          icon={<IssuesCloseOutlined />}
-          onClick={onOpenIssues}
-          title="Issues"
-        />
+        <Badge count={issueErrorCount} size="small">
+          <Button
+            aria-label="Issues"
+            icon={<IssuesCloseOutlined />}
+            onClick={onOpenIssues}
+            title="Issues"
+          />
+        </Badge>
         <Button
           aria-label="系统变量"
           autoInsertSpace={false}

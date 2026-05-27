@@ -431,6 +431,37 @@ describe('validateDocument', () => {
     ).toBe(true);
   });
 
+  test('returns a field error when a binding references a deleted source node', () => {
+    const broken = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const answerNode = broken.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('expected default Answer node');
+    }
+
+    answerNode.bindings.answer_template = {
+      kind: 'templated_text',
+      value: '{{node-llm.text}}\n----\n{{node-llm-1.text}}'
+    };
+
+    const issues = validateDocument(broken);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scope: 'field',
+          level: 'error',
+          nodeId: 'node-answer',
+          fieldKey: 'bindings.answer_template',
+          title: '绑定引用节点不存在',
+          message: '当前 binding 引用了已删除节点 node-llm-1 的输出。'
+        })
+      ])
+    );
+  });
+
   test('accepts templated bindings that reference application environment variables', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');

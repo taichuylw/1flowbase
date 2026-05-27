@@ -115,6 +115,25 @@
   min-width: 0;
 }
 
+.agent-flow-editor__inspector-field-issues {
+  display: grid;
+  gap: 4px;
+  grid-column: 1 / -1;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agent-flow-editor__inspector-field--error
+  .agent-flow-templated-text-field__frame {
+  border-color: #ff4d4f;
+}
+
+.agent-flow-editor__inspector-field--error
+  .agent-flow-templated-text-field__frame:focus-within {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.12);
+}
+
 .agent-flow-editor__inspector-field-control .ant-input,
 .agent-flow-editor__inspector-field-control .ant-input-number,
 .agent-flow-editor__inspector-field-control .ant-select,
