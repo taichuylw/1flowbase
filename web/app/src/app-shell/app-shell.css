@@ -490,8 +490,8 @@
 }
 
 .app-shell-account-label {
-  font-size: clamp(1rem, 0.92rem + 0.28vw, 1.2rem);
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.1;
 }
 
@@ -509,14 +509,14 @@
 }
 
 .app-shell-account-popup .ant-menu-title-content {
-  font-size: clamp(1.05rem, 0.98rem + 0.28vw, 1.18rem);
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
   line-height: inherit;
 }
 
 .app-shell-account-popup .ant-menu-item .ant-menu-item-icon,
 .app-shell-account-popup .ant-menu-submenu-title .ant-menu-item-icon {
-  font-size: clamp(1rem, 0.94rem + 0.2vw, 1.12rem);
+  font-size: 16px;
   color: var(--text-secondary);
 }
 

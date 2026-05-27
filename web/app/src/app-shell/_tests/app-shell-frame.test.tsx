@@ -37,7 +37,7 @@ describe('AppShellFrame', () => {
     });
   });
 
-  test('places the account menu before the settings menu in the top actions', async () => {
+  test('places the account menu after the secondary top actions', async () => {
     render(
       <AppShellFrame pathname="/settings/data-models">
         <main>Content</main>
@@ -46,10 +46,10 @@ describe('AppShellFrame', () => {
 
     await waitFor(() => {
       const accountLabel = screen.getByText('Root');
-      const settingsTrigger = screen.getByLabelText('设置');
+      const helpTrigger = screen.getByLabelText('帮助');
 
       expect(
-        accountLabel.compareDocumentPosition(settingsTrigger) &
+        helpTrigger.compareDocumentPosition(accountLabel) &
           Node.DOCUMENT_POSITION_FOLLOWING
       ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });

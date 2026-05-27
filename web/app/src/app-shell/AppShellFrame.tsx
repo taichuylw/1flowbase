@@ -54,7 +54,6 @@ export function AppShellFrame({
       navigation={<Navigation pathname={pathname} useRouterLinks={useRouterLinks} />}
       actions={
         <Space className="app-shell-action-row" size={20}>
-          <AccountMenu useRouterNavigation={useRouterLinks} />
           <span className="app-shell-secondary-actions">
             <FrontstageDesignModeAction
               pathname={pathname}
@@ -79,6 +78,7 @@ export function AppShellFrame({
             ))}
             <HelpChromeMenu />
           </span>
+          <AccountMenu useRouterNavigation={useRouterLinks} />
         </Space>
       }
     >
