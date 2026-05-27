@@ -134,6 +134,15 @@ where
                 .ok_or_else(|| anyhow!("waiting_human outcome is missing checkpoint"))?;
             let waiting_node_run = waiting_node_run
                 .ok_or_else(|| anyhow!("waiting_human outcome is missing node run"))?;
+            let answer_output_payload = materialize_ready_answer_node_run(
+                repository,
+                flow_run.id,
+                compiled_plan,
+                outcome,
+                base_started_at + Duration::seconds(outcome.node_traces.len() as i64),
+            )
+            .await?
+            .unwrap_or_else(|| json!({}));
             repository
                 .create_checkpoint(&CreateCheckpointInput {
                     flow_run_id: flow_run.id,
@@ -159,7 +168,7 @@ where
                         )?;
                         domain::FlowRunStatus::WaitingHuman
                     },
-                    output_payload: json!({}),
+                    output_payload: answer_output_payload,
                     error_payload: None,
                     finished_at: None,
                 })
@@ -189,6 +198,15 @@ where
                 .ok_or_else(|| anyhow!("waiting_callback outcome is missing checkpoint"))?;
             let waiting_node_run = waiting_node_run
                 .ok_or_else(|| anyhow!("waiting_callback outcome is missing node run"))?;
+            let answer_output_payload = materialize_ready_answer_node_run(
+                repository,
+                flow_run.id,
+                compiled_plan,
+                outcome,
+                base_started_at + Duration::seconds(outcome.node_traces.len() as i64),
+            )
+            .await?
+            .unwrap_or_else(|| json!({}));
             repository
                 .create_checkpoint(&CreateCheckpointInput {
                     flow_run_id: flow_run.id,
@@ -223,7 +241,7 @@ where
                         )?;
                         domain::FlowRunStatus::WaitingCallback
                     },
-                    output_payload: json!({}),
+                    output_payload: answer_output_payload,
                     error_payload: None,
                     finished_at: None,
                 })
@@ -447,6 +465,88 @@ pub(super) fn next_node_started_at(detail: &domain::ApplicationRunDetail) -> Off
         .max()
         .map(|value| value + Duration::seconds(1))
         .unwrap_or_else(OffsetDateTime::now_utc)
+}
+
+async fn materialize_ready_answer_node_run<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    compiled_plan: Option<&orchestration_runtime::compiled_plan::CompiledPlan>,
+    outcome: &orchestration_runtime::execution_state::FlowDebugExecutionOutcome,
+    started_at: OffsetDateTime,
+) -> Result<Option<Value>>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let Some(compiled_plan) = compiled_plan else {
+        return Ok(None);
+    };
+    let variable_pool = outcome
+        .checkpoint_snapshot
+        .as_ref()
+        .map(|snapshot| &snapshot.variable_pool)
+        .unwrap_or(&outcome.variable_pool);
+    let Some(ready) = super::answer_presentation::ready_answer_output_from_variable_pool(
+        compiled_plan,
+        variable_pool,
+    ) else {
+        return Ok(None);
+    };
+    let Some(answer_node) = compiled_plan.nodes.get(&ready.answer_node_id) else {
+        return Ok(None);
+    };
+    let output_payload =
+        super::answer_presentation::ready_answer_output_payload(&ready, variable_pool);
+    let node_run = repository
+        .create_node_run(&CreateNodeRunInput {
+            flow_run_id,
+            node_id: answer_node.node_id.clone(),
+            node_type: answer_node.node_type.clone(),
+            node_alias: answer_node.alias.clone(),
+            status: domain::NodeRunStatus::Running,
+            input_payload: json!({
+                "presentation": {
+                    "kind": "answer",
+                    "complete": ready.complete,
+                    "materialized_from": "waiting_prefix"
+                }
+            }),
+            debug_payload: json!({}),
+            started_at,
+        })
+        .await?;
+    ensure_node_run_transition(
+        domain::NodeRunStatus::Running,
+        domain::NodeRunStatus::Succeeded,
+        "materialize_waiting_answer_node",
+    )?;
+    repository
+        .update_node_run(&UpdateNodeRunInput {
+            node_run_id: node_run.id,
+            status: domain::NodeRunStatus::Succeeded,
+            output_payload: output_payload.clone(),
+            error_payload: None,
+            metrics_payload: json!({
+                "preview_mode": true,
+                "answer_presentation": {
+                    "partial": !ready.complete,
+                    "materialized_from": "waiting_prefix"
+                }
+            }),
+            debug_payload: json!({
+                "answer_presentation": {
+                    "partial": !ready.complete,
+                    "materialized_from": "waiting_prefix"
+                }
+            }),
+            finished_at: Some(started_at),
+        })
+        .await?;
+
+    if ready.text.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(output_payload))
+    }
 }
 
 async fn append_answer_presentation_suffix<R>(

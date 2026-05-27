@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use time::OffsetDateTime;
 use tokio::sync::{mpsc, Mutex};
 
@@ -490,6 +490,7 @@ where
                         &execution.output_payload,
                     )
                 {
+                    let checkpoint_variable_pool = wait.checkpoint_variable_pool.clone();
                     ensure_node_run_transition(
                         domain::NodeRunStatus::Running,
                         domain::NodeRunStatus::WaitingCallback,
@@ -526,6 +527,14 @@ where
                         domain::FlowRunStatus::WaitingCallback,
                         "continue_flow_debug_run",
                     )?;
+                    let answer_output_payload = materialize_ready_answer_node_run(
+                        service,
+                        flow_run.id,
+                        &compiled_plan,
+                        &checkpoint_variable_pool,
+                    )
+                    .await?
+                    .unwrap_or_else(|| json!({}));
                     service
                         .repository
                         .create_checkpoint(&CreateCheckpointInput {
@@ -556,7 +565,7 @@ where
                         .update_flow_run(&UpdateFlowRunInput {
                             flow_run_id: flow_run.id,
                             status: domain::FlowRunStatus::WaitingCallback,
-                            output_payload: json!({}),
+                            output_payload: answer_output_payload,
                             error_payload: None,
                             finished_at: None,
                         })
@@ -774,6 +783,14 @@ where
                         domain::FlowRunStatus::WaitingCallback,
                         "continue_flow_debug_run",
                     )?;
+                    let answer_output_payload = materialize_ready_answer_node_run(
+                        service,
+                        flow_run.id,
+                        &compiled_plan,
+                        &variable_pool,
+                    )
+                    .await?
+                    .unwrap_or_else(|| json!({}));
                     let confirmation_payload = json!({
                         "kind": "data_model_side_effect_confirmation",
                         "actor_user_id": actor.user_id,
@@ -814,7 +831,7 @@ where
                         .update_flow_run(&UpdateFlowRunInput {
                             flow_run_id: flow_run.id,
                             status: domain::FlowRunStatus::WaitingCallback,
-                            output_payload: json!({}),
+                            output_payload: answer_output_payload,
                             error_payload: None,
                             finished_at: None,
                         })
@@ -980,6 +997,14 @@ where
                     domain::FlowRunStatus::WaitingHuman,
                     "continue_flow_debug_run",
                 )?;
+                let answer_output_payload = materialize_ready_answer_node_run(
+                    service,
+                    flow_run.id,
+                    &compiled_plan,
+                    &variable_pool,
+                )
+                .await?
+                .unwrap_or_else(|| json!({}));
                 service
                     .repository
                     .create_checkpoint(&CreateCheckpointInput {
@@ -1000,7 +1025,7 @@ where
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
                         status: domain::FlowRunStatus::WaitingHuman,
-                        output_payload: json!({}),
+                        output_payload: answer_output_payload,
                         error_payload: None,
                         finished_at: None,
                     })
@@ -1053,6 +1078,14 @@ where
                     domain::FlowRunStatus::WaitingCallback,
                     "continue_flow_debug_run",
                 )?;
+                let answer_output_payload = materialize_ready_answer_node_run(
+                    service,
+                    flow_run.id,
+                    &compiled_plan,
+                    &variable_pool,
+                )
+                .await?
+                .unwrap_or_else(|| json!({}));
                 service
                     .repository
                     .create_checkpoint(&CreateCheckpointInput {
@@ -1083,7 +1116,7 @@ where
                     .update_flow_run(&UpdateFlowRunInput {
                         flow_run_id: flow_run.id,
                         status: domain::FlowRunStatus::WaitingCallback,
-                        output_payload: json!({}),
+                        output_payload: answer_output_payload,
                         error_payload: None,
                         finished_at: None,
                     })
@@ -1421,6 +1454,91 @@ async fn emit_answer_presentation_for_node<R, H>(
             .complete_node(node_id, node_run_id, output_payload);
     for event in events {
         append_runtime_event(service, flow_run_id, event).await;
+    }
+}
+
+async fn materialize_ready_answer_node_run<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    flow_run_id: uuid::Uuid,
+    compiled_plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+    variable_pool: &Map<String, Value>,
+) -> Result<Option<Value>>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let Some(ready) = super::super::answer_presentation::ready_answer_output_from_variable_pool(
+        compiled_plan,
+        variable_pool,
+    ) else {
+        return Ok(None);
+    };
+    let Some(answer_node) = compiled_plan.nodes.get(&ready.answer_node_id) else {
+        return Ok(None);
+    };
+    let started_at = OffsetDateTime::now_utc();
+    let node_run = service
+        .repository
+        .create_node_run(&CreateNodeRunInput {
+            flow_run_id,
+            node_id: answer_node.node_id.clone(),
+            node_type: answer_node.node_type.clone(),
+            node_alias: answer_node.alias.clone(),
+            status: domain::NodeRunStatus::Running,
+            input_payload: json!({
+                "presentation": {
+                    "kind": "answer",
+                    "complete": ready.complete,
+                    "materialized_from": "waiting_prefix"
+                }
+            }),
+            debug_payload: json!({}),
+            started_at,
+        })
+        .await?;
+    append_runtime_event(
+        service,
+        flow_run_id,
+        debug_stream_events::node_started(&node_run),
+    )
+    .await;
+
+    ensure_node_run_transition(
+        domain::NodeRunStatus::Running,
+        domain::NodeRunStatus::Succeeded,
+        "materialize_waiting_answer_node",
+    )?;
+    let output_payload =
+        super::super::answer_presentation::ready_answer_output_payload(&ready, variable_pool);
+    update_node_run_and_emit(
+        service,
+        flow_run_id,
+        &UpdateNodeRunInput {
+            node_run_id: node_run.id,
+            status: domain::NodeRunStatus::Succeeded,
+            output_payload: output_payload.clone(),
+            error_payload: None,
+            metrics_payload: json!({
+                "preview_mode": true,
+                "answer_presentation": {
+                    "partial": !ready.complete,
+                    "materialized_from": "waiting_prefix"
+                }
+            }),
+            debug_payload: json!({
+                "answer_presentation": {
+                    "partial": !ready.complete,
+                    "materialized_from": "waiting_prefix"
+                }
+            }),
+            finished_at: Some(started_at),
+        },
+    )
+    .await?;
+
+    if ready.text.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(output_payload))
     }
 }
 

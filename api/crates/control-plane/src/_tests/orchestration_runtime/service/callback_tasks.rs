@@ -69,10 +69,10 @@ async fn live_llm_tool_calls_create_callback_task_and_pause_downstream() {
         &attempts,
         llm_node.id,
     );
-    assert!(waiting_detail
-        .node_runs
-        .iter()
-        .all(|node_run| node_run.node_id != "node-answer"));
+    let answer_node = node_run(&waiting_detail, "node-answer");
+    assert_eq!(answer_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(answer_node.output_payload["answer"], json!(""));
+    assert_eq!(waiting_detail.flow_run.output_payload, json!({}));
     assert_eq!(waiting_detail.callback_tasks.len(), 1);
     assert_eq!(
         waiting_detail.callback_tasks[0].callback_kind,
@@ -333,6 +333,21 @@ async fn callback_resume_waiting_again_projects_completed_answer_prefix_before_t
         .filter_map(|event| event.payload["text"].as_str())
         .collect::<String>();
     assert_eq!(presentation_text, "LLM1 final\n----\n");
+    let answer_node = second_waiting
+        .node_runs
+        .iter()
+        .rev()
+        .find(|node_run| node_run.node_id == "node-answer")
+        .expect("waiting run should materialize Answer node with visible prefix");
+    assert_eq!(answer_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(
+        answer_node.output_payload["answer"],
+        json!("LLM1 final\n----\n")
+    );
+    assert_eq!(
+        second_waiting.flow_run.output_payload["answer"],
+        json!("LLM1 final\n----\n")
+    );
 
     let waiting_callback_sequence = runtime_events
         .iter()

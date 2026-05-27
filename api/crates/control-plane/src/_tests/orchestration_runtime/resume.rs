@@ -35,10 +35,18 @@ async fn continue_flow_debug_run_stops_at_human_input_and_persists_waiting_state
 
     assert_eq!(detail.flow_run.run_mode.as_str(), "debug_flow_run");
     assert_eq!(detail.flow_run.status.as_str(), "waiting_human");
-    assert_eq!(
-        detail.node_runs.last().unwrap().status.as_str(),
-        "waiting_human"
-    );
+    let human_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-human")
+        .expect("human node run should exist");
+    assert_eq!(human_node.status.as_str(), "waiting_human");
+    let answer_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.node_id == "node-answer")
+        .expect("answer node should be materialized while waiting");
+    assert_eq!(answer_node.status.as_str(), "succeeded");
     assert_eq!(detail.checkpoints.len(), 1);
 }
 

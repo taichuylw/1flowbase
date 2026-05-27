@@ -4,7 +4,7 @@ use orchestration_runtime::answer_presentation::{
     AnswerPresentationPlan, AnswerPresentationSegment,
 };
 use plugin_framework::provider_contract::ProviderStreamEvent;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::ports::RuntimeEventPayload;
@@ -23,6 +23,70 @@ pub(super) struct AnswerPresentationCursor {
 struct CompletedOutput {
     value: String,
     node_run_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ReadyAnswerOutput {
+    pub(super) answer_node_id: String,
+    pub(super) answer_output_key: String,
+    pub(super) text: String,
+    pub(super) complete: bool,
+}
+
+pub(super) fn ready_answer_output_from_variable_pool(
+    plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+    variable_pool: &Map<String, Value>,
+) -> Option<ReadyAnswerOutput> {
+    let presentation = AnswerPresentationPlan::from_plan(plan)?;
+    let mut text = String::new();
+    let mut complete = true;
+
+    for segment in &presentation.segments {
+        match segment {
+            AnswerPresentationSegment::StaticText(value) => {
+                text.push_str(value);
+            }
+            AnswerPresentationSegment::NodeOutput {
+                node_id,
+                output_key,
+            } => {
+                let Some(value) = variable_pool
+                    .get(node_id)
+                    .and_then(|node_output| node_output.get(output_key))
+                    .and_then(Value::as_str)
+                else {
+                    complete = false;
+                    break;
+                };
+                text.push_str(value);
+            }
+        }
+    }
+
+    Some(ReadyAnswerOutput {
+        answer_node_id: presentation.answer_node_id,
+        answer_output_key: presentation.answer_output_key,
+        text,
+        complete,
+    })
+}
+
+pub(super) fn ready_answer_output_payload(
+    ready: &ReadyAnswerOutput,
+    variable_pool: &Map<String, Value>,
+) -> Value {
+    let mut payload = Map::new();
+    payload.insert(
+        ready.answer_output_key.clone(),
+        Value::String(ready.text.clone()),
+    );
+    if let Some(sys) = variable_pool.get("sys") {
+        payload.insert("sys".to_string(), sys.clone());
+    }
+    if let Some(env) = variable_pool.get("env") {
+        payload.insert("env".to_string(), env.clone());
+    }
+    Value::Object(payload)
 }
 
 impl AnswerPresentationCursor {
