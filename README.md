@@ -129,7 +129,7 @@ This project is licensed under [Apache-2.0](LICENSE).
 ## Star History
 
 <p align="center">
-  <a href="https://www.star-history.com/#iOfficeAI/aionui&Date" target="_blank">
+  <a href="https://www.star-history.com/#taichuy/1flowbase&Date" target="_blank">
     <img src="https://api.star-history.com/svg?repos=taichuy/1flowbase&type=Date" alt="Star History" width="600">
   </a>
 </p>
