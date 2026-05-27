@@ -27,6 +27,6 @@ mod plugin_routes;
 mod role_routes;
 mod runtime_event_stream_tests;
 mod session_routes;
-mod support;
+pub(crate) mod support;
 mod system_routes;
 mod workspace_routes;

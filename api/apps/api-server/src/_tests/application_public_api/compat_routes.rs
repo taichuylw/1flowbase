@@ -16,10 +16,10 @@ use control_plane::{
     application_public_api::compat::openai::run_id_from_response_id,
     orchestration_runtime::debug_stream_events,
     ports::{
-        CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository,
-        RuntimeEventCloseReason, RuntimeEventEnvelope, RuntimeEventPayload, RuntimeEventStream,
-        RuntimeEventStreamPolicy, RuntimeEventSubscription, RuntimeEventTrimPolicy,
-        UpdateFlowRunInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateNodeRunInput,
+        OrchestrationRuntimeRepository, RuntimeEventCloseReason, RuntimeEventEnvelope,
+        RuntimeEventPayload, RuntimeEventStream, RuntimeEventStreamPolicy,
+        RuntimeEventSubscription, RuntimeEventTrimPolicy, UpdateFlowRunInput,
     },
 };
 use serde_json::{json, Value};
@@ -435,6 +435,49 @@ async fn seed_llm_callback_for_response_run(
         })
         .await
         .unwrap()
+}
+
+async fn seed_llm_callback_checkpoint_for_response_run(
+    state: &crate::app_state::ApiState,
+    callback_task: &domain::CallbackTaskRecord,
+) {
+    state
+        .store
+        .create_checkpoint(&CreateCheckpointInput {
+            flow_run_id: callback_task.flow_run_id,
+            node_run_id: Some(callback_task.node_run_id),
+            status: "waiting_callback".to_string(),
+            reason: "等待 callback 回填".to_string(),
+            locator_payload: json!({
+                "node_id": "node-llm",
+                "next_node_index": 1
+            }),
+            variable_snapshot: json!({
+                "node-start": {
+                    "query": "Final question"
+                },
+                "node-llm": {
+                    "__llm_tool_callback": {
+                        "callback_kind": "llm_tool_calls",
+                        "pending_tool_calls": callback_task.request_payload["tool_calls"],
+                        "history": [
+                            {
+                                "role": "user",
+                                "content": "Final question"
+                            },
+                            {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": callback_task.request_payload["tool_calls"]
+                            }
+                        ]
+                    }
+                }
+            }),
+            external_ref_payload: Some(callback_task.request_payload.clone()),
+        })
+        .await
+        .unwrap();
 }
 
 async fn post_json(
@@ -1115,6 +1158,106 @@ async fn openai_chat_streaming_tool_resume_returns_done_on_current_connection() 
     assert!(
         body.contains("runtime_error") || body.contains("\"finish_reason\":\"stop\""),
         "{body}"
+    );
+}
+
+#[tokio::test]
+async fn openai_chat_streaming_tool_resume_escapes_nul_tool_output_before_persisting_callback() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "OpenAI Streaming NUL Tool Resume App").await;
+
+    let created = post_json(
+        &app,
+        "/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        openai_body(false),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::OK);
+    let created_payload = response_json(created).await;
+    let run_id = created_payload["id"]
+        .as_str()
+        .and_then(|id| id.strip_prefix("chatcmpl-"))
+        .and_then(|id| uuid::Uuid::parse_str(id).ok())
+        .expect("chat completion id should include run id");
+    let callback_task = seed_llm_callback_for_response_run(state.as_ref(), run_id).await;
+    seed_llm_callback_checkpoint_for_response_run(state.as_ref(), &callback_task).await;
+    let tool_call_id = encode_openai_callback_tool_call_id(callback_task.id, "call_inventory");
+    state
+        .runtime_event_stream
+        .open_run(run_id, RuntimeEventStreamPolicy::debug_default())
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(run_id, debug_stream_events::flow_started(run_id))
+        .await
+        .unwrap();
+    state
+        .runtime_event_stream
+        .append(
+            run_id,
+            debug_stream_events::waiting_callback_with_task(
+                run_id,
+                callback_task.node_run_id,
+                "node-llm",
+                &callback_task,
+            ),
+        )
+        .await
+        .unwrap();
+
+    let response = post_json(
+        &app,
+        "/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        json!({
+            "model": "provider/custom-model:latest",
+            "stream": true,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": "lookup_inventory",
+                            "arguments": "{\"sku\":\"sku_123\"}"
+                        }
+                    }]
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": "STDERR:\n\0after"
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = timeout(
+        Duration::from_secs(5),
+        to_bytes(response.into_body(), usize::MAX),
+    )
+    .await
+    .expect("OpenAI streaming tool resume with NUL output should finish")
+    .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("[DONE]"), "{body}");
+
+    let stored_task = state
+        .store
+        .get_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored_task.status, domain::CallbackTaskStatus::Completed);
+    assert_eq!(
+        stored_task.response_payload.unwrap()["tool_results"][0]["content"],
+        json!("STDERR:\n\\u0000after")
     );
 }
 

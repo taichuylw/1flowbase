@@ -208,6 +208,35 @@ async fn complete_llm_tool_callback_resolves_final_llm_debug_refs() {
 }
 
 #[tokio::test]
+async fn complete_callback_task_escapes_nul_characters_before_persisting_response() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_waiting_callback_run("Support Agent").await;
+
+    let completed = service
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            callback_task_id: seeded.callback_task_id,
+            response_payload: json!({ "result": "STDERR:\n\0after" }),
+        })
+        .await
+        .unwrap();
+
+    let callback_task = service
+        .callback_task_for_tests(seeded.callback_task_id)
+        .await;
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Completed);
+    assert_eq!(
+        callback_task.response_payload.as_ref().unwrap()["result"],
+        json!("STDERR:\n\\u0000after")
+    );
+    assert_eq!(
+        completed.flow_run.output_payload["answer"],
+        json!("STDERR:\n\\u0000after")
+    );
+}
+
+#[tokio::test]
 async fn complete_llm_tool_callback_rejects_partial_results_without_consuming_task() {
     use plugin_framework::provider_contract::{
         ProviderFinishReason, ProviderInvocationResult, ProviderToolCall, ProviderUsage,

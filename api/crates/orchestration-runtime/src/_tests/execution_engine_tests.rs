@@ -2190,6 +2190,7 @@ async fn resume_llm_tool_results_passes_native_response_cursor_system_and_delta_
         provider_metadata: json!({}),
     }]);
     waiting_response.response_id = Some("resp_previous".to_string());
+    waiting_response.provider_metadata = json!({ "transport": "responses_websocket" });
     let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![waiting_response]);
     let mut plan = llm_answer_plan();
     let llm = plan
@@ -2286,6 +2287,86 @@ async fn resume_llm_tool_results_passes_native_response_cursor_system_and_delta_
     assert_eq!(
         captured[0].messages[0].name.as_deref(),
         Some("lookup_weather")
+    );
+}
+
+#[tokio::test]
+async fn resume_llm_tool_results_replays_full_history_after_http_sse_response_cursor() {
+    let mut waiting_response = tool_call_response(vec![ProviderToolCall {
+        id: "call_weather".to_string(),
+        name: "lookup_weather".to_string(),
+        arguments: json!({ "city": "Shanghai" }),
+        provider_metadata: json!({}),
+    }]);
+    waiting_response.response_id = Some("resp_from_http_sse".to_string());
+    waiting_response.provider_metadata = json!({ "transport": "http_sse" });
+    let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![waiting_response]);
+    let plan = llm_answer_plan();
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "weather?" } }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+
+    match waiting.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(
+                pending.request_payload["response_id"],
+                json!("resp_from_http_sse")
+            );
+            assert_eq!(
+                pending.request_payload["provider_metadata"]["transport"],
+                json!("http_sse")
+            );
+        }
+        other => panic!("expected llm tool callback wait, got {other:?}"),
+    }
+
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("llm tool wait should have checkpoint");
+    let (resume_invoker, resumed_inputs) =
+        sequential_tool_invoker(vec![final_llm_response("weather is clear")]);
+
+    resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_weather",
+                    "content": "{\"temperature\":21}"
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured = resumed_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 1);
+    assert_eq!(captured[0].previous_response_id, None);
+    assert_eq!(captured[0].messages.len(), 3);
+    assert_eq!(captured[0].messages[0].role, ProviderMessageRole::User);
+    assert_eq!(captured[0].messages[0].content, "weather?");
+    assert_eq!(captured[0].messages[1].role, ProviderMessageRole::Assistant);
+    assert_eq!(
+        captured[0].messages[1].tool_calls.as_ref().unwrap()[0]["id"],
+        json!("call_weather")
+    );
+    assert_eq!(captured[0].messages[2].role, ProviderMessageRole::Tool);
+    assert_eq!(
+        captured[0].messages[2].tool_call_id.as_deref(),
+        Some("call_weather")
     );
 }
 

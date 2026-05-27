@@ -37,6 +37,7 @@ pub use crate::code_runtime::{
 
 const LLM_TOOL_CALLBACK_KIND: &str = "llm_tool_calls";
 const LLM_TOOL_CALLBACK_STATE_KEY: &str = "__llm_tool_callback";
+const RESPONSES_WEBSOCKET_TRANSPORT: &str = "responses_websocket";
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ExecutionRuntimeContext {
@@ -1214,6 +1215,9 @@ fn variable_pool_with_pending_llm_tool_callback(
     if let Some(provider_route) = output_payload.get("provider_route") {
         callback_state.insert("provider_route".to_string(), provider_route.clone());
     }
+    if let Some(provider_metadata) = output_payload.get("provider_metadata") {
+        callback_state.insert("provider_metadata".to_string(), provider_metadata.clone());
+    }
     let mut node_state = Map::new();
     node_state.insert(
         LLM_TOOL_CALLBACK_STATE_KEY.to_string(),
@@ -1276,6 +1280,7 @@ fn append_llm_tool_result_messages(
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned);
     let provider_route = state.get("provider_route").cloned();
+    let provider_metadata = state.get("provider_metadata").cloned();
     let pending_tool_calls = state
         .get("pending_tool_calls")
         .and_then(Value::as_array)
@@ -1379,6 +1384,9 @@ fn append_llm_tool_result_messages(
     if let Some(provider_route) = provider_route {
         callback_state.insert("provider_route".to_string(), provider_route);
     }
+    if let Some(provider_metadata) = provider_metadata {
+        callback_state.insert("provider_metadata".to_string(), provider_metadata);
+    }
     if !delta_messages.is_empty() {
         callback_state.insert("delta_messages".to_string(), Value::Array(delta_messages));
     }
@@ -1446,11 +1454,22 @@ fn pending_llm_tool_callback_previous_response_id(
     if !pending_llm_tool_callback_route_matches(runtime, state.get("provider_route")?) {
         return None;
     }
+    if !pending_llm_tool_callback_uses_responses_websocket_cursor(state) {
+        return None;
+    }
     state
         .get("response_id")
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn pending_llm_tool_callback_uses_responses_websocket_cursor(state: &Map<String, Value>) -> bool {
+    state
+        .get("provider_metadata")
+        .and_then(|metadata| metadata.get("transport"))
+        .and_then(Value::as_str)
+        == Some(RESPONSES_WEBSOCKET_TRANSPORT)
 }
 
 fn pending_llm_tool_callback_route_matches(

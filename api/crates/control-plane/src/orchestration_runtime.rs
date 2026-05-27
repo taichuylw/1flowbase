@@ -35,6 +35,7 @@ pub mod debug_artifacts;
 pub mod debug_stream_events;
 mod debug_variable_cache;
 pub(crate) mod inputs;
+mod json_payload;
 mod live_debug_run;
 mod llm_observability_refs;
 mod payloads;
@@ -48,6 +49,7 @@ use self::{
         build_compiled_plan_input, build_complete_flow_run_input, build_complete_node_run_input,
         build_flow_run_input, build_node_run_input,
     },
+    json_payload::escape_json_nul_characters,
     payloads::persisted_node_output_payload,
     persistence::{
         checkpoint_node_id, checkpoint_snapshot_from_record, next_node_started_at,
@@ -735,8 +737,9 @@ where
 
     pub async fn complete_callback_task(
         &self,
-        command: CompleteCallbackTaskCommand,
+        mut command: CompleteCallbackTaskCommand,
     ) -> Result<domain::ApplicationRunDetail> {
+        command.response_payload = escape_json_nul_characters(command.response_payload);
         let actor = ApplicationRepository::load_actor_context_for_user(
             &self.repository,
             command.actor_user_id,

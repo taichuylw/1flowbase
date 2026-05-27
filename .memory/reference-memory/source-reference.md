@@ -6,6 +6,7 @@ keywords:
   - source
   - official-plugins
   - dify
+  - litellm
   - xyflow
   - architecture
 match_when:
@@ -14,8 +15,8 @@ match_when:
   - 需要查找上层相邻项目源码
   - 需要确认前端技术边界参考文档
 created_at: 2026-04-12 19
-updated_at: 2026-05-27 00
-last_verified_at: 2026-05-27 00
+updated_at: 2026-05-27 15
+last_verified_at: 2026-05-27 15
 decision_policy: index_only
 scope:
   - ../1flowbase-latest
@@ -37,6 +38,7 @@ scope:
   - ../css-modules
   - ../dify-official-plugins
   - ../dify-plugin-daemon
+  - ../litellm
   - ../dify
   - ../ds2api
   - ../hermes-agent
@@ -91,6 +93,8 @@ scope:
   - OpenAI Agents JavaScript SDK 参考入口。
 - `../codex`
   - OpenAI Responses API / Codex 风格请求、SSE 解析、工具调用返回和流式错误处理参考入口；优先看 `codex-rs/codex-api/src/endpoint/responses.rs`、`codex-rs/codex-api/src/sse/responses.rs`、`codex-rs/codex-api/src/common.rs`、`codex-rs/core/src/client.rs`。
+- `../litellm`
+  - OpenAI-compatible gateway / proxy 协议转换、SSE 映射和多上游适配参考入口；只作为实现参考，不作为 1flowbase Native 真值来源。
 - `../scalar`
   - API 文档和接口浏览体验参考入口。
 - `../supabase`
