@@ -28,6 +28,7 @@ import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../components/inspector/NodeInspector';
 import * as nodeSchemaAdapterApi from '../schema/node-schema-adapter';
 import * as nodeSchemaRegistry from '../schema/node-schema-registry';
+import { validateDocument } from '../lib/validate-document';
 import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
 import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
@@ -569,6 +570,48 @@ describe('NodeInspector', () => {
       screen.queryByRole('button', { name: '新增输出变量' })
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('输出变量名 1')).not.toBeInTheDocument();
+  });
+
+  test('renders field validation errors under the owning inspector field', () => {
+    const state = createInitialState();
+    const answerNode = state.draft.document.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('expected default Answer node');
+    }
+
+    answerNode.bindings.answer_template = {
+      kind: 'templated_text',
+      value: '{{node-llm.text}}\n----\n{{node-llm-1.text}}'
+    };
+
+    const schema = nodeSchemaRegistry.resolveAgentFlowNodeSchema('answer');
+    const adapter = nodeSchemaAdapterApi.createAgentFlowNodeSchemaAdapter({
+      document: state.draft.document,
+      nodeId: 'node-answer',
+      issues: validateDocument(state.draft.document),
+      setWorkingDocument: vi.fn(),
+      dispatch: vi.fn()
+    });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <NodeInspector schema={schema} adapter={adapter} />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const field = screen.getByTestId(
+      'inspector-field-bindings.answer_template'
+    );
+
+    expect(field).toHaveClass('agent-flow-editor__inspector-field--error');
+    expect(
+      within(field).getByText(
+        '当前 binding 引用了已删除节点 node-llm-1 的输出。'
+      )
+    ).toBeInTheDocument();
   });
 
   test('keeps code output contract definition editable without rendering the shared output contract card', async () => {

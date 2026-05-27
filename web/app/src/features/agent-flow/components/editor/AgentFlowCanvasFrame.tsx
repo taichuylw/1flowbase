@@ -388,6 +388,10 @@ export function AgentFlowCanvasFrame({
 
     return counts;
   }, [issues]);
+  const issueErrorCount = useMemo(
+    () => issues.filter((issue) => issue.level === 'error').length,
+    [issues]
+  );
   const nodePickerOptions = useMemo(
     () => buildNodePickerOptions(nodeContributions),
     [nodeContributions]
@@ -1075,7 +1079,8 @@ export function AgentFlowCanvasFrame({
         onOpenEnvironmentVariables={openEnvironmentVariables}
         onOpenSystemVariables={openSystemVariables}
         onOpenPublish={() => publishMutation.mutate()}
-        publishDisabled={publishMutation.isPending}
+        issueErrorCount={issueErrorCount}
+        publishDisabled={publishMutation.isPending || issueErrorCount > 0}
       />
       {activeContainerId ? (
         <div className="agent-flow-editor__breadcrumb">
@@ -1166,6 +1171,7 @@ export function AgentFlowCanvasFrame({
               activeRunId={debugSession.activeRunId}
               applicationId={applicationId}
               environmentVariables={environmentVariables}
+              issues={issues}
               onClose={detailActions.closeDetail}
               onResolveRunScope={debugSession.selectRunScope}
               onRunNode={selectedNodeId ? handleRunSelectedNode : undefined}

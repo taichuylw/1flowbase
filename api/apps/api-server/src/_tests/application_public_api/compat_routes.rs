@@ -656,6 +656,26 @@ async fn openai_responses_accepts_blocking_text_input() {
 }
 
 #[tokio::test]
+async fn openai_responses_accepts_root_endpoint_for_plain_base_url_clients() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "OpenAI Responses Root Base URL App").await;
+
+    let response = post_json(
+        &app,
+        "/responses",
+        ("authorization", format!("Bearer {token}")),
+        responses_body(false),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["object"], json!("response"));
+    assert_eq!(payload["status"], json!("completed"));
+    assert_eq!(payload["model"], json!("provider/custom-model:latest"));
+}
+
+#[tokio::test]
 async fn openai_responses_continues_from_previous_response_id() {
     let app = test_app().await;
     let token = setup_published_app(&app, "OpenAI Responses Continuation App").await;

@@ -59,9 +59,7 @@ where
         }
     };
 
-    let Some(value) = cached else {
-        return None;
-    };
+    let value = cached?;
 
     match serde_json::from_value(value) {
         Ok(value) => Some(value),

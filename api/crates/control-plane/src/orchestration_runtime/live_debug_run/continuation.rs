@@ -267,6 +267,7 @@ where
             &variable_pool,
         );
     let mut last_output_payload = json!({});
+    let mut pending_failure: Option<Value> = None;
     let flow_span = append_host_span(
         &service.repository,
         AppendHostSpanInput {
@@ -418,6 +419,7 @@ where
                 apply_llm_debug_observability_refs(&mut debug_payload, &refs);
 
                 if let Some(error_payload) = execution.error_payload.clone() {
+                    variable_pool.insert(node.node_id.clone(), public_output_payload.clone());
                     ensure_node_run_transition(
                         domain::NodeRunStatus::Running,
                         domain::NodeRunStatus::Failed,
@@ -437,35 +439,17 @@ where
                         },
                     )
                     .await?;
-                    ensure_flow_run_transition(
-                        domain::FlowRunStatus::Running,
-                        domain::FlowRunStatus::Failed,
-                        "continue_flow_debug_run",
-                    )?;
-                    service
-                        .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::Failed,
-                            output_payload: last_output_payload.clone(),
-                            error_payload: Some(error_payload.clone()),
-                            finished_at: Some(OffsetDateTime::now_utc()),
-                        })
-                        .await?;
-                    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
-                    service
-                        .repository
-                        .append_run_event(&AppendRunEventInput {
-                            flow_run_id: flow_run.id,
-                            node_run_id: Some(node_run.id),
-                            event_type: "flow_run_failed".to_string(),
-                            payload: error_payload,
-                        })
-                        .await?;
-                    return load_run_detail(
-                        &service.repository,
-                        command.application_id,
-                        flow_run.id,
+                    if can_continue_to_terminal_template_nodes(&compiled_plan, node_index) {
+                        pending_failure = Some(error_payload.clone());
+                        continue;
+                    }
+                    return fail_current_live_run_after_node_error(
+                        service,
+                        command,
+                        &flow_run,
+                        node_run.id,
+                        last_output_payload.clone(),
+                        error_payload,
                     )
                     .await;
                 }
@@ -1202,6 +1186,50 @@ where
         return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
     }
 
+    if let Some(error_payload) = pending_failure {
+        ensure_flow_run_transition(
+            domain::FlowRunStatus::Running,
+            domain::FlowRunStatus::Failed,
+            "continue_flow_debug_run",
+        )?;
+        let updated = service
+            .repository
+            .update_flow_run_if_status(
+                &UpdateFlowRunInput {
+                    flow_run_id: flow_run.id,
+                    status: domain::FlowRunStatus::Failed,
+                    output_payload: last_output_payload.clone(),
+                    error_payload: Some(error_payload.clone()),
+                    finished_at: Some(OffsetDateTime::now_utc()),
+                },
+                domain::FlowRunStatus::Running,
+            )
+            .await?;
+        let Some(updated_flow_run) = updated else {
+            return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
+        };
+        emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
+        service
+            .repository
+            .append_run_event(&AppendRunEventInput {
+                flow_run_id: flow_run.id,
+                node_run_id: None,
+                event_type: "flow_run_failed".to_string(),
+                payload: error_payload,
+            })
+            .await?;
+        let variable_cache = public_node_variable_cache(&compiled_plan, &variable_pool);
+        persist_debug_variable_cache_entries(
+            &service.repository,
+            application.workspace_id,
+            &updated_flow_run,
+            &variable_cache,
+        )
+        .await?;
+
+        return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
+    }
+
     ensure_flow_run_transition(
         domain::FlowRunStatus::Running,
         domain::FlowRunStatus::Succeeded,
@@ -1315,6 +1343,62 @@ fn template_output_payload(
     }
 
     Value::Object(payload)
+}
+
+fn can_continue_to_terminal_template_nodes(
+    plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+    failed_node_index: usize,
+) -> bool {
+    let mut has_terminal_template_node = false;
+    for node_id in plan.topological_order.iter().skip(failed_node_index + 1) {
+        let Some(node) = plan.nodes.get(node_id) else {
+            return false;
+        };
+        if !matches!(node.node_type.as_str(), "template_transform" | "answer") {
+            return false;
+        }
+        has_terminal_template_node = true;
+    }
+    has_terminal_template_node
+}
+
+async fn fail_current_live_run_after_node_error<R, H>(
+    service: &OrchestrationRuntimeService<R, H>,
+    command: &ContinueFlowDebugRunCommand,
+    flow_run: &domain::FlowRunRecord,
+    node_run_id: uuid::Uuid,
+    output_payload: Value,
+    error_payload: Value,
+) -> Result<domain::ApplicationRunDetail>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    ensure_flow_run_transition(
+        domain::FlowRunStatus::Running,
+        domain::FlowRunStatus::Failed,
+        "continue_flow_debug_run",
+    )?;
+    service
+        .repository
+        .update_flow_run(&UpdateFlowRunInput {
+            flow_run_id: flow_run.id,
+            status: domain::FlowRunStatus::Failed,
+            output_payload,
+            error_payload: Some(error_payload.clone()),
+            finished_at: Some(OffsetDateTime::now_utc()),
+        })
+        .await?;
+    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
+    service
+        .repository
+        .append_run_event(&AppendRunEventInput {
+            flow_run_id: flow_run.id,
+            node_run_id: Some(node_run_id),
+            event_type: "flow_run_failed".to_string(),
+            payload: error_payload,
+        })
+        .await?;
+    load_run_detail(&service.repository, command.application_id, flow_run.id).await
 }
 
 fn inject_application_environment_variables(

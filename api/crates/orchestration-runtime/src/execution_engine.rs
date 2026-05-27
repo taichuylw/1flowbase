@@ -14,7 +14,10 @@ use serde_json::{json, Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
-    binding_runtime::{render_templated_bindings, resolve_node_inputs},
+    binding_runtime::{
+        render_templated_bindings, resolve_answer_node_inputs, resolve_node_inputs,
+        BindingResolutionIssue,
+    },
     compiled_plan::{
         CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
     },
@@ -187,6 +190,7 @@ where
     I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let mut node_traces = Vec::new();
+    let mut pending_failure: Option<NodeExecutionFailure> = None;
 
     for (index, node_id) in plan
         .topological_order
@@ -198,33 +202,41 @@ where
             .nodes
             .get(node_id)
             .ok_or_else(|| anyhow!("compiled node missing: {node_id}"))?;
-        let resolved_inputs = match resolve_node_inputs(node, &variable_pool) {
-            Ok(inputs) => inputs,
-            Err(error) => {
-                let error_payload = build_binding_resolution_error_payload(&error);
-                node_traces.push(NodeExecutionTrace {
-                    node_id: node.node_id.clone(),
-                    node_type: node.node_type.clone(),
-                    node_alias: node.alias.clone(),
-                    input_payload: json!({}),
-                    output_payload: json!({}),
-                    error_payload: Some(error_payload.clone()),
-                    metrics_payload: json!({ "preview_mode": true }),
-                    debug_payload: json!({}),
-                    provider_events: Vec::new(),
-                });
-                return Ok(FlowDebugExecutionOutcome {
-                    stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+        let (resolved_inputs, answer_binding_error_payload) =
+            match resolve_node_inputs(node, &variable_pool) {
+                Ok(inputs) => (inputs, None),
+                Err(_) if node.node_type == "answer" => {
+                    let resolution = resolve_answer_node_inputs(node, &variable_pool);
+                    let error_payload = (!resolution.issues.is_empty()).then(|| {
+                        build_answer_binding_resolution_error_payload(node, &resolution.issues)
+                    });
+                    (resolution.resolved_inputs, error_payload)
+                }
+                Err(error) => {
+                    let error_payload = build_binding_resolution_error_payload(&error);
+                    node_traces.push(NodeExecutionTrace {
                         node_id: node.node_id.clone(),
+                        node_type: node.node_type.clone(),
                         node_alias: node.alias.clone(),
-                        error_payload,
-                    }),
-                    variable_pool,
-                    checkpoint_snapshot: None,
-                    node_traces,
-                });
-            }
-        };
+                        input_payload: json!({}),
+                        output_payload: json!({}),
+                        error_payload: Some(error_payload.clone()),
+                        metrics_payload: json!({ "preview_mode": true }),
+                        debug_payload: json!({}),
+                        provider_events: Vec::new(),
+                    });
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                            node_id: node.node_id.clone(),
+                            node_alias: node.alias.clone(),
+                            error_payload,
+                        }),
+                        variable_pool,
+                        checkpoint_snapshot: None,
+                        node_traces,
+                    });
+                }
+            };
         let rendered_templates = render_templated_bindings(node, &resolved_inputs);
 
         match node.node_type.as_str() {
@@ -269,12 +281,21 @@ where
                 node_traces.push(trace);
 
                 if let Some(error_payload) = execution.error_payload {
+                    variable_pool.insert(
+                        node.node_id.clone(),
+                        project_node_variable_payload(node, &execution.output_payload)?,
+                    );
+                    let failure = NodeExecutionFailure {
+                        node_id: node.node_id.clone(),
+                        node_alias: node.alias.clone(),
+                        error_payload,
+                    };
+                    if can_continue_to_terminal_template_nodes(plan, index) {
+                        pending_failure = Some(failure);
+                        continue;
+                    }
                     return Ok(FlowDebugExecutionOutcome {
-                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
-                            error_payload,
-                        }),
+                        stop_reason: ExecutionStopReason::Failed(failure),
                         variable_pool,
                         checkpoint_snapshot: None,
                         node_traces,
@@ -363,6 +384,10 @@ where
                         });
                 let output_payload =
                     template_output_payload(node, output_key, output_value, &variable_pool);
+                let output_payload = answer_output_payload_with_error(
+                    output_payload,
+                    answer_binding_error_payload.as_ref(),
+                );
                 variable_pool.insert(
                     node.node_id.clone(),
                     project_node_variable_payload(node, &output_payload)?,
@@ -373,11 +398,20 @@ where
                     node_alias: node.alias.clone(),
                     input_payload: Value::Object(resolved_inputs),
                     output_payload,
-                    error_payload: None,
+                    error_payload: answer_binding_error_payload.clone(),
                     metrics_payload: json!({ "preview_mode": true }),
                     debug_payload: json!({}),
                     provider_events: Vec::new(),
                 });
+                if pending_failure.is_none() {
+                    if let Some(error_payload) = answer_binding_error_payload {
+                        pending_failure = Some(NodeExecutionFailure {
+                            node_id: node.node_id.clone(),
+                            node_alias: node.alias.clone(),
+                            error_payload,
+                        });
+                    }
+                }
             }
             "human_input" => {
                 let prompt = rendered_templates
@@ -496,6 +530,15 @@ where
         }
     }
 
+    if let Some(failure) = pending_failure {
+        return Ok(FlowDebugExecutionOutcome {
+            stop_reason: ExecutionStopReason::Failed(failure),
+            variable_pool,
+            checkpoint_snapshot: None,
+            node_traces,
+        });
+    }
+
     Ok(FlowDebugExecutionOutcome {
         stop_reason: ExecutionStopReason::Completed,
         variable_pool,
@@ -574,7 +617,7 @@ where
                     None,
                 ),
                 Vec::new(),
-                false,
+                true,
                 &invocation_messages,
             );
         }
@@ -966,14 +1009,24 @@ fn build_provider_invocation_input(
 ) -> ProviderInvocationInput {
     let previous_response_id =
         pending_llm_tool_callback_previous_response_id(node, runtime, variable_pool);
-    let prompt_messages = if previous_response_id.is_some() {
-        pending_llm_tool_callback_delta_messages(node, variable_pool).unwrap_or_else(|| {
-            binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
-        })
+    let (system, messages) = if previous_response_id.is_some() {
+        let prompt_messages = pending_llm_tool_callback_delta_messages(node, variable_pool)
+            .unwrap_or_else(|| {
+                binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+            });
+        let (system, messages) = provider_messages_from_prompt_messages(prompt_messages);
+        (
+            system.or_else(|| pending_llm_tool_callback_system(node, variable_pool)),
+            messages,
+        )
     } else {
-        binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+        provider_messages_from_prompt_messages(binding_prompt_messages(
+            node,
+            rendered_templates,
+            resolved_inputs,
+            variable_pool,
+        ))
     };
-    let (system, messages) = provider_messages_from_prompt_messages(prompt_messages);
 
     let trace_context = BTreeMap::from([
         ("node_id".to_string(), node.node_id.clone()),
@@ -1376,6 +1429,14 @@ fn pending_llm_tool_callback_delta_messages(
         .cloned()
 }
 
+fn pending_llm_tool_callback_system(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> Option<String> {
+    let history = pending_llm_tool_callback_history(node, variable_pool)?;
+    provider_messages_from_prompt_messages(history).0
+}
+
 fn pending_llm_tool_callback_previous_response_id(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
@@ -1431,6 +1492,50 @@ fn build_binding_resolution_error_payload(error: &anyhow::Error) -> Value {
     json!({
         "error_kind": error_kind,
         "message": message,
+    })
+}
+
+fn build_answer_binding_resolution_error_payload(
+    node: &CompiledNode,
+    issues: &[BindingResolutionIssue],
+) -> Value {
+    let error_kind = if issues
+        .iter()
+        .any(|issue| issue.selector.is_some() || issue.message.contains("selector"))
+    {
+        "prompt_template_unresolved"
+    } else {
+        "binding_resolution_failed"
+    };
+    let message = if issues.len() == 1 {
+        let issue = &issues[0];
+        format!(
+            "failed to resolve binding {} for {}: {}",
+            issue.binding_key, node.node_id, issue.message
+        )
+    } else {
+        format!(
+            "failed to resolve {} bindings for {}",
+            issues.len(),
+            node.node_id
+        )
+    };
+    let details = issues
+        .iter()
+        .map(|issue| {
+            json!({
+                "binding_key": issue.binding_key,
+                "selector": issue.selector.as_ref().map(|selector| selector.join(".")),
+                "selector_path": issue.selector,
+                "message": issue.message,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    json!({
+        "error_kind": error_kind,
+        "message": message,
+        "details": details,
     })
 }
 
@@ -1812,6 +1917,31 @@ fn template_output_payload(
     Value::Object(payload)
 }
 
+fn answer_output_payload_with_error(
+    mut output_payload: Value,
+    error_payload: Option<&Value>,
+) -> Value {
+    if let (Value::Object(payload), Some(error_payload)) = (&mut output_payload, error_payload) {
+        payload.insert("error".to_string(), error_payload.clone());
+    }
+
+    output_payload
+}
+
+fn can_continue_to_terminal_template_nodes(plan: &CompiledPlan, failed_node_index: usize) -> bool {
+    let mut has_terminal_template_node = false;
+    for node_id in plan.topological_order.iter().skip(failed_node_index + 1) {
+        let Some(node) = plan.nodes.get(node_id) else {
+            return false;
+        };
+        if !matches!(node.node_type.as_str(), "template_transform" | "answer") {
+            return false;
+        }
+        has_terminal_template_node = true;
+    }
+    has_terminal_template_node
+}
+
 fn build_failed_llm_execution(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
@@ -1821,8 +1951,19 @@ fn build_failed_llm_execution(
     include_output_payload: bool,
     invocation_messages: &[Value],
 ) -> Result<LlmNodeExecution> {
+    let mut executor_output = Map::new();
+    executor_output.insert(
+        first_output_key(node),
+        Value::String(failed_llm_output_text(&error_payload)),
+    );
+    executor_output.insert(
+        "provider_route".to_string(),
+        build_llm_provider_route_payload(runtime),
+    );
+    executor_output.insert("finish_reason".to_string(), json!("error"));
+
     let raw = RawNodeExecutionResult {
-        executor_output: Map::new(),
+        executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
         debug_facts: build_llm_debug_facts(runtime, None, invocation_messages, None),
@@ -1841,6 +1982,17 @@ fn build_failed_llm_execution(
         debug_payload: built.debug_payload,
         provider_events,
     })
+}
+
+fn failed_llm_output_text(error_payload: &Value) -> String {
+    error_payload
+        .get("message")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| error_payload.get("error_message").and_then(Value::as_str))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("LLM node failed")
+        .to_string()
 }
 
 fn build_successful_llm_execution(

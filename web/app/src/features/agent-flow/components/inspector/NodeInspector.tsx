@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { Typography } from 'antd';
 
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
+import type { AgentFlowIssue } from '../../lib/validate-document';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { useNodeSchemaRuntime } from './use-node-schema-runtime';
 
@@ -62,6 +63,15 @@ function getRootValues(adapter: SchemaAdapter) {
   );
 }
 
+function getFieldIssues(adapter: SchemaAdapter) {
+  return (
+    (adapter.getDerived('fieldIssues') as Record<
+      string,
+      AgentFlowIssue[]
+    > | null) ?? {}
+  );
+}
+
 function shouldRenderFieldBlock(
   block: Extract<SchemaBlock, { kind: 'field' }>,
   adapter: SchemaAdapter,
@@ -89,6 +99,7 @@ export function NodeInspector({
   const activeSchema = schema ?? runtime.schema;
   const activeAdapter = adapter ?? runtime.adapter;
   const configBlocks = activeSchema?.detail.tabs.config.blocks ?? [];
+  const fieldIssuesByKey = activeAdapter ? getFieldIssues(activeAdapter) : {};
 
   useEffect(() => {
     if (!focusFieldKey || !rootRef.current) {
@@ -147,6 +158,11 @@ export function NodeInspector({
             <div className="agent-flow-editor__inspector-fields">
               {block.blocks.map((childBlock, index) => {
                 if (isFieldBlock(childBlock)) {
+                  const fieldIssues = fieldIssuesByKey[childBlock.path] ?? [];
+                  const hasError = fieldIssues.some(
+                    (issue) => issue.level === 'error'
+                  );
+
                   if (
                     !shouldRenderFieldBlock(
                       childBlock,
@@ -164,6 +180,9 @@ export function NodeInspector({
                         'agent-flow-editor__inspector-field',
                         isInlineFieldRenderer(childBlock.renderer)
                           ? 'agent-flow-editor__inspector-field--inline'
+                          : null,
+                        hasError
+                          ? 'agent-flow-editor__inspector-field--error'
                           : null
                       ]
                         .filter(Boolean)
@@ -187,6 +206,20 @@ export function NodeInspector({
                           capabilities={activeSchema.capabilities}
                         />
                       </div>
+                      {fieldIssues.length > 0 ? (
+                        <div className="agent-flow-editor__inspector-field-issues">
+                          {fieldIssues.map((issue) => (
+                            <Typography.Text
+                              key={issue.id}
+                              type={
+                                issue.level === 'error' ? 'danger' : 'warning'
+                              }
+                            >
+                              {issue.message}
+                            </Typography.Text>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 }

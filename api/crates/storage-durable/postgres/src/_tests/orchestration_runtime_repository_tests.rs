@@ -1941,7 +1941,7 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.overview.success_count, 1);
     assert_eq!(report.overview.failed_count, 1);
     assert_eq!(report.overview.cancelled_count, 0);
-    assert_eq!(report.overview.running_count_included, false);
+    assert!(!report.overview.running_count_included);
     assert_eq!(report.duration.duration_recorded_count, 2);
     assert_eq!(report.duration.avg_duration_ms.round() as i64, 22_500);
     assert_eq!(report.duration.p50_duration_ms.round() as i64, 22_500);

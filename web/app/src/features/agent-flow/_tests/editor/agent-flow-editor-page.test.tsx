@@ -46,14 +46,53 @@ import { AgentFlowEditorPage } from '../../pages/AgentFlowEditorPage';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 import { renderReactFlowScene } from '../../../../test/renderers/render-react-flow-scene';
 
-function createInitialState() {
+function createValidDocument() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+  const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+  if (!llmNode) {
+    throw new Error('expected default LLM node');
+  }
+
+  llmNode.config = {
+    ...llmNode.config,
+    model_provider: {
+      provider_code: 'fixture_provider',
+      model_id: 'gpt-5.4-mini'
+    }
+  };
+
+  return document;
+}
+
+function createDocumentWithDeletedAnswerReference() {
+  const document = createValidDocument();
+  const answerNode = document.graph.nodes.find(
+    (node) => node.id === 'node-answer'
+  );
+
+  if (!answerNode) {
+    throw new Error('expected default Answer node');
+  }
+
+  answerNode.bindings.answer_template = {
+    kind: 'templated_text',
+    value: '{{node-llm.text}}\n----\n{{node-llm-1.text}}'
+  };
+
+  return document;
+}
+
+function createInitialState(
+  document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+) {
   return {
     flow_id: 'flow-1',
     draft: {
       id: 'draft-1',
       flow_id: 'flow-1',
       updated_at: '2026-04-15T09:00:00Z',
-      document: createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+      document
     },
     versions: [],
     autosave_interval_seconds: 30
@@ -345,7 +384,7 @@ describe('AgentFlowEditorShell', () => {
       <AgentFlowEditorShell
         applicationId="app-1"
         applicationName="Support Agent"
-        initialState={createInitialState()}
+        initialState={createInitialState(createValidDocument())}
       />
     );
 
@@ -359,6 +398,33 @@ describe('AgentFlowEditorShell', () => {
       );
     });
     expect(publicApi.fetchApplicationApiMapping).toHaveBeenCalledWith('app-1');
+  }, 20_000);
+
+  test('blocks publish and badges issues when a binding references a deleted node', async () => {
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState(
+          createDocumentWithDeletedAnswerReference()
+        )}
+      />
+    );
+
+    const toolbar = await screen.findByRole('region', {
+      name: 'Agent Flow 操作栏'
+    });
+    const publishButton = within(toolbar).getByRole('button', {
+      name: '发布'
+    });
+
+    expect(publishButton).toBeDisabled();
+    expect(within(toolbar).getByText('1')).toBeInTheDocument();
+
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Issues' }));
+
+    expect(await screen.findByText('绑定引用节点不存在')).toBeInTheDocument();
+    expect(publicApi.publishApplicationApiVersion).not.toHaveBeenCalled();
   }, 20_000);
 
   test('opens readonly system variables from the canvas overlay', async () => {

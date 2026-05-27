@@ -21,7 +21,11 @@ import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { hasPluginContributionRef } from './plugin-node-definitions';
 import { isSelectorVisible } from './selector-options';
 import { parseTemplateSelectorTokens } from './template-binding';
-import type { AgentFlowEnvironmentVariable } from './application-environment-variables';
+import {
+  environmentVariableNodeId,
+  type AgentFlowEnvironmentVariable
+} from './application-environment-variables';
+import { systemVariableNodeId } from './system-variables';
 
 export interface AgentFlowIssue {
   id: string;
@@ -206,6 +210,12 @@ function pushFieldIssue(
     title,
     message
   });
+}
+
+function isRuntimeSelectorSource(source: string) {
+  return (
+    source === systemVariableNodeId || source === environmentVariableNodeId
+  );
 }
 
 function getAllowedPublicOutputKeysForNode(
@@ -396,10 +406,27 @@ export function validateDocument(
       const selectors = collectBindingSelectors(bindingValue);
 
       for (const selector of selectors) {
+        const sourceNodeId = selector[0] ?? '';
+
         if (
           selector.length === 0 ||
           isSelectorVisible(document, node.id, selector, environmentVariables)
         ) {
+          continue;
+        }
+
+        if (
+          selector.length >= 2 &&
+          !isRuntimeSelectorSource(sourceNodeId) &&
+          !nodeIds.has(sourceNodeId)
+        ) {
+          pushFieldIssue(
+            issues,
+            node,
+            `bindings.${bindingKey}`,
+            '绑定引用节点不存在',
+            `当前 binding 引用了已删除节点 ${sourceNodeId} 的输出。`
+          );
           continue;
         }
 

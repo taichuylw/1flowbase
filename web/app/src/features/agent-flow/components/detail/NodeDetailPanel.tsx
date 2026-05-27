@@ -6,6 +6,7 @@ import { createAgentFlowNodeSchemaAdapter } from '../../schema/node-schema-adapt
 import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 import { useNodeInteractions } from '../../hooks/interactions/use-node-interactions';
 import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
+import type { AgentFlowIssue } from '../../lib/validate-document';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { NodeDetailHeader } from './NodeDetailHeader';
 import { NodeConfigTab } from './tabs/NodeConfigTab';
@@ -23,6 +24,7 @@ export function NodeDetailPanel({
   applicationId,
   activeRunId,
   environmentVariables = [],
+  issues = [],
   onResolveRunScope,
   runLoading = false
 }: {
@@ -31,6 +33,7 @@ export function NodeDetailPanel({
   applicationId?: string;
   activeRunId?: string | null;
   environmentVariables?: AgentFlowEnvironmentVariable[];
+  issues?: AgentFlowIssue[];
   onResolveRunScope?: ((runId: string | null) => void) | undefined;
   runLoading?: boolean;
 }) {
@@ -62,6 +65,7 @@ export function NodeDetailPanel({
       document,
       nodeId: selectedNodeId,
       environmentVariables,
+      issues,
       setWorkingDocument,
       dispatch(actionKey, payload) {
         if (actionKey === 'openNodePicker') {
@@ -81,6 +85,7 @@ export function NodeDetailPanel({
   }, [
     document,
     environmentVariables,
+    issues,
     openNodePicker,
     selectedNodeId,
     setWorkingDocument

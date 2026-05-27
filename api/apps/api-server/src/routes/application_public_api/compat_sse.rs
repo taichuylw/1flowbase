@@ -43,7 +43,7 @@ pub(crate) async fn start_openai_run_stream(
     model: String,
 ) -> Result<Response, NativeApiError> {
     let mut mapper =
-        OpenAiChatStreamMapper::new(model, openai_chat_completion_id_from_run_id(run.id), false);
+        OpenAiChatStreamMapper::new(model, openai_chat_completion_id_from_run_id(run.id), true);
     start_compatible_run_stream(state, run, move |run, envelope| {
         mapper.runtime_event_to_sse(run, envelope)
     })
@@ -56,7 +56,7 @@ pub(crate) async fn start_openai_response_stream(
     model: String,
     previous_response_id: Option<String>,
 ) -> Result<Response, NativeApiError> {
-    let mut mapper = OpenAiResponseStreamMapper::new(model, previous_response_id, false);
+    let mut mapper = OpenAiResponseStreamMapper::new(model, previous_response_id, true);
     start_compatible_run_stream(state, run, move |run, envelope| {
         mapper.runtime_event_to_sse(run, envelope)
     })
@@ -318,7 +318,14 @@ async fn send_compatible_runtime_event_stream<F>(
             continue;
         }
         let is_terminal = is_public_terminal_runtime_event(&event.event_type);
-        let events = mapper(&initial_run, event);
+        let terminal_run;
+        let run = if is_terminal {
+            terminal_run = load_latest_native_run_for_terminal_fallback(&state, &initial_run).await;
+            &terminal_run
+        } else {
+            &initial_run
+        };
+        let events = mapper(run, event);
         emitted_public_event |= !events.is_empty();
         if !send_compatible_sse_events(&sender, events).await {
             debug!(
@@ -351,7 +358,15 @@ async fn send_compatible_runtime_event_stream<F>(
                 }
                 let event_type = event.event_type.clone();
                 let is_terminal = is_public_terminal_runtime_event(&event_type);
-                let events = mapper(&initial_run, event);
+                let terminal_run;
+                let run = if is_terminal {
+                    terminal_run =
+                        load_latest_native_run_for_terminal_fallback(&state, &initial_run).await;
+                    &terminal_run
+                } else {
+                    &initial_run
+                };
+                let events = mapper(run, event);
                 emitted_public_event |= !events.is_empty();
                 if !send_compatible_sse_events(&sender, events).await {
                     debug!(
@@ -618,12 +633,15 @@ impl OpenAiChatStreamMapper {
             _ => {}
         }
 
-        let terminal_deltas =
-            if self.terminal_answer_fallback && envelope.event_type == "flow_finished" {
-                terminal_answer_deltas_from_payload(&envelope.payload)
-            } else {
-                Vec::new()
-            };
+        let terminal_deltas = if self.terminal_answer_fallback
+            && matches!(
+                envelope.event_type.as_str(),
+                "flow_finished" | "flow_failed"
+            ) {
+            terminal_answer_deltas_from_run_or_payload(initial_run, &envelope.payload)
+        } else {
+            Vec::new()
+        };
 
         let mut events = Vec::new();
         let had_reasoning_delta = self.emitted_reasoning_delta;
@@ -715,12 +733,15 @@ impl OpenAiResponseStreamMapper {
             _ => {}
         }
 
-        let terminal_deltas =
-            if self.terminal_answer_fallback && envelope.event_type == "flow_finished" {
-                terminal_answer_deltas_from_payload(&envelope.payload)
-            } else {
-                Vec::new()
-            };
+        let terminal_deltas = if self.terminal_answer_fallback
+            && matches!(
+                envelope.event_type.as_str(),
+                "flow_finished" | "flow_failed"
+            ) {
+            terminal_answer_deltas_from_run_or_payload(initial_run, &envelope.payload)
+        } else {
+            Vec::new()
+        };
 
         let mut events = Vec::new();
         let had_reasoning_delta = self.emitted_reasoning_delta;
@@ -752,6 +773,31 @@ impl OpenAiResponseStreamMapper {
         ));
         events
     }
+}
+
+fn terminal_answer_text(run: &NativeRunResult, payload: &Value) -> Option<String> {
+    payload
+        .get("output")
+        .and_then(|output| output.get("answer"))
+        .or_else(|| payload.get("answer"))
+        .and_then(Value::as_str)
+        .filter(|answer| !answer.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            run.answer
+                .as_ref()
+                .filter(|answer| !answer.is_empty())
+                .cloned()
+        })
+}
+
+fn terminal_answer_deltas_from_run_or_payload(
+    run: &NativeRunResult,
+    payload: &Value,
+) -> Vec<TerminalAnswerDelta> {
+    terminal_answer_text(run, payload)
+        .map(|answer| terminal_answer_deltas_from_payload(&json!({ "answer": answer })))
+        .unwrap_or_default()
 }
 
 fn openai_runtime_event_to_sse(
@@ -792,14 +838,23 @@ fn openai_runtime_event_to_sse(
             done_sse(),
         ],
         "flow_failed" => vec![
-            json_sse(json!({
-                "error": {
-                    "message": runtime_error_message(&envelope.payload),
-                    "type": "server_error",
-                    "param": null,
-                    "code": "runtime_error"
-                }
-            })),
+            if terminal_answer_text(initial_run, &envelope.payload).is_some() {
+                json_sse(openai_finish_chunk_payload(
+                    initial_run,
+                    model,
+                    chat_completion_id,
+                    "stop",
+                ))
+            } else {
+                json_sse(json!({
+                    "error": {
+                        "message": runtime_error_message(&envelope.payload),
+                        "type": "server_error",
+                        "param": null,
+                        "code": "runtime_error"
+                    }
+                }))
+            },
             done_sse(),
         ],
         "flow_cancelled" => vec![done_sse()],
@@ -876,24 +931,41 @@ fn openai_response_runtime_event_to_sse(
                 )
             }),
         )],
-        "flow_failed" => vec![event_json_sse(
-            "response.failed",
-            json!({
-                "type": "response.failed",
-                "response": openai_response_stream_snapshot(
-                    initial_run,
-                    model,
-                    previous_response_id,
-                    "failed"
-                ),
-                "error": {
-                    "message": runtime_error_message(&envelope.payload),
-                    "type": "server_error",
-                    "param": null,
-                    "code": "runtime_error"
-                }
-            }),
-        )],
+        "flow_failed" => {
+            if terminal_answer_text(initial_run, &envelope.payload).is_some() {
+                vec![event_json_sse(
+                    "response.completed",
+                    json!({
+                        "type": "response.completed",
+                        "response": openai_response_stream_snapshot(
+                            initial_run,
+                            model,
+                            previous_response_id,
+                            "completed"
+                        )
+                    }),
+                )]
+            } else {
+                vec![event_json_sse(
+                    "response.failed",
+                    json!({
+                        "type": "response.failed",
+                        "response": openai_response_stream_snapshot(
+                            initial_run,
+                            model,
+                            previous_response_id,
+                            "failed"
+                        ),
+                        "error": {
+                            "message": runtime_error_message(&envelope.payload),
+                            "type": "server_error",
+                            "param": null,
+                            "code": "runtime_error"
+                        }
+                    }),
+                )]
+            }
+        }
         "flow_cancelled" => vec![event_json_sse(
             "response.failed",
             json!({
@@ -1851,6 +1923,67 @@ mod tests {
         );
 
         assert_eq!(events.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn openai_chat_failed_terminal_with_answer_finishes_without_error_event() {
+        let mut run = native_run();
+        run.status = NativeRunStatus::Failed;
+        run.answer = Some("工具失败后的回答".to_string());
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_failed(
+                    run.id,
+                    json!({ "message": "tool callback failed" }),
+                ),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("工具失败后的回答"), "{body}");
+        assert!(body.contains("\"finish_reason\":\"stop\""), "{body}");
+        assert!(!body.contains("\"error\""), "{body}");
+        assert!(body.contains("[DONE]"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn openai_responses_failed_terminal_with_answer_completes_without_failed_event() {
+        let mut run = native_run();
+        run.status = NativeRunStatus::Failed;
+        run.answer = Some("工具失败后的回答".to_string());
+        let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_failed(
+                    run.id,
+                    json!({ "message": "tool callback failed" }),
+                ),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("event: response.output_text.delta"), "{body}");
+        assert!(body.contains("工具失败后的回答"), "{body}");
+        assert!(body.contains("event: response.completed"), "{body}");
+        assert!(!body.contains("event: response.failed"), "{body}");
     }
 
     #[test]

@@ -11,6 +11,7 @@ import { getDirectDownstreamNodes } from '../lib/document/relations';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
 import type { AgentFlowEnvironmentVariable } from '../lib/application-environment-variables';
+import type { AgentFlowIssue } from '../lib/validate-document';
 
 import type { SchemaAdapter } from '../../../shared/schema-ui/registry/create-renderer-registry';
 
@@ -47,16 +48,35 @@ function createRootValues(node: FlowNodeDocument) {
   };
 }
 
+function groupFieldIssues(
+  issues: AgentFlowIssue[],
+  nodeId: string
+): Record<string, AgentFlowIssue[]> {
+  const grouped: Record<string, AgentFlowIssue[]> = {};
+
+  for (const issue of issues) {
+    if (issue.nodeId !== nodeId || !issue.fieldKey) {
+      continue;
+    }
+
+    grouped[issue.fieldKey] = [...(grouped[issue.fieldKey] ?? []), issue];
+  }
+
+  return grouped;
+}
+
 export function createAgentFlowNodeSchemaAdapter({
   document,
   nodeId,
   setWorkingDocument,
   dispatch,
-  environmentVariables = []
+  environmentVariables = [],
+  issues = []
 }: {
   document: FlowAuthoringDocument;
   nodeId: string;
   environmentVariables?: AgentFlowEnvironmentVariable[];
+  issues?: AgentFlowIssue[];
   setWorkingDocument: (
     update:
       | FlowAuthoringDocument
@@ -135,6 +155,10 @@ export function createAgentFlowNodeSchemaAdapter({
     getDerived(key: string) {
       if (key === 'rootValues') {
         return createRootValues(node);
+      }
+
+      if (key === 'fieldIssues') {
+        return groupFieldIssues(issues, nodeId);
       }
 
       if (key === 'node' || key === 'selectedNode') {
