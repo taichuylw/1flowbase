@@ -55,7 +55,7 @@ describe('AppShellFrame', () => {
     });
   });
 
-  test('places frontstage design mode icon after settings and toggles shared state', async () => {
+  test('places frontstage design mode icon before settings and toggles shared state', async () => {
     render(
       <AppShellFrame pathname="/frontstage">
         <main>Content</main>
@@ -65,9 +65,14 @@ describe('AppShellFrame', () => {
     await waitFor(() => {
       const settingsTrigger = screen.getByLabelText('设置');
       const designButton = screen.getByLabelText('进入设计模式');
+      const helpTrigger = screen.getByLabelText('帮助');
 
       expect(
-        settingsTrigger.compareDocumentPosition(designButton) &
+        designButton.compareDocumentPosition(settingsTrigger) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        settingsTrigger.compareDocumentPosition(helpTrigger) &
           Node.DOCUMENT_POSITION_FOLLOWING
       ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
