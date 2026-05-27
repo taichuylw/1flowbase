@@ -73,6 +73,20 @@ test('tooling index dispatches repo-hygiene subcommand', async () => {
   assert.deepEqual(capturedArgv, ['--max-findings', '10']);
 });
 
+test('tooling index dispatches i18n-hygiene subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['i18n-hygiene', '--max-findings', '10'], {
+    runI18nHygieneImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-findings', '10']);
+});
+
 test('tooling index passes subcommand help through to the subcommand', async () => {
   let capturedArgv = null;
 

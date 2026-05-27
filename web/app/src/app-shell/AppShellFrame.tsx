@@ -6,6 +6,8 @@ import { Space } from 'antd';
 
 import { AccountMenu } from './AccountMenu';
 import { FrontstageDesignModeAction } from './FrontstageDesignModeAction';
+import { HelpChromeMenu } from './HelpChromeMenu';
+import { LanguageChromeMenu } from './LanguageChromeMenu';
 import { Navigation } from './Navigation';
 import { SettingsChromeMenu } from './SettingsChromeMenu';
 import { getSecondaryChromeRoutes } from '../routes/route-helpers';
@@ -53,8 +55,11 @@ export function AppShellFrame({
       navigation={<Navigation pathname={pathname} useRouterLinks={useRouterLinks} />}
       actions={
         <Space className="app-shell-action-row" size={20}>
-          <AccountMenu useRouterNavigation={useRouterLinks} />
           <span className="app-shell-secondary-actions">
+            <FrontstageDesignModeAction
+              pathname={pathname}
+              useRouterNavigation={useRouterLinks}
+            />
             {secondaryActions.map((route) => (
               <span key={route.id}>
                 {route.id === 'settings' ? (
@@ -72,11 +77,10 @@ export function AppShellFrame({
                 )}
               </span>
             ))}
-            <FrontstageDesignModeAction
-              pathname={pathname}
-              useRouterNavigation={useRouterLinks}
-            />
+            <HelpChromeMenu />
+            <LanguageChromeMenu />
           </span>
+          <AccountMenu useRouterNavigation={useRouterLinks} />
         </Space>
       }
     >

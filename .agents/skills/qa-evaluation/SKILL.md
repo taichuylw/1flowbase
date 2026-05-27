@@ -1,6 +1,6 @@
 ---
 name: qa-evaluation
-description: Evidence-driven QA evaluation for 1flowbase task acceptance, regression, delivery, full-project audits, quality gate routing, frontend/backend contract, status, boundary and runtime checks, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
+description: Evidence-driven QA evaluation for 1flowbase task acceptance, regression, delivery, full-project audits, quality gate routing, i18n/multilingual key-value hygiene, frontend/backend contract, status, boundary and runtime checks, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
 ---
 
 # QA Evaluation
@@ -17,6 +17,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 需要输出结构化 QA 报告，而不是直接进入修复
 - 需要判断 UI、流程、响应式、API、状态和架构边界是否仍然成立
 - 需要评估后端接口、状态入口、插件消费边界、runtime 行为或工程质量门禁是否仍然符合最新规范
+- 需要检查多语言 key / value、locale 文件名、翻译资源归属或 `i18n-hygiene` 报告
 - 需要分析昨天/今天、近两天或近期代码热点、反复修改、churn 来源，并把问题转化为 AI 下次少犯错的 skills / AGENTS / 质量门禁 / 代码环境优化
 
 **不要用于**
@@ -35,6 +36,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 默认 `task mode`；只有用户明确要求全量审计时才进入 `project evaluation mode`
 - 评估前先读 `.memory/AGENTS.md`、`.memory/user-memory.md`、项目记忆、反馈记忆和相关 spec
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
+- 多语言 key / value hygiene、warning 解释和修复边界看 `references/i18n-hygiene-gate.md`
 - 需要处理周期性质量门禁值守、GitHub Issue / Actions 报告闭环或无权限贡献者本地门禁取证时，看 `references/quality-gate-watch.md`
 - 如果评估范围命中后端，必须先读 `api/AGENTS.md`，再对齐 `.memory/project-memory` 中最近的后端规范、计划和插件边界记忆，不能沿用旧口径
 - `task mode` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
@@ -47,6 +49,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 评估范围命中前端页面运行态、受保护页面、路由跳转、浏览器截图或控制台证据时，优先运行 `node scripts/node/page-debug.js`
 - 评估范围命中前端样式边界时，优先读取 `node scripts/node/check-style-boundary.js ...` 的运行结果；它只说明边界/扩散是否通过，不直接说明泛 UI 质量
 - 评估范围命中共享 console API DTO、`style-boundary` mock、settings / agent-flow 的 model provider consumer 时，必须检查 `node scripts/node/test-contracts.js` 或等价四条定向 contract consumer vitest，并确认 `verify-repo` 已包含该 gate
+- 评估范围命中前端 `i18n/`、插件 `i18n/`、语言切换或 UI 文案抽取时，必须运行或读取 `node scripts/node/tooling.js i18n-hygiene`
 - 没有运行时证据时，前端样式结论默认降级为受限结论
 - 只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须加载后端专项检查
 - 后端任务必查：三平面、接口包装、状态写入口、`HostExtension / RuntimeExtension / CapabilityPlugin` 边界、HostExtension manifest contribution、pre-state infra provider、route/worker/migration registry、`storage-durable/postgres` 内 `storage-postgres` 的 repository/mapper 拆分、`storage-durable / storage-object` 边界、`workspace/system` 命名面、`SYSTEM_SCOPE_ID`、runtime `scope_id`、无 legacy alias、验证命令与 blast radius
@@ -62,6 +65,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 
 - Mode selection and session bias: `references/modes.md`
 - Repository quality gate routing: `references/repo-quality-gates.md`
+- I18n hygiene gate: `references/i18n-hygiene-gate.md`
 - Quality gate watch scenarios: `references/quality-gate-watch.md`
 - Hotspot prevention review: `references/hotspot-prevention.md`
 - Maintainability / dead abstraction checks: `references/maintainability-dead-abstraction.md`

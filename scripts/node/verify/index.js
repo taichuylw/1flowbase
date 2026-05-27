@@ -1002,6 +1002,12 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
     {
+      label: 'repo-i18n-hygiene',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'i18n-hygiene'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-script-tests',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'scripts'],

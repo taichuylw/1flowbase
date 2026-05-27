@@ -3,6 +3,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+const { patchUserPreferences } = vi.hoisted(() => ({
+  patchUserPreferences: vi.fn()
+}));
+
+vi.mock('../../shared/user-preferences/user-preferences', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../shared/user-preferences/user-preferences')
+  >('../../shared/user-preferences/user-preferences');
+
+  return {
+    ...actual,
+    patchUserPreferences
+  };
+});
+
+import { AppProviders } from '../../app/AppProviders';
 import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 import {
   resetFrontstageDesignModeStore,
@@ -10,8 +26,40 @@ import {
 } from '../../state/frontstage-design-mode-store';
 import { AppShellFrame } from '../AppShellFrame';
 
+function renderShell(pathname: string) {
+  return render(
+    <AppProviders>
+      <AppShellFrame pathname={pathname}>
+        <main>Content</main>
+      </AppShellFrame>
+    </AppProviders>
+  );
+}
+
 describe('AppShellFrame', () => {
   beforeEach(() => {
+    window.localStorage.clear();
+    patchUserPreferences.mockReset();
+    patchUserPreferences.mockResolvedValue({
+      id: 'user-1',
+      account: 'root',
+      name: 'Root',
+      nickname: 'Root',
+      email: 'root@example.com',
+      phone: null,
+      avatar_url: null,
+      introduction: '',
+      preferred_locale: null,
+      effective_display_role: 'root',
+      permissions: [],
+      meta: {
+        ui: {
+          locale: {
+            preferred_locale: 'en_US'
+          }
+        }
+      }
+    });
     resetAuthStore();
     resetFrontstageDesignModeStore();
     useAuthStore.getState().setAuthenticated({
@@ -37,37 +85,106 @@ describe('AppShellFrame', () => {
     });
   });
 
-  test('places the account menu before the settings menu in the top actions', async () => {
-    render(
-      <AppShellFrame pathname="/settings/data-models">
-        <main>Content</main>
-      </AppShellFrame>
-    );
+  test('places the account menu after the secondary top actions', async () => {
+    renderShell('/settings/data-models');
 
     await waitFor(() => {
       const accountLabel = screen.getByText('Root');
-      const settingsTrigger = screen.getByLabelText('设置');
+      const helpTrigger = screen.getByLabelText('帮助');
 
       expect(
-        accountLabel.compareDocumentPosition(settingsTrigger) &
+        helpTrigger.compareDocumentPosition(accountLabel) &
           Node.DOCUMENT_POSITION_FOLLOWING
       ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
   });
 
-  test('places frontstage design mode icon after settings and toggles shared state', async () => {
-    render(
-      <AppShellFrame pathname="/frontstage">
-        <main>Content</main>
-      </AppShellFrame>
+  test('places the language switcher between help and account', async () => {
+    renderShell('/settings/data-models');
+
+    await waitFor(() => {
+      const helpTrigger = screen.getByLabelText('帮助');
+      const languageTrigger = screen.getByLabelText('切换语言');
+      const accountLabel = screen.getByText('Root');
+
+      expect(
+        helpTrigger.compareDocumentPosition(languageTrigger) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        languageTrigger.compareDocumentPosition(accountLabel) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+  });
+
+  test('updates the current session locale from the language switcher', async () => {
+    renderShell('/settings/data-models');
+
+    fireEvent.mouseEnter(await screen.findByLabelText('切换语言'));
+    fireEvent.click(await screen.findByText('English'));
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().me?.preferred_locale).toBe('en_US');
+    });
+    expect(window.localStorage.getItem('1flowbase.ui.locale_preference')).toBe('en_US');
+    expect(patchUserPreferences).toHaveBeenCalledWith(
+      {
+        ui: {
+          locale: {
+            preferred_locale: 'en_US'
+          }
+        }
+      },
+      'csrf-token'
     );
+  });
+
+  test('uses cached locale from localStorage when the profile has no locale preference', async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'en_US');
+    useAuthStore.getState().setAuthenticated({
+      csrfToken: 'csrf-token',
+      actor: {
+        id: 'user-1',
+        account: 'root',
+        effective_display_role: 'root',
+        current_workspace_id: 'workspace-1'
+      },
+      me: {
+        id: 'user-1',
+        account: 'root',
+        name: 'Root',
+        nickname: 'Root',
+        email: 'root@example.com',
+        phone: null,
+        avatar_url: null,
+        introduction: '',
+        preferred_locale: null,
+        meta: {},
+        effective_display_role: 'root',
+        permissions: []
+      }
+    });
+
+    renderShell('/settings/data-models');
+
+    expect(await screen.findByLabelText('Switch language')).toBeInTheDocument();
+  });
+
+  test('places frontstage design mode icon before settings and toggles shared state', async () => {
+    renderShell('/frontstage');
 
     await waitFor(() => {
       const settingsTrigger = screen.getByLabelText('设置');
       const designButton = screen.getByLabelText('进入设计模式');
+      const helpTrigger = screen.getByLabelText('帮助');
 
       expect(
-        settingsTrigger.compareDocumentPosition(designButton) &
+        designButton.compareDocumentPosition(settingsTrigger) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        settingsTrigger.compareDocumentPosition(helpTrigger) &
           Node.DOCUMENT_POSITION_FOLLOWING
       ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
@@ -106,11 +223,7 @@ describe('AppShellFrame', () => {
       } as Location
     });
 
-    render(
-      <AppShellFrame pathname="/">
-        <main>Content</main>
-      </AppShellFrame>
-    );
+    renderShell('/');
 
     await waitFor(() => {
       const designButton = screen.getByLabelText('进入设计模式');

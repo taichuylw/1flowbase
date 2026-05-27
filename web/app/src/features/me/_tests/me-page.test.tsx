@@ -20,7 +20,10 @@ import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 
-function authenticate() {
+function authenticate(
+  preferredLocale: string | null = null,
+  meta: Record<string, unknown> | undefined = undefined
+) {
   useAuthStore.getState().setAuthenticated({
     csrfToken: 'csrf-123',
     actor: {
@@ -38,7 +41,8 @@ function authenticate() {
       name: 'Root',
       avatar_url: null,
       introduction: '',
-      preferred_locale: null,
+      preferred_locale: preferredLocale,
+      meta,
       effective_display_role: 'manager',
       permissions: ['route_page.view.all']
     }
@@ -147,6 +151,37 @@ describe('MePage', () => {
         'csrf-123'
       )
     );
+  });
+
+  test('renders profile form copy in English when preferred locale is English', async () => {
+    resetAuthStore();
+    authenticate('en_US');
+
+    renderApp('/me/profile');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Personal information', level: 4 })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Edit profile/ })).toBeInTheDocument();
+    expect(screen.getAllByText('Interface language').length).toBeGreaterThan(0);
+  });
+
+  test('renders profile form copy in English when locale preference comes from me meta', async () => {
+    resetAuthStore();
+    authenticate(null, {
+      ui: {
+        locale: {
+          preferred_locale: 'en_US'
+        }
+      }
+    });
+
+    renderApp('/me/profile');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Personal information', level: 4 })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Edit profile/ })).toBeInTheDocument();
   });
 
   test('submits password change on /me/security and navigates to /sign-in after success', async () => {

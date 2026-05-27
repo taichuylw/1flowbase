@@ -18,8 +18,11 @@ import {
   Tag,
   Typography
 } from 'antd';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 
 import type { MyProfile, UpdateMyProfileInput } from '../api/me';
+import { resolveUserLocalePreference } from '../../../shared/user-preferences/locale-preference';
 
 interface ProfileFormValues {
   name: string;
@@ -31,14 +34,14 @@ interface ProfileFormValues {
   preferred_locale?: string;
 }
 
-function formatLocaleLabel(locale: string | null | undefined) {
+function formatLocaleLabel(locale: string | null | undefined, t: TFunction<'me'>) {
   switch (locale) {
     case 'zh_Hans':
-      return '简体中文';
+      return t('profile.locale.zhHans');
     case 'en_US':
-      return 'English';
+      return t('profile.locale.enUs');
     default:
-      return '跟随系统默认';
+      return t('profile.locale.default');
   }
 }
 
@@ -55,6 +58,7 @@ export function ProfileForm({
   errorMessage: string | null;
   onSubmit: (input: UpdateMyProfileInput) => Promise<void> | void;
 }) {
+  const { t } = useTranslation('me');
   const [form] = Form.useForm<ProfileFormValues>();
   const [drawerVisible, setDrawerVisible] = useState(false);
 
@@ -66,7 +70,8 @@ export function ProfileForm({
       phone: me.phone ?? '',
       avatar_url: me.avatar_url ?? '',
       introduction: me.introduction,
-      preferred_locale: me.preferred_locale ?? undefined
+      preferred_locale:
+        resolveUserLocalePreference(me.preferred_locale, me.meta) ?? undefined
     });
   }, [form, me]);
 
@@ -97,7 +102,7 @@ export function ProfileForm({
         className="me-profile-card"
         title={
           <div className="me-profile-card__header">
-            <Typography.Title level={4}>个人信息</Typography.Title>
+            <Typography.Title level={4}>{t('profile.title')}</Typography.Title>
           </div>
         }
         extra={
@@ -107,7 +112,7 @@ export function ProfileForm({
             icon={<EditOutlined />}
             onClick={handleEditClick}
           >
-            编辑资料
+            {t('profile.actions.edit')}
           </Button>
         }
         variant="borderless"
@@ -140,14 +145,17 @@ export function ProfileForm({
               layout="vertical"
               styles={{ label: { color: 'rgba(0, 0, 0, 0.45)', paddingBottom: 8 }, content: { color: 'rgba(0, 0, 0, 0.88)', fontWeight: 400, paddingBottom: 24 } }}
             >
-              <Descriptions.Item label="账号名称">{me.account}</Descriptions.Item>
-              <Descriptions.Item label="真实姓名">{me.name}</Descriptions.Item>
-              <Descriptions.Item label="联系邮箱">{me.email}</Descriptions.Item>
-              <Descriptions.Item label="手机号码">{me.phone || '-'}</Descriptions.Item>
-              <Descriptions.Item label="界面语言" span={2}>
-                {formatLocaleLabel(me.preferred_locale)}
+              <Descriptions.Item label={t('profile.fields.account')}>{me.account}</Descriptions.Item>
+              <Descriptions.Item label={t('profile.fields.name')}>{me.name}</Descriptions.Item>
+              <Descriptions.Item label={t('profile.fields.email')}>{me.email}</Descriptions.Item>
+              <Descriptions.Item label={t('profile.fields.phone')}>{me.phone || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('profile.fields.interfaceLanguage')} span={2}>
+                {formatLocaleLabel(
+                  resolveUserLocalePreference(me.preferred_locale, me.meta),
+                  t
+                )}
               </Descriptions.Item>
-              <Descriptions.Item label="系统权限" span={3}>
+              <Descriptions.Item label={t('profile.fields.permissions')} span={3}>
                 {me.permissions.length > 0 ? (
                   <Space className="me-profile-card__permissions" size={[4, 8]} wrap>
                     {me.permissions.map((permission) => (
@@ -158,14 +166,14 @@ export function ProfileForm({
                   </Space>
                 ) : (
                   <Typography.Text className="me-profile-card__placeholder" type="secondary">
-                    暂无显式权限
+                    {t('profile.empty.permissions')}
                   </Typography.Text>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="个人介绍" span={3}>
+              <Descriptions.Item label={t('profile.fields.introduction')} span={3}>
                 {me.introduction || (
                   <Typography.Text className="me-profile-card__placeholder" type="secondary">
-                    暂无介绍
+                    {t('profile.empty.introduction')}
                   </Typography.Text>
                 )}
               </Descriptions.Item>
@@ -176,15 +184,15 @@ export function ProfileForm({
 
       <Drawer
         forceRender
-        title="编辑个人信息"
+        title={t('profile.drawer.title')}
         width={400}
         onClose={handleDrawerClose}
         open={drawerVisible}
         extra={
           <Space>
-            <Button onClick={handleDrawerClose}>取消</Button>
+            <Button onClick={handleDrawerClose}>{t('profile.actions.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()} loading={submitting}>
-              保存资料
+              {t('profile.actions.save')}
             </Button>
           </Space>
         }
@@ -199,50 +207,54 @@ export function ProfileForm({
           onFinish={handleFinish}
         >
           <Form.Item
-            label="姓名"
+            label={t('profile.form.name.label')}
             name="name"
-            rules={[{ required: true, message: '请输入姓名。' }]}
-            extra="你的真实姓名，用于后台实名记录。"
+            rules={[{ required: true, message: t('profile.form.name.required') }]}
+            extra={t('profile.form.name.extra')}
           >
             <Input />
           </Form.Item>
           <Form.Item
-            label="昵称"
+            label={t('profile.fields.nickname')}
             name="nickname"
-            rules={[{ required: true, message: '请输入昵称。' }]}
-            extra="系统内的显示名称。"
+            rules={[{ required: true, message: t('profile.form.nickname.required') }]}
+            extra={t('profile.form.nickname.extra')}
           >
             <Input />
           </Form.Item>
           <Form.Item
-            label="邮箱"
+            label={t('profile.fields.email')}
             name="email"
-            rules={[{ required: true, type: 'email', message: '请输入有效的邮箱地址。' }]}
+            rules={[{ required: true, type: 'email', message: t('profile.form.email.required') }]}
           >
             <Input />
           </Form.Item>
-          <Form.Item label="手机号" name="phone">
+          <Form.Item label={t('profile.fields.phone')} name="phone">
             <Input />
           </Form.Item>
           <Form.Item
-            label="界面语言"
+            label={t('profile.fields.interfaceLanguage')}
             name="preferred_locale"
-            extra="不选择时使用系统自动解析到的默认语言。"
+            extra={t('profile.form.interfaceLanguage.extra')}
           >
             <Select
               allowClear
-              placeholder="跟随系统默认"
+              placeholder={t('profile.locale.default')}
               options={[
-                { label: '简体中文', value: 'zh_Hans' },
-                { label: 'English', value: 'en_US' }
+                { label: t('profile.locale.zhHans'), value: 'zh_Hans' },
+                { label: t('profile.locale.enUs'), value: 'en_US' }
               ]}
             />
           </Form.Item>
-          <Form.Item label="头像地址" name="avatar_url" extra="支持外链图片地址。">
-            <Input placeholder="https://example.com/avatar.png" />
+          <Form.Item
+            label={t('profile.fields.avatarUrl')}
+            name="avatar_url"
+            extra={t('profile.form.avatarUrl.extra')}
+          >
+            <Input placeholder={t('profile.form.avatarUrl.placeholder')} />
           </Form.Item>
-          <Form.Item label="个人介绍" name="introduction">
-            <Input.TextArea rows={4} placeholder="简单介绍一下自己..." />
+          <Form.Item label={t('profile.fields.introduction')} name="introduction">
+            <Input.TextArea rows={4} placeholder={t('profile.form.introduction.placeholder')} />
           </Form.Item>
         </Form>
       </Drawer>

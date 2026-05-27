@@ -74,7 +74,7 @@ describe('App shell', () => {
       const header = screen.getByRole('banner');
       const primaryNavigation = screen.getByRole('navigation', { name: 'Primary' });
 
-      expect(header).toHaveStyle('--app-shell-edge-gap: 5%');
+      expect(header).not.toHaveStyle('--app-shell-edge-gap: 5%');
       expect(within(primaryNavigation).getByRole('menu')).toBeInTheDocument();
       expect(
         within(primaryNavigation).getByRole('link', { name: '工作台' })

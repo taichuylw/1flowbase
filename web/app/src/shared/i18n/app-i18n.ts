@@ -1,0 +1,58 @@
+import i18next from 'i18next';
+import resourcesToBackend from 'i18next-resources-to-backend';
+import { initReactI18next } from 'react-i18next';
+
+import { FALLBACK_APP_LOCALE, SUPPORTED_APP_LOCALES } from './locales';
+
+const appTranslationLoaders = {
+  appShell: {
+    'zh-CN': () => import('../../app-shell/i18n/zh-CN.json'),
+    'en-US': () => import('../../app-shell/i18n/en-US.json')
+  },
+  auth: {
+    'zh-CN': () => import('../../features/auth/i18n/zh-CN.json'),
+    'en-US': () => import('../../features/auth/i18n/en-US.json')
+  },
+  me: {
+    'zh-CN': () => import('../../features/me/i18n/zh-CN.json'),
+    'en-US': () => import('../../features/me/i18n/en-US.json')
+  }
+} as const;
+
+type AppTranslationNamespace = keyof typeof appTranslationLoaders;
+
+function isAppTranslationNamespace(namespace: string): namespace is AppTranslationNamespace {
+  return namespace in appTranslationLoaders;
+}
+
+export const appI18n = i18next.createInstance();
+
+void appI18n
+  .use(initReactI18next)
+  .use(
+    resourcesToBackend((language: string, namespace: string) => {
+      if (!isAppTranslationNamespace(namespace)) {
+        throw new Error(`Unknown translation namespace: ${namespace}`);
+      }
+
+      const localeLoaders = appTranslationLoaders[namespace];
+      const loadTranslation = localeLoaders[language as keyof typeof localeLoaders];
+
+      if (!loadTranslation) {
+        throw new Error(`Unknown translation locale: ${language}`);
+      }
+
+      return loadTranslation();
+    })
+  )
+  .init({
+    fallbackLng: FALLBACK_APP_LOCALE,
+    supportedLngs: [...SUPPORTED_APP_LOCALES],
+    defaultNS: 'me',
+    interpolation: {
+      escapeValue: false
+    },
+    react: {
+      useSuspense: true
+    }
+  });
