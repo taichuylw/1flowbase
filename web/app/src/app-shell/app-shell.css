@@ -4,7 +4,6 @@
 }
 
 .app-shell-header.ant-layout-header {
-  --app-shell-edge-gap: 24px;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -15,7 +14,7 @@
   min-height: 56px;
   height: 56px;
   gap: 16px;
-  padding: 0 var(--app-shell-edge-gap) 0 24px;
+  padding: 0 24px;
   background: rgba(248, 252, 250, 0.45) !important;
   border-bottom: 1px solid rgba(0, 171, 115, 0.08);
   box-shadow: 0 4px 20px rgba(0, 171, 115, 0.02);
