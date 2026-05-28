@@ -158,11 +158,11 @@ function panelSection(
 const basicsPanelSection = panelSection('basics', 'Basics', [
   panelField({
     key: 'alias',
-    title: i18nText("agentFlow", "auto.key_pmgaljeipl"),
+    title: i18nText("agentFlow", "auto.node_alias"),
     renderer: 'text',
     required: true
   }),
-  panelField({ key: 'description', title: i18nText("agentFlow", "auto.key_kbegdcdjie"), renderer: 'text' })
+  panelField({ key: 'description', title: i18nText("agentFlow", "auto.node_introduction"), renderer: 'text' })
 ]);
 
 function outputsPanelSection(outputs: FlowNodeOutputDocument[]) {
@@ -236,24 +236,24 @@ function createStartContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'start',
     title: 'Start',
-    description: i18nText("agentFlow", "auto.key_acnhljoecd"),
+    description: i18nText("agentFlow", "auto.workflow_entry"),
     category: 'io',
     config: { input_fields: [], model_list: [] },
     outputs: [],
     panelSections: [
       basicsPanelSection,
-      panelSection('inputs', i18nText("agentFlow", "auto.key_pemlnglnbd"), [
+      panelSection('inputs', i18nText("agentFlow", "auto.input_field"), [
         panelField({
           key: 'config.input_fields',
-          title: i18nText("agentFlow", "auto.key_pemlnglnbd"),
+          title: i18nText("agentFlow", "auto.input_field"),
           renderer: 'start_input_fields',
           valueType: 'array'
         })
       ]),
-      panelSection('advanced', i18nText("agentFlow", "auto.key_mchbncjbbi"), [
+      panelSection('advanced', i18nText("agentFlow", "auto.model_list"), [
         panelField({
           key: 'config.model_list',
-          title: i18nText("agentFlow", "auto.key_mchbncjbbi"),
+          title: i18nText("agentFlow", "auto.model_list"),
           renderer: 'start_model_list',
           valueType: 'array'
         })
@@ -268,7 +268,7 @@ function createLlmContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'llm',
     title: 'LLM',
-    description: i18nText("agentFlow", "auto.key_ehoglgigeb"),
+    description: i18nText("agentFlow", "auto.call_language_model_generate_text"),
     category: 'generation',
     config: {
       model_provider: {
@@ -302,14 +302,14 @@ function createLlmContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'config.model_provider',
-          title: i18nText("agentFlow", "auto.key_jipnamlnjm"),
+          title: i18nText("agentFlow", "auto.model"),
           renderer: 'llm_model',
           valueType: 'json',
           required: true
         }),
         panelField({
           key: 'bindings.prompt_messages',
-          title: i18nText("agentFlow", "auto.key_njkkjpoang"),
+          title: i18nText("agentFlow", "auto.context_alt"),
           renderer: 'llm_prompt_messages',
           valueType: 'array'
         })
@@ -318,7 +318,7 @@ function createLlmContract(): NodeRuntimeUiContract {
       panelSection('advanced', 'Advanced', [
         panelField({
           key: 'config.response_format',
-          title: i18nText("agentFlow", "auto.key_nkmghdcigp"),
+          title: i18nText("agentFlow", "auto.return_format"),
           renderer: 'llm_response_format',
           valueType: 'json'
         })
@@ -328,12 +328,12 @@ function createLlmContract(): NodeRuntimeUiContract {
 }
 
 function createAnswerContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'answer', title: i18nText("agentFlow", "auto.key_gohhkaedfc"), valueType: 'string' }];
+  const outputs = [{ key: 'answer', title: i18nText("agentFlow", "auto.dialog_output"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'answer',
     title: 'Answer',
-    description: i18nText("agentFlow", "auto.key_ikpcmgegod"),
+    description: i18nText("agentFlow", "auto.returns_final_text_result_user"),
     category: 'io',
     config: {},
     outputs,
@@ -342,7 +342,7 @@ function createAnswerContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.answer_template',
-          title: i18nText("agentFlow", "auto.key_kdgmhihndf"),
+          title: i18nText("agentFlow", "auto.reply_content"),
           renderer: 'templated_text',
           required: true
         })
@@ -353,12 +353,12 @@ function createAnswerContract(): NodeRuntimeUiContract {
 }
 
 function createKnowledgeRetrievalContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'documents', title: i18nText("agentFlow", "auto.key_lbhndjcmkb"), valueType: 'array' }];
+  const outputs = [{ key: 'documents', title: i18nText("agentFlow", "auto.knowledge_results"), valueType: 'array' }];
 
   return createNodeRuntimeContract({
     type: 'knowledge_retrieval',
     title: 'Knowledge Retrieval',
-    description: i18nText("agentFlow", "auto.key_mebamdkebn"),
+    description: i18nText("agentFlow", "auto.retrieve_knowledge_base_based_input_question_return_document_results"),
     category: 'generation',
     config: { top_k: 4 },
     outputs,
@@ -367,7 +367,7 @@ function createKnowledgeRetrievalContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.query',
-          title: i18nText("agentFlow", "auto.key_ckbndafkag"),
+          title: i18nText("agentFlow", "auto.search_questions"),
           renderer: 'selector',
           required: true
         })
@@ -386,12 +386,12 @@ function createKnowledgeRetrievalContract(): NodeRuntimeUiContract {
 }
 
 function createQuestionClassifierContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'label', title: i18nText("agentFlow", "auto.key_aoppooijcm"), valueType: 'string' }];
+  const outputs = [{ key: 'label', title: i18nText("agentFlow", "auto.classification_tags"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'question_classifier',
     title: 'Question Classifier',
-    description: i18nText("agentFlow", "auto.key_coacfmohmn"),
+    description: i18nText("agentFlow", "auto.classify_question_output_hit_labels"),
     category: 'control',
     config: { classes: [] },
     outputs,
@@ -400,7 +400,7 @@ function createQuestionClassifierContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.question',
-          title: i18nText("agentFlow", "auto.key_bmhibkgdnh"),
+          title: i18nText("agentFlow", "auto.questions_classified"),
           renderer: 'selector',
           required: true
         })
@@ -414,7 +414,7 @@ function createIfElseContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'if_else',
     title: 'If / Else',
-    description: i18nText("agentFlow", "auto.key_jdjhlbjnlo"),
+    description: i18nText("agentFlow", "auto.select_paths_based_conditional_judgment"),
     category: 'control',
     config: { mode: 'all' },
     outputs: [],
@@ -423,7 +423,7 @@ function createIfElseContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.condition_group',
-          title: i18nText("agentFlow", "auto.key_fdgnfhocml"),
+          title: i18nText("agentFlow", "auto.condition_group"),
           renderer: 'condition_group',
           valueType: 'json',
           required: true
@@ -440,7 +440,7 @@ function createCodeContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'code',
     title: 'Code',
-    description: i18nText("agentFlow", "auto.key_kbmmnecplj"),
+    description: i18nText("agentFlow", "auto.execute_custom_code_return_structured_results"),
     category: 'data',
     config: { language: 'javascript', source: DEFAULT_CODE_SOURCE },
     bindings: {
@@ -464,7 +464,7 @@ function createCodeContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.named_bindings',
-          title: i18nText("agentFlow", "auto.key_jkefpofbfl"),
+          title: i18nText("agentFlow", "auto.input_variables"),
           renderer: 'templated_named_bindings',
           valueType: 'json'
         })
@@ -472,16 +472,16 @@ function createCodeContract(): NodeRuntimeUiContract {
       panelSection('code', 'JavaScript', [
         panelField({
           key: 'config.source',
-          title: i18nText("agentFlow", "auto.key_jdeokecijb"),
+          title: i18nText("agentFlow", "auto.javascript_code"),
           renderer: 'code_source',
           valueType: 'string',
           required: true
         })
       ]),
-      panelSection('outputs', i18nText("agentFlow", "auto.key_bigaknngaf"), [
+      panelSection('outputs', i18nText("agentFlow", "auto.output_variable"), [
         panelField({
           key: 'config.output_contract',
-          title: i18nText("agentFlow", "auto.key_bigaknngaf"),
+          title: i18nText("agentFlow", "auto.output_variable"),
           renderer: 'output_contract_definition',
           valueType: 'array'
         })
@@ -491,12 +491,12 @@ function createCodeContract(): NodeRuntimeUiContract {
 }
 
 function createTemplateTransformContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'text', title: i18nText("agentFlow", "auto.key_nkbhnkfien"), valueType: 'string' }];
+  const outputs = [{ key: 'text', title: i18nText("agentFlow", "auto.conversion_result"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'template_transform',
     title: 'Template Transform',
-    description: i18nText("agentFlow", "auto.key_lfefknnpgl"),
+    description: i18nText("agentFlow", "auto.template_output_conversion"),
     category: 'generation',
     config: { template: '' },
     outputs,
@@ -505,7 +505,7 @@ function createTemplateTransformContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.template',
-          title: i18nText("agentFlow", "auto.key_agnapdinnc"),
+          title: i18nText("agentFlow", "auto.template"),
           renderer: 'templated_text',
           required: true
         })
@@ -516,12 +516,12 @@ function createTemplateTransformContract(): NodeRuntimeUiContract {
 }
 
 function createHttpRequestContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'body', title: i18nText("agentFlow", "auto.key_kmfcgapicj"), valueType: 'json' }];
+  const outputs = [{ key: 'body', title: i18nText("agentFlow", "auto.response_body"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'http_request',
     title: 'HTTP Request',
-    description: i18nText("agentFlow", "auto.key_dkifpengag"),
+    description: i18nText("agentFlow", "auto.request_external_http_service"),
     category: 'external',
     config: { method: 'GET', url: '' },
     outputs,
@@ -536,7 +536,7 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
         }),
         panelField({
           key: 'bindings.body',
-          title: i18nText("agentFlow", "auto.key_kfcgnldjpl"),
+          title: i18nText("agentFlow", "auto.request_body"),
           renderer: 'templated_text'
         })
       ]),
@@ -553,12 +553,12 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
 }
 
 function createToolContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.key_plhonncdbp"), valueType: 'unknown' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.tool_output"), valueType: 'unknown' }];
 
   return createNodeRuntimeContract({
     type: 'tool',
     title: 'Tool',
-    description: i18nText("agentFlow", "auto.key_ijbjliocdo"),
+    description: i18nText("agentFlow", "auto.call_connected_tool_capabilities"),
     category: 'external',
     config: { tool_name: '' },
     outputs,
@@ -567,13 +567,13 @@ function createToolContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'config.tool_name',
-          title: i18nText("agentFlow", "auto.key_ocinhgfdam"),
+          title: i18nText("agentFlow", "auto.tool_name"),
           renderer: 'text',
           required: true
         }),
         panelField({
           key: 'bindings.parameters',
-          title: i18nText("agentFlow", "auto.key_domngakbhh"),
+          title: i18nText("agentFlow", "auto.tool_input_parameters"),
           renderer: 'named_bindings',
           valueType: 'json'
         })
@@ -584,12 +584,12 @@ function createToolContract(): NodeRuntimeUiContract {
 }
 
 function createPluginNodeContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.key_jndmnolnfc"), valueType: 'json' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.node_output"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'plugin_node',
     title: 'Plugin Node',
-    description: i18nText("agentFlow", "auto.key_jnldloelll"),
+    description: i18nText("agentFlow", "auto.declarative_node_placeholders_plugins"),
     category: 'external',
     config: {},
     outputs,
@@ -598,12 +598,12 @@ function createPluginNodeContract(): NodeRuntimeUiContract {
 }
 
 function createVariableAssignerContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'state', title: i18nText("agentFlow", "auto.key_eahojimkbp"), valueType: 'json' }];
+  const outputs = [{ key: 'state', title: i18nText("agentFlow", "auto.status_result"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'variable_assigner',
     title: 'Variable Assigner',
-    description: i18nText("agentFlow", "auto.key_fdgagfkfdf"),
+    description: i18nText("agentFlow", "auto.set_update_process_variables"),
     category: 'data',
     config: { writes: [] },
     outputs,
@@ -612,7 +612,7 @@ function createVariableAssignerContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.operations',
-          title: i18nText("agentFlow", "auto.key_ebggdcgepb"),
+          title: i18nText("agentFlow", "auto.variable_manipulation"),
           renderer: 'state_write',
           valueType: 'array',
           required: true
@@ -624,12 +624,12 @@ function createVariableAssignerContract(): NodeRuntimeUiContract {
 }
 
 function createParameterExtractorContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'parameters', title: i18nText("agentFlow", "auto.key_lomlepapba"), valueType: 'json' }];
+  const outputs = [{ key: 'parameters', title: i18nText("agentFlow", "auto.extract_parameters"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'parameter_extractor',
     title: 'Parameter Extractor',
-    description: i18nText("agentFlow", "auto.key_clmnekmoin"),
+    description: i18nText("agentFlow", "auto.extract_structured_parameter_results_text"),
     category: 'data',
     config: { schema: [] },
     outputs,
@@ -638,7 +638,7 @@ function createParameterExtractorContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.source_text',
-          title: i18nText("agentFlow", "auto.key_cfmjbhfpkj"),
+          title: i18nText("agentFlow", "auto.source_text"),
           renderer: 'selector',
           required: true
         })
@@ -649,12 +649,12 @@ function createParameterExtractorContract(): NodeRuntimeUiContract {
 }
 
 function createIterationContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.key_lkngeimdmc"), valueType: 'array' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.aggregate_output"), valueType: 'array' }];
 
   return createNodeRuntimeContract({
     type: 'iteration',
     title: 'Iteration',
-    description: i18nText("agentFlow", "auto.key_eiaelgfdbg"),
+    description: i18nText("agentFlow", "auto.iterate_through_list_process_each_item"),
     category: 'control',
     config: { max_steps: 10 },
     outputs,
@@ -663,7 +663,7 @@ function createIterationContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.items',
-          title: i18nText("agentFlow", "auto.key_cbbffkdmpf"),
+          title: i18nText("agentFlow", "auto.circular_list"),
           renderer: 'selector',
           required: true
         })
@@ -674,12 +674,12 @@ function createIterationContract(): NodeRuntimeUiContract {
 }
 
 function createLoopContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.key_lkngeimdmc"), valueType: 'array' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.aggregate_output"), valueType: 'array' }];
 
   return createNodeRuntimeContract({
     type: 'loop',
     title: 'Loop',
-    description: i18nText("agentFlow", "auto.key_gfleiobaoe"),
+    description: i18nText("agentFlow", "auto.conditionally_execute_node_repeatedly"),
     category: 'control',
     config: { max_rounds: 10 },
     outputs,
@@ -688,7 +688,7 @@ function createLoopContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.entry_condition',
-          title: i18nText("agentFlow", "auto.key_onfhklmfjc"),
+          title: i18nText("agentFlow", "auto.entry_conditions"),
           renderer: 'condition_group',
           valueType: 'json',
           required: true
@@ -697,7 +697,7 @@ function createLoopContract(): NodeRuntimeUiContract {
       panelSection('policy', 'Policy', [
         panelField({
           key: 'config.max_rounds',
-          title: i18nText("agentFlow", "auto.key_hlgcbncgli"),
+          title: i18nText("agentFlow", "auto.maximum_number_rounds"),
           renderer: 'number',
           valueType: 'number'
         })
@@ -708,12 +708,12 @@ function createLoopContract(): NodeRuntimeUiContract {
 }
 
 function createHumanInputContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'input', title: i18nText("agentFlow", "auto.key_geaooocjpb"), valueType: 'string' }];
+  const outputs = [{ key: 'input', title: i18nText("agentFlow", "auto.manual_input"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'human_input',
     title: 'Human Input',
-    description: i18nText("agentFlow", "auto.key_nlgenmcpcj"),
+    description: i18nText("agentFlow", "auto.waiting_manual_input"),
     category: 'io',
     config: {},
     outputs,
@@ -722,7 +722,7 @@ function createHumanInputContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'config.prompt',
-          title: i18nText("agentFlow", "auto.key_lalhmidajo"),
+          title: i18nText("agentFlow", "auto.waiting_for_questions"),
           renderer: 'templated_text',
           required: true
         })
@@ -819,7 +819,7 @@ function createDataModelContract(
   return createNodeRuntimeContract({
     type: nodeType,
     title: DATA_MODEL_NODE_TITLES[nodeType],
-    description: i18nText("agentFlow", "auto.key_ommempekmn"),
+    description: i18nText("agentFlow", "auto.data_model_operation_node"),
     category: 'data',
     config: getDataModelNodeDefaultConfig(nodeType),
     outputs,

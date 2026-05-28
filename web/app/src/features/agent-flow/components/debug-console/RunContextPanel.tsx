@@ -74,12 +74,12 @@ export function RunContextPanel({
         <Space direction="vertical" size={2}>
           <Typography.Text strong>{i18nText("agentFlow", "auto.run_context")}</Typography.Text>
           <Typography.Text type="secondary">
-            {i18nText("agentFlow", "auto.key_eleecolblh")}</Typography.Text>
+            {i18nText("agentFlow", "auto.pre_run_input_debugging_environment")}</Typography.Text>
         </Space>
         <Space size={8} wrap>
           <Tag color="blue">{i18nText("agentFlow", "auto.draft")}</Tag>
           <Tag color={runContext.remembered ? 'green' : 'default'}>
-            {runContext.remembered ? i18nText("agentFlow", "auto.key_iijkcmbbkk") : i18nText("agentFlow", "auto.key_hjlaiahkij")}
+            {runContext.remembered ? i18nText("agentFlow", "auto.reuse_last_input") : i18nText("agentFlow", "auto.current_draft_defaults")}
           </Tag>
         </Space>
       </div>

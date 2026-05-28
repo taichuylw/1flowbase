@@ -128,7 +128,7 @@
     "model_target_help": "pass-through target；留空不注入节点输入",
     "edit_information": "编辑信息",
     "full_token_hidden_after_close": "关闭后页面不再显示完整 token。",
-    "key_description": "密钥说明",
+    "text": "密钥说明",
     "application_description": "应用简介",
     "import_dsl_file": "导入 DSL 文件",
     "no_optional_tags": "当前还没有可选标签",

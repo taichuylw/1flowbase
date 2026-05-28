@@ -40,7 +40,7 @@ export function SelectorField({
           label: option.displayLabel,
           value: encodeSelectorValue(option.value)
         }))}
-        placeholder={i18nText("agentFlow", "auto.key_epgieaehhh")}
+        placeholder={i18nText("agentFlow", "auto.select_upstream_output")}
         value={selectedValues}
         onChange={(nextValues) =>
           onChange(nextValues.map((nextValue) => decodeSelectorValue(String(nextValue))))
@@ -54,7 +54,7 @@ export function SelectorField({
       allowClear
       aria-label={ariaLabel}
       options={toCascaderSelectorOptions(options)}
-      placeholder={i18nText("agentFlow", "auto.key_epgieaehhh")}
+      placeholder={i18nText("agentFlow", "auto.select_upstream_output")}
       value={isSelectorListValue(value) ? [] : value}
       onChange={(nextValue) =>
         onChange(Array.isArray(nextValue) ? nextValue.map(String) : [])

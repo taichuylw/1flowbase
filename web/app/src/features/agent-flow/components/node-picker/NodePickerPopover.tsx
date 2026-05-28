@@ -25,28 +25,28 @@ interface NodePickerGroup {
 const BUILTIN_NODE_PICKER_GROUPS: NodePickerGroup[] = [
   {
     key: 'io',
-    title: i18nText("agentFlow", "auto.key_kigfboeodi"),
-    description: i18nText("agentFlow", "auto.key_cihieejhob"),
+    title: i18nText("agentFlow", "auto.start_stop_output"),
+    description: i18nText("agentFlow", "auto.define_input_entry_final_response"),
   },
   {
     key: 'generation',
-    title: i18nText("agentFlow", "auto.key_fcehkoljij"),
-    description: i18nText("agentFlow", "auto.key_ipngigoamm"),
+    title: i18nText("agentFlow", "auto.model_and_generation"),
+    description: i18nText("agentFlow", "auto.invoke_models_retrieve_knowledge_organize_generated_content"),
   },
   {
     key: 'control',
-    title: i18nText("agentFlow", "auto.key_flmbjbjlpp"),
-    description: i18nText("agentFlow", "auto.key_cmcnoeleme"),
+    title: i18nText("agentFlow", "auto.process_control"),
+    description: i18nText("agentFlow", "auto.branching_sorting_looping_batch_processing"),
   },
   {
     key: 'data',
-    title: i18nText("agentFlow", "auto.key_lndcadbgcg"),
-    description: i18nText("agentFlow", "auto.key_jnddojafcc"),
+    title: i18nText("agentFlow", "auto.data_processing"),
+    description: i18nText("agentFlow", "auto.read_write_structured_data_maintain_process_variables"),
   },
   {
     key: 'external',
-    title: i18nText("agentFlow", "auto.key_nkhnocmgcn"),
-    description: i18nText("agentFlow", "auto.key_ajmddbohcf"),
+    title: i18nText("agentFlow", "auto.external_capabilities"),
+    description: i18nText("agentFlow", "auto.call_interfaces_tools_out_system_capabilities"),
   }
 ];
 
@@ -178,7 +178,7 @@ export function NodePickerPopover({
         <div className="agent-flow-node-picker">
           <div className="agent-flow-node-picker__header">
             <div
-              aria-label={i18nText("agentFlow", "auto.key_djjcgljmeh")}
+              aria-label={i18nText("agentFlow", "auto.node_source")}
               className="agent-flow-node-picker__tabs"
               role="tablist"
             >
@@ -189,7 +189,7 @@ export function NodePickerPopover({
                 type="button"
                 onClick={() => setActiveTab('builtin')}
               >
-                {i18nText("agentFlow", "auto.key_ajmookhgee")}</button>
+                {i18nText("agentFlow", "auto.built_in")}</button>
               <button
                 aria-selected={activeTab === 'plugin'}
                 className={`agent-flow-node-picker__tab${activeTab === 'plugin' ? ' agent-flow-node-picker__tab--active' : ''}`}
@@ -197,13 +197,13 @@ export function NodePickerPopover({
                 type="button"
                 onClick={() => setActiveTab('plugin')}
               >
-                {i18nText("agentFlow", "auto.key_bhnbdkkejn")}</button>
+                {i18nText("agentFlow", "auto.expand")}</button>
             </div>
             <div className="agent-flow-node-picker__search">
               <Input
                 allowClear
-                aria-label={i18nText("agentFlow", "auto.key_jbkljkeogn")}
-                placeholder={i18nText("agentFlow", "auto.key_jbkljkeogn")}
+                aria-label={i18nText("agentFlow", "auto.search_node")}
+                placeholder={i18nText("agentFlow", "auto.search_node")}
                 prefix={<SearchOutlined />}
                 size="small"
                 value={searchValue}
@@ -235,7 +235,7 @@ export function NodePickerPopover({
                 ))}
                 {uncategorizedBuiltinOptions.length > 0 ? (
                   <NodePickerSection
-                    title={i18nText("agentFlow", "auto.key_iacpagmiph")}
+                    title={i18nText("agentFlow", "auto.other_nodes")}
                   >
                     {uncategorizedBuiltinOptions.map((option) => (
                       <NodePickerOptionButton
@@ -277,10 +277,10 @@ export function NodePickerPopover({
             {!hasVisibleOptions ? (
               <div className="agent-flow-node-picker__empty">
                 {normalizedSearchValue.length > 0
-                  ? i18nText("agentFlow", "auto.key_bognadihao")
+                  ? i18nText("agentFlow", "auto.no_matching_node")
                   : activeTab === 'plugin'
-                    ? i18nText("agentFlow", "auto.key_dbegdknmjn")
-                    : i18nText("agentFlow", "auto.key_bicggjgbnj")}
+                    ? i18nText("agentFlow", "auto.expansion_node_yet")
+                    : i18nText("agentFlow", "auto.built_nodes_yet")}
               </div>
             ) : null}
           </div>

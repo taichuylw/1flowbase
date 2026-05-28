@@ -40,10 +40,10 @@ export function LlmCardModelBadge({
       </span>
       <span className="agent-flow-node-card__model-content">
         <span className="agent-flow-node-card__model-provider-label">
-          {modelProvider.provider_label || providerCode || i18nText("agentFlow", "auto.key_hgdhdcmbne")}
+          {modelProvider.provider_label || providerCode || i18nText("agentFlow", "auto.model_supplier_selected")}
         </span>
         <span className="agent-flow-node-card__model-label">
-          {modelProvider.model_label || model || i18nText("agentFlow", "auto.key_eohgjnncij")}
+          {modelProvider.model_label || model || i18nText("agentFlow", "auto.select_model")}
         </span>
       </span>
     </div>

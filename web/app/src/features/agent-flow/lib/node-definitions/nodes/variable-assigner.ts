@@ -16,7 +16,7 @@ export const variableAssignerNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.operations',
-          label: i18nText("agentFlow", "auto.key_ebggdcgepb"),
+          label: i18nText("agentFlow", "auto.variable_manipulation"),
           editor: 'state_write',
           required: true
         }
@@ -25,7 +25,7 @@ export const variableAssignerNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.state', label: i18nText("agentFlow", "auto.key_eahojimkbp"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.state', label: i18nText("agentFlow", "auto.status_result"), editor: 'text', required: true }]
     }
   ]
 };

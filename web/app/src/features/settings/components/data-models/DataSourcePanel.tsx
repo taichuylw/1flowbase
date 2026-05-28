@@ -36,7 +36,7 @@ export function DataSourcePanel({
 
   const columns: ColumnsType<SettingsDataSourceInstance> = [
     {
-      title: i18nText("settings", "auto.key_nhbgngbldp"),
+      title: i18nText("settings", "auto.data_source_name"),
       key: 'display_name',
       render: (_, source) => (
         <Space size={12}>
@@ -54,7 +54,7 @@ export function DataSourcePanel({
               {source.display_name}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {i18nText("settings", "auto.key_fgfokmlnio")}{' '}
+              {i18nText("settings", "auto.logo")}{' '}
               <code className="data-model-panel__code-badge">
                 {source.source_code}
               </code>
@@ -73,7 +73,7 @@ export function DataSourcePanel({
           color={value === 'main_source' ? 'blue' : 'purple'}
           style={{ borderRadius: 6, margin: 0 }}
         >
-          {value === 'main_source' ? i18nText("settings", "auto.key_djanmoddio") : i18nText("settings", "auto.external_data_source")}
+          {value === 'main_source' ? i18nText("settings", "auto.built_master_data_source") : i18nText("settings", "auto.external_data_source")}
         </Tag>
       )
     },
@@ -97,7 +97,7 @@ export function DataSourcePanel({
       width: 100,
       render: (_, source) => (
         <Checkbox
-          aria-label={i18nText("settings", "auto.key_aknkejnobb", { value1: source.display_name })}
+          aria-label={i18nText("settings", "auto.enable", { value1: source.display_name })}
           checked={source.status === 'ready'}
           className="data-model-panel__enabled-check"
           disabled
@@ -105,13 +105,13 @@ export function DataSourcePanel({
       )
     },
     {
-      title: i18nText("settings", "auto.key_ecnlllmmmi"),
+      title: i18nText("settings", "auto.default_policy"),
       key: 'default_policies',
       width: 260,
       render: (_, source) => (
         <Space size={8}>
           <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
-            {i18nText("settings", "auto.key_plfhaecmnl")}{source.default_data_model_status}
+            {i18nText("settings", "auto.modeling")}{source.default_data_model_status}
           </Tag>
           <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
             API:{' '}
@@ -130,7 +130,7 @@ export function DataSourcePanel({
           type="primary"
           ghost
           size="small"
-          aria-label={i18nText("settings", "auto.key_nhnhmohjal")}
+          aria-label={i18nText("settings", "auto.configuration_alt")}
           className="data-model-panel__enter-btn"
           icon={<RightOutlined aria-hidden="true" />}
           onClick={(event) => {
@@ -203,7 +203,7 @@ export function DataSourcePanel({
                   }
                   style={{ borderRadius: 6, margin: 0 }}
                 >
-                  {source.source_kind === 'main_source' ? i18nText("settings", "auto.key_pmncpeepig") : i18nText("settings", "auto.key_cpplkdmfnd")}
+                  {source.source_kind === 'main_source' ? i18nText("settings", "auto.built_in_source") : i18nText("settings", "auto.external")}
                 </Tag>
                 <Tag
                   color={source.status === 'ready' ? 'success' : 'default'}
@@ -212,7 +212,7 @@ export function DataSourcePanel({
                   {source.status === 'ready' ? i18nText("settings", "auto.ready") : source.status}
                 </Tag>
                 <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
-                  {i18nText("settings", "auto.key_plfhaecmnl")}{source.default_data_model_status}
+                  {i18nText("settings", "auto.modeling")}{source.default_data_model_status}
                 </Tag>
               </Flex>
             </div>

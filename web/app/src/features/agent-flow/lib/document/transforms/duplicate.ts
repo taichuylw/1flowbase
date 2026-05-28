@@ -185,7 +185,7 @@ export function duplicateNodeSubgraph(
     .map((node) => ({
       ...node,
       id: idMap.get(node.id)!,
-      alias: i18nText("agentFlow", "auto.key_ghndnbnobh", { value1: node.alias }),
+      alias: i18nText("agentFlow", "auto.copy_option", { value1: node.alias }),
       containerId:
         node.containerId && idMap.has(node.containerId)
           ? idMap.get(node.containerId)!

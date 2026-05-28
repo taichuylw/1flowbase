@@ -48,7 +48,7 @@ function renderStatusTag(status: string) {
 
 function formatCatalogRefreshedAt(value: string | null) {
   if (!value) {
-    return i18nText("settings", "auto.key_mlpmfjhanp");
+    return i18nText("settings", "auto.not_refreshed");
   }
 
   const matched = value.match(
@@ -91,7 +91,7 @@ export function ModelProviderInstancesTable({
       <section className="model-provider-panel__instances">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={loading ? i18nText("settings", "auto.key_oddbbbgloj") : i18nText("settings", "auto.key_bdcbaafgpo")}
+          description={loading ? i18nText("settings", "auto.loading_instances") : i18nText("settings", "auto.currently_model_supplier_instance")}
         />
       </section>
     );
@@ -119,10 +119,10 @@ export function ModelProviderInstancesTable({
               <div className="model-provider-panel__instance-header-side">
                 <div className="model-provider-panel__instance-inclusion-card">
                   <span className="model-provider-panel__instance-stat-label">
-                    {i18nText("settings", "auto.key_edfhjamomm")}</span>
+                    {i18nText("settings", "auto.inject_main_instance_alt")}</span>
                   <div className="model-provider-panel__instance-inclusion-row">
                     <Switch
-                      aria-label={i18nText("settings", "auto.key_cmfjbnbmlk", { value1: instance.display_name })}
+                      aria-label={i18nText("settings", "auto.inject_main_instance", { value1: instance.display_name })}
                       checked={instance.included_in_main}
                       disabled={!canManage || updatingInstanceId === instance.id}
                       onClick={(_, event) => {
@@ -133,7 +133,7 @@ export function ModelProviderInstancesTable({
                       }}
                     />
                     <Typography.Text type="secondary">
-                      {instance.included_in_main ? i18nText("settings", "auto.key_nkhccefnfa") : i18nText("settings", "auto.key_diajdnigel")}
+                      {instance.included_in_main ? i18nText("settings", "auto.already_connected") : i18nText("settings", "auto.not_connected")}
                     </Typography.Text>
                   </div>
                 </div>
@@ -141,14 +141,14 @@ export function ModelProviderInstancesTable({
                 <div className="model-provider-panel__instance-stats">
                   <div className="model-provider-panel__instance-stat">
                     <span className="model-provider-panel__instance-stat-label">
-                      {i18nText("settings", "auto.key_mdolggmmla")}</span>
+                      {i18nText("settings", "auto.effective_model")}</span>
                     <span className="model-provider-panel__instance-stat-value">
                       {instance.enabled_model_ids.length}
                     </span>
                   </div>
                   <div className="model-provider-panel__instance-stat">
                     <span className="model-provider-panel__instance-stat-label">
-                      {i18nText("settings", "auto.key_bnbppfhgjf")}</span>
+                      {i18nText("settings", "auto.cache_model")}</span>
                     <span className="model-provider-panel__instance-stat-value">
                       {instance.model_count}
                     </span>
@@ -170,26 +170,26 @@ export function ModelProviderInstancesTable({
                     children: (
                       <Typography.Paragraph
                         className="model-provider-panel__instance-baseurl-value"
-                        ellipsis={{ rows: 2, expandable: true, symbol: i18nText("settings", "auto.key_laoceiddph") }}
+                        ellipsis={{ rows: 2, expandable: true, symbol: i18nText("settings", "auto.expand") }}
                         style={{ marginBottom: 0 }}
                       >
-                        {String(instance.config_json.base_url ?? i18nText("settings", "auto.key_gdfjfojflh"))}
+                        {String(instance.config_json.base_url ?? i18nText("settings", "auto.not_configured"))}
                       </Typography.Paragraph>
                     )
                   },
                   {
                     key: 'enabled-models',
-                    label: i18nText("settings", "auto.key_mdolggmmla"),
+                    label: i18nText("settings", "auto.effective_model"),
                     children: (
                       <ModelProviderTagList
                         modelIds={instance.enabled_model_ids}
-                        emptyText={i18nText("settings", "auto.key_ffkaelfimn")}
+                        emptyText={i18nText("settings", "auto.not_set")}
                       />
                     )
                   },
                   {
                     key: 'refreshed-at',
-                    label: i18nText("settings", "auto.key_bgakfchkha"),
+                    label: i18nText("settings", "auto.recently_refreshed"),
                     children: (
                       <Typography.Text type="secondary">
                         {formatCatalogRefreshedAt(instance.catalog_refreshed_at)}
@@ -205,30 +205,30 @@ export function ModelProviderInstancesTable({
                     type="button"
                     className="model-provider-panel__instance-action-btn"
                     onClick={() => onEdit(instance)}
-                    aria-label={i18nText("settings", "auto.key_bjebpdgllf", { value1: instance.display_name })}
+                    aria-label={i18nText("settings", "auto.edit_api_key", { value1: instance.display_name })}
                   >
-                    {i18nText("settings", "auto.key_chjcjaikmg")}</button>
+                    {i18nText("settings", "auto.edit_api_key_alt")}</button>
                   <button
                     type="button"
                     className="model-provider-panel__instance-action-btn"
                     onClick={() => onRefreshCandidates(instance)}
-                    aria-label={i18nText("settings", "auto.key_ehmpfjadma", { value1: instance.display_name })}
+                    aria-label={i18nText("settings", "auto.refresh_candidate_model", { value1: instance.display_name })}
                   >
-                    {i18nText("settings", "auto.key_efiphoajfn")}</button>
+                    {i18nText("settings", "auto.refresh_candidate_models")}</button>
                   <button
                     type="button"
                     className="model-provider-panel__instance-action-btn"
                     onClick={() => onRefreshModels(instance)}
-                    aria-label={i18nText("settings", "auto.key_lojpmnlkkk", { value1: instance.display_name })}
+                    aria-label={i18nText("settings", "auto.refresh_model_alt", { value1: instance.display_name })}
                   >
-                    {i18nText("settings", "auto.key_ijcpicmnbg")}</button>
+                    {i18nText("settings", "auto.refresh_model")}</button>
                   <button
                     type="button"
                     className="model-provider-panel__instance-action-btn model-provider-panel__instance-action-btn--danger"
                     onClick={() => onDelete(instance)}
-                    aria-label={i18nText("settings", "auto.key_nnfakolcpn", { value1: instance.display_name })}
+                    aria-label={i18nText("settings", "auto.delete_instance_alt", { value1: instance.display_name })}
                   >
-                    {i18nText("settings", "auto.key_gohdkfppkf")}</button>
+                    {i18nText("settings", "auto.delete_instance")}</button>
                 </div>
               ) : null}
             </>

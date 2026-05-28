@@ -178,7 +178,7 @@ export function DebugVariablesPane({
     return (
       <div className="agent-flow-editor__debug-console-pane">
         <Empty
-          description={i18nText("agentFlow", "auto.key_lbpbpjhdhk")}
+          description={i18nText("agentFlow", "auto.currently_variable_snapshot")}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </div>
@@ -254,7 +254,7 @@ export function DebugVariablesPane({
         />
       </div>
       <div
-        aria-label={i18nText("agentFlow", "auto.key_lcmjjoglad")}
+        aria-label={i18nText("agentFlow", "auto.adjust_variable_list_width")}
         aria-orientation="vertical"
         className="agent-flow-editor__debug-variables-resize-handle"
         onMouseDown={onSidebarResizeStart}
@@ -269,29 +269,29 @@ export function DebugVariablesPane({
                 size={8}
                 wrap
               >
-                <Tag color="warning">{i18nText("agentFlow", "auto.key_fobpnhjhmk")}</Tag>
+                <Tag color="warning">{i18nText("agentFlow", "auto.truncated")}</Tag>
                 <Button size="small" onClick={handleLoadFullValue}>
-                  {i18nText("agentFlow", "auto.key_faegcpahah")}</Button>
+                  {i18nText("agentFlow", "auto.load_full_value")}</Button>
               </Space>
             ) : null}
             <Input.TextArea
               key={selectedItem.selectionKey}
               style={{ height: '100%' }}
-              aria-label={i18nText("agentFlow", "auto.key_ddmpflgdcf")}
+              aria-label={i18nText("agentFlow", "auto.variable_value_edit_box")}
               className="agent-flow-editor__debug-variables-detail-value"
               disabled={selectedItem.isReadOnly || selectedItem.isTruncated}
               onBlur={handleVariableValueBlur}
               onChange={(event) => setSelectedValueText(event.target.value)}
               value={selectedValueText}
               placeholder={
-                selectedItem.isReadOnly ? i18nText("agentFlow", "auto.key_opbbhgmfnf") : undefined
+                selectedItem.isReadOnly ? i18nText("agentFlow", "auto.system_variables_edited") : undefined
               }
             />
           </>
         ) : (
           <div className="agent-flow-editor__debug-variables-detail-empty">
             <Empty
-              description={i18nText("agentFlow", "auto.key_lfclnmibbd")}
+              description={i18nText("agentFlow", "auto.select_variable_left_view_details")}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           </div>

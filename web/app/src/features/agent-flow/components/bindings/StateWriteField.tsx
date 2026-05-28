@@ -94,7 +94,7 @@ export function StateWriteField({
             type="text"
             onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}
           >
-            {i18nText("agentFlow", "auto.key_dhffpfgpcp")}</Button>
+            {i18nText("agentFlow", "auto.delete")}</Button>
         </div>
       ))}
       <Button
@@ -103,7 +103,7 @@ export function StateWriteField({
           onChange([...value, { path: [], operator: 'set', source: null }])
         }
       >
-        {i18nText("agentFlow", "auto.key_cnoegnllco")}</Button>
+        {i18nText("agentFlow", "auto.add_operation")}</Button>
     </div>
   );
 }

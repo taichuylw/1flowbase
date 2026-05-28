@@ -63,7 +63,7 @@ export function HostInfrastructureProviderTable({
         dataIndex: 'restart_required',
         key: 'restart_required',
         render: (required: boolean) =>
-          required ? <Tag color="gold">{i18nText("settings", "auto.key_meldaimdml")}</Tag> : null
+          required ? <Tag color="gold">{i18nText("settings", "auto.take_effect_restart")}</Tag> : null
       },
       {
         title: '',
@@ -71,7 +71,7 @@ export function HostInfrastructureProviderTable({
         width: 96,
         render: (_, provider) => (
           <Button type="link" onClick={() => setSelectedProvider(provider)}>
-            {i18nText("settings", "auto.key_nhnhmohjal")}</Button>
+            {i18nText("settings", "auto.configuration_alt")}</Button>
         )
       }
     ],
@@ -96,7 +96,7 @@ export function HostInfrastructureProviderTable({
           canManage={canManage}
           open
           onSaved={() => {
-            messageApi.success(i18nText("settings", "auto.key_ikoejjjeoc"));
+            messageApi.success(i18nText("settings", "auto.saved_take_effect_restarting_api_server"));
           }}
           onClose={() => setSelectedProvider(null)}
         />

@@ -15,6 +15,7 @@ const SKIPPED_DIRS = new Set([
 const I18N_ROOTS = ['web/app/src', 'api/plugins'];
 const I18N_LOCALES = ['en_US', 'zh_Hans'];
 const I18N_KEY_SEGMENT_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
+const GENERATED_I18N_KEY_SEGMENT_PATTERN = /^(?:key|k)_[a-z]{6,}$/u;
 const FRONTEND_SOURCE_ROOT = 'web/app/src';
 const FRONTEND_I18N_BOOTSTRAP = 'web/app/src/shared/i18n/app-i18n.ts';
 const FRONTEND_SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
@@ -280,6 +281,16 @@ function scanJsonDuplicateKeys({ relativePath, content }) {
             line,
             key: keyPath,
             message: `i18n key segment "${token.value}" must use lowercase English letters joined with underscores`,
+            snippet: content.split(/\r?\n/u)[line - 1] || '',
+          }));
+        } else if (GENERATED_I18N_KEY_SEGMENT_PATTERN.test(token.value)) {
+          findings.push(createFinding({
+            severity: 'error',
+            rule: 'generated-key-name',
+            file: relativePath,
+            line,
+            key: keyPath,
+            message: `i18n key segment "${token.value}" looks generated; use readable semantic words such as version_switching_failed`,
             snippet: content.split(/\r?\n/u)[line - 1] || '',
           }));
         }

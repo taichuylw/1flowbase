@@ -73,7 +73,7 @@ export function StartModelListField({
     <div className="agent-flow-start-model-list">
       <div className="agent-flow-start-input-fields__header">
         <Button
-          aria-label={i18nText("agentFlow", "auto.key_jgddohdfnk")}
+          aria-label={i18nText("agentFlow", "auto.add_new_model")}
           icon={<PlusOutlined />}
           size="small"
           type="text"
@@ -90,7 +90,7 @@ export function StartModelListField({
             >
               <div className="agent-flow-node-detail__list-item-left">
                 <Input
-                  aria-label={i18nText("agentFlow", "auto.key_bmggheagmo", { value1: index + 1 })}
+                  aria-label={i18nText("agentFlow", "auto.model_id", { value1: index + 1 })}
                   placeholder="model-id"
                   value={row.id}
                   onChange={(event) =>
@@ -98,7 +98,7 @@ export function StartModelListField({
                   }
                 />
                 <Input
-                  aria-label={i18nText("agentFlow", "auto.key_eojppccehh", { value1: index + 1 })}
+                  aria-label={i18nText("agentFlow", "auto.model_display_name", { value1: index + 1 })}
                   placeholder="display name"
                   value={row.name ?? ''}
                   onChange={(event) =>
@@ -107,7 +107,7 @@ export function StartModelListField({
                 />
               </div>
               <Button
-                aria-label={i18nText("agentFlow", "auto.key_dlbhiodbmp", { value1: index + 1 })}
+                aria-label={i18nText("agentFlow", "auto.delete_model", { value1: index + 1 })}
                 danger
                 icon={<DeleteOutlined />}
                 size="small"
@@ -120,7 +120,7 @@ export function StartModelListField({
           ))}
         </div>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.key_pjojmfnioa")} />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.no_model_yet")} />
       )}
     </div>
   );

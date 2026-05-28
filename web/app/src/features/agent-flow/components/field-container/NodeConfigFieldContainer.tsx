@@ -65,7 +65,7 @@ export function NodeConfigFieldContainer({
           <div className="agent-flow-node-config-field__heading">
             {draggable ? (
               <button
-                aria-label={dragLabel ?? i18nText("agentFlow", "auto.key_ailemdileo", { value1: ariaLabel ?? label })}
+                aria-label={dragLabel ?? i18nText("agentFlow", "auto.drag_drop_sort", { value1: ariaLabel ?? label })}
                 className="agent-flow-node-config-field__drag-handle"
                 draggable
                 onDragEnd={onDragEnd}

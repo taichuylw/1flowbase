@@ -85,55 +85,55 @@ function ConversationLogDetail({
         />
       </div>
       <section
-        aria-label={i18nText("agentFlow", "auto.key_nljodhfffg")}
+        aria-label={i18nText("agentFlow", "auto.metadata")}
         className="agent-flow-editor__conversation-log-metadata"
       >
-        <Typography.Text strong>{i18nText("agentFlow", "auto.key_nljodhfffg")}</Typography.Text>
+        <Typography.Text strong>{i18nText("agentFlow", "auto.metadata")}</Typography.Text>
         <Descriptions
           column={1}
           items={[
             {
               key: 'runId',
-              label: i18nText("agentFlow", "auto.key_mbbijacdpl"),
+              label: i18nText("agentFlow", "auto.run_id"),
               children: message.runId ?? '—'
             },
             {
               key: 'status',
-              label: i18nText("agentFlow", "auto.key_gcojfbkgjc"),
+              label: i18nText("agentFlow", "auto.status"),
               children: message.status
             },
             {
               key: 'compatibilityMode',
-              label: i18nText("agentFlow", "auto.key_lamedbghfl"),
+              label: i18nText("agentFlow", "auto.agreement"),
               children: messageCompatibilityModeLabel(message)
             },
             {
               key: 'totalTokens',
-              label: i18nText("agentFlow", "auto.key_bfbnomhojn"),
+              label: i18nText("agentFlow", "auto.total_tokens"),
               children: formatNullableNumber(message.statistics?.total_tokens)
             },
             {
               key: 'uniqueNodeCount',
-              label: i18nText("agentFlow", "auto.key_hpbmcmmpab"),
+              label: i18nText("agentFlow", "auto.real_number_nodes"),
               children: formatNullableNumber(
                 message.statistics?.unique_node_count
               )
             },
             {
               key: 'toolCallbackCount',
-              label: i18nText("agentFlow", "auto.key_lpffmmgkgj"),
+              label: i18nText("agentFlow", "auto.number_tool_callbacks"),
               children: formatNullableNumber(
                 message.statistics?.tool_callback_count
               )
             },
             {
               key: 'startedAt',
-              label: i18nText("agentFlow", "auto.key_oiigikpgol"),
+              label: i18nText("agentFlow", "auto.start_time"),
               children: formatTimestamp(firstTraceItem?.startedAt)
             },
             {
               key: 'finishedAt',
-              label: i18nText("agentFlow", "auto.key_kalljpejkl"),
+              label: i18nText("agentFlow", "auto.end_time"),
               children: formatTimestamp(lastTraceItem?.finishedAt)
             }
           ]}
@@ -161,7 +161,7 @@ function ConversationTrace({
     return (
       <div className="agent-flow-editor__conversation-log-empty">
         <Empty
-          description={i18nText("agentFlow", "auto.key_fhlmabmhfl")}
+          description={i18nText("agentFlow", "auto.tracking_record_yet")}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </div>
@@ -173,7 +173,7 @@ function ConversationTrace({
   return (
     <div className="agent-flow-editor__conversation-log-trace">
       <div
-        aria-label={i18nText("agentFlow", "auto.key_pggfflkfcn")}
+        aria-label={i18nText("agentFlow", "auto.tracking_nodes")}
         className="agent-flow-editor__conversation-log-node-list"
       >
         {traceGroups.map((group) => {
@@ -192,7 +192,7 @@ function ConversationTrace({
               }
             >
               <section
-                aria-label={i18nText("agentFlow", "auto.key_gaadjpbcol", { value1: nodeDisplayName(item) })}
+                aria-label={i18nText("agentFlow", "auto.node_details_alt", { value1: nodeDisplayName(item) })}
                 className="agent-flow-editor__conversation-log-node-detail"
               >
                 <div className="agent-flow-editor__conversation-log-json-list">
@@ -234,8 +234,8 @@ export function ConversationLogPanel({
     <AgentFlowDockPanel
       bodyClassName="agent-flow-editor__conversation-log-body"
       className="agent-flow-editor__conversation-log-panel"
-      closeLabel={i18nText("agentFlow", "auto.key_ncjbnpojeo")}
-      title={i18nText("agentFlow", "auto.key_fhgmcinggi")}
+      closeLabel={i18nText("agentFlow", "auto.turn_off_conversation_log")}
+      title={i18nText("agentFlow", "auto.conversation_log")}
       onClose={onClose}
     >
       <Tabs
@@ -243,7 +243,7 @@ export function ConversationLogPanel({
         items={[
           {
             key: 'detail',
-            label: i18nText("agentFlow", "auto.key_epffoobogi"),
+            label: i18nText("agentFlow", "auto.details"),
             children: (
               <ConversationLogDetail
                 message={message}
@@ -253,7 +253,7 @@ export function ConversationLogPanel({
           },
           {
             key: 'trace',
-            label: i18nText("agentFlow", "auto.key_ijghndmgnc"),
+            label: i18nText("agentFlow", "auto.track"),
             children: (
               <ConversationTrace
                 message={message}

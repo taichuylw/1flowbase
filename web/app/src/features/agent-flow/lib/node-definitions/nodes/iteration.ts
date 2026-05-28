@@ -14,13 +14,13 @@ export const iterationNodeDefinition: NodeDefinition = {
       key: 'inputs',
       title: 'Inputs',
       fields: [
-        { key: 'bindings.items', label: i18nText("agentFlow", "auto.key_cbbffkdmpf"), editor: 'selector', required: true }
+        { key: 'bindings.items', label: i18nText("agentFlow", "auto.circular_list"), editor: 'selector', required: true }
       ]
     },
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.key_lkngeimdmc"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.aggregate_output"), editor: 'text', required: true }]
     }
   ]
 };

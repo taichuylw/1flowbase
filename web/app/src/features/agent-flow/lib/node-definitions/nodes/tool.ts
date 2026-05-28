@@ -14,14 +14,14 @@ export const toolNodeDefinition: NodeDefinition = {
       key: 'inputs',
       title: 'Inputs',
       fields: [
-        { key: 'config.tool_name', label: i18nText("agentFlow", "auto.key_ocinhgfdam"), editor: 'text', required: true },
-        { key: 'bindings.parameters', label: i18nText("agentFlow", "auto.key_domngakbhh"), editor: 'named_bindings' }
+        { key: 'config.tool_name', label: i18nText("agentFlow", "auto.tool_name"), editor: 'text', required: true },
+        { key: 'bindings.parameters', label: i18nText("agentFlow", "auto.tool_input_parameters"), editor: 'named_bindings' }
       ]
     },
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.key_plhonncdbp"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.tool_output"), editor: 'text', required: true }]
     }
   ]
 };

@@ -233,7 +233,7 @@ export function DebugConversationPane({
         >
           {messages.length === 0 ? (
             <Empty
-              description={i18nText("agentFlow", "auto.key_fggeghapno")}
+              description={i18nText("agentFlow", "auto.rectification_operation_record_yet")}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : (

@@ -144,16 +144,16 @@ export function NodeLastRunTab({
     enabled: Boolean(applicationId && nodeId)
   });
   if (lastRunQuery.isPending) {
-    return <Result status="info" title={i18nText("agentFlow", "auto.key_eanckadbdd")} />;
+    return <Result status="info" title={i18nText("agentFlow", "auto.loading_last_run")} />;
   }
 
   if (lastRunQuery.isError) {
-    return <Result status="error" title={i18nText("agentFlow", "auto.key_oncjljagek")} />;
+    return <Result status="error" title={i18nText("agentFlow", "auto.last_run_failed_load")} />;
   }
 
   const emptyDescription = activeRunId
-    ? i18nText("agentFlow", "auto.key_aijfjjdjgl")
-    : i18nText("agentFlow", "auto.key_lebnjnlckd");
+    ? i18nText("agentFlow", "auto.record_node_run")
+    : i18nText("agentFlow", "auto.node_running_records_yet");
 
   if (!lastRunQuery.data) {
     return renderLastRunContent({
@@ -165,7 +165,7 @@ export function NodeLastRunTab({
   }
 
   if (!isNodeLastRun(lastRunQuery.data)) {
-    return <Result status="warning" title={i18nText("agentFlow", "auto.key_cbpfmgpgba")} />;
+    return <Result status="warning" title={i18nText("agentFlow", "auto.abnormal_data_last_run")} />;
   }
 
   const lastRun = lastRunQuery.data;

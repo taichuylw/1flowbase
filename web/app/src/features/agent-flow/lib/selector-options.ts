@@ -57,7 +57,7 @@ export function listVisibleSelectorOptions(
   const visibleNodeIds = collectUpstreamNodeIds(document, nodeId);
   const systemOptions = agentFlowSystemVariables.map((variable) => ({
     nodeId: systemVariableNodeId,
-    nodeLabel: i18nText("agentFlow", "auto.key_ihcnbhnljd"),
+    nodeLabel: i18nText("agentFlow", "auto.system_variables"),
     outputKey: variable.key,
     outputLabel: variable.title,
     value: [systemVariableNodeId, variable.key],
@@ -65,7 +65,7 @@ export function listVisibleSelectorOptions(
   }));
   const environmentOptions = environmentVariables.map((variable) => ({
     nodeId: environmentVariableNodeId,
-    nodeLabel: i18nText("agentFlow", "auto.key_inkahhafkl"),
+    nodeLabel: i18nText("agentFlow", "auto.environment_variables"),
     outputKey: variable.name,
     outputLabel: formatEnvironmentVariableTitle(variable.name),
     value: [environmentVariableNodeId, variable.name],

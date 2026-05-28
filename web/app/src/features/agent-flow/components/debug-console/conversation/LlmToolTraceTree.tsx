@@ -13,11 +13,11 @@ import { i18nText } from '../../../../../shared/i18n/text';
 function callbackStatusLabel(status: LlmToolCallback['callbackStatus']) {
   switch (status) {
     case 'returned':
-      return i18nText("agentFlow", "auto.key_gnlajeegme");
+      return i18nText("agentFlow", "auto.returned");
     case 'cancelled':
-      return i18nText("agentFlow", "auto.key_kfppnmjfoo");
+      return i18nText("agentFlow", "auto.canceled");
     default:
-      return i18nText("agentFlow", "auto.key_hadhedbmip");
+      return i18nText("agentFlow", "auto.wait_for_callback");
   }
 }
 
@@ -35,15 +35,15 @@ function callbackStatusColor(status: LlmToolCallback['callbackStatus']) {
 function executionStatusLabel(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
-      return i18nText("agentFlow", "auto.key_gmbijkknen");
+      return i18nText("agentFlow", "auto.executed_successfully");
     case 'failed':
-      return i18nText("agentFlow", "auto.key_jhegmpmhnc");
+      return i18nText("agentFlow", "auto.execution_failed");
     case 'timed_out':
-      return i18nText("agentFlow", "auto.key_pcmdklpbde");
+      return i18nText("agentFlow", "auto.execution_timeout");
     case 'cancelled':
-      return i18nText("agentFlow", "auto.key_fphigmijid");
+      return i18nText("agentFlow", "auto.execution_cancel");
     default:
-      return i18nText("agentFlow", "auto.key_mamolhcoip");
+      return i18nText("agentFlow", "auto.execution_unknown");
   }
 }
 
@@ -151,21 +151,21 @@ function LlmToolCallbackItem({
       </button>
       {expanded ? (
         <div className="agent-flow-editor__debug-llm-tool-detail">
-          {loading ? <Tag color="processing">{i18nText("agentFlow", "auto.key_mofgpgbhoe")}</Tag> : null}
-          {loadFailed ? <Tag color="error">{i18nText("agentFlow", "auto.key_pglhkebofg")}</Tag> : null}
+          {loading ? <Tag color="processing">{i18nText("agentFlow", "auto.loading")}</Tag> : null}
+          {loadFailed ? <Tag color="error">{i18nText("agentFlow", "auto.loading_failed")}</Tag> : null}
           {!loading && !loadFailed ? (
             <>
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
-                title={i18nText("agentFlow", "auto.key_dnenbahfoh")}
+                title={i18nText("agentFlow", "auto.tool_call")}
                 onLoadArtifact={onLoadArtifact}
               />
               {callback.parsedResult ? (
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.parsedResult}
-                  title={i18nText("agentFlow", "auto.key_jhmokaedkd")}
+                  title={i18nText("agentFlow", "auto.parse_results")}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : null}
@@ -173,11 +173,11 @@ function LlmToolCallbackItem({
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.callbackPayload}
-                  title={i18nText("agentFlow", "auto.key_gdkplgflhp")}
+                  title={i18nText("agentFlow", "auto.full_callback")}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : (
-                <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_mbikpabain")}</Typography.Text>
+                <Typography.Text type="secondary">{i18nText("agentFlow", "auto.wait_callback_return")}</Typography.Text>
               )}
             </>
           ) : null}
@@ -314,8 +314,8 @@ export function LlmToolTraceTree({
 
   const summaryText =
     effectiveToolCallbacks.length > 0
-      ? i18nText("agentFlow", "auto.key_bljmhilamp", { value1: effectiveToolCallbacks.length })
-      : i18nText("agentFlow", "auto.key_olclgakmgp");
+      ? i18nText("agentFlow", "auto.tool_callbacks", { value1: effectiveToolCallbacks.length })
+      : i18nText("agentFlow", "auto.need_to_load");
 
   return (
     <section
@@ -344,7 +344,7 @@ export function LlmToolTraceTree({
           {effectiveToolCallbacks.length > 0 ? (
             <>
               <div
-                aria-label={i18nText("agentFlow", "auto.key_onkehibejj")}
+                aria-label={i18nText("agentFlow", "auto.tool_callback_list")}
                 className="agent-flow-editor__debug-llm-tool-list"
               >
                 {effectiveToolCallbacks.map((callback) => {
@@ -372,7 +372,7 @@ export function LlmToolTraceTree({
               </div>
             </>
           ) : (
-            <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_dblmiacohk")}</Typography.Text>
+            <Typography.Text type="secondary">{i18nText("agentFlow", "auto.tool_callback_truncated")}</Typography.Text>
           )}
         </div>
       ) : null}

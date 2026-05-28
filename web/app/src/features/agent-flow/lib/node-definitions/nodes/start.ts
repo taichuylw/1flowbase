@@ -12,22 +12,22 @@ export const startNodeDefinition: NodeDefinition = {
     },
     {
       key: 'inputs',
-      title: i18nText("agentFlow", "auto.key_pemlnglnbd"),
+      title: i18nText("agentFlow", "auto.input_field"),
       fields: [
         {
           key: 'config.input_fields',
-          label: i18nText("agentFlow", "auto.key_pemlnglnbd"),
+          label: i18nText("agentFlow", "auto.input_field"),
           editor: 'start_input_fields'
         }
       ]
     },
     {
       key: 'advanced',
-      title: i18nText("agentFlow", "auto.key_mchbncjbbi"),
+      title: i18nText("agentFlow", "auto.model_list"),
       fields: [
         {
           key: 'config.model_list',
-          label: i18nText("agentFlow", "auto.key_mchbncjbbi"),
+          label: i18nText("agentFlow", "auto.model_list"),
           editor: 'start_model_list'
         }
       ]

@@ -7,7 +7,7 @@ export function NodeRunEmptyState({
   description: string;
 }) {
   return (
-    <Card title={i18nText("agentFlow", "auto.key_ceplecenpn")}>
+    <Card title={i18nText("agentFlow", "auto.operation_record")}>
       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={description} />
     </Card>
   );

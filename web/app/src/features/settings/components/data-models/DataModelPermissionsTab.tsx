@@ -67,7 +67,7 @@ export function DataModelPermissionsTab({
       key: 'permission_profile',
       render: (_, grant) => (
         <Select
-          aria-label={i18nText("settings", "auto.key_cffikgmpia", { value1: grant.id })}
+          aria-label={i18nText("settings", "auto.permissions", { value1: grant.id })}
           value={grant.permission_profile}
           options={profileOptions}
           onChange={(value) => updateDraft(grant.id, { permission_profile: value })}
@@ -100,7 +100,7 @@ export function DataModelPermissionsTab({
             })
           }
         >
-          {i18nText("settings", "auto.key_ogjhldnmdc")}</Checkbox>
+          {i18nText("settings", "auto.confirm_system_all")}</Checkbox>
       )
     }
   ];
@@ -133,7 +133,7 @@ export function DataModelPermissionsTab({
             });
           }}
         >
-          {i18nText("settings", "auto.key_nfdffnbhlo")}</Button>
+          {i18nText("settings", "auto.save_permissions")}</Button>
       </div>
     </Form>
   );

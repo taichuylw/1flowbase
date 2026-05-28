@@ -67,6 +67,27 @@ test('scanJsonDuplicateKeys reports invalid i18n key naming', () => {
   );
 });
 
+test('scanJsonDuplicateKeys reports generated i18n key names', () => {
+  const findings = scanJsonDuplicateKeys({
+    relativePath: 'web/app/src/features/example/i18n/en_US.json',
+    content: [
+      '{',
+      '  "auto": {',
+      '    "key_nddjpjflog": "Version switching failed",',
+      '    "version_switching_failed": "Version switching failed"',
+      '  }',
+      '}',
+    ].join('\n'),
+  });
+
+  const generatedKeyNames = findings.filter((finding) => finding.rule === 'generated-key-name');
+
+  assert.equal(generatedKeyNames.length, 1);
+  assert.equal(generatedKeyNames[0].severity, 'error');
+  assert.equal(generatedKeyNames[0].key, 'auto.key_nddjpjflog');
+  assert.equal(generatedKeyNames[0].line, 3);
+});
+
 test('collectI18nHygieneFindings reports locale and key contract errors', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-hygiene-'));
   writeFile(

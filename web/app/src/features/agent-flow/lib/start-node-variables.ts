@@ -13,13 +13,13 @@ import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 import { i18nText } from '../../../shared/i18n/text';
 
 export const startInputTypeOptions = [
-  { value: 'text', label: i18nText("agentFlow", "auto.key_pbjcgojldd"), valueType: 'string' },
-  { value: 'paragraph', label: i18nText("agentFlow", "auto.key_jbikamidhl"), valueType: 'string' },
-  { value: 'select', label: i18nText("agentFlow", "auto.key_gjaobkpklj"), valueType: 'string' },
-  { value: 'number', label: i18nText("agentFlow", "auto.key_hkenmicfdp"), valueType: 'number' },
-  { value: 'checkbox', label: i18nText("agentFlow", "auto.key_ipnclbdaad"), valueType: 'boolean' },
-  { value: 'file', label: i18nText("agentFlow", "auto.key_ejnokphnkc"), valueType: 'json' },
-  { value: 'file_list', label: i18nText("agentFlow", "auto.key_mphfaifblp"), valueType: 'array[object]' },
+  { value: 'text', label: i18nText("agentFlow", "auto.text"), valueType: 'string' },
+  { value: 'paragraph', label: i18nText("agentFlow", "auto.paragraph"), valueType: 'string' },
+  { value: 'select', label: i18nText("agentFlow", "auto.drop_down_options"), valueType: 'string' },
+  { value: 'number', label: i18nText("agentFlow", "auto.numbers"), valueType: 'number' },
+  { value: 'checkbox', label: i18nText("agentFlow", "auto.checkbox"), valueType: 'boolean' },
+  { value: 'file', label: i18nText("agentFlow", "auto.file"), valueType: 'json' },
+  { value: 'file_list', label: i18nText("agentFlow", "auto.file_list"), valueType: 'array[object]' },
   { value: 'url', label: 'URL', valueType: 'string' }
 ] satisfies Array<{
   value: FlowStartInputType;

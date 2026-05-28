@@ -15,7 +15,7 @@ function getCatalogDescription(
   return (
     family.description?.trim() ||
     currentCatalogEntry?.description_key?.trim() ||
-    i18nText("settings", "auto.key_eamjhagkok")
+    i18nText("settings", "auto.no_description_provided")
   );
 }
 
@@ -80,7 +80,7 @@ export function ModelProviderCatalogPanel({
           emptyText: (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={loading ? i18nText("settings", "auto.key_dkgnkapbmh") : i18nText("settings", "auto.key_dgfknhedge")}
+              description={loading ? i18nText("settings", "auto.loading_supplier_catalog") : i18nText("settings", "auto.suppliers_available_yet")}
             />
           )
         }}
@@ -100,9 +100,9 @@ export function ModelProviderCatalogPanel({
                       type="link"
                       onClick={() => onViewInstances(entry)}
                     >
-                      {i18nText("settings", "auto.key_nhnhmohjal")}</Button>
+                      {i18nText("settings", "auto.configuration_alt")}</Button>
                     <Button type="link" onClick={() => onCreate(entry)}>
-                      {i18nText("settings", "auto.key_jebjbmocba")}</Button>
+                      {i18nText("settings", "auto.add")}</Button>
                     <Button
                       danger
                       type="link"
@@ -144,13 +144,13 @@ export function ModelProviderCatalogPanel({
                 >
                   <Tag color={status.color}>{status.label}</Tag>
                   <Tag>{entry.model_discovery_mode}</Tag>
-                  {entry.has_update ? <Tag color="gold">{i18nText("settings", "auto.key_plhcfnlhnk")}</Tag> : null}
+                  {entry.has_update ? <Tag color="gold">{i18nText("settings", "auto.updates_available")}</Tag> : null}
                 </Space>
               );
             }
           },
           {
-            title: i18nText("settings", "auto.key_jijnbkppka"),
+            title: i18nText("settings", "auto.version"),
             key: 'version',
             width: 120,
             render: (_, entry) => {
@@ -176,7 +176,7 @@ export function ModelProviderCatalogPanel({
                             root: 'model-provider-panel__version-dropdown'
                           }
                         }}
-                        aria-label={i18nText("settings", "auto.key_mldmbiibmm", { value1: entry.display_name })}
+                        aria-label={i18nText("settings", "auto.switch_version", { value1: entry.display_name })}
                         loading={switchingProviderCode === entry.provider_code}
                         options={versionOptions}
                         onChange={(installationId) => {
@@ -194,7 +194,7 @@ export function ModelProviderCatalogPanel({
                           loading={upgradingProviderCode === entry.provider_code}
                           onClick={() => onUpgradeLatest(entry)}
                         >
-                          {i18nText("settings", "auto.key_njnlacnahk")}</Button>
+                          {i18nText("settings", "auto.update")}</Button>
                       ) : null}
                     </Space>
                   ) : (
@@ -205,7 +205,7 @@ export function ModelProviderCatalogPanel({
             }
           },
           {
-            title: i18nText("settings", "auto.key_cgghannkec"),
+            title: i18nText("settings", "auto.description"),
             key: 'summary',
             width: 200,
             render: (_, entry) => {

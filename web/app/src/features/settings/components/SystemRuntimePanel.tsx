@@ -36,19 +36,19 @@ function getRelationshipLabel(relationship: string) {
     case 'same_host':
       return {
         color: '#00ab73' as const,
-        label: i18nText("settings", "auto.key_lpbkpapmhm"),
+        label: i18nText("settings", "auto.deployment_same_machine"),
         icon: CloudServerOutlined
       };
     case 'split_host':
       return {
         color: '#1677ff' as const,
-        label: i18nText("settings", "auto.key_focficjdhd"),
+        label: i18nText("settings", "auto.extension_deployment"),
         icon: ClusterOutlined
       };
     case 'runner_unreachable':
       return {
         color: '#ff4d4f' as const,
-        label: i18nText("settings", "auto.key_fnkkpjbhko"),
+        label: i18nText("settings", "auto.runner_is_unreachable"),
         icon: ExclamationCircleOutlined
       };
     default:
@@ -62,8 +62,8 @@ function getRelationshipLabel(relationship: string) {
 
 function getReachabilityMeta(reachable: boolean) {
   return reachable
-    ? { color: '#00ab73' as const, label: i18nText("settings", "auto.key_fjecejhaaf"), icon: CheckCircleFilled }
-    : { color: '#ff4d4f' as const, label: i18nText("settings", "auto.key_dfiiabonkk"), icon: CloseCircleFilled };
+    ? { color: '#00ab73' as const, label: i18nText("settings", "auto.running"), icon: CheckCircleFilled }
+    : { color: '#ff4d4f' as const, label: i18nText("settings", "auto.not_reachable"), icon: CloseCircleFilled };
 }
 
 function formatMemory(value: number) {
@@ -88,7 +88,7 @@ function buildHostRows(profile: SettingsSystemRuntimeProfile): HostTableRow[] {
     key: h.host_fingerprint,
     fingerprint: h.host_fingerprint,
     platform: `${h.platform.os}/${h.platform.arch}${h.platform.libc ? `/${h.platform.libc}` : ''}`,
-    cpu: i18nText("settings", "auto.key_clbigckdjn", { value1: h.cpu.logical_count }),
+    cpu: i18nText("settings", "auto.core", { value1: h.cpu.logical_count }),
     memoryTotal: formatMemory(h.memory.total_gb),
     memoryAvail: formatMemory(h.memory.available_gb),
     memoryUsage:
@@ -101,7 +101,7 @@ function buildHostRows(profile: SettingsSystemRuntimeProfile): HostTableRow[] {
 
 const hostColumns: ColumnsType<HostTableRow> = [
   {
-    title: i18nText("settings", "auto.key_difckamkie"),
+    title: i18nText("settings", "auto.fingerprint"),
     dataIndex: 'fingerprint',
     key: 'fingerprint',
     width: 140,
@@ -112,7 +112,7 @@ const hostColumns: ColumnsType<HostTableRow> = [
     )
   },
   {
-    title: i18nText("settings", "auto.key_oeljngjeig"),
+    title: i18nText("settings", "auto.platform"),
     dataIndex: 'platform',
     key: 'platform',
     width: 180
@@ -124,14 +124,14 @@ const hostColumns: ColumnsType<HostTableRow> = [
     width: 80
   },
   {
-    title: i18nText("settings", "auto.key_nabeklhhad"),
+    title: i18nText("settings", "auto.memory"),
     key: 'memory',
     width: 200,
     render: (_: unknown, record: HostTableRow) => (
       <Space size={12}>
         <Flex vertical gap={2} style={{ minWidth: 80 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {i18nText("settings", "auto.key_dkpbkmfleo")}{record.memoryTotal}
+            {i18nText("settings", "auto.total")}{record.memoryTotal}
           </Typography.Text>
           <Typography.Text style={{ fontSize: 12 }}>
             {i18nText("settings", "auto.available")}{record.memoryAvail}
@@ -165,7 +165,7 @@ const hostColumns: ColumnsType<HostTableRow> = [
     )
   },
   {
-    title: i18nText("settings", "auto.key_abflebagcf"),
+    title: i18nText("settings", "auto.hosting_services"),
     key: 'services',
     width: 180,
     render: (_: unknown, record: HostTableRow) => (
@@ -215,11 +215,11 @@ export function SystemRuntimePanel() {
         <Alert
           type="error"
           showIcon
-          message={i18nText("settings", "auto.key_dniomoindi")}
+          message={i18nText("settings", "auto.runtime_information_loading_failed")}
           description={
             runtimeQuery.error instanceof Error
               ? runtimeQuery.error.message
-              : i18nText("settings", "auto.key_ggcedhohog")
+              : i18nText("settings", "auto.try_again_later")
           }
         />
       </SettingsSectionSurface>
@@ -230,7 +230,7 @@ export function SystemRuntimePanel() {
   if (!profile) {
     return (
       <SettingsSectionSurface title={i18nText("settings", "auto.system_runtime")} hideHeader heightMode="fill">
-        <Empty description={i18nText("settings", "auto.key_baljnkcfpi")} />
+        <Empty description={i18nText("settings", "auto.runtime_data_yet")} />
       </SettingsSectionSurface>
     );
   }
@@ -261,7 +261,7 @@ export function SystemRuntimePanel() {
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
           <InfoCircleOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
-            {i18nText("settings", "auto.key_hfhjghdnag")}</Typography.Text>
+            {i18nText("settings", "auto.deployment_overview")}</Typography.Text>
         </Flex>
 
         <Flex
@@ -291,7 +291,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                {i18nText("settings", "auto.key_mpjdecamke")}</Typography.Text>
+                {i18nText("settings", "auto.deployment_relationship")}</Typography.Text>
               {relationshipMeta ? (
                 <Space size={6}>
                   <relationshipMeta.icon
@@ -327,7 +327,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                {i18nText("settings", "auto.key_lbdkphepla")}</Typography.Text>
+                {i18nText("settings", "auto.current_language")}</Typography.Text>
               <Typography.Text style={{ fontSize: 13 }}>
                 {profile.locale_meta.resolved_locale}
               </Typography.Text>
@@ -352,7 +352,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                {i18nText("settings", "auto.key_nnjaelbena")}</Typography.Text>
+                {i18nText("settings", "auto.fallback_language")}</Typography.Text>
               <Typography.Text style={{ fontSize: 13 }}>
                 {profile.locale_meta.fallback_locale}
               </Typography.Text>
@@ -373,7 +373,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                {i18nText("settings", "auto.key_idlgaeojbn")}</Typography.Text>
+                {i18nText("settings", "auto.supported_languages")}</Typography.Text>
               <Typography.Text style={{ fontSize: 13 }}>
                 {profile.locale_meta.supported_locales.join(', ')}
               </Typography.Text>
@@ -389,7 +389,7 @@ export function SystemRuntimePanel() {
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
           <CloudServerOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
-            {i18nText("settings", "auto.key_necnkjockm")}</Typography.Text>
+            {i18nText("settings", "auto.service_status")}</Typography.Text>
         </Flex>
 
         <Flex gap={16} wrap="wrap">
@@ -438,7 +438,7 @@ export function SystemRuntimePanel() {
                         marginBottom: 2
                       }}
                     >
-                      {i18nText("settings", "auto.key_jijnbkppka")}</Typography.Text>
+                      {i18nText("settings", "auto.version")}</Typography.Text>
                     <Typography.Text style={{ fontSize: 13 }}>
                       {svc.data.version ?? '—'}
                     </Typography.Text>
@@ -466,7 +466,7 @@ export function SystemRuntimePanel() {
                         marginBottom: 2
                       }}
                     >
-                      {i18nText("settings", "auto.key_bdegongoep")}</Typography.Text>
+                      {i18nText("settings", "auto.host_fingerprint")}</Typography.Text>
                     <Typography.Text code style={{ fontSize: 12 }}>
                       {svc.data.host_fingerprint?.slice(0, 16) ?? i18nText("settings", "auto.unknown")}
                     </Typography.Text>
@@ -485,7 +485,7 @@ export function SystemRuntimePanel() {
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
           <ClusterOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
-            {i18nText("settings", "auto.key_fafbkbcfoc")}</Typography.Text>
+            {i18nText("settings", "auto.host")}</Typography.Text>
           <Tag style={{ marginLeft: 4, fontSize: 11, lineHeight: '20px' }}>
             {hostRows.length}
           </Tag>
@@ -501,7 +501,7 @@ export function SystemRuntimePanel() {
             style={{ fontSize: 13 }}
           />
         ) : (
-          <Empty description={i18nText("settings", "auto.key_dppjjgpedc")} />
+          <Empty description={i18nText("settings", "auto.currently_host_information_display")} />
         )}
       </div>
     </SettingsSectionSurface>

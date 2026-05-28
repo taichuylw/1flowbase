@@ -59,7 +59,7 @@ export function ConditionGroupField({
           type="dashed"
           onClick={appendCondition}
         >
-          {i18nText("agentFlow", "auto.key_kcaknfiadl")}</Button>
+          {i18nText("agentFlow", "auto.new_conditions")}</Button>
       </div>
       {value.conditions.map((condition, index) => (
         <div key={`${condition.comparator}-${index}`} className="agent-flow-binding-row">
@@ -103,7 +103,7 @@ export function ConditionGroupField({
           {condition.comparator === 'exists' ? null : (
             <Input
               aria-label={`${ariaLabel}-${index}-right`}
-              placeholder={i18nText("agentFlow", "auto.key_pegedbcgli")}
+              placeholder={i18nText("agentFlow", "auto.comparison_value")}
               value={
                 Array.isArray(condition.right)
                   ? condition.right.join(' / ')
@@ -131,7 +131,7 @@ export function ConditionGroupField({
               })
             }
           >
-            {i18nText("agentFlow", "auto.key_dhffpfgpcp")}</Button>
+            {i18nText("agentFlow", "auto.delete")}</Button>
         </div>
       ))}
     </div>

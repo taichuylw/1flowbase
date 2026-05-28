@@ -51,38 +51,38 @@ const RESOURCE_MAP: Record<
   { tab: string; label: string; order: number }
 > = {
   role_permission: {
-    tab: i18nText("settings", "auto.key_fajfaajdeg"),
-    label: i18nText("settings", "auto.key_adgahnpekn"),
+    tab: i18nText("settings", "auto.basic_configuration"),
+    label: i18nText("settings", "auto.permission_role_permission"),
     order: 1
   },
-  user: { tab: i18nText("settings", "auto.key_fajfaajdeg"), label: i18nText("settings", "auto.key_akgbogeojh"), order: 2 },
-  team: { tab: i18nText("settings", "auto.key_fajfaajdeg"), label: i18nText("settings", "auto.key_jebaepbkpc"), order: 3 },
+  user: { tab: i18nText("settings", "auto.basic_configuration"), label: i18nText("settings", "auto.user"), order: 2 },
+  team: { tab: i18nText("settings", "auto.basic_configuration"), label: i18nText("settings", "auto.team"), order: 3 },
   external_data_source: {
-    tab: i18nText("settings", "auto.key_fajfaajdeg"),
-    label: i18nText("settings", "auto.key_ndaiaalbck"),
+    tab: i18nText("settings", "auto.basic_configuration"),
+    label: i18nText("settings", "auto.data_source_external_data_source"),
     order: 4
   },
 
-  application: { tab: i18nText("settings", "auto.key_aemkbmlfmh"), label: i18nText("settings", "auto.key_kolikoffoe"), order: 1 },
-  embedded_app: { tab: i18nText("settings", "auto.key_aemkbmlfmh"), label: i18nText("settings", "auto.key_akfiefiapf"), order: 2 },
+  application: { tab: i18nText("settings", "auto.system_management"), label: i18nText("settings", "auto.application"), order: 1 },
+  embedded_app: { tab: i18nText("settings", "auto.system_management"), label: i18nText("settings", "auto.subsystem_embedded_app"), order: 2 },
   plugin_config: {
-    tab: i18nText("settings", "auto.key_aemkbmlfmh"),
-    label: i18nText("settings", "auto.key_ipaogandap"),
+    tab: i18nText("settings", "auto.system_management"),
+    label: i18nText("settings", "auto.plugin_configuration_plugin_config"),
     order: 3
   },
-  state_model: { tab: i18nText("settings", "auto.key_aemkbmlfmh"), label: i18nText("settings", "auto.key_pekmanncmk"), order: 4 },
+  state_model: { tab: i18nText("settings", "auto.system_management"), label: i18nText("settings", "auto.model_supplier_state_model"), order: 4 },
 
-  route_page: { tab: i18nText("settings", "auto.key_fjaghfmpok"), label: i18nText("settings", "auto.key_abdpennbib"), order: 1 },
+  route_page: { tab: i18nText("settings", "auto.routing_page"), label: i18nText("settings", "auto.route_permissions_route_page"), order: 1 },
 
-  flow: { tab: i18nText("settings", "auto.key_echfhjgbih"), label: i18nText("settings", "auto.key_eegbnaniif"), order: 1 },
+  flow: { tab: i18nText("settings", "auto.agent_application"), label: i18nText("settings", "auto.workflow"), order: 1 },
   publish_endpoint: {
-    tab: i18nText("settings", "auto.key_echfhjgbih"),
-    label: i18nText("settings", "auto.key_nkgghmgknc"),
+    tab: i18nText("settings", "auto.agent_application"),
+    label: i18nText("settings", "auto.publish_endpoint"),
     order: 2
   }
 };
 
-const TAB_ORDER = [i18nText("settings", "auto.key_fajfaajdeg"), i18nText("settings", "auto.key_aemkbmlfmh"), i18nText("settings", "auto.key_fjaghfmpok"), i18nText("settings", "auto.key_echfhjgbih"), i18nText("settings", "auto.key_bkcgonpjek")];
+const TAB_ORDER = [i18nText("settings", "auto.basic_configuration"), i18nText("settings", "auto.system_management"), i18nText("settings", "auto.routing_page"), i18nText("settings", "auto.agent_application"), i18nText("settings", "auto.others")];
 
 export function RolePermissionPanel({
   canManageRoles
@@ -152,7 +152,7 @@ export function RolePermissionPanel({
     allPerms.forEach((p) => {
       const resKey = p.resource || 'other';
       const mapInfo = RESOURCE_MAP[resKey];
-      const tabName = mapInfo ? mapInfo.tab : i18nText("settings", "auto.key_bkcgonpjek");
+      const tabName = mapInfo ? mapInfo.tab : i18nText("settings", "auto.others");
 
       if (!tabsMap.has(tabName)) {
         tabsMap.set(tabName, new Map());
@@ -219,11 +219,11 @@ export function RolePermissionPanel({
       );
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.key_peloohhkhd"));
+      messageApi.success(i18nText("settings", "auto.permissions_updated_successfully"));
       await invalidateRoles();
     },
     onError: () => {
-      messageApi.error(i18nText("settings", "auto.key_apbiogceoi"));
+      messageApi.error(i18nText("settings", "auto.permission_update_failed"));
       // revert local state on error
       setLocalCheckedCodes(rolePermissionsQuery.data?.permission_codes ?? []);
     }
@@ -246,12 +246,12 @@ export function RolePermissionPanel({
       );
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.key_jangfbmllk"));
+      messageApi.success(i18nText("settings", "auto.role_created_successfully"));
       createForm.resetFields();
       setIsCreateModalOpen(false);
       await invalidateRoles();
     },
-    onError: () => messageApi.error(i18nText("settings", "auto.key_onejdgbcfd"))
+    onError: () => messageApi.error(i18nText("settings", "auto.character_creation_failed"))
   });
 
   const updateMutation = useMutation({
@@ -272,11 +272,11 @@ export function RolePermissionPanel({
       );
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.key_oglhelaafh"));
+      messageApi.success(i18nText("settings", "auto.role_updated_successfully"));
       setEditingRole(null);
       await invalidateRoles();
     },
-    onError: () => messageApi.error(i18nText("settings", "auto.key_anapjdbjpf"))
+    onError: () => messageApi.error(i18nText("settings", "auto.character_update_failed"))
   });
 
   const deleteMutation = useMutation({
@@ -285,13 +285,13 @@ export function RolePermissionPanel({
       return deleteSettingsRole(roleCode, csrfToken);
     },
     onSuccess: async (_, variables) => {
-      messageApi.success(i18nText("settings", "auto.key_jialdjnhcc"));
+      messageApi.success(i18nText("settings", "auto.role_deleted"));
       if (selectedRoleCode === variables) {
         setSelectedRoleCode(rolesQuery.data?.[0]?.code ?? null);
       }
       await invalidateRoles();
     },
-    onError: () => messageApi.error(i18nText("settings", "auto.key_kpdgdjllfb"))
+    onError: () => messageApi.error(i18nText("settings", "auto.role_deletion_failed"))
   });
 
   const handleEditClick = (role: SettingsRole) => {
@@ -358,10 +358,10 @@ export function RolePermissionPanel({
                     block
                     onClick={() => setIsCreateModalOpen(true)}
                   >
-                    {i18nText("settings", "auto.key_hkafcemdkh")}</Button>
+                    {i18nText("settings", "auto.create_new_role")}</Button>
                 )}
                 <Input
-                  placeholder={i18nText("settings", "auto.key_jdoekfmjmg")}
+                  placeholder={i18nText("settings", "auto.search_for_roles")}
                   prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -375,12 +375,12 @@ export function RolePermissionPanel({
                 <div
                   style={{ padding: 16, textAlign: 'center', color: '#bfbfbf' }}
                 >
-                  {i18nText("settings", "auto.key_fbemddkpfm")}</div>
+                  {i18nText("settings", "auto.loading")}</div>
               ) : filteredRoles.length === 0 ? (
                 <div
                   style={{ padding: 32, textAlign: 'center', color: '#bfbfbf' }}
                 >
-                  {i18nText("settings", "auto.key_gbaddhgdgc")}</div>
+                  {i18nText("settings", "auto.no_role_yet")}</div>
               ) : (
                 <div style={{ padding: '8px 0' }}>
                   {filteredRoles.map((role) => {
@@ -418,7 +418,7 @@ export function RolePermissionPanel({
                               color="gold"
                               style={{ margin: 0, border: 'none' }}
                             >
-                              {i18nText("settings", "auto.key_ajmookhgee")}</Tag>
+                              {i18nText("settings", "auto.built_in")}</Tag>
                           )}
                         </div>
                         <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
@@ -465,16 +465,16 @@ export function RolePermissionPanel({
                       {selectedRole.name}
                     </Typography.Title>
                     <Space size="large" style={{ color: '#595959' }}>
-                      <span>{i18nText("settings", "auto.key_lnbjajjlkp")}{selectedRole.code}</span>
-                      <span>{i18nText("settings", "auto.key_ibnobgakic")}{selectedRole.scope_kind}</span>
+                      <span>{i18nText("settings", "auto.encoding")}{selectedRole.code}</span>
+                      <span>{i18nText("settings", "auto.scope_alt")}{selectedRole.scope_kind}</span>
                       {selectedRole.introduction && (
-                        <span>{i18nText("settings", "auto.key_kcmipijdbc")}{selectedRole.introduction}</span>
+                        <span>{i18nText("settings", "auto.description_alt")}{selectedRole.introduction}</span>
                       )}
                       {selectedRole.auto_grant_new_permissions ? (
-                        <Tag color="blue">{i18nText("settings", "auto.key_pgobkibcjp")}</Tag>
+                        <Tag color="blue">{i18nText("settings", "auto.automatically_receive_new_permissions")}</Tag>
                       ) : null}
                       {selectedRole.is_default_member_role ? (
-                        <Tag color="green">{i18nText("settings", "auto.key_kiobacdobc")}</Tag>
+                        <Tag color="green">{i18nText("settings", "auto.new_user_role")}</Tag>
                       ) : null}
                     </Space>
                   </div>
@@ -484,9 +484,9 @@ export function RolePermissionPanel({
                         icon={<EditOutlined />}
                         onClick={() => handleEditClick(selectedRole)}
                       >
-                        {i18nText("settings", "auto.key_fcnencdaod")}</Button>
+                        {i18nText("settings", "auto.edit_basic_information")}</Button>
                       <Popconfirm
-                        title={i18nText("settings", "auto.key_ienneijipo")}
+                        title={i18nText("settings", "auto.sure_want_delete_role")}
                         onConfirm={() =>
                           deleteMutation.mutate(selectedRole.code)
                         }
@@ -494,7 +494,7 @@ export function RolePermissionPanel({
                         okButtonProps={{ danger: true }}
                       >
                         <Button danger icon={<DeleteOutlined />}>
-                          {i18nText("settings", "auto.key_ijnkleanei")}</Button>
+                          {i18nText("settings", "auto.delete_role")}</Button>
                       </Popconfirm>
                     </Space>
                   )}
@@ -507,7 +507,7 @@ export function RolePermissionPanel({
                   {permissionsQuery.isLoading ||
                   rolePermissionsQuery.isLoading ? (
                     <div style={{ padding: 32, textAlign: 'center' }}>
-                      {i18nText("settings", "auto.key_mnmkbkacpc")}</div>
+                      {i18nText("settings", "auto.loading_permission_data")}</div>
                   ) : (
                     <Tabs
                       defaultActiveKey={TAB_ORDER[0]}
@@ -567,7 +567,7 @@ export function RolePermissionPanel({
                 <Space direction="vertical" align="center">
                   <TeamOutlined style={{ fontSize: 48 }} />
                   <Typography.Text type="secondary">
-                    {i18nText("settings", "auto.key_ifbgkdhpbj")}</Typography.Text>
+                    {i18nText("settings", "auto.select_role_left_view_details")}</Typography.Text>
                 </Space>
               </div>
             )}
@@ -575,7 +575,7 @@ export function RolePermissionPanel({
         </div>
 
         <Modal
-          title={i18nText("settings", "auto.key_hkafcemdkh")}
+          title={i18nText("settings", "auto.create_new_role")}
           open={isCreateModalOpen}
           onCancel={() => {
             setIsCreateModalOpen(false);
@@ -596,45 +596,45 @@ export function RolePermissionPanel({
             style={{ marginTop: 24 }}
           >
             <Form.Item
-              label={i18nText("settings", "auto.key_dkkbpaiflc")}
+              label={i18nText("settings", "auto.character_name")}
               name="name"
-              rules={[{ required: true, message: i18nText("settings", "auto.key_lhmbhljogo") }]}
+              rules={[{ required: true, message: i18nText("settings", "auto.enter_role_name") }]}
             >
-              <Input placeholder={i18nText("settings", "auto.key_engpiccdmi")} />
+              <Input placeholder={i18nText("settings", "auto.example_operations_specialist")} />
             </Form.Item>
             <Form.Item
-              label={i18nText("settings", "auto.key_mbckmoghdn")}
+              label={i18nText("settings", "auto.role_coding")}
               name="code"
-              rules={[{ required: true, message: i18nText("settings", "auto.key_ghibjmoojl") }]}
-              extra={i18nText("settings", "auto.key_aokpehfkoj")}
+              rules={[{ required: true, message: i18nText("settings", "auto.enter_role_code") }]}
+              extra={i18nText("settings", "auto.encoding_must_globally_unique_modified_creation")}
             >
-              <Input placeholder={i18nText("settings", "auto.key_ajbejkpchd")} />
+              <Input placeholder={i18nText("settings", "auto.example_role_ops_specialist")} />
             </Form.Item>
-            <Form.Item label={i18nText("settings", "auto.key_jkofkkjiin")} name="introduction">
+            <Form.Item label={i18nText("settings", "auto.role_description")} name="introduction">
               <Input.TextArea
-                placeholder={i18nText("settings", "auto.key_ipigcbamch")}
+                placeholder={i18nText("settings", "auto.briefly_describe_responsibilities_scope_role")}
                 rows={3}
               />
             </Form.Item>
             <Form.Item
               name="auto_grant_new_permissions"
               valuePropName="checked"
-              extra={i18nText("settings", "auto.key_kdafomoccj")}
+              extra={i18nText("settings", "auto.turned_new_permissions_added_future_automatically_granted_role")}
             >
-              <Checkbox>{i18nText("settings", "auto.key_bhmlfecdhe")}</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.automatically_receive_subsequent_new_permissions")}</Checkbox>
             </Form.Item>
             <Form.Item
               name="is_default_member_role"
               valuePropName="checked"
-              extra={i18nText("settings", "auto.key_hpoknjgkop")}
+              extra={i18nText("settings", "auto.one_new_user_role_same_workspace")}
             >
-              <Checkbox>{i18nText("settings", "auto.key_kiobacdobc")}</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.new_user_role")}</Checkbox>
             </Form.Item>
           </Form>
         </Modal>
 
         <Modal
-          title={i18nText("settings", "auto.key_ljnmnickhl")}
+          title={i18nText("settings", "auto.edit_role_alt")}
           open={!!editingRole}
           onCancel={() => setEditingRole(null)}
           onOk={() => editForm.submit()}
@@ -648,28 +648,28 @@ export function RolePermissionPanel({
             style={{ marginTop: 24 }}
           >
             <Form.Item
-              label={i18nText("settings", "auto.key_dkkbpaiflc")}
+              label={i18nText("settings", "auto.character_name")}
               name="name"
-              rules={[{ required: true, message: i18nText("settings", "auto.key_lhmbhljogo") }]}
+              rules={[{ required: true, message: i18nText("settings", "auto.enter_role_name") }]}
             >
               <Input />
             </Form.Item>
-            <Form.Item label={i18nText("settings", "auto.key_jkofkkjiin")} name="introduction">
+            <Form.Item label={i18nText("settings", "auto.role_description")} name="introduction">
               <Input.TextArea rows={3} />
             </Form.Item>
             <Form.Item
               name="auto_grant_new_permissions"
               valuePropName="checked"
-              extra={i18nText("settings", "auto.key_kdafomoccj")}
+              extra={i18nText("settings", "auto.turned_new_permissions_added_future_automatically_granted_role")}
             >
-              <Checkbox>{i18nText("settings", "auto.key_bhmlfecdhe")}</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.automatically_receive_subsequent_new_permissions")}</Checkbox>
             </Form.Item>
             <Form.Item
               name="is_default_member_role"
               valuePropName="checked"
-              extra={i18nText("settings", "auto.key_hpoknjgkop")}
+              extra={i18nText("settings", "auto.one_new_user_role_same_workspace")}
             >
-              <Checkbox>{i18nText("settings", "auto.key_kiobacdobc")}</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.new_user_role")}</Checkbox>
             </Form.Item>
           </Form>
         </Modal>

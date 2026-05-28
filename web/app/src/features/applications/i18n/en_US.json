@@ -128,7 +128,7 @@
     "model_target_help": "pass-through target; leave blank to not inject node input",
     "edit_information": "Edit information",
     "full_token_hidden_after_close": "After closing, the page no longer displays the complete token.",
-    "key_description": "Key description",
+    "text": "Key description",
     "application_description": "Application introduction",
     "import_dsl_file": "Import DSL file",
     "no_optional_tags": "There are currently no optional tags",

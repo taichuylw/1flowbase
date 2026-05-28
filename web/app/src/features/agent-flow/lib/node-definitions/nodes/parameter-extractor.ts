@@ -16,7 +16,7 @@ export const parameterExtractorNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.source_text',
-          label: i18nText("agentFlow", "auto.key_cfmjbhfpkj"),
+          label: i18nText("agentFlow", "auto.source_text"),
           editor: 'selector',
           required: true
         }
@@ -28,7 +28,7 @@ export const parameterExtractorNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'outputs.parameters',
-          label: i18nText("agentFlow", "auto.key_lomlepapba"),
+          label: i18nText("agentFlow", "auto.extract_parameters"),
           editor: 'text',
           required: true
         }

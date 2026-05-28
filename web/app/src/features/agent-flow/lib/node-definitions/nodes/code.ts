@@ -16,7 +16,7 @@ export const codeNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.named_bindings',
-          label: i18nText("agentFlow", "auto.key_jkefpofbfl"),
+          label: i18nText("agentFlow", "auto.input_variables"),
           editor: 'named_bindings'
         }
       ]
@@ -27,7 +27,7 @@ export const codeNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'config.source',
-          label: i18nText("agentFlow", "auto.key_jdeokecijb"),
+          label: i18nText("agentFlow", "auto.javascript_code"),
           editor: 'code_source',
           required: true
         }
@@ -35,11 +35,11 @@ export const codeNodeDefinition: NodeDefinition = {
     },
     {
       key: 'outputs',
-      title: i18nText("agentFlow", "auto.key_bigaknngaf"),
+      title: i18nText("agentFlow", "auto.output_variable"),
       fields: [
         {
           key: 'config.output_contract',
-          label: i18nText("agentFlow", "auto.key_bigaknngaf"),
+          label: i18nText("agentFlow", "auto.output_variable"),
           editor: 'output_contract_definition'
         }
       ]

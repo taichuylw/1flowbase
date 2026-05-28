@@ -18,24 +18,24 @@ export function NodeActionMenu({
         items: [
           {
             key: 'locate',
-            label: i18nText("agentFlow", "auto.key_memgnffeml"),
+            label: i18nText("agentFlow", "auto.locate_node"),
             onClick: onLocate
           },
           {
             key: 'copy',
-            label: i18nText("agentFlow", "auto.key_cgkmamloap"),
+            label: i18nText("agentFlow", "auto.copy_node"),
             onClick: onCopy
           },
           {
             key: 'delete',
-            label: i18nText("agentFlow", "auto.key_ppdhnmdjpj"),
+            label: i18nText("agentFlow", "auto.delete_node"),
             danger: true,
             onClick: onDelete
           }
         ]
       }}
     >
-      <Button aria-label={i18nText("agentFlow", "auto.key_hhidgndkjj")} icon={<MoreOutlined />} type="text" />
+      <Button aria-label={i18nText("agentFlow", "auto.more_actions_alt")} icon={<MoreOutlined />} type="text" />
     </Dropdown>
   );
 }

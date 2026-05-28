@@ -75,12 +75,12 @@ export function NodePreviewVariablesModal({
 
   return (
     <Modal
-      cancelText={i18nText("agentFlow", "auto.key_enalegiimh")}
+      cancelText={i18nText("agentFlow", "auto.cancel")}
       confirmLoading={confirmLoading}
       destroyOnHidden
-      okText={i18nText("agentFlow", "auto.key_amdkmneegp")}
+      okText={i18nText("agentFlow", "auto.run")}
       open={open}
-      title={i18nText("agentFlow", "auto.key_migcmfdeki")}
+      title={i18nText("agentFlow", "auto.input_node_reference_variable")}
       width={520}
       onCancel={onCancel}
       onOk={() => {
@@ -105,7 +105,7 @@ export function NodePreviewVariablesModal({
             key={fieldName(field)}
             label={formatNodeVariableLabel(field.nodeLabel, field.key)}
             name={fieldName(field)}
-            rules={[{ required: true, message: i18nText("agentFlow", "auto.key_bjnknngcph") }]}
+            rules={[{ required: true, message: i18nText("agentFlow", "auto.enter_variable_value") }]}
             valuePropName={field.valueType === 'boolean' ? 'checked' : 'value'}
           >
             {renderField(field)}

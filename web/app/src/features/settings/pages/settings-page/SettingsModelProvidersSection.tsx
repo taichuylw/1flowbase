@@ -236,7 +236,7 @@ export function SettingsModelProvidersSection({
                 }}
                 onDelete={(entry) => {
                   void modal.confirm({
-                    title: i18nText("settings", "auto.key_ngombfgkcb"),
+                    title: i18nText("settings", "auto.delete_supplier"),
                     icon: null,
                     centered: true,
                     okText: i18nText("settings", "auto.delete"),
@@ -254,9 +254,9 @@ export function SettingsModelProvidersSection({
                             {entry.display_name}
                           </Typography.Title>
                           <Typography.Paragraph type="secondary">
-                            {i18nText("settings", "auto.key_jfhpghbdbl")}</Typography.Paragraph>
+                            {i18nText("settings", "auto.deletion_all_instances_installation_records_local_plug_files_provider_cleaned")}</Typography.Paragraph>
                           <Typography.Paragraph type="secondary">
-                            {i18nText("settings", "auto.key_gmgmfconjh")}</Typography.Paragraph>
+                            {i18nText("settings", "auto.existing_process_node_still_references_provider_subsequent_error_reports_normal")}</Typography.Paragraph>
                         </div>
                       </div>
                     ),
@@ -471,7 +471,7 @@ export function SettingsModelProvidersSection({
         onSubmit={() => {
           const file = uploadFileList[0]?.originFileObj;
           if (!(file instanceof File)) {
-            setUploadValidationMessage(i18nText("settings", "auto.key_fbcfbeocko"));
+            setUploadValidationMessage(i18nText("settings", "auto.select_plug_package_first"));
             return;
           }
 

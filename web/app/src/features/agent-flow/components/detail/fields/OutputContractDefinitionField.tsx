@@ -37,9 +37,9 @@ export function OutputContractDefinitionField({
     <div className="agent-flow-output-contract-editor">
       <div className="agent-flow-output-contract-editor__header">
         <Typography.Text className="agent-flow-node-detail__section-subtitle">
-          {i18nText("agentFlow", "auto.key_dpbdpcpjln")}</Typography.Text>
+          {i18nText("agentFlow", "auto.variables_produced_nodes_referenced_downstream_nodes")}</Typography.Text>
         <Button
-          aria-label={i18nText("agentFlow", "auto.key_igfnnomnkj")}
+          aria-label={i18nText("agentFlow", "auto.add_new_output_variable")}
           icon={<PlusOutlined />}
           size="small"
           type="text"
@@ -54,9 +54,9 @@ export function OutputContractDefinitionField({
               className="agent-flow-output-contract-editor__row"
             >
               <label className="agent-flow-output-contract-editor__cell">
-                <span>{i18nText("agentFlow", "auto.key_gdnfjhhnog")}</span>
+                <span>{i18nText("agentFlow", "auto.variable_name")}</span>
                 <Input
-                  aria-label={i18nText("agentFlow", "auto.key_facokndckb", { value1: index + 1 })}
+                  aria-label={i18nText("agentFlow", "auto.output_variable_name", { value1: index + 1 })}
                   value={output.key}
                   onChange={(event) =>
                     onChange(
@@ -70,9 +70,9 @@ export function OutputContractDefinitionField({
                 />
               </label>
               <label className="agent-flow-output-contract-editor__cell">
-                <span>{i18nText("agentFlow", "auto.key_mballpfnnn")}</span>
+                <span>{i18nText("agentFlow", "auto.display_name")}</span>
                 <Input
-                  aria-label={i18nText("agentFlow", "auto.key_aimodjbajj", { value1: index + 1 })}
+                  aria-label={i18nText("agentFlow", "auto.output_display_name", { value1: index + 1 })}
                   value={output.title}
                   onChange={(event) =>
                     onChange(
@@ -86,9 +86,9 @@ export function OutputContractDefinitionField({
                 />
               </label>
               <label className="agent-flow-output-contract-editor__cell">
-                <span>{i18nText("agentFlow", "auto.key_oeoegmhcdf")}</span>
+                <span>{i18nText("agentFlow", "auto.type")}</span>
                 <Select
-                  aria-label={i18nText("agentFlow", "auto.key_pojgcmimep", { value1: index + 1 })}
+                  aria-label={i18nText("agentFlow", "auto.output_type", { value1: index + 1 })}
                   options={valueTypeOptions}
                   value={output.valueType}
                   onChange={(valueType) =>
@@ -103,7 +103,7 @@ export function OutputContractDefinitionField({
                 />
               </label>
               <Button
-                aria-label={i18nText("agentFlow", "auto.key_koocgghegk", { value1: output.key || index + 1 })}
+                aria-label={i18nText("agentFlow", "auto.delete_output_variable", { value1: output.key || index + 1 })}
                 className="agent-flow-output-contract-editor__delete"
                 danger
                 icon={<DeleteOutlined />}
@@ -121,7 +121,7 @@ export function OutputContractDefinitionField({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={i18nText("agentFlow", "auto.key_bndolnolcc")}
+          description={i18nText("agentFlow", "auto.output_variables_yet")}
         />
       )}
     </div>

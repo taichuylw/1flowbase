@@ -43,15 +43,15 @@ export function AgentFlowOverlay({
   publishDisabled
 }: AgentFlowOverlayProps) {
   const statusTag = {
-    idle: { color: 'default', label: i18nText("agentFlow", "auto.key_idhohkbajk") },
-    saving: { color: 'blue', label: i18nText("agentFlow", "auto.key_bfbchmcmep") },
-    saved: { color: 'green', label: i18nText("agentFlow", "auto.key_mnpkljgphf") },
-    error: { color: 'red', label: i18nText("agentFlow", "auto.key_eafcfkhdci") }
+    idle: { color: 'default', label: i18nText("agentFlow", "auto.free") },
+    saving: { color: 'blue', label: i18nText("agentFlow", "auto.saving") },
+    saved: { color: 'green', label: i18nText("agentFlow", "auto.saved") },
+    error: { color: 'red', label: i18nText("agentFlow", "auto.save_failed") }
   }[autosaveStatus];
 
   return (
     <div
-      aria-label={i18nText("agentFlow", "auto.key_nkllnpbmmi")}
+      aria-label={i18nText("agentFlow", "auto.agent_flow_action_bar")}
       className="agent-flow-editor__overlay"
       role="region"
     >
@@ -63,13 +63,13 @@ export function AgentFlowOverlay({
       </Space>
       <Space size="small">
         <Button
-          aria-label={i18nText("agentFlow", "auto.key_nogbkkiobm")}
+          aria-label={i18nText("agentFlow", "auto.preview")}
           autoInsertSpace={false}
           icon={<PlayCircleOutlined />}
           onClick={onOpenDebugConsole}
-          title={i18nText("agentFlow", "auto.key_nogbkkiobm")}
+          title={i18nText("agentFlow", "auto.preview")}
         >
-          {i18nText("agentFlow", "auto.key_nogbkkiobm")}</Button>
+          {i18nText("agentFlow", "auto.preview")}</Button>
         <Badge count={issueErrorCount} size="small">
           <Button
             aria-label="Issues"
@@ -79,24 +79,24 @@ export function AgentFlowOverlay({
           />
         </Badge>
         <Button
-          aria-label={i18nText("agentFlow", "auto.key_ihcnbhnljd")}
+          aria-label={i18nText("agentFlow", "auto.system_variables")}
           autoInsertSpace={false}
           icon={<GlobalOutlined />}
           onClick={onOpenSystemVariables}
-          title={i18nText("agentFlow", "auto.key_ihcnbhnljd")}
+          title={i18nText("agentFlow", "auto.system_variables")}
         >
-          {i18nText("agentFlow", "auto.key_ihcnbhnljd")}</Button>
+          {i18nText("agentFlow", "auto.system_variables")}</Button>
         <Button
-          aria-label={i18nText("agentFlow", "auto.key_inkahhafkl")}
+          aria-label={i18nText("agentFlow", "auto.environment_variables")}
           autoInsertSpace={false}
           icon={<CodeOutlined />}
           onClick={onOpenEnvironmentVariables}
-          title={i18nText("agentFlow", "auto.key_inkahhafkl")}
+          title={i18nText("agentFlow", "auto.environment_variables")}
         >
-          {i18nText("agentFlow", "auto.key_inkahhafkl")}</Button>
+          {i18nText("agentFlow", "auto.environment_variables")}</Button>
         <Tooltip title={autosaveLabel}>
           <Button
-            aria-label={i18nText("agentFlow", "auto.key_pknpcenlmf")}
+            aria-label={i18nText("agentFlow", "auto.save")}
             autoInsertSpace={false}
             disabled={saveDisabled}
             icon={<SaveOutlined />}
@@ -110,12 +110,12 @@ export function AgentFlowOverlay({
           disabled={publishDisabled}
           onClick={onOpenPublish}
         >
-          {i18nText("agentFlow", "auto.key_jepbhcnacp")}</Button>
+          {i18nText("agentFlow", "auto.publish")}</Button>
         <Button
-          aria-label={i18nText("agentFlow", "auto.key_fomefcfipi")}
+          aria-label={i18nText("agentFlow", "auto.historical_version")}
           icon={<HistoryOutlined />}
           onClick={onOpenHistory}
-          title={i18nText("agentFlow", "auto.key_fomefcfipi")}
+          title={i18nText("agentFlow", "auto.historical_version")}
         />
       </Space>
     </div>

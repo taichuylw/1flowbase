@@ -6,7 +6,7 @@ import { formatDateTime } from '../../../../../shared/i18n/format';
 
 function formatTimestamp(value: string | null) {
   if (!value) {
-    return i18nText("agentFlow", "auto.key_aibaedpijj");
+    return i18nText("agentFlow", "auto.not_over");
   }
 
   return formatDateTime(value, { hour12: false });
@@ -18,7 +18,7 @@ export function NodeRunMetadataCard({
   lastRun: NodeLastRun;
 }) {
   return (
-    <Card title={i18nText("agentFlow", "auto.key_nljodhfffg")}>
+    <Card title={i18nText("agentFlow", "auto.metadata")}>
       <Descriptions
         column={1}
         size="small"
@@ -30,17 +30,17 @@ export function NodeRunMetadataCard({
           },
           {
             key: 'node_type',
-            label: i18nText("agentFlow", "auto.key_eophpofcem"),
+            label: i18nText("agentFlow", "auto.node_type"),
             children: lastRun.node_run.node_type
           },
           {
             key: 'started_at',
-            label: i18nText("agentFlow", "auto.key_oiigikpgol"),
+            label: i18nText("agentFlow", "auto.start_time"),
             children: formatTimestamp(lastRun.node_run.started_at)
           },
           {
             key: 'finished_at',
-            label: i18nText("agentFlow", "auto.key_kalljpejkl"),
+            label: i18nText("agentFlow", "auto.end_time"),
             children: formatTimestamp(lastRun.node_run.finished_at)
           }
         ]}

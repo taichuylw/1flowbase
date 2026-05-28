@@ -163,7 +163,7 @@ function renderTemplatedTextField({
     <TemplatedTextField
       label={block.label}
       ariaLabel={block.label}
-      placeholder={i18nText("agentFlow", "auto.key_bfafhhgmik")}
+      placeholder={i18nText("agentFlow", "auto.support_text_variable_block_enter_left_curly_bracket_quick_reference")}
       options={selectorOptions}
       value={stringValue}
       onChange={(nextValue) =>
@@ -228,9 +228,9 @@ function renderNamedBindingsField({
       options={getSelectorOptions(adapter)}
       value={binding}
       nameOptions={nameOptions}
-      namePlaceholder={isDataModelPayload ? i18nText("agentFlow", "auto.key_hhkejpcmdi") : undefined}
+      namePlaceholder={isDataModelPayload ? i18nText("agentFlow", "auto.field") : undefined}
       selectorLabel={isDataModelPayload ? 'variable' : undefined}
-      addButtonLabel={isDataModelPayload ? i18nText("agentFlow", "auto.key_fmgmpocpie") : undefined}
+      addButtonLabel={isDataModelPayload ? i18nText("agentFlow", "auto.add_new_field_assignment") : undefined}
       onChange={(nextValue) =>
         adapter.setValue(block.path, {
           kind: 'named_bindings',
@@ -462,7 +462,7 @@ export const agentFlowFieldRenderers = {
         aria-label={block.label}
         autoSize={{ minRows: 1, maxRows: 3 }}
         className="agent-flow-editor__inspector-description-input"
-        placeholder={i18nText("agentFlow", "auto.key_nkeckaopik")}
+        placeholder={i18nText("agentFlow", "auto.add_description")}
         value={typeof value === 'string' ? value : ''}
         onChange={(event) => adapter.setValue(block.path, event.target.value)}
       />

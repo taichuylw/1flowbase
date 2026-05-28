@@ -1,7 +1,7 @@
 import { i18nText } from '../../../../shared/i18n/text';
 
 export const MODEL_CONTEXT_WINDOW_VALIDATION_MESSAGE =
-  i18nText("settings", "auto.key_elblhclllp");
+  i18nText("settings", "auto.enter_valid_context_size_supports_pure_numbers_k_m_suffix");
 
 export const MODEL_CONTEXT_WINDOW_PRESET_OPTIONS = [
   { label: '16K', value: '16K' },

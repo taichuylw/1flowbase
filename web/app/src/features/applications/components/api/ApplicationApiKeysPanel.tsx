@@ -118,7 +118,7 @@ export function ApplicationApiKeysPanel({
             <Space size={6}>
               <span>{t('auto.key')}</span>
               <Tooltip title={t('auto.api_key_prefix_notice')}>
-                <QuestionCircleOutlined aria-label={t('auto.key_description')} />
+                <QuestionCircleOutlined aria-label={t('auto.text')} />
               </Tooltip>
             </Space>
           ),

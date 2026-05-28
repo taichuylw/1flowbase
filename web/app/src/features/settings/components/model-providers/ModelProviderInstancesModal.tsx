@@ -78,7 +78,7 @@ export function ModelProviderInstancesModal({
     0
   );
   const displayName = catalogEntry?.display_name ?? providerDisplayName;
-  const title = displayName ? i18nText("settings", "auto.key_mbdkjibmji", { value1: displayName }) : i18nText("settings", "auto.key_jhedibalkl");
+  const title = displayName ? i18nText("settings", "auto.instance", { value1: displayName }) : i18nText("settings", "auto.supplier_instance");
 
   return (
     <Modal
@@ -95,10 +95,10 @@ export function ModelProviderInstancesModal({
           <Alert
             type="warning"
             showIcon
-            message={i18nText("settings", "auto.key_cjnloipmko")}
+            message={i18nText("settings", "auto.text")}
             description={
               versionSwitchNotice.targetVersion
-                ? i18nText("settings", "auto.key_ogghjemgoe", { value1: versionSwitchNotice.targetVersion, value2: versionSwitchNotice.migratedInstanceCount ?? 0 })
+                ? i18nText("settings", "auto.target_version_instances_migrated", { value1: versionSwitchNotice.targetVersion, value2: versionSwitchNotice.migratedInstanceCount ?? 0 })
                 : undefined
             }
           />
@@ -107,15 +107,15 @@ export function ModelProviderInstancesModal({
         <section className="model-provider-panel__main-instance-card">
           <div className="model-provider-panel__main-instance-head">
             <div className="model-provider-panel__main-instance-title-row">
-              <Typography.Text strong>{i18nText("settings", "auto.key_elohdmnmmh")}</Typography.Text>
+              <Typography.Text strong>{i18nText("settings", "auto.master_instance")}</Typography.Text>
               <div className="model-provider-panel__main-instance-summary">
                 <Tag bordered={false} color="blue">
-                  {i18nText("settings", "auto.key_lenlofehbm")}</Tag>
+                  {i18nText("settings", "auto.aggregate_view")}</Tag>
                 <Typography.Text type="secondary">
-                  {i18nText("settings", "auto.key_mbgbgeiija")}{includedCount}
+                  {i18nText("settings", "auto.example")}{includedCount}
                 </Typography.Text>
                 <Typography.Text type="secondary">
-                  {i18nText("settings", "auto.key_hkmgekclee")}{aggregatedModelCount}
+                  {i18nText("settings", "auto.model")}{aggregatedModelCount}
                 </Typography.Text>
               </div>
             </div>
@@ -125,9 +125,9 @@ export function ModelProviderInstancesModal({
               className="model-provider-panel__main-instance-toggle"
             >
               <Typography.Text type="secondary">
-                {i18nText("settings", "auto.key_moendkaebn")}</Typography.Text>
+                {i18nText("settings", "auto.new_instances_automatically_injected_main_instance")}</Typography.Text>
               <Switch
-                aria-label={i18nText("settings", "auto.key_moendkaebn")}
+                aria-label={i18nText("settings", "auto.new_instances_automatically_injected_main_instance")}
                 checked={mainInstance?.auto_include_new_instances ?? false}
                 disabled={!canManage || updatingMainInstance}
                 onChange={onToggleAutoIncludeNewInstances}
@@ -138,7 +138,7 @@ export function ModelProviderInstancesModal({
           {modelGroups.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={i18nText("settings", "auto.key_fneeakmenh")}
+              description={i18nText("settings", "auto.text_alt")}
             />
           ) : (
             <div className="model-provider-panel__main-instance-groups">
@@ -152,7 +152,7 @@ export function ModelProviderInstancesModal({
                   </Typography.Text>
                   <ModelProviderTagList
                     modelIds={group.models.map((model) => model.model_id)}
-                    emptyText={i18nText("settings", "auto.key_lbenlakfbg")}
+                    emptyText={i18nText("settings", "auto.unsummarized_model")}
                   />
                 </section>
               ))}

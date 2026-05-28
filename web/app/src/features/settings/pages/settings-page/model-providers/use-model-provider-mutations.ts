@@ -374,7 +374,7 @@ export function useModelProviderMutations({
         isTaskTerminal(resolvedTask.status) &&
         !isTaskSucceeded(resolvedTask.status)
       ) {
-        throw new Error(resolvedTask.status_message ?? i18nText("settings", "auto.key_nddjpjflog"));
+        throw new Error(resolvedTask.status_message ?? i18nText("settings", "auto.version_switching_failed"));
       }
 
       return resolvedTask;

@@ -185,9 +185,9 @@ function NodeRunConsoleLogs({ logs }: { logs: ConsoleLogEntryView[] }) {
   }
 
   return (
-    <section aria-label={i18nText("agentFlow", "auto.key_mgcnidodhj")} className="agent-flow-node-run-console">
+    <section aria-label={i18nText("agentFlow", "auto.console_log")} className="agent-flow-node-run-console">
       <Typography.Text className="agent-flow-node-run-console__title" strong>
-        {i18nText("agentFlow", "auto.key_mgcnidodhj")}</Typography.Text>
+        {i18nText("agentFlow", "auto.console_log")}</Typography.Text>
       <div className="agent-flow-node-run-console__list">
         {logs.map((log, index) => (
           <div
@@ -230,7 +230,7 @@ export function NodeRunPayloadSections({
     <>
       <RuntimeDebugPayloadBlock
         payload={inputPayload}
-        title={i18nText("agentFlow", "auto.key_oiifaeeapc")}
+        title={i18nText("agentFlow", "auto.input")}
         onLoadArtifact={onLoadArtifact}
       />
       {includeDebugPayload ? (
@@ -238,7 +238,7 @@ export function NodeRunPayloadSections({
           <NodeRunConsoleLogs logs={consoleLogs} />
           <RuntimeDebugPayloadBlock
             payload={processPayload}
-            title={i18nText("agentFlow", "auto.key_lndcadbgcg")}
+            title={i18nText("agentFlow", "auto.data_processing")}
             onLoadArtifact={onLoadArtifact}
           />
         </>
@@ -291,9 +291,9 @@ export function RuntimeDebugPayloadBlock({
           fullPayload
         )
       );
-      message.success(i18nText("agentFlow", "auto.key_oejiblhnii"));
+      message.success(i18nText("agentFlow", "auto.full_value_loaded"));
     } catch {
-      message.error(i18nText("agentFlow", "auto.key_engjkheanm"));
+      message.error(i18nText("agentFlow", "auto.failed_load_full_value"));
     }
   };
 
@@ -302,13 +302,13 @@ export function RuntimeDebugPayloadBlock({
       actions={
         artifactLocation ? (
           <Space size={6} wrap>
-            <Tag color="warning">{i18nText("agentFlow", "auto.key_fobpnhjhmk")}</Tag>
+            <Tag color="warning">{i18nText("agentFlow", "auto.truncated")}</Tag>
             <Button
               disabled={!onLoadArtifact}
               onClick={handleLoadFullValue}
               size="small"
             >
-              {i18nText("agentFlow", "auto.key_faegcpahah")}</Button>
+              {i18nText("agentFlow", "auto.load_full_value")}</Button>
           </Space>
         ) : null
       }
@@ -324,7 +324,7 @@ export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
   const applicationId = lastRun.flow_run.application_id;
 
   return (
-    <Card title={i18nText("agentFlow", "auto.key_jglbkikhaa")}>
+    <Card title={i18nText("agentFlow", "auto.node_input_output")}>
       <div className="agent-flow-node-run-json-list">
         <NodeRunPayloadSections
           inputPayload={lastRun.node_run.input_payload}

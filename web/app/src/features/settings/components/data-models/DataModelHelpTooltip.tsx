@@ -5,16 +5,16 @@ import { Tooltip } from 'antd';
 import { i18nText } from '../../../../shared/i18n/text';
 
 export const dataModelStatusHelp =
-  i18nText("settings", "auto.key_iebdbikpal");
+  i18nText("settings", "auto.draft_created_unpublished_state_published_entry_running_availability_api_exposure");
 
 export const defaultApiExposureStatusHelp =
-  i18nText("settings", "auto.key_jkofikpneb");
+  i18nText("settings", "auto.draft_api_exposure_draft_published_exposed_api_access_surface_generated");
 
 export const dataModelCodeHelp =
-  i18nText("settings", "auto.key_fmofaccdgj");
+  i18nText("settings", "auto.code_stable_identifier_data_model_used_apis_permissions_internal_references");
 
 export const dataModelTitleHelp =
-  i18nText("settings", "auto.key_onebfpgeig");
+  i18nText("settings", "auto.title_name_displayed_management_console_adjusted_according_business_semantics_affecting");
 
 export function DataModelFieldLabel({
   label,
@@ -54,7 +54,7 @@ export function DataModelHelpTooltip({
         <QuestionCircleOutlined
           aria-describedby={decorative ? undefined : descriptionId}
           aria-hidden={decorative ? true : undefined}
-          aria-label={decorative ? undefined : i18nText("settings", "auto.key_odmakmdall", { value1: label })}
+          aria-label={decorative ? undefined : i18nText("settings", "auto.description_option", { value1: label })}
           className="data-model-panel__help-icon"
           tabIndex={decorative ? -1 : 0}
         />

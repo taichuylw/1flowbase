@@ -21,7 +21,7 @@ node scripts/node/tooling.js i18n-hygiene
 
 ## Review Rules
 
-- 多语言 key 的每个 JSON 段必须只使用英文小写字母；多个语义单词用 `_` 连接，例如 `primary_action`，不要用驼峰、短横线、数字、中文或空格。
+- 多语言 key 的每个 JSON 段必须只使用英文小写字母；多个语义单词用 `_` 连接，例如 `primary_action`，不要用驼峰、短横线、数字、中文、空格或 `key_xxx` / `k_xxx` 这类随机生成 key。
 - 同 owner 重复 value：优先让调用方复用已有 key，或调整文案使语义更精确。
 - 跨 owner 重复 value：默认不进入门禁；专项审计时默认保留局部 owner，不要为了消灭 advisory 抽错 common。
 - `unused-i18n-key`：优先删除已失效 key；如 key 由动态配置、路由配置或外部渲染入口使用，QA 报告必须写明保留原因。

@@ -16,7 +16,7 @@ import { i18nText } from '../../../../shared/i18n/text';
 const nodeDetailShellSchema = {
   schemaVersion: '1.0.0',
   shellType: 'dock_panel',
-  title: i18nText("agentFlow", "auto.key_ehfhbnhmbl")
+  title: i18nText("agentFlow", "auto.node_details")
 } as const;
 
 export function NodeDetailPanel({
@@ -122,7 +122,7 @@ export function NodeDetailPanel({
           items={[
             {
               key: 'config',
-              label: i18nText("agentFlow", "auto.key_hnolpjmlad"),
+              label: i18nText("agentFlow", "auto.settings"),
               children: (
                 <NodeConfigTab
                   adapter={runtime.adapter}
@@ -132,7 +132,7 @@ export function NodeDetailPanel({
             },
             {
               key: 'lastRun',
-              label: i18nText("agentFlow", "auto.key_ebglmklika"),
+              label: i18nText("agentFlow", "auto.last_run"),
               forceRender: true,
               children: (
                 <NodeLastRunTab

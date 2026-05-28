@@ -178,7 +178,7 @@ export function MemberManagementPanel({
   const columns = useMemo(
     () => [
       {
-        title: i18nText("settings", "auto.key_jlkhgdokde"),
+        title: i18nText("settings", "auto.user_alt"),
         key: 'user',
         render: (_: unknown, member: SettingsMember) => (
           <Space>
@@ -203,7 +203,7 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: i18nText("settings", "auto.key_galoonmipc"),
+        title: i18nText("settings", "auto.contact_information"),
         key: 'contact',
         render: (_: unknown, member: SettingsMember) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -224,12 +224,12 @@ export function MemberManagementPanel({
         width: 80,
         render: (_: unknown, member: SettingsMember) => (
           <Tag color={member.status === 'active' ? 'green' : 'default'}>
-            {member.status === 'active' ? i18nText("settings", "auto.enabled") : i18nText("settings", "auto.key_njijoffbii")}
+            {member.status === 'active' ? i18nText("settings", "auto.enabled") : i18nText("settings", "auto.deactivate")}
           </Tag>
         )
       },
       {
-        title: i18nText("settings", "auto.key_glcggjfoen"),
+        title: i18nText("settings", "auto.role"),
         key: 'roles',
         render: (_: unknown, member: SettingsMember) => {
           const isRootMember = member.role_codes.includes('root');
@@ -279,13 +279,13 @@ export function MemberManagementPanel({
                           icon={<StopOutlined />}
                           disabled
                         >
-                          {i18nText("settings", "auto.key_njijoffbii")}</Button>
+                          {i18nText("settings", "auto.deactivate")}</Button>
                       ) : (
                         <Popconfirm
-                          title={i18nText("settings", "auto.key_pmnjdcgeae")}
-                          description={i18nText("settings", "auto.key_cankkcoici", { value1: member.name })}
+                          title={i18nText("settings", "auto.deactivate_account")}
+                          description={i18nText("settings", "auto.sure_want_deactivate_s_account_deactivation_user_able_log", { value1: member.name })}
                           onConfirm={() => disableMutation.mutate(member.id)}
-                          okText={i18nText("settings", "auto.key_pdklnijebj")}
+                          okText={i18nText("settings", "auto.confirm_deactivation")}
                           cancelText={i18nText("settings", "auto.cancel")}
                           okButtonProps={{ danger: true }}
                         >
@@ -295,21 +295,21 @@ export function MemberManagementPanel({
                             icon={<StopOutlined />}
                             loading={disableMutation.isPending}
                           >
-                            {i18nText("settings", "auto.key_njijoffbii")}</Button>
+                            {i18nText("settings", "auto.deactivate")}</Button>
                         </Popconfirm>
                       )
                     ) : null}
                     {isRootMember ? (
                       <Button size="small" icon={<KeyOutlined />} disabled>
-                        {i18nText("settings", "auto.key_hoeccbegnn")}</Button>
+                        {i18nText("settings", "auto.reset_password")}</Button>
                     ) : (
                       <Popconfirm
-                        title={i18nText("settings", "auto.key_hoeccbegnn")}
-                        description={i18nText("settings", "auto.key_bdcakjhijn", { value1: member.name })}
+                        title={i18nText("settings", "auto.reset_password")}
+                        description={i18nText("settings", "auto.reset_password_temporary_password_needs_changed_immediately_user_logs", { value1: member.name })}
                         onConfirm={() =>
                           resetPasswordMutation.mutate(member.id)
                         }
-                        okText={i18nText("settings", "auto.key_dakgahjmod")}
+                        okText={i18nText("settings", "auto.confirm_reset")}
                         cancelText={i18nText("settings", "auto.cancel")}
                       >
                         <Button
@@ -317,7 +317,7 @@ export function MemberManagementPanel({
                           icon={<KeyOutlined />}
                           loading={resetPasswordMutation.isPending}
                         >
-                          {i18nText("settings", "auto.key_hoeccbegnn")}</Button>
+                          {i18nText("settings", "auto.reset_password")}</Button>
                       </Popconfirm>
                     )}
                   </Space>
@@ -346,7 +346,7 @@ export function MemberManagementPanel({
               icon={<UserAddOutlined />}
               onClick={() => setCreateModalOpen(true)}
             >
-              {i18nText("settings", "auto.key_daebgeahof")}</Button>
+              {i18nText("settings", "auto.create_new_user")}</Button>
           </div>
         ) : null}
 
@@ -360,11 +360,11 @@ export function MemberManagementPanel({
         />
 
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {i18nText("settings", "auto.key_jidbeoljph")}</Typography.Text>
+          {i18nText("settings", "auto.resetting_password_reset_target_account_password_temporary_password_require_user")}</Typography.Text>
 
         {/* Create Member Modal */}
         <Modal
-          title={i18nText("settings", "auto.key_daebgeahof")}
+          title={i18nText("settings", "auto.create_new_user")}
           open={createModalOpen}
           onCancel={() => {
             setCreateModalOpen(false);
@@ -391,54 +391,54 @@ export function MemberManagementPanel({
               }}
             >
               <Form.Item
-                label={i18nText("settings", "auto.key_jabdiejbhj")}
+                label={i18nText("settings", "auto.account_number")}
                 name="account"
-                rules={[{ required: true, message: i18nText("settings", "auto.key_npmmieegil") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_account_number") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.key_loemcgbglb")}
+                label={i18nText("settings", "auto.name_alt")}
                 name="name"
-                rules={[{ required: true, message: i18nText("settings", "auto.key_ghfldoockp") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_full_name") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.key_jongchlmpg")}
+                label={i18nText("settings", "auto.email")}
                 name="email"
                 rules={[
-                  { required: true, message: i18nText("settings", "auto.key_pcnmcenoli") },
-                  { type: 'email', message: i18nText("settings", "auto.key_lmbihdhdgc") }
+                  { required: true, message: i18nText("settings", "auto.enter_email") },
+                  { type: 'email', message: i18nText("settings", "auto.enter_valid_email_address") }
                 ]}
               >
                 <Input />
               </Form.Item>
-              <Form.Item label={i18nText("settings", "auto.key_fkjmmfoijb")} name="phone">
+              <Form.Item label={i18nText("settings", "auto.mobile_phone_number")} name="phone">
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.key_cfbceonhem")}
+                label={i18nText("settings", "auto.nickname")}
                 name="nickname"
-                rules={[{ required: true, message: i18nText("settings", "auto.key_fnloglahol") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_nickname") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.key_jgbpmllbfl")}
+                label={i18nText("settings", "auto.initial_password")}
                 name="password"
                 initialValue={TEMP_PASSWORD}
-                rules={[{ required: true, message: i18nText("settings", "auto.key_kollelnjfp") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_initial_password") }]}
               >
                 <Input.Password />
               </Form.Item>
             </div>
-            <Form.Item label={i18nText("settings", "auto.key_opphggfffe")} name="introduction">
+            <Form.Item label={i18nText("settings", "auto.personal_introduction")} name="introduction">
               <Input.TextArea rows={2} />
             </Form.Item>
             <div style={{ display: 'flex', gap: 24 }}>
               <Form.Item
-                label={i18nText("settings", "auto.key_dfobimmipn")}
+                label={i18nText("settings", "auto.email_login")}
                 name="email_login_enabled"
                 valuePropName="checked"
                 initialValue
@@ -446,7 +446,7 @@ export function MemberManagementPanel({
                 <Switch />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.key_capokofoij")}
+                label={i18nText("settings", "auto.mobile_login")}
                 name="phone_login_enabled"
                 valuePropName="checked"
                 initialValue={false}
@@ -460,7 +460,7 @@ export function MemberManagementPanel({
         {/* Role Edit Modal */}
         <Modal
           title={
-            roleEditMember ? i18nText("settings", "auto.key_jhmbjkddop", { value1: roleEditMember.name }) : i18nText("settings", "auto.key_ljnmnickhl")
+            roleEditMember ? i18nText("settings", "auto.edit_role", { value1: roleEditMember.name }) : i18nText("settings", "auto.edit_role_alt")
           }
           open={Boolean(roleEditMember)}
           onCancel={() => setRoleEditMember(null)}
@@ -477,14 +477,14 @@ export function MemberManagementPanel({
                 type="secondary"
                 style={{ display: 'block', marginBottom: 12, fontSize: 13 }}
               >
-                {i18nText("settings", "auto.key_acdifoeljh")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.key_eddfgndopi")}</Typography.Text>
+                {i18nText("settings", "auto.for_users")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.assign_roles")}</Typography.Text>
               <Select
                 mode="multiple"
                 style={{ width: '100%' }}
                 value={editingRoleCodes}
                 onChange={setEditingRoleCodes}
                 options={roleOptions}
-                placeholder={i18nText("settings", "auto.key_cbfajdjplb")}
+                placeholder={i18nText("settings", "auto.select_role")}
               />
             </div>
           ) : null}

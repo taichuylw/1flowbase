@@ -11,7 +11,7 @@ export function NodeRunButton({
 }) {
   return (
     <Button
-      aria-label={i18nText("agentFlow", "auto.key_khpanhiadd")}
+      aria-label={i18nText("agentFlow", "auto.run_current_node")}
       disabled={!onRunNode || loading}
       icon={<CaretRightOutlined />}
       loading={loading}

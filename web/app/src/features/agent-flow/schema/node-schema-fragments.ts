@@ -125,7 +125,7 @@ function buildSharedOutputVariableBlocks(
     {
       kind: 'view',
       renderer: 'output_contract',
-      title: i18nText("agentFlow", "auto.key_bigaknngaf"),
+      title: i18nText("agentFlow", "auto.output_variable"),
       key: `${nodeType}-generated-outputs`
     }
   ];
@@ -137,13 +137,13 @@ export function buildNodeDetailHeaderBlocks(): SchemaBlock[] {
       kind: 'field',
       renderer: 'header_alias',
       path: 'alias',
-      label: i18nText("agentFlow", "auto.key_pmgaljeipl")
+      label: i18nText("agentFlow", "auto.node_alias")
     },
     {
       kind: 'field',
       renderer: 'header_description',
       path: 'description',
-      label: i18nText("agentFlow", "auto.key_kbegdcdjie")
+      label: i18nText("agentFlow", "auto.node_introduction")
     }
   ];
 }
@@ -218,21 +218,21 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
   const policyBlocks: SchemaBlock[] =
     nodeType === 'start'
       ? []
-      : [{ kind: 'view', renderer: 'policy_group', title: i18nText("agentFlow", "auto.key_pdmejidbmg") }];
+      : [{ kind: 'view', renderer: 'policy_group', title: i18nText("agentFlow", "auto.strategy") }];
 
   return [
     ...definitionSections,
     ...buildSharedOutputVariableBlocks(nodeType),
     ...policyBlocks,
-    { kind: 'view', renderer: 'relations', title: i18nText("agentFlow", "auto.key_okaopckohc") }
+    { kind: 'view', renderer: 'relations', title: i18nText("agentFlow", "auto.next_step") }
   ];
 }
 
 export function buildCommonLastRunBlocks(): SchemaBlock[] {
   return [
-    { kind: 'view', renderer: 'runtime_summary', title: i18nText("agentFlow", "auto.key_fdfkckjebj") },
-    { kind: 'view', renderer: 'runtime_io', title: i18nText("agentFlow", "auto.key_dgjclkpkoo") },
-    { kind: 'view', renderer: 'runtime_metadata', title: i18nText("agentFlow", "auto.key_kfndjhminb") }
+    { kind: 'view', renderer: 'runtime_summary', title: i18nText("agentFlow", "auto.running_summary") },
+    { kind: 'view', renderer: 'runtime_io', title: i18nText("agentFlow", "auto.run_input_output") },
+    { kind: 'view', renderer: 'runtime_metadata', title: i18nText("agentFlow", "auto.run_metadata") }
   ];
 }
 

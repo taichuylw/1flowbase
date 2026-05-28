@@ -26,7 +26,7 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.key_hjpaloedpe")}
+          message={i18nText("settings", "auto.installation_configuration_activation_saved_pending_changes_take_effect_restarting_api")}
         />
         <HostInfrastructureProviderTable
           providers={providersQuery.data ?? []}

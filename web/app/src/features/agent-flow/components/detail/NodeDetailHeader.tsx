@@ -69,7 +69,7 @@ export function NodeDetailHeader({
           <NodeRunButton onRunNode={onRunNode} loading={runLoading} />
           {definitionMeta?.helpHref ? (
             <Button
-              aria-label={i18nText("agentFlow", "auto.key_djmbiihhej")}
+              aria-label={i18nText("agentFlow", "auto.help_documentation")}
               href={definitionMeta.helpHref}
               icon={<BookOutlined />}
               target="_blank"
@@ -83,7 +83,7 @@ export function NodeDetailHeader({
           />
           <Divider type="vertical" className="agent-flow-node-detail__divider" />
           <Button
-            aria-label={i18nText("agentFlow", "auto.key_eflgeccoif")}
+            aria-label={i18nText("agentFlow", "auto.close_node_details")}
             icon={<CloseOutlined />}
             type="text"
             onClick={onClose}
