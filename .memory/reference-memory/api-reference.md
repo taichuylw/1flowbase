@@ -11,14 +11,15 @@ match_when:
   - 需要查看 OpenAPI 文档
   - 需要访问控制面健康检查入口
 created_at: 2026-04-12 19
-updated_at: 2026-04-12 19
-last_verified_at: 无
+updated_at: 2026-05-28 11
+last_verified_at: 2026-05-28 11
 decision_policy: index_only
 scope:
   - api-server
   - openapi.json
   - /docs
   - /api/console/health
+  - https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions
 ---
 
 # API 查看相关引用
@@ -37,6 +38,11 @@ scope:
   - 本机访问的控制面健康检查入口。
 - `http://<本机IP>:7800/api/console/health`
   - 局域网访问的控制面健康检查入口。
+
+## 外部兼容协议参考
+
+- `https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions`
+  - 阿里云百炼 / DashScope OpenAI-compatible Chat Completions 文档入口；排查 Qwen 供应商适配、图片输入、Function Calling 和 `tool_calls` 字段形态时优先核对。
 
 ## 使用说明
 
