@@ -1,8 +1,9 @@
 import { Tag, Typography } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function ModelProviderTagList({
   modelIds,
-  emptyText = '未设置'
+  emptyText = i18nText("settings", "auto.k_55a04b58cd")
 }: {
   modelIds: string[];
   emptyText?: string;

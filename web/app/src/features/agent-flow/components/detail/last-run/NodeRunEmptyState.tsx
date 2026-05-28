@@ -1,4 +1,5 @@
 import { Card, Empty } from 'antd';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function NodeRunEmptyState({
   description
@@ -6,7 +7,7 @@ export function NodeRunEmptyState({
   description: string;
 }) {
   return (
-    <Card title="运行记录">
+    <Card title={i18nText("agentFlow", "auto.k_24fb424dfd")}>
       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={description} />
     </Card>
   );

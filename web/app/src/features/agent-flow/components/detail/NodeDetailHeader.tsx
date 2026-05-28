@@ -10,6 +10,7 @@ import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-a
 import { NodeActionMenu } from './NodeActionMenu';
 import { NodeRunButton } from './NodeRunButton';
 import { getAgentFlowNodeTypeIcon } from '../../lib/node-type-icons';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function findHeaderField(
   schema: CanvasNodeSchema,
@@ -68,7 +69,7 @@ export function NodeDetailHeader({
           <NodeRunButton onRunNode={onRunNode} loading={runLoading} />
           {definitionMeta?.helpHref ? (
             <Button
-              aria-label="帮助文档"
+              aria-label={i18nText("agentFlow", "auto.k_39c1887749")}
               href={definitionMeta.helpHref}
               icon={<BookOutlined />}
               target="_blank"
@@ -82,7 +83,7 @@ export function NodeDetailHeader({
           />
           <Divider type="vertical" className="agent-flow-node-detail__divider" />
           <Button
-            aria-label="关闭节点详情"
+            aria-label={i18nText("agentFlow", "auto.k_45b6422e85")}
             icon={<CloseOutlined />}
             type="text"
             onClick={onClose}

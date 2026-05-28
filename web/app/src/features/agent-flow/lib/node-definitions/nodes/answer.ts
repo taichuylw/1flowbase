@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const answerNodeDefinition: NodeDefinition = {
   label: 'Answer',
@@ -15,7 +16,7 @@ export const answerNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.answer_template',
-          label: '回复内容',
+          label: i18nText("agentFlow", "auto.k_a36c787d35"),
           editor: 'templated_text',
           required: true
         }
@@ -27,7 +28,7 @@ export const answerNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'outputs.answer',
-          label: '对话输出',
+          label: i18nText("agentFlow", "auto.k_6e77a04352"),
           editor: 'text',
           required: true
         }

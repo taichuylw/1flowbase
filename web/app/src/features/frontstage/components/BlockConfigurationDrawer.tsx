@@ -18,6 +18,7 @@ import type {
   FrontstageBlockDataConfiguration,
   FrontstageBlockLimitsConfiguration
 } from '../lib/block-configuration';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface BlockConfigurationDrawerProps {
   open: boolean;
@@ -443,7 +444,7 @@ export const BlockConfigurationDrawer: FC<BlockConfigurationDrawerProps> = ({
       open={open}
       onClose={onClose}
       placement="right"
-      title="区块配置"
+      title={i18nText("frontstage", "auto.k_18b073bc15")}
       width={640}
     >
       {model ? (
@@ -462,7 +463,7 @@ export const BlockConfigurationDrawer: FC<BlockConfigurationDrawerProps> = ({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="请选择一个区块查看配置。"
+          description={i18nText("frontstage", "auto.k_e01e9b50d4")}
         />
       )}
     </Drawer>

@@ -2,6 +2,7 @@ import { CloseOutlined } from '@ant-design/icons';
 import { Button, Tag, Typography } from 'antd';
 
 import { agentFlowSystemVariables } from '../../lib/system-variables';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface SystemVariablesPanelProps {
   onClose: () => void;
@@ -10,18 +11,17 @@ interface SystemVariablesPanelProps {
 export function SystemVariablesPanel({ onClose }: SystemVariablesPanelProps) {
   return (
     <section
-      aria-label="系统变量"
+      aria-label={i18nText("agentFlow", "auto.k_872d17db93")}
       className="agent-flow-editor__system-variables-panel"
     >
       <header className="agent-flow-editor__system-variables-header">
         <div className="agent-flow-editor__system-variables-heading">
-          <Typography.Title level={3}>系统变量</Typography.Title>
+          <Typography.Title level={3}>{i18nText("agentFlow", "auto.k_872d17db93")}</Typography.Title>
           <Typography.Text type="secondary">
-            系统变量是全局只读变量，可被画布内任意节点引用。
-          </Typography.Text>
+            {i18nText("agentFlow", "auto.k_0cab8a6c06")}</Typography.Text>
         </div>
         <Button
-          aria-label="关闭系统变量"
+          aria-label={i18nText("agentFlow", "auto.k_71f2b1a617")}
           icon={<CloseOutlined />}
           type="text"
           onClick={onClose}

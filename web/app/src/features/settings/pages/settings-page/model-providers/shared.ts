@@ -5,6 +5,7 @@ import type {
   SettingsModelProviderInstance
 } from '../../../api/model-providers';
 import type { SettingsPluginFamilyEntry } from '../../../api/plugins';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export type ModelProviderDrawerState =
   | { mode: 'create'; providerCode: string }
@@ -92,11 +93,11 @@ export function parseTaskDetailNumber(
 export function formatTrustLabel(trustLevel: string) {
   switch (trustLevel) {
     case 'verified_official':
-      return '官方签发';
+      return i18nText("settings", "auto.k_c68fddcd14");
     case 'checksum_only':
-      return '仅 checksum';
+      return i18nText("settings", "auto.k_4a07104b7c");
     default:
-      return '未验签';
+      return i18nText("settings", "auto.k_4fe0a3b1f2");
   }
 }
 

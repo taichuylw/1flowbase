@@ -37,6 +37,7 @@ import {
   type RecentVersionSwitchNotice,
   type UploadResultSummary
 } from './shared';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function useModelProviderMutations({
   csrfToken,
@@ -373,7 +374,7 @@ export function useModelProviderMutations({
         isTaskTerminal(resolvedTask.status) &&
         !isTaskSucceeded(resolvedTask.status)
       ) {
-        throw new Error(resolvedTask.status_message ?? '版本切换失败');
+        throw new Error(resolvedTask.status_message ?? i18nText("settings", "auto.k_d339f95be6"));
       }
 
       return resolvedTask;

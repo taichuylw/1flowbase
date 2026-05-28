@@ -3,6 +3,7 @@ import type { FC } from 'react';
 
 import { useFrontstageBlockCode } from '../hooks/use-frontstage-block-code';
 import type { FrontstageBlockInstance } from '../lib/page-document';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface BlockCodeEditorDrawerProps {
   open: boolean;
@@ -51,15 +52,15 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
   const saveDisabled = !canEdit || !dirty || loading || saving;
   const resetDisabled = !canEdit || !dirty || saving;
   const editorDisabled = !canEdit || loading || saving;
-  const statusText = loading ? '代码加载中' : dirty ? '未保存' : '已同步';
+  const statusText = loading ? i18nText("frontstage", "auto.k_1f37320940") : dirty ? i18nText("frontstage", "auto.k_4123f1faaa") : i18nText("frontstage", "auto.k_76ce8e3d5e");
   const emptyDescription = !hasSelectedTarget
-    ? '请选择一个带 codeRef 的区块后再编辑代码。'
+    ? i18nText("frontstage", "auto.k_637390fc4f")
     : !selectedCodeRef
-      ? '当前区块缺少 codeRef，无法加载或保存代码。'
+      ? i18nText("frontstage", "auto.k_f09775c006")
       : !pageId
-        ? '当前未选择页面，无法加载或保存代码。'
+        ? i18nText("frontstage", "auto.k_ed0dec3817")
         : !workspaceId
-          ? '当前未选择工作区，无法加载或保存代码。'
+          ? i18nText("frontstage", "auto.k_d0e05ae721")
           : null;
 
   const handleSave = () => {
@@ -71,26 +72,23 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
       open={open}
       onClose={onClose}
       placement="right"
-      title="区块代码"
+      title={i18nText("frontstage", "auto.k_9d86669742")}
       width={560}
       extra={
         <Space size={8}>
           {onOpenTrialPanel ? (
             <Button disabled={!canEdit} onClick={onOpenTrialPanel}>
-              JS Block 试运行
-            </Button>
+              {i18nText("frontstage", "auto.k_cc0f333429")}</Button>
           ) : null}
           <Button disabled={resetDisabled} onClick={reset}>
-            重置
-          </Button>
+            {i18nText("frontstage", "auto.k_3d81345303")}</Button>
           <Button
             type="primary"
             disabled={saveDisabled}
             loading={saving}
             onClick={handleSave}
           >
-            保存
-          </Button>
+            {i18nText("frontstage", "auto.k_fadf24dbc5")}</Button>
         </Space>
       }
     >
@@ -100,10 +98,10 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
             Block
           </Typography.Text>
           <Typography.Text strong>
-            {block?.id ?? '未选择区块'}
+            {block?.id ?? i18nText("frontstage", "auto.k_8080e5501a")}
           </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            codeRef：{selectedCodeRef ?? '缺失'}
+            codeRef：{selectedCodeRef ?? i18nText("frontstage", "auto.k_2fe9b75856")}
           </Typography.Text>
         </Space>
 
@@ -113,7 +111,7 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
 
         {error ? (
           <Alert
-            message="代码加载或保存失败"
+            message={i18nText("frontstage", "auto.k_7627f34231")}
             description={error.message}
             type="error"
             showIcon
@@ -123,8 +121,7 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
         <Space direction="vertical" size={6} style={{ width: '100%' }}>
           <Space size={8}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              状态
-            </Typography.Text>
+              {i18nText("frontstage", "auto.k_62e951a692")}</Typography.Text>
             <Typography.Text>{statusText}</Typography.Text>
           </Space>
           <Input.TextArea

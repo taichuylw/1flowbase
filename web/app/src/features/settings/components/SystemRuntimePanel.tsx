@@ -27,6 +27,7 @@ import {
 } from '../api/system-runtime';
 import type { SettingsSystemRuntimeProfile } from '../api/system-runtime';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
+import { i18nText } from '../../../shared/i18n/text';
 
 /* ── helpers ────────────────────────────────────── */
 
@@ -35,19 +36,19 @@ function getRelationshipLabel(relationship: string) {
     case 'same_host':
       return {
         color: '#00ab73' as const,
-        label: '同机部署',
+        label: i18nText("settings", "auto.k_bf1af0fc7c"),
         icon: CloudServerOutlined
       };
     case 'split_host':
       return {
         color: '#1677ff' as const,
-        label: '分机部署',
+        label: i18nText("settings", "auto.k_5e25829373"),
         icon: ClusterOutlined
       };
     case 'runner_unreachable':
       return {
         color: '#ff4d4f' as const,
-        label: 'Runner 不可达',
+        label: i18nText("settings", "auto.k_5daaf917ae"),
         icon: ExclamationCircleOutlined
       };
     default:
@@ -61,8 +62,8 @@ function getRelationshipLabel(relationship: string) {
 
 function getReachabilityMeta(reachable: boolean) {
   return reachable
-    ? { color: '#00ab73' as const, label: '运行中', icon: CheckCircleFilled }
-    : { color: '#ff4d4f' as const, label: '不可达', icon: CloseCircleFilled };
+    ? { color: '#00ab73' as const, label: i18nText("settings", "auto.k_5942497005"), icon: CheckCircleFilled }
+    : { color: '#ff4d4f' as const, label: i18nText("settings", "auto.k_358801edaa"), icon: CloseCircleFilled };
 }
 
 function formatMemory(value: number) {
@@ -87,7 +88,7 @@ function buildHostRows(profile: SettingsSystemRuntimeProfile): HostTableRow[] {
     key: h.host_fingerprint,
     fingerprint: h.host_fingerprint,
     platform: `${h.platform.os}/${h.platform.arch}${h.platform.libc ? `/${h.platform.libc}` : ''}`,
-    cpu: `${h.cpu.logical_count} 核`,
+    cpu: i18nText("settings", "auto.k_2b1862a39d", { value1: h.cpu.logical_count }),
     memoryTotal: formatMemory(h.memory.total_gb),
     memoryAvail: formatMemory(h.memory.available_gb),
     memoryUsage:
@@ -100,7 +101,7 @@ function buildHostRows(profile: SettingsSystemRuntimeProfile): HostTableRow[] {
 
 const hostColumns: ColumnsType<HostTableRow> = [
   {
-    title: '指纹',
+    title: i18nText("settings", "auto.k_3852a0ca84"),
     dataIndex: 'fingerprint',
     key: 'fingerprint',
     width: 140,
@@ -111,7 +112,7 @@ const hostColumns: ColumnsType<HostTableRow> = [
     )
   },
   {
-    title: '平台',
+    title: i18nText("settings", "auto.k_e4b9d69486"),
     dataIndex: 'platform',
     key: 'platform',
     width: 180
@@ -123,17 +124,17 @@ const hostColumns: ColumnsType<HostTableRow> = [
     width: 80
   },
   {
-    title: '内存',
+    title: i18nText("settings", "auto.k_d014ab7703"),
     key: 'memory',
     width: 200,
     render: (_: unknown, record: HostTableRow) => (
       <Space size={12}>
         <Flex vertical gap={2} style={{ minWidth: 80 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            总计 {record.memoryTotal}
+            {i18nText("settings", "auto.k_3af1ac5b4e")}{record.memoryTotal}
           </Typography.Text>
           <Typography.Text style={{ fontSize: 12 }}>
-            可用 {record.memoryAvail}
+            {i18nText("settings", "auto.k_e91365cf9e")}{record.memoryAvail}
           </Typography.Text>
         </Flex>
         <div
@@ -164,7 +165,7 @@ const hostColumns: ColumnsType<HostTableRow> = [
     )
   },
   {
-    title: '承载服务',
+    title: i18nText("settings", "auto.k_015b410625"),
     key: 'services',
     width: 180,
     render: (_: unknown, record: HostTableRow) => (
@@ -199,7 +200,7 @@ export function SystemRuntimePanel() {
   /* ── loading ── */
   if (runtimeQuery.isLoading) {
     return (
-      <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
+      <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
         <Flex justify="center" style={{ padding: '64px 0' }}>
           <Spin />
         </Flex>
@@ -210,15 +211,15 @@ export function SystemRuntimePanel() {
   /* ── error ── */
   if (runtimeQuery.isError) {
     return (
-      <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
+      <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
         <Alert
           type="error"
           showIcon
-          message="运行时信息加载失败"
+          message={i18nText("settings", "auto.k_3d8ece8d38")}
           description={
             runtimeQuery.error instanceof Error
               ? runtimeQuery.error.message
-              : '请稍后重试。'
+              : i18nText("settings", "auto.k_662437e7e6")
           }
         />
       </SettingsSectionSurface>
@@ -228,8 +229,8 @@ export function SystemRuntimePanel() {
   /* ── no data ── */
   if (!profile) {
     return (
-      <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
-        <Empty description="暂无运行时数据" />
+      <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
+        <Empty description={i18nText("settings", "auto.k_10b9da25f8")} />
       </SettingsSectionSurface>
     );
   }
@@ -252,7 +253,7 @@ export function SystemRuntimePanel() {
 
   /* ── render ── */
   return (
-    <SettingsSectionSurface title="系统运行" hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
       {/* ════════════════════════════════════════════════
          部署概览
          ════════════════════════════════════════════════ */}
@@ -260,8 +261,7 @@ export function SystemRuntimePanel() {
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
           <InfoCircleOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
-            部署概览
-          </Typography.Text>
+            {i18nText("settings", "auto.k_7579673d06")}</Typography.Text>
         </Flex>
 
         <Flex
@@ -291,8 +291,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                部署关系
-              </Typography.Text>
+                {i18nText("settings", "auto.k_cf93420ca4")}</Typography.Text>
               {relationshipMeta ? (
                 <Space size={6}>
                   <relationshipMeta.icon
@@ -328,8 +327,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                当前语言
-              </Typography.Text>
+                {i18nText("settings", "auto.k_b13af74fb0")}</Typography.Text>
               <Typography.Text style={{ fontSize: 13 }}>
                 {profile.locale_meta.resolved_locale}
               </Typography.Text>
@@ -354,8 +352,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                回退语言
-              </Typography.Text>
+                {i18nText("settings", "auto.k_dd904b14d0")}</Typography.Text>
               <Typography.Text style={{ fontSize: 13 }}>
                 {profile.locale_meta.fallback_locale}
               </Typography.Text>
@@ -376,8 +373,7 @@ export function SystemRuntimePanel() {
                 type="secondary"
                 style={{ fontSize: 12, display: 'block', marginBottom: 4 }}
               >
-                支持语言
-              </Typography.Text>
+                {i18nText("settings", "auto.k_83b604e91d")}</Typography.Text>
               <Typography.Text style={{ fontSize: 13 }}>
                 {profile.locale_meta.supported_locales.join(', ')}
               </Typography.Text>
@@ -393,8 +389,7 @@ export function SystemRuntimePanel() {
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
           <CloudServerOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
-            服务状态
-          </Typography.Text>
+            {i18nText("settings", "auto.k_d42da9e2ac")}</Typography.Text>
         </Flex>
 
         <Flex gap={16} wrap="wrap">
@@ -443,8 +438,7 @@ export function SystemRuntimePanel() {
                         marginBottom: 2
                       }}
                     >
-                      版本
-                    </Typography.Text>
+                      {i18nText("settings", "auto.k_989d1affa0")}</Typography.Text>
                     <Typography.Text style={{ fontSize: 13 }}>
                       {svc.data.version ?? '—'}
                     </Typography.Text>
@@ -458,8 +452,7 @@ export function SystemRuntimePanel() {
                         marginBottom: 2
                       }}
                     >
-                      状态
-                    </Typography.Text>
+                      {i18nText("settings", "auto.k_62e951a692")}</Typography.Text>
                     <Typography.Text style={{ fontSize: 13 }}>
                       {svc.data.status ?? '—'}
                     </Typography.Text>
@@ -473,10 +466,9 @@ export function SystemRuntimePanel() {
                         marginBottom: 2
                       }}
                     >
-                      宿主指纹
-                    </Typography.Text>
+                      {i18nText("settings", "auto.k_1346ed6e4f")}</Typography.Text>
                     <Typography.Text code style={{ fontSize: 12 }}>
-                      {svc.data.host_fingerprint?.slice(0, 16) ?? '未知'}
+                      {svc.data.host_fingerprint?.slice(0, 16) ?? i18nText("settings", "auto.k_d9c32a4c3d")}
                     </Typography.Text>
                   </div>
                 </Flex>
@@ -493,8 +485,7 @@ export function SystemRuntimePanel() {
         <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
           <ClusterOutlined style={{ color: '#00ab73', fontSize: 15 }} />
           <Typography.Text strong style={{ fontSize: 14 }}>
-            宿主机
-          </Typography.Text>
+            {i18nText("settings", "auto.k_5051a125e2")}</Typography.Text>
           <Tag style={{ marginLeft: 4, fontSize: 11, lineHeight: '20px' }}>
             {hostRows.length}
           </Tag>
@@ -510,7 +501,7 @@ export function SystemRuntimePanel() {
             style={{ fontSize: 13 }}
           />
         ) : (
-          <Empty description="当前没有可展示的宿主机信息" />
+          <Empty description={i18nText("settings", "auto.k_3ff996f432")} />
         )}
       </div>
     </SettingsSectionSurface>

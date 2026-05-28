@@ -35,6 +35,7 @@ import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { RouteGuard } from '../routes/route-guards';
 import { LoadingState } from '../shared/ui/loading-state/LoadingState';
 import { useAuthStore } from '../state/auth-store';
+import { i18nText } from '../shared/i18n/text';
 
 const ApplicationDetailPage = lazy(() =>
   import('../features/applications/pages/ApplicationDetailPage').then((module) => ({
@@ -48,7 +49,7 @@ const SettingsPage = lazy(() =>
 );
 
 function NotFoundPage() {
-  return <Result status="404" title="页面不存在" />;
+  return <Result status="404" title={i18nText("app", "auto.k_55c9e10608")} />;
 }
 
 function RouteLoadingFallback() {

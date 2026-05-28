@@ -15,6 +15,7 @@ import {
   getApplicationSections,
   type ApplicationSectionKey
 } from '../lib/application-sections';
+import { i18nText } from '../../../shared/i18n/text';
 
 const AgentFlowEditorPage = lazy(() =>
   import('../../agent-flow/pages/AgentFlowEditorPage').then((module) => ({
@@ -71,10 +72,10 @@ export function ApplicationDetailPage({
     }
 
     if (error instanceof ApiClientError && error.status === 404) {
-      return <Result status="404" title="应用不存在" />;
+      return <Result status="404" title={i18nText("applications", "auto.k_4cce244abd")} />;
     }
 
-    return <Result status="error" title="应用加载失败" />;
+    return <Result status="error" title={i18nText("applications", "auto.k_75e2d0b91e")} />;
   }
 
   const application = detailQuery.data;

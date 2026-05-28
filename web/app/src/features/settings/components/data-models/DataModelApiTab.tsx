@@ -4,6 +4,7 @@ import type {
   SettingsDataModel,
   UpdateSettingsDataModelApiExposureInput
 } from '../../api/data-models';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function DataModelApiTab({
   model,
@@ -39,7 +40,7 @@ export function DataModelApiTab({
         items={[
           {
             key: 'status',
-            label: 'API 暴露状态',
+            label: i18nText("settings", "auto.k_0da86a0bd3"),
             children: <Tag>{model.api_exposure_status}</Tag>
           },
           {
@@ -81,8 +82,7 @@ export function DataModelApiTab({
             })
           }
         >
-          请求 API 暴露
-        </Button>
+          {i18nText("settings", "auto.k_637f069ef3")}</Button>
         <Button
           loading={saving}
           disabled={!canManage || !canClose}
@@ -92,13 +92,11 @@ export function DataModelApiTab({
             })
           }
         >
-          关闭 API 暴露
-        </Button>
+          {i18nText("settings", "auto.k_9eb32c14db")}</Button>
       </Space>
       {unsafe ? (
         <Typography.Text type="secondary">
-          unsafe_external_source 为系统派生状态，不能通过手动选择改为安全。
-        </Typography.Text>
+          {i18nText("settings", "auto.k_36d11299fd")}</Typography.Text>
       ) : null}
     </Flex>
   );

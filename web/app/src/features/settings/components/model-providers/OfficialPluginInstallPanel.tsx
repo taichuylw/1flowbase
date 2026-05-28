@@ -8,6 +8,7 @@ import type {
   SettingsOfficialPluginCatalogEntry,
   SettingsPluginFamilyEntry
 } from '../../api/plugins';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type InstallState = 'idle' | 'installing' | 'success' | 'failed';
 
@@ -17,21 +18,21 @@ function getInstallButtonLabel(
   activePluginId: string | null
 ) {
   if (activePluginId === entry.plugin_id && installState === 'installing') {
-    return '安装中';
+    return i18nText("settings", "auto.k_411642f1d0");
   }
 
   if (
     entry.install_status === 'assigned' ||
     (activePluginId === entry.plugin_id && installState === 'success')
   ) {
-    return '已安装到当前 workspace';
+    return i18nText("settings", "auto.k_f0d2fb13dd");
   }
 
   if (activePluginId === entry.plugin_id && installState === 'failed') {
-    return '重试安装';
+    return i18nText("settings", "auto.k_87c0fd2d68");
   }
 
-  return '安装到当前 workspace';
+  return i18nText("settings", "auto.k_662ccf68d0");
 }
 
 function compareOfficialVersion(left: string, right: string) {
@@ -118,7 +119,7 @@ function renderTagLabel(tag: string) {
     return (
       <span className="model-provider-panel__tag-label">
         latest
-        <Tooltip title="表示当前版本已经是官方最新版本。">
+        <Tooltip title={i18nText("settings", "auto.k_9b281e3e0a")}>
           <QuestionCircleOutlined className="model-provider-panel__tag-help" />
         </Tooltip>
       </span>
@@ -132,10 +133,10 @@ function renderTagLabel(tag: string) {
         <Tooltip
           title={
             tag === 'hybrid'
-              ? '发现模式：预置模型列表 + 运行时动态拉取模型列表，最后合并。'
+              ? i18nText("settings", "auto.k_b99bc4228a")
               : tag === 'dynamic'
-                ? '发现模式：运行时动态拉取模型列表。'
-                : '发现模式：只使用插件内预置的模型列表。'
+                ? i18nText("settings", "auto.k_557571148f")
+                : i18nText("settings", "auto.k_be8ea55915")
           }
         >
           <QuestionCircleOutlined className="model-provider-panel__tag-help" />
@@ -255,25 +256,22 @@ export function OfficialPluginInstallPanel({
       {contextHolder}
       <div className="model-provider-panel__section-head">
         <div>
-          <Typography.Title level={5}>模型供应商</Typography.Title>
+          <Typography.Title level={5}>{i18nText("settings", "auto.k_77d78db072")}</Typography.Title>
           {sourceMeta ? (
             <Typography.Text type="secondary">
-              当前从{sourceMeta.sourceLabel}
-              读取可安装供应商目录，可直接查看说明后安装到当前 workspace。
-            </Typography.Text>
+              {i18nText("settings", "auto.k_47a3d3a019")}{sourceMeta.sourceLabel}
+              {i18nText("settings", "auto.k_4540c3f939")}</Typography.Text>
           ) : null}
           <div className="model-provider-panel__official-toolbar">
             {canManage ? (
-              <Button onClick={onOpenUpload}>上传插件</Button>
+              <Button onClick={onOpenUpload}>{i18nText("settings", "auto.k_31f407d6e8")}</Button>
             ) : null}
             {sourceMeta ? (
               <Button onClick={() => openExternal(sourceMeta.registryUrl)}>
-                来源
-              </Button>
+                {i18nText("settings", "auto.k_c63f79e636")}</Button>
             ) : null}
             <Button onClick={() => openExternal(OFFICIAL_PLUGIN_RELEASES_URL)}>
-              前往仓库下载
-            </Button>
+              {i18nText("settings", "auto.k_9e0c8a3d10")}</Button>
           </div>
         </div>
       </div>
@@ -281,7 +279,7 @@ export function OfficialPluginInstallPanel({
         allowClear
         showSearch
         className="model-provider-panel__official-select"
-        placeholder="下拉搜索可安装供应商"
+        placeholder={i18nText("settings", "auto.k_9cdcc87be5")}
         optionFilterProp="label"
         value={selectedPluginId}
         onChange={(value) => setSelectedPluginId(value ?? null)}
@@ -296,7 +294,7 @@ export function OfficialPluginInstallPanel({
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              loading ? '正在加载官方供应商目录...' : '暂无可安装的官方供应商'
+              loading ? i18nText("settings", "auto.k_6133694e11") : i18nText("settings", "auto.k_de2cfb189b")
             }
           />
         </div>
@@ -315,9 +313,9 @@ export function OfficialPluginInstallPanel({
             const buttonLabel = family
               ? family.has_update
                 ? upgrading
-                  ? '升级中'
-                  : '升级到最新版本'
-                : '当前已是最新版本'
+                  ? i18nText("settings", "auto.k_fdb8b1f420")
+                  : i18nText("settings", "auto.k_eed748acf2")
+                : i18nText("settings", "auto.k_db620f1761")
               : getInstallButtonLabel(entry, installState, activePluginId);
             const buttonDisabled = family ? !family.has_update : installed;
 
@@ -372,8 +370,7 @@ export function OfficialPluginInstallPanel({
                   <div className="model-provider-panel__catalog-item-actions">
                     {entry.help_url ? (
                       <Button onClick={() => openExternal(entry.help_url!)}>
-                        文档
-                      </Button>
+                        {i18nText("settings", "auto.k_1069127253")}</Button>
                     ) : null}
                     <Button
                       type={buttonDisabled ? 'default' : 'primary'}
@@ -381,11 +378,11 @@ export function OfficialPluginInstallPanel({
                       disabled={buttonDisabled}
                       onClick={() => {
                         void modal.confirm({
-                          title: family ? '升级插件' : '安装插件',
+                          title: family ? i18nText("settings", "auto.k_aa22ba464e") : i18nText("settings", "auto.k_76a38f0a4c"),
                           icon: null,
                           centered: true,
                           okText: buttonLabel,
-                          cancelText: '取消',
+                          cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
                           okButtonProps: {
                             loading: installing || upgrading,
                             disabled: buttonDisabled
@@ -398,13 +395,13 @@ export function OfficialPluginInstallPanel({
                                 </Typography.Title>
                                 <Typography.Paragraph type="secondary">
                                   {family
-                                    ? `即将把当前 workspace 的 ${entry.display_name} 升级到官方最新版本 ${entry.latest_version}。完成后会统一迁移该供应商下的全部实例。`
-                                    : `即将安装官方最新版本 ${entry.latest_version}，完成后会自动启用到当前 workspace。`}
+                                    ? i18nText("settings", "auto.k_75aedfd084", { value1: entry.display_name, value2: entry.latest_version })
+                                    : i18nText("settings", "auto.k_8585bc2c84", { value1: entry.latest_version })}
                                 </Typography.Paragraph>
                                 <div className="model-provider-panel__catalog-item-meta">
-                                  <span>协议：{entry.protocol}</span>
+                                  <span>{i18nText("settings", "auto.k_47f7f369a7")}{entry.protocol}</span>
                                   <span>
-                                    发现模式：{entry.model_discovery_mode}
+                                    {i18nText("settings", "auto.k_0d22afe6d2")}{entry.model_discovery_mode}
                                   </span>
                                 </div>
                               </div>
@@ -427,8 +424,7 @@ export function OfficialPluginInstallPanel({
                 ) : entry.help_url ? (
                   <div className="model-provider-panel__catalog-item-actions">
                     <Button onClick={() => openExternal(entry.help_url!)}>
-                      文档
-                    </Button>
+                      {i18nText("settings", "auto.k_1069127253")}</Button>
                   </div>
                 ) : null}
               </article>

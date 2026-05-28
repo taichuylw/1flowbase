@@ -6,6 +6,7 @@ import {
   settingsSectionDefinitions,
   type SettingsSectionDefinition
 } from '../features/settings/lib/settings-sections';
+import { i18nText } from '../shared/i18n/text';
 
 function hasAnyPermission(permissions: string[], candidates: string[]) {
   return candidates.some((permission) => permissions.includes(permission));
@@ -90,7 +91,7 @@ export function createSettingsChromeMenuItems({
     {
       key: 'settings',
       label: (
-        <span className="app-shell-settings-block" aria-label="设置">
+        <span className="app-shell-settings-block" aria-label={i18nText("appShell", "auto.k_7debf9cb03")}>
           <SettingOutlined />
         </span>
       ),

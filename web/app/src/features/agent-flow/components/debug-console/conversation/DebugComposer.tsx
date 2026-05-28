@@ -6,6 +6,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Input, Typography } from 'antd';
 import { useState } from 'react';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function DebugComposer({
   value,
@@ -44,7 +45,7 @@ export function DebugComposer({
         <Input.TextArea
           autoSize={{ minRows: 1, maxRows: 4 }}
           variant="borderless"
-          placeholder="和 Bot 聊天"
+          placeholder={i18nText("agentFlow", "auto.k_173e435c26")}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onCompositionStart={() => setIsComposing(true)}
@@ -68,7 +69,7 @@ export function DebugComposer({
         <div className="agent-flow-editor__debug-composer-actions">
           {showStop ? (
             <Button
-              aria-label={stopping ? '正在终止调试运行' : '终止调试运行'}
+              aria-label={stopping ? i18nText("agentFlow", "auto.k_ea4594f7ae") : i18nText("agentFlow", "auto.k_e860579abc")}
               className="agent-flow-editor__debug-composer-submit agent-flow-editor__debug-composer-stop"
               disabled={stopping}
               icon={<CloseCircleOutlined />}
@@ -78,7 +79,7 @@ export function DebugComposer({
             />
           ) : (
             <Button
-              aria-label="发送调试消息"
+              aria-label={i18nText("agentFlow", "auto.k_a18211cd0d")}
               className="agent-flow-editor__debug-composer-submit"
               disabled={disabled}
               icon={<ArrowUpOutlined />}
@@ -94,17 +95,16 @@ export function DebugComposer({
           <span className="agent-flow-editor__debug-feature-icon">
             <MessageOutlined />
           </span>
-          <Typography.Text>功能已开启</Typography.Text>
+          <Typography.Text>{i18nText("agentFlow", "auto.k_52dc9b5456")}</Typography.Text>
           <Button
-            aria-label="管理功能"
+            aria-label={i18nText("agentFlow", "auto.k_7ba74eba3b")}
             className="agent-flow-editor__debug-feature-manage"
             icon={<ArrowRightOutlined />}
             iconPosition="end"
             size="small"
             type="link"
           >
-            管理
-          </Button>
+            {i18nText("agentFlow", "auto.k_4989b5cf94")}</Button>
         </div>
       ) : null}
     </div>

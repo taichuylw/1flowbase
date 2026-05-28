@@ -1,23 +1,22 @@
 import { List, Space, Typography } from 'antd';
+import { i18nText } from '../../../shared/i18n/text';
 
 const embeddedAppCapabilities = [
-  '已接入应用的版本与构建产物清单',
-  '路由前缀、挂载上下文和宿主约束',
-  '后续接入发布、回滚和运行态诊断的入口'
+  i18nText("embeddedApps", "auto.k_f223c2c4fe"),
+  i18nText("embeddedApps", "auto.k_6e356eadf5"),
+  i18nText("embeddedApps", "auto.k_87e2ff5369")
 ];
 
 export function EmbeddedAppsPage() {
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <div>
-        <Typography.Title level={2}>子系统</Typography.Title>
+        <Typography.Title level={2}>{i18nText("embeddedApps", "auto.k_1c41ed3edc")}</Typography.Title>
         <Typography.Paragraph>
-          管理已接入子系统的发布清单、路由前缀与宿主约束。
-        </Typography.Paragraph>
+          {i18nText("embeddedApps", "auto.k_8be9a885e6")}</Typography.Paragraph>
       </div>
       <Typography.Paragraph>
-        当前页用于统一查看已接入子系统的运行边界和接入状态。
-      </Typography.Paragraph>
+        {i18nText("embeddedApps", "auto.k_7f32bd041b")}</Typography.Paragraph>
       <List
         dataSource={embeddedAppCapabilities}
         renderItem={(item) => <List.Item>{item}</List.Item>}

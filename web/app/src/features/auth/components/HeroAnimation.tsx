@@ -1,5 +1,6 @@
 import { theme } from 'antd';
 import React, { useEffect, useRef } from 'react';
+import { i18nText } from '../../../shared/i18n/text';
 
 interface Leaf {
   x: number;
@@ -465,8 +466,7 @@ export function HeroAnimation() {
         <div className="hero-tagline" aria-label="brand name and slogan">
           <div className="hero-text-line hero-title-line">1flowbase</div>
           <div className="hero-text-line hero-slogan-line">
-            对话即是壁垒，AI应用原生底座
-          </div>
+            {i18nText("auth", "auto.k_c40407a8a5")}</div>
         </div>
       </div>
 

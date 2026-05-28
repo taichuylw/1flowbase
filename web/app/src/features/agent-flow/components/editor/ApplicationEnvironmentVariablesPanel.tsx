@@ -24,6 +24,7 @@ import {
   type AgentFlowEnvironmentVariable
 } from '../../lib/application-environment-variables';
 import { EnvironmentVariableValueEditor } from './environment-variables/EnvironmentVariableValueEditor';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const valueTypeOptions = [
   'string',
@@ -199,7 +200,7 @@ export function ApplicationEnvironmentVariablesPanel({
 
   const editingVariable =
     editingIndex === null ? null : draftVariables[editingIndex];
-  const modalTitle = editingVariable ? '编辑环境变量' : '添加环境变量';
+  const modalTitle = editingVariable ? i18nText("agentFlow", "auto.k_1b50c88938") : i18nText("agentFlow", "auto.k_300aa1df1f");
 
   const existingNames = useMemo(
     () =>
@@ -252,7 +253,7 @@ export function ApplicationEnvironmentVariablesPanel({
       parsedValue = parseVariableValue(values.value_type, values.value);
       validateParsedValue(values.value_type, parsedValue);
     } catch {
-      setValueError('变量值与类型不匹配');
+      setValueError(i18nText("agentFlow", "auto.k_a43281f8ce"));
       return;
     }
 
@@ -284,18 +285,17 @@ export function ApplicationEnvironmentVariablesPanel({
 
   return (
     <section
-      aria-label="环境变量"
+      aria-label={i18nText("agentFlow", "auto.k_8da07705ab")}
       className="agent-flow-editor__environment-variables-panel"
     >
       <header className="agent-flow-editor__system-variables-header">
         <div className="agent-flow-editor__system-variables-heading">
-          <Typography.Title level={3}>环境变量</Typography.Title>
+          <Typography.Title level={3}>{i18nText("agentFlow", "auto.k_8da07705ab")}</Typography.Title>
           <Typography.Text type="secondary">
-            环境变量属于当前应用，可被画布内任意节点通过 env.xxx 引用。
-          </Typography.Text>
+            {i18nText("agentFlow", "auto.k_37388963fe")}</Typography.Text>
         </div>
         <Button
-          aria-label="关闭环境变量"
+          aria-label={i18nText("agentFlow", "auto.k_fd674fc63d")}
           icon={<CloseOutlined />}
           type="text"
           onClick={onClose}
@@ -308,8 +308,7 @@ export function ApplicationEnvironmentVariablesPanel({
             type="primary"
             onClick={openCreateModal}
           >
-            添加环境变量
-          </Button>
+            {i18nText("agentFlow", "auto.k_300aa1df1f")}</Button>
         </div>
         <div
           aria-busy={loading}
@@ -349,9 +348,9 @@ export function ApplicationEnvironmentVariablesPanel({
                   ) : null}
                 </div>
                 <Space size={2}>
-                  <Tooltip title="编辑">
+                  <Tooltip title={i18nText("agentFlow", "auto.k_a7f814c0a4")}>
                     <Button
-                      aria-label={`编辑 ${variable.name}`}
+                      aria-label={i18nText("agentFlow", "auto.k_1f2779b3d8", { value1: variable.name })}
                       icon={<EditOutlined />}
                       size="small"
                       type="text"
@@ -359,14 +358,14 @@ export function ApplicationEnvironmentVariablesPanel({
                     />
                   </Tooltip>
                   <Popconfirm
-                    title="删除环境变量"
-                    okText="删除"
-                    cancelText="取消"
+                    title={i18nText("agentFlow", "auto.k_10e3cd23bb")}
+                    okText={i18nText("agentFlow", "auto.k_3755f56f2f")}
+                    cancelText={i18nText("agentFlow", "auto.k_4d0b4688c7")}
                     onConfirm={() => deleteVariable(index)}
                   >
-                    <Tooltip title="删除">
+                    <Tooltip title={i18nText("agentFlow", "auto.k_3755f56f2f")}>
                       <Button
-                        aria-label={`删除 ${variable.name}`}
+                        aria-label={i18nText("agentFlow", "auto.k_0eaf7902d7", { value1: variable.name })}
                         danger
                         icon={<DeleteOutlined />}
                         size="small"
@@ -384,8 +383,8 @@ export function ApplicationEnvironmentVariablesPanel({
         title={modalTitle}
         open={modalOpen}
         confirmLoading={loading}
-        okText="保存"
-        cancelText="取消"
+        okText={i18nText("agentFlow", "auto.k_fadf24dbc5")}
+        cancelText={i18nText("agentFlow", "auto.k_4d0b4688c7")}
         width={420}
         onCancel={() => setModalOpen(false)}
         onOk={() => {
@@ -395,17 +394,17 @@ export function ApplicationEnvironmentVariablesPanel({
         <Form form={form} layout="vertical">
           <Form.Item
             name="name"
-            label="名称"
+            label={i18nText("agentFlow", "auto.k_1be7ae4fc2")}
             rules={[
-              { required: true, message: '请输入变量名' },
+              { required: true, message: i18nText("agentFlow", "auto.k_487d9800de") },
               {
                 pattern: /^[A-Za-z][A-Za-z0-9]*$/,
-                message: '仅支持字母开头，包含大小写字母和数字'
+                message: i18nText("agentFlow", "auto.k_348b6df641")
               },
               {
                 validator(_, value) {
                   if (value && existingNames.has(value)) {
-                    return Promise.reject(new Error('变量名已存在'));
+                    return Promise.reject(new Error(i18nText("agentFlow", "auto.k_37df9c8a97")));
                   }
                   return Promise.resolve();
                 }
@@ -416,8 +415,8 @@ export function ApplicationEnvironmentVariablesPanel({
           </Form.Item>
           <Form.Item
             name="value_type"
-            label="类型"
-            rules={[{ required: true, message: '请选择类型' }]}
+            label={i18nText("agentFlow", "auto.k_e4e46c7235")}
+            rules={[{ required: true, message: i18nText("agentFlow", "auto.k_97f47b7801") }]}
           >
             <Select
               options={valueTypeOptions}
@@ -426,7 +425,7 @@ export function ApplicationEnvironmentVariablesPanel({
           </Form.Item>
           <Form.Item
             name="value"
-            label="值"
+            label={i18nText("agentFlow", "auto.k_321b955840")}
             validateStatus={valueError ? 'error' : undefined}
             help={valueError ?? undefined}
             rules={[
@@ -437,7 +436,7 @@ export function ApplicationEnvironmentVariablesPanel({
                     value === null ||
                     (typeof value === 'string' && value.trim().length === 0)
                   ) {
-                    return Promise.reject(new Error('请输入变量值'));
+                    return Promise.reject(new Error(i18nText("agentFlow", "auto.k_19dadd62f7")));
                   }
 
                   return Promise.resolve();
@@ -450,7 +449,7 @@ export function ApplicationEnvironmentVariablesPanel({
               onValueErrorChange={setValueError}
             />
           </Form.Item>
-          <Form.Item name="description" label="描述">
+          <Form.Item name="description" label={i18nText("agentFlow", "auto.k_412f54dc38")}>
             <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
           </Form.Item>
         </Form>

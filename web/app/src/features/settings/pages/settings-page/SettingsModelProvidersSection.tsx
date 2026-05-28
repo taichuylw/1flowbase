@@ -34,6 +34,7 @@ import { useModelProviderData } from './model-providers/use-model-provider-data'
 import { useModelProviderMutations } from './model-providers/use-model-provider-mutations';
 import { useOfficialPluginTask } from './model-providers/use-official-plugin-task';
 import { SettingsSectionSurface } from '../../components/SettingsSectionSurface';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function SettingsModelProvidersSection({
   canManage
@@ -173,7 +174,7 @@ export function SettingsModelProvidersSection({
     <>
       {modalContextHolder}
       <SettingsSectionSurface
-        title="模型供应商"
+        title={i18nText("settings", "auto.k_77d78db072")}
         hideHeader
         heightMode="fill"
         status={
@@ -235,12 +236,12 @@ export function SettingsModelProvidersSection({
                 }}
                 onDelete={(entry) => {
                   void modal.confirm({
-                    title: '删除供应商',
+                    title: i18nText("settings", "auto.k_d6ec156a21"),
                     icon: null,
                     centered: true,
-                    okText: '删除',
+                    okText: i18nText("settings", "auto.k_3755f56f2f"),
                     okType: 'danger',
-                    cancelText: '取消',
+                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
                     okButtonProps: {
                       loading:
                         familyDeleteMutation.isPending &&
@@ -253,12 +254,9 @@ export function SettingsModelProvidersSection({
                             {entry.display_name}
                           </Typography.Title>
                           <Typography.Paragraph type="secondary">
-                            删除后会一并清理该供应商的全部实例、安装记录和本地插件文件。
-                          </Typography.Paragraph>
+                            {i18nText("settings", "auto.k_957f67131b")}</Typography.Paragraph>
                           <Typography.Paragraph type="secondary">
-                            如果现有流程节点仍引用这个供应商，后续报错属于正常现象；重新安装同一
-                            provider 并恢复对应 model 后，节点可继续恢复使用。
-                          </Typography.Paragraph>
+                            {i18nText("settings", "auto.k_6c6c52ed97")}</Typography.Paragraph>
                         </div>
                       </div>
                     ),
@@ -473,7 +471,7 @@ export function SettingsModelProvidersSection({
         onSubmit={() => {
           const file = uploadFileList[0]?.originFileObj;
           if (!(file instanceof File)) {
-            setUploadValidationMessage('请先选择插件包');
+            setUploadValidationMessage(i18nText("settings", "auto.k_512514e2ae"));
             return;
           }
 

@@ -40,6 +40,7 @@ import {
 } from '../api/runtime';
 import { ApplicationMonitoringChart } from '../components/monitoring/ApplicationMonitoringChart';
 import './application-monitoring-page.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 type MonitoringTimeRange = 1 | 7 | 28 | 90 | 365;
 
@@ -47,11 +48,11 @@ const TIME_RANGE_OPTIONS: Array<{
   label: string;
   value: MonitoringTimeRange;
 }> = [
-  { label: '过去 24 小时', value: 1 },
-  { label: '过去 7 天', value: 7 },
-  { label: '过去 4 周', value: 28 },
-  { label: '过去 3 月', value: 90 },
-  { label: '过去 12 月', value: 365 }
+  { label: i18nText("applications", "auto.k_c7e1108572"), value: 1 },
+  { label: i18nText("applications", "auto.k_767768b5fd"), value: 7 },
+  { label: i18nText("applications", "auto.k_7277af862d"), value: 28 },
+  { label: i18nText("applications", "auto.k_282a63446e"), value: 90 },
+  { label: i18nText("applications", "auto.k_8f88cfdef0"), value: 365 }
 ];
 
 function getMonitoringBucket(
@@ -104,7 +105,7 @@ function formatTime(value: string | null | undefined) {
 }
 
 function sourceLabel(source: string) {
-  return source === 'public_api' ? 'Public API' : '控制台';
+  return source === 'public_api' ? 'Public API' : i18nText("applications", "auto.k_5bd086d22a");
 }
 
 function statisticValue(value: string | number) {
@@ -114,19 +115,19 @@ function statisticValue(value: string | number) {
 const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
   [
     {
-      title: '协议',
+      title: i18nText("applications", "auto.k_b0c431675b"),
       dataIndex: 'protocol',
       key: 'protocol'
     },
     {
-      title: '请求数',
+      title: i18nText("applications", "auto.k_b28376ff80"),
       dataIndex: 'request_count',
       key: 'request_count',
       align: 'right',
       render: (value: number) => formatInteger(value)
     },
     {
-      title: '成功率',
+      title: i18nText("applications", "auto.k_df9dc72f2d"),
       dataIndex: 'success_rate',
       key: 'success_rate',
       align: 'right',
@@ -162,7 +163,7 @@ const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
       }
     },
     {
-      title: '平均耗时',
+      title: i18nText("applications", "auto.k_397236acf6"),
       dataIndex: 'avg_duration_ms',
       key: 'avg_duration_ms',
       align: 'right',
@@ -188,20 +189,20 @@ const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
 
 const sourceColumns: ColumnsType<ApplicationRunMonitoringSourceBreakdown> = [
   {
-    title: '来源',
+    title: i18nText("applications", "auto.k_c63f79e636"),
     dataIndex: 'source',
     key: 'source',
     render: sourceLabel
   },
   {
-    title: '请求数',
+    title: i18nText("applications", "auto.k_b28376ff80"),
     dataIndex: 'request_count',
     key: 'request_count',
     align: 'right',
     render: (value: number) => formatInteger(value)
   },
   {
-    title: '成功率',
+    title: i18nText("applications", "auto.k_df9dc72f2d"),
     dataIndex: 'success_rate',
     key: 'success_rate',
     align: 'right',
@@ -268,7 +269,7 @@ function usageColumns<
         renderDimension?.(value, record) ?? value ?? '-'
     },
     {
-      title: '请求数',
+      title: i18nText("applications", "auto.k_b28376ff80"),
       dataIndex: 'request_count',
       key: 'request_count',
       align: 'right',
@@ -294,7 +295,7 @@ function usageColumns<
       }
     },
     {
-      title: '失败数',
+      title: i18nText("applications", "auto.k_f908ba93ee"),
       dataIndex: 'failed_count',
       key: 'failed_count',
       align: 'right',
@@ -315,7 +316,7 @@ function usageColumns<
       }
     },
     {
-      title: '平均耗时',
+      title: i18nText("applications", "auto.k_397236acf6"),
       dataIndex: 'avg_duration_ms',
       key: 'avg_duration_ms',
       align: 'right',
@@ -361,7 +362,7 @@ function usageColumns<
 
 const runRankColumns: ColumnsType<ApplicationRunMonitoringRunRank> = [
   {
-    title: '运行',
+    title: i18nText("applications", "auto.k_0c3acd446f"),
     dataIndex: 'title',
     key: 'title',
     render: (value: string, run) => (
@@ -372,12 +373,12 @@ const runRankColumns: ColumnsType<ApplicationRunMonitoringRunRank> = [
     )
   },
   {
-    title: '状态',
+    title: i18nText("applications", "auto.k_62e951a692"),
     dataIndex: 'status',
     key: 'status'
   },
   {
-    title: '耗时',
+    title: i18nText("applications", "auto.k_a9704e1997"),
     dataIndex: 'duration_ms',
     key: 'duration_ms',
     align: 'right',
@@ -392,7 +393,7 @@ const runRankColumns: ColumnsType<ApplicationRunMonitoringRunRank> = [
       value == null ? '-' : formatInteger(value)
   },
   {
-    title: '开始时间',
+    title: i18nText("applications", "auto.k_e8868af6eb"),
     dataIndex: 'started_at',
     key: 'started_at',
     render: formatTime
@@ -503,7 +504,7 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
         data: report.tokens_trend.map((point) => point.total_tokens)
       },
       {
-        name: '运行数',
+        name: i18nText("applications", "auto.k_c184a1f9d0"),
         type: 'bar',
         barMaxWidth: 16,
         itemStyle: {
@@ -566,7 +567,7 @@ function buildProtocolOption(report: ApplicationRunMonitoringReport) {
     },
     series: [
       {
-        name: '请求数',
+        name: i18nText("applications", "auto.k_b28376ff80"),
         type: 'bar',
         barMaxWidth: 24,
         itemStyle: {
@@ -609,7 +610,7 @@ function buildSourceOption(report: ApplicationRunMonitoringReport) {
     },
     title: {
       text: formatInteger(totalRequests),
-      subtext: '总请求数',
+      subtext: i18nText("applications", "auto.k_25450698b0"),
       left: 'center',
       top: '38%',
       textStyle: {
@@ -625,7 +626,7 @@ function buildSourceOption(report: ApplicationRunMonitoringReport) {
     },
     series: [
       {
-        name: '来源',
+        name: i18nText("applications", "auto.k_c63f79e636"),
         type: 'pie',
         radius: ['55%', '75%'],
         center: ['50%', '46%'],
@@ -815,7 +816,7 @@ export function ApplicationMonitoringPage({
 
   const activeRangeLabel =
     TIME_RANGE_OPTIONS.find((option) => option.value === timeRangeDays)
-      ?.label ?? '过去 7 天';
+      ?.label ?? i18nText("applications", "auto.k_767768b5fd");
   const tokenTrendOption = useMemo(
     () => (report ? buildTokenTrendOption(report) : null),
     [report]
@@ -834,7 +835,7 @@ export function ApplicationMonitoringPage({
   }
 
   if (reportQuery.isError || !report) {
-    return <Result status="error" title="监控报表加载失败" />;
+    return <Result status="error" title={i18nText("applications", "auto.k_c3d4348395")} />;
   }
 
   return (
@@ -855,13 +856,13 @@ export function ApplicationMonitoringPage({
         >
           <Typography.Text type="secondary">
             {reportQuery.isFetching
-              ? '正在刷新'
-              : `当前范围：${activeRangeLabel}`}
+              ? i18nText("applications", "auto.k_21eaf73725")
+              : i18nText("applications", "auto.k_2f353cdd45", { value1: activeRangeLabel })}
           </Typography.Text>
           {!report.overview.running_count_included ? (
-            <Tooltip title="仅统计运行已经结束的任务。">
+            <Tooltip title={i18nText("applications", "auto.k_a17a4868ff")}>
               <Button
-                aria-label="运行统计口径"
+                aria-label={i18nText("applications", "auto.k_f458a91efa")}
                 className="application-monitoring-page__scope-help"
                 icon={<QuestionCircleOutlined aria-hidden="true" />}
                 size="small"
@@ -870,7 +871,7 @@ export function ApplicationMonitoringPage({
             </Tooltip>
           ) : null}
           <Button
-            aria-label="刷新监控报表"
+            aria-label={i18nText("applications", "auto.k_338cf45f56")}
             icon={<ReloadOutlined aria-hidden="true" />}
             loading={reportQuery.isFetching}
             onClick={() => {
@@ -886,7 +887,7 @@ export function ApplicationMonitoringPage({
             <DashboardOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">运行总数</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_7c135f267b")}</span>
             <span className="metric-card__value">
               {formatInteger(report.overview.total_count)}
             </span>
@@ -898,7 +899,7 @@ export function ApplicationMonitoringPage({
             <SafetyCertificateOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">成功率</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_df9dc72f2d")}</span>
             <span className="metric-card__value">
               {formatPercent(report.overview.success_rate)}
             </span>
@@ -910,7 +911,7 @@ export function ApplicationMonitoringPage({
             <CloseCircleOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">失败数</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_f908ba93ee")}</span>
             <span className="metric-card__value">
               {formatInteger(report.overview.failed_count)}
             </span>
@@ -922,7 +923,7 @@ export function ApplicationMonitoringPage({
             <ClockCircleOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">慢请求率</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_131d1ebdf8")}</span>
             <span className="metric-card__value">
               {formatPercent(report.duration.slow_run_rate)}
             </span>
@@ -934,7 +935,7 @@ export function ApplicationMonitoringPage({
             <HourglassOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">P95 耗时</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_79015d24f7")}</span>
             <span className="metric-card__value">
               {formatDuration(report.duration.p95_duration_ms)}
             </span>
@@ -946,7 +947,7 @@ export function ApplicationMonitoringPage({
             <DatabaseOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">Token 总量</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_3f5fa71b8e")}</span>
             <span className="metric-card__value">
               {formatInteger(report.tokens.total_tokens_sum)}
             </span>
@@ -958,7 +959,7 @@ export function ApplicationMonitoringPage({
             <ApiOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">工具回调</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_44ec8518ff")}</span>
             <span className="metric-card__value">
               {formatInteger(report.tool_callbacks.total_tool_callback_count)}
             </span>
@@ -970,7 +971,7 @@ export function ApplicationMonitoringPage({
             <NodeIndexOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">峰值并发</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.k_a89ec645e3")}</span>
             <span className="metric-card__value">
               {formatInteger(report.concurrency.peak_concurrency)}
             </span>
@@ -979,7 +980,7 @@ export function ApplicationMonitoringPage({
       </section>
 
       <div className="application-monitoring-page__chart-grid">
-        <MonitoringPanel title="Token 趋势">
+        <MonitoringPanel title={i18nText("applications", "auto.k_0abd48a0b6")}>
           {tokenTrendOption ? (
             <ApplicationMonitoringChart
               ariaLabel="Token trend chart"
@@ -987,7 +988,7 @@ export function ApplicationMonitoringPage({
             />
           ) : null}
         </MonitoringPanel>
-        <MonitoringPanel title="协议分布">
+        <MonitoringPanel title={i18nText("applications", "auto.k_30fe575253")}>
           {protocolOption ? (
             <ApplicationMonitoringChart
               ariaLabel="Protocol distribution chart"
@@ -995,7 +996,7 @@ export function ApplicationMonitoringPage({
             />
           ) : null}
         </MonitoringPanel>
-        <MonitoringPanel title="来源分布">
+        <MonitoringPanel title={i18nText("applications", "auto.k_5958ac66a5")}>
           {sourceOption ? (
             <ApplicationMonitoringChart
               ariaLabel="Source distribution chart"
@@ -1006,36 +1007,32 @@ export function ApplicationMonitoringPage({
       </div>
 
       <div className="application-monitoring-page__table-grid">
-        <MonitoringPanel title="耗时质量">
+        <MonitoringPanel title={i18nText("applications", "auto.k_2186eb0c39")}>
           <div className="application-monitoring-page__quality-grid">
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <ClockCircleOutlined /> 平均耗时
-              </span>
+                <ClockCircleOutlined /> {i18nText("applications", "auto.k_397236acf6")}</span>
               <span className="quality-metric-item__value">
                 {formatDuration(report.duration.avg_duration_ms)}
               </span>
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <DashboardOutlined /> P50 耗时
-              </span>
+                <DashboardOutlined /> {i18nText("applications", "auto.k_defe42cde3")}</span>
               <span className="quality-metric-item__value">
                 {formatDuration(report.duration.p50_duration_ms)}
               </span>
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <NodeIndexOutlined /> 平均真实节点数
-              </span>
+                <NodeIndexOutlined /> {i18nText("applications", "auto.k_1ed6b5c996")}</span>
               <span className="quality-metric-item__value">
                 {formatDecimal(report.nodes.avg_unique_node_count, 1)}
               </span>
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <ApiOutlined /> 平均工具回调
-              </span>
+                <ApiOutlined /> {i18nText("applications", "auto.k_b7edb9456b")}</span>
               <span className="quality-metric-item__value">
                 {formatDecimal(
                   report.tool_callbacks.avg_tool_callback_count,
@@ -1045,24 +1042,24 @@ export function ApplicationMonitoringPage({
             </div>
           </div>
         </MonitoringPanel>
-        <MonitoringPanel title="协议明细">
+        <MonitoringPanel title={i18nText("applications", "auto.k_fca8e9df85")}>
           <MonitoringTable
             columns={protocolColumns}
             dataSource={report.protocols}
             rowKey="protocol"
           />
         </MonitoringPanel>
-        <MonitoringPanel title="来源明细">
+        <MonitoringPanel title={i18nText("applications", "auto.k_e7bd1626bc")}>
           <MonitoringTable
             columns={sourceColumns}
             dataSource={report.sources}
             rowKey="source"
           />
         </MonitoringPanel>
-        <MonitoringPanel title="授权账号">
+        <MonitoringPanel title={i18nText("applications", "auto.k_ce607bd254")}>
           <MonitoringTable<ApplicationRunMonitoringAuthorizedAccountUsage>
             columns={usageColumns(
-              '账号',
+              i18nText("applications", "auto.k_9013849179"),
               'authorized_account',
               maxAuthRequests,
               maxAuthTokens
@@ -1071,10 +1068,10 @@ export function ApplicationMonitoringPage({
             rowKey={(record) => record.authorized_account ?? 'unknown'}
           />
         </MonitoringPanel>
-        <MonitoringPanel title="外部用户">
+        <MonitoringPanel title={i18nText("applications", "auto.k_3c68bb7106")}>
           <MonitoringTable<ApplicationRunMonitoringExternalUserUsage>
             columns={usageColumns(
-              '外部用户',
+              i18nText("applications", "auto.k_3c68bb7106"),
               'external_user',
               maxExtUserRequests,
               maxExtUserTokens
@@ -1097,10 +1094,10 @@ export function ApplicationMonitoringPage({
             rowKey="api_key_id"
           />
         </MonitoringPanel>
-        <MonitoringPanel title="外部会话">
+        <MonitoringPanel title={i18nText("applications", "auto.k_8bedbdf4de")}>
           <MonitoringTable<ApplicationRunMonitoringExternalConversationUsage>
             columns={usageColumns(
-              '会话',
+              i18nText("applications", "auto.k_836ffe0e10"),
               'external_conversation_id',
               maxExtConvRequests,
               maxExtConvTokens
@@ -1109,10 +1106,10 @@ export function ApplicationMonitoringPage({
             rowKey={(record) => record.external_conversation_id ?? 'unknown'}
           />
         </MonitoringPanel>
-        <MonitoringPanel title="最慢运行 Top 10">
+        <MonitoringPanel title={i18nText("applications", "auto.k_369c39ccf7")}>
           <RunRankList runs={report.slowest_runs} metricType="duration" />
         </MonitoringPanel>
-        <MonitoringPanel title="高 Token 运行 Top 10">
+        <MonitoringPanel title={i18nText("applications", "auto.k_16e329bb71")}>
           <RunRankList runs={report.high_token_runs} metricType="token" />
         </MonitoringPanel>
       </div>

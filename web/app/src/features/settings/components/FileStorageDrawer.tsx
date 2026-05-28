@@ -17,6 +17,7 @@ import {
   type UpdateSettingsFileStorageInput
 } from '../api/file-management';
 import { useAuthStore } from '../../../state/auth-store';
+import { i18nText } from '../../../shared/i18n/text';
 
 type DrawerMode = 'create' | 'view' | 'edit';
 
@@ -42,16 +43,16 @@ interface StorageFormValues {
 }
 
 const DRIVER_TYPE_OPTIONS = [
-  { label: '本地文件系统 (Local)', value: 'local' },
-  { label: 'AWS S3 / 兼容 (S3)', value: 's3' },
-  { label: '阿里云 OSS', value: 'oss' },
-  { label: '腾讯云 COS', value: 'cos' },
-  { label: '通用 S3 兼容 (RustFS)', value: 'rustfs' }
+  { label: i18nText("settings", "auto.k_8d76933308"), value: 'local' },
+  { label: i18nText("settings", "auto.k_6aff108343"), value: 's3' },
+  { label: i18nText("settings", "auto.k_9a38a926a6"), value: 'oss' },
+  { label: i18nText("settings", "auto.k_44bbd058d1"), value: 'cos' },
+  { label: i18nText("settings", "auto.k_3900bffc22"), value: 'rustfs' }
 ];
 
 const DRIVER_FIELDS: Record<string, { key: string; label: string; type: 'string' | 'number' }[]> = {
   local: [
-    { key: 'root_path', label: '根目录路径', type: 'string' }
+    { key: 'root_path', label: i18nText("settings", "auto.k_946450ad2b"), type: 'string' }
   ],
   s3: [
     { key: 'endpoint', label: 'Endpoint', type: 'string' },
@@ -149,10 +150,10 @@ export function FileStorageDrawer({
           rule_json: input.rule_json
         };
         await updateSettingsFileStorage(record.id, updateInput, csrfToken);
-        message.success('存储配置已更新');
+        message.success(i18nText("settings", "auto.k_442ed441ae"));
       } else {
         await createSettingsFileStorage(input, csrfToken);
-        message.success('存储配置已创建');
+        message.success(i18nText("settings", "auto.k_3cc7d61ba4"));
       }
 
       onSuccess();
@@ -160,7 +161,7 @@ export function FileStorageDrawer({
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return;
       const msg =
-        err instanceof Error ? err.message : '操作失败，请重试';
+        err instanceof Error ? err.message : i18nText("settings", "auto.k_51d3cb57e6");
       message.error(msg);
     } finally {
       setSubmitting(false);
@@ -173,10 +174,10 @@ export function FileStorageDrawer({
     <Drawer
       title={
         mode === 'create'
-          ? '新增存储配置'
+          ? i18nText("settings", "auto.k_c6d2ecf562")
           : mode === 'edit'
-            ? '编辑存储配置'
-            : '查看存储配置'
+            ? i18nText("settings", "auto.k_cca4df23d3")
+            : i18nText("settings", "auto.k_891a7e446d")
       }
       open={open}
       onClose={onClose}
@@ -184,7 +185,7 @@ export function FileStorageDrawer({
       extra={
         !isView ? (
           <Button type="primary" loading={submitting} onClick={handleSubmit}>
-            {mode === 'create' ? '创建' : '保存'}
+            {mode === 'create' ? i18nText("settings", "auto.k_fcbd093292") : i18nText("settings", "auto.k_fadf24dbc5")}
           </Button>
         ) : undefined
       }
@@ -203,39 +204,39 @@ export function FileStorageDrawer({
       >
         <Form.Item
           name="code"
-          label="存储标识"
-          rules={[{ required: true, message: '请输入存储标识' }]}
+          label={i18nText("settings", "auto.k_ae17a131fe")}
+          rules={[{ required: true, message: i18nText("settings", "auto.k_ac3a41d55f") }]}
         >
-          <Input placeholder="例: local-storage" disabled={mode === 'edit' || isView} />
+          <Input placeholder={i18nText("settings", "auto.k_3a288a7ebb")} disabled={mode === 'edit' || isView} />
         </Form.Item>
 
         <Form.Item
           name="title"
-          label="名称"
-          rules={[{ required: true, message: '请输入名称' }]}
+          label={i18nText("settings", "auto.k_1be7ae4fc2")}
+          rules={[{ required: true, message: i18nText("settings", "auto.k_c2afb255a5") }]}
         >
-          <Input placeholder="例: 本地存储" />
+          <Input placeholder={i18nText("settings", "auto.k_25437d105e")} />
         </Form.Item>
 
         <Form.Item
           name="driver_type"
-          label="驱动类型"
-          rules={[{ required: true, message: '请选择驱动类型' }]}
+          label={i18nText("settings", "auto.k_86414a5456")}
+          rules={[{ required: true, message: i18nText("settings", "auto.k_580c8c8243") }]}
         >
           <Select options={DRIVER_TYPE_OPTIONS} disabled={mode === 'edit' || isView} />
         </Form.Item>
 
-        <Form.Item name="enabled" label="启用" valuePropName="checked">
+        <Form.Item name="enabled" label={i18nText("settings", "auto.k_d4e9ca3dd4")} valuePropName="checked">
           <Switch />
         </Form.Item>
 
-        <Form.Item name="is_default" label="设为默认存储" valuePropName="checked">
+        <Form.Item name="is_default" label={i18nText("settings", "auto.k_bb8a31330e")} valuePropName="checked">
           <Switch />
         </Form.Item>
 
         {currentDriver && DRIVER_FIELDS[currentDriver] && (
           <div className="storage-drawer-driver-config">
-            <h4>驱动配置</h4>
+            <h4>{i18nText("settings", "auto.k_406af8cf5a")}</h4>
             {DRIVER_FIELDS[currentDriver].map((field) => (
               <Form.Item
                 key={field.key}
@@ -245,15 +246,15 @@ export function FileStorageDrawer({
                 {field.type === 'number' ? (
                   <InputNumber style={{ width: '100%' }} />
                 ) : (
-                  <Input placeholder={`请输入${field.label}`} />
+                  <Input placeholder={i18nText("settings", "auto.k_3de2d2bfc3", { value1: field.label })} />
                 )}
               </Form.Item>
             ))}
           </div>
         )}
 
-        <Form.Item name={['rule_json', 'description']} label="规则描述">
-          <Input.TextArea rows={2} placeholder="可选" />
+        <Form.Item name={['rule_json', 'description']} label={i18nText("settings", "auto.k_f3dc34f386")}>
+          <Input.TextArea rows={2} placeholder={i18nText("settings", "auto.k_53e32830a5")} />
         </Form.Item>
       </Form>
     </Drawer>

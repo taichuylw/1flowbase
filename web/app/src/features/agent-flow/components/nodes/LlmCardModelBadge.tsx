@@ -6,6 +6,7 @@ import {
   modelProviderOptionsQueryKey
 } from '../../api/model-provider-options';
 import { getLlmModelProvider } from '../../lib/llm-node-config';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function LlmCardModelBadge({
   node
@@ -40,10 +41,10 @@ export function LlmCardModelBadge({
       </span>
       <span className="agent-flow-node-card__model-content">
         <span className="agent-flow-node-card__model-provider-label">
-          {modelProvider.provider_label || providerCode || '模型供应商未选择'}
+          {modelProvider.provider_label || providerCode || i18nText("agentFlow", "auto.k_763732c1d4")}
         </span>
         <span className="agent-flow-node-card__model-label">
-          {modelProvider.model_label || model || '选择模型'}
+          {modelProvider.model_label || model || i18nText("agentFlow", "auto.k_4e769dd289")}
         </span>
       </span>
     </div>

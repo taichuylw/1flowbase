@@ -16,6 +16,7 @@ import {
 } from 'antd';
 
 import type { AgentFlowVariableGroup } from '../../../api/runtime';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function formatValue(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -177,7 +178,7 @@ export function DebugVariablesPane({
     return (
       <div className="agent-flow-editor__debug-console-pane">
         <Empty
-          description="当前还没有变量快照"
+          description={i18nText("agentFlow", "auto.k_b1f1f9737a")}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </div>
@@ -253,7 +254,7 @@ export function DebugVariablesPane({
         />
       </div>
       <div
-        aria-label="调整变量列表宽度"
+        aria-label={i18nText("agentFlow", "auto.k_b2c99e6b03")}
         aria-orientation="vertical"
         className="agent-flow-editor__debug-variables-resize-handle"
         onMouseDown={onSidebarResizeStart}
@@ -268,30 +269,29 @@ export function DebugVariablesPane({
                 size={8}
                 wrap
               >
-                <Tag color="warning">已截断</Tag>
+                <Tag color="warning">{i18nText("agentFlow", "auto.k_5e1fd797ca")}</Tag>
                 <Button size="small" onClick={handleLoadFullValue}>
-                  加载完整值
-                </Button>
+                  {i18nText("agentFlow", "auto.k_50462f0707")}</Button>
               </Space>
             ) : null}
             <Input.TextArea
               key={selectedItem.selectionKey}
               style={{ height: '100%' }}
-              aria-label="变量值编辑框"
+              aria-label={i18nText("agentFlow", "auto.k_33cf5b6325")}
               className="agent-flow-editor__debug-variables-detail-value"
               disabled={selectedItem.isReadOnly || selectedItem.isTruncated}
               onBlur={handleVariableValueBlur}
               onChange={(event) => setSelectedValueText(event.target.value)}
               value={selectedValueText}
               placeholder={
-                selectedItem.isReadOnly ? '系统变量不可编辑' : undefined
+                selectedItem.isReadOnly ? i18nText("agentFlow", "auto.k_ef1176c5d5") : undefined
               }
             />
           </>
         ) : (
           <div className="agent-flow-editor__debug-variables-detail-empty">
             <Empty
-              description="选择左侧变量查看详情"
+              description={i18nText("agentFlow", "auto.k_b52bdc8113")}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           </div>

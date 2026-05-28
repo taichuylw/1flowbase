@@ -14,6 +14,7 @@ import { LlmCardModelBadge } from '../components/nodes/LlmCardModelBadge';
 import type { NodeLastRun } from '../api/runtime';
 import { getAgentFlowNodeTypeIcon } from '../lib/node-type-icons';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
+import { i18nText } from '../../../shared/i18n/text';
 
 function getNode(adapter: SchemaViewRendererProps['adapter']) {
   return adapter.getDerived('node') as FlowNodeDocument | null | undefined;
@@ -37,15 +38,14 @@ function renderSummaryView({ adapter, block }: SchemaViewRendererProps) {
           <Typography.Link href={meta.helpHref} target="_blank">
             <Space size={4}>
               <BookOutlined />
-              帮助文档
-            </Space>
+              {i18nText("agentFlow", "auto.k_39c1887749")}</Space>
           </Typography.Link>
         ) : null
       }
-      title={block.title ?? '节点说明'}
+      title={block.title ?? i18nText("agentFlow", "auto.k_88a5351e42")}
     >
       <Typography.Paragraph>
-        {meta?.summary ?? node.description ?? '暂无节点说明'}
+        {meta?.summary ?? node.description ?? i18nText("agentFlow", "auto.k_9aab389dfe")}
       </Typography.Paragraph>
     </Card>
   );
@@ -98,7 +98,7 @@ function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
     description ||
     contract?.card.description ||
     meta?.summary ||
-    '节点配置将在这里展示';
+    i18nText("agentFlow", "auto.k_e9cb930956");
 
   return (
     <div className="agent-flow-node-card__description">{displayContent}</div>
@@ -120,7 +120,7 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
     return null;
   }
 
-  const title = node.type === 'start' ? '输入字段' : '输出变量';
+  const title = node.type === 'start' ? i18nText("agentFlow", "auto.k_f4cbd6bd13") : i18nText("agentFlow", "auto.k_1860add605");
   return (
     <div className="agent-flow-node-detail__section">
       <div className="agent-flow-node-detail__section-header">
@@ -150,7 +150,7 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
           ))}
         </div>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无字段" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.k_79bbc81592")} />
       )}
     </div>
   );
@@ -164,18 +164,18 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
   const errorPolicyOptions = [
     {
       value: 'none',
-      label: '无',
-      description: '当发生异常且未处理时，节点将停止运行'
+      label: i18nText("agentFlow", "auto.k_72077749f7"),
+      description: i18nText("agentFlow", "auto.k_544a35b974")
     },
     {
       value: 'default_value',
-      label: '默认值',
-      description: '当发生异常时，指定默认输出内容。'
+      label: i18nText("agentFlow", "auto.k_d93919c37b"),
+      description: i18nText("agentFlow", "auto.k_9be0a808e3")
     },
     {
       value: 'error_branch',
-      label: '异常分支',
-      description: '当发生异常时，将执行异常分支'
+      label: i18nText("agentFlow", "auto.k_92879700a0"),
+      description: i18nText("agentFlow", "auto.k_938451d34e")
     }
   ] satisfies Array<{ value: string; label: string; description: string }>;
 
@@ -186,10 +186,9 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          失败重试
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_794ff5f046")}</Typography.Text>
         <Switch
-          aria-label="失败重试"
+          aria-label={i18nText("agentFlow", "auto.k_794ff5f046")}
           checked={retryEnabled}
           className="agent-flow-node-detail__policy-control"
           onChange={(checked) =>
@@ -202,14 +201,13 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          异常处理
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_066247572d")}</Typography.Text>
         <div
           className="agent-flow-node-detail__policy-select-shell agent-flow-node-detail__policy-select-shell--compact"
           data-testid="node-policy-error"
         >
           <Select
-            aria-label="异常处理"
+            aria-label={i18nText("agentFlow", "auto.k_066247572d")}
             className="agent-flow-node-detail__policy-control agent-flow-node-detail__policy-select"
             options={errorPolicyOptions}
             optionRender={(option) => {
@@ -259,11 +257,10 @@ function renderRelationsView({ adapter, block }: SchemaViewRendererProps) {
         level={5}
         className="agent-flow-node-detail__section-title"
       >
-        {block.title ?? '下一步'}
+        {block.title ?? i18nText("agentFlow", "auto.k_ea0ef2ae72")}
       </Typography.Title>
       <Typography.Text className="agent-flow-node-detail__section-subtitle">
-        添加此工作流程中的下一个节点
-      </Typography.Text>
+        {i18nText("agentFlow", "auto.k_b31a0ef195")}</Typography.Text>
       <div
         className="agent-flow-node-detail__relation-list"
         style={{ marginTop: 12 }}
@@ -290,8 +287,7 @@ function renderRelationsView({ adapter, block }: SchemaViewRendererProps) {
               adapter.dispatch('openNodePicker', { nodeId: node.id })
             }
           >
-            <PlusOutlined /> 添加并行节点
-          </div>
+            <PlusOutlined /> {i18nText("agentFlow", "auto.k_97473d57f8")}</div>
         </div>
       </div>
     </div>
@@ -305,7 +301,7 @@ function renderRuntimeSummaryView({ adapter }: SchemaViewRendererProps) {
     | undefined;
   const emptyDescription =
     (adapter.getDerived('lastRunEmptyDescription') as string | null) ??
-    '当前节点还没有运行记录';
+    i18nText("agentFlow", "auto.k_b41d9db2a3");
 
   return lastRun ? (
     <NodeRunSummaryCard lastRun={lastRun} />

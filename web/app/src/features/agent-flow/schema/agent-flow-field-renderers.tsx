@@ -35,6 +35,7 @@ import {
 } from '../lib/llm-prompt-messages';
 import type { FlowSelectorOption } from '../lib/selector-options';
 import { createTemplateSelectorToken } from '../lib/template-binding';
+import { i18nText } from '../../../shared/i18n/text';
 
 function getSelectorOptions(adapter: SchemaFieldRendererProps['adapter']) {
   return (
@@ -162,7 +163,7 @@ function renderTemplatedTextField({
     <TemplatedTextField
       label={block.label}
       ariaLabel={block.label}
-      placeholder={'支持正文变量块，输入"/"或左花括号可快速引用'}
+      placeholder={i18nText("agentFlow", "auto.k_1505776c8a")}
       options={selectorOptions}
       value={stringValue}
       onChange={(nextValue) =>
@@ -227,9 +228,9 @@ function renderNamedBindingsField({
       options={getSelectorOptions(adapter)}
       value={binding}
       nameOptions={nameOptions}
-      namePlaceholder={isDataModelPayload ? '字段' : undefined}
+      namePlaceholder={isDataModelPayload ? i18nText("agentFlow", "auto.k_77a49f2c38") : undefined}
       selectorLabel={isDataModelPayload ? 'variable' : undefined}
-      addButtonLabel={isDataModelPayload ? '新增字段赋值' : undefined}
+      addButtonLabel={isDataModelPayload ? i18nText("agentFlow", "auto.k_5c6cfe2f84") : undefined}
       onChange={(nextValue) =>
         adapter.setValue(block.path, {
           kind: 'named_bindings',
@@ -461,7 +462,7 @@ export const agentFlowFieldRenderers = {
         aria-label={block.label}
         autoSize={{ minRows: 1, maxRows: 3 }}
         className="agent-flow-editor__inspector-description-input"
-        placeholder="添加描述..."
+        placeholder={i18nText("agentFlow", "auto.k_da42a0ef8a")}
         value={typeof value === 'string' ? value : ''}
         onChange={(event) => adapter.setValue(block.path, event.target.value)}
       />

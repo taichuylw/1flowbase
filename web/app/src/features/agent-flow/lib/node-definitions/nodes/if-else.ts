@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const ifElseNodeDefinition: NodeDefinition = {
   label: 'IfElse',
@@ -15,7 +16,7 @@ export const ifElseNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.condition_group',
-          label: '条件组',
+          label: i18nText("agentFlow", "auto.k_536d57e2cb"),
           editor: 'condition_group',
           required: true
         }

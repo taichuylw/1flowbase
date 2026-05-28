@@ -32,6 +32,7 @@ import {
 import { useApplicationRunsTableConfiguration } from '../components/logs/useApplicationRunsTableConfiguration';
 import { isActiveRunStatus } from '../lib/run-status';
 import './application-logs-page.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 const FLOATING_WINDOW_TOP = 112;
 const FLOATING_WINDOW_GAP = 16;
@@ -56,29 +57,29 @@ const TIME_RANGE_OPTIONS: Array<{
   label: string;
   value: ApplicationLogTimeRange;
 }> = [
-  { label: '今天', value: '1' },
-  { label: '过去 7 天', value: '7' },
-  { label: '过去 4 周', value: '28' },
-  { label: '过去 3 月', value: '90' },
-  { label: '过去 12 月', value: '365' },
-  { label: '所有时间', value: 'all' }
+  { label: i18nText("applications", "auto.k_17e83cc25e"), value: '1' },
+  { label: i18nText("applications", "auto.k_767768b5fd"), value: '7' },
+  { label: i18nText("applications", "auto.k_7277af862d"), value: '28' },
+  { label: i18nText("applications", "auto.k_282a63446e"), value: '90' },
+  { label: i18nText("applications", "auto.k_8f88cfdef0"), value: '365' },
+  { label: i18nText("applications", "auto.k_12b14ac632"), value: 'all' }
 ];
 const RUN_SORT_FIELD_OPTIONS: Array<{
   label: string;
   value: ApplicationRunSortField;
 }> = [
-  { label: '开始时间', value: 'started_at' },
-  { label: '更新时间', value: 'updated_at' }
+  { label: i18nText("applications", "auto.k_e8868af6eb"), value: 'started_at' },
+  { label: i18nText("applications", "auto.k_093dea88c9"), value: 'updated_at' }
 ];
 const DEFAULT_SORT_BY: ApplicationRunSortField = 'started_at';
 const DEFAULT_SORT_ORDER: ApplicationRunSortOrder = 'desc';
 
 const RUN_SORT_FIELD_MEASURE_LABELS = RUN_SORT_FIELD_OPTIONS.map(
-  (option) => `排序：${option.label}`
+  (option) => i18nText("applications", "auto.k_14760d0e3a", { value1: option.label })
 );
 
 function getSortOrderToggleLabel(sortOrder: ApplicationRunSortOrder) {
-  return sortOrder === 'desc' ? '当前降序，切换为升序' : '当前升序，切换为降序';
+  return sortOrder === 'desc' ? i18nText("applications", "auto.k_fd61748428") : i18nText("applications", "auto.k_4f6a9a564d");
 }
 
 function getViewportSize() {
@@ -297,7 +298,7 @@ export function ApplicationLogsPage({
         refreshedRuns
       );
     } catch {
-      message.error('刷新失败');
+      message.error(i18nText("applications", "auto.k_be6ff1fbf8"));
     } finally {
       setRefreshingRuns(false);
     }
@@ -315,7 +316,7 @@ export function ApplicationLogsPage({
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
         <AutosizeSelect<ApplicationLogTimeRange>
-          aria-label="时间间隔"
+          aria-label={i18nText("applications", "auto.k_c31851a4b2")}
           options={TIME_RANGE_OPTIONS}
           value={timeRange}
           onChange={setTimeRange}
@@ -325,14 +326,13 @@ export function ApplicationLogsPage({
           data-testid="application-logs-sort-control"
         >
           <AutosizeSelect<ApplicationRunSortField>
-            aria-label="排序字段"
+            aria-label={i18nText("applications", "auto.k_52aff3c1ca")}
             autosizeLabels={RUN_SORT_FIELD_MEASURE_LABELS}
             className="application-logs-page__sort-select"
             options={RUN_SORT_FIELD_OPTIONS}
             prefix={
               <span className="application-logs-page__sort-select-prefix">
-                排序：
-              </span>
+                {i18nText("applications", "auto.k_510b0096d5")}</span>
             }
             value={sortBy}
             onChange={setSortBy}
@@ -352,17 +352,17 @@ export function ApplicationLogsPage({
         </span>
         <Input
           allowClear
-          aria-label="关键字搜索"
+          aria-label={i18nText("applications", "auto.k_c93de2a032")}
           className="application-logs-page__filter-search"
-          placeholder="搜索对话和回答"
+          placeholder={i18nText("applications", "auto.k_1f5d42ca33")}
           prefix={<SearchOutlined />}
           value={keywordSearch}
           onChange={(event) => setKeywordSearch(event.target.value)}
         />
         <div className="application-logs-page__filter-actions">
-          <Tooltip title="刷新日志">
+          <Tooltip title={i18nText("applications", "auto.k_be822279f4")}>
             <Button
-              aria-label="刷新日志"
+              aria-label={i18nText("applications", "auto.k_be822279f4")}
               icon={<ReloadOutlined aria-hidden="true" />}
               loading={refreshingRuns}
               onClick={() => {
@@ -413,7 +413,7 @@ export function ApplicationLogsPage({
           active={activeFloatingWindow === 'conversation-log'}
           initialRect={getConversationLogInitialRect}
           testId="application-logs-floating-conversation-log"
-          title="对话日志"
+          title={i18nText("applications", "auto.k_576c28d668")}
           onActivate={() => setActiveFloatingWindow('conversation-log')}
         >
           <div className="application-logs-page__conversation-log-panel">
@@ -432,7 +432,7 @@ export function ApplicationLogsPage({
           active={activeFloatingWindow === 'run-detail'}
           initialRect={getRunDetailInitialRect}
           testId="application-logs-floating-run-detail"
-          title="运行详情"
+          title={i18nText("applications", "auto.k_a939e999ca")}
           onActivate={() => setActiveFloatingWindow('run-detail')}
         >
           <ApplicationRunDetailPanel

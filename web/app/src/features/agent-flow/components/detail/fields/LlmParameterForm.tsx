@@ -32,6 +32,7 @@ import {
   findLlmModelOption,
   findLlmProviderOption
 } from '../../../lib/model-options';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 type LlmParameterField = NonNullable<
   NonNullable<ReturnType<typeof findLlmProviderOption>>['parameterForm']
@@ -213,7 +214,7 @@ function LlmNumericControl({
         />
         <div className="agent-flow-llm-parameter-form__number-actions">
           <InputNumber
-            aria-label={`${field.label} 当前值`}
+            aria-label={i18nText("agentFlow", "auto.k_2d161c320f", { value1: field.label })}
             min={min}
             max={max}
             step={step}
@@ -228,11 +229,11 @@ function LlmNumericControl({
               nextParameters(draftValue);
             }}
           />
-          <Tooltip title="还原默认值">
+          <Tooltip title={i18nText("agentFlow", "auto.k_52cb049b18")}>
             <Button
               type="text"
               size="small"
-              aria-label={`${field.label} 还原默认值`}
+              aria-label={i18nText("agentFlow", "auto.k_fb3f374a25", { value1: field.label })}
               className="agent-flow-llm-parameter-form__default-icon"
               icon={<ReloadOutlined />}
               onClick={restoreDefaultValue}
@@ -378,19 +379,19 @@ export function LlmParameterForm({
 
   if (providerOptionsQuery.isPending) {
     return (
-      <Typography.Text type="secondary">正在加载参数 schema…</Typography.Text>
+      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.k_df83f7b08f")}</Typography.Text>
     );
   }
 
   if (providerOptionsQuery.isError) {
-    return <Alert type="error" showIcon message="参数 schema 加载失败。" />;
+    return <Alert type="error" showIcon message={i18nText("agentFlow", "auto.k_9097feb8a3")} />;
   }
 
   if (!modelProvider.model_id) {
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={block.empty_text ?? '请先选择模型，随后再调整 LLM 参数。'}
+        description={block.empty_text ?? i18nText("agentFlow", "auto.k_5e7f96c88f")}
       />
     );
   }
@@ -400,7 +401,7 @@ export function LlmParameterForm({
       <Alert
         type="warning"
         showIcon
-        message="当前模型供应商不可用，无法渲染参数表单。"
+        message={i18nText("agentFlow", "auto.k_b411242e66")}
       />
     );
   }
@@ -410,7 +411,7 @@ export function LlmParameterForm({
       <Alert
         type="warning"
         showIcon
-        message="当前模型不可用，无法渲染参数表单。"
+        message={i18nText("agentFlow", "auto.k_d7a6c568ea")}
       />
     );
   }
@@ -419,7 +420,7 @@ export function LlmParameterForm({
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="当前供应商没有可调参数。"
+        description={i18nText("agentFlow", "auto.k_622b6ac668")}
       />
     );
   }
@@ -474,7 +475,7 @@ export function LlmParameterForm({
                           <Tooltip title={field.description}>
                             <QuestionCircleOutlined
                               className="agent-flow-llm-parameter-form__help-icon"
-                              aria-label={`${field.label} 字段说明`}
+                              aria-label={i18nText("agentFlow", "auto.k_1f1ac9b96c", { value1: field.label })}
                             />
                           </Tooltip>
                         ) : null}
@@ -498,8 +499,7 @@ export function LlmParameterForm({
                           type="secondary"
                           className="agent-flow-llm-parameter-form__row-fixed"
                         >
-                          始终开启
-                        </Typography.Text>
+                          {i18nText("agentFlow", "auto.k_9830513247")}</Typography.Text>
                       )}
                     </div>
                   </div>

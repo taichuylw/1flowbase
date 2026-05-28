@@ -14,6 +14,7 @@ import {
   type DataTableConfiguration
 } from './data-table-state';
 import './data-table.css';
+import { i18nText } from '../../i18n/text';
 
 export type { DataTableColumn, DataTableConfiguration };
 
@@ -40,12 +41,12 @@ function ResizeHeaderCell({
 }
 
 export function DataTableColumnSettings<T extends object>({
-  ariaLabel = '字段配置',
+  ariaLabel = i18nText("sharedUi", "auto.k_e33a2514ed"),
   className,
   columns,
   configuration,
-  placeholder = '字段配置',
-  resetLabel = '重置默认字段'
+  placeholder = i18nText("sharedUi", "auto.k_e33a2514ed"),
+  resetLabel = i18nText("sharedUi", "auto.k_4b510238a8")
 }: {
   ariaLabel?: string;
   className?: string;
@@ -269,7 +270,7 @@ export function DataTable<T extends object>({
         pageSize={pageSize}
         total={total}
         showSizeChanger={false}
-        showTotal={(paginationTotal) => `共 ${paginationTotal} 条`}
+        showTotal={(paginationTotal) => i18nText("sharedUi", "auto.k_f183b6ff3e", { value1: paginationTotal })}
         onChange={onPageChange}
       />
     </section>

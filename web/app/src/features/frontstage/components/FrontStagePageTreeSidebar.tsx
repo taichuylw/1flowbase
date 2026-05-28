@@ -11,6 +11,7 @@ import {
   type FrontStageTreeNode
 } from '../lib/page-tree';
 import './frontstage-page-tree-sidebar.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 type FrontStagePageTreeSidebarProps = {
   pageTree: FrontStageTreeNode[];
@@ -90,7 +91,7 @@ function getNodeTitle(node: FrontStageTreeNode) {
     return node.title;
   }
 
-  return node.kind === 'group' ? '未命名分组' : '未命名页面';
+  return node.kind === 'group' ? i18nText("frontstage", "auto.k_c4a274264a") : i18nText("frontstage", "auto.k_5a131f787f");
 }
 
 function findParentId(
@@ -219,9 +220,9 @@ function renderTreeNode({
     isPageNode && isSelected && onMovePageToGroup && topLevelGroups.length > 0
   );
   const pageGroupOptions = [
-    { label: '不分组', value: ROOT_PAGE_GROUP_VALUE },
+    { label: i18nText("frontstage", "auto.k_73e3355932"), value: ROOT_PAGE_GROUP_VALUE },
     ...topLevelGroups.map((groupNode) => ({
-      label: groupNode.title || '未命名分组',
+      label: groupNode.title || i18nText("frontstage", "auto.k_c4a274264a"),
       value: groupNode.id
     }))
   ];
@@ -330,7 +331,7 @@ function renderTreeNode({
   const menuItems: MenuProps['items'] = [
     {
       key: 'rename',
-      label: '编辑',
+      label: i18nText("frontstage", "auto.k_a7f814c0a4"),
       icon: <EditOutlined />,
       onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
@@ -339,7 +340,7 @@ function renderTreeNode({
     },
     {
       key: 'tooltip',
-      label: '编辑描述',
+      label: i18nText("frontstage", "auto.k_a78a018382"),
       icon: <InfoCircleOutlined />,
       onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
@@ -358,7 +359,7 @@ function renderTreeNode({
             minWidth: '110px'
           }}
         >
-          <span>隐藏</span>
+          <span>{i18nText("frontstage", "auto.k_bb0e7e01aa")}</span>
           <Switch
             size="small"
             checked={isHidden}
@@ -373,12 +374,12 @@ function renderTreeNode({
     },
     {
       key: 'move-to',
-      label: '移动到',
+      label: i18nText("frontstage", "auto.k_ac9d34fdc6"),
       icon: <DragOutlined />,
       children: [
         {
           key: 'move-up',
-          label: '上移',
+          label: i18nText("frontstage", "auto.k_8a0c839791"),
           icon: <ArrowUpOutlined />,
           disabled: !canMoveUp,
           onClick: ({ domEvent }: MenuClickInfo) => {
@@ -388,7 +389,7 @@ function renderTreeNode({
         },
         {
           key: 'move-down',
-          label: '下移',
+          label: i18nText("frontstage", "auto.k_05c46fa3b7"),
           icon: <ArrowDownOutlined />,
           disabled: !canMoveDown,
           onClick: ({ domEvent }: MenuClickInfo) => {
@@ -401,12 +402,12 @@ function renderTreeNode({
     },
     {
       key: 'insert-before',
-      label: '在前面插入',
+      label: i18nText("frontstage", "auto.k_e89dce5cb5"),
       icon: <PlusOutlined />,
       children: [
         {
           key: 'insert-before-page',
-          label: '页面',
+          label: i18nText("frontstage", "auto.k_06dfb846bd"),
           icon: <FileTextOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -415,7 +416,7 @@ function renderTreeNode({
         },
         {
           key: 'insert-before-group',
-          label: '分组',
+          label: i18nText("frontstage", "auto.k_97d8a6c05b"),
           icon: <FolderOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -428,7 +429,7 @@ function renderTreeNode({
       ? [
           {
             key: 'insert-inside',
-            label: '在里面插入',
+            label: i18nText("frontstage", "auto.k_d2f61420da"),
             icon: <FileAddOutlined />,
             disabled: isOperationPending,
             onClick: ({ domEvent }: MenuClickInfo) => {
@@ -440,12 +441,12 @@ function renderTreeNode({
       : []),
     {
       key: 'insert-after',
-      label: '在后面插入',
+      label: i18nText("frontstage", "auto.k_41ba84a1b4"),
       icon: <PlusOutlined />,
       children: [
         {
           key: 'insert-after-page',
-          label: '页面',
+          label: i18nText("frontstage", "auto.k_06dfb846bd"),
           icon: <FileTextOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -454,7 +455,7 @@ function renderTreeNode({
         },
         {
           key: 'insert-after-group',
-          label: '分组',
+          label: i18nText("frontstage", "auto.k_97d8a6c05b"),
           icon: <FolderOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -468,7 +469,7 @@ function renderTreeNode({
     },
     {
       key: 'delete',
-      label: '删除',
+      label: i18nText("frontstage", "auto.k_3755f56f2f"),
       icon: <DeleteOutlined />,
       danger: true,
       onClick: ({ domEvent }: MenuClickInfo) => {
@@ -503,7 +504,7 @@ function renderTreeNode({
           className="frontstage-page-tree-sidebar__node-kind"
           type="secondary"
         >
-          {node.kind === 'group' ? '分组节点' : '页面节点'}
+          {node.kind === 'group' ? i18nText("frontstage", "auto.k_2642605440") : i18nText("frontstage", "auto.k_6359a08e3c")}
         </Typography.Text>
       </span>
       {isHidden && (
@@ -587,9 +588,9 @@ function renderTreeNode({
               className="frontstage-page-tree-sidebar__node-actions-visible"
               onClick={(e) => e.stopPropagation()}
             >
-              <Tooltip title="拖拽/排序 (请使用菜单中的上移/下移)">
+              <Tooltip title={i18nText("frontstage", "auto.k_92a1e78c27")}>
                 <Button
-                  aria-label="拖拽移动节点"
+                  aria-label={i18nText("frontstage", "auto.k_2964423419")}
                   className="frontstage-page-tree-sidebar__drag-handle"
                   disabled={isOperationPending}
                   draggable={!isOperationPending}
@@ -620,7 +621,7 @@ function renderTreeNode({
                 placement="bottomRight"
               >
                 <Button
-                  aria-label="页面操作菜单"
+                  aria-label={i18nText("frontstage", "auto.k_6891a11252")}
                   className="frontstage-page-tree-sidebar__more-trigger"
                   disabled={isOperationPending}
                   icon={<MenuOutlined />}
@@ -798,8 +799,7 @@ export function FrontStagePageTreeSidebar({
           className="frontstage-page-tree-sidebar__empty"
           description={
             <Typography.Text type="secondary">
-              当前工作区页面树为空。请在设计态创建页面后将显示树结构。
-            </Typography.Text>
+              {i18nText("frontstage", "auto.k_6012282c27")}</Typography.Text>
           }
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
@@ -814,7 +814,7 @@ export function FrontStagePageTreeSidebar({
           <Button
             aria-expanded={isAddMenuOpen}
             aria-haspopup="menu"
-            aria-label="添加菜单"
+            aria-label={i18nText("frontstage", "auto.k_55c59bd0c9")}
             className="frontstage-page-tree-sidebar__add-item-btn"
             disabled={isOperationPending}
             icon={<PlusOutlined />}
@@ -822,8 +822,7 @@ export function FrontStagePageTreeSidebar({
             onFocus={() => setIsAddMenuOpen(true)}
             size="small"
           >
-            添加菜单
-          </Button>
+            {i18nText("frontstage", "auto.k_55c59bd0c9")}</Button>
           {isAddMenuOpen ? (
             <div className="frontstage-page-tree-sidebar__add-menu" role="menu">
               <button
@@ -833,8 +832,7 @@ export function FrontStagePageTreeSidebar({
                 type="button"
               >
                 <FolderAddOutlined aria-hidden />
-                新增分组
-              </button>
+                {i18nText("frontstage", "auto.k_ac8e6b0575")}</button>
               <button
                 className="frontstage-page-tree-sidebar__add-menu-item"
                 onClick={handleAddPage}
@@ -842,8 +840,7 @@ export function FrontStagePageTreeSidebar({
                 type="button"
               >
                 <FileAddOutlined aria-hidden />
-                新增页面
-              </button>
+                {i18nText("frontstage", "auto.k_b899f9df2b")}</button>
             </div>
           ) : null}
         </div>

@@ -1,5 +1,7 @@
+import { i18nText } from '../../../../shared/i18n/text';
+
 export const MODEL_CONTEXT_WINDOW_VALIDATION_MESSAGE =
-  '请输入有效的上下文大小，支持纯数字、K 或 M 后缀。';
+  i18nText("settings", "auto.k_4b1b72bbbf");
 
 export const MODEL_CONTEXT_WINDOW_PRESET_OPTIONS = [
   { label: '16K', value: '16K' },

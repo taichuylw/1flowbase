@@ -76,6 +76,7 @@ import {
   type SettingsHostInfrastructureMemoryStatsOverview,
   type SettingsHostInfrastructureMemoryTreeNode
 } from '../../api/host-infrastructure';
+import { i18nText } from '../../../../shared/i18n/text';
 
 echarts.use([
   BarChart,
@@ -105,7 +106,7 @@ function formatBytes(value: number) {
 
 function formatTtl(value: number | null) {
   if (value == null) {
-    return '无过期';
+    return i18nText("settings", "auto.k_ff139dbaf3");
   }
   if (value < 60) {
     return `${value}s`;
@@ -125,7 +126,7 @@ function formatUnixTimestamp(value: number | null) {
 
 function formatUpdatedAt(value: number) {
   if (!value) {
-    return '尚未刷新';
+    return i18nText("settings", "auto.k_b6b13cc32c");
   }
   return new Date(value).toLocaleTimeString();
 }
@@ -279,7 +280,7 @@ function MemoryStatsChart({
         top: 8,
         itemGap: 16,
         textStyle: { color: '#555555', fontSize: 12 },
-        data: ['总条目 (Entries)', '敏感条目 (Sensitive)', '值容量 (Bytes)']
+        data: [i18nText("settings", "auto.k_f6a6168878"), i18nText("settings", "auto.k_d87aa08a57"), i18nText("settings", "auto.k_e354350550")]
       },
       radar: [
         {
@@ -338,7 +339,7 @@ function MemoryStatsChart({
           data: [
             {
               value: stats.map((s) => s.entry_count),
-              name: '总条目 (Entries)',
+              name: i18nText("settings", "auto.k_f6a6168878"),
               symbol: 'circle',
               symbolSize: 4,
               itemStyle: { color: '#1677ff' },
@@ -347,7 +348,7 @@ function MemoryStatsChart({
             },
             {
               value: stats.map((s) => s.sensitive_entry_count),
-              name: '敏感条目 (Sensitive)',
+              name: i18nText("settings", "auto.k_d87aa08a57"),
               symbol: 'circle',
               symbolSize: 4,
               itemStyle: { color: '#ff4d4f' },
@@ -362,7 +363,7 @@ function MemoryStatsChart({
           data: [
             {
               value: stats.map((s) => s.total_value_size_bytes),
-              name: '值容量 (Bytes)',
+              name: i18nText("settings", "auto.k_e354350550"),
               symbol: 'circle',
               symbolSize: 4,
               itemStyle: { color: '#52c41a' },
@@ -486,8 +487,8 @@ const getCustomServiceChartOption = (
             itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
             label: { show: false },
             data: [
-              { value: regularCount, name: '普通会话', itemStyle: { color: themeColors.primary } },
-              { value: sensitiveCount, name: '敏感会话', itemStyle: { color: themeColors.error } }
+              { value: regularCount, name: i18nText("settings", "auto.k_b734552957"), itemStyle: { color: themeColors.primary } },
+              { value: sensitiveCount, name: i18nText("settings", "auto.k_f0dab5d046"), itemStyle: { color: themeColors.error } }
             ]
           }
         ]
@@ -509,12 +510,12 @@ const getCustomServiceChartOption = (
         },
         yAxis: {
           type: 'category',
-          data: ['容量分配'],
+          data: [i18nText("settings", "auto.k_868d9aeab5")],
           axisLine: { show: false }
         },
         series: [
           {
-            name: '数据容量',
+            name: i18nText("settings", "auto.k_25d667351c"),
             type: 'bar',
             stack: 'total',
             barWidth: 24,
@@ -522,7 +523,7 @@ const getCustomServiceChartOption = (
             data: [valueBytes]
           },
           {
-            name: '元数据开销',
+            name: i18nText("settings", "auto.k_7cf97c2e73"),
             type: 'bar',
             stack: 'total',
             itemStyle: { borderRadius: [0, 4, 4, 0], color: '#b37feb' },
@@ -559,7 +560,7 @@ const getCustomServiceChartOption = (
               color: 'var(--ant-color-text)',
               offsetCenter: [0, '35%']
             },
-            data: [{ value: entryCount, name: '限流槽数' }]
+            data: [{ value: entryCount, name: i18nText("settings", "auto.k_cf41e96d24") }]
           }
         ]
       };
@@ -586,8 +587,8 @@ const getCustomServiceChartOption = (
             label: { show: true, position: 'inside' },
             itemStyle: { borderColor: '#fff', borderWidth: 1 },
             data: [
-              { value: entryCount, name: '竞争锁数量', itemStyle: { color: themeColors.cyan } },
-              { value: sensitiveCount, name: '排他锁数量', itemStyle: { color: themeColors.primary } }
+              { value: entryCount, name: i18nText("settings", "auto.k_d90630afd6"), itemStyle: { color: themeColors.cyan } },
+              { value: sensitiveCount, name: i18nText("settings", "auto.k_bef5a9ad28"), itemStyle: { color: themeColors.primary } }
             ]
           }
         ]
@@ -600,7 +601,7 @@ const getCustomServiceChartOption = (
         grid: { top: '20%', left: '10%', right: '10%', bottom: '15%' },
         xAxis: {
           type: 'category',
-          data: ['等待任务', '敏感任务'],
+          data: [i18nText("settings", "auto.k_ad6d33ced2"), i18nText("settings", "auto.k_5f3bf92cd4")],
           axisLine: { lineStyle: { color: '#f0f0f0' } },
           axisLabel: { color: 'var(--ant-color-text-secondary)' }
         },
@@ -610,7 +611,7 @@ const getCustomServiceChartOption = (
         },
         series: [
           {
-            name: '任务数',
+            name: i18nText("settings", "auto.k_cd75bc6231"),
             type: 'bar',
             barMaxWidth: 24,
             itemStyle: {
@@ -637,7 +638,7 @@ const getCustomServiceChartOption = (
         xAxis: {
           type: 'category',
           boundaryGap: false,
-          data: ['T-4s', 'T-3s', 'T-2s', 'T-1s', '当前'],
+          data: ['T-4s', 'T-3s', 'T-2s', 'T-1s', i18nText("settings", "auto.k_25e74dceac")],
           axisLine: { lineStyle: { color: '#f0f0f0' } }
         },
         yAxis: {
@@ -646,7 +647,7 @@ const getCustomServiceChartOption = (
         },
         series: [
           {
-            name: '广播消息',
+            name: i18nText("settings", "auto.k_5edc792a96"),
             type: 'line',
             smooth: true,
             symbol: 'none',
@@ -684,12 +685,12 @@ const getCustomServiceChartOption = (
         },
         yAxis: {
           type: 'category',
-          data: ['普通事件', '敏感事件'],
+          data: [i18nText("settings", "auto.k_170df708e6"), i18nText("settings", "auto.k_3d1b17281e")],
           axisLine: { show: false }
         },
         series: [
           {
-            name: '事件数量',
+            name: i18nText("settings", "auto.k_d27ec3ee4e"),
             type: 'bar',
             barMaxWidth: 14,
             itemStyle: {
@@ -714,8 +715,7 @@ function MemoryServiceBreakdownPane({
     <div className="host-memory-panel__breakdown-section">
       <div className="host-memory-panel__breakdown-header">
         <Typography.Text strong style={{ fontSize: 14 }}>
-          全局服务容量对比
-        </Typography.Text>
+          {i18nText("settings", "auto.k_a138d3a3d7")}</Typography.Text>
       </div>
       <div className="host-memory-panel__stats-chart-wrapper">
         <MemoryStatsChart stats={stats} />
@@ -723,8 +723,7 @@ function MemoryServiceBreakdownPane({
 
       <div className="host-memory-panel__breakdown-header" style={{ marginTop: 24 }}>
         <Typography.Text strong style={{ fontSize: 14 }}>
-          各组件细分专题监控
-        </Typography.Text>
+          {i18nText("settings", "auto.k_c82fa2ffd6")}</Typography.Text>
       </div>
 
       <div className="host-memory-panel__services-list">
@@ -744,9 +743,9 @@ function MemoryServiceBreakdownPane({
                 <Space size={6}>
                   <Tag color="blue">{item.provider_code ?? 'local'}</Tag>
                   {item.supported ? (
-                    <Tag color="green">已启用</Tag>
+                    <Tag color="green">{i18nText("settings", "auto.k_25d2843150")}</Tag>
                   ) : (
-                    <Tag color="default">未启用</Tag>
+                    <Tag color="default">{i18nText("settings", "auto.k_8bb38ef00c")}</Tag>
                   )}
                 </Space>
               </div>
@@ -767,34 +766,34 @@ function MemoryServiceBreakdownPane({
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="无监控指标数据"
+                    description={i18nText("settings", "auto.k_d92352c698")}
                     style={{ margin: '32px 0' }}
                   />
                 )}
               </div>
               <div className="host-memory-panel__service-card-details">
                 <Descriptions column={1} size="small" bordered>
-                  <Descriptions.Item label="条目数量">
+                  <Descriptions.Item label={i18nText("settings", "auto.k_2e52abd100")}>
                     <Typography.Text strong>{item.entry_count}</Typography.Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label="敏感条目">
+                  <Descriptions.Item label={i18nText("settings", "auto.k_c5af77a151")}>
                     <Typography.Text type={item.sensitive_entry_count > 0 ? "danger" : "secondary"}>
                       {item.sensitive_entry_count}
                     </Typography.Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label="值容量大小">
+                  <Descriptions.Item label={i18nText("settings", "auto.k_bc722cda0c")}>
                     <Typography.Text>{formatBytes(item.total_value_size_bytes)}</Typography.Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label="支持的操作">
+                  <Descriptions.Item label={i18nText("settings", "auto.k_775c1e01d1")}>
                     <Space size={4} wrap>
                       {item.capabilities?.list_entries ? (
-                        <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>查看条目</Tag>
+                        <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.k_fdcf343c57")}</Tag>
                       ) : null}
                       {item.capabilities?.list_tree ? (
-                        <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>树形导航</Tag>
+                        <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.k_adaf30cb73")}</Tag>
                       ) : null}
                       {item.capabilities?.reveal_value ? (
-                        <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>值审计</Tag>
+                        <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.k_d75977efdd")}</Tag>
                       ) : null}
                     </Space>
                   </Descriptions.Item>
@@ -864,7 +863,7 @@ function MemoryStatsOverviewPane({
   );
 
   if (isError) {
-    return <Alert type="warning" showIcon message="统计加载失败。" />;
+    return <Alert type="warning" showIcon message={i18nText("settings", "auto.k_6fc0a5e98c")} />;
   }
 
   return (
@@ -936,7 +935,7 @@ function MemoryStatsOverviewPane({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无统计数据"
+          description={i18nText("settings", "auto.k_9cf5deae81")}
         />
       )}
     </Space>
@@ -1318,7 +1317,7 @@ export function HostInfrastructureMemoryObservationPanel({
         width: canReveal ? 220 : 120,
         render: (_, entry) => (
           <Space size={4}>
-            <Tooltip title="查看这条 entry 的元信息，不读取真实 value。">
+            <Tooltip title={i18nText("settings", "auto.k_07fc1551d4")}>
               <Button
                 icon={<FileSearchOutlined />}
                 onClick={() => setMetadataEntry(entry)}
@@ -1328,7 +1327,7 @@ export function HostInfrastructureMemoryObservationPanel({
               </Button>
             </Tooltip>
             {canReveal ? (
-              <Tooltip title="请求后端读取真实 value，默认先展示 preview，可能包含敏感内容。">
+              <Tooltip title={i18nText("settings", "auto.k_d02aad393c")}>
                 <Button
                   icon={<EyeOutlined />}
                   loading={revealMutation.isPending}
@@ -1354,16 +1353,15 @@ export function HostInfrastructureMemoryObservationPanel({
         <Alert
           type="error"
           showIcon
-          message="内存观察连接失败。"
-          description="无法读取当前 api-server 的 host infrastructure memory observation API。"
+          message={i18nText("settings", "auto.k_036b9c25ab")}
+          description={i18nText("settings", "auto.k_ad6683a1ac")}
         />
         <Button
           icon={<ReloadOutlined />}
           onClick={() => overviewQuery.refetch()}
           loading={overviewQuery.isFetching}
         >
-          刷新
-        </Button>
+          {i18nText("settings", "auto.k_38108eaa1d")}</Button>
       </Space>
     );
   }
@@ -1377,7 +1375,7 @@ export function HostInfrastructureMemoryObservationPanel({
             Reveal {overviewQuery.data?.can_manage ? 'available' : 'off'}
           </Tag>
           <Typography.Text type="secondary">
-            最近刷新: {formatUpdatedAt(overviewQuery.dataUpdatedAt)}
+            {i18nText("settings", "auto.k_8827f80e7b")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
           </Typography.Text>
         </Space>
         <Space size={12} align="center">
@@ -1388,8 +1386,7 @@ export function HostInfrastructureMemoryObservationPanel({
               size="small"
             />
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              自动刷新 (30s)
-            </Typography.Text>
+              {i18nText("settings", "auto.k_2a8f67fd50")}</Typography.Text>
           </Space>
           <Button
             icon={<ReloadOutlined />}
@@ -1403,8 +1400,7 @@ export function HostInfrastructureMemoryObservationPanel({
               statsOverviewQuery.isFetching
             }
           >
-            刷新
-          </Button>
+            {i18nText("settings", "auto.k_38108eaa1d")}</Button>
         </Space>
       </div>
 
@@ -1412,15 +1408,15 @@ export function HostInfrastructureMemoryObservationPanel({
         <Alert
           type="info"
           showIcon
-          message="当前视图只展示 metadata。"
-          description="Reveal value 需要基础设施 manage 权限和当前 contract 的 reveal_value 能力。"
+          message={i18nText("settings", "auto.k_9cb10f5faa")}
+          description={i18nText("settings", "auto.k_08bfced71d")}
         />
       ) : null}
 
       {overviewQuery.isSuccess && !contracts.length ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无可观察内存 contract"
+          description={i18nText("settings", "auto.k_c4facea5a7")}
         />
       ) : null}
 
@@ -1431,7 +1427,7 @@ export function HostInfrastructureMemoryObservationPanel({
           items={[
             {
               key: MEMORY_STATS_TAB_KEY,
-              label: '统计',
+              label: i18nText("settings", "auto.k_ca8ffc3990"),
               children: (
                 <div className="host-memory-panel__tab-pane">
                   <MemoryStatsOverviewPane
@@ -1470,18 +1466,18 @@ export function HostInfrastructureMemoryObservationPanel({
                             <Alert
                               type="warning"
                               showIcon
-                              message="当前 contract 不支持 tree inspection。"
+                              message={i18nText("settings", "auto.k_7bae909c7e")}
                             />
                           ) : rootTreeQuery.isError ? (
                             <Alert
                               type="error"
                               showIcon
-                              message="内存树加载失败。"
+                              message={i18nText("settings", "auto.k_58d51c1020")}
                             />
                           ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
                             <Empty
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              description="暂无内存节点"
+                              description={i18nText("settings", "auto.k_9c7938fe9a")}
                             />
                           ) : (
                             <div
@@ -1519,7 +1515,7 @@ export function HostInfrastructureMemoryObservationPanel({
                         ) : (
                           <Empty
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description="请选择内存 contract"
+                            description={i18nText("settings", "auto.k_7da1855029")}
                           />
                         )}
                       </Layout.Sider>
@@ -1537,7 +1533,7 @@ export function HostInfrastructureMemoryObservationPanel({
                               <Typography.Text type="secondary">
                                 {selectedInspectionPath
                                   ? formatInspectionPath(selectedInspectionPath)
-                                  : '未选择路径'}
+                                  : i18nText("settings", "auto.k_23a055bd87")}
                               </Typography.Text>
                             </Space>
                             <Input.Search
@@ -1563,19 +1559,19 @@ export function HostInfrastructureMemoryObservationPanel({
                           {!selectedInspectionPath ? (
                             <Empty
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              description="请选择 tree 节点"
+                              description={i18nText("settings", "auto.k_64ebf116a8")}
                             />
                           ) : entriesQuery.isError ? (
                             <Alert
                               type="error"
                               showIcon
-                              message="内存 entry 连接失败。"
-                              description="无法读取当前路径的 entries。"
+                              message={i18nText("settings", "auto.k_a7e34111a5")}
+                              description={i18nText("settings", "auto.k_44201a2c61")}
                             />
                           ) : entriesQuery.isSuccess && !entries.length ? (
                             <Empty
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              description="暂无内存 entry"
+                              description={i18nText("settings", "auto.k_d8050c1fad")}
                             />
                           ) : (
                             <>
@@ -1617,8 +1613,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                       });
                                     }}
                                   >
-                                    上一页
-                                  </Button>
+                                    {i18nText("settings", "auto.k_b41561d807")}</Button>
                                   <Button
                                     size="small"
                                     disabled={!entriesQuery.data?.next_cursor}
@@ -1635,8 +1630,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                       setEntryCursor(nextCursor);
                                     }}
                                   >
-                                    下一页
-                                  </Button>
+                                    {i18nText("settings", "auto.k_67a246a344")}</Button>
                                 </Space>
                               </div>
                             </>
@@ -1696,7 +1690,7 @@ export function HostInfrastructureMemoryObservationPanel({
               value={metadataEntry.metadata}
               collapsible={false}
               height="320px"
-              copySuccessMessage="已复制 metadata JSON"
+              copySuccessMessage={i18nText("settings", "auto.k_959ac0ecef")}
             />
           </Space>
         ) : null}
@@ -1744,7 +1738,7 @@ export function HostInfrastructureMemoryObservationPanel({
                 value={revealedEntry.value}
                 collapsible={false}
                 height="360px"
-                copySuccessMessage="已复制内存 JSON"
+                copySuccessMessage={i18nText("settings", "auto.k_5eea2fcd1b")}
               />
             ) : revealedEntry.value_preview ? (
               <Space direction="vertical" size={8}>
@@ -1762,7 +1756,7 @@ export function HostInfrastructureMemoryObservationPanel({
                   rawText={revealedEntry.value_preview}
                   collapsible={false}
                   height="320px"
-                  copySuccessMessage="已复制内存预览 JSON"
+                  copySuccessMessage={i18nText("settings", "auto.k_892f5db7fe")}
                 />
               </Space>
             ) : (

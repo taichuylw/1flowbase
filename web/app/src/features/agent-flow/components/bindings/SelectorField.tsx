@@ -6,6 +6,7 @@ import {
   type FlowSelectorOption,
   toCascaderSelectorOptions
 } from '../../lib/selector-options';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface SelectorFieldProps {
   ariaLabel: string;
@@ -39,7 +40,7 @@ export function SelectorField({
           label: option.displayLabel,
           value: encodeSelectorValue(option.value)
         }))}
-        placeholder="选择上游输出"
+        placeholder={i18nText("agentFlow", "auto.k_4f68404777")}
         value={selectedValues}
         onChange={(nextValues) =>
           onChange(nextValues.map((nextValue) => decodeSelectorValue(String(nextValue))))
@@ -53,7 +54,7 @@ export function SelectorField({
       allowClear
       aria-label={ariaLabel}
       options={toCascaderSelectorOptions(options)}
-      placeholder="选择上游输出"
+      placeholder={i18nText("agentFlow", "auto.k_4f68404777")}
       value={isSelectorListValue(value) ? [] : value}
       onChange={(nextValue) =>
         onChange(Array.isArray(nextValue) ? nextValue.map(String) : [])

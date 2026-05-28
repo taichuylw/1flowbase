@@ -25,6 +25,7 @@ import {
   type RestrictedBlockLoaderLimits
 } from '../lib/restricted-block-loader';
 import type { RestrictedBlockRuntimeHostSnapshot } from '../lib/restricted-block-runtime-host';
+import { i18nText } from '../../../shared/i18n/text';
 
 export type JsBlockTrialPanelRuntimeSessionFactory = (
   options: FrontstageRestrictedBlockRuntimeHostOptions
@@ -76,17 +77,17 @@ function parseJsonObject(
   try {
     const parsed = JSON.parse(value) as unknown;
     if (!isRecord(parsed)) {
-      return { ok: false, message: `${label} 必须是 JSON object。` };
+      return { ok: false, message: i18nText("frontstage", "auto.k_81d6b4cdb0", { value1: label }) };
     }
     return { ok: true, value: parsed };
   } catch {
-    return { ok: false, message: `${label} 不是有效 JSON。` };
+    return { ok: false, message: i18nText("frontstage", "auto.k_465d4e11e3", { value1: label }) };
   }
 }
 
 function formatList(values: readonly unknown[] | undefined): string {
   if (!values || values.length === 0) {
-    return '无';
+    return i18nText("frontstage", "auto.k_72077749f7");
   }
   return values.map(String).join(', ');
 }
@@ -96,7 +97,7 @@ function formatKeys(value: Record<string, unknown>): string {
 }
 
 function formatNumber(value: number | undefined): string {
-  return typeof value === 'number' ? String(value) : '未设置';
+  return typeof value === 'number' ? String(value) : i18nText("frontstage", "auto.k_55a04b58cd");
 }
 
 function toRuntimeLimitsDraft(
@@ -108,18 +109,18 @@ function toRuntimeLimitsDraft(
   if (timeoutMs === null) {
     return {
       ok: false,
-      message: 'Runtime limits.timeoutMs 必须是正数。'
+      message: i18nText("frontstage", "auto.k_82391fb977")
     };
   }
 
   const maxRenderDepth = readOptionalPositiveNumber(value, 'maxRenderDepth');
   if (!maxRenderDepth.ok) {
-    return { ok: false, message: 'Runtime limits.maxRenderDepth 必须是正数。' };
+    return { ok: false, message: i18nText("frontstage", "auto.k_1d6a55547f") };
   }
 
   const maxRenderNodes = readOptionalPositiveNumber(value, 'maxRenderNodes');
   if (!maxRenderNodes.ok) {
-    return { ok: false, message: 'Runtime limits.maxRenderNodes 必须是正数。' };
+    return { ok: false, message: i18nText("frontstage", "auto.k_24e0f6bb36") };
   }
 
   const maxEventChainDepth = readOptionalPositiveNumber(
@@ -129,25 +130,25 @@ function toRuntimeLimitsDraft(
   if (!maxEventChainDepth.ok) {
     return {
       ok: false,
-      message: 'Runtime limits.maxEventChainDepth 必须是正数。'
+      message: i18nText("frontstage", "auto.k_206844e880")
     };
   }
 
   const allowedActions = readStringArray(value, 'allowedActions');
   if (!allowedActions.ok) {
-    return { ok: false, message: 'Runtime limits.allowedActions 必须是字符串数组。' };
+    return { ok: false, message: i18nText("frontstage", "auto.k_2de111b84d") };
   }
 
   const allowedEvents = readStringArray(value, 'allowedEvents');
   if (!allowedEvents.ok) {
-    return { ok: false, message: 'Runtime limits.allowedEvents 必须是字符串数组。' };
+    return { ok: false, message: i18nText("frontstage", "auto.k_ad65e873a6") };
   }
 
   const allowedDataModels = readStringArray(value, 'allowedDataModels');
   if (!allowedDataModels.ok) {
     return {
       ok: false,
-      message: 'Runtime limits.allowedDataModels 必须是字符串数组。'
+      message: i18nText("frontstage", "auto.k_d7c697902c")
     };
   }
 
@@ -158,7 +159,7 @@ function toRuntimeLimitsDraft(
   if (!allowedDataOperations.ok) {
     return {
       ok: false,
-      message: 'Runtime limits.allowedDataOperations 只能包含 query/create/update/delete。'
+      message: i18nText("frontstage", "auto.k_b2b5a17c34")
     };
   }
 
@@ -383,8 +384,8 @@ export function JsBlockTrialPanel({
       <Alert
         type="info"
         showIcon
-        message="请选择一个区块"
-        description="JS Block 试运行计划需要当前选中的区块。"
+        message={i18nText("frontstage", "auto.k_45ea035daf")}
+        description={i18nText("frontstage", "auto.k_ebaaa97cea")}
       />
     );
   }
@@ -394,8 +395,8 @@ export function JsBlockTrialPanel({
       <Alert
         type="warning"
         showIcon
-        message="缺少区块目录条目"
-        description="当前区块无法匹配可用 catalog entry。"
+        message={i18nText("frontstage", "auto.k_2a43fb2bbb")}
+        description={i18nText("frontstage", "auto.k_0702ae4626")}
       />
     );
   }
@@ -403,13 +404,12 @@ export function JsBlockTrialPanel({
   return (
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
       <Typography.Title level={5} style={{ margin: 0 }}>
-        JS Block 试运行
-      </Typography.Title>
+        {i18nText("frontstage", "auto.k_cc0f333429")}</Typography.Title>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>JS 代码</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.k_043a408692")}</Typography.Text>
         <Input.TextArea
-          aria-label="JS 代码"
+          aria-label={i18nText("frontstage", "auto.k_043a408692")}
           value={code}
           rows={5}
           readOnly={!onCodeChange}
@@ -430,8 +430,7 @@ export function JsBlockTrialPanel({
           disabled={!onContextSnapshotChange}
           onClick={applyContextDraft}
         >
-          更新 context
-        </Button>
+          {i18nText("frontstage", "auto.k_69231d8347")}</Button>
       </Space>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -447,8 +446,7 @@ export function JsBlockTrialPanel({
           disabled={!onLimitsChange}
           onClick={applyLimitsDraft}
         >
-          更新 limits
-        </Button>
+          {i18nText("frontstage", "auto.k_74c067966c")}</Button>
       </Space>
 
       {draftError ? (
@@ -457,8 +455,8 @@ export function JsBlockTrialPanel({
           showIcon
           message={
             draftError.kind === 'context'
-              ? 'Context 更新失败'
-              : 'Limits 更新失败'
+              ? i18nText("frontstage", "auto.k_4686b36330")
+              : i18nText("frontstage", "auto.k_4d05d4532a")
           }
           description={draftError.message}
         />
@@ -466,30 +464,29 @@ export function JsBlockTrialPanel({
 
       {runPlan?.ok ? (
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <Alert type="success" showIcon message="Run plan 已生成" />
+          <Alert type="success" showIcon message={i18nText("frontstage", "auto.k_073766b481")} />
           <Space size="small" wrap>
             <Button
-              aria-label="运行"
+              aria-label={i18nText("frontstage", "auto.k_0c3acd446f")}
               size="small"
               type="primary"
               onClick={runRuntimeSession}
             >
-              {canStopRuntimeSession ? '重新运行' : '运行'}
+              {canStopRuntimeSession ? i18nText("frontstage", "auto.k_def52527a1") : i18nText("frontstage", "auto.k_0c3acd446f")}
             </Button>
             <Button
-              aria-label="停止"
+              aria-label={i18nText("frontstage", "auto.k_a17f70a8d3")}
               size="small"
               disabled={!canStopRuntimeSession}
               onClick={stopRuntimeSession}
             >
-              停止
-            </Button>
+              {i18nText("frontstage", "auto.k_a17f70a8d3")}</Button>
           </Space>
           <Descriptions
             bordered
             size="small"
             column={1}
-            title="Request 摘要"
+            title={i18nText("frontstage", "auto.k_853e3635ba")}
             items={[
               {
                 key: 'requestId',
@@ -603,7 +600,7 @@ export function JsBlockTrialPanel({
           <Alert
             type="error"
             showIcon
-            message="Run plan 被拒绝"
+            message={i18nText("frontstage", "auto.k_4bc62ef123")}
             description={runPlan.message}
           />
           <Descriptions

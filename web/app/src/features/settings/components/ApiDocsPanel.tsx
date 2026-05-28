@@ -21,6 +21,7 @@ import {
 } from '../api/api-docs';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
 import './api-docs-panel.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -153,7 +154,7 @@ export function ApiDocsPanel() {
 
   return (
     <SettingsSectionSurface
-      title="API 文档"
+      title={i18nText("settings", "auto.k_ddd798b421")}
       titleLevel={3}
       hideHeader
       heightMode="fill"

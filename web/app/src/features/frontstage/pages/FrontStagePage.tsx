@@ -66,6 +66,7 @@ import {
 import type { FrontStageTreeNode } from '../lib/page-tree';
 import type { RestrictedBlockLoaderLimits } from '../lib/restricted-block-loader';
 import './frontstage-page.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 const DESIGN_MODE_PERMISSION = 'frontstage.page.design';
 const DEFAULT_JS_BLOCK_TRIAL_LIMITS: RestrictedBlockLoaderLimits = {
@@ -278,7 +279,7 @@ function renderPageTreeIconPicker(
         onOpenChange={onIconPickerOpenChange}
       >
         <button
-          aria-label="选择图标"
+          aria-label={i18nText("frontstage", "auto.k_ef6e0d1008")}
           className={[
             'frontstage-page-tree-form__icon-select-button',
             selectedIcon
@@ -294,7 +295,7 @@ function renderPageTreeIconPicker(
       </Popover>
       {selectedIcon ? (
         <button
-          aria-label="清除图标"
+          aria-label={i18nText("frontstage", "auto.k_e5729c06d3")}
           className="frontstage-page-tree-form__icon-clear-button"
           type="button"
           onClick={() => onChange(undefined)}
@@ -330,7 +331,7 @@ function toDisplayErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return '页面内容保存失败，请稍后重试。';
+  return i18nText("frontstage", "auto.k_ae488641ec");
 }
 
 function requireCsrfToken(csrfToken: string | null): string {
@@ -735,10 +736,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     !hasPageContentLoadError &&
     !isPageContentSavePending;
   const operationStatusText = isOperationPending
-    ? '保存中'
+    ? i18nText("frontstage", "auto.k_a032e8fdda")
     : hasOperationError
-      ? '操作失败'
-      : '页面树已同步';
+      ? i18nText("frontstage", "auto.k_09e424b5e8")
+      : i18nText("frontstage", "auto.k_3bd14ff97a");
 
   const canEnterDesignMode = useMemo(() => {
     return (
@@ -929,11 +930,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const selectedPageLabel = selectedPageDisplayTitle
     ? selectedPageDisplayTitle
     : selectedPageId
-      ? `页面 ${selectedPageId}`
+      ? i18nText("frontstage", "auto.k_0b964316bf", { value1: selectedPageId })
       : null;
   const pageLabel = selectedPageLabel
     ? selectedPageLabel
-    : '未选择 pageId（将使用默认首页）';
+    : i18nText("frontstage", "auto.k_f5712eb8b4");
 
   const saveBlockComposition = useCallback(
     async (
@@ -1025,15 +1026,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   if (initialPageTree === undefined && isPageTreeLoading) {
     return (
       <SectionPageLayout
-        pageTitle="前台"
+        pageTitle={i18nText("frontstage", "auto.k_89408f6d5a")}
         navItems={[]}
         activeKey=""
         contentWidth="wide"
         heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
-            页面树加载中
-          </Typography.Text>
+            {i18nText("frontstage", "auto.k_ec2b6b237c")}</Typography.Text>
         }
       >
         <section className="frontstage-page-workspace">
@@ -1042,14 +1042,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               className="frontstage-page-workspace__title"
               level={3}
             >
-              页面树加载中…
-            </Typography.Title>
+              {i18nText("frontstage", "auto.k_b869e675c7")}</Typography.Title>
           </header>
           <Divider style={{ margin: 0 }} />
           <div className="frontstage-page-workspace__body">
             <Empty
               description={
-                <Typography.Text>正在加载页面树，请稍后...</Typography.Text>
+                <Typography.Text>{i18nText("frontstage", "auto.k_c454a48ff6")}</Typography.Text>
               }
             />
           </div>
@@ -1061,15 +1060,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   if (initialPageTree === undefined && hasPageTreeLoadError) {
     return (
       <SectionPageLayout
-        pageTitle="前台"
+        pageTitle={i18nText("frontstage", "auto.k_89408f6d5a")}
         navItems={[]}
         activeKey=""
         contentWidth="wide"
         heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
-            页面树不可用
-          </Typography.Text>
+            {i18nText("frontstage", "auto.k_21fcc2abb1")}</Typography.Text>
         }
       >
         <section className="frontstage-page-workspace">
@@ -1078,8 +1076,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               className="frontstage-page-workspace__title"
               level={3}
             >
-              页面树加载失败
-            </Typography.Title>
+              {i18nText("frontstage", "auto.k_88430a50e6")}</Typography.Title>
           </header>
           <Divider style={{ margin: 0 }} />
           <div className="frontstage-page-workspace__body">
@@ -1087,13 +1084,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <Typography.Text>
-                  页面树加载失败，请检查网络后重试。点击“重试”按钮重新发起加载。
-                </Typography.Text>
+                  {i18nText("frontstage", "auto.k_c747dade51")}</Typography.Text>
               }
             >
               <Button type="primary" onClick={onRetryLoadPageTree}>
-                重试
-              </Button>
+                {i18nText("frontstage", "auto.k_e2d53a6d3a")}</Button>
             </Empty>
           </div>
         </section>
@@ -1104,15 +1099,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const renderPageTreeErrorBanner = hasPageTreeLoadError ? (
     <Alert
       style={{ marginBottom: 12 }}
-      message="页面树加载失败"
-      description="页面树加载失败，当前页面树仍可查看；请点击“重试”恢复最新数据。"
+      message={i18nText("frontstage", "auto.k_88430a50e6")}
+      description={i18nText("frontstage", "auto.k_03949681b4")}
       type="error"
       showIcon
       action={
         onRetryLoadPageTree ? (
           <Button size="small" onClick={() => onRetryLoadPageTree()}>
-            重试
-          </Button>
+            {i18nText("frontstage", "auto.k_e2d53a6d3a")}</Button>
         ) : null
       }
     />
@@ -1146,7 +1140,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       initialTitle: '',
       initialIcon: '',
       initialTooltip: '',
-      title: nodeKind === 'page' ? '新增页面' : '新增分组'
+      title: nodeKind === 'page' ? i18nText("frontstage", "auto.k_b899f9df2b") : i18nText("frontstage", "auto.k_ac8e6b0575")
     });
   };
 
@@ -1210,11 +1204,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     }
 
     modal.confirm({
-      title: '删除节点',
+      title: i18nText("frontstage", "auto.k_ff37dc39f9"),
       content: getDeleteConfirmMessage(node),
-      okText: '删除',
+      okText: i18nText("frontstage", "auto.k_3755f56f2f"),
       okButtonProps: { danger: true },
-      cancelText: '取消',
+      cancelText: i18nText("frontstage", "auto.k_4d0b4688c7"),
       onOk: async () => {
         await runPageTreeOperation(async () => {
           await onDeletePageNode?.(nodeId);
@@ -1298,7 +1292,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       initialTitle: node.title ?? '',
       initialIcon: node.icon ?? '',
       initialTooltip: node.tooltip ?? '',
-      title: '编辑节点'
+      title: i18nText("frontstage", "auto.k_f5e952b33b")
     });
   };
 
@@ -1310,7 +1304,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       kind: 'tooltip',
       nodeId,
       initialTooltip: currentTooltip ?? '',
-      title: '编辑描述'
+      title: i18nText("frontstage", "auto.k_a78a018382")
     });
   };
 
@@ -1572,13 +1566,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                 type="secondary"
                 style={{ marginBottom: 12, display: 'block' }}
               >
-                区块保存中
-              </Typography.Text>
+                {i18nText("frontstage", "auto.k_eae703d599")}</Typography.Text>
             ) : null}
             {canEnterDesignMode && isDesignMode && pageContentSaveError ? (
               <Alert
                 style={{ marginBottom: 12 }}
-                message="区块保存失败"
+                message={i18nText("frontstage", "auto.k_842b11ddf3")}
                 description={pageContentSaveError}
                 type="error"
                 showIcon
@@ -1624,7 +1617,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             {canEnterDesignMode && isDesignMode ? (
               <Button
                 size="middle"
-                aria-label="创建区块"
+                aria-label={i18nText("frontstage", "auto.k_09afc112a0")}
                 onClick={handleAddBlock}
                 disabled={!canAddBlock}
                 style={{
@@ -1634,12 +1627,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   color: '#00a86b'
                 }}
               >
-                + 创建区块
-              </Button>
+                {i18nText("frontstage", "auto.k_186bb142d2")}</Button>
             ) : null}
           </div>
           <Drawer
-            title="JS 区块试运行"
+            title={i18nText("frontstage", "auto.k_33caa9a1e9")}
             open={isJsBlockTrialPanelOpen}
             onClose={() => setIsJsBlockTrialPanelOpen(false)}
             width={600}
@@ -1663,8 +1655,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         <Modal
           title={pageTreeFormDialog?.title}
           open={Boolean(pageTreeFormDialog)}
-          okText="确定"
-          cancelText="取消"
+          okText={i18nText("frontstage", "auto.k_f526c89937")}
+          cancelText={i18nText("frontstage", "auto.k_4d0b4688c7")}
           confirmLoading={isOperationPending}
           destroyOnHidden
           forceRender
@@ -1680,31 +1672,31 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             }}
           >
             {pageTreeFormDialog?.kind === 'tooltip' ? (
-              <Form.Item label="描述" name="tooltip">
+              <Form.Item label={i18nText("frontstage", "auto.k_412f54dc38")} name="tooltip">
                 <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
               </Form.Item>
             ) : (
               <>
                 <Form.Item
-                  label="名称"
+                  label={i18nText("frontstage", "auto.k_1be7ae4fc2")}
                   name="title"
                   rules={[
                     {
                       required: true,
                       whitespace: true,
-                      message: '请输入名称'
+                      message: i18nText("frontstage", "auto.k_c2afb255a5")
                     }
                   ]}
                 >
                   <Input autoFocus />
                 </Form.Item>
-                <Form.Item label="图标" name="icon">
+                <Form.Item label={i18nText("frontstage", "auto.k_1f24c1e5aa")} name="icon">
                   <PageTreeIconPickerField
                     iconPickerOpen={isPageTreeIconPickerOpen}
                     onIconPickerOpenChange={setIsPageTreeIconPickerOpen}
                   />
                 </Form.Item>
-                <Form.Item label="描述" name="tooltip">
+                <Form.Item label={i18nText("frontstage", "auto.k_412f54dc38")} name="tooltip">
                   <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
                 </Form.Item>
               </>

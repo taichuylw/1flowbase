@@ -5,6 +5,7 @@ import {
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import { Menu } from 'antd';
+import { i18nText } from '../shared/i18n/text';
 
 const HELP_LINKS = [
   {
@@ -15,7 +16,7 @@ const HELP_LINKS = [
   },
   {
     key: 'docs',
-    label: '文档',
+    label: i18nText("appShell", "auto.k_1069127253"),
     icon: <FileTextOutlined />,
     href: 'https://docs.taichuy.com/'
   }
@@ -36,7 +37,7 @@ export function HelpChromeMenu() {
         {
           key: 'help',
           label: (
-            <span className="app-shell-help-block" aria-label="帮助">
+            <span className="app-shell-help-block" aria-label={i18nText("appShell", "auto.k_adf465ebf0")}>
               <QuestionCircleOutlined />
             </span>
           ),

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { NodeLastRun } from '../../../api/runtime';
 import { fetchRuntimeDebugArtifact } from '../../../api/runtime';
 import { JsonPreviewBlock } from '../../../../../shared/ui/json-preview/JsonPreviewBlock';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 interface RuntimeDebugArtifactLocation {
   artifactRef: string;
@@ -184,10 +185,9 @@ function NodeRunConsoleLogs({ logs }: { logs: ConsoleLogEntryView[] }) {
   }
 
   return (
-    <section aria-label="控制台日志" className="agent-flow-node-run-console">
+    <section aria-label={i18nText("agentFlow", "auto.k_c62d83e379")} className="agent-flow-node-run-console">
       <Typography.Text className="agent-flow-node-run-console__title" strong>
-        控制台日志
-      </Typography.Text>
+        {i18nText("agentFlow", "auto.k_c62d83e379")}</Typography.Text>
       <div className="agent-flow-node-run-console__list">
         {logs.map((log, index) => (
           <div
@@ -230,7 +230,7 @@ export function NodeRunPayloadSections({
     <>
       <RuntimeDebugPayloadBlock
         payload={inputPayload}
-        title="输入"
+        title={i18nText("agentFlow", "auto.k_e8850440f2")}
         onLoadArtifact={onLoadArtifact}
       />
       {includeDebugPayload ? (
@@ -238,14 +238,14 @@ export function NodeRunPayloadSections({
           <NodeRunConsoleLogs logs={consoleLogs} />
           <RuntimeDebugPayloadBlock
             payload={processPayload}
-            title="数据处理"
+            title={i18nText("agentFlow", "auto.k_bd32031626")}
             onLoadArtifact={onLoadArtifact}
           />
         </>
       ) : null}
       <RuntimeDebugPayloadBlock
         payload={outputPayload}
-        title="输出"
+        title={i18nText("agentFlow", "auto.k_ded698ae1e")}
         onLoadArtifact={onLoadArtifact}
       />
     </>
@@ -291,9 +291,9 @@ export function RuntimeDebugPayloadBlock({
           fullPayload
         )
       );
-      message.success('已加载完整值');
+      message.success(i18nText("agentFlow", "auto.k_e4981b7d88"));
     } catch {
-      message.error('加载完整值失败');
+      message.error(i18nText("agentFlow", "auto.k_4d69a740dc"));
     }
   };
 
@@ -302,14 +302,13 @@ export function RuntimeDebugPayloadBlock({
       actions={
         artifactLocation ? (
           <Space size={6} wrap>
-            <Tag color="warning">已截断</Tag>
+            <Tag color="warning">{i18nText("agentFlow", "auto.k_5e1fd797ca")}</Tag>
             <Button
               disabled={!onLoadArtifact}
               onClick={handleLoadFullValue}
               size="small"
             >
-              加载完整值
-            </Button>
+              {i18nText("agentFlow", "auto.k_50462f0707")}</Button>
           </Space>
         ) : null
       }
@@ -325,7 +324,7 @@ export function NodeRunIOCard({ lastRun }: { lastRun: NodeLastRun }) {
   const applicationId = lastRun.flow_run.application_id;
 
   return (
-    <Card title="节点输入输出">
+    <Card title={i18nText("agentFlow", "auto.k_96b1a8a700")}>
       <div className="agent-flow-node-run-json-list">
         <NodeRunPayloadSections
           inputPayload={lastRun.node_run.input_payload}

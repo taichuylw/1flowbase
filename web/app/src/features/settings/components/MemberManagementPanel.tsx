@@ -34,6 +34,7 @@ import {
 } from '../api/members';
 import { fetchSettingsRoles, settingsRolesQueryKey } from '../api/roles';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
+import { i18nText } from '../../../shared/i18n/text';
 
 const TEMP_PASSWORD = 'Temp@123456';
 
@@ -177,7 +178,7 @@ export function MemberManagementPanel({
   const columns = useMemo(
     () => [
       {
-        title: '用户',
+        title: i18nText("settings", "auto.k_9ba763ea34"),
         key: 'user',
         render: (_: unknown, member: SettingsMember) => (
           <Space>
@@ -202,7 +203,7 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: '联系方式',
+        title: i18nText("settings", "auto.k_60beedc8f2"),
         key: 'contact',
         render: (_: unknown, member: SettingsMember) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -218,17 +219,17 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: '状态',
+        title: i18nText("settings", "auto.k_62e951a692"),
         key: 'status',
         width: 80,
         render: (_: unknown, member: SettingsMember) => (
           <Tag color={member.status === 'active' ? 'green' : 'default'}>
-            {member.status === 'active' ? '启用' : '停用'}
+            {member.status === 'active' ? i18nText("settings", "auto.k_d4e9ca3dd4") : i18nText("settings", "auto.k_d989e55188")}
           </Tag>
         )
       },
       {
-        title: '角色',
+        title: i18nText("settings", "auto.k_6b26695e4d"),
         key: 'roles',
         render: (_: unknown, member: SettingsMember) => {
           const isRootMember = member.role_codes.includes('root');
@@ -248,8 +249,7 @@ export function MemberManagementPanel({
                   isRootMember ? undefined : () => handleOpenRoleEdit(member)
                 }
               >
-                编辑
-              </Button>
+                {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
             </Space>
           ) : (
             <Space wrap size={4}>
@@ -263,7 +263,7 @@ export function MemberManagementPanel({
       ...(canManageMembers
         ? [
             {
-              title: '操作',
+              title: i18nText("settings", "auto.k_f3ea6d345e"),
               key: 'action',
               width: 160,
               render: (_: unknown, member: SettingsMember) => {
@@ -279,15 +279,14 @@ export function MemberManagementPanel({
                           icon={<StopOutlined />}
                           disabled
                         >
-                          停用
-                        </Button>
+                          {i18nText("settings", "auto.k_d989e55188")}</Button>
                       ) : (
                         <Popconfirm
-                          title="停用账号"
-                          description={`确定要停用 ${member.name} 的账号吗？停用后该用户将无法登录。`}
+                          title={i18nText("settings", "auto.k_fcd9326404")}
+                          description={i18nText("settings", "auto.k_20daa2e828", { value1: member.name })}
                           onConfirm={() => disableMutation.mutate(member.id)}
-                          okText="确认停用"
-                          cancelText="取消"
+                          okText={i18nText("settings", "auto.k_f3abd89419")}
+                          cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
                           okButtonProps={{ danger: true }}
                         >
                           <Button
@@ -296,32 +295,29 @@ export function MemberManagementPanel({
                             icon={<StopOutlined />}
                             loading={disableMutation.isPending}
                           >
-                            停用
-                          </Button>
+                            {i18nText("settings", "auto.k_d989e55188")}</Button>
                         </Popconfirm>
                       )
                     ) : null}
                     {isRootMember ? (
                       <Button size="small" icon={<KeyOutlined />} disabled>
-                        重置密码
-                      </Button>
+                        {i18nText("settings", "auto.k_7e422146dd")}</Button>
                     ) : (
                       <Popconfirm
-                        title="重置密码"
-                        description={`将 ${member.name} 的密码重置为默认临时密码，用户登录后需立即修改。`}
+                        title={i18nText("settings", "auto.k_7e422146dd")}
+                        description={i18nText("settings", "auto.k_1320a9789d", { value1: member.name })}
                         onConfirm={() =>
                           resetPasswordMutation.mutate(member.id)
                         }
-                        okText="确认重置"
-                        cancelText="取消"
+                        okText={i18nText("settings", "auto.k_30a6079ce3")}
+                        cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
                       >
                         <Button
                           size="small"
                           icon={<KeyOutlined />}
                           loading={resetPasswordMutation.isPending}
                         >
-                          重置密码
-                        </Button>
+                          {i18nText("settings", "auto.k_7e422146dd")}</Button>
                       </Popconfirm>
                     )}
                   </Space>
@@ -341,7 +337,7 @@ export function MemberManagementPanel({
   );
 
   return (
-    <SettingsSectionSurface title="用户管理" hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.k_baf84751a2")} hideHeader heightMode="fill">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {canManageMembers ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -350,8 +346,7 @@ export function MemberManagementPanel({
               icon={<UserAddOutlined />}
               onClick={() => setCreateModalOpen(true)}
             >
-              新建用户
-            </Button>
+              {i18nText("settings", "auto.k_30416407e5")}</Button>
           </div>
         ) : null}
 
@@ -365,12 +360,11 @@ export function MemberManagementPanel({
         />
 
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。
-        </Typography.Text>
+          {i18nText("settings", "auto.k_98314eb9f7")}</Typography.Text>
 
         {/* Create Member Modal */}
         <Modal
-          title="新建用户"
+          title={i18nText("settings", "auto.k_30416407e5")}
           open={createModalOpen}
           onCancel={() => {
             setCreateModalOpen(false);
@@ -378,8 +372,8 @@ export function MemberManagementPanel({
           }}
           onOk={() => createForm.submit()}
           confirmLoading={createMutation.isPending}
-          okText="创建"
-          cancelText="取消"
+          okText={i18nText("settings", "auto.k_fcbd093292")}
+          cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
           width={600}
           destroyOnHidden
         >
@@ -397,54 +391,54 @@ export function MemberManagementPanel({
               }}
             >
               <Form.Item
-                label="账号"
+                label={i18nText("settings", "auto.k_9013849179")}
                 name="account"
-                rules={[{ required: true, message: '请输入账号' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.k_dfcc84468b") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label="姓名"
+                label={i18nText("settings", "auto.k_be4c2616b1")}
                 name="name"
-                rules={[{ required: true, message: '请输入姓名' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.k_675b3ee2af") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label="邮箱"
+                label={i18nText("settings", "auto.k_9ed627bcf6")}
                 name="email"
                 rules={[
-                  { required: true, message: '请输入邮箱' },
-                  { type: 'email', message: '请输入有效邮箱' }
+                  { required: true, message: i18nText("settings", "auto.k_f2dc24deb8") },
+                  { type: 'email', message: i18nText("settings", "auto.k_bc18737362") }
                 ]}
               >
                 <Input />
               </Form.Item>
-              <Form.Item label="手机号" name="phone">
+              <Form.Item label={i18nText("settings", "auto.k_5a9cc5e891")} name="phone">
                 <Input />
               </Form.Item>
               <Form.Item
-                label="昵称"
+                label={i18nText("settings", "auto.k_25124ed74c")}
                 name="nickname"
-                rules={[{ required: true, message: '请输入昵称' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.k_5dbe6b07eb") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label="初始密码"
+                label={i18nText("settings", "auto.k_961fcbb15b")}
                 name="password"
                 initialValue={TEMP_PASSWORD}
-                rules={[{ required: true, message: '请输入初始密码' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.k_aebb4bd95f") }]}
               >
                 <Input.Password />
               </Form.Item>
             </div>
-            <Form.Item label="个人介绍" name="introduction">
+            <Form.Item label={i18nText("settings", "auto.k_eff7665554")} name="introduction">
               <Input.TextArea rows={2} />
             </Form.Item>
             <div style={{ display: 'flex', gap: 24 }}>
               <Form.Item
-                label="邮箱登录"
+                label={i18nText("settings", "auto.k_35e18cc8fd")}
                 name="email_login_enabled"
                 valuePropName="checked"
                 initialValue
@@ -452,7 +446,7 @@ export function MemberManagementPanel({
                 <Switch />
               </Form.Item>
               <Form.Item
-                label="手机登录"
+                label={i18nText("settings", "auto.k_20feae5e89")}
                 name="phone_login_enabled"
                 valuePropName="checked"
                 initialValue={false}
@@ -466,14 +460,14 @@ export function MemberManagementPanel({
         {/* Role Edit Modal */}
         <Modal
           title={
-            roleEditMember ? `编辑角色 — ${roleEditMember.name}` : '编辑角色'
+            roleEditMember ? i18nText("settings", "auto.k_97c19a33ef", { value1: roleEditMember.name }) : i18nText("settings", "auto.k_b9dcd82a7b")
           }
           open={Boolean(roleEditMember)}
           onCancel={() => setRoleEditMember(null)}
           onOk={handleRoleEditOk}
           confirmLoading={replaceRolesMutation.isPending}
-          okText="保存"
-          cancelText="取消"
+          okText={i18nText("settings", "auto.k_fadf24dbc5")}
+          cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
           width={480}
           destroyOnHidden
         >
@@ -483,15 +477,14 @@ export function MemberManagementPanel({
                 type="secondary"
                 style={{ display: 'block', marginBottom: 12, fontSize: 13 }}
               >
-                为用户 {roleEditMember.name}（{roleEditMember.account}）分配角色
-              </Typography.Text>
+                {i18nText("settings", "auto.k_02385e4b97")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.k_43356d3ef8")}</Typography.Text>
               <Select
                 mode="multiple"
                 style={{ width: '100%' }}
                 value={editingRoleCodes}
                 onChange={setEditingRoleCodes}
                 options={roleOptions}
-                placeholder="选择角色"
+                placeholder={i18nText("settings", "auto.k_2150939fb1")}
               />
             </div>
           ) : null}

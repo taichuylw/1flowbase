@@ -3,6 +3,7 @@ import { Button, Input } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
 import { TemplatedTextField } from './TemplatedTextField';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export interface TemplatedNamedBindingValue {
   name: string;
@@ -29,7 +30,7 @@ export function TemplatedNamedBindingsField({
   return (
     <div className="agent-flow-templated-binding-list">
       {value.map((entry, index) => {
-        const entryLabel = entry.name || `变量 ${index + 1}`;
+        const entryLabel = entry.name || i18nText("agentFlow", "auto.k_9fdebca240", { value1: index + 1 });
 
         return (
           <div
@@ -39,7 +40,7 @@ export function TemplatedNamedBindingsField({
             <div className="agent-flow-templated-binding-row__name">
               <Input
                 aria-label={`${ariaLabel}-${index}-name`}
-                placeholder="变量名"
+                placeholder={i18nText("agentFlow", "auto.k_63d5977de6")}
                 value={entry.name}
                 onChange={(event) =>
                   onChange(
@@ -58,7 +59,7 @@ export function TemplatedNamedBindingsField({
                 displayMode="input"
                 label={entryLabel}
                 options={options}
-                placeholder="输入文本，或输入 / 引用变量"
+                placeholder={i18nText("agentFlow", "auto.k_faa6bb45af")}
                 value={entry.content.value}
                 onChange={(nextValue) =>
                   onChange(
@@ -78,7 +79,7 @@ export function TemplatedNamedBindingsField({
               />
             </div>
             <Button
-              aria-label={`删除变量 ${entry.name || index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.k_4a86499cd0", { value1: entry.name || index + 1 })}
               className="agent-flow-templated-binding-row__delete"
               danger
               icon={<DeleteOutlined />}
@@ -100,8 +101,7 @@ export function TemplatedNamedBindingsField({
           ])
         }
       >
-        新增变量
-      </Button>
+        {i18nText("agentFlow", "auto.k_b81a7d3e3c")}</Button>
     </div>
   );
 }

@@ -43,6 +43,7 @@ import {
   type SettingsRole
 } from '../api/roles';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
+import { i18nText } from '../../../shared/i18n/text';
 
 // 分类映射，根据要求
 const RESOURCE_MAP: Record<
@@ -50,38 +51,38 @@ const RESOURCE_MAP: Record<
   { tab: string; label: string; order: number }
 > = {
   role_permission: {
-    tab: '基础配置',
-    label: '权限 (role_permission)',
+    tab: i18nText("settings", "auto.k_5095009346"),
+    label: i18nText("settings", "auto.k_03607df4ad"),
     order: 1
   },
-  user: { tab: '基础配置', label: '用户 (user)', order: 2 },
-  team: { tab: '基础配置', label: '团队 (team)', order: 3 },
+  user: { tab: i18nText("settings", "auto.k_5095009346"), label: i18nText("settings", "auto.k_0a61e64e97"), order: 2 },
+  team: { tab: i18nText("settings", "auto.k_5095009346"), label: i18nText("settings", "auto.k_94104f1af2"), order: 3 },
   external_data_source: {
-    tab: '基础配置',
-    label: '数据源 (external_data_source)',
+    tab: i18nText("settings", "auto.k_5095009346"),
+    label: i18nText("settings", "auto.k_d30800b12a"),
     order: 4
   },
 
-  application: { tab: '系统管理', label: '应用 (application)', order: 1 },
-  embedded_app: { tab: '系统管理', label: '子系统 (embedded_app)', order: 2 },
+  application: { tab: i18nText("settings", "auto.k_04ca1cb5c7"), label: i18nText("settings", "auto.k_aeb8ae55e4"), order: 1 },
+  embedded_app: { tab: i18nText("settings", "auto.k_04ca1cb5c7"), label: i18nText("settings", "auto.k_0a584580f5"), order: 2 },
   plugin_config: {
-    tab: '系统管理',
-    label: '插件配置 (plugin_config)',
+    tab: i18nText("settings", "auto.k_04ca1cb5c7"),
+    label: i18nText("settings", "auto.k_8f0e60d30f"),
     order: 3
   },
-  state_model: { tab: '系统管理', label: '模型供应商 (state_model)', order: 4 },
+  state_model: { tab: i18nText("settings", "auto.k_04ca1cb5c7"), label: i18nText("settings", "auto.k_f4ac0dd2ca"), order: 4 },
 
-  route_page: { tab: '路由页面', label: '路由权限 (route_page)', order: 1 },
+  route_page: { tab: i18nText("settings", "auto.k_590675cfea"), label: i18nText("settings", "auto.k_013f4dd181"), order: 1 },
 
-  flow: { tab: 'Agent 应用', label: '工作流 (flow)', order: 1 },
+  flow: { tab: i18nText("settings", "auto.k_4275796187"), label: i18nText("settings", "auto.k_4461d0d885"), order: 1 },
   publish_endpoint: {
-    tab: 'Agent 应用',
-    label: '发布 (publish_endpoint)',
+    tab: i18nText("settings", "auto.k_4275796187"),
+    label: i18nText("settings", "auto.k_da667c6ad2"),
     order: 2
   }
 };
 
-const TAB_ORDER = ['基础配置', '系统管理', '路由页面', 'Agent 应用', '其他'];
+const TAB_ORDER = [i18nText("settings", "auto.k_5095009346"), i18nText("settings", "auto.k_04ca1cb5c7"), i18nText("settings", "auto.k_590675cfea"), i18nText("settings", "auto.k_4275796187"), i18nText("settings", "auto.k_1a26edf94a")];
 
 export function RolePermissionPanel({
   canManageRoles
@@ -151,7 +152,7 @@ export function RolePermissionPanel({
     allPerms.forEach((p) => {
       const resKey = p.resource || 'other';
       const mapInfo = RESOURCE_MAP[resKey];
-      const tabName = mapInfo ? mapInfo.tab : '其他';
+      const tabName = mapInfo ? mapInfo.tab : i18nText("settings", "auto.k_1a26edf94a");
 
       if (!tabsMap.has(tabName)) {
         tabsMap.set(tabName, new Map());
@@ -218,11 +219,11 @@ export function RolePermissionPanel({
       );
     },
     onSuccess: async () => {
-      messageApi.success('权限更新成功');
+      messageApi.success(i18nText("settings", "auto.k_f4bee77a73"));
       await invalidateRoles();
     },
     onError: () => {
-      messageApi.error('权限更新失败');
+      messageApi.error(i18nText("settings", "auto.k_0f18e624e8"));
       // revert local state on error
       setLocalCheckedCodes(rolePermissionsQuery.data?.permission_codes ?? []);
     }
@@ -245,12 +246,12 @@ export function RolePermissionPanel({
       );
     },
     onSuccess: async () => {
-      messageApi.success('角色创建成功');
+      messageApi.success(i18nText("settings", "auto.k_90d651cbba"));
       createForm.resetFields();
       setIsCreateModalOpen(false);
       await invalidateRoles();
     },
-    onError: () => messageApi.error('角色创建失败')
+    onError: () => messageApi.error(i18nText("settings", "auto.k_ed49361253"))
   });
 
   const updateMutation = useMutation({
@@ -271,11 +272,11 @@ export function RolePermissionPanel({
       );
     },
     onSuccess: async () => {
-      messageApi.success('角色更新成功');
+      messageApi.success(i18nText("settings", "auto.k_e6b74b0057"));
       setEditingRole(null);
       await invalidateRoles();
     },
-    onError: () => messageApi.error('角色更新失败')
+    onError: () => messageApi.error(i18nText("settings", "auto.k_0d0f9319f5"))
   });
 
   const deleteMutation = useMutation({
@@ -284,13 +285,13 @@ export function RolePermissionPanel({
       return deleteSettingsRole(roleCode, csrfToken);
     },
     onSuccess: async (_, variables) => {
-      messageApi.success('角色已删除');
+      messageApi.success(i18nText("settings", "auto.k_980b39d722"));
       if (selectedRoleCode === variables) {
         setSelectedRoleCode(rolesQuery.data?.[0]?.code ?? null);
       }
       await invalidateRoles();
     },
-    onError: () => messageApi.error('角色删除失败')
+    onError: () => messageApi.error(i18nText("settings", "auto.k_af3639bb51"))
   });
 
   const handleEditClick = (role: SettingsRole) => {
@@ -304,7 +305,7 @@ export function RolePermissionPanel({
   };
 
   return (
-    <SettingsSectionSurface title="权限管理" hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.k_e47b7f25dd")} hideHeader heightMode="fill">
       <div
         style={{
           display: 'flex',
@@ -357,11 +358,10 @@ export function RolePermissionPanel({
                     block
                     onClick={() => setIsCreateModalOpen(true)}
                   >
-                    新建角色
-                  </Button>
+                    {i18nText("settings", "auto.k_7a0524c3a7")}</Button>
                 )}
                 <Input
-                  placeholder="搜索角色..."
+                  placeholder={i18nText("settings", "auto.k_93e4a5c9c6")}
                   prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -375,14 +375,12 @@ export function RolePermissionPanel({
                 <div
                   style={{ padding: 16, textAlign: 'center', color: '#bfbfbf' }}
                 >
-                  加载中...
-                </div>
+                  {i18nText("settings", "auto.k_514c33af5c")}</div>
               ) : filteredRoles.length === 0 ? (
                 <div
                   style={{ padding: 32, textAlign: 'center', color: '#bfbfbf' }}
                 >
-                  暂无角色
-                </div>
+                  {i18nText("settings", "auto.k_6103376362")}</div>
               ) : (
                 <div style={{ padding: '8px 0' }}>
                   {filteredRoles.map((role) => {
@@ -420,8 +418,7 @@ export function RolePermissionPanel({
                               color="gold"
                               style={{ margin: 0, border: 'none' }}
                             >
-                              内置
-                            </Tag>
+                              {i18nText("settings", "auto.k_09ceea7644")}</Tag>
                           )}
                         </div>
                         <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
@@ -468,16 +465,16 @@ export function RolePermissionPanel({
                       {selectedRole.name}
                     </Typography.Title>
                     <Space size="large" style={{ color: '#595959' }}>
-                      <span>编码：{selectedRole.code}</span>
-                      <span>作用域：{selectedRole.scope_kind}</span>
+                      <span>{i18nText("settings", "auto.k_bd19099baf")}{selectedRole.code}</span>
+                      <span>{i18nText("settings", "auto.k_81de160a82")}{selectedRole.scope_kind}</span>
                       {selectedRole.introduction && (
-                        <span>说明：{selectedRole.introduction}</span>
+                        <span>{i18nText("settings", "auto.k_a2c8f89312")}{selectedRole.introduction}</span>
                       )}
                       {selectedRole.auto_grant_new_permissions ? (
-                        <Tag color="blue">自动接收新增权限</Tag>
+                        <Tag color="blue">{i18nText("settings", "auto.k_f6e1a8129f")}</Tag>
                       ) : null}
                       {selectedRole.is_default_member_role ? (
-                        <Tag color="green">默认新用户角色</Tag>
+                        <Tag color="green">{i18nText("settings", "auto.k_a8e1023e12")}</Tag>
                       ) : null}
                     </Space>
                   </div>
@@ -487,19 +484,17 @@ export function RolePermissionPanel({
                         icon={<EditOutlined />}
                         onClick={() => handleEditClick(selectedRole)}
                       >
-                        编辑基本信息
-                      </Button>
+                        {i18nText("settings", "auto.k_52d4d230e3")}</Button>
                       <Popconfirm
-                        title="确定要删除该角色吗？"
+                        title={i18nText("settings", "auto.k_84dd4898fe")}
                         onConfirm={() =>
                           deleteMutation.mutate(selectedRole.code)
                         }
-                        okText="删除"
+                        okText={i18nText("settings", "auto.k_3755f56f2f")}
                         okButtonProps={{ danger: true }}
                       >
                         <Button danger icon={<DeleteOutlined />}>
-                          删除角色
-                        </Button>
+                          {i18nText("settings", "auto.k_89dab40d48")}</Button>
                       </Popconfirm>
                     </Space>
                   )}
@@ -512,8 +507,7 @@ export function RolePermissionPanel({
                   {permissionsQuery.isLoading ||
                   rolePermissionsQuery.isLoading ? (
                     <div style={{ padding: 32, textAlign: 'center' }}>
-                      加载权限数据中...
-                    </div>
+                      {i18nText("settings", "auto.k_cdca1a02f2")}</div>
                   ) : (
                     <Tabs
                       defaultActiveKey={TAB_ORDER[0]}
@@ -573,8 +567,7 @@ export function RolePermissionPanel({
                 <Space direction="vertical" align="center">
                   <TeamOutlined style={{ fontSize: 48 }} />
                   <Typography.Text type="secondary">
-                    请在左侧选择一个角色查看详情
-                  </Typography.Text>
+                    {i18nText("settings", "auto.k_8516a37f19")}</Typography.Text>
                 </Space>
               </div>
             )}
@@ -582,7 +575,7 @@ export function RolePermissionPanel({
         </div>
 
         <Modal
-          title="新建角色"
+          title={i18nText("settings", "auto.k_7a0524c3a7")}
           open={isCreateModalOpen}
           onCancel={() => {
             setIsCreateModalOpen(false);
@@ -603,45 +596,45 @@ export function RolePermissionPanel({
             style={{ marginTop: 24 }}
           >
             <Form.Item
-              label="角色名称"
+              label={i18nText("settings", "auto.k_3aa1f085b2")}
               name="name"
-              rules={[{ required: true, message: '请输入角色名称' }]}
+              rules={[{ required: true, message: i18nText("settings", "auto.k_b7c17b9e6e") }]}
             >
-              <Input placeholder="例如：运营专员" />
+              <Input placeholder={i18nText("settings", "auto.k_4d6f8223c8")} />
             </Form.Item>
             <Form.Item
-              label="角色编码"
+              label={i18nText("settings", "auto.k_c12ace673d")}
               name="code"
-              rules={[{ required: true, message: '请输入角色编码' }]}
-              extra="编码需全局唯一，创建后不可修改。"
+              rules={[{ required: true, message: i18nText("settings", "auto.k_67819cee9b") }]}
+              extra={i18nText("settings", "auto.k_0eaf475ae9")}
             >
-              <Input placeholder="例如：role_ops_specialist" />
+              <Input placeholder={i18nText("settings", "auto.k_09149af273")} />
             </Form.Item>
-            <Form.Item label="角色说明" name="introduction">
+            <Form.Item label={i18nText("settings", "auto.k_9ae5aa988d")} name="introduction">
               <Input.TextArea
-                placeholder="简要描述该角色的职责和适用范围"
+                placeholder={i18nText("settings", "auto.k_8f86210c27")}
                 rows={3}
               />
             </Form.Item>
             <Form.Item
               name="auto_grant_new_permissions"
               valuePropName="checked"
-              extra="开启后，仅对未来新增的权限自动授予当前角色。"
+              extra={i18nText("settings", "auto.k_a305ece229")}
             >
-              <Checkbox>自动接收后续新增权限</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.k_17cb542374")}</Checkbox>
             </Form.Item>
             <Form.Item
               name="is_default_member_role"
               valuePropName="checked"
-              extra="同一工作空间只能有一个默认新用户角色。"
+              extra={i18nText("settings", "auto.k_7fead96aef")}
             >
-              <Checkbox>默认新用户角色</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.k_a8e1023e12")}</Checkbox>
             </Form.Item>
           </Form>
         </Modal>
 
         <Modal
-          title="编辑角色"
+          title={i18nText("settings", "auto.k_b9dcd82a7b")}
           open={!!editingRole}
           onCancel={() => setEditingRole(null)}
           onOk={() => editForm.submit()}
@@ -655,28 +648,28 @@ export function RolePermissionPanel({
             style={{ marginTop: 24 }}
           >
             <Form.Item
-              label="角色名称"
+              label={i18nText("settings", "auto.k_3aa1f085b2")}
               name="name"
-              rules={[{ required: true, message: '请输入角色名称' }]}
+              rules={[{ required: true, message: i18nText("settings", "auto.k_b7c17b9e6e") }]}
             >
               <Input />
             </Form.Item>
-            <Form.Item label="角色说明" name="introduction">
+            <Form.Item label={i18nText("settings", "auto.k_9ae5aa988d")} name="introduction">
               <Input.TextArea rows={3} />
             </Form.Item>
             <Form.Item
               name="auto_grant_new_permissions"
               valuePropName="checked"
-              extra="开启后，仅对未来新增的权限自动授予当前角色。"
+              extra={i18nText("settings", "auto.k_a305ece229")}
             >
-              <Checkbox>自动接收后续新增权限</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.k_17cb542374")}</Checkbox>
             </Form.Item>
             <Form.Item
               name="is_default_member_role"
               valuePropName="checked"
-              extra="同一工作空间只能有一个默认新用户角色。"
+              extra={i18nText("settings", "auto.k_7fead96aef")}
             >
-              <Checkbox>默认新用户角色</Checkbox>
+              <Checkbox>{i18nText("settings", "auto.k_a8e1023e12")}</Checkbox>
             </Form.Item>
           </Form>
         </Modal>

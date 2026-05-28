@@ -8,6 +8,7 @@ import {
   selectSelectedNodeId,
   selectWorkingDocument
 } from '../../../store/editor/selectors';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function NodeOutputContractCard({
   adapter
@@ -28,7 +29,7 @@ export function NodeOutputContractCard({
   }
 
   // Use a customized title for the start node
-  const title = selectedNode.type === 'start' ? '输入字段' : '输出变量';
+  const title = selectedNode.type === 'start' ? i18nText("agentFlow", "auto.k_f4cbd6bd13") : i18nText("agentFlow", "auto.k_1860add605");
   const outputs =
     (adapter?.getValue('config.output_contract') as
       | FlowNodeDocument['outputs']
@@ -64,7 +65,7 @@ export function NodeOutputContractCard({
           ))}
         </div>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无字段" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.k_79bbc81592")} />
       )}
     </div>
   );

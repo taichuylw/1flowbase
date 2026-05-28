@@ -10,6 +10,7 @@ import {
 import type { ApplicationRunSummary } from '../../api/runtime';
 import { APPLICATION_RUNS_TABLE_COLUMNS } from './application-runs-table-columns';
 import type { ApplicationRunsTableConfiguration } from './useApplicationRunsTableConfiguration';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function ApplicationRunsTableColumnSettings({
   configuration
@@ -57,8 +58,7 @@ export function ApplicationRunsTable({
           ...column,
           render: (_value: unknown, run: ApplicationRunSummary): ReactNode => (
             <Button type="link" onClick={() => onSelectRun(run.id)}>
-              查看运行详情
-            </Button>
+              {i18nText("applications", "auto.k_edb5f5db6b")}</Button>
           )
         };
       }),

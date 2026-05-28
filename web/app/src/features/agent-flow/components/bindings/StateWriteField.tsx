@@ -2,6 +2,7 @@ import { Button, Input, Select } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
 import { SelectorField } from './SelectorField';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface StateWriteValue {
   path: string[];
@@ -93,8 +94,7 @@ export function StateWriteField({
             type="text"
             onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}
           >
-            删除
-          </Button>
+            {i18nText("agentFlow", "auto.k_3755f56f2f")}</Button>
         </div>
       ))}
       <Button
@@ -103,8 +103,7 @@ export function StateWriteField({
           onChange([...value, { path: [], operator: 'set', source: null }])
         }
       >
-        新增操作
-      </Button>
+        {i18nText("agentFlow", "auto.k_2de46dbb2e")}</Button>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   type ApplicationApiMapping,
   type ApplicationApiPublication
 } from '../../api/public-api';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const selectorPattern = /^[A-Za-z0-9_.-]+$/;
 
@@ -60,13 +61,12 @@ export function ApplicationApiMappingPanel({
       <Space direction="vertical" size={12} className="application-api-panel__stack">
         <Typography.Title level={4}>Mapping</Typography.Title>
         <Typography.Text type="secondary">
-          `model_target` 留空时，model 只保留在请求 metadata，不注入节点输入。
-        </Typography.Text>
+          {i18nText("applications", "auto.k_0ffa401624")}</Typography.Text>
         {publication && currentMappingText !== publishedMappingText ? (
           <Alert
             type="warning"
             showIcon
-            message="当前保存的 mapping 与 active publication snapshot 不一致"
+            message={i18nText("applications", "auto.k_3652f445da")}
           />
         ) : null}
         <Form<ApplicationApiMapping>
@@ -79,7 +79,7 @@ export function ApplicationApiMappingPanel({
             <SelectorItem
               name={['input', 'model_target']}
               label="model_target"
-              help="pass-through target；留空不注入节点输入"
+              help={i18nText("applications", "auto.k_96b96b64cb")}
             />
             <SelectorItem name={['input', 'inputs_target']} label="inputs_target" />
             <SelectorItem name={['input', 'history_target']} label="history_target" />
@@ -90,8 +90,7 @@ export function ApplicationApiMappingPanel({
             <SelectorItem name={['output', 'error_selector']} label="error_selector" />
           </div>
           <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
-            保存 Mapping
-          </Button>
+            {i18nText("applications", "auto.k_03707d93b7")}</Button>
         </Form>
       </Space>
     </section>
@@ -115,7 +114,7 @@ function SelectorItem({
       label={label}
       help={help}
       rules={[
-        ...(required ? [{ required: true, message: `${label} 不能为空` }] : []),
+        ...(required ? [{ required: true, message: i18nText("applications", "auto.k_14cc0ae4e6", { value1: label }) }] : []),
         {
           validator: (_, value: string | null | undefined) => {
             if (!value) {
@@ -123,7 +122,7 @@ function SelectorItem({
             }
             return selectorPattern.test(value)
               ? Promise.resolve()
-              : Promise.reject(new Error('只能包含字母、数字、下划线、点和连字符'));
+              : Promise.reject(new Error(i18nText("applications", "auto.k_869d32dcbb")));
           }
         }
       ]}

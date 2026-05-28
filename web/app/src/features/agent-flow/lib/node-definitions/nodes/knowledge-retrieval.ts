@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const knowledgeRetrievalNodeDefinition: NodeDefinition = {
   label: 'Knowledge Retrieval',
@@ -13,7 +14,7 @@ export const knowledgeRetrievalNodeDefinition: NodeDefinition = {
       key: 'inputs',
       title: 'Inputs',
       fields: [
-        { key: 'bindings.query', label: '检索问题', editor: 'selector', required: true }
+        { key: 'bindings.query', label: i18nText("agentFlow", "auto.k_2a1d305a06"), editor: 'selector', required: true }
       ]
     },
     {
@@ -22,7 +23,7 @@ export const knowledgeRetrievalNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'outputs.documents',
-          label: '知识结果',
+          label: i18nText("agentFlow", "auto.k_b17d392ca1"),
           editor: 'text',
           required: true
         }

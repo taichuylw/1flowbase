@@ -33,6 +33,7 @@ import { AgentFlowCustomConnectionLine } from '../canvas/custom-connection-line'
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import { agentFlowEdgeTypes, agentFlowNodeTypes } from '../canvas/node-types';
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface AgentFlowCanvasProps {
   issueCountByNodeId: Record<string, number>;
@@ -54,12 +55,12 @@ function ZoomToolbar() {
     <Panel position="bottom-left" style={{ left: 0, bottom: 0 }}>
       <div className="agent-flow-zoom-toolbar">
         <div
-          aria-label="画布缩放工具栏"
+          aria-label={i18nText("agentFlow", "auto.k_a1b87f70ac")}
           className="agent-flow-zoom-toolbar__actions"
           role="toolbar"
         >
           <Button
-            aria-label="缩小画布"
+            aria-label={i18nText("agentFlow", "auto.k_b7f9e266e1")}
             className="agent-flow-zoom-toolbar__button"
             icon={<MinusOutlined />}
             onClick={() => {
@@ -69,7 +70,7 @@ function ZoomToolbar() {
             type="text"
           />
           <Button
-            aria-label="放大画布"
+            aria-label={i18nText("agentFlow", "auto.k_55c0d6cce3")}
             className="agent-flow-zoom-toolbar__button"
             icon={<PlusOutlined />}
             onClick={() => {
@@ -79,7 +80,7 @@ function ZoomToolbar() {
             type="text"
           />
           <Button
-            aria-label="适应画布"
+            aria-label={i18nText("agentFlow", "auto.k_3bc70c8d9d")}
             className="agent-flow-zoom-toolbar__button"
             icon={<AimOutlined />}
             onClick={() => {
@@ -89,7 +90,7 @@ function ZoomToolbar() {
             type="text"
           />
         </div>
-        <div aria-label="当前缩放" className="agent-flow-zoom-display">
+        <div aria-label={i18nText("agentFlow", "auto.k_d962d98436")} className="agent-flow-zoom-display">
           {Math.round(zoom * 100)}%
         </div>
       </div>
@@ -327,7 +328,7 @@ function AgentFlowCanvasInner({
           }}
         >
           <NodePickerPopover
-            ariaLabel="在当前连线位置插入节点"
+            ariaLabel={i18nText("agentFlow", "auto.k_b0ac61e9d5")}
             buttonClassName="agent-flow-floating-picker-anchor__button"
             open
             options={nodePickerOptions}

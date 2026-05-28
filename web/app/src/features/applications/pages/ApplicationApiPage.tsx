@@ -18,6 +18,7 @@ import { ApplicationApiDocsPanel } from '../components/api/ApplicationApiDocsPan
 import { ApplicationApiKeysPanel } from '../components/api/ApplicationApiKeysPanel';
 import { ApplicationApiStatusBar } from '../components/api/ApplicationApiStatusBar';
 import './application-api-page.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 export function ApplicationApiPage({
   application
@@ -60,7 +61,7 @@ export function ApplicationApiPage({
   });
 
   if (!publication && publicationQuery.isLoading) {
-    return <Result status="info" title="正在加载公开 API 状态" />;
+    return <Result status="info" title={i18nText("applications", "auto.k_efe6d2cf3c")} />;
   }
 
   return (
@@ -87,16 +88,15 @@ export function ApplicationApiPage({
         <Alert
           type="warning"
           showIcon
-          message="需要先发布公开 API"
-          description="发布会保存当前工作流版本和公开 API 运行配置，并让 API Key 调用 active publication。"
+          message={i18nText("applications", "auto.k_7a5fb3c3d0")}
+          description={i18nText("applications", "auto.k_dc3901e5a6")}
           action={
             <Button
               type="primary"
               loading={publishMutation.isPending || mappingQuery.isLoading}
               onClick={() => publishMutation.mutate()}
             >
-              发布当前版本
-            </Button>
+              {i18nText("applications", "auto.k_b9f1ed2cf2")}</Button>
           }
         />
       ) : null}

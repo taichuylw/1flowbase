@@ -38,12 +38,13 @@ import {
 } from '../../api/data-models';
 import { DataModelFormDrawer } from './DataModelFormDrawer';
 import { DataModelHelpTooltip } from './DataModelHelpTooltip';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const dataModelStatusHelp =
-  'draft: 草稿，默认新建为未发布状态；published: 已发布，允许进入运行可用性和 API 暴露判断；disabled: 已停用，不进入运行面；broken: 当前定义、运行依赖或外部资源异常，需要修复后再发布。';
+  i18nText("settings", "auto.k_841318af0b");
 
 const defaultApiExposureStatusHelp =
-  'draft: API 暴露草稿；published_not_exposed: 默认不生成 API 访问面；api_exposed_no_permission: 已请求生成 API 访问面，但默认不授予访问权限。';
+  i18nText("settings", "auto.k_9ae58afd41");
 
 type DefaultDataModelStatus =
   UpdateSettingsDataSourceDefaultsInput['default_data_model_status'];
@@ -51,16 +52,16 @@ type DefaultApiExposureStatus =
   UpdateSettingsDataSourceDefaultsInput['default_api_exposure_status'];
 
 const dataModelStatusOptions = [
-  { label: 'Draft (草稿)', value: 'draft' },
-  { label: 'Published (已发布)', value: 'published' },
-  { label: 'Disabled (已停用)', value: 'disabled' },
-  { label: 'Broken (异常)', value: 'broken' }
+  { label: i18nText("settings", "auto.k_4bd191fb0d"), value: 'draft' },
+  { label: i18nText("settings", "auto.k_65a525c108"), value: 'published' },
+  { label: i18nText("settings", "auto.k_36bd66d67b"), value: 'disabled' },
+  { label: i18nText("settings", "auto.k_0b1d58b4a0"), value: 'broken' }
 ] satisfies Array<{ label: string; value: DefaultDataModelStatus }>;
 
 const apiExposureOptions = [
-  { label: 'Draft (API 草稿)', value: 'draft' },
-  { label: 'Published (无公开 API)', value: 'published_not_exposed' },
-  { label: 'API Exposed (未授权公开)', value: 'api_exposed_no_permission' }
+  { label: i18nText("settings", "auto.k_b2c29bc1c0"), value: 'draft' },
+  { label: i18nText("settings", "auto.k_b75bad6b2d"), value: 'published_not_exposed' },
+  { label: i18nText("settings", "auto.k_e64aeccb70"), value: 'api_exposed_no_permission' }
 ] satisfies Array<{ label: string; value: DefaultApiExposureStatus }>;
 
 const builtinMainSourceModelCodes = new Set(['attachments', 'users', 'roles']);
@@ -87,8 +88,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<CheckCircleOutlined />}
         >
-          已发布
-        </Tag>
+          {i18nText("settings", "auto.k_176a2eb4eb")}</Tag>
       );
     case 'draft':
       return (
@@ -97,8 +97,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<EditOutlined />}
         >
-          草稿
-        </Tag>
+          {i18nText("settings", "auto.k_0f436818c0")}</Tag>
       );
     case 'disabled':
       return (
@@ -107,8 +106,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<StopOutlined />}
         >
-          已停用
-        </Tag>
+          {i18nText("settings", "auto.k_6c7dcbb73a")}</Tag>
       );
     case 'broken':
       return (
@@ -117,8 +115,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<ExclamationCircleOutlined />}
         >
-          异常
-        </Tag>
+          {i18nText("settings", "auto.k_5caf279339")}</Tag>
       );
     default:
       return <Tag style={{ borderRadius: 6, margin: 0 }}>{status}</Tag>;
@@ -134,8 +131,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<CheckCircleOutlined />}
         >
-          已公开
-        </Tag>
+          {i18nText("settings", "auto.k_25c17b12f1")}</Tag>
       );
     case 'api_exposed_no_permission':
       return (
@@ -144,8 +140,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<InfoCircleOutlined />}
         >
-          已公开 (未授权)
-        </Tag>
+          {i18nText("settings", "auto.k_64d55ec6b6")}</Tag>
       );
     case 'published_not_exposed':
       return (
@@ -154,8 +149,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<FileTextOutlined />}
         >
-          未公开
-        </Tag>
+          {i18nText("settings", "auto.k_365cbc93a4")}</Tag>
       );
     case 'draft':
       return (
@@ -164,8 +158,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<EditOutlined />}
         >
-          草稿
-        </Tag>
+          {i18nText("settings", "auto.k_0f436818c0")}</Tag>
       );
     case 'unsafe_external_source':
       return (
@@ -174,8 +167,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<ExclamationCircleOutlined />}
         >
-          不安全外部源
-        </Tag>
+          {i18nText("settings", "auto.k_4495641c08")}</Tag>
       );
     default:
       return <Tag style={{ borderRadius: 6, margin: 0 }}>API {status}</Tag>;
@@ -233,7 +225,7 @@ export function DataModelTable({
       return updateSettingsDataSourceDefaults(source.id, patch, csrfToken);
     },
     onSuccess: async () => {
-      message.success('默认状态已保存');
+      message.success(i18nText("settings", "auto.k_67a3d27986"));
       await queryClient.invalidateQueries({
         queryKey: settingsDataSourcesQueryKey
       });
@@ -266,7 +258,7 @@ export function DataModelTable({
       )
     },
     {
-      title: '状态',
+      title: i18nText("settings", "auto.k_62e951a692"),
       dataIndex: 'status',
       key: 'status',
       width: 140,
@@ -280,7 +272,7 @@ export function DataModelTable({
       render: (value: string) => getApiExposureTag(value)
     },
     {
-      title: '表 ID',
+      title: i18nText("settings", "auto.k_e8c66a5fcd"),
       dataIndex: 'external_table_id',
       key: 'external_table_id',
       width: 180,
@@ -294,7 +286,7 @@ export function DataModelTable({
         )
     },
     {
-      title: '字段数',
+      title: i18nText("settings", "auto.k_b2404bdd45"),
       key: 'fields',
       width: 96,
       render: (_, model) => (
@@ -302,7 +294,7 @@ export function DataModelTable({
       )
     },
     {
-      title: '操作',
+      title: i18nText("settings", "auto.k_f3ea6d345e"),
       key: 'actions',
       width: 160,
       render: (_, model) => {
@@ -321,8 +313,7 @@ export function DataModelTable({
                 onEditModel(model);
               }}
             >
-              编辑
-            </Button>
+              {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
             {canDeleteModel ? (
               <Button
                 danger
@@ -330,15 +321,14 @@ export function DataModelTable({
                 size="small"
                 icon={<DeleteOutlined aria-hidden="true" />}
                 style={{ padding: 0 }}
-                aria-label={`删除数据表 ${model.title}`}
+                aria-label={i18nText("settings", "auto.k_24b7874b28", { value1: model.title })}
                 disabled={!canManage}
                 onClick={(event) => {
                   event.stopPropagation();
                   setDeleteTarget(model);
                 }}
               >
-                删除
-              </Button>
+                {i18nText("settings", "auto.k_3755f56f2f")}</Button>
             ) : null}
           </Space>
         );
@@ -355,7 +345,7 @@ export function DataModelTable({
         wrap="wrap"
         gap={16}
       >
-        <span className="data-model-panel__sr-only">数据表</span>
+        <span className="data-model-panel__sr-only">{i18nText("settings", "auto.k_61abbaa1c0")}</span>
         <Button
           type="primary"
           icon={<PlusOutlined aria-hidden="true" />}
@@ -364,8 +354,7 @@ export function DataModelTable({
             setDrawerState({ open: true, mode: 'create', model: null })
           }
         >
-          新建数据表
-        </Button>
+          {i18nText("settings", "auto.k_23e9246ed9")}</Button>
 
         {selectedSource && (
           <Form
@@ -383,15 +372,14 @@ export function DataModelTable({
                   htmlFor="data-source-default-model-status"
                   className="data-model-panel__sr-only"
                 >
-                  默认 Data Model 状态
-                </label>
+                  {i18nText("settings", "auto.k_f907023cd8")}</label>
                 <Select
                   id="data-source-default-model-status"
                   value={selectedSource.default_data_model_status}
                   options={dataModelStatusOptions}
                   disabled={updateDefaultsMutation.isPending}
                   style={{ minWidth: 140 }}
-                  placeholder="默认建模状态"
+                  placeholder={i18nText("settings", "auto.k_8da22d3410")}
                   onChange={(value) =>
                     updateDefaultsMutation.mutate({
                       source: selectedSource,
@@ -406,7 +394,7 @@ export function DataModelTable({
                 />
                 <DataModelHelpTooltip
                   decorative
-                  label="默认 Data Model 状态"
+                  label={i18nText("settings", "auto.k_f907023cd8")}
                   title={dataModelStatusHelp}
                 />
               </Flex>
@@ -418,8 +406,7 @@ export function DataModelTable({
                   htmlFor="data-source-default-api-status"
                   className="data-model-panel__sr-only"
                 >
-                  默认 API 暴露状态
-                </label>
+                  {i18nText("settings", "auto.k_1ae4b76727")}</label>
                 <Select
                   id="data-source-default-api-status"
                   value={toDefaultApiExposureStatus(
@@ -428,7 +415,7 @@ export function DataModelTable({
                   options={apiExposureOptions}
                   disabled={updateDefaultsMutation.isPending}
                   style={{ minWidth: 140 }}
-                  placeholder="默认 API 暴露状态"
+                  placeholder={i18nText("settings", "auto.k_1ae4b76727")}
                   onChange={(value: DefaultApiExposureStatus) =>
                     updateDefaultsMutation.mutate({
                       source: selectedSource,
@@ -442,7 +429,7 @@ export function DataModelTable({
                 />
                 <DataModelHelpTooltip
                   decorative
-                  label="默认 API 暴露状态"
+                  label={i18nText("settings", "auto.k_1ae4b76727")}
                   title={defaultApiExposureStatusHelp}
                 />
               </Flex>
@@ -504,13 +491,12 @@ export function DataModelTable({
                   {model.source_kind === 'external_source' &&
                   model.external_table_id ? (
                     <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                      表 ID: {model.external_table_id}
+                      {i18nText("settings", "auto.k_870407f93e")}{model.external_table_id}
                     </Typography.Text>
                   ) : null}
                 </Space>
                 <Tag style={{ borderRadius: 6, margin: 0 }}>
-                  {model.fields.length} 字段
-                </Tag>
+                  {model.fields.length} {i18nText("settings", "auto.k_77a49f2c38")}</Tag>
               </Flex>
               <Flex gap={6} style={{ marginTop: 12 }} wrap="wrap">
                 {getStatusTag(model.status)}
@@ -537,8 +523,7 @@ export function DataModelTable({
                         onEditModel(model);
                       }}
                     >
-                      编辑
-                    </Button>
+                      {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
                     {!isBuiltinMainSourceModel(model) ? (
                       <Button
                         danger
@@ -546,14 +531,13 @@ export function DataModelTable({
                         size="small"
                         icon={<DeleteOutlined aria-hidden="true" />}
                         style={{ padding: 0 }}
-                        aria-label={`删除数据表 ${model.title}`}
+                        aria-label={i18nText("settings", "auto.k_24b7874b28", { value1: model.title })}
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleteTarget(model);
                         }}
                       >
-                        删除
-                      </Button>
+                        {i18nText("settings", "auto.k_3755f56f2f")}</Button>
                     ) : null}
                   </Space>
                 ) : null}
@@ -575,12 +559,12 @@ export function DataModelTable({
         onUpdate={onUpdateModel}
       />
       <Modal
-        title="确认删除数据表"
+        title={i18nText("settings", "auto.k_2acd0aba22")}
         open={Boolean(deleteTarget)}
-        okText="确认"
+        okText={i18nText("settings", "auto.k_b56d9ac6c5")}
         okType="danger"
-        cancelText="取消"
-        okButtonProps={{ 'aria-label': '确认' }}
+        cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
+        okButtonProps={{ 'aria-label': i18nText("settings", "auto.k_b56d9ac6c5") }}
         onCancel={() => setDeleteTarget(null)}
         onOk={() => {
           if (deleteTarget) {
@@ -590,7 +574,7 @@ export function DataModelTable({
         }}
       >
         {deleteTarget
-          ? `确定删除数据表 "${deleteTarget.title}" (${deleteTarget.code}) 吗？此操作会同步删除运行表和字段配置。`
+          ? i18nText("settings", "auto.k_2f316ca1c1", { value1: deleteTarget.title, value2: deleteTarget.code })
           : null}
       </Modal>
     </Flex>

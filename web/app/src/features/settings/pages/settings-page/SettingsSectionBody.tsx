@@ -8,6 +8,7 @@ import { SystemRuntimePanel } from '../../components/SystemRuntimePanel';
 import type { SettingsSectionKey } from '../../lib/settings-sections';
 import { SettingsDataModelsSection } from './SettingsDataModelsSection';
 import { SettingsFilesSection } from './SettingsFilesSection';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const ApiDocsPanel = lazy(() =>
   import('../../components/ApiDocsPanel').then((module) => ({
@@ -90,7 +91,7 @@ export function SettingsSectionBody({
     case 'memory-observation':
       return (
         <SettingsSectionBoundary>
-          <SettingsSectionSurface title="内存观察" hideHeader heightMode="fill">
+          <SettingsSectionSurface title={i18nText("settings", "auto.k_5d461a917d")} hideHeader heightMode="fill">
             <HostInfrastructureMemoryObservationPanel
               canManage={canManageHostInfrastructure}
             />

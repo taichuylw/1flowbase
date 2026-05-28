@@ -10,6 +10,7 @@ import { Suspense, lazy, useMemo, useState } from 'react';
 
 import { useClipboardCopy } from '../clipboard/use-clipboard-copy';
 import './json-preview-block.css';
+import { i18nText } from '../../i18n/text';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
@@ -45,8 +46,7 @@ function formatJsonPreview(value: unknown) {
 function JsonEditorFallback({ minHeight }: { minHeight: string }) {
   return (
     <div className="json-preview-block__loading" style={{ minHeight }}>
-      正在加载 JSON 查看器
-    </div>
+      {i18nText("sharedUi", "auto.k_e3a250d891")}</div>
   );
 }
 
@@ -71,8 +71,8 @@ export function JsonPreviewBlock({
   className,
   collapsible = true,
   copyAriaLabel,
-  copyFailureMessage = '复制失败',
-  copySuccessMessage = '已复制',
+  copyFailureMessage = i18nText("sharedUi", "auto.k_f2c6b5167b"),
+  copySuccessMessage = i18nText("sharedUi", "auto.k_e381a5763d"),
   defaultCollapsed = false,
   displayTitle = title,
   fullscreenAriaLabel,
@@ -138,18 +138,18 @@ export function JsonPreviewBlock({
         </button>
         <div className="json-preview-block__actions">
           {actions}
-          <Tooltip title="复制 JSON">
+          <Tooltip title={i18nText("sharedUi", "auto.k_651cff2967")}>
             <Button
-              aria-label={copyAriaLabel ?? `复制${title} JSON`}
+              aria-label={copyAriaLabel ?? i18nText("sharedUi", "auto.k_af7984470a", { value1: title })}
               icon={copied ? <CheckOutlined /> : <CopyOutlined />}
               onClick={handleCopy}
               size="small"
               type="text"
             />
           </Tooltip>
-          <Tooltip title="放大查看">
+          <Tooltip title={i18nText("sharedUi", "auto.k_c5d7f819ba")}>
             <Button
-              aria-label={fullscreenAriaLabel ?? `放大查看${title} JSON`}
+              aria-label={fullscreenAriaLabel ?? i18nText("sharedUi", "auto.k_2032827601", { value1: title })}
               disabled={isCollapsed}
               icon={<FullscreenOutlined />}
               onClick={() => setExpanded(true)}

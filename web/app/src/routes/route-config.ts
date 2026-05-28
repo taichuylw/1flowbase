@@ -1,4 +1,5 @@
 import type { AppRouteId } from '@1flowbase/shared-types';
+import { i18nText } from '../shared/i18n/text';
 
 export interface AppRouteDefinition {
   id: AppRouteId;
@@ -14,7 +15,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'home',
     path: '/',
-    navLabel: '工作台',
+    navLabel: i18nText("appShell", "auto.k_8483cd2b08"),
     chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname === '/'],
     permissionKey: 'route_page.view.all',
@@ -23,7 +24,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'frontstage',
     path: '/frontstage',
-    navLabel: '前台',
+    navLabel: i18nText("appShell", "auto.k_89408f6d5a"),
     chromeSlot: 'primary',
     selectedMatchers: [
       (pathname) =>
@@ -45,7 +46,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'embedded-apps',
     path: '/embedded-apps',
-    navLabel: '子系统',
+    navLabel: i18nText("appShell", "auto.k_1c41ed3edc"),
     chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname.startsWith('/embedded-apps')],
     permissionKey: 'embedded_app.view.all',
@@ -54,7 +55,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'tools',
     path: '/tools',
-    navLabel: '工具',
+    navLabel: i18nText("appShell", "auto.k_a72ef18d9a"),
     chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname.startsWith('/tools')],
     permissionKey: 'route_page.view.all',
@@ -63,7 +64,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'settings',
     path: '/settings',
-    navLabel: '设置',
+    navLabel: i18nText("appShell", "auto.k_7debf9cb03"),
     chromeSlot: 'secondary',
     selectedMatchers: [(pathname) => pathname === '/settings' || pathname.startsWith('/settings/')],
     permissionKey: null,

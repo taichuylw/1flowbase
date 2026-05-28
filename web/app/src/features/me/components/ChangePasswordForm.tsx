@@ -1,6 +1,7 @@
 import { Alert, Button, Form, Input, Space, Typography } from 'antd';
 
 import type { ChangeMyPasswordInput } from '../api/me';
+import { i18nText } from '../../../shared/i18n/text';
 
 interface ChangePasswordValues {
   old_password: string;
@@ -24,10 +25,9 @@ export function ChangePasswordForm({
   return (
     <Space className={className} direction="vertical" size="large">
       <div>
-        <Typography.Title level={3}>安全设置</Typography.Title>
+        <Typography.Title level={3}>{i18nText("me", "auto.k_8bf435e8a8")}</Typography.Title>
         <Typography.Paragraph>
-          更新密码后会立即清除当前会话，你需要使用新密码重新登录。
-        </Typography.Paragraph>
+          {i18nText("me", "auto.k_f10b511381")}</Typography.Paragraph>
       </div>
 
       {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
@@ -44,32 +44,32 @@ export function ChangePasswordForm({
         }}
       >
         <Form.Item
-          label="密码"
+          label={i18nText("me", "auto.k_c839a8ff17")}
           name="old_password"
-          rules={[{ required: true, message: '请输入当前密码。' }]}
+          rules={[{ required: true, message: i18nText("me", "auto.k_5ccbfd6edd") }]}
         >
           <Input.Password />
         </Form.Item>
         <Form.Item
-          label="新密码"
+          label={i18nText("me", "auto.k_d22c9c0085")}
           name="new_password"
-          rules={[{ required: true, message: '请输入新密码。' }]}
+          rules={[{ required: true, message: i18nText("me", "auto.k_7543b01a32") }]}
         >
           <Input.Password />
         </Form.Item>
         <Form.Item
-          label="确认新密码"
+          label={i18nText("me", "auto.k_d4477adb6f")}
           name="confirm_password"
           dependencies={['new_password']}
           rules={[
-            { required: true, message: '请再次输入新密码。' },
+            { required: true, message: i18nText("me", "auto.k_4850ecf733") },
             ({ getFieldValue }) => ({
               validator(_, value) {
                 if (!value || value === getFieldValue('new_password')) {
                   return Promise.resolve();
                 }
 
-                return Promise.reject(new Error('两次输入的新密码不一致。'));
+                return Promise.reject(new Error(i18nText("me", "auto.k_00348363de")));
               }
             })
           ]}
@@ -77,8 +77,7 @@ export function ChangePasswordForm({
           <Input.Password />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={submitting}>
-          更新密码
-        </Button>
+          {i18nText("me", "auto.k_2f3ed4c7a4")}</Button>
       </Form>
     </Space>
   );

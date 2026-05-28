@@ -8,6 +8,7 @@ import {
   selectSelectedNodeId,
   selectWorkingDocument
 } from '../../../store/editor/selectors';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function NodePolicySection({
   adapter
@@ -30,18 +31,18 @@ export function NodePolicySection({
   const errorPolicyOptions = [
     {
       value: 'none',
-      label: '无',
-      description: '当发生异常且未处理时，节点将停止运行'
+      label: i18nText("agentFlow", "auto.k_72077749f7"),
+      description: i18nText("agentFlow", "auto.k_544a35b974")
     },
     {
       value: 'default_value',
-      label: '默认值',
-      description: '当发生异常时，指定默认输出内容。'
+      label: i18nText("agentFlow", "auto.k_d93919c37b"),
+      description: i18nText("agentFlow", "auto.k_9be0a808e3")
     },
     {
       value: 'error_branch',
-      label: '异常分支',
-      description: '当发生异常时，将执行异常分支'
+      label: i18nText("agentFlow", "auto.k_92879700a0"),
+      description: i18nText("agentFlow", "auto.k_938451d34e")
     }
   ] satisfies Array<{
     value: string;
@@ -53,10 +54,9 @@ export function NodePolicySection({
     <div className="agent-flow-node-detail__policies">
       <div className="agent-flow-node-detail__policy-row" data-testid="node-policy-row">
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          失败重试
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_794ff5f046")}</Typography.Text>
         <Switch
-          aria-label="失败重试"
+          aria-label={i18nText("agentFlow", "auto.k_794ff5f046")}
           checked={Boolean(selectedNode.config.retry_enabled)}
           className="agent-flow-node-detail__policy-control"
           onChange={(checked) => {
@@ -74,14 +74,13 @@ export function NodePolicySection({
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          异常处理
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_066247572d")}</Typography.Text>
         <div
           className="agent-flow-node-detail__policy-select-shell agent-flow-node-detail__policy-select-shell--compact"
           data-testid="node-policy-error"
         >
           <Select
-            aria-label="异常处理"
+            aria-label={i18nText("agentFlow", "auto.k_066247572d")}
             className="agent-flow-node-detail__policy-control agent-flow-node-detail__policy-select"
             options={errorPolicyOptions}
             optionRender={(option) => {

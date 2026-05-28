@@ -1,4 +1,5 @@
 import type { SectionNavItem } from '../../../shared/ui/section-page-layout/SectionPageLayout';
+import { i18nText } from '../../../shared/i18n/text';
 
 export type SettingsSectionKey =
   | 'docs'
@@ -22,31 +23,31 @@ export interface SettingsSectionDefinition extends SettingsSectionNavItem {
 export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   {
     key: 'docs',
-    label: 'API 文档',
+    label: i18nText("settings", "auto.k_ddd798b421"),
     to: '/settings/docs',
     requiredPermissions: ['api_reference.view.all']
   },
   {
     key: 'system-runtime',
-    label: '系统运行',
+    label: i18nText("settings", "auto.k_5027fd1718"),
     to: '/settings/system-runtime',
     requiredPermissions: ['system_runtime.view.all']
   },
   {
     key: 'host-infrastructure',
-    label: '基础设施',
+    label: i18nText("settings", "auto.k_add2c7fd5b"),
     to: '/settings/host-infrastructure',
     requiredPermissions: ['plugin_config.view.all']
   },
   {
     key: 'memory-observation',
-    label: '内存观察',
+    label: i18nText("settings", "auto.k_5d461a917d"),
     to: '/settings/memory-observation',
     requiredPermissions: ['plugin_config.view.all']
   },
   {
     key: 'files',
-    label: '文件管理',
+    label: i18nText("settings", "auto.k_3f2244c98f"),
     to: '/settings/files',
     requiredPermissions: [
       'file_table.view.all',
@@ -56,7 +57,7 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'data-models',
-    label: '数据源',
+    label: i18nText("settings", "auto.k_a3ccf702c5"),
     to: '/settings/data-models',
     requiredPermissions: [
       'state_model.view.all',
@@ -67,7 +68,7 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'model-providers',
-    label: '模型供应商',
+    label: i18nText("settings", "auto.k_77d78db072"),
     to: '/settings/model-providers',
     requiredPermissions: [
       'state_model.view.all',
@@ -78,13 +79,13 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'members',
-    label: '用户管理',
+    label: i18nText("settings", "auto.k_baf84751a2"),
     to: '/settings/members',
     requiredPermissions: ['user.view.all']
   },
   {
     key: 'roles',
-    label: '权限管理',
+    label: i18nText("settings", "auto.k_e47b7f25dd"),
     to: '/settings/roles',
     requiredPermissions: ['role_permission.view.all']
   }

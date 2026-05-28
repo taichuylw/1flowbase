@@ -16,6 +16,7 @@ import {
   startSystemVariables
 } from '../../../lib/start-node-variables';
 import { StartInputFieldSettingsPanel } from './StartInputFieldSettingsPanel';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function normalizeList(value: unknown): FlowStartInputField[] {
   return Array.isArray(value)
@@ -90,11 +91,11 @@ function systemVariableExample(variableKey: string) {
       return [
         {
           role: 'user',
-          content: '上一轮用户消息'
+          content: i18nText("agentFlow", "auto.k_e5d5e52f35")
         },
         {
           role: 'assistant',
-          content: '上一轮助手回复'
+          content: i18nText("agentFlow", "auto.k_69a1988133")
         }
       ];
     case 'files':
@@ -229,7 +230,7 @@ export function StartInputFieldsField({
     <div className="agent-flow-start-input-fields">
       <div className="agent-flow-start-input-fields__header">
         <Button
-          aria-label="新增输入字段"
+          aria-label={i18nText("agentFlow", "auto.k_ada5f5ec56")}
           icon={<PlusOutlined />}
           size="small"
           type="text"
@@ -249,7 +250,7 @@ export function StartInputFieldsField({
               onDrop={() => handleDrop(index)}
             >
               <button
-                aria-label={`拖拽排序输入字段 ${field.key}`}
+                aria-label={i18nText("agentFlow", "auto.k_d542a2eabf", { value1: field.key })}
                 className="agent-flow-start-input-fields__drag-handle"
                 draggable
                 onDragStart={() => handleDragStart(index)}
@@ -259,7 +260,7 @@ export function StartInputFieldsField({
                 <HolderOutlined />
               </button>
               <button
-                aria-label={`编辑输入字段 ${field.key}`}
+                aria-label={i18nText("agentFlow", "auto.k_2e256226f5", { value1: field.key })}
                 className="agent-flow-start-input-fields__variable-main"
                 type="button"
                 onClick={() => openEditPanel(field, index)}
@@ -282,13 +283,11 @@ export function StartInputFieldsField({
                 <span className="agent-flow-start-input-fields__item-meta">
                   {field.required ? (
                     <span className="agent-flow-start-input-fields__badge">
-                      必填
-                    </span>
+                      {i18nText("agentFlow", "auto.k_32945d3e36")}</span>
                   ) : null}
                   {field.hidden ? (
                     <span className="agent-flow-start-input-fields__badge">
-                      隐藏
-                    </span>
+                      {i18nText("agentFlow", "auto.k_bb0e7e01aa")}</span>
                   ) : null}
                   <span className="agent-flow-node-detail__list-item-type">
                     {formatValueType(field.valueType)}
@@ -296,7 +295,7 @@ export function StartInputFieldsField({
                 </span>
               </button>
               <Button
-                aria-label={`删除输入字段 ${field.key}`}
+                aria-label={i18nText("agentFlow", "auto.k_c418492b8c", { value1: field.key })}
                 className="agent-flow-start-input-fields__delete"
                 danger
                 icon={<DeleteOutlined />}
@@ -314,7 +313,7 @@ export function StartInputFieldsField({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无自定义输入字段"
+          description={i18nText("agentFlow", "auto.k_7b45c5dd27")}
         />
       )}
 
@@ -323,8 +322,7 @@ export function StartInputFieldsField({
           strong
           className="agent-flow-start-input-fields__system-title"
         >
-          系统变量
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_872d17db93")}</Typography.Text>
         <div className="agent-flow-node-detail__list">
           {startSystemVariables.map((variable) => {
             const example = systemVariableExample(variable.key);
@@ -382,9 +380,9 @@ export function StartInputFieldsField({
                   <JsonPreviewBlock
                     className="agent-flow-start-input-fields__system-json"
                     collapsible={false}
-                    copyAriaLabel={`复制${variable.title} JSON`}
+                    copyAriaLabel={i18nText("agentFlow", "auto.k_af7984470a", { value1: variable.title })}
                     displayTitle=""
-                    fullscreenAriaLabel={`放大查看${variable.title} JSON`}
+                    fullscreenAriaLabel={i18nText("agentFlow", "auto.k_2032827601", { value1: variable.title })}
                     height="180px"
                     title={variable.title}
                     value={example}

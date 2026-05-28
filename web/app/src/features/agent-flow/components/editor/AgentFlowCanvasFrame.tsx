@@ -84,6 +84,7 @@ import { AgentFlowOverlay } from './AgentFlowOverlay';
 import { AgentFlowSideDock } from './AgentFlowSideDock';
 import { ApplicationEnvironmentVariablesPanel } from './ApplicationEnvironmentVariablesPanel';
 import { SystemVariablesPanel } from './SystemVariablesPanel';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
 const DEBUG_CONSOLE_MIN_WIDTH = 320;
@@ -233,10 +234,10 @@ export function AgentFlowCanvasFrame({
         applicationEnvironmentVariablesQueryKey(applicationId),
         nextVariables
       );
-      message.success('环境变量已保存');
+      message.success(i18nText("agentFlow", "auto.k_ec0f4d0a1e"));
     },
     onError() {
-      message.error('环境变量保存失败');
+      message.error(i18nText("agentFlow", "auto.k_b0739fb6e2"));
     }
   });
   const publishMutation = useMutation({
@@ -255,10 +256,10 @@ export function AgentFlowCanvasFrame({
       void queryClient.invalidateQueries({
         queryKey: applicationDetailQueryKey(applicationId)
       });
-      message.success('发布成功');
+      message.success(i18nText("agentFlow", "auto.k_ec00233618"));
     },
     onError() {
-      message.error('发布失败');
+      message.error(i18nText("agentFlow", "auto.k_7e7f5d44c4"));
     }
   });
   const versionMetadataMutation = useMutation({
@@ -278,10 +279,10 @@ export function AgentFlowCanvasFrame({
     onSuccess(nextState) {
       syncSavedServerState(nextState);
       queryClient.setQueryData(orchestrationQueryKey(applicationId), nextState);
-      message.success('历史版本已更新');
+      message.success(i18nText("agentFlow", "auto.k_1e3a053ca9"));
     },
     onError() {
-      message.error('历史版本更新失败');
+      message.error(i18nText("agentFlow", "auto.k_c0201ed037"));
     }
   });
 
@@ -928,7 +929,7 @@ export function AgentFlowCanvasFrame({
   function handleResetVariableCache() {
     debugSession.resetVariableCache();
     setSelectedVariable(null);
-    message.success('已重置变量缓存');
+    message.success(i18nText("agentFlow", "auto.k_115f88b14e"));
   }
 
   function handleVariableCacheValueChange(key: string, value: unknown) {
@@ -1066,7 +1067,7 @@ export function AgentFlowCanvasFrame({
     >
       <AgentFlowOverlay
         applicationName={applicationName}
-        autosaveLabel={`${Math.round(autosaveIntervalMs / 1000)} 秒自动保存`}
+        autosaveLabel={i18nText("agentFlow", "auto.k_50d33a9abe", { value1: Math.round(autosaveIntervalMs / 1000) })}
         autosaveStatus={autosaveStatus}
         onSaveDraft={() => {
           void draftSync.saveNow();
@@ -1084,9 +1085,9 @@ export function AgentFlowCanvasFrame({
       />
       {activeContainerId ? (
         <div className="agent-flow-editor__breadcrumb">
-          <Button onClick={navigation.returnToRoot}>返回主画布</Button>
+          <Button onClick={navigation.returnToRoot}>{i18nText("agentFlow", "auto.k_7238370c78")}</Button>
           <Typography.Text type="secondary">
-            当前位于容器节点{' '}
+            {i18nText("agentFlow", "auto.k_af3098d4be")}{' '}
             {
               workingDocument.graph.nodes.find(
                 (node) => node.id === activeContainerId
@@ -1118,15 +1119,14 @@ export function AgentFlowCanvasFrame({
           style={{ left: variableCacheCenterLeft }}
           onClick={() => setVariableCacheOpen(true)}
         >
-          查看缓存
-        </Button>
+          {i18nText("agentFlow", "auto.k_ec763ccf4c")}</Button>
         {variablesDockOpen ? (
           <AgentFlowSideDock
             className="agent-flow-editor__variables-dock"
             data-testid="agent-flow-editor-variables-dock"
             isResizing={isResizingVariablesDock}
             resizeLabel={
-              environmentVariablesOpen ? '调整环境变量宽度' : '调整系统变量宽度'
+              environmentVariablesOpen ? i18nText("agentFlow", "auto.k_5cfee2d078") : i18nText("agentFlow", "auto.k_ab9e42f016")
             }
             width={boundedVariablesDockWidth}
             onResizeStart={handleVariablesDockResizeStart}
@@ -1161,7 +1161,7 @@ export function AgentFlowCanvasFrame({
             }}
           >
             <div
-              aria-label="调整节点详情宽度"
+              aria-label={i18nText("agentFlow", "auto.k_1b598e1a7f")}
               aria-orientation="vertical"
               className="agent-flow-editor__detail-resize-handle"
               onMouseDown={handleNodeDetailResizeStart}
@@ -1181,7 +1181,7 @@ export function AgentFlowCanvasFrame({
         ) : null}
         {variableCacheOpen ? (
           <section
-            aria-label="变量缓存"
+            aria-label={i18nText("agentFlow", "auto.k_8402171cae")}
             className="agent-flow-editor__variable-cache-panel"
             data-resizing={isResizingVariableCache ? 'true' : 'false'}
             data-sidebar-resizing={
@@ -1193,7 +1193,7 @@ export function AgentFlowCanvasFrame({
             }}
           >
             <div
-              aria-label="调整变量缓存高度"
+              aria-label={i18nText("agentFlow", "auto.k_7611b6be74")}
               aria-orientation="horizontal"
               className="agent-flow-editor__variable-cache-resize-handle"
               onMouseDown={handleVariableCacheResizeStart}
@@ -1201,10 +1201,10 @@ export function AgentFlowCanvasFrame({
             />
             <header className="agent-flow-editor__variable-cache-header">
               <div className="agent-flow-editor__variable-cache-title-line">
-                <Typography.Text strong>变量缓存</Typography.Text>
-                <Tooltip title="当前编排页内存中的试运行变量。">
+                <Typography.Text strong>{i18nText("agentFlow", "auto.k_8402171cae")}</Typography.Text>
+                <Tooltip title={i18nText("agentFlow", "auto.k_e0825e60b7")}>
                   <QuestionCircleOutlined
-                    aria-label="变量缓存说明"
+                    aria-label={i18nText("agentFlow", "auto.k_8c94e7e371")}
                     className="agent-flow-editor__variable-cache-help-icon"
                   />
                 </Tooltip>
@@ -1216,7 +1216,7 @@ export function AgentFlowCanvasFrame({
                       {selectedVariable.label}
                     </Typography.Text>
                     <Button
-                      aria-label="复制变量值"
+                      aria-label={i18nText("agentFlow", "auto.k_85e5c2ace7")}
                       icon={<CopyOutlined />}
                       size="small"
                       type="text"
@@ -1226,25 +1226,23 @@ export function AgentFlowCanvasFrame({
                             ? selectedVariable.value
                             : JSON.stringify(selectedVariable.value, null, 2);
                         copyTextToClipboard(text).then(
-                          () => message.success('已复制'),
-                          () => message.error('复制失败')
+                          () => message.success(i18nText("agentFlow", "auto.k_e381a5763d")),
+                          () => message.error(i18nText("agentFlow", "auto.k_f2c6b5167b"))
                         );
                       }}
                     >
-                      复制
-                    </Button>
+                      {i18nText("agentFlow", "auto.k_4edd1d0087")}</Button>
                   </div>
                 )}
                 <Button
-                  aria-label="重置所有变量缓存"
+                  aria-label={i18nText("agentFlow", "auto.k_06e2bb6a0e")}
                   size="small"
                   type="text"
                   onClick={handleResetVariableCache}
                 >
-                  重置所有
-                </Button>
+                  {i18nText("agentFlow", "auto.k_dbe3a18d13")}</Button>
                 <Button
-                  aria-label="关闭变量缓存"
+                  aria-label={i18nText("agentFlow", "auto.k_43e5a6e24c")}
                   icon={<CloseOutlined />}
                   type="text"
                   onClick={() => setVariableCacheOpen(false)}
@@ -1272,7 +1270,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__conversation-log-dock"
             data-testid="agent-flow-editor-conversation-log-dock"
             isResizing={isResizingConversationLog}
-            resizeLabel="调整对话日志宽度"
+            resizeLabel={i18nText("agentFlow", "auto.k_52908a7dab")}
             style={{
               right: `${16 + boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP}px`
             }}
@@ -1293,7 +1291,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__debug-console-dock"
             data-testid="agent-flow-editor-debug-console-dock"
             isResizing={isResizingDebugConsole}
-            resizeLabel="调整预览宽度"
+            resizeLabel={i18nText("agentFlow", "auto.k_3f868b7897")}
             width={boundedDebugConsoleWidth}
             onResizeStart={handleDebugConsoleResizeStart}
           >
@@ -1331,7 +1329,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__history-dock"
             data-testid="agent-flow-editor-history-dock"
             isResizing={isResizingHistoryDock}
-            resizeLabel="调整历史版本宽度"
+            resizeLabel={i18nText("agentFlow", "auto.k_fea6486652")}
             width={boundedHistoryDockWidth}
             onResizeStart={handleHistoryDockResizeStart}
           >
@@ -1354,8 +1352,7 @@ export function AgentFlowCanvasFrame({
       </div>
       {issues.some((issue) => issue.scope === 'global') ? (
         <Typography.Text type="danger">
-          当前草稿存在全局问题，请先查看 Issues 面板处理。
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_d65b0dc124")}</Typography.Text>
       ) : null}
       <NodePreviewVariablesModal
         confirmLoading={nodePreviewMutation.isPending}

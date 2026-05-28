@@ -1,3 +1,5 @@
+import { i18nText } from '../../../shared/i18n/text';
+
 export type FrontStageTreeNode = {
   id: string;
   title: string | null;
@@ -120,11 +122,11 @@ export function getNextNodeId(nodes: FrontStageTreeNode[]): string {
 }
 
 export function getNextPageTitleIndex(nodes: FrontStageTreeNode[]): number {
-  return getNextNodeTitleIndex(nodes, 'page', '页面 新建 ');
+  return getNextNodeTitleIndex(nodes, 'page', i18nText("frontstage", "auto.k_f6159e607f"));
 }
 
 export function getNextGroupTitleIndex(nodes: FrontStageTreeNode[]): number {
-  return getNextNodeTitleIndex(nodes, 'group', '分组 ');
+  return getNextNodeTitleIndex(nodes, 'group', i18nText("frontstage", "auto.k_97d8a6c05b"));
 }
 
 export function createPageNode(
@@ -133,7 +135,7 @@ export function createPageNode(
 ): FrontStageTreeNode {
   return {
     id,
-    title: `页面 新建 ${numberHint}`,
+    title: i18nText("frontstage", "auto.k_4ac134a6d6", { value1: numberHint }),
     kind: 'page'
   };
 }
@@ -141,7 +143,7 @@ export function createPageNode(
 export function createGroupNode(id: string, index: number): FrontStageTreeNode {
   return {
     id,
-    title: `分组 ${index}`,
+    title: i18nText("frontstage", "auto.k_56fb5f348d", { value1: index }),
     kind: 'group',
     children: []
   };
@@ -252,15 +254,15 @@ export function getPageDisplayTitle(
     return null;
   }
 
-  return targetNode.title || '未命名页面';
+  return targetNode.title || i18nText("frontstage", "auto.k_5a131f787f");
 }
 
 export function getDeleteConfirmMessage(node: FrontStageTreeNode): string {
   if (node.kind === 'group' && node.children && node.children.length > 0) {
-    return `确认删除分组“${node.title || '未命名分组'}”吗？该分组下的页面会同时删除，且无法恢复。`;
+    return i18nText("frontstage", "auto.k_6b6c49168c", { value1: node.title || i18nText("frontstage", "auto.k_c4a274264a") });
   }
 
-  return `确认删除${node.kind === 'group' ? '分组' : '页面'}“${node.title || '未命名页面'}”？`;
+  return i18nText("frontstage", "auto.k_e1fc019842", { value1: node.kind === 'group' ? i18nText("frontstage", "auto.k_97d8a6c05b") : i18nText("frontstage", "auto.k_06dfb846bd"), value2: node.title || i18nText("frontstage", "auto.k_5a131f787f") });
 }
 
 export function moveNodeInTree(

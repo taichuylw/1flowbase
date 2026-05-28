@@ -2,6 +2,7 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Empty, Input } from 'antd';
 
 import type { FlowStartModelDescriptor } from '@1flowbase/flow-schema';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function normalizeModelList(value: unknown): FlowStartModelDescriptor[] {
   if (!Array.isArray(value)) {
@@ -72,7 +73,7 @@ export function StartModelListField({
     <div className="agent-flow-start-model-list">
       <div className="agent-flow-start-input-fields__header">
         <Button
-          aria-label="新增模型"
+          aria-label={i18nText("agentFlow", "auto.k_9633e735da")}
           icon={<PlusOutlined />}
           size="small"
           type="text"
@@ -89,7 +90,7 @@ export function StartModelListField({
             >
               <div className="agent-flow-node-detail__list-item-left">
                 <Input
-                  aria-label={`模型 ID ${index + 1}`}
+                  aria-label={i18nText("agentFlow", "auto.k_1c667406ce", { value1: index + 1 })}
                   placeholder="model-id"
                   value={row.id}
                   onChange={(event) =>
@@ -97,7 +98,7 @@ export function StartModelListField({
                   }
                 />
                 <Input
-                  aria-label={`模型显示名 ${index + 1}`}
+                  aria-label={i18nText("agentFlow", "auto.k_4e9ff22477", { value1: index + 1 })}
                   placeholder="display name"
                   value={row.name ?? ''}
                   onChange={(event) =>
@@ -106,7 +107,7 @@ export function StartModelListField({
                 />
               </div>
               <Button
-                aria-label={`删除模型 ${index + 1}`}
+                aria-label={i18nText("agentFlow", "auto.k_3b178e31cf", { value1: index + 1 })}
                 danger
                 icon={<DeleteOutlined />}
                 size="small"
@@ -119,7 +120,7 @@ export function StartModelListField({
           ))}
         </div>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无模型" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.k_f9e9c5d8e0")} />
       )}
     </div>
   );

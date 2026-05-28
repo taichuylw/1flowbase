@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { CSSProperties, KeyboardEvent, RefObject } from 'react';
 
 import type { FlowSelectorOption } from '../../../lib/selector-options';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 interface TemplateVariableTypeaheadPluginProps {
   open: boolean;
@@ -31,7 +32,7 @@ export function TemplateVariableTypeaheadPlugin({
   onKeyDown,
   onSelect
 }: TemplateVariableTypeaheadPluginProps) {
-  const emptyDescription = query.trim().length > 0 ? '未找到匹配变量' : '无可用变量';
+  const emptyDescription = query.trim().length > 0 ? i18nText("agentFlow", "auto.k_4ce85e7b5a") : i18nText("agentFlow", "auto.k_f196ae0d7e");
   const popupStyle: CSSProperties | undefined = position
     ? {
         left: `${position.left}px`,
@@ -49,19 +50,19 @@ export function TemplateVariableTypeaheadPlugin({
       ref={popupRef}
       className="agent-flow-templated-text-field__typeahead"
       role="listbox"
-      aria-label="变量建议"
+      aria-label={i18nText("agentFlow", "auto.k_2446fb79b8")}
       style={popupStyle}
       onKeyDown={onKeyDown}
       onMouseDown={(event) => event.preventDefault()}
     >
       <div className="agent-flow-templated-text-field__typeahead-search">
         <input
-          aria-label="搜索变量"
+          aria-label={i18nText("agentFlow", "auto.k_e11e701d58")}
           role="searchbox"
           className="agent-flow-templated-text-field__typeahead-searchbox"
           autoFocus
           value={query}
-          placeholder="搜索节点或字段"
+          placeholder={i18nText("agentFlow", "auto.k_1fb012f9e2")}
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </div>

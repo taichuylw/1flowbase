@@ -3,6 +3,7 @@ import { Descriptions, Empty, Switch, Tag, Typography } from 'antd';
 import { CollapseShell } from '../../../../shared/ui/collapse-shell/CollapseShell';
 import type { SettingsModelProviderInstance } from '../../api/model-providers';
 import { ModelProviderTagList } from './ModelProviderTagList';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function renderStatusTag(status: string) {
   switch (status) {
@@ -47,7 +48,7 @@ function renderStatusTag(status: string) {
 
 function formatCatalogRefreshedAt(value: string | null) {
   if (!value) {
-    return '未刷新';
+    return i18nText("settings", "auto.k_cbfc5970df");
   }
 
   const matched = value.match(
@@ -90,7 +91,7 @@ export function ModelProviderInstancesTable({
       <section className="model-provider-panel__instances">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={loading ? '正在加载实例...' : '暂无模型供应商实例'}
+          description={loading ? i18nText("settings", "auto.k_e331116be9") : i18nText("settings", "auto.k_13210056fe")}
         />
       </section>
     );
@@ -118,11 +119,10 @@ export function ModelProviderInstancesTable({
               <div className="model-provider-panel__instance-header-side">
                 <div className="model-provider-panel__instance-inclusion-card">
                   <span className="model-provider-panel__instance-stat-label">
-                    注入主实例
-                  </span>
+                    {i18nText("settings", "auto.k_435790cecc")}</span>
                   <div className="model-provider-panel__instance-inclusion-row">
                     <Switch
-                      aria-label={`注入主实例 ${instance.display_name}`}
+                      aria-label={i18nText("settings", "auto.k_2c591d1cba", { value1: instance.display_name })}
                       checked={instance.included_in_main}
                       disabled={!canManage || updatingInstanceId === instance.id}
                       onClick={(_, event) => {
@@ -133,7 +133,7 @@ export function ModelProviderInstancesTable({
                       }}
                     />
                     <Typography.Text type="secondary">
-                      {instance.included_in_main ? '已接入' : '未接入'}
+                      {instance.included_in_main ? i18nText("settings", "auto.k_da72245d50") : i18nText("settings", "auto.k_38093d864b")}
                     </Typography.Text>
                   </div>
                 </div>
@@ -141,16 +141,14 @@ export function ModelProviderInstancesTable({
                 <div className="model-provider-panel__instance-stats">
                   <div className="model-provider-panel__instance-stat">
                     <span className="model-provider-panel__instance-stat-label">
-                      生效模型
-                    </span>
+                      {i18nText("settings", "auto.k_c3eb66ccb0")}</span>
                     <span className="model-provider-panel__instance-stat-value">
                       {instance.enabled_model_ids.length}
                     </span>
                   </div>
                   <div className="model-provider-panel__instance-stat">
                     <span className="model-provider-panel__instance-stat-label">
-                      缓存模型
-                    </span>
+                      {i18nText("settings", "auto.k_1d1ff57695")}</span>
                     <span className="model-provider-panel__instance-stat-value">
                       {instance.model_count}
                     </span>
@@ -172,26 +170,26 @@ export function ModelProviderInstancesTable({
                     children: (
                       <Typography.Paragraph
                         className="model-provider-panel__instance-baseurl-value"
-                        ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}
+                        ellipsis={{ rows: 2, expandable: true, symbol: i18nText("settings", "auto.k_b0e24833f7") }}
                         style={{ marginBottom: 0 }}
                       >
-                        {String(instance.config_json.base_url ?? '未配置')}
+                        {String(instance.config_json.base_url ?? i18nText("settings", "auto.k_63595e95b7"))}
                       </Typography.Paragraph>
                     )
                   },
                   {
                     key: 'enabled-models',
-                    label: '生效模型',
+                    label: i18nText("settings", "auto.k_c3eb66ccb0"),
                     children: (
                       <ModelProviderTagList
                         modelIds={instance.enabled_model_ids}
-                        emptyText="未设置"
+                        emptyText={i18nText("settings", "auto.k_55a04b58cd")}
                       />
                     )
                   },
                   {
                     key: 'refreshed-at',
-                    label: '最近刷新',
+                    label: i18nText("settings", "auto.k_160a527a70"),
                     children: (
                       <Typography.Text type="secondary">
                         {formatCatalogRefreshedAt(instance.catalog_refreshed_at)}
@@ -207,34 +205,30 @@ export function ModelProviderInstancesTable({
                     type="button"
                     className="model-provider-panel__instance-action-btn"
                     onClick={() => onEdit(instance)}
-                    aria-label={`编辑 API Key ${instance.display_name}`}
+                    aria-label={i18nText("settings", "auto.k_1941f36bb5", { value1: instance.display_name })}
                   >
-                    编辑 API Key
-                  </button>
+                    {i18nText("settings", "auto.k_2792908ac6")}</button>
                   <button
                     type="button"
                     className="model-provider-panel__instance-action-btn"
                     onClick={() => onRefreshCandidates(instance)}
-                    aria-label={`刷新候选模型 ${instance.display_name}`}
+                    aria-label={i18nText("settings", "auto.k_47cf5903c0", { value1: instance.display_name })}
                   >
-                    刷新候选模型
-                  </button>
+                    {i18nText("settings", "auto.k_458f7e095d")}</button>
                   <button
                     type="button"
                     className="model-provider-panel__instance-action-btn"
                     onClick={() => onRefreshModels(instance)}
-                    aria-label={`刷新模型 ${instance.display_name}`}
+                    aria-label={i18nText("settings", "auto.k_be9fcdbaaa", { value1: instance.display_name })}
                   >
-                    刷新模型
-                  </button>
+                    {i18nText("settings", "auto.k_892f82cd16")}</button>
                   <button
                     type="button"
                     className="model-provider-panel__instance-action-btn model-provider-panel__instance-action-btn--danger"
                     onClick={() => onDelete(instance)}
-                    aria-label={`删除实例 ${instance.display_name}`}
+                    aria-label={i18nText("settings", "auto.k_dd50aeb2fd", { value1: instance.display_name })}
                   >
-                    删除实例
-                  </button>
+                    {i18nText("settings", "auto.k_6e73a5ffa5")}</button>
                 </div>
               ) : null}
             </>

@@ -1,0 +1,10 @@
+{
+  "auto": {
+    "k_1c41ed3edc": "Subsystem",
+    "k_6e356eadf5": "Route prefixes, mount contexts, and hosting constraints",
+    "k_7f32bd041b": "The current page is used to uniformly view the operating boundaries and access status of connected subsystems.",
+    "k_87e2ff5369": "Subsequent access to release, rollback and running diagnostics",
+    "k_8be9a885e6": "Manage the publication list, routing prefix and host constraints of the connected subsystem.",
+    "k_f223c2c4fe": "List of versions and build products that have been connected to the application"
+  }
+}

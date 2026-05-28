@@ -5,6 +5,7 @@ import { Button, Drawer, Menu, Tabs } from 'antd';
 import type { MenuProps, TabsProps } from 'antd';
 
 import type { SectionNavItem } from './SectionPageLayout';
+import { i18nText } from '../../i18n/text';
 
 interface SectionSidebarNavProps {
   navItems: SectionNavItem[];
@@ -71,10 +72,9 @@ export function SectionSidebarNav({
   return (
     <div className="section-page-layout__drawer-trigger">
       <Button type="default" onClick={() => setDrawerOpen(true)}>
-        更多分区
-      </Button>
+        {i18nText("sharedUi", "auto.k_9a49e95d8e")}</Button>
       <Drawer
-        title="更多分区"
+        title={i18nText("sharedUi", "auto.k_9a49e95d8e")}
         placement="left"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}

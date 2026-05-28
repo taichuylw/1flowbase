@@ -3,6 +3,7 @@ import { Button, Form, Input, Radio, Space, Typography } from 'antd';
 
 import { SchemaModalPanel } from '../../../shared/schema-ui/overlay-shell/SchemaModalPanel';
 import { applicationsQueryKey, createApplication } from '../api/applications';
+import { i18nText } from '../../../shared/i18n/text';
 
 interface ApplicationCreateModalProps {
   open: boolean;
@@ -20,7 +21,7 @@ interface ApplicationCreateFormValues {
 const applicationCreateShell = {
   schemaVersion: '1.0.0',
   shellType: 'modal_panel',
-  title: '新建应用',
+  title: i18nText("applications", "auto.k_ac31c1170b"),
   destroyOnHidden: true
 } as const;
 
@@ -65,7 +66,7 @@ export function ApplicationCreateModal({
         }}
         onFinish={(values) => mutation.mutate(values)}
       >
-        <Form.Item label="类型" name="application_type">
+        <Form.Item label={i18nText("applications", "auto.k_e4e46c7235")} name="application_type">
           <Radio.Group>
             <Space direction="vertical" size="small">
               <Radio value="agent_flow">AgentFlow</Radio>
@@ -76,23 +77,22 @@ export function ApplicationCreateModal({
           </Radio.Group>
         </Form.Item>
 
-        <Typography.Text type="secondary">未开放</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("applications", "auto.k_530b63f3e0")}</Typography.Text>
 
         <Form.Item
-          label="名称"
+          label={i18nText("applications", "auto.k_1be7ae4fc2")}
           name="name"
-          rules={[{ required: true, message: '请输入名称' }]}
+          rules={[{ required: true, message: i18nText("applications", "auto.k_c2afb255a5") }]}
         >
           <Input />
         </Form.Item>
 
-        <Form.Item label="简介" name="description">
+        <Form.Item label={i18nText("applications", "auto.k_5ea2e0cde2")} name="description">
           <Input.TextArea rows={3} />
         </Form.Item>
 
         <Button type="primary" htmlType="submit" loading={mutation.isPending}>
-          创建应用
-        </Button>
+          {i18nText("applications", "auto.k_45dc181075")}</Button>
       </Form>
     </SchemaModalPanel>
   );

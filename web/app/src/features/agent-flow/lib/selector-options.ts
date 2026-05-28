@@ -11,6 +11,7 @@ import {
   type AgentFlowEnvironmentVariable
 } from './application-environment-variables';
 import { formatNodeVariableLabel } from './variable-labels';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface FlowSelectorOption {
   nodeId: string;
@@ -56,7 +57,7 @@ export function listVisibleSelectorOptions(
   const visibleNodeIds = collectUpstreamNodeIds(document, nodeId);
   const systemOptions = agentFlowSystemVariables.map((variable) => ({
     nodeId: systemVariableNodeId,
-    nodeLabel: '系统变量',
+    nodeLabel: i18nText("agentFlow", "auto.k_872d17db93"),
     outputKey: variable.key,
     outputLabel: variable.title,
     value: [systemVariableNodeId, variable.key],
@@ -64,7 +65,7 @@ export function listVisibleSelectorOptions(
   }));
   const environmentOptions = environmentVariables.map((variable) => ({
     nodeId: environmentVariableNodeId,
-    nodeLabel: '环境变量',
+    nodeLabel: i18nText("agentFlow", "auto.k_8da07705ab"),
     outputKey: variable.name,
     outputLabel: formatEnvironmentVariableTitle(variable.name),
     value: [environmentVariableNodeId, variable.name],

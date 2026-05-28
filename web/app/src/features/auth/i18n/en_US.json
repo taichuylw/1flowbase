@@ -1,23 +1,26 @@
 {
+  "auto": {
+    "k_c40407a8a5": "Dialogue is a barrier, the native base for AI applications"
+  },
   "signIn": {
-    "title": "1flowbase",
+    "errorFallback": "Sign in failed. Please try again later.",
+    "footer": "power by taichuy",
     "identifier": {
       "label": "Account",
-      "required": "Enter an account or email.",
-      "placeholder": "root / root@example.com"
+      "placeholder": "root / root@example.com",
+      "required": "Enter an account or email."
+    },
+    "language": {
+      "enUs": "English",
+      "trigger": "Switch language",
+      "zhHans": "Chinese"
     },
     "password": {
       "label": "Password",
-      "required": "Enter a password.",
-      "placeholder": "Enter password"
+      "placeholder": "Enter password",
+      "required": "Enter a password."
     },
     "submit": "Sign in",
-    "errorFallback": "Sign in failed. Please try again later.",
-    "language": {
-      "trigger": "Switch language",
-      "zhHans": "Chinese",
-      "enUs": "English"
-    },
-    "footer": "power by taichuy"
+    "title": "1flowbase"
   }
 }

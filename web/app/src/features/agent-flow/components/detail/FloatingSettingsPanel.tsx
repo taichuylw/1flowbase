@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Typography } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type FloatingPanelBounds = {
   left: number;
@@ -541,7 +542,7 @@ export function FloatingSettingsPanel({
       </div>
 
       <div
-        aria-label={`从左侧调整${title}宽度`}
+        aria-label={i18nText("agentFlow", "auto.k_237ff1cc40", { value1: title })}
         aria-orientation="vertical"
         className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--left"
         data-testid={leftResizeHandleTestId}
@@ -550,7 +551,7 @@ export function FloatingSettingsPanel({
       />
 
       <div
-        aria-label={`从右侧调整${title}宽度`}
+        aria-label={i18nText("agentFlow", "auto.k_1b02125555", { value1: title })}
         aria-orientation="vertical"
         className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--right"
         data-testid={rightResizeHandleTestId}
@@ -559,7 +560,7 @@ export function FloatingSettingsPanel({
       />
 
       <div
-        aria-label={`向下调整${title}高度`}
+        aria-label={i18nText("agentFlow", "auto.k_e7e3f3a8e7", { value1: title })}
         aria-orientation="horizontal"
         className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--bottom"
         data-testid={bottomResizeHandleTestId}

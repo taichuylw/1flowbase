@@ -2,6 +2,7 @@ import { Button, Checkbox, Empty, Flex, Form, Input, Modal, Space, Tag, Typograp
 import { useEffect, useState } from 'react';
 
 import type { ApplicationTagCatalogEntry } from '../api/applications';
+import { i18nText } from '../../../shared/i18n/text';
 
 interface ApplicationTagManagerModalProps {
   open: boolean;
@@ -49,7 +50,7 @@ export function ApplicationTagManagerModal({
   const handleCreateTag = async () => {
     const normalizedName = newTagName.trim();
     if (!normalizedName) {
-      setErrorText('请输入新标签名称');
+      setErrorText(i18nText("applications", "auto.k_71878d6b32"));
       return;
     }
 
@@ -61,9 +62,9 @@ export function ApplicationTagManagerModal({
   return (
     <Modal
       open={open}
-      title="管理应用标签"
-      okText="保存标签"
-      cancelText="取消"
+      title={i18nText("applications", "auto.k_d4ef5f914b")}
+      okText={i18nText("applications", "auto.k_4a69baf51e")}
+      cancelText={i18nText("applications", "auto.k_4d0b4688c7")}
       confirmLoading={saving}
       onCancel={onCancel}
       onOk={() => onSubmit(selectedTagIds)}
@@ -72,25 +73,24 @@ export function ApplicationTagManagerModal({
     >
       <Flex vertical gap={16}>
         <Form layout="vertical">
-          <Form.Item label="新标签名称" validateStatus={errorText ? 'error' : ''} help={errorText}>
+          <Form.Item label={i18nText("applications", "auto.k_b4240a63a6")} validateStatus={errorText ? 'error' : ''} help={errorText}>
             <Space.Compact style={{ width: '100%' }}>
               <Input
-                aria-label="新标签名称"
+                aria-label={i18nText("applications", "auto.k_b4240a63a6")}
                 value={newTagName}
                 onChange={(event) => setNewTagName(event.target.value)}
               />
               <Button loading={creating} onClick={() => void handleCreateTag()}>
-                创建标签
-              </Button>
+                {i18nText("applications", "auto.k_ee0c198f75")}</Button>
             </Space.Compact>
           </Form.Item>
         </Form>
 
         {catalogTags.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有可选标签" />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("applications", "auto.k_9d85acf9d5")} />
         ) : (
           <Flex vertical gap={12}>
-            <Typography.Text type="secondary">勾选后将写回当前应用。</Typography.Text>
+            <Typography.Text type="secondary">{i18nText("applications", "auto.k_629321f112")}</Typography.Text>
             <Flex wrap gap={12}>
               {catalogTags.map((tag) => (
                 <Checkbox

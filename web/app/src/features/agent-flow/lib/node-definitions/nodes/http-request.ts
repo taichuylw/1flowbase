@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const httpRequestNodeDefinition: NodeDefinition = {
   label: 'HTTP Request',
@@ -14,13 +15,13 @@ export const httpRequestNodeDefinition: NodeDefinition = {
       title: 'Inputs',
       fields: [
         { key: 'config.url', label: 'URL', editor: 'templated_text', required: true },
-        { key: 'bindings.body', label: '请求体', editor: 'templated_text' }
+        { key: 'bindings.body', label: i18nText("agentFlow", "auto.k_a526db39fb"), editor: 'templated_text' }
       ]
     },
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.body', label: '响应正文', editor: 'text', required: true }]
+      fields: [{ key: 'outputs.body', label: i18nText("agentFlow", "auto.k_ac5260f829"), editor: 'text', required: true }]
     },
     {
       key: 'policy',

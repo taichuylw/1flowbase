@@ -1,6 +1,7 @@
 import { Button, Flex, List, Tag, Typography } from 'antd';
 
 import type { Application } from '../api/applications';
+import { i18nText } from '../../../shared/i18n/text';
 
 interface ApplicationCardGridProps {
   applications: Application[];
@@ -35,15 +36,15 @@ export function ApplicationCardGrid({ applications }: ApplicationCardGridProps) 
             </Flex>
 
             <Typography.Paragraph style={{ marginBottom: 0 }}>
-              {application.description || '当前应用尚未填写简介。'}
+              {application.description || i18nText("applications", "auto.k_14e94c943d")}
             </Typography.Paragraph>
 
             <Typography.Text type="secondary">
-              最近更新：{new Date(application.updated_at).toLocaleString('zh-CN')}
+              {i18nText("applications", "auto.k_8d8174e0f2")}{new Date(application.updated_at).toLocaleString('zh-CN')}
             </Typography.Text>
 
             <a href={`/applications/${application.id}/orchestration`}>
-              <Button type="primary">进入应用</Button>
+              <Button type="primary">{i18nText("applications", "auto.k_ba95e86694")}</Button>
             </a>
           </Flex>
         </List.Item>

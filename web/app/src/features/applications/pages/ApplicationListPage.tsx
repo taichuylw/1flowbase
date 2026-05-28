@@ -49,6 +49,7 @@ import {
 import { ApplicationCreateModal } from '../components/ApplicationCreateModal';
 import { ApplicationEditModal } from '../components/ApplicationEditModal';
 import { ApplicationTagManagerModal } from '../components/ApplicationTagManagerModal';
+import { i18nText } from '../../../shared/i18n/text';
 
 type ApplicationTypeFilter = 'all' | Application['application_type'];
 
@@ -84,14 +85,14 @@ function mergeTagCatalog(
 }
 
 function buildCopiedApplicationName(name: string) {
-  return `${name} 副本`;
+  return i18nText("applications", "auto.k_67d3d1de17", { value1: name });
 }
 
 function toApplicationTypeTabs(
   types: Array<{ value: Application['application_type']; label: string }>
 ): ApplicationTypeTab[] {
   return [
-    { key: 'all', label: '全部', icon: <AppstoreOutlined /> },
+    { key: 'all', label: i18nText("applications", "auto.k_778fc8f994"), icon: <AppstoreOutlined /> },
     ...types.map((type) => ({
       key: type.value,
       label: type.label,
@@ -142,10 +143,10 @@ export function ApplicationListPage() {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: applicationsQueryKey });
-      messageApi.success('已复制应用');
+      messageApi.success(i18nText("applications", "auto.k_6f2d25967e"));
     },
     onError: () => {
-      messageApi.error('复制应用失败');
+      messageApi.error(i18nText("applications", "auto.k_a3492f6441"));
     }
   });
 
@@ -173,10 +174,10 @@ export function ApplicationListPage() {
         queryClient.invalidateQueries({ queryKey: applicationsQueryKey }),
         queryClient.invalidateQueries({ queryKey: applicationCatalogQueryKey })
       ]);
-      messageApi.success('已删除应用');
+      messageApi.success(i18nText("applications", "auto.k_bd2ef28234"));
     },
     onError: () => {
-      messageApi.error('删除应用失败');
+      messageApi.error(i18nText("applications", "auto.k_d62efc26ad"));
     }
   });
 
@@ -203,7 +204,7 @@ export function ApplicationListPage() {
   }
 
   if (applicationsQuery.isError || applicationCatalogQuery.isError) {
-    return <Result status="error" title="应用列表加载失败" />;
+    return <Result status="error" title={i18nText("applications", "auto.k_cbe184edda")} />;
   }
 
   const applications = applicationsQuery.data ?? [];
@@ -239,11 +240,11 @@ export function ApplicationListPage() {
 
   const confirmDeleteApplication = (application: Application) => {
     modalApi.confirm({
-      title: '删除应用',
-      content: '删除后将一并删除“' + application.name + '”相关的编排、草稿、运行记录和标签绑定。',
-      okText: '删除',
+      title: i18nText("applications", "auto.k_f9087f3ee8"),
+      content: i18nText("applications", "auto.k_4d30d910e9") + application.name + i18nText("applications", "auto.k_3ab0845d3f"),
+      okText: i18nText("applications", "auto.k_3755f56f2f"),
       okButtonProps: { danger: true },
-      cancelText: '取消',
+      cancelText: i18nText("applications", "auto.k_4d0b4688c7"),
       onOk: () => deleteApplicationMutation.mutateAsync(application)
     });
   };
@@ -279,12 +280,11 @@ export function ApplicationListPage() {
 
         <Space size="middle" wrap>
           <Checkbox checked={myCreated} onChange={(event) => setMyCreated(event.target.checked)}>
-            我创建的
-          </Checkbox>
+            {i18nText("applications", "auto.k_254d60d822")}</Checkbox>
           <Select
             allowClear
             value={tagFilter}
-            placeholder="全部标签"
+            placeholder={i18nText("applications", "auto.k_ffd92f5524")}
             options={availableTags.map((tag) => ({
               value: tag.id,
               label: `${tag.name} (${tag.application_count})`
@@ -296,7 +296,7 @@ export function ApplicationListPage() {
           <Input
             value={keyword}
             prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            placeholder="搜索应用"
+            placeholder={i18nText("applications", "auto.k_897fdfef89")}
             style={{ width: 220, borderRadius: 8 }}
             onChange={(event) => setKeyword(event.target.value)}
           />
@@ -323,31 +323,28 @@ export function ApplicationListPage() {
               border: '1px solid #dbe7f3'
             }}
           >
-            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>创建应用</Typography.Text>
+            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>{i18nText("applications", "auto.k_45dc181075")}</Typography.Text>
             <Button
               type="text"
               icon={<AppstoreAddOutlined />}
               style={{ justifyContent: 'flex-start' }}
               onClick={() => setCreateOpen(true)}
             >
-              创建空白应用
-            </Button>
+              {i18nText("applications", "auto.k_e2c5ab5025")}</Button>
             <Button
               type="text"
               icon={<FileTextOutlined />}
               style={{ justifyContent: 'flex-start' }}
               disabled
             >
-              从应用模板创建
-            </Button>
+              {i18nText("applications", "auto.k_558b4948f6")}</Button>
             <Button
               type="text"
               icon={<ImportOutlined />}
               style={{ justifyContent: 'flex-start' }}
               disabled
             >
-              导入 DSL 文件
-            </Button>
+              {i18nText("applications", "auto.k_9d0d148180")}</Button>
           </div>
         )}
 
@@ -360,19 +357,19 @@ export function ApplicationListPage() {
             {
               key: 'copy',
               icon: <CopyOutlined />,
-              label: '复制',
+              label: i18nText("applications", "auto.k_4edd1d0087"),
               disabled: !canCreate || duplicateApplicationMutation.isPending
             },
             {
               key: 'edit',
               icon: <EditOutlined />,
-              label: '编辑信息',
+              label: i18nText("applications", "auto.k_9799c4bcb9"),
               disabled: !canEdit
             },
             {
               key: 'delete',
               icon: <DeleteOutlined />,
-              label: '删除',
+              label: i18nText("applications", "auto.k_3755f56f2f"),
               danger: true,
               disabled: !canDelete || deleteApplicationMutation.isPending
             }
@@ -395,7 +392,7 @@ export function ApplicationListPage() {
             >
               <a
                 href={applicationHref}
-                aria-label={`进入应用-${application.name}`}
+                aria-label={i18nText("applications", "auto.k_61ec7e1a2a", { value1: application.name })}
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -425,7 +422,7 @@ export function ApplicationListPage() {
                       {application.name}
                     </Typography.Title>
                     <Typography.Text type="secondary">
-                      {typeLabel} · 编辑于{' '}
+                      {typeLabel} {i18nText("applications", "auto.k_4d4f92d4d7")}{' '}
                       {new Date(application.updated_at).toLocaleString('zh-CN', {
                         year: 'numeric',
                         month: '2-digit',
@@ -438,14 +435,13 @@ export function ApplicationListPage() {
                 </Flex>
 
                 <Typography.Paragraph style={{ color: '#334155', minHeight: 44 }}>
-                  {application.description || '当前应用尚未填写简介。'}
+                  {application.description || i18nText("applications", "auto.k_14e94c943d")}
                 </Typography.Paragraph>
 
                 <Flex wrap gap={8} style={{ minHeight: 32, marginBottom: 16 }}>
                   {application.tags.length === 0 ? (
                     <Tag bordered={false} color="default">
-                      暂无标签
-                    </Tag>
+                      {i18nText("applications", "auto.k_ec7eb0e788")}</Tag>
                   ) : (
                     application.tags.map((tag) => (
                       <Tag key={tag.id} bordered={false} color="blue">
@@ -465,18 +461,17 @@ export function ApplicationListPage() {
                   <Button
                     size="small"
                     icon={<TagOutlined />}
-                    aria-label={`管理标签-${application.name}`}
+                    aria-label={i18nText("applications", "auto.k_786274fb76", { value1: application.name })}
                     onClick={() => setTaggingApplicationId(application.id)}
                     disabled={!canEdit}
                   >
-                    管理标签
-                  </Button>
+                    {i18nText("applications", "auto.k_42a855ad1e")}</Button>
                 </Space>
                 <div style={{ position: 'relative' }}>
                   <Button
                     type="text"
                     icon={<MoreOutlined />}
-                    aria-label={`更多操作-${application.name}`}
+                    aria-label={i18nText("applications", "auto.k_cf4afb4503", { value1: application.name })}
                     aria-expanded={openActionApplicationId === application.id}
                     onMouseDown={(event) => {
                       event.preventDefault();
@@ -542,7 +537,7 @@ export function ApplicationListPage() {
 
       {visibleApplications.length === 0 ? (
         <div style={{ marginTop: 24 }}>
-          <Empty description="当前筛选条件下暂无应用" />
+          <Empty description={i18nText("applications", "auto.k_c312d18b13")} />
         </div>
       ) : null}
 

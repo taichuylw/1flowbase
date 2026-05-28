@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Alert, Space, Switch, Typography } from 'antd';
 
 import type { ApplicationApiPublication } from '../../api/public-api';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function ApplicationApiStatusBar({
   publication,
@@ -19,13 +20,13 @@ export function ApplicationApiStatusBar({
 }) {
   if (!publication) {
     return (
-      <section aria-label="公开 API 状态" className="application-api-status">
+      <section aria-label={i18nText("applications", "auto.k_0b262b3fc7")} className="application-api-status">
         <div className="application-api-status__header">
           <Alert
             type="warning"
             showIcon
-            message="当前应用还没有已发布的公开 API 版本"
-            description="发布后，应用 API Key 会自动绑定当前 active publication；公开 URL 不包含 application_id。"
+            message={i18nText("applications", "auto.k_fb86a8f40c")}
+            description={i18nText("applications", "auto.k_af2691a1d8")}
           />
           <div className="application-api-status__docs-toolbar">{toolbar}</div>
           <div className="application-api-status__actions">{children}</div>
@@ -35,15 +36,15 @@ export function ApplicationApiStatusBar({
   }
 
   return (
-    <section aria-label="公开 API 状态" className="application-api-status">
+    <section aria-label={i18nText("applications", "auto.k_0b262b3fc7")} className="application-api-status">
       <div className="application-api-status__header">
         <Space className="application-api-status__summary" align="center" wrap>
-          <Typography.Text strong>公开 API</Typography.Text>
+          <Typography.Text strong>{i18nText("applications", "auto.k_570e4c1e63")}</Typography.Text>
           <Switch
             checked={publication.api_enabled}
             loading={loading}
-            checkedChildren="启用"
-            unCheckedChildren="停用"
+            checkedChildren={i18nText("applications", "auto.k_d4e9ca3dd4")}
+            unCheckedChildren={i18nText("applications", "auto.k_d989e55188")}
             onChange={onToggleEnabled}
           />
           <Typography.Text type="secondary">

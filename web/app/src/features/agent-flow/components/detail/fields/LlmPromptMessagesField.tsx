@@ -13,6 +13,7 @@ import {
   LLM_PROMPT_MESSAGE_ROLES
 } from '../../../lib/llm-prompt-messages';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const DYNAMIC_PROMPT_MESSAGE_ROLES = LLM_PROMPT_MESSAGE_ROLES.filter(
   (role) => role !== 'system'
@@ -195,9 +196,9 @@ export function LlmPromptMessagesField({
       >
         <div className="agent-flow-llm-prompt-messages__body">
           <TemplatedTextField
-            ariaLabel={`${roleLabel} 消息内容`}
+            ariaLabel={i18nText("agentFlow", "auto.k_0cc8b6ac45", { value1: roleLabel })}
             draggable={isDraggableMessage}
-            dragLabel={`拖拽排序 ${roleLabel} 消息`}
+            dragLabel={i18nText("agentFlow", "auto.k_a825b8c3cd", { value1: roleLabel })}
             label={roleLabel}
             labelContent={
               isSystemMessage ? (
@@ -209,7 +210,7 @@ export function LlmPromptMessagesField({
                 </Typography.Text>
               ) : (
                 <PromptMessageRoleSelect
-                  ariaLabel={roleLabel + ' 消息角色'}
+                  ariaLabel={roleLabel + i18nText("agentFlow", "auto.k_4aa036182f")}
                   value={message.role}
                   onChange={(role) => updateRole(index, role)}
                 />
@@ -218,7 +219,7 @@ export function LlmPromptMessagesField({
             toolbarExtraActions={
               isSystemMessage ? null : (
                 <Button
-                  aria-label={`删除 ${roleLabel} 消息`}
+                  aria-label={i18nText("agentFlow", "auto.k_33932e5754", { value1: roleLabel })}
                   className="agent-flow-templated-text-field__action"
                   danger
                   icon={<DeleteOutlined />}
@@ -229,7 +230,7 @@ export function LlmPromptMessagesField({
               )
             }
             options={options}
-            placeholder="输入文本，或输入 / 引用变量"
+            placeholder={i18nText("agentFlow", "auto.k_faa6bb45af")}
             value={message.content.value}
             onChange={(nextValue) => updateContent(index, nextValue)}
             onDragEnd={() => setDraggingIndex(null)}
@@ -244,8 +245,7 @@ export function LlmPromptMessagesField({
     <div className="agent-flow-llm-prompt-messages">
       <div className="agent-flow-llm-prompt-messages__header">
         <Typography.Text className="agent-flow-node-detail__section-subtitle">
-          按顺序发送给模型的上下文消息
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_30827d1c96")}</Typography.Text>
       </div>
 
       <div className="agent-flow-llm-prompt-messages__list">
@@ -258,15 +258,14 @@ export function LlmPromptMessagesField({
             renderPromptMessage(message, dynamicIndex + 1)
           )}
           <Button
-            aria-label="新增消息"
+            aria-label={i18nText("agentFlow", "auto.k_bc38ae0484")}
             className="agent-flow-llm-prompt-messages__add-message"
             icon={<PlusOutlined />}
             size="small"
             type="dashed"
             onClick={addMessage}
           >
-            新增消息
-          </Button>
+            {i18nText("agentFlow", "auto.k_bc38ae0484")}</Button>
         </div>
       </div>
     </div>

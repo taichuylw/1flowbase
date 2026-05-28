@@ -2,6 +2,7 @@ import { Input, InputNumber, Space, Switch, Tag, Typography } from 'antd';
 
 import type { AgentFlowRunContext } from '../../api/runtime';
 import { formatNodeVariableLabel } from '../../lib/variable-labels';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function renderFieldInput(
   field: AgentFlowRunContext['fields'][number],
@@ -73,13 +74,12 @@ export function RunContextPanel({
         <Space direction="vertical" size={2}>
           <Typography.Text strong>Run Context</Typography.Text>
           <Typography.Text type="secondary">
-            运行前输入与当前调试环境。
-          </Typography.Text>
+            {i18nText("agentFlow", "auto.k_4b442eb1b7")}</Typography.Text>
         </Space>
         <Space size={8} wrap>
           <Tag color="blue">draft</Tag>
           <Tag color={runContext.remembered ? 'green' : 'default'}>
-            {runContext.remembered ? '复用上次输入' : '当前草稿默认值'}
+            {runContext.remembered ? i18nText("agentFlow", "auto.k_889a2c11aa") : i18nText("agentFlow", "auto.k_79b0807a89")}
           </Tag>
         </Space>
       </div>

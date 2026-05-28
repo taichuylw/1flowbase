@@ -5,6 +5,7 @@ import {
 import { Alert, Descriptions, Empty, Space, Tag, Typography } from 'antd';
 
 import type { RestrictedBlockRuntimeHostSnapshot } from '../lib/restricted-block-runtime-host';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface RestrictedBlockRuntimePreviewProps {
   snapshot: RestrictedBlockRuntimeHostSnapshot;
@@ -13,23 +14,31 @@ export interface RestrictedBlockRuntimePreviewProps {
 
 export type RestrictedBlockRuntimeActionEvent = BlockRendererActionEvent;
 
-const statusView: Record<
-  RestrictedBlockRuntimeHostSnapshot['status'],
-  { message: string; type: 'info' | 'success' | 'warning' | 'error' }
-> = {
-  idle: { message: '尚未运行', type: 'info' },
-  running: { message: '运行中', type: 'info' },
-  ready: { message: '运行结果', type: 'success' },
-  failed: { message: '运行失败', type: 'error' },
-  timed_out: { message: '运行超时', type: 'warning' },
-  disposed: { message: '已释放', type: 'info' }
-};
+function getStatusView(status: RestrictedBlockRuntimeHostSnapshot['status']): {
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+} {
+  switch (status) {
+    case 'idle':
+      return { message: i18nText("frontstage", "auto.k_5afa7a9851"), type: 'info' };
+    case 'running':
+      return { message: i18nText("frontstage", "auto.k_5942497005"), type: 'info' };
+    case 'ready':
+      return { message: i18nText("frontstage", "auto.k_618d581979"), type: 'success' };
+    case 'failed':
+      return { message: i18nText("frontstage", "auto.k_f5f12f1d7a"), type: 'error' };
+    case 'timed_out':
+      return { message: i18nText("frontstage", "auto.k_5debddc330"), type: 'warning' };
+    case 'disposed':
+      return { message: i18nText("frontstage", "auto.k_0fc2814fea"), type: 'info' };
+  }
+}
 
 export function RestrictedBlockRuntimePreview({
   snapshot,
   onAction
 }: RestrictedBlockRuntimePreviewProps) {
-  const view = statusView[snapshot.status];
+  const view = getStatusView(snapshot.status);
 
   return (
     <Space
@@ -43,7 +52,7 @@ export function RestrictedBlockRuntimePreview({
       {snapshot.status === 'ready' ? (
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           {snapshot.schema === undefined ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 UI schema" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("frontstage", "auto.k_d62f5a0a4e")} />
           ) : (
             <BlockUiRenderer
               schema={snapshot.schema}
@@ -75,7 +84,7 @@ function RuntimeErrorSummary({
       bordered
       size="small"
       column={1}
-      title="错误摘要"
+      title={i18nText("frontstage", "auto.k_e127739219")}
       items={[
         {
           key: 'kind',
@@ -113,8 +122,7 @@ function RuntimeActivitySummary({
       {snapshot.logs.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            {snapshot.logs.length} 条
-          </Typography.Text>
+            {snapshot.logs.length} {i18nText("frontstage", "auto.k_bce2ef6151")}</Typography.Text>
           {snapshot.logs.map((log, index) => (
             <Typography.Text key={`${log.level}-${index}`}>
               <Tag>{log.level}</Tag>
@@ -123,15 +131,14 @@ function RuntimeActivitySummary({
           ))}
         </Space>
       ) : (
-        <Typography.Text type="secondary">无</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_72077749f7")}</Typography.Text>
       )}
 
       <Typography.Text strong>Effects</Typography.Text>
       {snapshot.effects.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            {snapshot.effects.length} 个 effect
-          </Typography.Text>
+            {snapshot.effects.length} {i18nText("frontstage", "auto.k_d98770d860")}</Typography.Text>
           {snapshot.effects.map((effect, index) => (
             <Typography.Text key={`${effect.type}-${index}`}>
               {formatEffect(effect)}
@@ -139,15 +146,14 @@ function RuntimeActivitySummary({
           ))}
         </Space>
       ) : (
-        <Typography.Text type="secondary">无</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_72077749f7")}</Typography.Text>
       )}
 
       <Typography.Text strong>Rejections</Typography.Text>
       {snapshot.rejections.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            {snapshot.rejections.length} 个 rejection
-          </Typography.Text>
+            {snapshot.rejections.length} {i18nText("frontstage", "auto.k_402cffd864")}</Typography.Text>
           {snapshot.rejections.map((rejection, index) => (
             <Typography.Text key={`${rejection.code}-${index}`}>
               <Tag color="warning">{rejection.code}</Tag>
@@ -156,7 +162,7 @@ function RuntimeActivitySummary({
           ))}
         </Space>
       ) : (
-        <Typography.Text type="secondary">无</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_72077749f7")}</Typography.Text>
       )}
     </Space>
   );

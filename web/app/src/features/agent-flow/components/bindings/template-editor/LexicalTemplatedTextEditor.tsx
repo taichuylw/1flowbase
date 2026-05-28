@@ -40,6 +40,7 @@ import {
   removeTriggerQueryBeforeSelection,
   textToEditorState
 } from './template-editor-utils';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const TRIGGER_CHARACTERS = new Set(['/', '{']);
 const TYPEAHEAD_OFFSET = 8;
@@ -559,7 +560,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
           }
           placeholder={
             <div className="agent-flow-templated-text-field__placeholder">
-              {placeholder || '输入模板内容'}
+              {placeholder || i18nText("agentFlow", "auto.k_10f59112ea")}
             </div>
           }
           ErrorBoundary={LexicalErrorBoundary}

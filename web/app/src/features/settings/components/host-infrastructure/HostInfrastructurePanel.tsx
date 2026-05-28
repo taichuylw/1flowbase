@@ -8,6 +8,7 @@ import {
 import { SettingsSectionSurface } from '../SettingsSectionSurface';
 import { HostInfrastructureProviderTable } from './HostInfrastructureProviderTable';
 import './host-infrastructure-panel.css';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
   const providersQuery = useQuery({
@@ -16,7 +17,7 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
   });
 
   return (
-    <SettingsSectionSurface title="基础设施" hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.k_add2c7fd5b")} hideHeader heightMode="fill">
       <Space
         direction="vertical"
         size={16}
@@ -25,7 +26,7 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
         <Alert
           type="info"
           showIcon
-          message="安装、配置和启用会保存为待应用变更，重启 api-server 一次后生效。"
+          message={i18nText("settings", "auto.k_79f0be43f4")}
         />
         <HostInfrastructureProviderTable
           providers={providersQuery.data ?? []}

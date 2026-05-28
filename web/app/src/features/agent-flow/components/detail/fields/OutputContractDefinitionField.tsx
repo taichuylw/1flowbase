@@ -2,6 +2,7 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Empty, Input, Select, Typography } from 'antd';
 
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const valueTypeOptions = [
   { value: 'string', label: 'String' },
@@ -36,10 +37,9 @@ export function OutputContractDefinitionField({
     <div className="agent-flow-output-contract-editor">
       <div className="agent-flow-output-contract-editor__header">
         <Typography.Text className="agent-flow-node-detail__section-subtitle">
-          节点产出的变量可被下游节点引用
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.k_3f13f2f9bd")}</Typography.Text>
         <Button
-          aria-label="新增输出变量"
+          aria-label={i18nText("agentFlow", "auto.k_865ddecda9")}
           icon={<PlusOutlined />}
           size="small"
           type="text"
@@ -54,9 +54,9 @@ export function OutputContractDefinitionField({
               className="agent-flow-output-contract-editor__row"
             >
               <label className="agent-flow-output-contract-editor__cell">
-                <span>变量名</span>
+                <span>{i18nText("agentFlow", "auto.k_63d5977de6")}</span>
                 <Input
-                  aria-label={`输出变量名 ${index + 1}`}
+                  aria-label={i18nText("agentFlow", "auto.k_502ead32a1", { value1: index + 1 })}
                   value={output.key}
                   onChange={(event) =>
                     onChange(
@@ -70,9 +70,9 @@ export function OutputContractDefinitionField({
                 />
               </label>
               <label className="agent-flow-output-contract-editor__cell">
-                <span>显示名</span>
+                <span>{i18nText("agentFlow", "auto.k_c10bbf5ddd")}</span>
                 <Input
-                  aria-label={`输出显示名 ${index + 1}`}
+                  aria-label={i18nText("agentFlow", "auto.k_08ce391099", { value1: index + 1 })}
                   value={output.title}
                   onChange={(event) =>
                     onChange(
@@ -86,9 +86,9 @@ export function OutputContractDefinitionField({
                 />
               </label>
               <label className="agent-flow-output-contract-editor__cell">
-                <span>类型</span>
+                <span>{i18nText("agentFlow", "auto.k_e4e46c7235")}</span>
                 <Select
-                  aria-label={`输出类型 ${index + 1}`}
+                  aria-label={i18nText("agentFlow", "auto.k_fe962c8c4f", { value1: index + 1 })}
                   options={valueTypeOptions}
                   value={output.valueType}
                   onChange={(valueType) =>
@@ -103,7 +103,7 @@ export function OutputContractDefinitionField({
                 />
               </label>
               <Button
-                aria-label={`删除输出变量 ${output.key || index + 1}`}
+                aria-label={i18nText("agentFlow", "auto.k_aee266746a", { value1: output.key || index + 1 })}
                 className="agent-flow-output-contract-editor__delete"
                 danger
                 icon={<DeleteOutlined />}
@@ -121,7 +121,7 @@ export function OutputContractDefinitionField({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无输出变量"
+          description={i18nText("agentFlow", "auto.k_1d3ebdeb22")}
         />
       )}
     </div>

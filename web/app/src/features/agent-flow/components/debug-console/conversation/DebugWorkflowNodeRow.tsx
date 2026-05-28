@@ -13,6 +13,7 @@ import { getAgentFlowNodeTypeIcon } from '../../../lib/node-type-icons';
 import { nodeDisplayName } from './debug-workflow-trace-utils';
 import { collectLlmToolCallbacks } from './llm-tool-callbacks';
 import './debug-message.css';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function statusTone(status: string) {
   switch (status) {
@@ -68,14 +69,14 @@ function metricText(item: AgentFlowTraceItem) {
   const metrics = [
     typeof tokens === 'number' ? `${tokens} tokens` : null,
     duration,
-    toolCount > 0 ? `工具 ${toolCount}` : null
+    toolCount > 0 ? i18nText("agentFlow", "auto.k_c3ef1c5910", { value1: toolCount }) : null
   ].filter((metric): metric is string => Boolean(metric));
 
   if (metrics.length > 0) {
     return metrics.join(' · ');
   }
 
-  return '进行中';
+  return i18nText("agentFlow", "auto.k_6f1972e48e");
 }
 
 export function StatusIcon({ status }: { status: string }) {
@@ -84,7 +85,7 @@ export function StatusIcon({ status }: { status: string }) {
   if (tone === 'running') {
     return (
       <LoadingOutlined
-        aria-label={`${status} 状态`}
+        aria-label={i18nText("agentFlow", "auto.k_7a74cbc1b2", { value1: status })}
         className="agent-flow-editor__debug-workflow-status-icon"
         spin
       />
@@ -94,7 +95,7 @@ export function StatusIcon({ status }: { status: string }) {
   if (tone === 'error' || tone === 'warning') {
     return (
       <WarningFilled
-        aria-label={`${status} 状态`}
+        aria-label={i18nText("agentFlow", "auto.k_7a74cbc1b2", { value1: status })}
         className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
       />
     );
@@ -102,7 +103,7 @@ export function StatusIcon({ status }: { status: string }) {
 
   return (
     <CheckCircleFilled
-      aria-label={`${status} 状态`}
+      aria-label={i18nText("agentFlow", "auto.k_7a74cbc1b2", { value1: status })}
       className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
     />
   );
@@ -111,7 +112,7 @@ export function StatusIcon({ status }: { status: string }) {
 export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   return (
     <span
-      aria-label={`${nodeType} 节点类型`}
+      aria-label={i18nText("agentFlow", "auto.k_bdd8654569", { value1: nodeType })}
       className="agent-flow-editor__debug-workflow-node-icon"
       role="img"
     >

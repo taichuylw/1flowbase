@@ -16,6 +16,7 @@ import type {
 } from '../../api/model-providers';
 import { ModelProviderTagList } from './ModelProviderTagList';
 import { ModelProviderInstancesTable } from './ModelProviderInstancesTable';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type ModelGroup =
   SettingsModelProviderOptions['providers'][number]['model_groups'][number];
@@ -77,7 +78,7 @@ export function ModelProviderInstancesModal({
     0
   );
   const displayName = catalogEntry?.display_name ?? providerDisplayName;
-  const title = displayName ? `${displayName} 实例` : '供应商实例';
+  const title = displayName ? i18nText("settings", "auto.k_c13a981c98", { value1: displayName }) : i18nText("settings", "auto.k_9743810bab");
 
   return (
     <Modal
@@ -94,10 +95,10 @@ export function ModelProviderInstancesModal({
           <Alert
             type="warning"
             showIcon
-            message="该供应商刚完成版本切换，建议刷新模型并验证关键实例。"
+            message={i18nText("settings", "auto.k_29dbe8fcae")}
             description={
               versionSwitchNotice.targetVersion
-                ? `当前目标版本 ${versionSwitchNotice.targetVersion}，已迁移 ${versionSwitchNotice.migratedInstanceCount ?? 0} 个实例。`
+                ? i18nText("settings", "auto.k_e66794c6e4", { value1: versionSwitchNotice.targetVersion, value2: versionSwitchNotice.migratedInstanceCount ?? 0 })
                 : undefined
             }
           />
@@ -106,16 +107,15 @@ export function ModelProviderInstancesModal({
         <section className="model-provider-panel__main-instance-card">
           <div className="model-provider-panel__main-instance-head">
             <div className="model-provider-panel__main-instance-title-row">
-              <Typography.Text strong>主实例</Typography.Text>
+              <Typography.Text strong>{i18nText("settings", "auto.k_4be73cdcc7")}</Typography.Text>
               <div className="model-provider-panel__main-instance-summary">
                 <Tag bordered={false} color="blue">
-                  聚合视图
-                </Tag>
+                  {i18nText("settings", "auto.k_b4dbe5471c")}</Tag>
                 <Typography.Text type="secondary">
-                  实例：{includedCount}
+                  {i18nText("settings", "auto.k_c161648890")}{includedCount}
                 </Typography.Text>
                 <Typography.Text type="secondary">
-                  模型：{aggregatedModelCount}
+                  {i18nText("settings", "auto.k_7ac64a2b44")}{aggregatedModelCount}
                 </Typography.Text>
               </div>
             </div>
@@ -125,10 +125,9 @@ export function ModelProviderInstancesModal({
               className="model-provider-panel__main-instance-toggle"
             >
               <Typography.Text type="secondary">
-                新实例自动注入主实例
-              </Typography.Text>
+                {i18nText("settings", "auto.k_ce4d3a041d")}</Typography.Text>
               <Switch
-                aria-label="新实例自动注入主实例"
+                aria-label={i18nText("settings", "auto.k_ce4d3a041d")}
                 checked={mainInstance?.auto_include_new_instances ?? false}
                 disabled={!canManage || updatingMainInstance}
                 onChange={onToggleAutoIncludeNewInstances}
@@ -139,7 +138,7 @@ export function ModelProviderInstancesModal({
           {modelGroups.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="当前主实例还没有接入任何子实例模型"
+              description={i18nText("settings", "auto.k_5d440ac4d7")}
             />
           ) : (
             <div className="model-provider-panel__main-instance-groups">
@@ -153,7 +152,7 @@ export function ModelProviderInstancesModal({
                   </Typography.Text>
                   <ModelProviderTagList
                     modelIds={group.models.map((model) => model.model_id)}
-                    emptyText="未汇总模型"
+                    emptyText={i18nText("settings", "auto.k_b14db0a516")}
                   />
                 </section>
               ))}

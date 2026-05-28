@@ -16,6 +16,7 @@ import {
   getDataModelNodeOutputs,
   getDataModelActionForNodeType
 } from './nodes/data-model';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type BuiltinNodeRuntimeContractType = FlowNodeType;
 type ContractCategory = 'io' | 'generation' | 'control' | 'data' | 'external';
@@ -157,11 +158,11 @@ function panelSection(
 const basicsPanelSection = panelSection('basics', 'Basics', [
   panelField({
     key: 'alias',
-    title: '节点别名',
+    title: i18nText("agentFlow", "auto.k_fc60b948fb"),
     renderer: 'text',
     required: true
   }),
-  panelField({ key: 'description', title: '节点简介', renderer: 'text' })
+  panelField({ key: 'description', title: i18nText("agentFlow", "auto.k_a146323984"), renderer: 'text' })
 ]);
 
 function outputsPanelSection(outputs: FlowNodeOutputDocument[]) {
@@ -235,24 +236,24 @@ function createStartContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'start',
     title: 'Start',
-    description: '工作流入口。',
+    description: i18nText("agentFlow", "auto.k_02d7b9e423"),
     category: 'io',
     config: { input_fields: [], model_list: [] },
     outputs: [],
     panelSections: [
       basicsPanelSection,
-      panelSection('inputs', '输入字段', [
+      panelSection('inputs', i18nText("agentFlow", "auto.k_f4cbd6bd13"), [
         panelField({
           key: 'config.input_fields',
-          title: '输入字段',
+          title: i18nText("agentFlow", "auto.k_f4cbd6bd13"),
           renderer: 'start_input_fields',
           valueType: 'array'
         })
       ]),
-      panelSection('advanced', '模型列表', [
+      panelSection('advanced', i18nText("agentFlow", "auto.k_c271d29118"), [
         panelField({
           key: 'config.model_list',
-          title: '模型列表',
+          title: i18nText("agentFlow", "auto.k_c271d29118"),
           renderer: 'start_model_list',
           valueType: 'array'
         })
@@ -267,7 +268,7 @@ function createLlmContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'llm',
     title: 'LLM',
-    description: '调用语言模型生成文本。',
+    description: i18nText("agentFlow", "auto.k_47e6b68641"),
     category: 'generation',
     config: {
       model_provider: {
@@ -301,14 +302,14 @@ function createLlmContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'config.model_provider',
-          title: '模型',
+          title: i18nText("agentFlow", "auto.k_98fd0cbd9c"),
           renderer: 'llm_model',
           valueType: 'json',
           required: true
         }),
         panelField({
           key: 'bindings.prompt_messages',
-          title: '上下文',
+          title: i18nText("agentFlow", "auto.k_d9aa9fe0d6"),
           renderer: 'llm_prompt_messages',
           valueType: 'array'
         })
@@ -317,7 +318,7 @@ function createLlmContract(): NodeRuntimeUiContract {
       panelSection('advanced', 'Advanced', [
         panelField({
           key: 'config.response_format',
-          title: '返回格式',
+          title: i18nText("agentFlow", "auto.k_dac673286f"),
           renderer: 'llm_response_format',
           valueType: 'json'
         })
@@ -327,12 +328,12 @@ function createLlmContract(): NodeRuntimeUiContract {
 }
 
 function createAnswerContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'answer', title: '对话输出', valueType: 'string' }];
+  const outputs = [{ key: 'answer', title: i18nText("agentFlow", "auto.k_6e77a04352"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'answer',
     title: 'Answer',
-    description: '向用户返回最终文本结果。',
+    description: i18nText("agentFlow", "auto.k_8af2c646e3"),
     category: 'io',
     config: {},
     outputs,
@@ -341,7 +342,7 @@ function createAnswerContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.answer_template',
-          title: '回复内容',
+          title: i18nText("agentFlow", "auto.k_a36c787d35"),
           renderer: 'templated_text',
           required: true
         })
@@ -352,12 +353,12 @@ function createAnswerContract(): NodeRuntimeUiContract {
 }
 
 function createKnowledgeRetrievalContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'documents', title: '知识结果', valueType: 'array' }];
+  const outputs = [{ key: 'documents', title: i18nText("agentFlow", "auto.k_b17d392ca1"), valueType: 'array' }];
 
   return createNodeRuntimeContract({
     type: 'knowledge_retrieval',
     title: 'Knowledge Retrieval',
-    description: '根据输入问题检索知识库并返回文档结果。',
+    description: i18nText("agentFlow", "auto.k_c410c3a41d"),
     category: 'generation',
     config: { top_k: 4 },
     outputs,
@@ -366,7 +367,7 @@ function createKnowledgeRetrievalContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.query',
-          title: '检索问题',
+          title: i18nText("agentFlow", "auto.k_2a1d305a06"),
           renderer: 'selector',
           required: true
         })
@@ -385,12 +386,12 @@ function createKnowledgeRetrievalContract(): NodeRuntimeUiContract {
 }
 
 function createQuestionClassifierContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'label', title: '分类标签', valueType: 'string' }];
+  const outputs = [{ key: 'label', title: i18nText("agentFlow", "auto.k_0effee892c"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'question_classifier',
     title: 'Question Classifier',
-    description: '对问题进行分类并输出命中的标签。',
+    description: i18nText("agentFlow", "auto.k_2e025ce7cd"),
     category: 'control',
     config: { classes: [] },
     outputs,
@@ -399,7 +400,7 @@ function createQuestionClassifierContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.question',
-          title: '待分类问题',
+          title: i18nText("agentFlow", "auto.k_1c781a63d7"),
           renderer: 'selector',
           required: true
         })
@@ -413,7 +414,7 @@ function createIfElseContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'if_else',
     title: 'If / Else',
-    description: '按条件判断选择路径。',
+    description: i18nText("agentFlow", "auto.k_9397b19dbe"),
     category: 'control',
     config: { mode: 'all' },
     outputs: [],
@@ -422,7 +423,7 @@ function createIfElseContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.condition_group',
-          title: '条件组',
+          title: i18nText("agentFlow", "auto.k_536d57e2cb"),
           renderer: 'condition_group',
           valueType: 'json',
           required: true
@@ -439,7 +440,7 @@ function createCodeContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'code',
     title: 'Code',
-    description: '执行自定义代码并返回结构化结果。',
+    description: i18nText("agentFlow", "auto.k_a1ccd42fb9"),
     category: 'data',
     config: { language: 'javascript', source: DEFAULT_CODE_SOURCE },
     bindings: {
@@ -463,7 +464,7 @@ function createCodeContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.named_bindings',
-          title: '输入变量',
+          title: i18nText("agentFlow", "auto.k_9a45fe515b"),
           renderer: 'templated_named_bindings',
           valueType: 'json'
         })
@@ -471,16 +472,16 @@ function createCodeContract(): NodeRuntimeUiContract {
       panelSection('code', 'JavaScript', [
         panelField({
           key: 'config.source',
-          title: 'JavaScript 代码',
+          title: i18nText("agentFlow", "auto.k_934ea42891"),
           renderer: 'code_source',
           valueType: 'string',
           required: true
         })
       ]),
-      panelSection('outputs', '输出变量', [
+      panelSection('outputs', i18nText("agentFlow", "auto.k_1860add605"), [
         panelField({
           key: 'config.output_contract',
-          title: '输出变量',
+          title: i18nText("agentFlow", "auto.k_1860add605"),
           renderer: 'output_contract_definition',
           valueType: 'array'
         })
@@ -490,12 +491,12 @@ function createCodeContract(): NodeRuntimeUiContract {
 }
 
 function createTemplateTransformContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'text', title: '转换结果', valueType: 'string' }];
+  const outputs = [{ key: 'text', title: i18nText("agentFlow", "auto.k_da17da584d"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'template_transform',
     title: 'Template Transform',
-    description: '模板输出转换。',
+    description: i18nText("agentFlow", "auto.k_b545addf6b"),
     category: 'generation',
     config: { template: '' },
     outputs,
@@ -504,7 +505,7 @@ function createTemplateTransformContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.template',
-          title: '模板',
+          title: i18nText("agentFlow", "auto.k_06d0f38dd2"),
           renderer: 'templated_text',
           required: true
         })
@@ -515,12 +516,12 @@ function createTemplateTransformContract(): NodeRuntimeUiContract {
 }
 
 function createHttpRequestContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'body', title: '响应正文', valueType: 'json' }];
+  const outputs = [{ key: 'body', title: i18nText("agentFlow", "auto.k_ac5260f829"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'http_request',
     title: 'HTTP Request',
-    description: '请求外部 HTTP 服务。',
+    description: i18nText("agentFlow", "auto.k_3a85f4d606"),
     category: 'external',
     config: { method: 'GET', url: '' },
     outputs,
@@ -535,7 +536,7 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
         }),
         panelField({
           key: 'bindings.body',
-          title: '请求体',
+          title: i18nText("agentFlow", "auto.k_a526db39fb"),
           renderer: 'templated_text'
         })
       ]),
@@ -552,12 +553,12 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
 }
 
 function createToolContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: '工具输出', valueType: 'unknown' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.k_fb7edd231f"), valueType: 'unknown' }];
 
   return createNodeRuntimeContract({
     type: 'tool',
     title: 'Tool',
-    description: '调用已接入的工具能力。',
+    description: i18nText("agentFlow", "auto.k_8919b8e23e"),
     category: 'external',
     config: { tool_name: '' },
     outputs,
@@ -566,13 +567,13 @@ function createToolContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'config.tool_name',
-          title: '工具名称',
+          title: i18nText("agentFlow", "auto.k_e28d76530c"),
           renderer: 'text',
           required: true
         }),
         panelField({
           key: 'bindings.parameters',
-          title: '工具入参',
+          title: i18nText("agentFlow", "auto.k_3ecd60a177"),
           renderer: 'named_bindings',
           valueType: 'json'
         })
@@ -583,12 +584,12 @@ function createToolContract(): NodeRuntimeUiContract {
 }
 
 function createPluginNodeContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: '节点输出', valueType: 'json' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.k_9d3cdebd52"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'plugin_node',
     title: 'Plugin Node',
-    description: '来自插件的声明式节点占位。',
+    description: i18nText("agentFlow", "auto.k_9db3be4bbb"),
     category: 'external',
     config: {},
     outputs,
@@ -597,12 +598,12 @@ function createPluginNodeContract(): NodeRuntimeUiContract {
 }
 
 function createVariableAssignerContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'state', title: '状态结果', valueType: 'json' }];
+  const outputs = [{ key: 'state', title: i18nText("agentFlow", "auto.k_407e98ca1f"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'variable_assigner',
     title: 'Variable Assigner',
-    description: '设置或更新流程变量。',
+    description: i18nText("agentFlow", "auto.k_536065a535"),
     category: 'data',
     config: { writes: [] },
     outputs,
@@ -611,7 +612,7 @@ function createVariableAssignerContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.operations',
-          title: '变量操作',
+          title: i18nText("agentFlow", "auto.k_41663264f1"),
           renderer: 'state_write',
           valueType: 'array',
           required: true
@@ -623,12 +624,12 @@ function createVariableAssignerContract(): NodeRuntimeUiContract {
 }
 
 function createParameterExtractorContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'parameters', title: '提取参数', valueType: 'json' }];
+  const outputs = [{ key: 'parameters', title: i18nText("agentFlow", "auto.k_becb4f0f10"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'parameter_extractor',
     title: 'Parameter Extractor',
-    description: '从文本中提取结构化参数结果。',
+    description: i18nText("agentFlow", "auto.k_2bcd4ace8d"),
     category: 'data',
     config: { schema: [] },
     outputs,
@@ -637,7 +638,7 @@ function createParameterExtractorContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.source_text',
-          title: '源文本',
+          title: i18nText("agentFlow", "auto.k_25c9175fa9"),
           renderer: 'selector',
           required: true
         })
@@ -648,12 +649,12 @@ function createParameterExtractorContract(): NodeRuntimeUiContract {
 }
 
 function createIterationContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: '聚合输出', valueType: 'array' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.k_bad648c3c2"), valueType: 'array' }];
 
   return createNodeRuntimeContract({
     type: 'iteration',
     title: 'Iteration',
-    description: '遍历列表并处理每一项。',
+    description: i18nText("agentFlow", "auto.k_4804b65316"),
     category: 'control',
     config: { max_steps: 10 },
     outputs,
@@ -662,7 +663,7 @@ function createIterationContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.items',
-          title: '循环列表',
+          title: i18nText("agentFlow", "auto.k_21155a3cf5"),
           renderer: 'selector',
           required: true
         })
@@ -673,12 +674,12 @@ function createIterationContract(): NodeRuntimeUiContract {
 }
 
 function createLoopContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: '聚合输出', valueType: 'array' }];
+  const outputs = [{ key: 'result', title: i18nText("agentFlow", "auto.k_bad648c3c2"), valueType: 'array' }];
 
   return createNodeRuntimeContract({
     type: 'loop',
     title: 'Loop',
-    description: '按条件重复执行节点。',
+    description: i18nText("agentFlow", "auto.k_65b48e10e4"),
     category: 'control',
     config: { max_rounds: 10 },
     outputs,
@@ -687,7 +688,7 @@ function createLoopContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.entry_condition',
-          title: '入口条件',
+          title: i18nText("agentFlow", "auto.k_ed57abc592"),
           renderer: 'condition_group',
           valueType: 'json',
           required: true
@@ -696,7 +697,7 @@ function createLoopContract(): NodeRuntimeUiContract {
       panelSection('policy', 'Policy', [
         panelField({
           key: 'config.max_rounds',
-          title: '最大轮数',
+          title: i18nText("agentFlow", "auto.k_7b621d26b8"),
           renderer: 'number',
           valueType: 'number'
         })
@@ -707,12 +708,12 @@ function createLoopContract(): NodeRuntimeUiContract {
 }
 
 function createHumanInputContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'input', title: '人工输入', valueType: 'string' }];
+  const outputs = [{ key: 'input', title: i18nText("agentFlow", "auto.k_640eee29f1"), valueType: 'string' }];
 
   return createNodeRuntimeContract({
     type: 'human_input',
     title: 'Human Input',
-    description: '等待人工输入。',
+    description: i18nText("agentFlow", "auto.k_db64dc2f29"),
     category: 'io',
     config: {},
     outputs,
@@ -721,7 +722,7 @@ function createHumanInputContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'config.prompt',
-          title: '等待问题',
+          title: i18nText("agentFlow", "auto.k_b0b7c8309e"),
           renderer: 'templated_text',
           required: true
         })
@@ -818,7 +819,7 @@ function createDataModelContract(
   return createNodeRuntimeContract({
     type: nodeType,
     title: DATA_MODEL_NODE_TITLES[nodeType],
-    description: '数据模型操作节点。',
+    description: i18nText("agentFlow", "auto.k_ecc4cf4acd"),
     category: 'data',
     config: getDataModelNodeDefaultConfig(nodeType),
     outputs,

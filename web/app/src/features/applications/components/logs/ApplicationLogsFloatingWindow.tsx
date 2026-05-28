@@ -6,6 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode
 } from 'react';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type FloatingWindowRect = {
   left: number;
@@ -369,21 +370,21 @@ export function ApplicationLogsFloatingWindow({
     >
       <div className="application-logs-floating-window__body">{children}</div>
       <div
-        aria-label={`从右侧调整${title}宽度`}
+        aria-label={i18nText("applications", "auto.k_1b02125555", { value1: title })}
         aria-orientation="vertical"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--right"
         role="separator"
         onMouseDown={(event) => startWidthResize('right', event)}
       />
       <div
-        aria-label={`从左侧调整${title}宽度`}
+        aria-label={i18nText("applications", "auto.k_237ff1cc40", { value1: title })}
         aria-orientation="vertical"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--left"
         role="separator"
         onMouseDown={(event) => startWidthResize('left', event)}
       />
       <div
-        aria-label={`向下调整${title}高度`}
+        aria-label={i18nText("applications", "auto.k_e7e3f3a8e7", { value1: title })}
         aria-orientation="horizontal"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--bottom"
         role="separator"

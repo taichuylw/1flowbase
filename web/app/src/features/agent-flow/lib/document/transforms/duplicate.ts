@@ -7,6 +7,7 @@ import type {
 import { getNodeById } from '../selectors';
 import { remapTemplateSelectorTokens } from '../../template-binding';
 import { remapDataModelQueryBinding } from '../../data-model-query-binding';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function collectDuplicatedNodeIds(
   document: FlowAuthoringDocument,
@@ -184,7 +185,7 @@ export function duplicateNodeSubgraph(
     .map((node) => ({
       ...node,
       id: idMap.get(node.id)!,
-      alias: `${node.alias} 副本`,
+      alias: i18nText("agentFlow", "auto.k_67d3d1de17", { value1: node.alias }),
       containerId:
         node.containerId && idMap.has(node.containerId)
           ? idMap.get(node.containerId)!

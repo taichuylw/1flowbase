@@ -36,6 +36,7 @@ import {
   type SettingsHostInfrastructureCacheEntry,
   type SettingsHostInfrastructureCacheEntryValue
 } from '../../api/host-infrastructure';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function formatBytes(value: number) {
   if (value < 1024) {
@@ -49,7 +50,7 @@ function formatBytes(value: number) {
 
 function formatTtl(value: number | null) {
   if (value == null) {
-    return '无过期';
+    return i18nText("settings", "auto.k_ff139dbaf3");
   }
   if (value < 60) {
     return `${value}s`;
@@ -69,7 +70,7 @@ function formatUnixTimestamp(value: number | null) {
 
 function formatUpdatedAt(value: number) {
   if (!value) {
-    return '尚未刷新';
+    return i18nText("settings", "auto.k_b6b13cc32c");
   }
   return new Date(value).toLocaleTimeString();
 }
@@ -151,7 +152,7 @@ export function HostInfrastructureCachePanel({
     },
     onSuccess: async (_, entry) => {
       await refreshCacheQueries(entry.domain_code);
-      messageApi.success('缓存 entry 已清理');
+      messageApi.success(i18nText("settings", "auto.k_3a49d24203"));
     }
   });
   const clearDomainMutation = useMutation({
@@ -163,7 +164,7 @@ export function HostInfrastructureCachePanel({
     },
     onSuccess: async (_, domainCode) => {
       await refreshCacheQueries(domainCode);
-      messageApi.success('缓存域已清理');
+      messageApi.success(i18nText("settings", "auto.k_4a8f5abd96"));
     }
   });
 
@@ -211,39 +212,37 @@ export function HostInfrastructureCachePanel({
                 disabled={!canReveal || revealMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: '查看缓存 value',
+                    title: i18nText("settings", "auto.k_81f04f1ca1"),
                     content:
-                      '这个操作可能展示用户输入、运行日志、模型输出或业务记录，并会写入审计日志。',
-                    okText: '查看并记录审计',
-                    cancelText: '取消',
+                      i18nText("settings", "auto.k_17f57796d8"),
+                    okText: i18nText("settings", "auto.k_190bf928b1"),
+                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
                     onOk: () => revealMutation.mutateAsync(entry)
                   });
                 }}
                 size="small"
               >
-                查看 value
-              </Button>
+                {i18nText("settings", "auto.k_ea8b000633")}</Button>
               <Button
                 danger
                 icon={<DeleteOutlined />}
                 disabled={!canClearEntry || clearEntryMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: '清理缓存 entry',
-                    content: `清理 ${entry.key} 后，下次访问会重新生成缓存。`,
-                    okText: '清理并记录审计',
+                    title: i18nText("settings", "auto.k_073c7b8b23"),
+                    content: i18nText("settings", "auto.k_30cbb97b6a", { value1: entry.key }),
+                    okText: i18nText("settings", "auto.k_f1c3ef7622"),
                     okButtonProps: { danger: true },
-                    cancelText: '取消',
+                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
                     onOk: () => clearEntryMutation.mutateAsync(entry)
                   });
                 }}
                 size="small"
               >
-                清理
-              </Button>
+                {i18nText("settings", "auto.k_907c3945d8")}</Button>
             </Space>
           ) : (
-            <Typography.Text type="secondary">仅 metadata</Typography.Text>
+            <Typography.Text type="secondary">{i18nText("settings", "auto.k_c27081c863")}</Typography.Text>
           )
       }
     ],
@@ -269,16 +268,15 @@ export function HostInfrastructureCachePanel({
         <Alert
           type="warning"
           showIcon
-          message="当前 cache provider 不支持 entry inspection。"
-          description="可用能力会随 provider 暴露；当前无法列出缓存域、entry 或 value。"
+          message={i18nText("settings", "auto.k_0f6be2f3d5")}
+          description={i18nText("settings", "auto.k_15d732c71c")}
         />
         <Button
           icon={<ReloadOutlined />}
           onClick={() => overviewQuery.refetch()}
           loading={overviewQuery.isFetching}
         >
-          刷新 provider 状态
-        </Button>
+          {i18nText("settings", "auto.k_dc6755b83a")}</Button>
       </Space>
     );
   }
@@ -298,7 +296,7 @@ export function HostInfrastructureCachePanel({
             Value inspection {capabilities?.reveal_value ? 'on' : 'off'}
           </Tag>
           <Typography.Text type="secondary">
-            最近刷新: {formatUpdatedAt(overviewQuery.dataUpdatedAt)}
+            {i18nText("settings", "auto.k_8827f80e7b")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
           </Typography.Text>
         </Space>
         <Button
@@ -311,16 +309,15 @@ export function HostInfrastructureCachePanel({
           }}
           loading={overviewQuery.isFetching || entriesQuery.isFetching}
         >
-          刷新
-        </Button>
+          {i18nText("settings", "auto.k_38108eaa1d")}</Button>
       </div>
 
       {!canManage ? (
         <Alert
           type="info"
           showIcon
-          message="当前权限只能查看缓存 metadata。"
-          description="查看 value、复制 JSON 和清理缓存需要基础设施 manage 权限，并会写入审计日志。"
+          message={i18nText("settings", "auto.k_db605406d8")}
+          description={i18nText("settings", "auto.k_061e7014e0")}
         />
       ) : null}
 
@@ -328,14 +325,14 @@ export function HostInfrastructureCachePanel({
         <Alert
           type="info"
           showIcon
-          message="当前 cache-store 没有可观察 entry。"
-          description="API 已连接到当前 api-server 进程的 local Moka cache-store；没有缓存域表示当前进程里暂时没有 entry，或重启后内存缓存已清空。"
+          message={i18nText("settings", "auto.k_b486563b7c")}
+          description={i18nText("settings", "auto.k_5c6f5a6b5a")}
         />
       ) : null}
 
       <div className="host-cache-panel__layout">
         <aside className="host-cache-panel__domains">
-          <div className="host-cache-panel__section-title">缓存域</div>
+          <div className="host-cache-panel__section-title">{i18nText("settings", "auto.k_d4766fc965")}</div>
           {domains.length ? (
             <Space
               direction="vertical"
@@ -367,7 +364,7 @@ export function HostInfrastructureCachePanel({
           ) : (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="暂无缓存域"
+              description={i18nText("settings", "auto.k_9e6e8a15d8")}
             />
           )}
         </aside>
@@ -376,7 +373,7 @@ export function HostInfrastructureCachePanel({
           <div className="host-cache-panel__entries-header">
             <Space direction="vertical" size={2}>
               <Typography.Text strong>
-                {activeDomain ?? '选择缓存域'}
+                {activeDomain ?? i18nText("settings", "auto.k_bfbe272414")}
               </Typography.Text>
               {activeDomainSummary ? (
                 <Typography.Text type="secondary">
@@ -392,17 +389,16 @@ export function HostInfrastructureCachePanel({
                 disabled={!canClearDomain || clearDomainMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: '清理缓存域',
-                    content: `清理 ${activeDomain} 后，下次访问会重新从数据库或运行时生成缓存。这个操作不会删除业务数据。`,
-                    okText: '清理并记录审计',
+                    title: i18nText("settings", "auto.k_39dc9b475e"),
+                    content: i18nText("settings", "auto.k_c509239c72", { value1: activeDomain }),
+                    okText: i18nText("settings", "auto.k_f1c3ef7622"),
                     okButtonProps: { danger: true },
-                    cancelText: '取消',
+                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
                     onOk: () => clearDomainMutation.mutateAsync(activeDomain)
                   });
                 }}
               >
-                清理缓存域
-              </Button>
+                {i18nText("settings", "auto.k_39dc9b475e")}</Button>
             ) : null}
           </div>
           <Table
@@ -454,7 +450,7 @@ export function HostInfrastructureCachePanel({
               value={revealedEntry.value}
               collapsible={false}
               height="360px"
-              copySuccessMessage="已复制缓存 JSON"
+              copySuccessMessage={i18nText("settings", "auto.k_4e4a4870f7")}
             />
           </Space>
         ) : null}

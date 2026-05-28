@@ -14,6 +14,7 @@ import {
   type ApplicationApiKey,
   type CreatedApplicationApiKey
 } from '../../api/public-api';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const SHANGHAI_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   timeZone: 'Asia/Shanghai',
@@ -43,7 +44,7 @@ function formatDateTime(value: string) {
 }
 
 function formatOptionalDateTime(value: string | null | undefined) {
-  return value ? formatDateTime(value) : '未使用';
+  return value ? formatDateTime(value) : i18nText("applications", "auto.k_13cec83596");
 }
 
 export function ApplicationApiKeysPanel({
@@ -85,7 +86,7 @@ export function ApplicationApiKeysPanel({
   const revokeMutation = useMutation({
     mutationFn: (keyId: string) => revokeApplicationApiKey(applicationId, keyId, csrfToken),
     onSuccess: () => {
-      message.success('API Key 已删除');
+      message.success(i18nText("applications", "auto.k_574dd3f1cc"));
       void queryClient.invalidateQueries({
         queryKey: applicationApiKeysQueryKey(applicationId)
       });
@@ -105,8 +106,8 @@ export function ApplicationApiKeysPanel({
       return;
     }
     copyTextToClipboard(token).then(
-      () => message.success('API Key 已复制'),
-      () => message.error('复制失败')
+      () => message.success(i18nText("applications", "auto.k_8b68a9f539")),
+      () => message.error(i18nText("applications", "auto.k_f2c6b5167b"))
     );
   };
   const keyTable = (
@@ -116,13 +117,13 @@ export function ApplicationApiKeysPanel({
       dataSource={keys}
       pagination={false}
       columns={[
-        { title: '名称', dataIndex: 'name' },
+        { title: i18nText("applications", "auto.k_1be7ae4fc2"), dataIndex: 'name' },
         {
           title: (
             <Space size={6}>
-              <span>密钥</span>
-              <Tooltip title="列表只显示可识别的 Key 前缀；完整 token 只在创建后显示一次，关闭后无法再次查看。">
-                <QuestionCircleOutlined aria-label="密钥说明" />
+              <span>{i18nText("applications", "auto.k_0d1965e139")}</span>
+              <Tooltip title={i18nText("applications", "auto.k_bf490b9cf1")}>
+                <QuestionCircleOutlined aria-label={i18nText("applications", "auto.k_984b8989e3")} />
               </Tooltip>
             </Space>
           ),
@@ -133,19 +134,19 @@ export function ApplicationApiKeysPanel({
           )
         },
         {
-          title: '创建时间',
+          title: i18nText("applications", "auto.k_84e3802f60"),
           dataIndex: 'created_at',
           width: 200,
           render: (value: string) => formatDateTime(value)
         },
         {
-          title: '最后使用时间',
+          title: i18nText("applications", "auto.k_8ccd127a3b"),
           dataIndex: 'last_used_at',
           width: 200,
           render: (value: string | null | undefined) => formatOptionalDateTime(value)
         },
         {
-          title: '操作',
+          title: i18nText("applications", "auto.k_f3ea6d345e"),
           key: 'actions',
           width: 96,
           render: (_, record) => (
@@ -154,7 +155,7 @@ export function ApplicationApiKeysPanel({
               icon={<DeleteOutlined />}
               size="small"
               type="text"
-              aria-label="删除"
+              aria-label={i18nText("applications", "auto.k_3755f56f2f")}
               loading={revokeMutation.isPending}
               onClick={() => revokeMutation.mutate(record.id)}
             />
@@ -168,13 +169,12 @@ export function ApplicationApiKeysPanel({
     return (
       <>
         <Button
-          aria-label="API 密钥"
+          aria-label={i18nText("applications", "auto.k_5df1d83e18")}
           className="application-api-key-trigger"
           icon={<KeyOutlined />}
           onClick={() => setListOpen(true)}
         >
-          API 密钥
-        </Button>
+          {i18nText("applications", "auto.k_5df1d83e18")}</Button>
         <Modal
           title="API Keys"
           open={listOpen}
@@ -186,20 +186,18 @@ export function ApplicationApiKeysPanel({
           <Space direction="vertical" size={16} className="application-api-key-list-modal">
             <div className="application-api-panel__header">
               <Typography.Text type="secondary">
-                已创建 {keys.length} 个 Key。
-              </Typography.Text>
+                {i18nText("applications", "auto.k_62cfc53516")}{keys.length} {i18nText("applications", "auto.k_1bcb780957")}</Typography.Text>
               <Button type="primary" onClick={() => setCreateOpen(true)}>
-                创建 Key
-              </Button>
+                {i18nText("applications", "auto.k_bd80d911f1")}</Button>
             </div>
             {keyTable}
           </Space>
         </Modal>
         <Modal
-          title="创建 API Key"
+          title={i18nText("applications", "auto.k_f02ce7394c")}
           open={createOpen}
           destroyOnHidden
-          okText="创建"
+          okText={i18nText("applications", "auto.k_fcbd093292")}
           confirmLoading={createMutation.isPending}
           onCancel={() => setCreateOpen(false)}
           onOk={() => form.submit()}
@@ -211,38 +209,35 @@ export function ApplicationApiKeysPanel({
           >
             <Form.Item
               name="name"
-              label="Key 名称"
-              rules={[{ required: true, message: '请输入 Key 名称' }]}
+              label={i18nText("applications", "auto.k_e8a3d906a8")}
+              rules={[{ required: true, message: i18nText("applications", "auto.k_45ee57a35e") }]}
             >
               <Input />
             </Form.Item>
           </Form>
         </Modal>
         <Modal
-          title="保存这次创建的 API Key"
+          title={i18nText("applications", "auto.k_4bcdd71eeb")}
           open={Boolean(createdKey)}
           className="application-api-created-key-modal"
           destroyOnHidden
           onCancel={() => setCreatedKey(null)}
           footer={[
             <Button key="close" type="text" onClick={() => setCreatedKey(null)}>
-              关闭
-            </Button>,
+              {i18nText("applications", "auto.k_6c14bd7f6f")}</Button>,
             <Button
               key="copy"
-              aria-label="复制"
+              aria-label={i18nText("applications", "auto.k_4edd1d0087")}
               className="application-api-created-token-copy"
               onClick={copyCreatedToken}
             >
-              复制
-            </Button>
+              {i18nText("applications", "auto.k_4edd1d0087")}</Button>
           ]}
         >
           <Space direction="vertical" className="application-api-token-modal">
-            <Typography.Text>完整 token 只在创建后显示一次。</Typography.Text>
+            <Typography.Text>{i18nText("applications", "auto.k_79d9d1edd7")}</Typography.Text>
             <Typography.Text type="secondary">
-              关闭后页面不再显示完整 token。
-            </Typography.Text>
+              {i18nText("applications", "auto.k_97afb20b3b")}</Typography.Text>
             <Typography.Text className="application-api-created-token">
               {createdKey?.token}
             </Typography.Text>
@@ -257,18 +252,17 @@ export function ApplicationApiKeysPanel({
       <div className="application-api-panel__header">
         <div>
           <Typography.Title level={4}>API Keys</Typography.Title>
-          <Typography.Text type="secondary">用于调用当前应用公开 API。</Typography.Text>
+          <Typography.Text type="secondary">{i18nText("applications", "auto.k_391a547696")}</Typography.Text>
         </div>
         <Button type="primary" onClick={() => setCreateOpen(true)}>
-          创建 Key
-        </Button>
+          {i18nText("applications", "auto.k_bd80d911f1")}</Button>
       </div>
       {keyTable}
       <Modal
-        title="创建 API Key"
+        title={i18nText("applications", "auto.k_f02ce7394c")}
         open={createOpen}
         destroyOnHidden
-        okText="创建"
+        okText={i18nText("applications", "auto.k_fcbd093292")}
         confirmLoading={createMutation.isPending}
         onCancel={() => setCreateOpen(false)}
         onOk={() => form.submit()}
@@ -280,38 +274,35 @@ export function ApplicationApiKeysPanel({
         >
           <Form.Item
             name="name"
-            label="Key 名称"
-            rules={[{ required: true, message: '请输入 Key 名称' }]}
+            label={i18nText("applications", "auto.k_e8a3d906a8")}
+            rules={[{ required: true, message: i18nText("applications", "auto.k_45ee57a35e") }]}
           >
             <Input />
           </Form.Item>
         </Form>
       </Modal>
       <Modal
-        title="保存这次创建的 API Key"
+        title={i18nText("applications", "auto.k_4bcdd71eeb")}
         open={Boolean(createdKey)}
         className="application-api-created-key-modal"
         destroyOnHidden
         onCancel={() => setCreatedKey(null)}
         footer={[
           <Button key="close" type="text" onClick={() => setCreatedKey(null)}>
-            关闭
-          </Button>,
+            {i18nText("applications", "auto.k_6c14bd7f6f")}</Button>,
           <Button
             key="copy"
-            aria-label="复制"
+            aria-label={i18nText("applications", "auto.k_4edd1d0087")}
             className="application-api-created-token-copy"
             onClick={copyCreatedToken}
           >
-            复制
-          </Button>
+            {i18nText("applications", "auto.k_4edd1d0087")}</Button>
         ]}
       >
         <Space direction="vertical" className="application-api-token-modal">
-          <Typography.Text>完整 token 只在创建后显示一次。</Typography.Text>
+          <Typography.Text>{i18nText("applications", "auto.k_79d9d1edd7")}</Typography.Text>
           <Typography.Text type="secondary">
-            关闭后页面不再显示完整 token。
-          </Typography.Text>
+            {i18nText("applications", "auto.k_97afb20b3b")}</Typography.Text>
           <Typography.Text className="application-api-created-token">
             {createdKey?.token}
           </Typography.Text>

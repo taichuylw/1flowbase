@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 
 import type { SectionNavItem } from '../../../shared/ui/section-page-layout/SectionPageLayout';
+import { i18nText } from '../../../shared/i18n/text';
 
 export type ApplicationSectionKey = 'orchestration' | 'api' | 'logs' | 'monitoring';
 
@@ -18,7 +19,7 @@ const SECTION_DEFINITIONS: Array<{
 }> = [
   {
     key: 'orchestration',
-    label: '编排',
+    label: i18nText("applications", "auto.k_63881557e3"),
     icon: <DeploymentUnitOutlined />
   },
   {
@@ -28,12 +29,12 @@ const SECTION_DEFINITIONS: Array<{
   },
   {
     key: 'logs',
-    label: '日志',
+    label: i18nText("applications", "auto.k_4de50894b8"),
     icon: <UnorderedListOutlined />
   },
   {
     key: 'monitoring',
-    label: '监控',
+    label: i18nText("applications", "auto.k_c87cbd5fc8"),
     icon: <FundOutlined />
   }
 ];

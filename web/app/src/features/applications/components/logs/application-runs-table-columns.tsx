@@ -3,6 +3,7 @@ import { Tag } from 'antd';
 import type { DataTableColumn } from '../../../../shared/ui/data-table/DataTable';
 import type { ApplicationRunSummary } from '../../api/runtime';
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const STATUS_COLOR: Record<string, string> = {
   succeeded: 'green',
@@ -31,7 +32,7 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
 > = [
   {
     key: 'title',
-    title: '标题',
+    title: i18nText("applications", "auto.k_748d7dc7e3"),
     dataIndex: 'title',
     width: 240,
     ellipsis: true,
@@ -47,7 +48,7 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'authorized_account',
-    title: '授权人',
+    title: i18nText("applications", "auto.k_1c31fbd81e"),
     dataIndex: 'authorized_account',
     width: 160,
     ellipsis: true,
@@ -55,20 +56,20 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'id',
-    title: '运行 ID',
+    title: i18nText("applications", "auto.k_c1189023fb"),
     dataIndex: 'id',
     width: 180,
     ellipsis: true
   },
   {
     key: 'run_mode',
-    title: '模式',
+    title: i18nText("applications", "auto.k_ed0eea8f20"),
     dataIndex: 'run_mode',
     width: 180
   },
   {
     key: 'compatibility_mode',
-    title: '协议',
+    title: i18nText("applications", "auto.k_b0c431675b"),
     dataIndex: 'compatibility_mode',
     width: 170,
     ellipsis: true,
@@ -79,14 +80,14 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'target_node_id',
-    title: '目标节点',
+    title: i18nText("applications", "auto.k_eba69a0678"),
     dataIndex: 'target_node_id',
     width: 160,
-    render: (value) => (typeof value === 'string' && value ? value : '全流')
+    render: (value) => (typeof value === 'string' && value ? value : i18nText("applications", "auto.k_538c417265"))
   },
   {
     key: 'status',
-    title: '状态',
+    title: i18nText("applications", "auto.k_62e951a692"),
     width: 120,
     render: (_: unknown, run) => (
       <Tag color={STATUS_COLOR[run.status] ?? 'default'}>{run.status}</Tag>
@@ -94,42 +95,42 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'total_tokens',
-    title: '总 tokens',
+    title: i18nText("applications", "auto.k_151dec7e9d"),
     width: 130,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.total_tokens)
   },
   {
     key: 'unique_node_count',
-    title: '真实节点数',
+    title: i18nText("applications", "auto.k_7f1c2ccf01"),
     width: 130,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.unique_node_count)
   },
   {
     key: 'tool_callback_count',
-    title: '工具回调次数',
+    title: i18nText("applications", "auto.k_bf55cc6a69"),
     width: 150,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.tool_callback_count)
   },
   {
     key: 'started_at',
-    title: '开始时间',
+    title: i18nText("applications", "auto.k_e8868af6eb"),
     dataIndex: 'started_at',
     width: 200,
     render: (value) => formatTimestamp(typeof value === 'string' ? value : null)
   },
   {
     key: 'updated_at',
-    title: '更新时间',
+    title: i18nText("applications", "auto.k_093dea88c9"),
     dataIndex: 'updated_at',
     width: 200,
     render: (value) => formatTimestamp(typeof value === 'string' ? value : null)
   },
   {
     key: 'action',
-    title: '操作',
+    title: i18nText("applications", "auto.k_f3ea6d345e"),
     width: 140
   }
 ];

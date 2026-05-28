@@ -17,6 +17,7 @@ import type {
   FrontstagePageCanvasRuntimeSourceState
 } from '../lib/page-canvas/runtime-source';
 import type { FrontstagePageCanvasRuntimeRunPlanState } from '../lib/page-canvas/runtime-run-plan';
+import { i18nText } from '../../../shared/i18n/text';
 
 type DesignBlockActions = {
   onMoveUp: (blockId: string) => void;
@@ -48,7 +49,7 @@ type PageCanvasProps = {
 };
 
 function formatPageTitle(content: FrontstagePageContent): string {
-  return content.page.title?.trim() || '未命名页面';
+  return content.page.title?.trim() || i18nText("frontstage", "auto.k_5a131f787f");
 }
 
 function findRuntimeSessionEntryForSlot({
@@ -179,8 +180,8 @@ function RenderPlanSlot({
           <Alert
             type="error"
             showIcon
-            message="运行时预览不可用"
-            description="受限运行时会话创建失败。"
+            message={i18nText("frontstage", "auto.k_067ef7f111")}
+            description={i18nText("frontstage", "auto.k_067c9628d1")}
           />
         </div>
       );
@@ -198,8 +199,8 @@ function RenderPlanSlot({
       >
         <Typography.Text type="secondary" style={{ fontSize: 13 }}>
           {runtimeSessionEntry?.status === 'skipped'
-            ? '区块跳过运行'
-            : '区块加载中...'}
+            ? i18nText("frontstage", "auto.k_1abe8a9f9c")
+            : i18nText("frontstage", "auto.k_fc57f1cac8")}
         </Typography.Text>
       </div>
     );
@@ -214,7 +215,7 @@ function RenderPlanSlot({
         transition: 'border-color 0.15s, background 0.15s'
       }}
       data-testid={`block-slot-${item.blockId}`}
-      aria-label={isDesignMode ? `区块 ${item.blockId}` : undefined}
+      aria-label={isDesignMode ? i18nText("frontstage", "auto.k_4f8666b5df", { value1: item.blockId }) : undefined}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleSelect}
@@ -277,10 +278,9 @@ export const PageCanvas: FC<PageCanvasProps> = ({
     return (
       <div style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6, padding: 12 }}>
         <Space direction="vertical" size={4}>
-          <Typography.Text strong>页面内容加载中</Typography.Text>
+          <Typography.Text strong>{i18nText("frontstage", "auto.k_1d231c6377")}</Typography.Text>
           <Typography.Text type="secondary">
-            正在读取页面内容和区块清单。
-          </Typography.Text>
+            {i18nText("frontstage", "auto.k_4f266d7afb")}</Typography.Text>
         </Space>
       </div>
     );
@@ -291,13 +291,12 @@ export const PageCanvas: FC<PageCanvasProps> = ({
       <Alert
         type="error"
         showIcon
-        message="页面内容加载失败"
-        description="请检查网络后重试。"
+        message={i18nText("frontstage", "auto.k_7a345db1d2")}
+        description={i18nText("frontstage", "auto.k_08d67b2f45")}
         action={
           onRetry ? (
             <Button size="small" onClick={onRetry}>
-              重试
-            </Button>
+              {i18nText("frontstage", "auto.k_e2d53a6d3a")}</Button>
           ) : null
         }
       />
@@ -310,10 +309,9 @@ export const PageCanvas: FC<PageCanvasProps> = ({
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={
           <Space direction="vertical" size={2}>
-            <Typography.Text>未选择页面内容</Typography.Text>
+            <Typography.Text>{i18nText("frontstage", "auto.k_3fa60b167a")}</Typography.Text>
             <Typography.Text type="secondary">
-              选择页面后将显示页面预览。
-            </Typography.Text>
+              {i18nText("frontstage", "auto.k_348bd4e6d2")}</Typography.Text>
           </Space>
         }
       />
@@ -341,7 +339,7 @@ export const PageCanvas: FC<PageCanvasProps> = ({
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              <Typography.Text type="secondary">页面内容为空</Typography.Text>
+              <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_b20523aaa9")}</Typography.Text>
             }
           />
         </div>

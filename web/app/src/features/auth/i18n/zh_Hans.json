@@ -1,23 +1,26 @@
 {
+  "auto": {
+    "k_c40407a8a5": "对话即是壁垒，AI应用原生底座"
+  },
   "signIn": {
-    "title": "1flowbase",
+    "errorFallback": "登录失败，请稍后重试。",
+    "footer": "power by taichuy",
     "identifier": {
       "label": "账号",
-      "required": "请输入账号或邮箱。",
-      "placeholder": "root / root@example.com"
+      "placeholder": "root / root@example.com",
+      "required": "请输入账号或邮箱。"
+    },
+    "language": {
+      "enUs": "English",
+      "trigger": "切换语言",
+      "zhHans": "Chinese"
     },
     "password": {
       "label": "密码",
-      "required": "请输入密码。",
-      "placeholder": "请输入密码"
+      "placeholder": "请输入密码",
+      "required": "请输入密码。"
     },
     "submit": "登录",
-    "errorFallback": "登录失败，请稍后重试。",
-    "language": {
-      "trigger": "切换语言",
-      "zhHans": "Chinese",
-      "enUs": "English"
-    },
-    "footer": "power by taichuy"
+    "title": "1flowbase"
   }
 }

@@ -13,6 +13,7 @@ import {
   Typography
 } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const scalarObjectValueTypes = ['string', 'number', 'boolean'] as const;
 
@@ -175,7 +176,7 @@ function StructuredJsonEditor({
       onApply(JSON.parse(content));
       onValueErrorChange?.(null);
     } catch {
-      onValueErrorChange?.('JSON 格式不合法');
+      onValueErrorChange?.(i18nText("agentFlow", "auto.k_b1ecff0cde"));
     }
   }
 
@@ -192,11 +193,9 @@ function StructuredJsonEditor({
       />
       <div className="agent-flow-editor__env-value-json-actions">
         <Button size="small" onClick={onCancel}>
-          返回表单
-        </Button>
+          {i18nText("agentFlow", "auto.k_35e189d1cc")}</Button>
         <Button size="small" type="primary" onClick={applyJson}>
-          应用 JSON
-        </Button>
+          {i18nText("agentFlow", "auto.k_ee52d34160")}</Button>
       </div>
     </div>
   );
@@ -206,8 +205,8 @@ function ObjectValueEditor({
   value,
   onChange,
   onValueErrorChange,
-  addButtonLabel = '添加字段',
-  ariaLabelPrefix = '对象'
+  addButtonLabel = i18nText("agentFlow", "auto.k_f2772f08ad"),
+  ariaLabelPrefix = i18nText("agentFlow", "auto.k_539cb3b0a6")
 }: ObjectValueEditorProps) {
   const [rows, setRows] = useState(() => createObjectRows(value));
   const lastEmittedValueRef = useRef<unknown>(value);
@@ -235,7 +234,7 @@ function ObjectValueEditor({
       {rows.map((row, index) => (
         <div className="agent-flow-editor__env-object-row" key={index}>
           <Input
-            aria-label={`${ariaLabelPrefix}键 ${index + 1}`}
+            aria-label={i18nText("agentFlow", "auto.k_6d9cbb7213", { value1: ariaLabelPrefix, value2: index + 1 })}
             placeholder="key"
             value={row.key}
             onChange={(event) =>
@@ -249,7 +248,7 @@ function ObjectValueEditor({
             }
           />
           <Select
-            aria-label={`${ariaLabelPrefix}值类型 ${index + 1}`}
+            aria-label={i18nText("agentFlow", "auto.k_7e538be644", { value1: ariaLabelPrefix, value2: index + 1 })}
             className="agent-flow-editor__env-object-type-select"
             options={scalarObjectValueTypes.map((type) => ({
               label: type,
@@ -277,7 +276,7 @@ function ObjectValueEditor({
           />
           {row.type === 'number' ? (
             <InputNumber
-              aria-label={`${ariaLabelPrefix}值 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.k_5f0f74790b", { value1: ariaLabelPrefix, value2: index + 1 })}
               className="agent-flow-editor__env-object-value"
               value={typeof row.value === 'number' ? row.value : null}
               onChange={(nextValue) =>
@@ -311,7 +310,7 @@ function ObjectValueEditor({
             />
           ) : (
             <Input
-              aria-label={`${ariaLabelPrefix}值 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.k_5f0f74790b", { value1: ariaLabelPrefix, value2: index + 1 })}
               className="agent-flow-editor__env-object-value"
               placeholder="value"
               value={typeof row.value === 'string' ? row.value : ''}
@@ -327,7 +326,7 @@ function ObjectValueEditor({
             />
           )}
           <Button
-            aria-label={`删除${ariaLabelPrefix}字段 ${index + 1}`}
+            aria-label={i18nText("agentFlow", "auto.k_53da62d9f4", { value1: ariaLabelPrefix, value2: index + 1 })}
             disabled={rows.length === 1}
             icon={<DeleteOutlined />}
             type="text"
@@ -364,18 +363,17 @@ function ArrayObjectValueEditor({
 }) {
   return (
     <div
-      aria-label={`数组对象 ${index + 1}`}
+      aria-label={i18nText("agentFlow", "auto.k_746a5f8bbd", { value1: index + 1 })}
       className="agent-flow-editor__env-array-object-value"
     >
       <Typography.Text
         className="agent-flow-editor__env-array-object-title"
         type="secondary"
       >
-        对象字段
-      </Typography.Text>
+        {i18nText("agentFlow", "auto.k_a56077521a")}</Typography.Text>
       <ObjectValueEditor
-        addButtonLabel={`添加数组对象 ${index + 1} 字段`}
-        ariaLabelPrefix={`数组对象 ${index + 1} 字段`}
+        addButtonLabel={i18nText("agentFlow", "auto.k_f235cd4e14", { value1: index + 1 })}
+        ariaLabelPrefix={i18nText("agentFlow", "auto.k_064c85e9b2", { value1: index + 1 })}
         value={item}
         valueType="object"
         onChange={onChange}
@@ -432,7 +430,7 @@ function ArrayValueEditor({
           </Typography.Text>
           {valueType === 'array[number]' ? (
             <InputNumber
-              aria-label={`数组值 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.k_32583613f1", { value1: index + 1 })}
               className="agent-flow-editor__env-array-value"
               value={typeof item === 'number' ? item : null}
               onChange={(nextValue) =>
@@ -475,7 +473,7 @@ function ArrayValueEditor({
             />
           ) : (
             <Input
-              aria-label={`数组值 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.k_32583613f1", { value1: index + 1 })}
               className="agent-flow-editor__env-array-value"
               placeholder="value"
               value={typeof item === 'string' ? item : ''}
@@ -489,7 +487,7 @@ function ArrayValueEditor({
             />
           )}
           <Button
-            aria-label={`删除数组项 ${index + 1}`}
+            aria-label={i18nText("agentFlow", "auto.k_758d730be9", { value1: index + 1 })}
             disabled={items.length === 1}
             icon={<DeleteOutlined />}
             type="text"
@@ -502,13 +500,12 @@ function ArrayValueEditor({
         </div>
       ))}
       <Button
-        aria-label="添加项"
+        aria-label={i18nText("agentFlow", "auto.k_18e92f216d")}
         icon={<PlusOutlined />}
         size="small"
         onClick={() => updateItems([...items, createDefaultItem(valueType)])}
       >
-        添加项
-      </Button>
+        {i18nText("agentFlow", "auto.k_18e92f216d")}</Button>
     </div>
   );
 }
@@ -530,7 +527,7 @@ export function EnvironmentVariableValueEditor({
     return (
       <InputNumber
         className="agent-flow-editor__environment-variable-number-input"
-        placeholder="请输入变量值"
+        placeholder={i18nText("agentFlow", "auto.k_19dadd62f7")}
         value={typeof value === 'number' ? value : null}
         onChange={(nextValue) => {
           onValueErrorChange?.(null);
@@ -561,7 +558,7 @@ export function EnvironmentVariableValueEditor({
     return (
       <Input.TextArea
         autoSize={{ minRows: 3, maxRows: 10 }}
-        placeholder="请输入变量值"
+        placeholder={i18nText("agentFlow", "auto.k_19dadd62f7")}
         value={typeof value === 'string' ? value : ''}
         onChange={(event) => {
           onValueErrorChange?.(null);
@@ -614,8 +611,7 @@ export function EnvironmentVariableValueEditor({
         />
       )}
       <Typography.Text type="secondary">
-        <FormOutlined /> 可切换到 JSON 模式编辑复杂结构。
-      </Typography.Text>
+        <FormOutlined /> {i18nText("agentFlow", "auto.k_09306c801f")}</Typography.Text>
     </div>
   );
 }

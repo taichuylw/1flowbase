@@ -29,6 +29,7 @@ import {
   type ModelProviderDrawerState,
   type ModelProviderInstanceModalState
 } from './shared';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function useModelProviderData({
   drawerState,
@@ -205,10 +206,10 @@ export function useModelProviderData({
   const providerCount = families.length;
   const officialCount = officialCatalogEntries.length;
   const overviewRows = [
-    { key: 'providers', label: '已安装供应商', value: String(providerCount) },
-    { key: 'ready', label: '可用实例', value: String(readyCount) },
-    { key: 'invalid', label: '异常实例', value: String(invalidCount) },
-    { key: 'official', label: '可安装供应商', value: String(officialCount) }
+    { key: 'providers', label: i18nText("settings", "auto.k_f97a4befa3"), value: String(providerCount) },
+    { key: 'ready', label: i18nText("settings", "auto.k_c15b72a2b6"), value: String(readyCount) },
+    { key: 'invalid', label: i18nText("settings", "auto.k_c3804bc16f"), value: String(invalidCount) },
+    { key: 'official', label: i18nText("settings", "auto.k_ca352b0aa3"), value: String(officialCount) }
   ];
 
   return {

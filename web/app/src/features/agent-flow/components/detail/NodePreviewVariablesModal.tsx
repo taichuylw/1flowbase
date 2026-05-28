@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 
 import type { NodeDebugPreviewVariableField } from '../../api/runtime';
 import { formatNodeVariableLabel } from '../../lib/variable-labels';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type NodePreviewVariablesModalProps = {
   open: boolean;
@@ -74,12 +75,12 @@ export function NodePreviewVariablesModal({
 
   return (
     <Modal
-      cancelText="取消"
+      cancelText={i18nText("agentFlow", "auto.k_4d0b4688c7")}
       confirmLoading={confirmLoading}
       destroyOnHidden
-      okText="运行"
+      okText={i18nText("agentFlow", "auto.k_0c3acd446f")}
       open={open}
-      title="输入节点引用变量"
+      title={i18nText("agentFlow", "auto.k_c862c534a8")}
       width={520}
       onCancel={onCancel}
       onOk={() => {
@@ -104,7 +105,7 @@ export function NodePreviewVariablesModal({
             key={fieldName(field)}
             label={formatNodeVariableLabel(field.nodeLabel, field.key)}
             name={fieldName(field)}
-            rules={[{ required: true, message: '请输入变量值' }]}
+            rules={[{ required: true, message: i18nText("agentFlow", "auto.k_19dadd62f7") }]}
             valuePropName={field.valueType === 'boolean' ? 'checked' : 'value'}
           >
             {renderField(field)}

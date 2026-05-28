@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const startNodeDefinition: NodeDefinition = {
   label: 'Start',
@@ -11,22 +12,22 @@ export const startNodeDefinition: NodeDefinition = {
     },
     {
       key: 'inputs',
-      title: '输入字段',
+      title: i18nText("agentFlow", "auto.k_f4cbd6bd13"),
       fields: [
         {
           key: 'config.input_fields',
-          label: '输入字段',
+          label: i18nText("agentFlow", "auto.k_f4cbd6bd13"),
           editor: 'start_input_fields'
         }
       ]
     },
     {
       key: 'advanced',
-      title: '模型列表',
+      title: i18nText("agentFlow", "auto.k_c271d29118"),
       fields: [
         {
           key: 'config.model_list',
-          label: '模型列表',
+          label: i18nText("agentFlow", "auto.k_c271d29118"),
           editor: 'start_model_list'
         }
       ]

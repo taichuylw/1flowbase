@@ -90,7 +90,7 @@ describe('AppShellFrame', () => {
 
     await waitFor(() => {
       const accountLabel = screen.getByText('Root');
-      const helpTrigger = screen.getByLabelText('帮助');
+      const helpTrigger = screen.getByLabelText('help');
 
       expect(
         helpTrigger.compareDocumentPosition(accountLabel) &
@@ -103,7 +103,7 @@ describe('AppShellFrame', () => {
     renderShell('/settings/data-models');
 
     await waitFor(() => {
-      const helpTrigger = screen.getByLabelText('帮助');
+      const helpTrigger = screen.getByLabelText('help');
       const languageTrigger = screen.getByLabelText('Switch language');
       const accountLabel = screen.getByText('Root');
 
@@ -175,9 +175,9 @@ describe('AppShellFrame', () => {
     renderShell('/frontstage');
 
     await waitFor(() => {
-      const settingsTrigger = screen.getByLabelText('设置');
-      const designButton = screen.getByLabelText('进入设计模式');
-      const helpTrigger = screen.getByLabelText('帮助');
+      const settingsTrigger = screen.getByLabelText('settings');
+      const designButton = screen.getByLabelText('Enter design mode');
+      const helpTrigger = screen.getByLabelText('help');
 
       expect(
         designButton.compareDocumentPosition(settingsTrigger) &
@@ -190,10 +190,10 @@ describe('AppShellFrame', () => {
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
     });
 
-    fireEvent.click(screen.getByLabelText('进入设计模式'));
+    fireEvent.click(screen.getByLabelText('Enter design mode'));
 
     expect(useFrontstageDesignModeStore.getState().isDesignMode).toBe(true);
-    expect(screen.getByLabelText('退出设计模式')).toHaveAttribute(
+    expect(screen.getByLabelText('Exit design mode')).toHaveAttribute(
       'aria-pressed',
       'true'
     );
@@ -226,11 +226,11 @@ describe('AppShellFrame', () => {
     renderShell('/');
 
     await waitFor(() => {
-      const designButton = screen.getByLabelText('进入设计模式');
+      const designButton = screen.getByLabelText('Enter design mode');
       expect(designButton).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('进入设计模式'));
+    fireEvent.click(screen.getByLabelText('Enter design mode'));
 
     expect(useFrontstageDesignModeStore.getState().isDesignMode).toBe(true);
     expect(locationSpy).not.toHaveBeenCalled();

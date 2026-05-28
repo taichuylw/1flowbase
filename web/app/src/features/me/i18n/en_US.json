@@ -1,38 +1,51 @@
 {
+  "auto": {
+    "k_00348363de": "The new passwords entered twice are inconsistent.",
+    "k_00e69bd114": "Logged in",
+    "k_10a57ef7c7": "The current account has no access to content.",
+    "k_22ee0f0313": "Profile is unavailable",
+    "k_25410d575c": "The current session is missing the necessary user context, please log in again and try again.",
+    "k_2f3ed4c7a4": "Update password",
+    "k_4850ecf733": "Please enter your new password again.",
+    "k_5ccbfd6edd": "Please enter your current password.",
+    "k_7543b01a32": "Please enter a new password.",
+    "k_8bf435e8a8": "Security settings",
+    "k_8cabb0c543": "This page is used to manage personal information and security settings.",
+    "k_c839a8ff17": "Password",
+    "k_d22c9c0085": "new password",
+    "k_d4477adb6f": "Confirm new password",
+    "k_d562e344b9": "personal information",
+    "k_e8041a8c93": "Not logged in",
+    "k_f10b511381": "Updating your password will immediately clear your current session and you will need to log in again with your new password."
+  },
   "profile": {
-    "title": "Personal information",
     "actions": {
-      "edit": "Edit profile",
       "cancel": "Cancel",
+      "edit": "Edit profile",
       "save": "Save profile"
     },
     "drawer": {
       "title": "Edit personal information"
     },
+    "empty": {
+      "introduction": "No bio",
+      "permissions": "No explicit permissions"
+    },
     "fields": {
       "account": "Account name",
-      "name": "Legal name",
-      "email": "Email",
-      "phone": "Phone",
-      "interfaceLanguage": "Interface language",
-      "permissions": "System permissions",
-      "introduction": "Bio",
       "avatarUrl": "Avatar URL",
-      "nickname": "Nickname"
-    },
-    "empty": {
-      "permissions": "No explicit permissions",
-      "introduction": "No bio"
+      "email": "Email",
+      "interfaceLanguage": "Interface language",
+      "introduction": "Bio",
+      "name": "Legal name",
+      "nickname": "Nickname",
+      "permissions": "System permissions",
+      "phone": "Phone"
     },
     "form": {
-      "name": {
-        "label": "Name",
-        "required": "Enter a name.",
-        "extra": "Your legal name, used for backend identity records."
-      },
-      "nickname": {
-        "required": "Enter a nickname.",
-        "extra": "The display name shown in the system."
+      "avatarUrl": {
+        "extra": "External image URLs are supported.",
+        "placeholder": "https://example.com/avatar.png"
       },
       "email": {
         "required": "Enter a valid email address."
@@ -40,18 +53,24 @@
       "interfaceLanguage": {
         "extra": "Leave blank to use the system-resolved default language."
       },
-      "avatarUrl": {
-        "extra": "External image URLs are supported.",
-        "placeholder": "https://example.com/avatar.png"
-      },
       "introduction": {
         "placeholder": "Briefly introduce yourself..."
+      },
+      "name": {
+        "extra": "Your legal name, used for backend identity records.",
+        "label": "Name",
+        "required": "Enter a name."
+      },
+      "nickname": {
+        "extra": "The display name shown in the system.",
+        "required": "Enter a nickname."
       }
     },
     "locale": {
       "default": "Follow system default",
-      "zhHans": "Simplified Chinese",
-      "enUs": "English"
-    }
+      "enUs": "English",
+      "zhHans": "Simplified Chinese"
+    },
+    "title": "Personal information"
   }
 }

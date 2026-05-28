@@ -1,7 +1,8 @@
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
+import { i18nText } from '../shared/i18n/text';
 
-export function createAccountMenuItems(accountLabel = '用户'): MenuProps['items'] {
+export function createAccountMenuItems(accountLabel = i18nText("appShell", "auto.k_9ba763ea34")): MenuProps['items'] {
   return [
     {
       key: 'account',
@@ -14,12 +15,12 @@ export function createAccountMenuItems(accountLabel = '用户'): MenuProps['item
       children: [
         {
           key: 'profile',
-          label: '个人资料',
+          label: i18nText("appShell", "auto.k_d562e344b9"),
           icon: <UserOutlined />
         },
         {
           key: 'sign-out',
-          label: '退出登录',
+          label: i18nText("appShell", "auto.k_094774b4a7"),
           icon: <LogoutOutlined />
         }
       ]
