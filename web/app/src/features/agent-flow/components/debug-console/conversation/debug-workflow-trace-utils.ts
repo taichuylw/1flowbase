@@ -118,6 +118,11 @@ function mergeDebugPayloads(items: AgentFlowTraceItem[]) {
   return merged;
 }
 
+function lastAnswerSnapshot(items: AgentFlowTraceItem[]) {
+  return [...items].reverse().find((item) => item.answerSnapshot)
+    ?.answerSnapshot;
+}
+
 function mergeTraceGroupItems(items: AgentFlowTraceItem[]): AgentFlowTraceItem {
   const firstItem = items[0];
   const lastItem = items.at(-1) ?? firstItem;
@@ -133,10 +138,12 @@ function mergeTraceGroupItems(items: AgentFlowTraceItem[]): AgentFlowTraceItem {
     durationMs: mergedDuration(items),
     inputPayload: firstPayload(items, (item) => item.inputPayload),
     outputPayload: lastPayload(items, (item) => item.outputPayload),
-    errorPayload: [...items].reverse().find((item) => item.errorPayload)
-      ?.errorPayload ?? null,
+    errorPayload:
+      [...items].reverse().find((item) => item.errorPayload)?.errorPayload ??
+      null,
     metricsPayload: lastPayload(items, (item) => item.metricsPayload),
-    debugPayload: mergeDebugPayloads(items)
+    debugPayload: mergeDebugPayloads(items),
+    answerSnapshot: lastAnswerSnapshot(items)
   };
 }
 

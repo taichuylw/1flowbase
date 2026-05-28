@@ -315,4 +315,66 @@ describe('run detail mapper', () => {
       env: {}
     });
   });
+
+  test('attaches waiting answer snapshot to the waiting node trace item', () => {
+    const detail = baseDetail();
+    detail.flow_run.status = 'waiting_callback';
+    detail.flow_run.output_payload = {
+      answer: 'LLM1 final\n----\n'
+    };
+    detail.answer_snapshot = {
+      kind: 'answer',
+      text: 'LLM1 final\n----\n',
+      output_payload: {
+        answer: 'LLM1 final\n----\n'
+      },
+      complete: false,
+      materialized_from: 'waiting_prefix',
+      answer_node_id: 'node-answer',
+      answer_node_run_id: 'node-run-answer-snapshot',
+      waiting_node_id: 'node-llm-2',
+      waiting_node_run_id: 'node-run-llm-2'
+    };
+    detail.node_runs = [
+      {
+        id: 'node-run-llm-2',
+        flow_run_id: 'flow-run-1',
+        node_id: 'node-llm-2',
+        node_type: 'llm',
+        node_alias: 'LLM2',
+        status: 'waiting_callback',
+        input_payload: {
+          prompt: 'continue'
+        },
+        output_payload: {
+          tool_calls: []
+        },
+        error_payload: null,
+        metrics_payload: {},
+        debug_payload: {},
+        started_at: '2026-04-26T10:00:00Z',
+        finished_at: null
+      }
+    ];
+
+    const traceItems = mapRunDetailToTrace(detail);
+
+    expect(traceItems).toHaveLength(1);
+    expect(traceItems[0]).toEqual(
+      expect.objectContaining({
+        nodeId: 'node-llm-2',
+        nodeRunId: 'node-run-llm-2',
+        answerSnapshot: expect.objectContaining({
+          text: 'LLM1 final\n----\n',
+          complete: false,
+          materializedFrom: 'waiting_prefix',
+          answerNodeId: 'node-answer',
+          answerNodeRunId: 'node-run-answer-snapshot',
+          waitingNodeId: 'node-llm-2',
+          waitingNodeRunId: 'node-run-llm-2'
+        })
+      })
+    );
+    expect(traceItems.some((item) => item.nodeType === 'answer')).toBe(false);
+  });
 });

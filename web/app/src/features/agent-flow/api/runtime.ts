@@ -16,6 +16,7 @@ import {
   getConsoleNodeLastRun,
   startConsoleNodeDebugPreview,
   upsertConsoleDebugVariableCacheEntry,
+  type ConsoleAnswerSnapshot,
   type ConsoleApplicationRunDetail,
   type ConsoleDebugVariableSnapshot,
   type ConsoleFlowDebugStreamEvent,
@@ -51,6 +52,18 @@ export type AgentFlowDebugMessageStatus =
   | 'cancelled'
   | 'failed';
 
+export interface AgentFlowAnswerSnapshot {
+  kind: ConsoleAnswerSnapshot['kind'];
+  text: string;
+  outputPayload: Record<string, unknown>;
+  complete: boolean;
+  materializedFrom: string;
+  answerNodeId: string;
+  answerNodeRunId: string;
+  waitingNodeId?: string | null;
+  waitingNodeRunId?: string | null;
+}
+
 export interface AgentFlowTraceItem {
   nodeId: string;
   nodeRunId?: string;
@@ -65,6 +78,7 @@ export interface AgentFlowTraceItem {
   errorPayload: Record<string, unknown> | null;
   metricsPayload: Record<string, unknown>;
   debugPayload?: Record<string, unknown>;
+  answerSnapshot?: AgentFlowAnswerSnapshot;
 }
 
 export interface AgentFlowRunStatistics {

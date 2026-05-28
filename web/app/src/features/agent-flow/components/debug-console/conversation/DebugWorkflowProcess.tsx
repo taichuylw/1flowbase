@@ -4,6 +4,7 @@ import { Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
 import { NodeRunPayloadSections } from '../../detail/last-run/NodeRunIOCard';
+import { AnswerSnapshotTrace } from './AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem, StatusIcon } from './DebugWorkflowNodeRow';
 import { LlmToolTraceTree } from './LlmToolTraceTree';
 import { groupTraceItemsForDisplay } from './debug-workflow-trace-utils';
@@ -107,6 +108,12 @@ export function DebugWorkflowProcess({
                     )}
                     onLoadArtifact={onLoadArtifact}
                   />
+                  {item.answerSnapshot ? (
+                    <AnswerSnapshotTrace
+                      snapshot={item.answerSnapshot}
+                      onLoadArtifact={onLoadArtifact}
+                    />
+                  ) : null}
                   <NodeRunPayloadSections
                     inputPayload={item.inputPayload}
                     debugPayload={stripLlmRoundsFromDebugPayload(

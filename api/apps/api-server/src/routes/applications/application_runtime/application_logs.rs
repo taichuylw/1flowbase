@@ -4,7 +4,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
-    CallbackTaskResponse, CheckpointResponse, FlowRunResponse, NodeRunResponse, RunEventResponse,
+    AnswerSnapshotResponse, CallbackTaskResponse, CheckpointResponse, FlowRunResponse,
+    NodeRunResponse, RunEventResponse,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
@@ -76,6 +77,7 @@ pub struct ApplicationRunStatisticsResponse {
 pub struct ApplicationRunTypedDetailResponse {
     pub kind: String,
     pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
     pub node_runs: Vec<NodeRunResponse>,
     pub checkpoints: Vec<CheckpointResponse>,
     pub callback_tasks: Vec<CallbackTaskResponse>,

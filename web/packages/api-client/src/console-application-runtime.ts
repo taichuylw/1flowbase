@@ -318,11 +318,24 @@ export interface ConsoleCallbackTask {
   completed_at: string | null;
 }
 
+export interface ConsoleAnswerSnapshot {
+  kind: string;
+  text: string;
+  output_payload: Record<string, unknown>;
+  complete: boolean;
+  materialized_from: string;
+  answer_node_id: string;
+  answer_node_run_id: string;
+  waiting_node_id?: string | null;
+  waiting_node_run_id?: string | null;
+}
+
 export interface ConsoleApplicationRunDetail {
   run?: ConsoleApplicationRunLog;
   statistics?: ConsoleApplicationRunStatistics;
   detail?: ConsoleApplicationRunTypedDetail;
   flow_run: ConsoleFlowRunDetail;
+  answer_snapshot?: ConsoleAnswerSnapshot | null;
   node_runs: ConsoleNodeRunDetail[];
   checkpoints: ConsoleRunCheckpoint[];
   callback_tasks: ConsoleCallbackTask[];
@@ -364,6 +377,7 @@ export interface GetConsoleApplicationConversationMessagesInput {
 export interface ConsoleApplicationRunTypedDetail {
   kind: string;
   flow_run: ConsoleFlowRunDetail;
+  answer_snapshot?: ConsoleAnswerSnapshot | null;
   node_runs: ConsoleNodeRunDetail[];
   checkpoints: ConsoleRunCheckpoint[];
   callback_tasks: ConsoleCallbackTask[];

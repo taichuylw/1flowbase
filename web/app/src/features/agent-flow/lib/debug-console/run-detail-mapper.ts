@@ -1,4 +1,5 @@
 import type {
+  AgentFlowAnswerSnapshot,
   AgentFlowDebugMessage,
   AgentFlowDebugMessageStatus,
   AgentFlowTraceItem,
@@ -134,6 +135,50 @@ function findAnswerNodeOutputText(detail: FlowDebugRunDetail): string | null {
   return null;
 }
 
+function mapAnswerSnapshot(
+  detail: FlowDebugRunDetail
+): AgentFlowAnswerSnapshot | null {
+  const snapshot =
+    detail.answer_snapshot ?? detail.detail?.answer_snapshot ?? null;
+
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    kind: snapshot.kind,
+    text: snapshot.text,
+    outputPayload: snapshot.output_payload,
+    complete: snapshot.complete,
+    materializedFrom: snapshot.materialized_from,
+    answerNodeId: snapshot.answer_node_id,
+    answerNodeRunId: snapshot.answer_node_run_id,
+    waitingNodeId: snapshot.waiting_node_id ?? null,
+    waitingNodeRunId: snapshot.waiting_node_run_id ?? null
+  };
+}
+
+function answerSnapshotBelongsToNodeRun(
+  nodeRun: FlowDebugRunDetail['node_runs'][number],
+  answerSnapshot: AgentFlowAnswerSnapshot | null
+) {
+  if (!answerSnapshot) {
+    return false;
+  }
+
+  if (
+    answerSnapshot.waitingNodeRunId &&
+    nodeRun.id === answerSnapshot.waitingNodeRunId
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    answerSnapshot.waitingNodeId &&
+    nodeRun.node_id === answerSnapshot.waitingNodeId
+  );
+}
+
 function mapMessageStatus(status: string): AgentFlowDebugMessageStatus {
   switch (status) {
     case 'succeeded':
@@ -154,27 +199,37 @@ function mapMessageStatus(status: string): AgentFlowDebugMessageStatus {
 export function mapRunDetailToTrace(
   detail: FlowDebugRunDetail
 ): AgentFlowTraceItem[] {
-  return detail.node_runs.map((nodeRun) => ({
-    nodeRunId: nodeRun.id,
-    nodeId: nodeRun.node_id,
-    nodeAlias: nodeRun.node_alias,
-    nodeType: nodeRun.node_type,
-    status: nodeRun.status,
-    startedAt: nodeRun.started_at,
-    finishedAt: nodeRun.finished_at,
-    durationMs: nodeRun.finished_at
-      ? Math.max(
-          new Date(nodeRun.finished_at).getTime() -
-            new Date(nodeRun.started_at).getTime(),
-          0
-        )
-      : null,
-    inputPayload: nodeRun.input_payload,
-    outputPayload: nodeRun.output_payload,
-    errorPayload: nodeRun.error_payload,
-    metricsPayload: nodeRun.metrics_payload,
-    debugPayload: nodeRun.debug_payload ?? {}
-  }));
+  const answerSnapshot = mapAnswerSnapshot(detail);
+
+  return detail.node_runs.map((nodeRun) => {
+    const nodeAnswerSnapshot =
+      answerSnapshot && answerSnapshotBelongsToNodeRun(nodeRun, answerSnapshot)
+        ? answerSnapshot
+        : undefined;
+
+    return {
+      nodeRunId: nodeRun.id,
+      nodeId: nodeRun.node_id,
+      nodeAlias: nodeRun.node_alias,
+      nodeType: nodeRun.node_type,
+      status: nodeRun.status,
+      startedAt: nodeRun.started_at,
+      finishedAt: nodeRun.finished_at,
+      durationMs: nodeRun.finished_at
+        ? Math.max(
+            new Date(nodeRun.finished_at).getTime() -
+              new Date(nodeRun.started_at).getTime(),
+            0
+          )
+        : null,
+      inputPayload: nodeRun.input_payload,
+      outputPayload: nodeRun.output_payload,
+      errorPayload: nodeRun.error_payload,
+      metricsPayload: nodeRun.metrics_payload,
+      debugPayload: nodeRun.debug_payload ?? {},
+      answerSnapshot: nodeAnswerSnapshot
+    };
+  });
 }
 
 export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {

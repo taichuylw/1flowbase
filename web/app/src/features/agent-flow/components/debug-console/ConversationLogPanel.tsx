@@ -4,6 +4,7 @@ import { Descriptions, Empty, Tabs, Typography } from 'antd';
 import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { NodeRunPayloadSections } from '../detail/last-run/NodeRunIOCard';
+import { AnswerSnapshotTrace } from './conversation/AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
 import { LlmToolTraceTree } from './conversation/LlmToolTraceTree';
 import {
@@ -201,6 +202,12 @@ function ConversationTrace({
                     )}
                     onLoadArtifact={onLoadArtifact}
                   />
+                  {item.answerSnapshot ? (
+                    <AnswerSnapshotTrace
+                      snapshot={item.answerSnapshot}
+                      onLoadArtifact={onLoadArtifact}
+                    />
+                  ) : null}
                   <NodeRunPayloadSections
                     debugPayload={stripLlmRoundsFromDebugPayload(
                       item.debugPayload ?? {}

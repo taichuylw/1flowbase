@@ -251,11 +251,25 @@ pub struct RunEventResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct AnswerSnapshotResponse {
+    pub kind: String,
+    pub text: String,
+    pub output_payload: serde_json::Value,
+    pub complete: bool,
+    pub materialized_from: String,
+    pub answer_node_id: String,
+    pub answer_node_run_id: String,
+    pub waiting_node_id: Option<String>,
+    pub waiting_node_run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunDetailResponse {
     pub run: application_logs::ApplicationRunLogResponse,
     pub statistics: application_logs::ApplicationRunStatisticsResponse,
     pub detail: application_logs::ApplicationRunTypedDetailResponse,
     pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
     pub node_runs: Vec<NodeRunResponse>,
     pub checkpoints: Vec<CheckpointResponse>,
     pub callback_tasks: Vec<CallbackTaskResponse>,
@@ -905,15 +919,152 @@ fn to_run_event_response(event: domain::RunEventRecord) -> RunEventResponse {
     }
 }
 
+fn is_waiting_prefix_answer_node_run(run: &domain::NodeRunRecord) -> bool {
+    if run.node_type != "answer" {
+        return false;
+    }
+
+    let input_marker = run
+        .input_payload
+        .get("presentation")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|presentation| presentation.get("materialized_from"))
+        .and_then(serde_json::Value::as_str);
+    let debug_marker = run
+        .debug_payload
+        .get("answer_presentation")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|presentation| presentation.get("materialized_from"))
+        .and_then(serde_json::Value::as_str);
+
+    input_marker == Some("waiting_prefix") || debug_marker == Some("waiting_prefix")
+}
+
+fn split_answer_snapshot_node_runs(
+    detail: &domain::ApplicationRunDetail,
+) -> (Option<domain::NodeRunRecord>, Vec<domain::NodeRunRecord>) {
+    let mut answer_snapshot = None;
+    let mut node_runs = Vec::new();
+
+    for node_run in detail.node_runs.iter().cloned() {
+        if is_waiting_prefix_answer_node_run(&node_run) {
+            answer_snapshot = Some(node_run);
+        } else {
+            node_runs.push(node_run);
+        }
+    }
+
+    (answer_snapshot, node_runs)
+}
+
+fn waiting_node_for_answer_snapshot(
+    detail: &domain::ApplicationRunDetail,
+) -> (Option<String>, Option<String>) {
+    if let Some(checkpoint) = detail
+        .checkpoints
+        .iter()
+        .rev()
+        .find(|checkpoint| checkpoint.status.starts_with("waiting"))
+    {
+        let waiting_node_id = checkpoint
+            .locator_payload
+            .get("node_id")
+            .and_then(serde_json::Value::as_str)
+            .map(ToOwned::to_owned);
+        let waiting_node_run_id = checkpoint.node_run_id.map(|value| value.to_string());
+        return (waiting_node_id, waiting_node_run_id);
+    }
+
+    if let Some(task) = detail
+        .callback_tasks
+        .iter()
+        .rev()
+        .find(|task| task.status == domain::CallbackTaskStatus::Pending)
+    {
+        let waiting_node_run_id = task.node_run_id.to_string();
+        let waiting_node_id = detail
+            .node_runs
+            .iter()
+            .find(|node_run| node_run.id == task.node_run_id)
+            .map(|node_run| node_run.node_id.clone());
+        return (waiting_node_id, Some(waiting_node_run_id));
+    }
+
+    (None, None)
+}
+
+fn answer_snapshot_text(output_payload: &serde_json::Value) -> Option<String> {
+    output_payload
+        .get("answer")
+        .or_else(|| output_payload.get("text"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|text| !text.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn answer_snapshot_complete(run: &domain::NodeRunRecord) -> bool {
+    if let Some(complete) = run
+        .input_payload
+        .get("presentation")
+        .and_then(|presentation| presentation.get("complete"))
+        .and_then(serde_json::Value::as_bool)
+    {
+        return complete;
+    }
+
+    !run.debug_payload
+        .get("answer_presentation")
+        .and_then(|presentation| presentation.get("partial"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn to_answer_snapshot_response(
+    run: &domain::NodeRunRecord,
+    detail: &domain::ApplicationRunDetail,
+) -> Option<AnswerSnapshotResponse> {
+    let text = answer_snapshot_text(&run.output_payload)?;
+    let (waiting_node_id, waiting_node_run_id) = waiting_node_for_answer_snapshot(detail);
+
+    Some(AnswerSnapshotResponse {
+        kind: "answer".to_string(),
+        text,
+        output_payload: run.output_payload.clone(),
+        complete: answer_snapshot_complete(run),
+        materialized_from: "waiting_prefix".to_string(),
+        answer_node_id: run.node_id.clone(),
+        answer_node_run_id: run.id.to_string(),
+        waiting_node_id,
+        waiting_node_run_id,
+    })
+}
+
+fn flow_run_can_expose_answer_snapshot(status: &domain::FlowRunStatus) -> bool {
+    matches!(
+        status,
+        domain::FlowRunStatus::WaitingCallback | domain::FlowRunStatus::WaitingHuman
+    )
+}
+
 fn to_application_run_detail_response(
     application: &domain::ApplicationRecord,
     detail: domain::ApplicationRunDetail,
 ) -> ApplicationRunDetailResponse {
-    let statistics = application_run_statistics(&detail);
+    let (answer_snapshot_node_run, visible_node_run_records) =
+        split_answer_snapshot_node_runs(&detail);
+    let answer_snapshot = if flow_run_can_expose_answer_snapshot(&detail.flow_run.status) {
+        answer_snapshot_node_run
+            .as_ref()
+            .and_then(|node_run| to_answer_snapshot_response(node_run, &detail))
+    } else {
+        None
+    };
+    let statistics = application_run_statistics(&domain::ApplicationRunDetail {
+        node_runs: visible_node_run_records.clone(),
+        ..detail.clone()
+    });
     let flow_run = to_flow_run_response(detail.flow_run.clone());
-    let node_runs = detail
-        .node_runs
-        .clone()
+    let node_runs = visible_node_run_records
         .into_iter()
         .map(to_node_run_response)
         .collect::<Vec<_>>();
@@ -976,6 +1127,7 @@ fn to_application_run_detail_response(
     let typed_detail = application_logs::ApplicationRunTypedDetailResponse {
         kind: application.application_type.as_str().to_string(),
         flow_run: flow_run.clone(),
+        answer_snapshot: answer_snapshot.clone(),
         node_runs: node_runs.clone(),
         checkpoints: checkpoints.clone(),
         callback_tasks: callback_tasks.clone(),
@@ -987,6 +1139,7 @@ fn to_application_run_detail_response(
         statistics,
         detail: typed_detail,
         flow_run,
+        answer_snapshot,
         node_runs,
         checkpoints,
         callback_tasks,
@@ -2232,6 +2385,304 @@ mod tests {
             serde_json::json!(["history"])
         );
         assert_eq!(response.input_payload_view, response.input_payload);
+    }
+
+    fn test_application_record() -> domain::ApplicationRecord {
+        domain::ApplicationRecord {
+            id: Uuid::now_v7(),
+            workspace_id: Uuid::now_v7(),
+            application_type: domain::ApplicationType::AgentFlow,
+            name: "Support Agent".to_string(),
+            description: "runtime".to_string(),
+            icon: None,
+            icon_type: None,
+            icon_background: None,
+            created_by: Uuid::now_v7(),
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+            tags: Vec::new(),
+            sections: domain::ApplicationSections {
+                orchestration: domain::ApplicationOrchestrationSection {
+                    status: "enabled".to_string(),
+                    subject_kind: "flow".to_string(),
+                    subject_status: "draft".to_string(),
+                    current_subject_id: Some(Uuid::now_v7()),
+                    current_draft_id: Some(Uuid::now_v7()),
+                },
+                api: domain::ApplicationApiSection {
+                    status: "enabled".to_string(),
+                    credential_kind: "api_key".to_string(),
+                    invoke_routing_mode: "application".to_string(),
+                    invoke_path_template: None,
+                    api_capability_status: "enabled".to_string(),
+                    credentials_status: "enabled".to_string(),
+                },
+                logs: domain::ApplicationLogsSection {
+                    status: "enabled".to_string(),
+                    runs_capability_status: "enabled".to_string(),
+                    run_object_kind: "application_run".to_string(),
+                    log_retention_status: "default".to_string(),
+                },
+                monitoring: domain::ApplicationMonitoringSection {
+                    status: "enabled".to_string(),
+                    metrics_capability_status: "enabled".to_string(),
+                    metrics_object_kind: "application_run".to_string(),
+                    tracing_config_status: "default".to_string(),
+                },
+            },
+        }
+    }
+
+    fn test_flow_run_record(
+        application_id: Uuid,
+        flow_run_id: Uuid,
+        status: domain::FlowRunStatus,
+        output_payload: serde_json::Value,
+    ) -> domain::FlowRunRecord {
+        domain::FlowRunRecord {
+            id: flow_run_id,
+            application_id,
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: Some(Uuid::now_v7()),
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::DebugFlowRun,
+            target_node_id: None,
+            title: "天气？".to_string(),
+            status,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "天气？"
+                }
+            }),
+            output_payload,
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: None,
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        }
+    }
+
+    #[test]
+    fn run_detail_response_moves_waiting_prefix_answer_into_answer_snapshot() {
+        let application = test_application_record();
+        let flow_run_id = Uuid::now_v7();
+        let waiting_node_run_id = Uuid::now_v7();
+        let virtual_answer_node_run_id = Uuid::now_v7();
+        let detail = domain::ApplicationRunDetail {
+            flow_run: test_flow_run_record(
+                application.id,
+                flow_run_id,
+                domain::FlowRunStatus::WaitingCallback,
+                serde_json::json!({ "answer": "LLM1 final\n----\n" }),
+            ),
+            node_runs: vec![
+                domain::NodeRunRecord {
+                    id: waiting_node_run_id,
+                    flow_run_id,
+                    node_id: "node-llm-2".to_string(),
+                    node_type: "llm".to_string(),
+                    node_alias: "LLM2".to_string(),
+                    status: domain::NodeRunStatus::WaitingCallback,
+                    input_payload: serde_json::json!({}),
+                    output_payload: serde_json::json!({ "tool_calls": [] }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({}),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: None,
+                },
+                domain::NodeRunRecord {
+                    id: virtual_answer_node_run_id,
+                    flow_run_id,
+                    node_id: "node-answer".to_string(),
+                    node_type: "answer".to_string(),
+                    node_alias: "Answer".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: serde_json::json!({
+                        "presentation": {
+                            "kind": "answer",
+                            "complete": false,
+                            "materialized_from": "waiting_prefix"
+                        }
+                    }),
+                    output_payload: serde_json::json!({
+                        "answer": "LLM1 final\n----\n"
+                    }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({
+                        "answer_presentation": {
+                            "partial": true,
+                            "materialized_from": "waiting_prefix"
+                        }
+                    }),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+                },
+            ],
+            checkpoints: vec![domain::CheckpointRecord {
+                id: Uuid::now_v7(),
+                flow_run_id,
+                node_run_id: Some(waiting_node_run_id),
+                status: "waiting_callback".to_string(),
+                reason: "等待 callback 回填".to_string(),
+                locator_payload: serde_json::json!({
+                    "node_id": "node-llm-2",
+                    "next_node_index": 2
+                }),
+                variable_snapshot: serde_json::json!({}),
+                external_ref_payload: None,
+                created_at: OffsetDateTime::UNIX_EPOCH,
+            }],
+            callback_tasks: Vec::new(),
+            events: Vec::new(),
+        };
+
+        let response = to_application_run_detail_response(&application, detail);
+
+        assert_eq!(response.node_runs.len(), 1);
+        assert_eq!(response.node_runs[0].node_id, "node-llm-2");
+        let answer_snapshot = response
+            .answer_snapshot
+            .expect("waiting_prefix answer should become answer_snapshot");
+        assert_eq!(answer_snapshot.text, "LLM1 final\n----\n");
+        assert!(!answer_snapshot.complete);
+        assert_eq!(answer_snapshot.materialized_from, "waiting_prefix");
+        assert_eq!(answer_snapshot.answer_node_id, "node-answer");
+        assert_eq!(
+            answer_snapshot.answer_node_run_id,
+            virtual_answer_node_run_id.to_string()
+        );
+        assert_eq!(
+            answer_snapshot.waiting_node_id.as_deref(),
+            Some("node-llm-2")
+        );
+        assert_eq!(
+            answer_snapshot.waiting_node_run_id.as_deref(),
+            Some(waiting_node_run_id.to_string().as_str())
+        );
+        assert!(response
+            .node_runs
+            .iter()
+            .all(|node_run| node_run.node_id != "node-answer"));
+    }
+
+    #[test]
+    fn run_detail_response_hides_historical_waiting_prefix_after_run_finishes() {
+        let application = test_application_record();
+        let flow_run_id = Uuid::now_v7();
+        let waiting_node_run_id = Uuid::now_v7();
+        let virtual_answer_node_run_id = Uuid::now_v7();
+        let final_answer_node_run_id = Uuid::now_v7();
+        let detail = domain::ApplicationRunDetail {
+            flow_run: test_flow_run_record(
+                application.id,
+                flow_run_id,
+                domain::FlowRunStatus::Succeeded,
+                serde_json::json!({ "answer": "final answer" }),
+            ),
+            node_runs: vec![
+                domain::NodeRunRecord {
+                    id: waiting_node_run_id,
+                    flow_run_id,
+                    node_id: "node-llm-2".to_string(),
+                    node_type: "llm".to_string(),
+                    node_alias: "LLM2".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: serde_json::json!({}),
+                    output_payload: serde_json::json!({ "text": "final answer" }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({}),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+                },
+                domain::NodeRunRecord {
+                    id: virtual_answer_node_run_id,
+                    flow_run_id,
+                    node_id: "node-answer".to_string(),
+                    node_type: "answer".to_string(),
+                    node_alias: "Answer".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: serde_json::json!({
+                        "presentation": {
+                            "kind": "answer",
+                            "complete": false,
+                            "materialized_from": "waiting_prefix"
+                        }
+                    }),
+                    output_payload: serde_json::json!({
+                        "answer": "prefix answer"
+                    }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({
+                        "answer_presentation": {
+                            "partial": true,
+                            "materialized_from": "waiting_prefix"
+                        }
+                    }),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+                },
+                domain::NodeRunRecord {
+                    id: final_answer_node_run_id,
+                    flow_run_id,
+                    node_id: "node-answer".to_string(),
+                    node_type: "answer".to_string(),
+                    node_alias: "Answer".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: serde_json::json!({}),
+                    output_payload: serde_json::json!({
+                        "answer": "final answer"
+                    }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({}),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+                },
+            ],
+            checkpoints: vec![domain::CheckpointRecord {
+                id: Uuid::now_v7(),
+                flow_run_id,
+                node_run_id: Some(waiting_node_run_id),
+                status: "waiting_callback".to_string(),
+                reason: "历史等待点".to_string(),
+                locator_payload: serde_json::json!({
+                    "node_id": "node-llm-2"
+                }),
+                variable_snapshot: serde_json::json!({}),
+                external_ref_payload: None,
+                created_at: OffsetDateTime::UNIX_EPOCH,
+            }],
+            callback_tasks: Vec::new(),
+            events: Vec::new(),
+        };
+
+        let response = to_application_run_detail_response(&application, detail);
+
+        assert!(response.answer_snapshot.is_none());
+        assert!(response
+            .node_runs
+            .iter()
+            .all(|node_run| node_run.id != virtual_answer_node_run_id.to_string()));
+        assert!(response
+            .node_runs
+            .iter()
+            .any(|node_run| node_run.id == final_answer_node_run_id.to_string()));
     }
 
     #[test]

@@ -381,6 +381,49 @@ const multiLlmRunAssistantMessage: AgentFlowDebugMessage = {
   ]
 };
 
+const answerSnapshotAssistantMessage: AgentFlowDebugMessage = {
+  ...assistantMessage,
+  status: 'waiting_callback',
+  content: '',
+  rawOutput: {
+    answer: 'LLM1 final\n----\n'
+  },
+  traceSummary: [
+    {
+      nodeId: 'node-llm-2',
+      nodeRunId: 'node-run-llm-2',
+      nodeAlias: 'LLM2',
+      nodeType: 'llm',
+      status: 'waiting_callback',
+      startedAt: '2026-04-25T10:00:01Z',
+      finishedAt: null,
+      durationMs: null,
+      inputPayload: {
+        prompt: 'continue'
+      },
+      outputPayload: {
+        tool_calls: []
+      },
+      errorPayload: null,
+      metricsPayload: {},
+      debugPayload: {},
+      answerSnapshot: {
+        kind: 'answer',
+        text: 'LLM1 final\n----\n',
+        outputPayload: {
+          answer: 'LLM1 final\n----\n'
+        },
+        complete: false,
+        materializedFrom: 'waiting_prefix',
+        answerNodeId: 'node-answer',
+        answerNodeRunId: 'node-run-answer-snapshot',
+        waitingNodeId: 'node-llm-2',
+        waitingNodeRunId: 'node-run-llm-2'
+      }
+    }
+  ]
+};
+
 function renderConsole(
   props: Partial<ComponentProps<typeof AgentFlowDebugConsole>> = {}
 ) {
@@ -632,6 +675,53 @@ describe('debug conversation log panel', () => {
     expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
       'weather is clear'
     );
+  }, 10_000);
+
+  test('renders waiting answer snapshots inside the waiting LLM trace row', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '继续?',
+          rawOutput: null,
+          traceSummary: []
+        },
+        answerSnapshotAssistantMessage
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+
+    expect(
+      within(panel).getAllByTestId('debug-workflow-node-row')
+    ).toHaveLength(1);
+    expect(within(panel).queryByText('直接回复')).not.toBeInTheDocument();
+
+    const llmTraceNode = within(panel).getByRole('button', { name: /LLM2/ });
+    fireEvent.click(llmTraceNode);
+
+    const nodeDetail = within(panel).getByRole('region', {
+      name: 'LLM2 节点详情'
+    });
+    const answerSnapshot = within(nodeDetail).getByRole('button', {
+      name: /answer快照/
+    });
+    expect(answerSnapshot).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(nodeDetail).queryByText('LLM1 final')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(answerSnapshot);
+
+    expect(answerSnapshot).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(nodeDetail).getByLabelText('answer快照 JSON')
+    ).toHaveTextContent('LLM1 final');
   }, 10_000);
 
   test('loads full LLM tool callbacks when the rounds payload is truncated', async () => {
