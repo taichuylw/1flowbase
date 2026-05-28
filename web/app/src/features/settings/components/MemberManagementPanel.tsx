@@ -219,12 +219,12 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: i18nText("settings", "auto.k_62e951a692"),
+        title: i18nText("settings", "auto.status"),
         key: 'status',
         width: 80,
         render: (_: unknown, member: SettingsMember) => (
           <Tag color={member.status === 'active' ? 'green' : 'default'}>
-            {member.status === 'active' ? i18nText("settings", "auto.k_d4e9ca3dd4") : i18nText("settings", "auto.k_d989e55188")}
+            {member.status === 'active' ? i18nText("settings", "auto.enabled") : i18nText("settings", "auto.k_d989e55188")}
           </Tag>
         )
       },
@@ -249,7 +249,7 @@ export function MemberManagementPanel({
                   isRootMember ? undefined : () => handleOpenRoleEdit(member)
                 }
               >
-                {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+                {i18nText("settings", "auto.edit")}</Button>
             </Space>
           ) : (
             <Space wrap size={4}>
@@ -263,7 +263,7 @@ export function MemberManagementPanel({
       ...(canManageMembers
         ? [
             {
-              title: i18nText("settings", "auto.k_f3ea6d345e"),
+              title: i18nText("settings", "auto.operation"),
               key: 'action',
               width: 160,
               render: (_: unknown, member: SettingsMember) => {
@@ -286,7 +286,7 @@ export function MemberManagementPanel({
                           description={i18nText("settings", "auto.k_20daa2e828", { value1: member.name })}
                           onConfirm={() => disableMutation.mutate(member.id)}
                           okText={i18nText("settings", "auto.k_f3abd89419")}
-                          cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
+                          cancelText={i18nText("settings", "auto.cancel")}
                           okButtonProps={{ danger: true }}
                         >
                           <Button
@@ -310,7 +310,7 @@ export function MemberManagementPanel({
                           resetPasswordMutation.mutate(member.id)
                         }
                         okText={i18nText("settings", "auto.k_30a6079ce3")}
-                        cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
+                        cancelText={i18nText("settings", "auto.cancel")}
                       >
                         <Button
                           size="small"
@@ -337,7 +337,7 @@ export function MemberManagementPanel({
   );
 
   return (
-    <SettingsSectionSurface title={i18nText("settings", "auto.k_baf84751a2")} hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.user_management")} hideHeader heightMode="fill">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {canManageMembers ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -372,8 +372,8 @@ export function MemberManagementPanel({
           }}
           onOk={() => createForm.submit()}
           confirmLoading={createMutation.isPending}
-          okText={i18nText("settings", "auto.k_fcbd093292")}
-          cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
+          okText={i18nText("settings", "auto.create")}
+          cancelText={i18nText("settings", "auto.cancel")}
           width={600}
           destroyOnHidden
         >
@@ -466,8 +466,8 @@ export function MemberManagementPanel({
           onCancel={() => setRoleEditMember(null)}
           onOk={handleRoleEditOk}
           confirmLoading={replaceRolesMutation.isPending}
-          okText={i18nText("settings", "auto.k_fadf24dbc5")}
-          cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
+          okText={i18nText("settings", "auto.save")}
+          cancelText={i18nText("settings", "auto.cancel")}
           width={480}
           destroyOnHidden
         >

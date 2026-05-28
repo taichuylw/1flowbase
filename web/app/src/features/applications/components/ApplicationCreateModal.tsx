@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Radio, Space, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import { SchemaModalPanel } from '../../../shared/schema-ui/overlay-shell/SchemaModalPanel';
 import { applicationsQueryKey, createApplication } from '../api/applications';
-import { i18nText } from '../../../shared/i18n/text';
 
 interface ApplicationCreateModalProps {
   open: boolean;
@@ -21,7 +21,6 @@ interface ApplicationCreateFormValues {
 const applicationCreateShell = {
   schemaVersion: '1.0.0',
   shellType: 'modal_panel',
-  title: i18nText("applications", "auto.k_ac31c1170b"),
   destroyOnHidden: true
 } as const;
 
@@ -31,6 +30,7 @@ export function ApplicationCreateModal({
   onClose,
   onCreated
 }: ApplicationCreateModalProps) {
+  const { t } = useTranslation('applications');
   const queryClient = useQueryClient();
   const [form] = Form.useForm<ApplicationCreateFormValues>();
   const mutation = useMutation({
@@ -55,7 +55,11 @@ export function ApplicationCreateModal({
   });
 
   return (
-    <SchemaModalPanel open={open} schema={applicationCreateShell} onClose={onClose}>
+    <SchemaModalPanel
+      open={open}
+      schema={{ ...applicationCreateShell, title: t('auto.new_application') }}
+      onClose={onClose}
+    >
       <Form<ApplicationCreateFormValues>
         form={form}
         layout="vertical"
@@ -66,7 +70,7 @@ export function ApplicationCreateModal({
         }}
         onFinish={(values) => mutation.mutate(values)}
       >
-        <Form.Item label={i18nText("applications", "auto.k_e4e46c7235")} name="application_type">
+        <Form.Item label={t('auto.type')} name="application_type">
           <Radio.Group>
             <Space direction="vertical" size="small">
               <Radio value="agent_flow">AgentFlow</Radio>
@@ -77,22 +81,22 @@ export function ApplicationCreateModal({
           </Radio.Group>
         </Form.Item>
 
-        <Typography.Text type="secondary">{i18nText("applications", "auto.k_530b63f3e0")}</Typography.Text>
+        <Typography.Text type="secondary">{t('auto.not_open')}</Typography.Text>
 
         <Form.Item
-          label={i18nText("applications", "auto.k_1be7ae4fc2")}
+          label={t('auto.name')}
           name="name"
-          rules={[{ required: true, message: i18nText("applications", "auto.k_c2afb255a5") }]}
+          rules={[{ required: true, message: t('auto.name_required') }]}
         >
           <Input />
         </Form.Item>
 
-        <Form.Item label={i18nText("applications", "auto.k_5ea2e0cde2")} name="description">
+        <Form.Item label={t('auto.description')} name="description">
           <Input.TextArea rows={3} />
         </Form.Item>
 
         <Button type="primary" htmlType="submit" loading={mutation.isPending}>
-          {i18nText("applications", "auto.k_45dc181075")}</Button>
+          {t('auto.create_application')}</Button>
       </Form>
     </SchemaModalPanel>
   );

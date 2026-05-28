@@ -258,7 +258,7 @@ export function DataModelTable({
       )
     },
     {
-      title: i18nText("settings", "auto.k_62e951a692"),
+      title: i18nText("settings", "auto.status"),
       dataIndex: 'status',
       key: 'status',
       width: 140,
@@ -294,7 +294,7 @@ export function DataModelTable({
       )
     },
     {
-      title: i18nText("settings", "auto.k_f3ea6d345e"),
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: 160,
       render: (_, model) => {
@@ -313,7 +313,7 @@ export function DataModelTable({
                 onEditModel(model);
               }}
             >
-              {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+              {i18nText("settings", "auto.edit")}</Button>
             {canDeleteModel ? (
               <Button
                 danger
@@ -328,7 +328,7 @@ export function DataModelTable({
                   setDeleteTarget(model);
                 }}
               >
-                {i18nText("settings", "auto.k_3755f56f2f")}</Button>
+                {i18nText("settings", "auto.delete")}</Button>
             ) : null}
           </Space>
         );
@@ -523,7 +523,7 @@ export function DataModelTable({
                         onEditModel(model);
                       }}
                     >
-                      {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+                      {i18nText("settings", "auto.edit")}</Button>
                     {!isBuiltinMainSourceModel(model) ? (
                       <Button
                         danger
@@ -537,7 +537,7 @@ export function DataModelTable({
                           setDeleteTarget(model);
                         }}
                       >
-                        {i18nText("settings", "auto.k_3755f56f2f")}</Button>
+                        {i18nText("settings", "auto.delete")}</Button>
                     ) : null}
                   </Space>
                 ) : null}
@@ -563,7 +563,7 @@ export function DataModelTable({
         open={Boolean(deleteTarget)}
         okText={i18nText("settings", "auto.k_b56d9ac6c5")}
         okType="danger"
-        cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
+        cancelText={i18nText("settings", "auto.cancel")}
         okButtonProps={{ 'aria-label': i18nText("settings", "auto.k_b56d9ac6c5") }}
         onCancel={() => setDeleteTarget(null)}
         onOk={() => {

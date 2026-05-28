@@ -1,7 +1,7 @@
 import { Button, Flex, List, Tag, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import type { Application } from '../api/applications';
-import { i18nText } from '../../../shared/i18n/text';
 
 interface ApplicationCardGridProps {
   applications: Application[];
@@ -12,6 +12,8 @@ function applicationTypeLabel(applicationType: Application['application_type']) 
 }
 
 export function ApplicationCardGrid({ applications }: ApplicationCardGridProps) {
+  const { t } = useTranslation('applications');
+
   return (
     <List
       grid={{ gutter: 16, column: 2 }}
@@ -36,15 +38,15 @@ export function ApplicationCardGrid({ applications }: ApplicationCardGridProps) 
             </Flex>
 
             <Typography.Paragraph style={{ marginBottom: 0 }}>
-              {application.description || i18nText("applications", "auto.k_14e94c943d")}
+              {application.description || t('auto.application_description_empty')}
             </Typography.Paragraph>
 
             <Typography.Text type="secondary">
-              {i18nText("applications", "auto.k_8d8174e0f2")}{new Date(application.updated_at).toLocaleString('zh-CN')}
+              {t('auto.recently_updated')}{new Date(application.updated_at).toLocaleString('zh-CN')}
             </Typography.Text>
 
             <a href={`/applications/${application.id}/orchestration`}>
-              <Button type="primary">{i18nText("applications", "auto.k_ba95e86694")}</Button>
+              <Button type="primary">{t('auto.enter_application')}</Button>
             </a>
           </Flex>
         </List.Item>

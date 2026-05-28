@@ -1,6 +1,7 @@
 import { Button } from 'antd';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   DataTable,
@@ -8,19 +9,19 @@ import {
   type DataTableColumn
 } from '../../../../shared/ui/data-table/DataTable';
 import type { ApplicationRunSummary } from '../../api/runtime';
-import { APPLICATION_RUNS_TABLE_COLUMNS } from './application-runs-table-columns';
 import type { ApplicationRunsTableConfiguration } from './useApplicationRunsTableConfiguration';
-import { i18nText } from '../../../../shared/i18n/text';
 
 export function ApplicationRunsTableColumnSettings({
+  columns,
   configuration
 }: {
+  columns: Array<DataTableColumn<ApplicationRunSummary>>;
   configuration: ApplicationRunsTableConfiguration;
 }) {
   return (
     <DataTableColumnSettings<ApplicationRunSummary>
       className="application-runs-table__column-selector"
-      columns={APPLICATION_RUNS_TABLE_COLUMNS}
+      columns={columns}
       configuration={configuration}
     />
   );
@@ -32,6 +33,7 @@ export function ApplicationRunsTable({
   pageSize,
   total,
   runs,
+  columns,
   selectedRunId,
   configuration,
   onPageChange,
@@ -42,14 +44,16 @@ export function ApplicationRunsTable({
   pageSize: number;
   total: number;
   runs: ApplicationRunSummary[];
+  columns: Array<DataTableColumn<ApplicationRunSummary>>;
   selectedRunId?: string | null;
   configuration: ApplicationRunsTableConfiguration;
   onPageChange: (page: number) => void;
   onSelectRun: (runId: string) => void;
 }) {
+  const { t } = useTranslation('applications');
   const tableColumns = useMemo<Array<DataTableColumn<ApplicationRunSummary>>>(
     () =>
-      APPLICATION_RUNS_TABLE_COLUMNS.map((column) => {
+      columns.map((column) => {
         if (column.key !== 'action') {
           return column;
         }
@@ -58,11 +62,11 @@ export function ApplicationRunsTable({
           ...column,
           render: (_value: unknown, run: ApplicationRunSummary): ReactNode => (
             <Button type="link" onClick={() => onSelectRun(run.id)}>
-              {i18nText("applications", "auto.k_edb5f5db6b")}</Button>
+              {t('auto.view_run_details')}</Button>
           )
         };
       }),
-    [onSelectRun]
+    [columns, onSelectRun, t]
   );
 
   return (

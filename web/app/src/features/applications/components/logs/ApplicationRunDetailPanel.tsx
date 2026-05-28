@@ -87,18 +87,18 @@ function RunIdSubtitle({ runId }: { runId: string }) {
   async function handleCopyRunId() {
     try {
       await copy(runId);
-      message.success(i18nText("applications", "auto.k_7c4ff8649c"));
+      message.success(i18nText("applications", "auto.id_copied"));
     } catch {
-      message.error(i18nText("applications", "auto.k_f2c6b5167b"));
+      message.error(i18nText("applications", "auto.copy_failed"));
     }
   }
 
   return (
     <span className="application-run-detail__run-id">
       <span className="application-run-detail__run-id-value">{runId}</span>
-      <Tooltip title={i18nText("applications", "auto.k_849256142b")}>
+      <Tooltip title={i18nText("applications", "auto.copy_id")}>
         <Button
-          aria-label={i18nText("applications", "auto.k_61943cf491")}
+          aria-label={i18nText("applications", "auto.copy_run_id")}
           className="application-run-detail__run-id-copy"
           icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           onClick={handleCopyRunId}
@@ -121,7 +121,7 @@ function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
 function buildConversationLogMessage(
   detail: ApplicationRunDetail
 ): AgentFlowDebugMessage {
-  const assistantContent = extractAssistantOutputText(detail) || i18nText("applications", "auto.k_85d96c9a70");
+  const assistantContent = extractAssistantOutputText(detail) || i18nText("applications", "auto.no_output_yet");
   const rawOutput =
     Object.keys(detail.flow_run.output_payload).length > 0
       ? detail.flow_run.output_payload
@@ -192,8 +192,8 @@ function mapConversationItemToMessages(
     ];
   }
 
-  const userContent = nonEmptyString(item.query) ?? i18nText("applications", "auto.k_72077749f7");
-  const assistantContent = nonEmptyString(item.answer) ?? i18nText("applications", "auto.k_85d96c9a70");
+  const userContent = nonEmptyString(item.query) ?? i18nText("applications", "auto.none");
+  const assistantContent = nonEmptyString(item.answer) ?? i18nText("applications", "auto.no_output_yet");
 
   return [
     {
@@ -351,8 +351,8 @@ function RunConversation({
   return (
     <div className="application-run-detail__conversation-pane">
       <AgentFlowDebugConsole
-        ariaLabel={i18nText("applications", "auto.k_c2d7a918a3")}
-        closeLabel={i18nText("applications", "auto.k_6c89174b32")}
+        ariaLabel={i18nText("applications", "auto.run_details_preview")}
+        closeLabel={i18nText("applications", "auto.close_run_details")}
         composerUiOnly
         messages={messages}
         runContext={runConversationContext}
@@ -361,7 +361,7 @@ function RunConversation({
         status={conversationSessionStatus(conversationPage)}
         stopping={false}
         subtitle={<RunIdSubtitle runId={runId} />}
-        title={i18nText("applications", "auto.k_a939e999ca")}
+        title={i18nText("applications", "auto.run_details")}
         onChangeRunContextValue={() => {}}
         onClearSession={() => {}}
         onClose={onClose}
@@ -423,7 +423,7 @@ export function ApplicationRunDetailPanel({
 
   return (
     <aside
-      aria-label={i18nText("applications", "auto.k_a939e999ca")}
+      aria-label={i18nText("applications", "auto.run_details")}
       className="application-run-detail application-run-detail--loaded"
     >
       <div className="application-run-detail__body">

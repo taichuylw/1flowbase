@@ -77,17 +77,17 @@ function parseJsonObject(
   try {
     const parsed = JSON.parse(value) as unknown;
     if (!isRecord(parsed)) {
-      return { ok: false, message: i18nText("frontstage", "auto.k_81d6b4cdb0", { value1: label }) };
+      return { ok: false, message: i18nText("frontstage", "auto.json_object_required", { value1: label }) };
     }
     return { ok: true, value: parsed };
   } catch {
-    return { ok: false, message: i18nText("frontstage", "auto.k_465d4e11e3", { value1: label }) };
+    return { ok: false, message: i18nText("frontstage", "auto.invalid_json", { value1: label }) };
   }
 }
 
 function formatList(values: readonly unknown[] | undefined): string {
   if (!values || values.length === 0) {
-    return i18nText("frontstage", "auto.k_72077749f7");
+    return i18nText("frontstage", "auto.none");
   }
   return values.map(String).join(', ');
 }
@@ -97,7 +97,7 @@ function formatKeys(value: Record<string, unknown>): string {
 }
 
 function formatNumber(value: number | undefined): string {
-  return typeof value === 'number' ? String(value) : i18nText("frontstage", "auto.k_55a04b58cd");
+  return typeof value === 'number' ? String(value) : i18nText("frontstage", "auto.not_set");
 }
 
 function toRuntimeLimitsDraft(
@@ -109,18 +109,18 @@ function toRuntimeLimitsDraft(
   if (timeoutMs === null) {
     return {
       ok: false,
-      message: i18nText("frontstage", "auto.k_82391fb977")
+      message: i18nText("frontstage", "auto.timeout_positive")
     };
   }
 
   const maxRenderDepth = readOptionalPositiveNumber(value, 'maxRenderDepth');
   if (!maxRenderDepth.ok) {
-    return { ok: false, message: i18nText("frontstage", "auto.k_1d6a55547f") };
+    return { ok: false, message: i18nText("frontstage", "auto.max_render_depth_positive") };
   }
 
   const maxRenderNodes = readOptionalPositiveNumber(value, 'maxRenderNodes');
   if (!maxRenderNodes.ok) {
-    return { ok: false, message: i18nText("frontstage", "auto.k_24e0f6bb36") };
+    return { ok: false, message: i18nText("frontstage", "auto.max_render_nodes_positive") };
   }
 
   const maxEventChainDepth = readOptionalPositiveNumber(
@@ -130,25 +130,25 @@ function toRuntimeLimitsDraft(
   if (!maxEventChainDepth.ok) {
     return {
       ok: false,
-      message: i18nText("frontstage", "auto.k_206844e880")
+      message: i18nText("frontstage", "auto.max_event_chain_depth_positive")
     };
   }
 
   const allowedActions = readStringArray(value, 'allowedActions');
   if (!allowedActions.ok) {
-    return { ok: false, message: i18nText("frontstage", "auto.k_2de111b84d") };
+    return { ok: false, message: i18nText("frontstage", "auto.allowed_actions_string_array") };
   }
 
   const allowedEvents = readStringArray(value, 'allowedEvents');
   if (!allowedEvents.ok) {
-    return { ok: false, message: i18nText("frontstage", "auto.k_ad65e873a6") };
+    return { ok: false, message: i18nText("frontstage", "auto.allowed_events_string_array") };
   }
 
   const allowedDataModels = readStringArray(value, 'allowedDataModels');
   if (!allowedDataModels.ok) {
     return {
       ok: false,
-      message: i18nText("frontstage", "auto.k_d7c697902c")
+      message: i18nText("frontstage", "auto.allowed_data_models_string_array")
     };
   }
 
@@ -159,7 +159,7 @@ function toRuntimeLimitsDraft(
   if (!allowedDataOperations.ok) {
     return {
       ok: false,
-      message: i18nText("frontstage", "auto.k_b2b5a17c34")
+      message: i18nText("frontstage", "auto.allowed_data_operations_invalid")
     };
   }
 
@@ -384,8 +384,8 @@ export function JsBlockTrialPanel({
       <Alert
         type="info"
         showIcon
-        message={i18nText("frontstage", "auto.k_45ea035daf")}
-        description={i18nText("frontstage", "auto.k_ebaaa97cea")}
+        message={i18nText("frontstage", "auto.select_block")}
+        description={i18nText("frontstage", "auto.js_block_trial_requires_selected_block")}
       />
     );
   }
@@ -395,8 +395,8 @@ export function JsBlockTrialPanel({
       <Alert
         type="warning"
         showIcon
-        message={i18nText("frontstage", "auto.k_2a43fb2bbb")}
-        description={i18nText("frontstage", "auto.k_0702ae4626")}
+        message={i18nText("frontstage", "auto.missing_block_catalog_entry")}
+        description={i18nText("frontstage", "auto.no_matching_block_catalog_entry")}
       />
     );
   }
@@ -404,12 +404,12 @@ export function JsBlockTrialPanel({
   return (
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
       <Typography.Title level={5} style={{ margin: 0 }}>
-        {i18nText("frontstage", "auto.k_cc0f333429")}</Typography.Title>
+        {i18nText("frontstage", "auto.js_block_trial_panel")}</Typography.Title>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>{i18nText("frontstage", "auto.k_043a408692")}</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.js_code")}</Typography.Text>
         <Input.TextArea
-          aria-label={i18nText("frontstage", "auto.k_043a408692")}
+          aria-label={i18nText("frontstage", "auto.js_code")}
           value={code}
           rows={5}
           readOnly={!onCodeChange}
@@ -430,7 +430,7 @@ export function JsBlockTrialPanel({
           disabled={!onContextSnapshotChange}
           onClick={applyContextDraft}
         >
-          {i18nText("frontstage", "auto.k_69231d8347")}</Button>
+          {i18nText("frontstage", "auto.update_context")}</Button>
       </Space>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -446,7 +446,7 @@ export function JsBlockTrialPanel({
           disabled={!onLimitsChange}
           onClick={applyLimitsDraft}
         >
-          {i18nText("frontstage", "auto.k_74c067966c")}</Button>
+          {i18nText("frontstage", "auto.update_limits")}</Button>
       </Space>
 
       {draftError ? (
@@ -455,8 +455,8 @@ export function JsBlockTrialPanel({
           showIcon
           message={
             draftError.kind === 'context'
-              ? i18nText("frontstage", "auto.k_4686b36330")
-              : i18nText("frontstage", "auto.k_4d05d4532a")
+              ? i18nText("frontstage", "auto.context_update_failed")
+              : i18nText("frontstage", "auto.limits_update_failed")
           }
           description={draftError.message}
         />
@@ -464,29 +464,29 @@ export function JsBlockTrialPanel({
 
       {runPlan?.ok ? (
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <Alert type="success" showIcon message={i18nText("frontstage", "auto.k_073766b481")} />
+          <Alert type="success" showIcon message={i18nText("frontstage", "auto.run_plan_generated")} />
           <Space size="small" wrap>
             <Button
-              aria-label={i18nText("frontstage", "auto.k_0c3acd446f")}
+              aria-label={i18nText("frontstage", "auto.run")}
               size="small"
               type="primary"
               onClick={runRuntimeSession}
             >
-              {canStopRuntimeSession ? i18nText("frontstage", "auto.k_def52527a1") : i18nText("frontstage", "auto.k_0c3acd446f")}
+              {canStopRuntimeSession ? i18nText("frontstage", "auto.rerun") : i18nText("frontstage", "auto.run")}
             </Button>
             <Button
-              aria-label={i18nText("frontstage", "auto.k_a17f70a8d3")}
+              aria-label={i18nText("frontstage", "auto.stop")}
               size="small"
               disabled={!canStopRuntimeSession}
               onClick={stopRuntimeSession}
             >
-              {i18nText("frontstage", "auto.k_a17f70a8d3")}</Button>
+              {i18nText("frontstage", "auto.stop")}</Button>
           </Space>
           <Descriptions
             bordered
             size="small"
             column={1}
-            title={i18nText("frontstage", "auto.k_853e3635ba")}
+            title={i18nText("frontstage", "auto.request_summary")}
             items={[
               {
                 key: 'requestId',
@@ -600,7 +600,7 @@ export function JsBlockTrialPanel({
           <Alert
             type="error"
             showIcon
-            message={i18nText("frontstage", "auto.k_4bc62ef123")}
+            message={i18nText("frontstage", "auto.run_plan_rejected")}
             description={runPlan.message}
           />
           <Descriptions

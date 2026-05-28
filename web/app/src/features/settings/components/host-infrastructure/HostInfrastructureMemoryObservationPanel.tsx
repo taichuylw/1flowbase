@@ -1361,7 +1361,7 @@ export function HostInfrastructureMemoryObservationPanel({
           onClick={() => overviewQuery.refetch()}
           loading={overviewQuery.isFetching}
         >
-          {i18nText("settings", "auto.k_38108eaa1d")}</Button>
+          {i18nText("settings", "auto.refresh")}</Button>
       </Space>
     );
   }
@@ -1400,7 +1400,7 @@ export function HostInfrastructureMemoryObservationPanel({
               statsOverviewQuery.isFetching
             }
           >
-            {i18nText("settings", "auto.k_38108eaa1d")}</Button>
+            {i18nText("settings", "auto.refresh")}</Button>
         </Space>
       </div>
 

@@ -91,7 +91,7 @@ export function SettingsSectionBody({
     case 'memory-observation':
       return (
         <SettingsSectionBoundary>
-          <SettingsSectionSurface title={i18nText("settings", "auto.k_5d461a917d")} hideHeader heightMode="fill">
+          <SettingsSectionSurface title={i18nText("settings", "auto.memory_observation")} hideHeader heightMode="fill">
             <HostInfrastructureMemoryObservationPanel
               canManage={canManageHostInfrastructure}
             />

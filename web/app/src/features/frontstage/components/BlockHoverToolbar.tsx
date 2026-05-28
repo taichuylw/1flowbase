@@ -59,16 +59,16 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(blockId).then(
         () => {
-          void message.success(i18nText("frontstage", "auto.k_b5ec70f2f9"));
+          void message.success(i18nText("frontstage", "auto.uid_copied"));
         },
         () => {
-          void message.warning(i18nText("frontstage", "auto.k_7c5c0e741a"));
+          void message.warning(i18nText("frontstage", "auto.copy_uid_failed"));
         }
       );
       return;
     }
 
-    void message.warning(i18nText("frontstage", "auto.k_5a9c502df4"));
+    void message.warning(i18nText("frontstage", "auto.auto_copy_unsupported"));
   };
 
   const menuButtonStyle: CSSProperties = {
@@ -84,7 +84,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
         type="text"
         block
         icon={<ArrowUpOutlined />}
-        aria-label={i18nText("frontstage", "auto.k_a4906091ba")}
+        aria-label={i18nText("frontstage", "auto.move_block_up")}
         disabled={disabled || !canMoveUp}
         onClick={(e) => {
           e.stopPropagation();
@@ -93,13 +93,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
         }}
         style={menuButtonStyle}
       >
-        {i18nText("frontstage", "auto.k_a4906091ba")}</Button>
+        {i18nText("frontstage", "auto.move_block_up")}</Button>
       <Button
         size="small"
         type="text"
         block
         icon={<ArrowDownOutlined />}
-        aria-label={i18nText("frontstage", "auto.k_abd210090c")}
+        aria-label={i18nText("frontstage", "auto.move_block_down")}
         disabled={disabled || !canMoveDown}
         onClick={(e) => {
           e.stopPropagation();
@@ -108,7 +108,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
         }}
         style={menuButtonStyle}
       >
-        {i18nText("frontstage", "auto.k_abd210090c")}</Button>
+        {i18nText("frontstage", "auto.move_block_down")}</Button>
     </Space>
   );
 
@@ -125,7 +125,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           type="text"
           block
           icon={<EditOutlined />}
-          aria-label={i18nText("frontstage", "auto.k_6e4259361d")}
+          aria-label={i18nText("frontstage", "auto.title_and_description")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -134,13 +134,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          {i18nText("frontstage", "auto.k_6e4259361d")}</Button>
+          {i18nText("frontstage", "auto.title_and_description")}</Button>
         <Button
           size="small"
           type="text"
           block
           icon={<SettingOutlined />}
-          aria-label={i18nText("frontstage", "auto.k_40a60b8acd")}
+          aria-label={i18nText("frontstage", "auto.block_linkage_rules")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -149,13 +149,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          {i18nText("frontstage", "auto.k_40a60b8acd")}</Button>
+          {i18nText("frontstage", "auto.block_linkage_rules")}</Button>
         <Button
           size="small"
           type="text"
           block
           icon={<SettingOutlined />}
-          aria-label={i18nText("frontstage", "auto.k_0e190a74d0")}
+          aria-label={i18nText("frontstage", "auto.block_height")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -164,7 +164,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          {i18nText("frontstage", "auto.k_0e190a74d0")}</Button>
+          {i18nText("frontstage", "auto.block_height")}</Button>
         <Button
           size="small"
           type="text"
@@ -186,16 +186,16 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           size="small"
           type="text"
           block
-          aria-label={i18nText("frontstage", "auto.k_827613c831")}
+          aria-label={i18nText("frontstage", "auto.save_as_template")}
           disabled
           style={menuButtonStyle}
         >
-          {i18nText("frontstage", "auto.k_827613c831")}</Button>
+          {i18nText("frontstage", "auto.save_as_template")}</Button>
         <Button
           size="small"
           type="text"
           block
-          aria-label={i18nText("frontstage", "auto.k_7213f5e85f")}
+          aria-label={i18nText("frontstage", "auto.copy_uid")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -204,13 +204,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          {i18nText("frontstage", "auto.k_7213f5e85f")}</Button>
+          {i18nText("frontstage", "auto.copy_uid")}</Button>
         <Popconfirm
-          title={i18nText("frontstage", "auto.k_dfdda6d524")}
+          title={i18nText("frontstage", "auto.confirm_delete_this_block")}
           trigger="click"
-          okText={i18nText("frontstage", "auto.k_3755f56f2f")}
-          cancelText={i18nText("frontstage", "auto.k_4d0b4688c7")}
-          okButtonProps={{ 'aria-label': i18nText("frontstage", "auto.k_864f33fb1a") }}
+          okText={i18nText("frontstage", "auto.delete")}
+          cancelText={i18nText("frontstage", "auto.cancel")}
+          okButtonProps={{ 'aria-label': i18nText("frontstage", "auto.confirm_delete_block") }}
           open={isDeleteConfirmOpen}
           onOpenChange={(open) => {
             setIsDeleteConfirmOpen(open);
@@ -232,7 +232,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             block
             danger
             icon={<DeleteOutlined />}
-            aria-label={i18nText("frontstage", "auto.k_b9b918a319")}
+            aria-label={i18nText("frontstage", "auto.delete_block")}
             disabled={disabled}
             onClick={(event) => {
               event.stopPropagation();
@@ -241,11 +241,11 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             }}
             style={menuButtonStyle}
           >
-            {i18nText("frontstage", "auto.k_3755f56f2f")}</Button>
+            {i18nText("frontstage", "auto.delete")}</Button>
         </Popconfirm>
       </Space>
       <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 11 }}>
-        {i18nText("frontstage", "auto.k_050571a2ae")}</Typography.Text>
+        {i18nText("frontstage", "auto.save_as_template_unavailable")}</Typography.Text>
     </div>
   );
 
@@ -272,7 +272,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             type="text"
             icon={<HolderOutlined />}
             disabled={disabled}
-            aria-label={i18nText("frontstage", "auto.k_b3ebc68dc0")}
+            aria-label={i18nText("frontstage", "auto.move_or_sort_block")}
           />
         </Popover>
         <Button
@@ -284,7 +284,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             e.stopPropagation();
             onEditCode();
           }}
-          aria-label={i18nText("frontstage", "auto.k_b57a12863d")}
+          aria-label={i18nText("frontstage", "auto.edit_block")}
         />
         <Popover
           content={moreContent}
@@ -304,7 +304,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             type="text"
             icon={<MoreOutlined />}
             disabled={disabled}
-            aria-label={i18nText("frontstage", "auto.k_0adc4aa803")}
+            aria-label={i18nText("frontstage", "auto.more_block_operations")}
           />
         </Popover>
       </Space>

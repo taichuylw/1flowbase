@@ -216,7 +216,7 @@ export function DataModelDetail({
         )
     },
     {
-      title: i18nText("settings", "auto.k_f3ea6d345e"),
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: 100,
       render: (_, field) => (
@@ -234,7 +234,7 @@ export function DataModelDetail({
             setFieldDrawerState({ open: true, mode: 'edit', field })
           }
         >
-          {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+          {i18nText("settings", "auto.edit")}</Button>
       )
     }
   ];
@@ -254,7 +254,7 @@ export function DataModelDetail({
     {
       key: 'source',
       label: i18nText("settings", "auto.k_c63f79e636"),
-      value: model.source_kind === 'main_source' ? i18nText("settings", "auto.k_6d0cf74264") : i18nText("settings", "auto.k_be76ca9cab"),
+      value: model.source_kind === 'main_source' ? i18nText("settings", "auto.built_in_data_source") : i18nText("settings", "auto.external_data_source"),
       icon:
         model.source_kind === 'main_source' ? (
           <DatabaseOutlined />
@@ -339,7 +339,7 @@ export function DataModelDetail({
           />
         </div>
         <Button disabled={!canManage} onClick={() => setModelDrawerOpen(true)}>
-          {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+          {i18nText("settings", "auto.edit")}</Button>
       </div>
 
       <Tabs

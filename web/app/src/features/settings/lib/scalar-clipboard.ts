@@ -44,9 +44,9 @@ async function copyTextWithExecCommand(text: string) {
       throw new Error('Copy command failed');
     }
 
-    message.success(i18nText("settings", "auto.k_0e8e6a3fb3") + text);
+    message.success(i18nText("settings", "auto.copied") + text);
   } catch (err) {
-    message.error(i18nText("settings", "auto.k_2b1cae855e"));
+    message.error(i18nText("settings", "auto.copy_failed_manual"));
     console.error('Copy failed:', err);
     throw err;
   } finally {

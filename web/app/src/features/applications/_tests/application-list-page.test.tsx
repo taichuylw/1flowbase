@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const applicationsApi = vi.hoisted(() => ({
   applicationsQueryKey: ['applications'],
@@ -15,6 +15,7 @@ const applicationsApi = vi.hoisted(() => ({
 vi.mock('../api/applications', () => applicationsApi);
 
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { ApplicationListPage } from '../pages/ApplicationListPage';
 
@@ -36,13 +37,21 @@ function authenticate() {
       name: 'Root',
       avatar_url: null,
       introduction: '',
+      preferred_locale: 'zh_Hans',
       effective_display_role: 'root',
       permissions: [
         'application.create.all',
         'application.delete.own',
         'application.edit.own',
         'application.view.all'
-      ]
+      ],
+      meta: {
+        ui: {
+          locale: {
+            preferred_locale: 'zh_Hans'
+          }
+        }
+      }
     }
   });
 }
@@ -56,7 +65,9 @@ function renderPage() {
 }
 
 describe('ApplicationListPage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.localStorage.clear();
+    await appI18n.changeLanguage('zh_Hans');
     resetAuthStore();
     authenticate();
     applicationsApi.fetchApplicationCatalog.mockResolvedValue({
@@ -100,6 +111,10 @@ describe('ApplicationListPage', () => {
     });
     applicationsApi.deleteApplication.mockResolvedValue(undefined);
     applicationsApi.updateApplication.mockResolvedValue(undefined);
+  });
+
+  afterEach(async () => {
+    await appI18n.changeLanguage('en_US');
   });
 
   test('renders backend-driven type tabs and filters the list', async () => {

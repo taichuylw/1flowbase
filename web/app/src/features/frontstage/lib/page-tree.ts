@@ -122,11 +122,11 @@ export function getNextNodeId(nodes: FrontStageTreeNode[]): string {
 }
 
 export function getNextPageTitleIndex(nodes: FrontStageTreeNode[]): number {
-  return getNextNodeTitleIndex(nodes, 'page', i18nText("frontstage", "auto.k_f6159e607f"));
+  return getNextNodeTitleIndex(nodes, 'page', i18nText("frontstage", "auto.new_page_prefix"));
 }
 
 export function getNextGroupTitleIndex(nodes: FrontStageTreeNode[]): number {
-  return getNextNodeTitleIndex(nodes, 'group', i18nText("frontstage", "auto.k_97d8a6c05b"));
+  return getNextNodeTitleIndex(nodes, 'group', i18nText("frontstage", "auto.group"));
 }
 
 export function createPageNode(
@@ -135,7 +135,7 @@ export function createPageNode(
 ): FrontStageTreeNode {
   return {
     id,
-    title: i18nText("frontstage", "auto.k_4ac134a6d6", { value1: numberHint }),
+    title: i18nText("frontstage", "auto.new_page_with_number", { value1: numberHint }),
     kind: 'page'
   };
 }
@@ -143,7 +143,7 @@ export function createPageNode(
 export function createGroupNode(id: string, index: number): FrontStageTreeNode {
   return {
     id,
-    title: i18nText("frontstage", "auto.k_56fb5f348d", { value1: index }),
+    title: i18nText("frontstage", "auto.group_with_index", { value1: index }),
     kind: 'group',
     children: []
   };
@@ -254,15 +254,15 @@ export function getPageDisplayTitle(
     return null;
   }
 
-  return targetNode.title || i18nText("frontstage", "auto.k_5a131f787f");
+  return targetNode.title || i18nText("frontstage", "auto.unnamed_page");
 }
 
 export function getDeleteConfirmMessage(node: FrontStageTreeNode): string {
   if (node.kind === 'group' && node.children && node.children.length > 0) {
-    return i18nText("frontstage", "auto.k_6b6c49168c", { value1: node.title || i18nText("frontstage", "auto.k_c4a274264a") });
+    return i18nText("frontstage", "auto.confirm_delete_group", { value1: node.title || i18nText("frontstage", "auto.unnamed_group") });
   }
 
-  return i18nText("frontstage", "auto.k_e1fc019842", { value1: node.kind === 'group' ? i18nText("frontstage", "auto.k_97d8a6c05b") : i18nText("frontstage", "auto.k_06dfb846bd"), value2: node.title || i18nText("frontstage", "auto.k_5a131f787f") });
+  return i18nText("frontstage", "auto.confirm_delete_node", { value1: node.kind === 'group' ? i18nText("frontstage", "auto.group") : i18nText("frontstage", "auto.page"), value2: node.title || i18nText("frontstage", "auto.unnamed_page") });
 }
 
 export function moveNodeInTree(

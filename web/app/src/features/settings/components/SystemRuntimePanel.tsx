@@ -200,7 +200,7 @@ export function SystemRuntimePanel() {
   /* ── loading ── */
   if (runtimeQuery.isLoading) {
     return (
-      <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
+      <SettingsSectionSurface title={i18nText("settings", "auto.system_runtime")} hideHeader heightMode="fill">
         <Flex justify="center" style={{ padding: '64px 0' }}>
           <Spin />
         </Flex>
@@ -211,7 +211,7 @@ export function SystemRuntimePanel() {
   /* ── error ── */
   if (runtimeQuery.isError) {
     return (
-      <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
+      <SettingsSectionSurface title={i18nText("settings", "auto.system_runtime")} hideHeader heightMode="fill">
         <Alert
           type="error"
           showIcon
@@ -229,7 +229,7 @@ export function SystemRuntimePanel() {
   /* ── no data ── */
   if (!profile) {
     return (
-      <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
+      <SettingsSectionSurface title={i18nText("settings", "auto.system_runtime")} hideHeader heightMode="fill">
         <Empty description={i18nText("settings", "auto.k_10b9da25f8")} />
       </SettingsSectionSurface>
     );
@@ -253,7 +253,7 @@ export function SystemRuntimePanel() {
 
   /* ── render ── */
   return (
-    <SettingsSectionSurface title={i18nText("settings", "auto.k_5027fd1718")} hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.system_runtime")} hideHeader heightMode="fill">
       {/* ════════════════════════════════════════════════
          部署概览
          ════════════════════════════════════════════════ */}
@@ -452,7 +452,7 @@ export function SystemRuntimePanel() {
                         marginBottom: 2
                       }}
                     >
-                      {i18nText("settings", "auto.k_62e951a692")}</Typography.Text>
+                      {i18nText("settings", "auto.status")}</Typography.Text>
                     <Typography.Text style={{ fontSize: 13 }}>
                       {svc.data.status ?? '—'}
                     </Typography.Text>

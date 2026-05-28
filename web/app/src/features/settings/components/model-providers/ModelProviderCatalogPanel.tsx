@@ -88,7 +88,7 @@ export function ModelProviderCatalogPanel({
           ...(canManage
             ? [
               {
-                title: i18nText("settings", "auto.k_f3ea6d345e"),
+                title: i18nText("settings", "auto.operation"),
                 key: 'actions',
                 width: 120,
                 render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
@@ -109,14 +109,14 @@ export function ModelProviderCatalogPanel({
                       loading={deletingProviderCode === entry.provider_code}
                       onClick={() => onDelete(entry)}
                     >
-                      {i18nText("settings", "auto.k_3755f56f2f")}</Button>
+                      {i18nText("settings", "auto.delete")}</Button>
                   </Space>
                 )
               }
             ]
             : []),
           {
-            title: i18nText("settings", "auto.k_1be7ae4fc2"),
+            title: i18nText("settings", "auto.name"),
             key: 'provider',
             width: 180,
             render: (_, entry) => (
@@ -126,7 +126,7 @@ export function ModelProviderCatalogPanel({
             )
           },
           {
-            title: i18nText("settings", "auto.k_62e951a692"),
+            title: i18nText("settings", "auto.status"),
             key: 'status',
             width: 130,
             render: (_, entry) => {

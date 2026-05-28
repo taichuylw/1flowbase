@@ -256,7 +256,7 @@ export function OfficialPluginInstallPanel({
       {contextHolder}
       <div className="model-provider-panel__section-head">
         <div>
-          <Typography.Title level={5}>{i18nText("settings", "auto.k_77d78db072")}</Typography.Title>
+          <Typography.Title level={5}>{i18nText("settings", "auto.model_providers")}</Typography.Title>
           {sourceMeta ? (
             <Typography.Text type="secondary">
               {i18nText("settings", "auto.k_47a3d3a019")}{sourceMeta.sourceLabel}
@@ -382,7 +382,7 @@ export function OfficialPluginInstallPanel({
                           icon: null,
                           centered: true,
                           okText: buttonLabel,
-                          cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+                          cancelText: i18nText("settings", "auto.cancel"),
                           okButtonProps: {
                             loading: installing || upgrading,
                             disabled: buttonDisabled

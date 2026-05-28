@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Result } from 'antd';
 import { Suspense, lazy, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ApiClientError } from '@1flowbase/api-client';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
@@ -15,7 +16,6 @@ import {
   getApplicationSections,
   type ApplicationSectionKey
 } from '../lib/application-sections';
-import { i18nText } from '../../../shared/i18n/text';
 
 const AgentFlowEditorPage = lazy(() =>
   import('../../agent-flow/pages/AgentFlowEditorPage').then((module) => ({
@@ -55,6 +55,7 @@ export function ApplicationDetailPage({
   applicationId: string;
   requestedSectionKey: ApplicationSectionKey;
 }) {
+  const { t } = useTranslation('applications');
   const detailQuery = useQuery({
     queryKey: applicationDetailQueryKey(applicationId),
     queryFn: () => fetchApplicationDetail(applicationId)
@@ -72,10 +73,10 @@ export function ApplicationDetailPage({
     }
 
     if (error instanceof ApiClientError && error.status === 404) {
-      return <Result status="404" title={i18nText("applications", "auto.k_4cce244abd")} />;
+      return <Result status="404" title={t('auto.application_not_found')} />;
     }
 
-    return <Result status="error" title={i18nText("applications", "auto.k_75e2d0b91e")} />;
+    return <Result status="error" title={t('auto.application_load_failed')} />;
   }
 
   const application = detailQuery.data;
@@ -109,7 +110,7 @@ export function ApplicationDetailPage({
   return (
     <SectionPageLayout
       pageTitle={application.name}
-      navItems={getApplicationSections(applicationId)}
+      navItems={getApplicationSections(applicationId, t)}
       activeKey={requestedSectionKey}
       contentWidth={requestedSectionKey === 'orchestration' ? 'full' : 'wide'}
       heightMode={

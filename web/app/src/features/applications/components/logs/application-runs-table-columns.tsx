@@ -1,9 +1,9 @@
 import { Tag } from 'antd';
+import type { TFunction } from 'i18next';
 
 import type { DataTableColumn } from '../../../../shared/ui/data-table/DataTable';
 import type { ApplicationRunSummary } from '../../api/runtime';
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
-import { i18nText } from '../../../../shared/i18n/text';
 
 const STATUS_COLOR: Record<string, string> = {
   succeeded: 'green',
@@ -27,12 +27,13 @@ function formatRunStatisticNumber(value: number | null | undefined) {
     : '-';
 }
 
-export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
-  DataTableColumn<ApplicationRunSummary>
-> = [
+export function getApplicationRunsTableColumns(
+  t: TFunction<'applications'>
+): Array<DataTableColumn<ApplicationRunSummary>> {
+  return [
   {
     key: 'title',
-    title: i18nText("applications", "auto.k_748d7dc7e3"),
+    title: t('auto.title'),
     dataIndex: 'title',
     width: 240,
     ellipsis: true,
@@ -48,7 +49,7 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'authorized_account',
-    title: i18nText("applications", "auto.k_1c31fbd81e"),
+    title: t('auto.authorizer'),
     dataIndex: 'authorized_account',
     width: 160,
     ellipsis: true,
@@ -56,20 +57,20 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'id',
-    title: i18nText("applications", "auto.k_c1189023fb"),
+    title: t('auto.run_id'),
     dataIndex: 'id',
     width: 180,
     ellipsis: true
   },
   {
     key: 'run_mode',
-    title: i18nText("applications", "auto.k_ed0eea8f20"),
+    title: t('auto.mode'),
     dataIndex: 'run_mode',
     width: 180
   },
   {
     key: 'compatibility_mode',
-    title: i18nText("applications", "auto.k_b0c431675b"),
+    title: t('auto.protocol'),
     dataIndex: 'compatibility_mode',
     width: 170,
     ellipsis: true,
@@ -80,14 +81,14 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'target_node_id',
-    title: i18nText("applications", "auto.k_eba69a0678"),
+    title: t('auto.target_node'),
     dataIndex: 'target_node_id',
     width: 160,
-    render: (value) => (typeof value === 'string' && value ? value : i18nText("applications", "auto.k_538c417265"))
+    render: (value) => (typeof value === 'string' && value ? value : t('auto.full_flow'))
   },
   {
     key: 'status',
-    title: i18nText("applications", "auto.k_62e951a692"),
+    title: t('auto.status'),
     width: 120,
     render: (_: unknown, run) => (
       <Tag color={STATUS_COLOR[run.status] ?? 'default'}>{run.status}</Tag>
@@ -95,42 +96,43 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'total_tokens',
-    title: i18nText("applications", "auto.k_151dec7e9d"),
+    title: t('auto.total_tokens'),
     width: 130,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.total_tokens)
   },
   {
     key: 'unique_node_count',
-    title: i18nText("applications", "auto.k_7f1c2ccf01"),
+    title: t('auto.real_node_count'),
     width: 130,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.unique_node_count)
   },
   {
     key: 'tool_callback_count',
-    title: i18nText("applications", "auto.k_bf55cc6a69"),
+    title: t('auto.tool_callback_count'),
     width: 150,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.tool_callback_count)
   },
   {
     key: 'started_at',
-    title: i18nText("applications", "auto.k_e8868af6eb"),
+    title: t('auto.start_time'),
     dataIndex: 'started_at',
     width: 200,
     render: (value) => formatTimestamp(typeof value === 'string' ? value : null)
   },
   {
     key: 'updated_at',
-    title: i18nText("applications", "auto.k_093dea88c9"),
+    title: t('auto.updated_at'),
     dataIndex: 'updated_at',
     width: 200,
     render: (value) => formatTimestamp(typeof value === 'string' ? value : null)
   },
   {
     key: 'action',
-    title: i18nText("applications", "auto.k_f3ea6d345e"),
+    title: t('auto.operation'),
     width: 140
   }
-];
+  ];
+}

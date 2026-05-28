@@ -174,7 +174,7 @@ export function SettingsModelProvidersSection({
     <>
       {modalContextHolder}
       <SettingsSectionSurface
-        title={i18nText("settings", "auto.k_77d78db072")}
+        title={i18nText("settings", "auto.model_providers")}
         hideHeader
         heightMode="fill"
         status={
@@ -239,9 +239,9 @@ export function SettingsModelProvidersSection({
                     title: i18nText("settings", "auto.k_d6ec156a21"),
                     icon: null,
                     centered: true,
-                    okText: i18nText("settings", "auto.k_3755f56f2f"),
+                    okText: i18nText("settings", "auto.delete"),
                     okType: 'danger',
-                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+                    cancelText: i18nText("settings", "auto.cancel"),
                     okButtonProps: {
                       loading:
                         familyDeleteMutation.isPending &&

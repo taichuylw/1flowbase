@@ -1,5 +1,4 @@
 import type { SectionNavItem } from '../../../shared/ui/section-page-layout/SectionPageLayout';
-import { i18nText } from '../../../shared/i18n/text';
 
 export type SettingsSectionKey =
   | 'docs'
@@ -16,38 +15,40 @@ export interface SettingsSectionNavItem extends SectionNavItem {
   key: SettingsSectionKey;
 }
 
-export interface SettingsSectionDefinition extends SettingsSectionNavItem {
+export interface SettingsSectionDefinition
+  extends Omit<SettingsSectionNavItem, 'label'> {
+  labelKey: string;
   requiredPermissions: string[];
 }
 
 export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   {
     key: 'docs',
-    label: i18nText("settings", "auto.k_ddd798b421"),
+    labelKey: 'auto.api_documentation',
     to: '/settings/docs',
     requiredPermissions: ['api_reference.view.all']
   },
   {
     key: 'system-runtime',
-    label: i18nText("settings", "auto.k_5027fd1718"),
+    labelKey: 'auto.system_runtime',
     to: '/settings/system-runtime',
     requiredPermissions: ['system_runtime.view.all']
   },
   {
     key: 'host-infrastructure',
-    label: i18nText("settings", "auto.k_add2c7fd5b"),
+    labelKey: 'auto.infrastructure',
     to: '/settings/host-infrastructure',
     requiredPermissions: ['plugin_config.view.all']
   },
   {
     key: 'memory-observation',
-    label: i18nText("settings", "auto.k_5d461a917d"),
+    labelKey: 'auto.memory_observation',
     to: '/settings/memory-observation',
     requiredPermissions: ['plugin_config.view.all']
   },
   {
     key: 'files',
-    label: i18nText("settings", "auto.k_3f2244c98f"),
+    labelKey: 'auto.file_management',
     to: '/settings/files',
     requiredPermissions: [
       'file_table.view.all',
@@ -57,7 +58,7 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'data-models',
-    label: i18nText("settings", "auto.k_a3ccf702c5"),
+    labelKey: 'auto.data_source',
     to: '/settings/data-models',
     requiredPermissions: [
       'state_model.view.all',
@@ -68,7 +69,7 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'model-providers',
-    label: i18nText("settings", "auto.k_77d78db072"),
+    labelKey: 'auto.model_providers',
     to: '/settings/model-providers',
     requiredPermissions: [
       'state_model.view.all',
@@ -79,13 +80,13 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'members',
-    label: i18nText("settings", "auto.k_baf84751a2"),
+    labelKey: 'auto.user_management',
     to: '/settings/members',
     requiredPermissions: ['user.view.all']
   },
   {
     key: 'roles',
-    label: i18nText("settings", "auto.k_e47b7f25dd"),
+    labelKey: 'auto.permission_management',
     to: '/settings/roles',
     requiredPermissions: ['role_permission.view.all']
   }

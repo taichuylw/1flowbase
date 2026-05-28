@@ -1,6 +1,6 @@
 import { Form, Input, Modal } from 'antd';
 import { useEffect } from 'react';
-import { i18nText } from '../../../shared/i18n/text';
+import { useTranslation } from 'react-i18next';
 
 interface ApplicationEditModalProps {
   open: boolean;
@@ -22,6 +22,7 @@ export function ApplicationEditModal({
   onCancel,
   onSubmit
 }: ApplicationEditModalProps) {
+  const { t } = useTranslation('applications');
   const [form] = Form.useForm<{ name: string; description: string }>();
 
   useEffect(() => {
@@ -39,9 +40,9 @@ export function ApplicationEditModal({
   return (
     <Modal
       open={open}
-      title={i18nText("applications", "auto.k_4e38d03d7d")}
-      okText={i18nText("applications", "auto.k_60b4ae9082")}
-      cancelText={i18nText("applications", "auto.k_4d0b4688c7")}
+      title={t('auto.edit_application_information')}
+      okText={t('auto.save_changes')}
+      cancelText={t('auto.cancel')}
       confirmLoading={saving}
       onCancel={onCancel}
       onOk={() => form.submit()}
@@ -50,14 +51,14 @@ export function ApplicationEditModal({
     >
       <Form form={form} layout="vertical" onFinish={onSubmit}>
         <Form.Item
-          label={i18nText("applications", "auto.k_2d87d51825")}
+          label={t('auto.application_name')}
           name="name"
-          rules={[{ required: true, message: i18nText("applications", "auto.k_183bb0289f") }]}
+          rules={[{ required: true, message: t('auto.application_name_required') }]}
         >
-          <Input maxLength={64} aria-label={i18nText("applications", "auto.k_2d87d51825")} />
+          <Input maxLength={64} aria-label={t('auto.application_name')} />
         </Form.Item>
-        <Form.Item label={i18nText("applications", "auto.k_9b58608132")} name="description">
-          <Input.TextArea rows={4} maxLength={240} aria-label={i18nText("applications", "auto.k_9b58608132")} />
+        <Form.Item label={t('auto.application_description')} name="description">
+          <Input.TextArea rows={4} maxLength={240} aria-label={t('auto.application_description')} />
         </Form.Item>
       </Form>
     </Modal>

@@ -279,7 +279,7 @@ function renderPageTreeIconPicker(
         onOpenChange={onIconPickerOpenChange}
       >
         <button
-          aria-label={i18nText("frontstage", "auto.k_ef6e0d1008")}
+          aria-label={i18nText("frontstage", "auto.select_icon")}
           className={[
             'frontstage-page-tree-form__icon-select-button',
             selectedIcon
@@ -295,7 +295,7 @@ function renderPageTreeIconPicker(
       </Popover>
       {selectedIcon ? (
         <button
-          aria-label={i18nText("frontstage", "auto.k_e5729c06d3")}
+          aria-label={i18nText("frontstage", "auto.clear_icon")}
           className="frontstage-page-tree-form__icon-clear-button"
           type="button"
           onClick={() => onChange(undefined)}
@@ -331,7 +331,7 @@ function toDisplayErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return i18nText("frontstage", "auto.k_ae488641ec");
+  return i18nText("frontstage", "auto.page_content_save_failed");
 }
 
 function requireCsrfToken(csrfToken: string | null): string {
@@ -736,10 +736,10 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     !hasPageContentLoadError &&
     !isPageContentSavePending;
   const operationStatusText = isOperationPending
-    ? i18nText("frontstage", "auto.k_a032e8fdda")
+    ? i18nText("frontstage", "auto.saving")
     : hasOperationError
-      ? i18nText("frontstage", "auto.k_09e424b5e8")
-      : i18nText("frontstage", "auto.k_3bd14ff97a");
+      ? i18nText("frontstage", "auto.operation_failed")
+      : i18nText("frontstage", "auto.page_tree_synced");
 
   const canEnterDesignMode = useMemo(() => {
     return (
@@ -930,11 +930,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const selectedPageLabel = selectedPageDisplayTitle
     ? selectedPageDisplayTitle
     : selectedPageId
-      ? i18nText("frontstage", "auto.k_0b964316bf", { value1: selectedPageId })
+      ? i18nText("frontstage", "auto.page_with_id", { value1: selectedPageId })
       : null;
   const pageLabel = selectedPageLabel
     ? selectedPageLabel
-    : i18nText("frontstage", "auto.k_f5712eb8b4");
+    : i18nText("frontstage", "auto.default_home_page_notice");
 
   const saveBlockComposition = useCallback(
     async (
@@ -1026,14 +1026,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   if (initialPageTree === undefined && isPageTreeLoading) {
     return (
       <SectionPageLayout
-        pageTitle={i18nText("frontstage", "auto.k_89408f6d5a")}
+        pageTitle={i18nText("frontstage", "auto.frontstage")}
         navItems={[]}
         activeKey=""
         contentWidth="wide"
         heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
-            {i18nText("frontstage", "auto.k_ec2b6b237c")}</Typography.Text>
+            {i18nText("frontstage", "auto.page_tree_loading")}</Typography.Text>
         }
       >
         <section className="frontstage-page-workspace">
@@ -1042,13 +1042,13 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               className="frontstage-page-workspace__title"
               level={3}
             >
-              {i18nText("frontstage", "auto.k_b869e675c7")}</Typography.Title>
+              {i18nText("frontstage", "auto.page_tree_loading_ellipsis")}</Typography.Title>
           </header>
           <Divider style={{ margin: 0 }} />
           <div className="frontstage-page-workspace__body">
             <Empty
               description={
-                <Typography.Text>{i18nText("frontstage", "auto.k_c454a48ff6")}</Typography.Text>
+                <Typography.Text>{i18nText("frontstage", "auto.page_tree_loading_wait")}</Typography.Text>
               }
             />
           </div>
@@ -1060,14 +1060,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   if (initialPageTree === undefined && hasPageTreeLoadError) {
     return (
       <SectionPageLayout
-        pageTitle={i18nText("frontstage", "auto.k_89408f6d5a")}
+        pageTitle={i18nText("frontstage", "auto.frontstage")}
         navItems={[]}
         activeKey=""
         contentWidth="wide"
         heightMode="viewport"
         sidebarContent={
           <Typography.Text type="secondary" style={{ paddingInline: 16 }}>
-            {i18nText("frontstage", "auto.k_21fcc2abb1")}</Typography.Text>
+            {i18nText("frontstage", "auto.page_tree_unavailable")}</Typography.Text>
         }
       >
         <section className="frontstage-page-workspace">
@@ -1076,7 +1076,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               className="frontstage-page-workspace__title"
               level={3}
             >
-              {i18nText("frontstage", "auto.k_88430a50e6")}</Typography.Title>
+              {i18nText("frontstage", "auto.page_tree_load_failed")}</Typography.Title>
           </header>
           <Divider style={{ margin: 0 }} />
           <div className="frontstage-page-workspace__body">
@@ -1084,11 +1084,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <Typography.Text>
-                  {i18nText("frontstage", "auto.k_c747dade51")}</Typography.Text>
+                  {i18nText("frontstage", "auto.page_tree_load_failed_retry")}</Typography.Text>
               }
             >
               <Button type="primary" onClick={onRetryLoadPageTree}>
-                {i18nText("frontstage", "auto.k_e2d53a6d3a")}</Button>
+                {i18nText("frontstage", "auto.retry")}</Button>
             </Empty>
           </div>
         </section>
@@ -1099,14 +1099,14 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
   const renderPageTreeErrorBanner = hasPageTreeLoadError ? (
     <Alert
       style={{ marginBottom: 12 }}
-      message={i18nText("frontstage", "auto.k_88430a50e6")}
-      description={i18nText("frontstage", "auto.k_03949681b4")}
+      message={i18nText("frontstage", "auto.page_tree_load_failed")}
+      description={i18nText("frontstage", "auto.page_tree_load_failed_recover")}
       type="error"
       showIcon
       action={
         onRetryLoadPageTree ? (
           <Button size="small" onClick={() => onRetryLoadPageTree()}>
-            {i18nText("frontstage", "auto.k_e2d53a6d3a")}</Button>
+            {i18nText("frontstage", "auto.retry")}</Button>
         ) : null
       }
     />
@@ -1140,7 +1140,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       initialTitle: '',
       initialIcon: '',
       initialTooltip: '',
-      title: nodeKind === 'page' ? i18nText("frontstage", "auto.k_b899f9df2b") : i18nText("frontstage", "auto.k_ac8e6b0575")
+      title: nodeKind === 'page' ? i18nText("frontstage", "auto.add_page") : i18nText("frontstage", "auto.add_group")
     });
   };
 
@@ -1204,11 +1204,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
     }
 
     modal.confirm({
-      title: i18nText("frontstage", "auto.k_ff37dc39f9"),
+      title: i18nText("frontstage", "auto.delete_node"),
       content: getDeleteConfirmMessage(node),
-      okText: i18nText("frontstage", "auto.k_3755f56f2f"),
+      okText: i18nText("frontstage", "auto.delete"),
       okButtonProps: { danger: true },
-      cancelText: i18nText("frontstage", "auto.k_4d0b4688c7"),
+      cancelText: i18nText("frontstage", "auto.cancel"),
       onOk: async () => {
         await runPageTreeOperation(async () => {
           await onDeletePageNode?.(nodeId);
@@ -1292,7 +1292,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       initialTitle: node.title ?? '',
       initialIcon: node.icon ?? '',
       initialTooltip: node.tooltip ?? '',
-      title: i18nText("frontstage", "auto.k_f5e952b33b")
+      title: i18nText("frontstage", "auto.edit_node")
     });
   };
 
@@ -1304,7 +1304,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
       kind: 'tooltip',
       nodeId,
       initialTooltip: currentTooltip ?? '',
-      title: i18nText("frontstage", "auto.k_a78a018382")
+      title: i18nText("frontstage", "auto.edit_description")
     });
   };
 
@@ -1566,12 +1566,12 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                 type="secondary"
                 style={{ marginBottom: 12, display: 'block' }}
               >
-                {i18nText("frontstage", "auto.k_eae703d599")}</Typography.Text>
+                {i18nText("frontstage", "auto.block_saving")}</Typography.Text>
             ) : null}
             {canEnterDesignMode && isDesignMode && pageContentSaveError ? (
               <Alert
                 style={{ marginBottom: 12 }}
-                message={i18nText("frontstage", "auto.k_842b11ddf3")}
+                message={i18nText("frontstage", "auto.block_save_failed")}
                 description={pageContentSaveError}
                 type="error"
                 showIcon
@@ -1617,7 +1617,7 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             {canEnterDesignMode && isDesignMode ? (
               <Button
                 size="middle"
-                aria-label={i18nText("frontstage", "auto.k_09afc112a0")}
+                aria-label={i18nText("frontstage", "auto.create_block")}
                 onClick={handleAddBlock}
                 disabled={!canAddBlock}
                 style={{
@@ -1627,11 +1627,11 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
                   color: '#00a86b'
                 }}
               >
-                {i18nText("frontstage", "auto.k_186bb142d2")}</Button>
+                {i18nText("frontstage", "auto.add_block_button")}</Button>
             ) : null}
           </div>
           <Drawer
-            title={i18nText("frontstage", "auto.k_33caa9a1e9")}
+            title={i18nText("frontstage", "auto.js_block_trial_run")}
             open={isJsBlockTrialPanelOpen}
             onClose={() => setIsJsBlockTrialPanelOpen(false)}
             width={600}
@@ -1655,8 +1655,8 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
         <Modal
           title={pageTreeFormDialog?.title}
           open={Boolean(pageTreeFormDialog)}
-          okText={i18nText("frontstage", "auto.k_f526c89937")}
-          cancelText={i18nText("frontstage", "auto.k_4d0b4688c7")}
+          okText={i18nText("frontstage", "auto.confirm")}
+          cancelText={i18nText("frontstage", "auto.cancel")}
           confirmLoading={isOperationPending}
           destroyOnHidden
           forceRender
@@ -1672,31 +1672,31 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             }}
           >
             {pageTreeFormDialog?.kind === 'tooltip' ? (
-              <Form.Item label={i18nText("frontstage", "auto.k_412f54dc38")} name="tooltip">
+              <Form.Item label={i18nText("frontstage", "auto.description")} name="tooltip">
                 <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
               </Form.Item>
             ) : (
               <>
                 <Form.Item
-                  label={i18nText("frontstage", "auto.k_1be7ae4fc2")}
+                  label={i18nText("frontstage", "auto.name")}
                   name="title"
                   rules={[
                     {
                       required: true,
                       whitespace: true,
-                      message: i18nText("frontstage", "auto.k_c2afb255a5")
+                      message: i18nText("frontstage", "auto.name_required")
                     }
                   ]}
                 >
                   <Input autoFocus />
                 </Form.Item>
-                <Form.Item label={i18nText("frontstage", "auto.k_1f24c1e5aa")} name="icon">
+                <Form.Item label={i18nText("frontstage", "auto.icon")} name="icon">
                   <PageTreeIconPickerField
                     iconPickerOpen={isPageTreeIconPickerOpen}
                     onIconPickerOpenChange={setIsPageTreeIconPickerOpen}
                   />
                 </Form.Item>
-                <Form.Item label={i18nText("frontstage", "auto.k_412f54dc38")} name="tooltip">
+                <Form.Item label={i18nText("frontstage", "auto.description")} name="tooltip">
                   <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
                 </Form.Item>
               </>

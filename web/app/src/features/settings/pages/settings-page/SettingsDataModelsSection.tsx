@@ -202,7 +202,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModel(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.k_39b122f99a"));
+      messageApi.success(i18nText("settings", "auto.data_model_saved"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -219,7 +219,7 @@ export function SettingsDataModelsSection({
       return createSettingsDataModel(input, csrfToken);
     },
     onSuccess: async (model) => {
-      messageApi.success(i18nText("settings", "auto.k_e832a2f0f0"));
+      messageApi.success(i18nText("settings", "auto.data_model_created"));
       setSelectedModelId(model.id);
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
@@ -237,7 +237,7 @@ export function SettingsDataModelsSection({
       return deleteSettingsDataModel(model.id, csrfToken);
     },
     onSuccess: async (_result, model) => {
-      messageApi.success(i18nText("settings", "auto.k_8096920570"));
+      messageApi.success(i18nText("settings", "auto.data_model_deleted"));
       if (selectedModelId === model.id) {
         setSelectedModelId(null);
       }
@@ -266,7 +266,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModelApiExposure(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.k_3eddbe2fcd"));
+      messageApi.success(i18nText("settings", "auto.api_exposure_request_saved"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -289,7 +289,7 @@ export function SettingsDataModelsSection({
       return createSettingsDataModelField(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.k_0dbb68b69c"));
+      messageApi.success(i18nText("settings", "auto.field_created"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -314,7 +314,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModelField(model.id, field.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.k_6dde5bbbc9"));
+      messageApi.success(i18nText("settings", "auto.field_saved"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -337,7 +337,7 @@ export function SettingsDataModelsSection({
       return deleteSettingsDataModelField(model.id, field.id, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success(i18nText("settings", "auto.k_1be70282a8"));
+      messageApi.success(i18nText("settings", "auto.field_deleted"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -390,8 +390,8 @@ export function SettingsDataModelsSection({
 
   return (
     <SettingsSectionSurface
-      title={i18nText("settings", "auto.k_a3ccf702c5")}
-      description={i18nText("settings", "auto.k_121c7955fd")}
+      title={i18nText("settings", "auto.data_source")}
+      description={i18nText("settings", "auto.data_source_description")}
       hideHeader={true}
       heightMode="fill"
       status={
@@ -415,7 +415,7 @@ export function SettingsDataModelsSection({
                         className="data-model-panel__breadcrumb-link"
                         onClick={closeSourceManager}
                       >
-                        {i18nText("settings", "auto.k_2bb6501b4f")}</Button>
+                        {i18nText("settings", "auto.data_source_management")}</Button>
                     )
                   },
                   { title: selectedSource.display_name }
@@ -429,7 +429,7 @@ export function SettingsDataModelsSection({
                 wrap="wrap"
               >
                 <Button
-                  aria-label={i18nText("settings", "auto.k_11d0241540")}
+                  aria-label={i18nText("settings", "auto.back")}
                   className="data-model-panel__back-button"
                   icon={<ArrowLeftOutlined />}
                   onClick={closeSourceManager}
@@ -458,7 +458,7 @@ export function SettingsDataModelsSection({
                   style={{ borderRadius: 12, margin: 0 }}
                 >
                   {selectedSource.status === 'ready'
-                    ? i18nText("settings", "auto.k_b796f2d4ca")
+                    ? i18nText("settings", "auto.ready")
                     : selectedSource.status}
                 </Tag>
                 <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -484,11 +484,11 @@ export function SettingsDataModelsSection({
                       <CloudServerOutlined className="data-model-panel__source-meta-icon" />
                     )}
                     <Typography.Text type="secondary">
-                      {i18nText("settings", "auto.k_d840e299a8")}</Typography.Text>
+                      {i18nText("settings", "auto.source_type")}</Typography.Text>
                     <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.source_kind === 'main_source'
-                        ? i18nText("settings", "auto.k_6d0cf74264")
-                        : i18nText("settings", "auto.k_be76ca9cab")}
+                        ? i18nText("settings", "auto.built_in_data_source")
+                        : i18nText("settings", "auto.external_data_source")}
                     </Typography.Text>
                   </span>
                   <span className="data-model-panel__source-meta-item">
@@ -526,7 +526,7 @@ export function SettingsDataModelsSection({
 
             <Drawer
               title={
-                editingModel ? i18nText("settings", "auto.k_1f2779b3d8", { value1: editingModel.title }) : i18nText("settings", "auto.k_de5da45943")
+                editingModel ? i18nText("settings", "auto.edit_item", { value1: editingModel.title }) : i18nText("settings", "auto.edit_data_model")
               }
               open={Boolean(editingModel)}
               width={980}

@@ -476,8 +476,8 @@ export function DataModelFieldDrawer({
         <Select
           allowClear
           options={[
-            { label: i18nText("settings", "auto.k_30160a21b9"), value: true },
-            { label: i18nText("settings", "auto.k_8bf5c10ad9"), value: false }
+            { label: i18nText("settings", "auto.yes"), value: true },
+            { label: i18nText("settings", "auto.no"), value: false }
           ]}
         />
       );
@@ -774,10 +774,10 @@ export function DataModelFieldDrawer({
       <Modal
         title={i18nText("settings", "auto.k_d3173d7269")}
         open={deleteConfirmOpen}
-        okText={i18nText("settings", "auto.k_3755f56f2f")}
+        okText={i18nText("settings", "auto.delete")}
         okType="danger"
-        cancelText={i18nText("settings", "auto.k_4d0b4688c7")}
-        okButtonProps={{ 'aria-label': i18nText("settings", "auto.k_3755f56f2f") }}
+        cancelText={i18nText("settings", "auto.cancel")}
+        okButtonProps={{ 'aria-label': i18nText("settings", "auto.delete") }}
         onCancel={() => setDeleteConfirmOpen(false)}
         onOk={() => {
           if (field) {

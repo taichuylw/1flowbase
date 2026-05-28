@@ -54,12 +54,12 @@ export const AddBlockCatalogPickerDrawer: FC<
       open={open}
       onClose={onClose}
       placement="right"
-      title={i18nText("frontstage", "auto.k_d9b1f67999")}
+      title={i18nText("frontstage", "auto.add_block")}
       width={520}
     >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space direction="vertical" size={6} style={{ width: '100%' }}>
-          <Typography.Text strong>{i18nText("frontstage", "auto.k_1cddfcf703")}</Typography.Text>
+          <Typography.Text strong>{i18nText("frontstage", "auto.built_in_templates")}</Typography.Text>
           <Radio.Group
             value={selectedTemplateId}
             disabled={isBusy}
@@ -86,7 +86,7 @@ export const AddBlockCatalogPickerDrawer: FC<
 
         {error ? (
           <Alert
-            message={i18nText("frontstage", "auto.k_21a4702b5d")}
+            message={i18nText("frontstage", "auto.block_catalog_load_failed")}
             description={error.message}
             type="error"
             showIcon
@@ -98,7 +98,7 @@ export const AddBlockCatalogPickerDrawer: FC<
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <Typography.Text type="secondary">
-                {i18nText("frontstage", "auto.k_fa781eade0")}</Typography.Text>
+                {i18nText("frontstage", "auto.no_available_block_catalog_entries")}</Typography.Text>
             }
           />
         ) : (
@@ -111,14 +111,14 @@ export const AddBlockCatalogPickerDrawer: FC<
                 actions={[
                   <Button
                     key="select"
-                    aria-label={i18nText("frontstage", "auto.k_70b208202c")}
+                    aria-label={i18nText("frontstage", "auto.select")}
                     type="primary"
                     size="small"
                     disabled={isBusy}
                     loading={saving}
                     onClick={() => onSelect(entry, selectedTemplateId)}
                   >
-                    {i18nText("frontstage", "auto.k_70b208202c")}</Button>
+                    {i18nText("frontstage", "auto.select")}</Button>
                 ]}
               >
                 <List.Item.Meta

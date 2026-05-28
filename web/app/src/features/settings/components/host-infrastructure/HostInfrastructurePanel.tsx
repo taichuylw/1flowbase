@@ -17,7 +17,7 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
   });
 
   return (
-    <SettingsSectionSurface title={i18nText("settings", "auto.k_add2c7fd5b")} hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.infrastructure")} hideHeader heightMode="fill">
       <Space
         direction="vertical"
         size={16}

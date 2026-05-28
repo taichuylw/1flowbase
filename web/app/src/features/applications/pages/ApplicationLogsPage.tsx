@@ -7,6 +7,7 @@ import {
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Empty, Input, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelect';
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
@@ -25,6 +26,7 @@ import {
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
 import { ApplicationLogsFloatingWindow } from '../components/logs/ApplicationLogsFloatingWindow';
+import { getApplicationRunsTableColumns } from '../components/logs/application-runs-table-columns';
 import {
   ApplicationRunsTable,
   ApplicationRunsTableColumnSettings
@@ -32,7 +34,6 @@ import {
 import { useApplicationRunsTableConfiguration } from '../components/logs/useApplicationRunsTableConfiguration';
 import { isActiveRunStatus } from '../lib/run-status';
 import './application-logs-page.css';
-import { i18nText } from '../../../shared/i18n/text';
 
 const FLOATING_WINDOW_TOP = 112;
 const FLOATING_WINDOW_GAP = 16;
@@ -54,32 +55,33 @@ type SearchableRunSummary = ApplicationRunSummary & {
 };
 
 const TIME_RANGE_OPTIONS: Array<{
-  label: string;
+  labelKey: string;
   value: ApplicationLogTimeRange;
 }> = [
-  { label: i18nText("applications", "auto.k_17e83cc25e"), value: '1' },
-  { label: i18nText("applications", "auto.k_767768b5fd"), value: '7' },
-  { label: i18nText("applications", "auto.k_7277af862d"), value: '28' },
-  { label: i18nText("applications", "auto.k_282a63446e"), value: '90' },
-  { label: i18nText("applications", "auto.k_8f88cfdef0"), value: '365' },
-  { label: i18nText("applications", "auto.k_12b14ac632"), value: 'all' }
+  { labelKey: 'auto.today', value: '1' },
+  { labelKey: 'auto.past_7_days', value: '7' },
+  { labelKey: 'auto.past_4_weeks', value: '28' },
+  { labelKey: 'auto.past_3_months', value: '90' },
+  { labelKey: 'auto.past_12_months', value: '365' },
+  { labelKey: 'auto.all_time', value: 'all' }
 ];
 const RUN_SORT_FIELD_OPTIONS: Array<{
-  label: string;
+  labelKey: string;
   value: ApplicationRunSortField;
 }> = [
-  { label: i18nText("applications", "auto.k_e8868af6eb"), value: 'started_at' },
-  { label: i18nText("applications", "auto.k_093dea88c9"), value: 'updated_at' }
+  { labelKey: 'auto.start_time', value: 'started_at' },
+  { labelKey: 'auto.updated_at', value: 'updated_at' }
 ];
 const DEFAULT_SORT_BY: ApplicationRunSortField = 'started_at';
 const DEFAULT_SORT_ORDER: ApplicationRunSortOrder = 'desc';
 
-const RUN_SORT_FIELD_MEASURE_LABELS = RUN_SORT_FIELD_OPTIONS.map(
-  (option) => i18nText("applications", "auto.k_14760d0e3a", { value1: option.label })
-);
-
-function getSortOrderToggleLabel(sortOrder: ApplicationRunSortOrder) {
-  return sortOrder === 'desc' ? i18nText("applications", "auto.k_fd61748428") : i18nText("applications", "auto.k_4f6a9a564d");
+function getSortOrderToggleLabel(
+  sortOrder: ApplicationRunSortOrder,
+  t: (key: string) => string
+) {
+  return sortOrder === 'desc'
+    ? t('auto.sort_descending_toggle_to_ascending')
+    : t('auto.sort_ascending_toggle_to_descending');
 }
 
 function getViewportSize() {
@@ -193,6 +195,7 @@ export function ApplicationLogsPage({
 }: {
   applicationId: string;
 }) {
+  const { t } = useTranslation('applications');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
@@ -210,7 +213,31 @@ export function ApplicationLogsPage({
   >('run-detail');
   const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const runsTableConfiguration = useApplicationRunsTableConfiguration();
+  const timeRangeOptions = useMemo(
+    () =>
+      TIME_RANGE_OPTIONS.map((option) => ({
+        label: t(option.labelKey),
+        value: option.value
+      })),
+    [t]
+  );
+  const runSortFieldOptions = useMemo(
+    () =>
+      RUN_SORT_FIELD_OPTIONS.map((option) => ({
+        label: t(option.labelKey),
+        value: option.value
+      })),
+    [t]
+  );
+  const runSortFieldMeasureLabels = useMemo(
+    () =>
+      runSortFieldOptions.map((option) =>
+        t('auto.sort_by_value', { value1: option.label })
+      ),
+    [runSortFieldOptions, t]
+  );
+  const runsTableColumns = useMemo(() => getApplicationRunsTableColumns(t), [t]);
+  const runsTableConfiguration = useApplicationRunsTableConfiguration(runsTableColumns);
   const runsInput: FetchApplicationRunsInput = {
     page,
     pageSize: PAGE_SIZE,
@@ -298,7 +325,7 @@ export function ApplicationLogsPage({
         refreshedRuns
       );
     } catch {
-      message.error(i18nText("applications", "auto.k_be6ff1fbf8"));
+      message.error(t('auto.refresh_failed'));
     } finally {
       setRefreshingRuns(false);
     }
@@ -316,8 +343,8 @@ export function ApplicationLogsPage({
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
         <AutosizeSelect<ApplicationLogTimeRange>
-          aria-label={i18nText("applications", "auto.k_c31851a4b2")}
-          options={TIME_RANGE_OPTIONS}
+          aria-label={t('auto.time_range')}
+          options={timeRangeOptions}
           value={timeRange}
           onChange={setTimeRange}
         />
@@ -326,19 +353,19 @@ export function ApplicationLogsPage({
           data-testid="application-logs-sort-control"
         >
           <AutosizeSelect<ApplicationRunSortField>
-            aria-label={i18nText("applications", "auto.k_52aff3c1ca")}
-            autosizeLabels={RUN_SORT_FIELD_MEASURE_LABELS}
+            aria-label={t('auto.sort_field')}
+            autosizeLabels={runSortFieldMeasureLabels}
             className="application-logs-page__sort-select"
-            options={RUN_SORT_FIELD_OPTIONS}
+            options={runSortFieldOptions}
             prefix={
               <span className="application-logs-page__sort-select-prefix">
-                {i18nText("applications", "auto.k_510b0096d5")}</span>
+                {t('auto.sort_by_prefix')}</span>
             }
             value={sortBy}
             onChange={setSortBy}
           />
           <Button
-            aria-label={getSortOrderToggleLabel(sortOrder)}
+            aria-label={getSortOrderToggleLabel(sortOrder, t)}
             className="application-logs-page__sort-direction-button"
             icon={
               sortOrder === 'desc' ? (
@@ -352,17 +379,17 @@ export function ApplicationLogsPage({
         </span>
         <Input
           allowClear
-          aria-label={i18nText("applications", "auto.k_c93de2a032")}
+          aria-label={t('auto.keyword_search')}
           className="application-logs-page__filter-search"
-          placeholder={i18nText("applications", "auto.k_1f5d42ca33")}
+          placeholder={t('auto.search_conversations_and_answers')}
           prefix={<SearchOutlined />}
           value={keywordSearch}
           onChange={(event) => setKeywordSearch(event.target.value)}
         />
         <div className="application-logs-page__filter-actions">
-          <Tooltip title={i18nText("applications", "auto.k_be822279f4")}>
+          <Tooltip title={t('auto.refresh_logs')}>
             <Button
-              aria-label={i18nText("applications", "auto.k_be822279f4")}
+              aria-label={t('auto.refresh_logs')}
               icon={<ReloadOutlined aria-hidden="true" />}
               loading={refreshingRuns}
               onClick={() => {
@@ -371,6 +398,7 @@ export function ApplicationLogsPage({
             />
           </Tooltip>
           <ApplicationRunsTableColumnSettings
+            columns={runsTableColumns}
             configuration={runsTableConfiguration}
           />
         </div>
@@ -393,6 +421,7 @@ export function ApplicationLogsPage({
           pageSize={PAGE_SIZE}
           total={total}
           configuration={runsTableConfiguration}
+          columns={runsTableColumns}
           runs={visibleRuns}
           selectedRunId={selectedRunId}
           onPageChange={setPage}
@@ -413,7 +442,7 @@ export function ApplicationLogsPage({
           active={activeFloatingWindow === 'conversation-log'}
           initialRect={getConversationLogInitialRect}
           testId="application-logs-floating-conversation-log"
-          title={i18nText("applications", "auto.k_576c28d668")}
+          title={t('auto.conversation_logs')}
           onActivate={() => setActiveFloatingWindow('conversation-log')}
         >
           <div className="application-logs-page__conversation-log-panel">
@@ -432,7 +461,7 @@ export function ApplicationLogsPage({
           active={activeFloatingWindow === 'run-detail'}
           initialRect={getRunDetailInitialRect}
           testId="application-logs-floating-run-detail"
-          title={i18nText("applications", "auto.k_a939e999ca")}
+          title={t('auto.run_details')}
           onActivate={() => setActiveFloatingWindow('run-detail')}
         >
           <ApplicationRunDetailPanel

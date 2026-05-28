@@ -8,41 +8,43 @@ import {
 } from '@ant-design/icons';
 
 import type { SectionNavItem } from '../../../shared/ui/section-page-layout/SectionPageLayout';
-import { i18nText } from '../../../shared/i18n/text';
 
 export type ApplicationSectionKey = 'orchestration' | 'api' | 'logs' | 'monitoring';
 
 const SECTION_DEFINITIONS: Array<{
   key: ApplicationSectionKey;
-  label: string;
+  labelKey: string;
   icon: ReactNode;
 }> = [
   {
     key: 'orchestration',
-    label: i18nText("applications", "auto.k_63881557e3"),
+    labelKey: 'auto.orchestration',
     icon: <DeploymentUnitOutlined />
   },
   {
     key: 'api',
-    label: 'API',
+    labelKey: 'auto.api',
     icon: <ApiOutlined />
   },
   {
     key: 'logs',
-    label: i18nText("applications", "auto.k_4de50894b8"),
+    labelKey: 'auto.logs',
     icon: <UnorderedListOutlined />
   },
   {
     key: 'monitoring',
-    label: i18nText("applications", "auto.k_c87cbd5fc8"),
+    labelKey: 'auto.monitoring',
     icon: <FundOutlined />
   }
 ];
 
-export function getApplicationSections(applicationId: string): SectionNavItem[] {
+export function getApplicationSections(
+  applicationId: string,
+  t: (key: string) => string
+): SectionNavItem[] {
   return SECTION_DEFINITIONS.map((section) => ({
     key: section.key,
-    label: section.label,
+    label: t(section.labelKey),
     icon: section.icon,
     to: `/applications/${applicationId}/${section.key}`
   }));

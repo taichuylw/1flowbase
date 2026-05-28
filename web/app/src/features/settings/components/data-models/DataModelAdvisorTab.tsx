@@ -17,7 +17,7 @@ export function DataModelAdvisorTab({
   loading: boolean;
 }) {
   if (!loading && findings.length === 0) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("settings", "auto.k_78aa602ea7")} />;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("settings", "auto.no_advisor_findings")} />;
   }
 
   return (

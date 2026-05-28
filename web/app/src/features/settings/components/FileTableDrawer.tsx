@@ -76,13 +76,13 @@ export function FileTableDrawer({
         csrfToken
       );
 
-      message.success(i18nText("settings", "auto.k_4955c06b3f"));
+      message.success(i18nText("settings", "auto.file_table_created"));
       onSuccess();
       onClose();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return;
       const msg =
-        err instanceof Error ? err.message : i18nText("settings", "auto.k_af973c1b23");
+        err instanceof Error ? err.message : i18nText("settings", "auto.create_failed_retry");
       message.error(msg);
     } finally {
       setSubmitting(false);
@@ -95,12 +95,12 @@ export function FileTableDrawer({
       const values = form.getFieldsValue();
       setBindingSubmitting(true);
       await onUpdateBinding(record.id, values.bound_storage_id || '');
-      message.success(i18nText("settings", "auto.k_e9306fa89e"));
+      message.success(i18nText("settings", "auto.binding_updated"));
       onSuccess();
       onClose();
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : i18nText("settings", "auto.k_e984b83605");
+        err instanceof Error ? err.message : i18nText("settings", "auto.binding_update_failed_retry");
       message.error(msg);
     } finally {
       setBindingSubmitting(false);
@@ -116,10 +116,10 @@ export function FileTableDrawer({
     <Drawer
       title={
         mode === 'create'
-          ? i18nText("settings", "auto.k_97d5d4da3a")
+          ? i18nText("settings", "auto.add_file_table")
           : mode === 'edit'
-            ? i18nText("settings", "auto.k_05e5f28c5f")
-            : i18nText("settings", "auto.k_2de570621b")
+            ? i18nText("settings", "auto.edit_file_table")
+            : i18nText("settings", "auto.view_file_table")
       }
       open={open}
       onClose={onClose}
@@ -132,10 +132,10 @@ export function FileTableDrawer({
               loading={bindingSubmitting}
               onClick={handleBindingSave}
             >
-              {i18nText("settings", "auto.k_547fd26235")}</Button>
+              {i18nText("settings", "auto.save_binding")}</Button>
           ) : (
             <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              {i18nText("settings", "auto.k_fcbd093292")}</Button>
+              {i18nText("settings", "auto.create")}</Button>
           )
         ) : undefined
       }
@@ -148,36 +148,36 @@ export function FileTableDrawer({
       >
         <Form.Item
           name="code"
-          label={i18nText("settings", "auto.k_469515fc79")}
-          rules={[{ required: true, message: i18nText("settings", "auto.k_237ebdde3c") }]}
+          label={i18nText("settings", "auto.table_code")}
+          rules={[{ required: true, message: i18nText("settings", "auto.table_code_required") }]}
         >
-          <Input placeholder={i18nText("settings", "auto.k_7f942f1b59")} disabled={mode !== 'create'} />
+          <Input placeholder={i18nText("settings", "auto.table_code_placeholder")} disabled={mode !== 'create'} />
         </Form.Item>
 
         <Form.Item
           name="title"
-          label={i18nText("settings", "auto.k_1be7ae4fc2")}
-          rules={[{ required: true, message: i18nText("settings", "auto.k_c2afb255a5") }]}
+          label={i18nText("settings", "auto.name")}
+          rules={[{ required: true, message: i18nText("settings", "auto.name_required") }]}
         >
-          <Input placeholder={i18nText("settings", "auto.k_6bf29a4b1e")} disabled={isView} />
+          <Input placeholder={i18nText("settings", "auto.table_name_placeholder")} disabled={isView} />
         </Form.Item>
 
         {mode !== 'create' && (
           <>
             <Form.Item
               name="bound_storage_id"
-              label={i18nText("settings", "auto.k_47224aad23")}
-              rules={[{ required: true, message: i18nText("settings", "auto.k_53d6ae4774") }]}
+              label={i18nText("settings", "auto.bound_storage")}
+              rules={[{ required: true, message: i18nText("settings", "auto.storage_required") }]}
             >
               <Select
                 options={storageOptions}
-                placeholder={i18nText("settings", "auto.k_3ef2c80e54")}
+                placeholder={i18nText("settings", "auto.select_storage")}
                 allowClear
                 disabled={isView}
               />
             </Form.Item>
 
-            <Form.Item label={i18nText("settings", "auto.k_689434b4ec")}>
+            <Form.Item label={i18nText("settings", "auto.scope")}>
               <Input
                 value={
                   record
@@ -190,10 +190,10 @@ export function FileTableDrawer({
 
             {record && (
               <>
-                <Form.Item label={i18nText("settings", "auto.k_83a5c20bbf")}>
-                  <Input value={record.is_builtin ? i18nText("settings", "auto.k_30160a21b9") : i18nText("settings", "auto.k_8bf5c10ad9")} disabled />
+                <Form.Item label={i18nText("settings", "auto.built_in_table")}>
+                  <Input value={record.is_builtin ? i18nText("settings", "auto.yes") : i18nText("settings", "auto.no")} disabled />
                 </Form.Item>
-                <Form.Item label={i18nText("settings", "auto.k_62e951a692")}>
+                <Form.Item label={i18nText("settings", "auto.status")}>
                   <Input value={record.status} disabled />
                 </Form.Item>
               </>
@@ -204,7 +204,7 @@ export function FileTableDrawer({
 
       {mode === 'edit' && record && !isView && (
         <div style={{ marginTop: 16, color: '#888', fontSize: 13 }}>
-          {i18nText("settings", "auto.k_f0e90f8eab")}</div>
+          {i18nText("settings", "auto.file_table_edit_binding_notice")}</div>
       )}
     </Drawer>
   );

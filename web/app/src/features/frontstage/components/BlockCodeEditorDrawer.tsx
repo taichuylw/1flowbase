@@ -52,15 +52,15 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
   const saveDisabled = !canEdit || !dirty || loading || saving;
   const resetDisabled = !canEdit || !dirty || saving;
   const editorDisabled = !canEdit || loading || saving;
-  const statusText = loading ? i18nText("frontstage", "auto.k_1f37320940") : dirty ? i18nText("frontstage", "auto.k_4123f1faaa") : i18nText("frontstage", "auto.k_76ce8e3d5e");
+  const statusText = loading ? i18nText("frontstage", "auto.code_loading") : dirty ? i18nText("frontstage", "auto.not_saved") : i18nText("frontstage", "auto.synced");
   const emptyDescription = !hasSelectedTarget
-    ? i18nText("frontstage", "auto.k_637390fc4f")
+    ? i18nText("frontstage", "auto.select_code_ref_block")
     : !selectedCodeRef
-      ? i18nText("frontstage", "auto.k_f09775c006")
+      ? i18nText("frontstage", "auto.block_missing_code_ref")
       : !pageId
-        ? i18nText("frontstage", "auto.k_ed0dec3817")
+        ? i18nText("frontstage", "auto.no_page_for_code")
         : !workspaceId
-          ? i18nText("frontstage", "auto.k_d0e05ae721")
+          ? i18nText("frontstage", "auto.no_workspace_for_code")
           : null;
 
   const handleSave = () => {
@@ -72,23 +72,23 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
       open={open}
       onClose={onClose}
       placement="right"
-      title={i18nText("frontstage", "auto.k_9d86669742")}
+      title={i18nText("frontstage", "auto.block_code")}
       width={560}
       extra={
         <Space size={8}>
           {onOpenTrialPanel ? (
             <Button disabled={!canEdit} onClick={onOpenTrialPanel}>
-              {i18nText("frontstage", "auto.k_cc0f333429")}</Button>
+              {i18nText("frontstage", "auto.js_block_trial_panel")}</Button>
           ) : null}
           <Button disabled={resetDisabled} onClick={reset}>
-            {i18nText("frontstage", "auto.k_3d81345303")}</Button>
+            {i18nText("frontstage", "auto.reset")}</Button>
           <Button
             type="primary"
             disabled={saveDisabled}
             loading={saving}
             onClick={handleSave}
           >
-            {i18nText("frontstage", "auto.k_fadf24dbc5")}</Button>
+            {i18nText("frontstage", "auto.save")}</Button>
         </Space>
       }
     >
@@ -98,10 +98,10 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
             Block
           </Typography.Text>
           <Typography.Text strong>
-            {block?.id ?? i18nText("frontstage", "auto.k_8080e5501a")}
+            {block?.id ?? i18nText("frontstage", "auto.no_block_selected")}
           </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            codeRef：{selectedCodeRef ?? i18nText("frontstage", "auto.k_2fe9b75856")}
+            codeRef：{selectedCodeRef ?? i18nText("frontstage", "auto.missing")}
           </Typography.Text>
         </Space>
 
@@ -111,7 +111,7 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
 
         {error ? (
           <Alert
-            message={i18nText("frontstage", "auto.k_7627f34231")}
+            message={i18nText("frontstage", "auto.code_load_or_save_failed")}
             description={error.message}
             type="error"
             showIcon
@@ -121,7 +121,7 @@ export const BlockCodeEditorDrawer: FC<BlockCodeEditorDrawerProps> = ({
         <Space direction="vertical" size={6} style={{ width: '100%' }}>
           <Space size={8}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {i18nText("frontstage", "auto.k_62e951a692")}</Typography.Text>
+              {i18nText("frontstage", "auto.status")}</Typography.Text>
             <Typography.Text>{statusText}</Typography.Text>
           </Space>
           <Input.TextArea

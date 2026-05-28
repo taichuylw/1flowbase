@@ -20,17 +20,17 @@ function getStatusView(status: RestrictedBlockRuntimeHostSnapshot['status']): {
 } {
   switch (status) {
     case 'idle':
-      return { message: i18nText("frontstage", "auto.k_5afa7a9851"), type: 'info' };
+      return { message: i18nText("frontstage", "auto.not_run_yet"), type: 'info' };
     case 'running':
-      return { message: i18nText("frontstage", "auto.k_5942497005"), type: 'info' };
+      return { message: i18nText("frontstage", "auto.running"), type: 'info' };
     case 'ready':
-      return { message: i18nText("frontstage", "auto.k_618d581979"), type: 'success' };
+      return { message: i18nText("frontstage", "auto.run_result"), type: 'success' };
     case 'failed':
-      return { message: i18nText("frontstage", "auto.k_f5f12f1d7a"), type: 'error' };
+      return { message: i18nText("frontstage", "auto.run_failed"), type: 'error' };
     case 'timed_out':
-      return { message: i18nText("frontstage", "auto.k_5debddc330"), type: 'warning' };
+      return { message: i18nText("frontstage", "auto.run_timeout"), type: 'warning' };
     case 'disposed':
-      return { message: i18nText("frontstage", "auto.k_0fc2814fea"), type: 'info' };
+      return { message: i18nText("frontstage", "auto.released"), type: 'info' };
   }
 }
 
@@ -52,7 +52,7 @@ export function RestrictedBlockRuntimePreview({
       {snapshot.status === 'ready' ? (
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           {snapshot.schema === undefined ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("frontstage", "auto.k_d62f5a0a4e")} />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("frontstage", "auto.no_ui_schema")} />
           ) : (
             <BlockUiRenderer
               schema={snapshot.schema}
@@ -84,7 +84,7 @@ function RuntimeErrorSummary({
       bordered
       size="small"
       column={1}
-      title={i18nText("frontstage", "auto.k_e127739219")}
+      title={i18nText("frontstage", "auto.error_summary")}
       items={[
         {
           key: 'kind',
@@ -122,7 +122,7 @@ function RuntimeActivitySummary({
       {snapshot.logs.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            {snapshot.logs.length} {i18nText("frontstage", "auto.k_bce2ef6151")}</Typography.Text>
+            {snapshot.logs.length} {i18nText("frontstage", "auto.item_count_suffix")}</Typography.Text>
           {snapshot.logs.map((log, index) => (
             <Typography.Text key={`${log.level}-${index}`}>
               <Tag>{log.level}</Tag>
@@ -131,14 +131,14 @@ function RuntimeActivitySummary({
           ))}
         </Space>
       ) : (
-        <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_72077749f7")}</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("frontstage", "auto.none")}</Typography.Text>
       )}
 
       <Typography.Text strong>Effects</Typography.Text>
       {snapshot.effects.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            {snapshot.effects.length} {i18nText("frontstage", "auto.k_d98770d860")}</Typography.Text>
+            {snapshot.effects.length} {i18nText("frontstage", "auto.effect_count_suffix")}</Typography.Text>
           {snapshot.effects.map((effect, index) => (
             <Typography.Text key={`${effect.type}-${index}`}>
               {formatEffect(effect)}
@@ -146,14 +146,14 @@ function RuntimeActivitySummary({
           ))}
         </Space>
       ) : (
-        <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_72077749f7")}</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("frontstage", "auto.none")}</Typography.Text>
       )}
 
       <Typography.Text strong>Rejections</Typography.Text>
       {snapshot.rejections.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
-            {snapshot.rejections.length} {i18nText("frontstage", "auto.k_402cffd864")}</Typography.Text>
+            {snapshot.rejections.length} {i18nText("frontstage", "auto.rejection_count_suffix")}</Typography.Text>
           {snapshot.rejections.map((rejection, index) => (
             <Typography.Text key={`${rejection.code}-${index}`}>
               <Tag color="warning">{rejection.code}</Tag>
@@ -162,7 +162,7 @@ function RuntimeActivitySummary({
           ))}
         </Space>
       ) : (
-        <Typography.Text type="secondary">{i18nText("frontstage", "auto.k_72077749f7")}</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("frontstage", "auto.none")}</Typography.Text>
       )}
     </Space>
   );

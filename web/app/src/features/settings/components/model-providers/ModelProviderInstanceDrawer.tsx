@@ -602,8 +602,8 @@ function ModelProviderInstanceDrawerContent({
                 void handleSubmit().catch(() => undefined);
               }}
             >
-              {i18nText("settings", "auto.k_fadf24dbc5")}</Button>
-            <Button onClick={onClose}>{i18nText("settings", "auto.k_4d0b4688c7")}</Button>
+              {i18nText("settings", "auto.save")}</Button>
+            <Button onClick={onClose}>{i18nText("settings", "auto.cancel")}</Button>
           </Space>
         </div>
       }
@@ -636,7 +636,7 @@ function ModelProviderInstanceDrawerContent({
                 <Flex gap={16} align="flex-start">
                   <div style={{ flex: 1 }}>
                     <Form.Item
-                      label={i18nText("settings", "auto.k_1be7ae4fc2")}
+                      label={i18nText("settings", "auto.name")}
                       name="display_name"
                       rules={[{ required: true, message: i18nText("settings", "auto.k_1502ce6c39") }]}
                       style={{ marginBottom: 0 }}
@@ -756,9 +756,9 @@ function ModelProviderInstanceDrawerContent({
                       <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.k_2b7c96b260")}</Typography.Text>
                       <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.k_d9aa9fe0d6")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
-                        {i18nText("settings", "auto.k_d4e9ca3dd4")}</Typography.Text>
+                        {i18nText("settings", "auto.enabled")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
-                        {i18nText("settings", "auto.k_f3ea6d345e")}</Typography.Text>
+                        {i18nText("settings", "auto.operation")}</Typography.Text>
                     </div>
 
                     {configuredModels.length > 0 ? (

@@ -305,7 +305,7 @@ export function RolePermissionPanel({
   };
 
   return (
-    <SettingsSectionSurface title={i18nText("settings", "auto.k_e47b7f25dd")} hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.permission_management")} hideHeader heightMode="fill">
       <div
         style={{
           display: 'flex',
@@ -490,7 +490,7 @@ export function RolePermissionPanel({
                         onConfirm={() =>
                           deleteMutation.mutate(selectedRole.code)
                         }
-                        okText={i18nText("settings", "auto.k_3755f56f2f")}
+                        okText={i18nText("settings", "auto.delete")}
                         okButtonProps={{ danger: true }}
                       >
                         <Button danger icon={<DeleteOutlined />}>

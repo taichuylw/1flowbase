@@ -154,7 +154,7 @@ export function ApiDocsPanel() {
 
   return (
     <SettingsSectionSurface
-      title={i18nText("settings", "auto.k_ddd798b421")}
+      title={i18nText("settings", "auto.api_documentation")}
       titleLevel={3}
       hideHeader
       heightMode="fill"

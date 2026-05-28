@@ -444,7 +444,7 @@ export const BlockConfigurationDrawer: FC<BlockConfigurationDrawerProps> = ({
       open={open}
       onClose={onClose}
       placement="right"
-      title={i18nText("frontstage", "auto.k_18b073bc15")}
+      title={i18nText("frontstage", "auto.block_configuration")}
       width={640}
     >
       {model ? (
@@ -463,7 +463,7 @@ export const BlockConfigurationDrawer: FC<BlockConfigurationDrawerProps> = ({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={i18nText("frontstage", "auto.k_e01e9b50d4")}
+          description={i18nText("frontstage", "auto.select_block_for_configuration")}
         />
       )}
     </Drawer>

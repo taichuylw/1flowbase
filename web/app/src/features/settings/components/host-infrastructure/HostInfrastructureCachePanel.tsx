@@ -216,7 +216,7 @@ export function HostInfrastructureCachePanel({
                     content:
                       i18nText("settings", "auto.k_17f57796d8"),
                     okText: i18nText("settings", "auto.k_190bf928b1"),
-                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+                    cancelText: i18nText("settings", "auto.cancel"),
                     onOk: () => revealMutation.mutateAsync(entry)
                   });
                 }}
@@ -233,7 +233,7 @@ export function HostInfrastructureCachePanel({
                     content: i18nText("settings", "auto.k_30cbb97b6a", { value1: entry.key }),
                     okText: i18nText("settings", "auto.k_f1c3ef7622"),
                     okButtonProps: { danger: true },
-                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+                    cancelText: i18nText("settings", "auto.cancel"),
                     onOk: () => clearEntryMutation.mutateAsync(entry)
                   });
                 }}
@@ -309,7 +309,7 @@ export function HostInfrastructureCachePanel({
           }}
           loading={overviewQuery.isFetching || entriesQuery.isFetching}
         >
-          {i18nText("settings", "auto.k_38108eaa1d")}</Button>
+          {i18nText("settings", "auto.refresh")}</Button>
       </div>
 
       {!canManage ? (
@@ -393,7 +393,7 @@ export function HostInfrastructureCachePanel({
                     content: i18nText("settings", "auto.k_c509239c72", { value1: activeDomain }),
                     okText: i18nText("settings", "auto.k_f1c3ef7622"),
                     okButtonProps: { danger: true },
-                    cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+                    cancelText: i18nText("settings", "auto.cancel"),
                     onOk: () => clearDomainMutation.mutateAsync(activeDomain)
                   });
                 }}

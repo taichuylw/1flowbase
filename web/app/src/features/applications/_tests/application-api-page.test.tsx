@@ -7,7 +7,7 @@ import {
 } from '@testing-library/react';
 import copy from 'copy-to-clipboard';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const publicApi = vi.hoisted(() => ({
   applicationApiKeysQueryKey: vi.fn((applicationId: string) => [
@@ -54,6 +54,7 @@ vi.mock('../../../shared/ui/api-docs/ApiDocsExplorer', () => ({
 }));
 
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import type { ApplicationDetail } from '../api/applications';
 import { ApplicationApiKeysPanel } from '../components/api/ApplicationApiKeysPanel';
@@ -122,9 +123,12 @@ function renderWithProviders(ui: ReactNode) {
 }
 
 describe('ApplicationApiPage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.mocked(copy).mockResolvedValue(true);
+    window.localStorage.clear();
+    window.history.replaceState(null, '', '/?language=zh-Hans');
+    await appI18n.changeLanguage('zh_Hans');
     resetAuthStore();
     useAuthStore.getState().setAuthenticated({
       csrfToken: 'csrf-123',
@@ -141,6 +145,11 @@ describe('ApplicationApiPage', () => {
     );
     publicApi.fetchApplicationApiMapping.mockResolvedValue(mapping);
     publicApi.fetchApplicationApiKeys.mockResolvedValue([]);
+  });
+
+  afterEach(async () => {
+    window.history.replaceState(null, '', '/');
+    await appI18n.changeLanguage('en_US');
   });
 
   test('renders API section shell with status, docs panel, and publish action', async () => {

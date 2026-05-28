@@ -143,19 +143,19 @@ export function FileManagementPanel({
 
   const handleDeleteStorage = (record: SettingsFileStorage) => {
     Modal.confirm({
-      title: i18nText("settings", "auto.k_3c06abe116"),
-      content: i18nText("settings", "auto.k_a7b3a605c2", { value1: record.title, value2: record.code }),
-      okText: i18nText("settings", "auto.k_3755f56f2f"),
+      title: i18nText("settings", "auto.confirm_delete"),
+      content: i18nText("settings", "auto.delete_storage_configuration_content", { value1: record.title, value2: record.code }),
+      okText: i18nText("settings", "auto.delete"),
       okType: 'danger',
-      cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+      cancelText: i18nText("settings", "auto.cancel"),
       onOk: async () => {
         try {
           await deleteSettingsFileStorage(record.id, ensureCsrfToken());
-          message.success(i18nText("settings", "auto.k_d05a5176e0"));
+          message.success(i18nText("settings", "auto.storage_configuration_deleted"));
           await refetchStorages();
         } catch (error) {
           message.error(
-            error instanceof Error ? error.message : i18nText("settings", "auto.k_a5eae00ec3")
+            error instanceof Error ? error.message : i18nText("settings", "auto.delete_failed_retry")
           );
         }
       }
@@ -164,19 +164,19 @@ export function FileManagementPanel({
 
   const handleDeleteTable = (record: SettingsFileTable) => {
     Modal.confirm({
-      title: i18nText("settings", "auto.k_3c06abe116"),
-      content: i18nText("settings", "auto.k_c374db4990", { value1: record.title, value2: record.code }),
-      okText: i18nText("settings", "auto.k_3755f56f2f"),
+      title: i18nText("settings", "auto.confirm_delete"),
+      content: i18nText("settings", "auto.delete_file_table_content", { value1: record.title, value2: record.code }),
+      okText: i18nText("settings", "auto.delete"),
       okType: 'danger',
-      cancelText: i18nText("settings", "auto.k_4d0b4688c7"),
+      cancelText: i18nText("settings", "auto.cancel"),
       onOk: async () => {
         try {
           await deleteSettingsFileTable(record.id, ensureCsrfToken());
-          message.success(i18nText("settings", "auto.k_2a4ab5c769"));
+          message.success(i18nText("settings", "auto.file_table_deleted"));
           await refetchTables();
         } catch (error) {
           message.error(
-            error instanceof Error ? error.message : i18nText("settings", "auto.k_a5eae00ec3")
+            error instanceof Error ? error.message : i18nText("settings", "auto.delete_failed_retry")
           );
         }
       }
@@ -193,42 +193,42 @@ export function FileManagementPanel({
 
   const storageColumns: ColumnsType<SettingsFileStorage> = [
     {
-      title: i18nText("settings", "auto.k_3537d5ef90"),
+      title: i18nText("settings", "auto.identifier"),
       dataIndex: 'code',
       key: 'code',
       width: 160
     },
     {
-      title: i18nText("settings", "auto.k_1be7ae4fc2"),
+      title: i18nText("settings", "auto.name"),
       dataIndex: 'title',
       key: 'title',
       width: 180
     },
     {
-      title: i18nText("settings", "auto.k_307ca13fd6"),
+      title: i18nText("settings", "auto.driver"),
       dataIndex: 'driver_type',
       key: 'driver_type',
       width: 120,
       render: (driverType: string) => <Tag>{driverType}</Tag>
     },
     {
-      title: i18nText("settings", "auto.k_c8d09cf955"),
+      title: i18nText("settings", "auto.default"),
       dataIndex: 'is_default',
       key: 'is_default',
       width: 90,
       render: (value: boolean) =>
-        value ? <Tag color="green">{i18nText("settings", "auto.k_30160a21b9")}</Tag> : <Tag>{i18nText("settings", "auto.k_8bf5c10ad9")}</Tag>
+        value ? <Tag color="green">{i18nText("settings", "auto.yes")}</Tag> : <Tag>{i18nText("settings", "auto.no")}</Tag>
     },
     {
-      title: i18nText("settings", "auto.k_d4e9ca3dd4"),
+      title: i18nText("settings", "auto.enabled"),
       dataIndex: 'enabled',
       key: 'enabled',
       width: 90,
       render: (value: boolean) =>
-        value ? <Tag color="blue">{i18nText("settings", "auto.k_30160a21b9")}</Tag> : <Tag color="default">{i18nText("settings", "auto.k_8bf5c10ad9")}</Tag>
+        value ? <Tag color="blue">{i18nText("settings", "auto.yes")}</Tag> : <Tag color="default">{i18nText("settings", "auto.no")}</Tag>
     },
     {
-      title: i18nText("settings", "auto.k_2e604c06f0"),
+      title: i18nText("settings", "auto.health_status"),
       dataIndex: 'health_status',
       key: 'health_status',
       width: 120,
@@ -238,12 +238,12 @@ export function FileManagementPanel({
       }
     },
     {
-      title: i18nText("settings", "auto.k_f3ea6d345e"),
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: 220,
       render: (_value, record) => (
         <Space size="small">
-          <Tooltip title={i18nText("settings", "auto.k_f7acefd2d4")}>
+          <Tooltip title={i18nText("settings", "auto.view")}>
             <Button
               type="link"
               size="small"
@@ -252,9 +252,9 @@ export function FileManagementPanel({
                 setStorageDrawer({ open: true, mode: 'view', record })
               }
             >
-              {i18nText("settings", "auto.k_f7acefd2d4")}</Button>
+              {i18nText("settings", "auto.view")}</Button>
           </Tooltip>
-          <Tooltip title={i18nText("settings", "auto.k_a7f814c0a4")}>
+          <Tooltip title={i18nText("settings", "auto.edit")}>
             <Button
               type="link"
               size="small"
@@ -263,9 +263,9 @@ export function FileManagementPanel({
                 setStorageDrawer({ open: true, mode: 'edit', record })
               }
             >
-              {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+              {i18nText("settings", "auto.edit")}</Button>
           </Tooltip>
-          <Tooltip title={record.is_default ? i18nText("settings", "auto.k_ad93f5405a") : i18nText("settings", "auto.k_3755f56f2f")}>
+          <Tooltip title={record.is_default ? i18nText("settings", "auto.default_storage_cannot_be_deleted") : i18nText("settings", "auto.delete")}>
             <Button
               type="link"
               size="small"
@@ -274,7 +274,7 @@ export function FileManagementPanel({
               icon={<DeleteOutlined />}
               onClick={() => handleDeleteStorage(record)}
             >
-              {i18nText("settings", "auto.k_3755f56f2f")}</Button>
+              {i18nText("settings", "auto.delete")}</Button>
           </Tooltip>
         </Space>
       )
@@ -283,26 +283,26 @@ export function FileManagementPanel({
 
   const tableColumns: ColumnsType<SettingsFileTable> = [
     {
-      title: i18nText("settings", "auto.k_3537d5ef90"),
+      title: i18nText("settings", "auto.identifier"),
       dataIndex: 'code',
       key: 'code',
       width: 160
     },
     {
-      title: i18nText("settings", "auto.k_1be7ae4fc2"),
+      title: i18nText("settings", "auto.name"),
       dataIndex: 'title',
       key: 'title',
       width: 180
     },
     {
-      title: i18nText("settings", "auto.k_689434b4ec"),
+      title: i18nText("settings", "auto.scope"),
       dataIndex: 'scope_kind',
       key: 'scope_kind',
       width: 120,
       render: (scopeKind: string) => <Tag>{scopeKind}</Tag>
     },
     {
-      title: i18nText("settings", "auto.k_47224aad23"),
+      title: i18nText("settings", "auto.bound_storage"),
       dataIndex: 'bound_storage_title',
       key: 'bound_storage_title',
       width: 220,
@@ -313,13 +313,13 @@ export function FileManagementPanel({
 
         return (
           <Tag color="orange">
-            {record.bound_storage_id ? i18nText("settings", "auto.k_42a7306766") : i18nText("settings", "auto.k_3bf179d8d0")}
+            {record.bound_storage_id ? i18nText("settings", "auto.unnamed_storage") : i18nText("settings", "auto.unbound")}
           </Tag>
         );
       }
     },
     {
-      title: i18nText("settings", "auto.k_62e951a692"),
+      title: i18nText("settings", "auto.status"),
       dataIndex: 'status',
       key: 'status',
       width: 120,
@@ -328,12 +328,12 @@ export function FileManagementPanel({
       )
     },
     {
-      title: i18nText("settings", "auto.k_f3ea6d345e"),
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: isRoot ? 220 : 96,
       render: (_value, record) => (
         <Space size="small">
-          <Tooltip title={i18nText("settings", "auto.k_f7acefd2d4")}>
+          <Tooltip title={i18nText("settings", "auto.view")}>
             <Button
               type="link"
               size="small"
@@ -342,10 +342,10 @@ export function FileManagementPanel({
                 setTableDrawer({ open: true, mode: 'view', record })
               }
             >
-              {i18nText("settings", "auto.k_f7acefd2d4")}</Button>
+              {i18nText("settings", "auto.view")}</Button>
           </Tooltip>
           {isRoot ? (
-            <Tooltip title={i18nText("settings", "auto.k_a7f814c0a4")}>
+            <Tooltip title={i18nText("settings", "auto.edit")}>
               <Button
                 type="link"
                 size="small"
@@ -354,11 +354,11 @@ export function FileManagementPanel({
                   setTableDrawer({ open: true, mode: 'edit', record })
                 }
               >
-                {i18nText("settings", "auto.k_a7f814c0a4")}</Button>
+                {i18nText("settings", "auto.edit")}</Button>
             </Tooltip>
           ) : null}
           {isRoot ? (
-            <Tooltip title={record.is_builtin ? i18nText("settings", "auto.k_902fdb82f0") : i18nText("settings", "auto.k_3755f56f2f")}>
+            <Tooltip title={record.is_builtin ? i18nText("settings", "auto.built_in_file_table_cannot_be_deleted") : i18nText("settings", "auto.delete")}>
               <Button
                 type="link"
                 size="small"
@@ -367,7 +367,7 @@ export function FileManagementPanel({
                 icon={<DeleteOutlined />}
                 onClick={() => handleDeleteTable(record)}
               >
-                {i18nText("settings", "auto.k_3755f56f2f")}</Button>
+                {i18nText("settings", "auto.delete")}</Button>
             </Tooltip>
           ) : null}
         </Space>
@@ -389,8 +389,8 @@ export function FileManagementPanel({
               setStorageDrawer({ open: true, mode: 'create', record: null })
             }
           >
-            {i18nText("settings", "auto.k_2cd9e6ce81")}</Button>
-          <Tooltip title={i18nText("settings", "auto.k_38108eaa1d")}>
+            {i18nText("settings", "auto.new")}</Button>
+          <Tooltip title={i18nText("settings", "auto.refresh")}>
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -400,7 +400,7 @@ export function FileManagementPanel({
           <Input.Search
             allowClear
             value={storageSearch}
-            placeholder={i18nText("settings", "auto.k_6347da691c")}
+            placeholder={i18nText("settings", "auto.search_storage_placeholder")}
             size="small"
             style={{ width: 220 }}
             onChange={(event) => setStorageSearch(event.target.value)}
@@ -432,9 +432,9 @@ export function FileManagementPanel({
                 setTableDrawer({ open: true, mode: 'create', record: null })
               }
             >
-              {i18nText("settings", "auto.k_2cd9e6ce81")}</Button>
+              {i18nText("settings", "auto.new")}</Button>
           ) : null}
-          <Tooltip title={i18nText("settings", "auto.k_38108eaa1d")}>
+          <Tooltip title={i18nText("settings", "auto.refresh")}>
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -444,7 +444,7 @@ export function FileManagementPanel({
           <Input.Search
             allowClear
             value={tableSearch}
-            placeholder={i18nText("settings", "auto.k_5ea65b0703")}
+            placeholder={i18nText("settings", "auto.search_file_table_placeholder")}
             size="small"
             style={{ width: 220 }}
             onChange={(event) => setTableSearch(event.target.value)}
@@ -465,15 +465,15 @@ export function FileManagementPanel({
 
   const managementTabs = [
     ...(isRoot
-      ? [{ key: 'storages', label: i18nText("settings", "auto.k_ecab6e1c19"), children: storagePanel }]
+      ? [{ key: 'storages', label: i18nText("settings", "auto.storage_configuration"), children: storagePanel }]
       : []),
     ...(canViewTables
-      ? [{ key: 'tables', label: i18nText("settings", "auto.k_5caea685a9"), children: tablePanel }]
+      ? [{ key: 'tables', label: i18nText("settings", "auto.file_table"), children: tablePanel }]
       : [])
   ];
 
   return (
-    <SettingsSectionSurface title={i18nText("settings", "auto.k_3f2244c98f")} hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.file_management")} hideHeader heightMode="fill">
       <div className="file-management-panel">
         {managementTabs.length > 0 ? (
           <section className="fm-section fm-tabs-section">
@@ -484,7 +484,7 @@ export function FileManagementPanel({
         {showCreateOnlyTable ? (
           <section className="fm-section">
             <div className="fm-section-header">
-              <h3>{i18nText("settings", "auto.k_5caea685a9")}</h3>
+              <h3>{i18nText("settings", "auto.file_table")}</h3>
               <div className="fm-toolbar">
                 <Button
                   type="primary"
@@ -494,11 +494,11 @@ export function FileManagementPanel({
                     setTableDrawer({ open: true, mode: 'create', record: null })
                   }
                 >
-                  {i18nText("settings", "auto.k_2cd9e6ce81")}</Button>
+                  {i18nText("settings", "auto.new")}</Button>
               </div>
             </div>
             <p className="fm-create-only-info">
-              {i18nText("settings", "auto.k_b5d136ba60")}</p>
+              {i18nText("settings", "auto.create_file_table_without_view_permission_notice")}</p>
           </section>
         ) : null}
 

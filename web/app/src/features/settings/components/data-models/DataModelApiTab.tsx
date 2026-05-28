@@ -40,7 +40,7 @@ export function DataModelApiTab({
         items={[
           {
             key: 'status',
-            label: i18nText("settings", "auto.k_0da86a0bd3"),
+            label: i18nText("settings", "auto.api_exposure_status"),
             children: <Tag>{model.api_exposure_status}</Tag>
           },
           {
@@ -82,7 +82,7 @@ export function DataModelApiTab({
             })
           }
         >
-          {i18nText("settings", "auto.k_637f069ef3")}</Button>
+          {i18nText("settings", "auto.request_api_exposure")}</Button>
         <Button
           loading={saving}
           disabled={!canManage || !canClose}
@@ -92,11 +92,11 @@ export function DataModelApiTab({
             })
           }
         >
-          {i18nText("settings", "auto.k_9eb32c14db")}</Button>
+          {i18nText("settings", "auto.turn_off_api_exposure")}</Button>
       </Space>
       {unsafe ? (
         <Typography.Text type="secondary">
-          {i18nText("settings", "auto.k_36d11299fd")}</Typography.Text>
+          {i18nText("settings", "auto.unsafe_external_source_notice")}</Typography.Text>
       ) : null}
     </Flex>
   );

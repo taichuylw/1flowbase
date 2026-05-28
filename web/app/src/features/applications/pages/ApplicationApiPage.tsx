@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Result } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../../../state/auth-store';
 import {
@@ -18,13 +19,13 @@ import { ApplicationApiDocsPanel } from '../components/api/ApplicationApiDocsPan
 import { ApplicationApiKeysPanel } from '../components/api/ApplicationApiKeysPanel';
 import { ApplicationApiStatusBar } from '../components/api/ApplicationApiStatusBar';
 import './application-api-page.css';
-import { i18nText } from '../../../shared/i18n/text';
 
 export function ApplicationApiPage({
   application
 }: {
   application: ApplicationDetail;
 }) {
+  const { t } = useTranslation('applications');
   const csrfToken = useAuthStore((state) => state.csrfToken) ?? '';
   const queryClient = useQueryClient();
   const docsToolbarId = `application-api-docs-toolbar-${application.id}`;
@@ -61,7 +62,7 @@ export function ApplicationApiPage({
   });
 
   if (!publication && publicationQuery.isLoading) {
-    return <Result status="info" title={i18nText("applications", "auto.k_efe6d2cf3c")} />;
+    return <Result status="info" title={t('auto.loading_public_api_status')} />;
   }
 
   return (
@@ -88,15 +89,15 @@ export function ApplicationApiPage({
         <Alert
           type="warning"
           showIcon
-          message={i18nText("applications", "auto.k_7a5fb3c3d0")}
-          description={i18nText("applications", "auto.k_dc3901e5a6")}
+          message={t('auto.publish_public_api_required')}
+          description={t('auto.public_api_publish_description')}
           action={
             <Button
               type="primary"
               loading={publishMutation.isPending || mappingQuery.isLoading}
               onClick={() => publishMutation.mutate()}
             >
-              {i18nText("applications", "auto.k_b9f1ed2cf2")}</Button>
+              {t('auto.publish_current_version')}</Button>
           }
         />
       ) : null}

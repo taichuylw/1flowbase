@@ -1,8 +1,8 @@
 import { Button, Checkbox, Empty, Flex, Form, Input, Modal, Space, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { ApplicationTagCatalogEntry } from '../api/applications';
-import { i18nText } from '../../../shared/i18n/text';
 
 interface ApplicationTagManagerModalProps {
   open: boolean;
@@ -30,6 +30,7 @@ export function ApplicationTagManagerModal({
   onSubmit,
   onCreateTag
 }: ApplicationTagManagerModalProps) {
+  const { t } = useTranslation('applications');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export function ApplicationTagManagerModal({
   const handleCreateTag = async () => {
     const normalizedName = newTagName.trim();
     if (!normalizedName) {
-      setErrorText(i18nText("applications", "auto.k_71878d6b32"));
+      setErrorText(t('auto.new_tag_name_required'));
       return;
     }
 
@@ -62,9 +63,9 @@ export function ApplicationTagManagerModal({
   return (
     <Modal
       open={open}
-      title={i18nText("applications", "auto.k_d4ef5f914b")}
-      okText={i18nText("applications", "auto.k_4a69baf51e")}
-      cancelText={i18nText("applications", "auto.k_4d0b4688c7")}
+      title={t('auto.manage_application_tags')}
+      okText={t('auto.save_tags')}
+      cancelText={t('auto.cancel')}
       confirmLoading={saving}
       onCancel={onCancel}
       onOk={() => onSubmit(selectedTagIds)}
@@ -73,24 +74,24 @@ export function ApplicationTagManagerModal({
     >
       <Flex vertical gap={16}>
         <Form layout="vertical">
-          <Form.Item label={i18nText("applications", "auto.k_b4240a63a6")} validateStatus={errorText ? 'error' : ''} help={errorText}>
+          <Form.Item label={t('auto.new_tag_name')} validateStatus={errorText ? 'error' : ''} help={errorText}>
             <Space.Compact style={{ width: '100%' }}>
               <Input
-                aria-label={i18nText("applications", "auto.k_b4240a63a6")}
+                aria-label={t('auto.new_tag_name')}
                 value={newTagName}
                 onChange={(event) => setNewTagName(event.target.value)}
               />
               <Button loading={creating} onClick={() => void handleCreateTag()}>
-                {i18nText("applications", "auto.k_ee0c198f75")}</Button>
+                {t('auto.create_tag')}</Button>
             </Space.Compact>
           </Form.Item>
         </Form>
 
         {catalogTags.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("applications", "auto.k_9d85acf9d5")} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('auto.no_optional_tags')} />
         ) : (
           <Flex vertical gap={12}>
-            <Typography.Text type="secondary">{i18nText("applications", "auto.k_629321f112")}</Typography.Text>
+            <Typography.Text type="secondary">{t('auto.tag_write_back_notice')}</Typography.Text>
             <Flex wrap gap={12}>
               {catalogTags.map((tag) => (
                 <Checkbox

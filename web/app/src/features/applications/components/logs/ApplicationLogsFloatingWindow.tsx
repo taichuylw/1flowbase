@@ -6,7 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode
 } from 'react';
-import { i18nText } from '../../../../shared/i18n/text';
+import { useTranslation } from 'react-i18next';
 
 type FloatingWindowRect = {
   left: number;
@@ -165,6 +165,7 @@ export function ApplicationLogsFloatingWindow({
   initialRect,
   onActivate
 }: ApplicationLogsFloatingWindowProps) {
+  const { t } = useTranslation('applications');
   const [rect, setRect] = useState(() =>
     clampRect(applyStoredWidth(initialRect(), testId), minWidth, minHeight)
   );
@@ -370,21 +371,21 @@ export function ApplicationLogsFloatingWindow({
     >
       <div className="application-logs-floating-window__body">{children}</div>
       <div
-        aria-label={i18nText("applications", "auto.k_1b02125555", { value1: title })}
+        aria-label={t('auto.adjust_width_from_right', { value1: title })}
         aria-orientation="vertical"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--right"
         role="separator"
         onMouseDown={(event) => startWidthResize('right', event)}
       />
       <div
-        aria-label={i18nText("applications", "auto.k_237ff1cc40", { value1: title })}
+        aria-label={t('auto.adjust_width_from_left', { value1: title })}
         aria-orientation="vertical"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--left"
         role="separator"
         onMouseDown={(event) => startWidthResize('left', event)}
       />
       <div
-        aria-label={i18nText("applications", "auto.k_e7e3f3a8e7", { value1: title })}
+        aria-label={t('auto.adjust_height_downward', { value1: title })}
         aria-orientation="horizontal"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--bottom"
         role="separator"

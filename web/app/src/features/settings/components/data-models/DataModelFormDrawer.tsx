@@ -109,18 +109,18 @@ export function DataModelFormDrawer({
 
   return (
     <Drawer
-      title={mode === 'create' ? i18nText("settings", "auto.k_bcd246f770") : i18nText("settings", "auto.k_de5da45943")}
+      title={mode === 'create' ? i18nText("settings", "auto.k_bcd246f770") : i18nText("settings", "auto.edit_data_model")}
       open={open}
       width={520}
       onClose={onClose}
       extra={
         <Button
           type="primary"
-          aria-label={mode === 'create' ? i18nText("settings", "auto.k_fcbd093292") : i18nText("settings", "auto.k_fadf24dbc5")}
+          aria-label={mode === 'create' ? i18nText("settings", "auto.create") : i18nText("settings", "auto.save")}
           loading={saving}
           onClick={handleSubmit}
         >
-          {mode === 'create' ? i18nText("settings", "auto.k_fcbd093292") : i18nText("settings", "auto.k_fadf24dbc5")}
+          {mode === 'create' ? i18nText("settings", "auto.create") : i18nText("settings", "auto.save")}
         </Button>
       }
     >
@@ -153,13 +153,13 @@ export function DataModelFormDrawer({
         <Form.Item
           name="status"
           label={
-            <DataModelFieldLabel label={i18nText("settings", "auto.k_62e951a692")} title={dataModelStatusHelp} />
+            <DataModelFieldLabel label={i18nText("settings", "auto.status")} title={dataModelStatusHelp} />
           }
           rules={[{ required: true, message: i18nText("settings", "auto.k_dba277df58") }]}
         >
-          <Select aria-label={i18nText("settings", "auto.k_62e951a692")} options={dataModelStatusOptions} />
+          <Select aria-label={i18nText("settings", "auto.status")} options={dataModelStatusOptions} />
         </Form.Item>
-        <Form.Item name="data_source_instance_id" label={i18nText("settings", "auto.k_a3ccf702c5")}>
+        <Form.Item name="data_source_instance_id" label={i18nText("settings", "auto.data_source")}>
           <Input disabled />
         </Form.Item>
         {isExternalModel ? (

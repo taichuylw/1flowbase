@@ -73,12 +73,12 @@ export function DataSourcePanel({
           color={value === 'main_source' ? 'blue' : 'purple'}
           style={{ borderRadius: 6, margin: 0 }}
         >
-          {value === 'main_source' ? i18nText("settings", "auto.k_390dce338e") : i18nText("settings", "auto.k_be76ca9cab")}
+          {value === 'main_source' ? i18nText("settings", "auto.k_390dce338e") : i18nText("settings", "auto.external_data_source")}
         </Tag>
       )
     },
     {
-      title: i18nText("settings", "auto.k_62e951a692"),
+      title: i18nText("settings", "auto.status"),
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -87,12 +87,12 @@ export function DataSourcePanel({
           color={value === 'ready' ? 'success' : 'default'}
           style={{ borderRadius: 12, paddingInline: 8, margin: 0 }}
         >
-          {value === 'ready' ? i18nText("settings", "auto.k_b796f2d4ca") : value}
+          {value === 'ready' ? i18nText("settings", "auto.ready") : value}
         </Tag>
       )
     },
     {
-      title: i18nText("settings", "auto.k_d4e9ca3dd4"),
+      title: i18nText("settings", "auto.enabled"),
       key: 'enabled',
       width: 100,
       render: (_, source) => (
@@ -209,7 +209,7 @@ export function DataSourcePanel({
                   color={source.status === 'ready' ? 'success' : 'default'}
                   style={{ borderRadius: 12, margin: 0 }}
                 >
-                  {source.status === 'ready' ? i18nText("settings", "auto.k_b796f2d4ca") : source.status}
+                  {source.status === 'ready' ? i18nText("settings", "auto.ready") : source.status}
                 </Tag>
                 <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
                   {i18nText("settings", "auto.k_fb57042cdb")}{source.default_data_model_status}

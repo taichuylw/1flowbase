@@ -31,14 +31,14 @@ export function ApplicationRunResumeCard({
 
     return (
       <div>
-        <Typography.Title level={5}>{i18nText("applications", "auto.k_a18fc7fc48")}</Typography.Title>
+        <Typography.Title level={5}>{i18nText("applications", "auto.continue_execution")}</Typography.Title>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Typography.Text>
             {(latestCheckpoint.external_ref_payload?.prompt as string | undefined) ??
-              i18nText("applications", "auto.k_376653cd1f")}
+              i18nText("applications", "auto.manual_input_required")}
           </Typography.Text>
           <Input.TextArea
-            aria-label={i18nText("applications", "auto.k_640eee29f1")}
+            aria-label={i18nText("applications", "auto.manual_input")}
             rows={4}
             value={humanInput}
             onChange={(event) => setHumanInput(event.target.value)}
@@ -51,7 +51,7 @@ export function ApplicationRunResumeCard({
               })
             }
           >
-            {i18nText("applications", "auto.k_4df857eb48")}</Button>
+            {i18nText("applications", "auto.submit_and_continue")}</Button>
         </Space>
       </div>
     );
@@ -60,11 +60,11 @@ export function ApplicationRunResumeCard({
   if (detail.flow_run.status === 'waiting_callback' && pendingCallback) {
     return (
       <div>
-        <Typography.Title level={5}>{i18nText("applications", "auto.k_d36b025c58")}</Typography.Title>
+        <Typography.Title level={5}>{i18nText("applications", "auto.callback_backfill")}</Typography.Title>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Typography.Text>{pendingCallback.callback_kind}</Typography.Text>
           <Input.TextArea
-            aria-label={i18nText("applications", "auto.k_d986c08e0d")}
+            aria-label={i18nText("applications", "auto.callback_response")}
             rows={6}
             value={callbackJson}
             onChange={(event) => setCallbackJson(event.target.value)}
@@ -78,7 +78,7 @@ export function ApplicationRunResumeCard({
               )
             }
           >
-            {i18nText("applications", "auto.k_b232bb91ac")}</Button>
+            {i18nText("applications", "auto.backfill_and_continue")}</Button>
         </Space>
       </div>
     );

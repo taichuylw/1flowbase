@@ -29,8 +29,10 @@ import {
   SearchOutlined,
   TagOutlined
 } from '@ant-design/icons';
+import type { TFunction } from 'i18next';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
@@ -49,7 +51,6 @@ import {
 import { ApplicationCreateModal } from '../components/ApplicationCreateModal';
 import { ApplicationEditModal } from '../components/ApplicationEditModal';
 import { ApplicationTagManagerModal } from '../components/ApplicationTagManagerModal';
-import { i18nText } from '../../../shared/i18n/text';
 
 type ApplicationTypeFilter = 'all' | Application['application_type'];
 
@@ -84,15 +85,16 @@ function mergeTagCatalog(
   return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function buildCopiedApplicationName(name: string) {
-  return i18nText("applications", "auto.k_67d3d1de17", { value1: name });
+function buildCopiedApplicationName(name: string, t: TFunction<'applications'>) {
+  return t('auto.copied_application_name', { value1: name });
 }
 
 function toApplicationTypeTabs(
-  types: Array<{ value: Application['application_type']; label: string }>
+  types: Array<{ value: Application['application_type']; label: string }>,
+  t: TFunction<'applications'>
 ): ApplicationTypeTab[] {
   return [
-    { key: 'all', label: i18nText("applications", "auto.k_778fc8f994"), icon: <AppstoreOutlined /> },
+    { key: 'all', label: t('auto.all'), icon: <AppstoreOutlined /> },
     ...types.map((type) => ({
       key: type.value,
       label: type.label,
@@ -102,6 +104,7 @@ function toApplicationTypeTabs(
 }
 
 export function ApplicationListPage() {
+  const { t } = useTranslation('applications');
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const csrfToken = useAuthStore((state) => state.csrfToken);
@@ -133,7 +136,7 @@ export function ApplicationListPage() {
       createApplication(
         {
           application_type: application.application_type,
-          name: buildCopiedApplicationName(application.name),
+          name: buildCopiedApplicationName(application.name, t),
           description: application.description,
           icon: application.icon,
           icon_type: application.icon_type,
@@ -143,10 +146,10 @@ export function ApplicationListPage() {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: applicationsQueryKey });
-      messageApi.success(i18nText("applications", "auto.k_6f2d25967e"));
+      messageApi.success(t('auto.application_copied'));
     },
     onError: () => {
-      messageApi.error(i18nText("applications", "auto.k_a3492f6441"));
+      messageApi.error(t('auto.copy_application_failed'));
     }
   });
 
@@ -174,10 +177,10 @@ export function ApplicationListPage() {
         queryClient.invalidateQueries({ queryKey: applicationsQueryKey }),
         queryClient.invalidateQueries({ queryKey: applicationCatalogQueryKey })
       ]);
-      messageApi.success(i18nText("applications", "auto.k_bd2ef28234"));
+      messageApi.success(t('auto.application_deleted'));
     },
     onError: () => {
-      messageApi.error(i18nText("applications", "auto.k_d62efc26ad"));
+      messageApi.error(t('auto.delete_application_failed'));
     }
   });
 
@@ -204,13 +207,13 @@ export function ApplicationListPage() {
   }
 
   if (applicationsQuery.isError || applicationCatalogQuery.isError) {
-    return <Result status="error" title={i18nText("applications", "auto.k_cbe184edda")} />;
+    return <Result status="error" title={t('auto.application_list_load_failed')} />;
   }
 
   const applications = applicationsQuery.data ?? [];
   const catalog = applicationCatalogQuery.data ?? { types: [], tags: [] };
   const availableTags = mergeTagCatalog(catalog.tags, optimisticTags);
-  const typeTabs = toApplicationTypeTabs(catalog.types);
+  const typeTabs = toApplicationTypeTabs(catalog.types, t);
   const typeLabels = new Map(
     catalog.types.map((type) => [type.value, type.label] as const)
   );
@@ -240,11 +243,14 @@ export function ApplicationListPage() {
 
   const confirmDeleteApplication = (application: Application) => {
     modalApi.confirm({
-      title: i18nText("applications", "auto.k_f9087f3ee8"),
-      content: i18nText("applications", "auto.k_4d30d910e9") + application.name + i18nText("applications", "auto.k_3ab0845d3f"),
-      okText: i18nText("applications", "auto.k_3755f56f2f"),
+      title: t('auto.delete_application'),
+      content:
+        t('auto.delete_application_content_prefix') +
+        application.name +
+        t('auto.delete_application_content_suffix'),
+      okText: t('auto.delete'),
       okButtonProps: { danger: true },
-      cancelText: i18nText("applications", "auto.k_4d0b4688c7"),
+      cancelText: t('auto.cancel'),
       onOk: () => deleteApplicationMutation.mutateAsync(application)
     });
   };
@@ -280,11 +286,11 @@ export function ApplicationListPage() {
 
         <Space size="middle" wrap>
           <Checkbox checked={myCreated} onChange={(event) => setMyCreated(event.target.checked)}>
-            {i18nText("applications", "auto.k_254d60d822")}</Checkbox>
+            {t('auto.created_by_me')}</Checkbox>
           <Select
             allowClear
             value={tagFilter}
-            placeholder={i18nText("applications", "auto.k_ffd92f5524")}
+            placeholder={t('auto.all_tags')}
             options={availableTags.map((tag) => ({
               value: tag.id,
               label: `${tag.name} (${tag.application_count})`
@@ -296,7 +302,7 @@ export function ApplicationListPage() {
           <Input
             value={keyword}
             prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            placeholder={i18nText("applications", "auto.k_897fdfef89")}
+            placeholder={t('auto.search_applications')}
             style={{ width: 220, borderRadius: 8 }}
             onChange={(event) => setKeyword(event.target.value)}
           />
@@ -323,28 +329,30 @@ export function ApplicationListPage() {
               border: '1px solid #dbe7f3'
             }}
           >
-            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>{i18nText("applications", "auto.k_45dc181075")}</Typography.Text>
+            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>
+              {t('auto.create_application')}
+            </Typography.Text>
             <Button
               type="text"
               icon={<AppstoreAddOutlined />}
               style={{ justifyContent: 'flex-start' }}
               onClick={() => setCreateOpen(true)}
             >
-              {i18nText("applications", "auto.k_e2c5ab5025")}</Button>
+              {t('auto.create_blank_application')}</Button>
             <Button
               type="text"
               icon={<FileTextOutlined />}
               style={{ justifyContent: 'flex-start' }}
               disabled
             >
-              {i18nText("applications", "auto.k_558b4948f6")}</Button>
+              {t('auto.create_from_application_template')}</Button>
             <Button
               type="text"
               icon={<ImportOutlined />}
               style={{ justifyContent: 'flex-start' }}
               disabled
             >
-              {i18nText("applications", "auto.k_9d0d148180")}</Button>
+              {t('auto.import_dsl_file')}</Button>
           </div>
         )}
 
@@ -357,19 +365,19 @@ export function ApplicationListPage() {
             {
               key: 'copy',
               icon: <CopyOutlined />,
-              label: i18nText("applications", "auto.k_4edd1d0087"),
+              label: t('auto.copy'),
               disabled: !canCreate || duplicateApplicationMutation.isPending
             },
             {
               key: 'edit',
               icon: <EditOutlined />,
-              label: i18nText("applications", "auto.k_9799c4bcb9"),
+              label: t('auto.edit_information'),
               disabled: !canEdit
             },
             {
               key: 'delete',
               icon: <DeleteOutlined />,
-              label: i18nText("applications", "auto.k_3755f56f2f"),
+              label: t('auto.delete'),
               danger: true,
               disabled: !canDelete || deleteApplicationMutation.isPending
             }
@@ -392,7 +400,7 @@ export function ApplicationListPage() {
             >
               <a
                 href={applicationHref}
-                aria-label={i18nText("applications", "auto.k_61ec7e1a2a", { value1: application.name })}
+                aria-label={t('auto.enter_application_named', { value1: application.name })}
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -422,7 +430,7 @@ export function ApplicationListPage() {
                       {application.name}
                     </Typography.Title>
                     <Typography.Text type="secondary">
-                      {typeLabel} {i18nText("applications", "auto.k_4d4f92d4d7")}{' '}
+                      {typeLabel} {t('auto.edited_at_prefix')}{' '}
                       {new Date(application.updated_at).toLocaleString('zh-CN', {
                         year: 'numeric',
                         month: '2-digit',
@@ -435,13 +443,13 @@ export function ApplicationListPage() {
                 </Flex>
 
                 <Typography.Paragraph style={{ color: '#334155', minHeight: 44 }}>
-                  {application.description || i18nText("applications", "auto.k_14e94c943d")}
+                  {application.description || t('auto.application_description_empty')}
                 </Typography.Paragraph>
 
                 <Flex wrap gap={8} style={{ minHeight: 32, marginBottom: 16 }}>
                   {application.tags.length === 0 ? (
                     <Tag bordered={false} color="default">
-                      {i18nText("applications", "auto.k_ec7eb0e788")}</Tag>
+                      {t('auto.no_tags')}</Tag>
                   ) : (
                     application.tags.map((tag) => (
                       <Tag key={tag.id} bordered={false} color="blue">
@@ -461,17 +469,17 @@ export function ApplicationListPage() {
                   <Button
                     size="small"
                     icon={<TagOutlined />}
-                    aria-label={i18nText("applications", "auto.k_786274fb76", { value1: application.name })}
+                    aria-label={t('auto.manage_tags_named', { value1: application.name })}
                     onClick={() => setTaggingApplicationId(application.id)}
                     disabled={!canEdit}
                   >
-                    {i18nText("applications", "auto.k_42a855ad1e")}</Button>
+                    {t('auto.manage_tags')}</Button>
                 </Space>
                 <div style={{ position: 'relative' }}>
                   <Button
                     type="text"
                     icon={<MoreOutlined />}
-                    aria-label={i18nText("applications", "auto.k_cf4afb4503", { value1: application.name })}
+                    aria-label={t('auto.more_actions_named', { value1: application.name })}
                     aria-expanded={openActionApplicationId === application.id}
                     onMouseDown={(event) => {
                       event.preventDefault();
@@ -537,7 +545,7 @@ export function ApplicationListPage() {
 
       {visibleApplications.length === 0 ? (
         <div style={{ marginTop: 24 }}>
-          <Empty description={i18nText("applications", "auto.k_c312d18b13")} />
+          <Empty description={t('auto.no_applications_for_filter')} />
         </div>
       ) : null}
 

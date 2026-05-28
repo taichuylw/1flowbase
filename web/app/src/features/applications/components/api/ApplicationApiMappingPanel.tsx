@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Form, Input, Space, Typography } from 'antd';
@@ -11,7 +12,6 @@ import {
   type ApplicationApiMapping,
   type ApplicationApiPublication
 } from '../../api/public-api';
-import { i18nText } from '../../../../shared/i18n/text';
 
 const selectorPattern = /^[A-Za-z0-9_.-]+$/;
 
@@ -24,6 +24,7 @@ export function ApplicationApiMappingPanel({
   csrfToken: string;
   publication: ApplicationApiPublication | null;
 }) {
+  const { t } = useTranslation('applications');
   const [form] = Form.useForm<ApplicationApiMapping>();
   const queryClient = useQueryClient();
   const mappingQuery = useQuery({
@@ -61,12 +62,12 @@ export function ApplicationApiMappingPanel({
       <Space direction="vertical" size={12} className="application-api-panel__stack">
         <Typography.Title level={4}>Mapping</Typography.Title>
         <Typography.Text type="secondary">
-          {i18nText("applications", "auto.k_0ffa401624")}</Typography.Text>
+          {t('auto.model_target_empty_notice')}</Typography.Text>
         {publication && currentMappingText !== publishedMappingText ? (
           <Alert
             type="warning"
             showIcon
-            message={i18nText("applications", "auto.k_3652f445da")}
+            message={t('auto.mapping_snapshot_mismatch')}
           />
         ) : null}
         <Form<ApplicationApiMapping>
@@ -79,7 +80,7 @@ export function ApplicationApiMappingPanel({
             <SelectorItem
               name={['input', 'model_target']}
               label="model_target"
-              help={i18nText("applications", "auto.k_96b96b64cb")}
+              help={t('auto.model_target_help')}
             />
             <SelectorItem name={['input', 'inputs_target']} label="inputs_target" />
             <SelectorItem name={['input', 'history_target']} label="history_target" />
@@ -90,7 +91,7 @@ export function ApplicationApiMappingPanel({
             <SelectorItem name={['output', 'error_selector']} label="error_selector" />
           </div>
           <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
-            {i18nText("applications", "auto.k_03707d93b7")}</Button>
+            {t('auto.save_mapping')}</Button>
         </Form>
       </Space>
     </section>
@@ -108,13 +109,15 @@ function SelectorItem({
   help?: string;
   required?: boolean;
 }) {
+  const { t } = useTranslation('applications');
+
   return (
     <Form.Item
       name={name}
       label={label}
       help={help}
       rules={[
-        ...(required ? [{ required: true, message: i18nText("applications", "auto.k_14cc0ae4e6", { value1: label }) }] : []),
+        ...(required ? [{ required: true, message: t('auto.field_required', { value1: label }) }] : []),
         {
           validator: (_, value: string | null | undefined) => {
             if (!value) {
@@ -122,7 +125,7 @@ function SelectorItem({
             }
             return selectorPattern.test(value)
               ? Promise.resolve()
-              : Promise.reject(new Error(i18nText("applications", "auto.k_869d32dcbb")));
+              : Promise.reject(new Error(t('auto.selector_pattern_invalid')));
           }
         }
       ]}
