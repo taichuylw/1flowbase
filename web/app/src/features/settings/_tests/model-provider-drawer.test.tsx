@@ -55,6 +55,88 @@ describe('model-context-window helpers', () => {
 
 describe('ModelProviderInstanceDrawer', () => {
   test(
+    'renders enum config fields as selects and submits the schema default',
+    { timeout: 15000 },
+    async () => {
+      const submit = vi.fn().mockResolvedValue(undefined);
+      const catalogEntry = {
+        ...modelProviderCatalogEntries[0],
+        form_schema: [
+          ...modelProviderCatalogEntries[0].form_schema.slice(0, 2),
+          {
+            key: 'api_protocol',
+            field_type: 'enum',
+            required: false,
+            advanced: false,
+            control: 'select',
+            default_value: 'openai_chat',
+            options: [
+              {
+                label: 'OpenAI Chat Completions',
+                value: 'openai_chat'
+              },
+              {
+                label: 'OpenAI Responses',
+                value: 'openai_responses'
+              }
+            ]
+          },
+          ...modelProviderCatalogEntries[0].form_schema.slice(2)
+        ]
+      };
+
+      render(
+        <ModelProviderInstanceDrawer
+          open
+          mode="create"
+          catalogEntry={catalogEntry}
+          instance={null}
+          cachedModelCatalog={null}
+          defaultIncludedInMain={true}
+          submitting={false}
+          onClose={() => undefined}
+          onSubmit={submit}
+          onPreviewModels={async () => ({
+            models: [],
+            preview_token: 'preview-1',
+            expires_at: '2026-04-22T12:00:00Z'
+          })}
+          onRevealSecret={async () => 'super-secret'}
+        />
+      );
+
+      expect(
+        await screen.findByRole('combobox', { name: 'API 协议' })
+      ).toBeInTheDocument();
+      expect(screen.getByText('OpenAI Chat Completions')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('API Endpoint'), {
+        target: { value: 'https://dashscope.aliyuncs.com/compatible-mode/v1' }
+      });
+      fireEvent.change(screen.getByLabelText('API Key'), {
+        target: { value: 'super-secret' }
+      });
+      fireEvent.change(screen.getByLabelText('名称'), {
+        target: { value: 'Alibaba Bailian' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+      await waitFor(() => {
+        expect(submit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            display_name: 'Alibaba Bailian',
+            config: {
+              base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+              api_key: 'super-secret',
+              api_protocol: 'openai_chat'
+            }
+          })
+        );
+      });
+    }
+  );
+
+  test(
     'loads candidate models from the draft drawer and submits grouped configured model rows',
     { timeout: 30000 },
     async () => {

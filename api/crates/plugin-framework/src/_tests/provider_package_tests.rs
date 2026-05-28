@@ -104,6 +104,16 @@ config_schema:
   - key: api_key
     type: secret
     required: true
+  - key: api_protocol
+    type: enum
+    required: false
+    control: select
+    default_value: openai_chat
+    options:
+      - label: OpenAI Chat Completions
+        value: openai_chat
+      - label: OpenAI Responses
+        value: openai_responses
   - key: organization
     type: string
     required: false
@@ -212,8 +222,22 @@ fn provider_package_loads_manifest_v1_runtime_entry_and_static_models() {
 
     let catalog_entry = ProviderCatalogEntry::from_package(&package);
     assert_eq!(catalog_entry.plugin_id, "acme_openai_compatible@1.2.3");
-    assert_eq!(catalog_entry.form_schema.len(), 3);
-    assert!(catalog_entry.form_schema[2].advanced);
+    assert_eq!(catalog_entry.form_schema.len(), 4);
+    assert_eq!(catalog_entry.form_schema[2].field_type, "enum");
+    assert_eq!(
+        catalog_entry.form_schema[2].control.as_deref(),
+        Some("select")
+    );
+    assert_eq!(
+        catalog_entry.form_schema[2].default_value.as_ref(),
+        Some(&serde_json::json!("openai_chat"))
+    );
+    assert_eq!(catalog_entry.form_schema[2].options.len(), 2);
+    assert_eq!(
+        catalog_entry.form_schema[2].options[0].label,
+        "OpenAI Chat Completions"
+    );
+    assert!(catalog_entry.form_schema[3].advanced);
     assert_eq!(catalog_entry.predefined_models.len(), 1);
     assert_eq!(catalog_entry.icon.as_deref(), Some("icon.svg"));
 }

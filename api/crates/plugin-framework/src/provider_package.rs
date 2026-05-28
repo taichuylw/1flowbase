@@ -12,7 +12,8 @@ use crate::{
     error::{FrameworkResult, PluginFrameworkError},
     manifest_v1::{parse_plugin_manifest, PluginManifestV1},
     provider_contract::{
-        ModelDiscoveryMode, PluginFormSchema, ProviderModelDescriptor, ProviderModelSource,
+        ModelDiscoveryMode, PluginFormOption, PluginFormSchema, ProviderModelDescriptor,
+        ProviderModelSource,
     },
 };
 
@@ -59,15 +60,27 @@ pub struct ProviderCapabilitiesManifest {
     pub model_types: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ProviderConfigField {
     pub key: String,
     #[serde(rename = "type")]
     pub field_type: String,
     #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub control: Option<String>,
+    #[serde(default)]
     pub required: bool,
     #[serde(default)]
     pub advanced: bool,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub default_value: Option<Value>,
+    #[serde(default)]
+    pub options: Vec<PluginFormOption>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

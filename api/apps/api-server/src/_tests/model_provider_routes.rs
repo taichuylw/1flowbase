@@ -45,6 +45,16 @@ config_schema:
   - key: api_key
     type: secret
     required: true
+  - key: api_protocol
+    type: enum
+    required: false
+    control: select
+    default_value: openai_chat
+    options:
+      - label: OpenAI Chat Completions
+        value: openai_chat
+      - label: OpenAI Responses
+        value: openai_responses
   - key: organization
     type: string
     required: false
@@ -504,10 +514,26 @@ async fn model_provider_routes_mask_secret_until_reveal_and_keep_ready_options()
     );
     assert_eq!(
         catalog_payload["data"]["entries"][0]["form_schema"][2]["key"].as_str(),
+        Some("api_protocol")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["form_schema"][2]["control"].as_str(),
+        Some("select")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["form_schema"][2]["default_value"].as_str(),
+        Some("openai_chat")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["form_schema"][2]["options"][0]["value"].as_str(),
+        Some("openai_chat")
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["form_schema"][3]["key"].as_str(),
         Some("organization")
     );
     assert_eq!(
-        catalog_payload["data"]["entries"][0]["form_schema"][2]["advanced"].as_bool(),
+        catalog_payload["data"]["entries"][0]["form_schema"][3]["advanced"].as_bool(),
         Some(true)
     );
 

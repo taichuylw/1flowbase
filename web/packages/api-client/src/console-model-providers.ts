@@ -3,8 +3,14 @@ import { apiFetch } from './transport';
 export interface ConsoleModelProviderConfigField {
   key: string;
   field_type: string;
+  label?: string | null;
+  control?: string | null;
   required: boolean;
   advanced: boolean;
+  description?: string | null;
+  placeholder?: string | null;
+  default_value?: unknown;
+  options?: ConsolePluginFormOption[];
 }
 
 export interface ConsolePluginFormOption {

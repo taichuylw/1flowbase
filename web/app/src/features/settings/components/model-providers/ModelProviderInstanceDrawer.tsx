@@ -8,6 +8,7 @@ import {
   Flex,
   Form,
   Input,
+  Select,
   Space,
   Switch,
   Tag,
@@ -37,7 +38,7 @@ import {
 } from './model-context-window';
 
 type DrawerMode = 'create' | 'edit';
-type ModelProviderFormValue = string | boolean;
+type ModelProviderFormValue = string | boolean | number;
 type ModelProviderConfigField = SettingsModelProviderCatalogEntry['form_schema'][number];
 type PreviewModelDescriptor = SettingsModelProviderModelCatalog['models'][number];
 type PreviewModelsResponse = PreviewSettingsModelProviderModelsResponse;
@@ -52,9 +53,44 @@ type ConfiguredModelRow = {
 const CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS = 'minmax(0, 1fr) 132px 48px 40px';
 const CONFIGURED_MODEL_GRID_GAP = 8;
 
-function normalizeConfigFieldValue(value: unknown): ModelProviderFormValue {
+function isSelectConfigField(field: ModelProviderConfigField) {
+  return field.field_type === 'enum' || field.control === 'select';
+}
+
+function toSelectOptionValue(value: unknown): string | number {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function normalizeConfigFieldValue(
+  field: ModelProviderConfigField,
+  value: unknown
+): ModelProviderFormValue {
+  if (isSelectConfigField(field)) {
+    return toSelectOptionValue(value);
+  }
+
   if (typeof value === 'boolean') {
     return value;
+  }
+
+  if (typeof value === 'number') {
+    return String(value);
   }
 
   if (typeof value === 'string') {
@@ -63,10 +99,6 @@ function normalizeConfigFieldValue(value: unknown): ModelProviderFormValue {
 
   if (value === null || value === undefined) {
     return '';
-  }
-
-  if (typeof value === 'number') {
-    return String(value);
   }
 
   if (typeof value === 'object') {
@@ -85,7 +117,34 @@ function buildFieldLabel(key: string) {
     return 'API Key';
   }
 
+  if (key === 'api_protocol') {
+    return 'API 协议';
+  }
+
   return key;
+}
+
+function buildConfigSelectOptions(field: ModelProviderConfigField) {
+  return (field.options ?? []).map((option) => ({
+    label: option.label || String(option.value ?? ''),
+    value: toSelectOptionValue(option.value),
+    disabled: option.disabled ?? false
+  }));
+}
+
+function resolveDraftConfigValue(
+  field: ModelProviderConfigField,
+  value: ModelProviderFormValue
+) {
+  if (!isSelectConfigField(field)) {
+    return value;
+  }
+
+  const matchedOption = (field.options ?? []).find(
+    (option) => toSelectOptionValue(option.value) === value
+  );
+
+  return matchedOption ? matchedOption.value : value;
 }
 
 function maskSecretPreview(value: string) {
@@ -113,7 +172,12 @@ function buildInitialConfig(
     const currentValue = currentConfig[field.key];
 
     if (currentValue !== undefined) {
-      nextConfig[field.key] = normalizeConfigFieldValue(currentValue);
+      nextConfig[field.key] = normalizeConfigFieldValue(field, currentValue);
+      continue;
+    }
+
+    if (field.default_value !== undefined && field.default_value !== null) {
+      nextConfig[field.key] = normalizeConfigFieldValue(field, field.default_value);
       continue;
     }
 
@@ -400,7 +464,7 @@ function ModelProviderInstanceDrawerContent({
         continue;
       }
 
-      config[field.key] = nextValue;
+      config[field.key] = resolveDraftConfigValue(field, nextValue);
     }
 
     if (mode === 'edit' && catalogEntry) {
@@ -474,10 +538,11 @@ function ModelProviderInstanceDrawerContent({
   }
 
   function renderConfigField(field: ModelProviderConfigField) {
-    const label = buildFieldLabel(field.key);
+    const label = field.label || buildFieldLabel(field.key);
 
     const isSecret = field.field_type === 'secret';
     const useTextArea = isTextAreaField(field.key);
+    const useSelect = isSelectConfigField(field);
 
     if (isSecret && mode === 'edit') {
       const previewSource =
@@ -562,20 +627,28 @@ function ModelProviderInstanceDrawerContent({
         {isSecret ? (
           <Input.Password
             autoComplete="off"
-            placeholder="请输入"
+            placeholder={field.placeholder ?? '请输入'}
+          />
+        ) : useSelect ? (
+          <Select
+            allowClear={!field.required}
+            options={buildConfigSelectOptions(field)}
+            placeholder={field.placeholder ?? '请选择'}
           />
         ) : useTextArea ? (
           <Input.TextArea
             rows={4}
             placeholder={
-              field.key === 'base_url' ? catalogEntry?.default_base_url ?? '' : undefined
+              field.placeholder ??
+              (field.key === 'base_url' ? catalogEntry?.default_base_url ?? '' : undefined)
             }
           />
         ) : (
           <Input
             autoComplete={isSecret ? 'off' : undefined}
             placeholder={
-              field.key === 'base_url' ? catalogEntry?.default_base_url ?? '' : undefined
+              field.placeholder ??
+              (field.key === 'base_url' ? catalogEntry?.default_base_url ?? '' : undefined)
             }
           />
         )}

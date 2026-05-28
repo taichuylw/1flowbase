@@ -107,8 +107,21 @@ pub struct ModelProviderCatalogQuery {
 pub struct ModelProviderConfigFieldResponse {
     pub key: String,
     pub field_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub control: Option<String>,
     pub required: bool,
     pub advanced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
+    #[schema(value_type = Object)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<PluginFormOptionResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -492,8 +505,18 @@ fn to_config_field_response(field: ProviderConfigField) -> ModelProviderConfigFi
     ModelProviderConfigFieldResponse {
         key: field.key,
         field_type: field.field_type,
+        label: field.label,
+        control: field.control,
         required: field.required,
         advanced: field.advanced,
+        description: field.description,
+        placeholder: field.placeholder,
+        default_value: field.default_value,
+        options: field
+            .options
+            .into_iter()
+            .map(to_plugin_form_option_response)
+            .collect(),
     }
 }
 
