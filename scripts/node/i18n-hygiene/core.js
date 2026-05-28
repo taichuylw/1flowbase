@@ -14,6 +14,7 @@ const SKIPPED_DIRS = new Set([
 ]);
 const I18N_ROOTS = ['web/app/src', 'api/plugins'];
 const I18N_LOCALES = ['en_US', 'zh_Hans'];
+const I18N_KEY_SEGMENT_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -250,6 +251,17 @@ function scanJsonDuplicateKeys({ relativePath, content }) {
       const token = readJsonStringToken(content, index);
       if (currentObject?.expectingKey) {
         const keyPath = [...pathStack, token.value].join('.');
+        if (!I18N_KEY_SEGMENT_PATTERN.test(token.value)) {
+          findings.push(createFinding({
+            severity: 'error',
+            rule: 'invalid-key-name',
+            file: relativePath,
+            line,
+            key: keyPath,
+            message: `i18n key segment "${token.value}" must use lowercase English letters joined with underscores`,
+            snippet: content.split(/\r?\n/u)[line - 1] || '',
+          }));
+        }
         if (currentObject.keys.has(token.value)) {
           findings.push(createFinding({
             severity: 'error',
@@ -576,7 +588,7 @@ function writeReport({ repoRoot, findings }) {
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/tooling.js i18n-hygiene [--max-findings <n>]\n'
-      + 'Checks i18n locale file names, key alignment, duplicate JSON keys, and semantic value reuse.\n'
+      + 'Checks i18n locale file names, key naming, key alignment, duplicate JSON keys, and semantic value reuse.\n'
   );
 }
 

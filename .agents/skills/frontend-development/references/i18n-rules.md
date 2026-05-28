@@ -20,10 +20,11 @@
 
 ## Key And Value Rules
 
+- Key 的每个 JSON 段必须只使用英文小写字母；多个语义单词用 `_` 连接，例如 `primary_action`，不要用驼峰、短横线、数字、中文或空格。
 - Key 只要求在 owner 内唯一；跨 owner 同 key 允许存在，但 `i18n-hygiene` 会给 warning 供复盘。
 - 相同展示 value 在同一 owner、同一 locale 内是 error；优先让调用方复用已有 key，或改成语义更准确的文案。
 - 跨 owner 相同 value 是 warning；只有语义完全一致且足够稳定时才上提 common。
-- 中英文文件 key 必须完全对齐；缺 key、多 key、JSON 重复 key 都是 error。
+- 中英文文件 key 必须完全对齐；非法 key 命名、缺 key、多 key、JSON 重复 key 都是 error。
 - 不要为了消灭重复字符串跨 feature 复用业务 key；错误复用比局部重复更危险。
 
 ## QA Evidence

@@ -41,17 +41,43 @@ test('scanJsonDuplicateKeys reports duplicate keys with line evidence', () => {
   assert.equal(findings[0].line, 4);
 });
 
+test('scanJsonDuplicateKeys reports invalid i18n key naming', () => {
+  const findings = scanJsonDuplicateKeys({
+    relativePath: 'web/app/src/features/example/i18n/zh_Hans.json',
+    content: [
+      '{',
+      '  "signIn": {',
+      '    "primaryAction": "登录"',
+      '  },',
+      '  "k_1069127253": "自动 key"',
+      '  "valid_key": "有效"',
+      '}',
+    ].join('\n'),
+  });
+
+  const invalidKeyNames = findings.filter((finding) => finding.rule === 'invalid-key-name');
+
+  assert.deepEqual(
+    invalidKeyNames.map((finding) => finding.key),
+    ['signIn', 'signIn.primaryAction', 'k_1069127253']
+  );
+  assert.deepEqual(
+    invalidKeyNames.map((finding) => finding.line),
+    [2, 3, 5]
+  );
+});
+
 test('collectI18nHygieneFindings reports locale and key contract errors', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-hygiene-'));
   writeFile(
     repoRoot,
     'web/app/src/features/auth/i18n/zh-CN.json',
-    '{"signIn":{"title":"登录"}}\n'
+    '{"sign_in":{"title":"登录"}}\n'
   );
   writeFile(
     repoRoot,
     'web/app/src/features/auth/i18n/en_US.json',
-    '{"signIn":{"title":"Sign in","submit":"Sign in"}}\n'
+    '{"sign_in":{"title":"Sign in","submit":"Sign in"}}\n'
   );
 
   const findings = collectI18nHygieneFindings({ repoRoot });
@@ -75,8 +101,8 @@ test('collectI18nHygieneFindings accepts backend canonical locale names for fron
   writeI18nPair(
     repoRoot,
     'web/app/src/features/auth',
-    { signIn: { title: '登录' } },
-    { signIn: { title: 'Sign in' } }
+    { sign_in: { title: '登录' } },
+    { sign_in: { title: 'Sign in' } }
   );
 
   const findings = collectI18nHygieneFindings({ repoRoot });
