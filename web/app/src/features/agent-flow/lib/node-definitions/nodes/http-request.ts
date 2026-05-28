@@ -15,13 +15,13 @@ export const httpRequestNodeDefinition: NodeDefinition = {
       title: 'Inputs',
       fields: [
         { key: 'config.url', label: 'URL', editor: 'templated_text', required: true },
-        { key: 'bindings.body', label: i18nText("agentFlow", "auto.k_a526db39fb"), editor: 'templated_text' }
+        { key: 'bindings.body', label: i18nText("agentFlow", "auto.key_kfcgnldjpl"), editor: 'templated_text' }
       ]
     },
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.body', label: i18nText("agentFlow", "auto.k_ac5260f829"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.body', label: i18nText("agentFlow", "auto.key_kmfcgapicj"), editor: 'text', required: true }]
     },
     {
       key: 'policy',

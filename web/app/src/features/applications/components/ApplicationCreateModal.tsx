@@ -73,9 +73,9 @@ export function ApplicationCreateModal({
         <Form.Item label={t('auto.type')} name="application_type">
           <Radio.Group>
             <Space direction="vertical" size="small">
-              <Radio value="agent_flow">AgentFlow</Radio>
+              <Radio value="agent_flow">{t('auto.application_type_agent_flow')}</Radio>
               <Radio value="workflow" disabled>
-                Workflow
+                {t('auto.application_type_workflow')}
               </Radio>
             </Space>
           </Radio.Group>

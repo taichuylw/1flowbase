@@ -73,8 +73,8 @@ function monitoringReport() {
     duration: {
       duration_recorded_count: 12,
       avg_duration_ms: 2400,
-      p50_duration_ms: 1800,
-      p95_duration_ms: 32000,
+      percentile_fifty_duration_ms: 1800,
+      percentile_ninety_five_duration_ms: 32000,
       slow_run_rate: 0.08
     },
     tokens: {

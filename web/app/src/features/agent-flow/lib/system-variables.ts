@@ -12,36 +12,36 @@ export const agentFlowSystemVariables = [
     key: 'conversation_id',
     title: 'sys.conversation_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.k_9490434cd4")
+    description: i18nText("agentFlow", "auto.system_variable_conversation_id")
   },
   {
     key: 'dialog_count',
     title: 'sys.dialog_count',
     valueType: 'number',
-    description: i18nText("agentFlow", "auto.k_026dd41243")
+    description: i18nText("agentFlow", "auto.system_variable_dialog_count")
   },
   {
     key: 'user_id',
     title: 'sys.user_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.k_ee7720935b")
+    description: i18nText("agentFlow", "auto.system_variable_user_id")
   },
   {
     key: 'app_id',
     title: 'sys.app_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.k_642feaef05")
+    description: i18nText("agentFlow", "auto.system_variable_app_id")
   },
   {
     key: 'workflow_id',
     title: 'sys.workflow_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.k_494ba91036")
+    description: i18nText("agentFlow", "auto.system_variable_workflow_id")
   },
   {
     key: 'workflow_run_id',
     title: 'sys.workflow_run_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.k_f6d7ee5ee4")
+    description: i18nText("agentFlow", "auto.system_variable_workflow_run_id")
   }
 ] satisfies AgentFlowSystemVariable[];

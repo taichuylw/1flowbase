@@ -228,7 +228,7 @@ function RenderPlanSlot({
         }
       }}
     >
-      {isDesignMode ? <span style={blockLabelStyle}>JS block</span> : null}
+      {isDesignMode ? <span style={blockLabelStyle}>{i18nText("frontstage", "auto.js_block")}</span> : null}
       {renderBlockContent()}
 
       {isDesignMode && designActions && isToolbarVisible && (

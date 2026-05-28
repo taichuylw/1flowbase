@@ -24,6 +24,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { formatDate, formatDateTime, formatNumber } from '../../../shared/i18n/format';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import {
   applicationRunMonitoringReportQueryKey,
@@ -48,11 +49,11 @@ const TIME_RANGE_OPTIONS: Array<{
   label: string;
   value: MonitoringTimeRange;
 }> = [
-  { label: i18nText("applications", "auto.past_24_hours"), value: 1 },
-  { label: i18nText("applications", "auto.past_7_days"), value: 7 },
-  { label: i18nText("applications", "auto.past_4_weeks"), value: 28 },
-  { label: i18nText("applications", "auto.past_3_months"), value: 90 },
-  { label: i18nText("applications", "auto.past_12_months"), value: 365 }
+  { label: i18nText("applications", "auto.past_twenty_four_hours"), value: 1 },
+  { label: i18nText("applications", "auto.past_seven_days"), value: 7 },
+  { label: i18nText("applications", "auto.past_four_weeks"), value: 28 },
+  { label: i18nText("applications", "auto.past_three_months"), value: 90 },
+  { label: i18nText("applications", "auto.past_twelve_months"), value: 365 }
 ];
 
 function getMonitoringBucket(
@@ -71,16 +72,14 @@ function getMonitoringBucket(
 }
 
 function formatInteger(value: number) {
-  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }).format(
-    value
-  );
+  return formatNumber(value, { maximumFractionDigits: 0 });
 }
 
 function formatDecimal(value: number, digits = 1) {
-  return new Intl.NumberFormat('zh-CN', {
+  return formatNumber(value, {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits
-  }).format(value);
+  });
 }
 
 function formatPercent(value: number) {
@@ -101,7 +100,7 @@ function formatTime(value: string | null | undefined) {
   if (!value) {
     return '-';
   }
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 }
 
 function sourceLabel(source: string) {
@@ -456,7 +455,7 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
     xAxis: {
       type: 'category',
       data: report.tokens_trend.map((point) =>
-        new Date(point.bucket_start).toLocaleDateString()
+        formatDate(point.bucket_start)
       ),
       axisLine: {
         lineStyle: {
@@ -816,7 +815,7 @@ export function ApplicationMonitoringPage({
 
   const activeRangeLabel =
     TIME_RANGE_OPTIONS.find((option) => option.value === timeRangeDays)
-      ?.label ?? i18nText("applications", "auto.past_7_days");
+      ?.label ?? i18nText("applications", "auto.past_seven_days");
   const tokenTrendOption = useMemo(
     () => (report ? buildTokenTrendOption(report) : null),
     [report]
@@ -935,9 +934,9 @@ export function ApplicationMonitoringPage({
             <HourglassOutlined />
           </div>
           <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.p95_duration")}</span>
+            <span className="metric-card__title">{i18nText("applications", "auto.percentile_ninety_five_duration")}</span>
             <span className="metric-card__value">
-              {formatDuration(report.duration.p95_duration_ms)}
+              {formatDuration(report.duration.percentile_ninety_five_duration_ms)}
             </span>
           </div>
         </div>
@@ -1018,9 +1017,9 @@ export function ApplicationMonitoringPage({
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <DashboardOutlined /> {i18nText("applications", "auto.p50_duration")}</span>
+                <DashboardOutlined /> {i18nText("applications", "auto.percentile_fifty_duration")}</span>
               <span className="quality-metric-item__value">
-                {formatDuration(report.duration.p50_duration_ms)}
+                {formatDuration(report.duration.percentile_fifty_duration_ms)}
               </span>
             </div>
             <div className="quality-metric-item">
@@ -1106,10 +1105,10 @@ export function ApplicationMonitoringPage({
             rowKey={(record) => record.external_conversation_id ?? 'unknown'}
           />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.slowest_runs_top_10")}>
+        <MonitoringPanel title={i18nText("applications", "auto.slowest_runs_top_ten")}>
           <RunRankList runs={report.slowest_runs} metricType="duration" />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.high_token_runs_top_10")}>
+        <MonitoringPanel title={i18nText("applications", "auto.high_token_runs_top_ten")}>
           <RunRankList runs={report.high_token_runs} metricType="token" />
         </MonitoringPanel>
       </div>

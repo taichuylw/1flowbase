@@ -14,7 +14,7 @@ export const knowledgeRetrievalNodeDefinition: NodeDefinition = {
       key: 'inputs',
       title: 'Inputs',
       fields: [
-        { key: 'bindings.query', label: i18nText("agentFlow", "auto.k_2a1d305a06"), editor: 'selector', required: true }
+        { key: 'bindings.query', label: i18nText("agentFlow", "auto.key_ckbndafkag"), editor: 'selector', required: true }
       ]
     },
     {
@@ -23,7 +23,7 @@ export const knowledgeRetrievalNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'outputs.documents',
-          label: i18nText("agentFlow", "auto.k_b17d392ca1"),
+          label: i18nText("agentFlow", "auto.key_lbhndjcmkb"),
           editor: 'text',
           required: true
         }

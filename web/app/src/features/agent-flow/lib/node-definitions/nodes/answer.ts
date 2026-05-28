@@ -16,7 +16,7 @@ export const answerNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.answer_template',
-          label: i18nText("agentFlow", "auto.k_a36c787d35"),
+          label: i18nText("agentFlow", "auto.key_kdgmhihndf"),
           editor: 'templated_text',
           required: true
         }
@@ -28,7 +28,7 @@ export const answerNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'outputs.answer',
-          label: i18nText("agentFlow", "auto.k_6e77a04352"),
+          label: i18nText("agentFlow", "auto.key_gohhkaedfc"),
           editor: 'text',
           required: true
         }

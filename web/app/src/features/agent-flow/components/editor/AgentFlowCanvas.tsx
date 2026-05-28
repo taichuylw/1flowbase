@@ -55,12 +55,12 @@ function ZoomToolbar() {
     <Panel position="bottom-left" style={{ left: 0, bottom: 0 }}>
       <div className="agent-flow-zoom-toolbar">
         <div
-          aria-label={i18nText("agentFlow", "auto.k_a1b87f70ac")}
+          aria-label={i18nText("agentFlow", "auto.key_kblihphakm")}
           className="agent-flow-zoom-toolbar__actions"
           role="toolbar"
         >
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_b7f9e266e1")}
+            aria-label={i18nText("agentFlow", "auto.key_lhpjocggob")}
             className="agent-flow-zoom-toolbar__button"
             icon={<MinusOutlined />}
             onClick={() => {
@@ -70,7 +70,7 @@ function ZoomToolbar() {
             type="text"
           />
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_55c0d6cce3")}
+            aria-label={i18nText("agentFlow", "auto.key_ffmangmmod")}
             className="agent-flow-zoom-toolbar__button"
             icon={<PlusOutlined />}
             onClick={() => {
@@ -80,7 +80,7 @@ function ZoomToolbar() {
             type="text"
           />
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_3bc70c8d9d")}
+            aria-label={i18nText("agentFlow", "auto.key_dlmhaminjn")}
             className="agent-flow-zoom-toolbar__button"
             icon={<AimOutlined />}
             onClick={() => {
@@ -90,7 +90,7 @@ function ZoomToolbar() {
             type="text"
           />
         </div>
-        <div aria-label={i18nText("agentFlow", "auto.k_d962d98436")} className="agent-flow-zoom-display">
+        <div aria-label={i18nText("agentFlow", "auto.key_njgcnjiedg")} className="agent-flow-zoom-display">
           {Math.round(zoom * 100)}%
         </div>
       </div>
@@ -328,7 +328,7 @@ function AgentFlowCanvasInner({
           }}
         >
           <NodePickerPopover
-            ariaLabel={i18nText("agentFlow", "auto.k_b0ac61e9d5")}
+            ariaLabel={i18nText("agentFlow", "auto.key_lakmgbojnf")}
             buttonClassName="agent-flow-floating-picker-anchor__button"
             open
             options={nodePickerOptions}

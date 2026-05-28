@@ -521,10 +521,10 @@ function buildStringPreviewValue(
   }
 
   if (outputKey === 'text' || outputKey === 'answer') {
-    return i18nText("agentFlow", "auto.k_19bc8b7f49");
+    return i18nText("agentFlow", "auto.debug_preview_output");
   }
 
-  return i18nText("agentFlow", "auto.k_dd3215c78d", { value1: node?.alias ?? i18nText("agentFlow", "auto.k_e840cd6f1e"), value2: outputKey });
+  return i18nText("agentFlow", "auto.debug_preview_value", { value1: node?.alias ?? i18nText("agentFlow", "auto.fallback_node_label"), value2: outputKey });
 }
 
 function buildPreviewValue(

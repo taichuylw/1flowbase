@@ -36,7 +36,7 @@ export function DataSourcePanel({
 
   const columns: ColumnsType<SettingsDataSourceInstance> = [
     {
-      title: i18nText("settings", "auto.k_d716d61b3f"),
+      title: i18nText("settings", "auto.key_nhbgngbldp"),
       key: 'display_name',
       render: (_, source) => (
         <Space size={12}>
@@ -54,7 +54,7 @@ export function DataSourcePanel({
               {source.display_name}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {i18nText("settings", "auto.k_565eacbd8e")}{' '}
+              {i18nText("settings", "auto.key_fgfokmlnio")}{' '}
               <code className="data-model-panel__code-badge">
                 {source.source_code}
               </code>
@@ -64,7 +64,7 @@ export function DataSourcePanel({
       )
     },
     {
-      title: i18nText("settings", "auto.k_e4e46c7235"),
+      title: i18nText("settings", "auto.kind"),
       dataIndex: 'source_kind',
       key: 'source_kind',
       width: 140,
@@ -73,7 +73,7 @@ export function DataSourcePanel({
           color={value === 'main_source' ? 'blue' : 'purple'}
           style={{ borderRadius: 6, margin: 0 }}
         >
-          {value === 'main_source' ? i18nText("settings", "auto.k_390dce338e") : i18nText("settings", "auto.external_data_source")}
+          {value === 'main_source' ? i18nText("settings", "auto.key_djanmoddio") : i18nText("settings", "auto.external_data_source")}
         </Tag>
       )
     },
@@ -97,7 +97,7 @@ export function DataSourcePanel({
       width: 100,
       render: (_, source) => (
         <Checkbox
-          aria-label={i18nText("settings", "auto.k_0ada49de11", { value1: source.display_name })}
+          aria-label={i18nText("settings", "auto.key_aknkejnobb", { value1: source.display_name })}
           checked={source.status === 'ready'}
           className="data-model-panel__enabled-check"
           disabled
@@ -105,13 +105,13 @@ export function DataSourcePanel({
       )
     },
     {
-      title: i18nText("settings", "auto.k_42dbbbccc8"),
+      title: i18nText("settings", "auto.key_ecnlllmmmi"),
       key: 'default_policies',
       width: 260,
       render: (_, source) => (
         <Space size={8}>
           <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
-            {i18nText("settings", "auto.k_fb57042cdb")}{source.default_data_model_status}
+            {i18nText("settings", "auto.key_plfhaecmnl")}{source.default_data_model_status}
           </Tag>
           <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
             API:{' '}
@@ -130,7 +130,7 @@ export function DataSourcePanel({
           type="primary"
           ghost
           size="small"
-          aria-label={i18nText("settings", "auto.k_d7d7ce790b")}
+          aria-label={i18nText("settings", "auto.key_nhnhmohjal")}
           className="data-model-panel__enter-btn"
           icon={<RightOutlined aria-hidden="true" />}
           onClick={(event) => {
@@ -203,7 +203,7 @@ export function DataSourcePanel({
                   }
                   style={{ borderRadius: 6, margin: 0 }}
                 >
-                  {source.source_kind === 'main_source' ? i18nText("settings", "auto.k_fcd2f44f86") : i18nText("settings", "auto.k_2ffba3c5d3")}
+                  {source.source_kind === 'main_source' ? i18nText("settings", "auto.key_pmncpeepig") : i18nText("settings", "auto.key_cpplkdmfnd")}
                 </Tag>
                 <Tag
                   color={source.status === 'ready' ? 'success' : 'default'}
@@ -212,7 +212,7 @@ export function DataSourcePanel({
                   {source.status === 'ready' ? i18nText("settings", "auto.ready") : source.status}
                 </Tag>
                 <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
-                  {i18nText("settings", "auto.k_fb57042cdb")}{source.default_data_model_status}
+                  {i18nText("settings", "auto.key_plfhaecmnl")}{source.default_data_model_status}
                 </Tag>
               </Flex>
             </div>

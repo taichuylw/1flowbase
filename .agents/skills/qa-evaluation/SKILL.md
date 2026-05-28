@@ -17,7 +17,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 需要输出结构化 QA 报告，而不是直接进入修复
 - 需要判断 UI、流程、响应式、API、状态和架构边界是否仍然成立
 - 需要评估后端接口、状态入口、插件消费边界、runtime 行为或工程质量门禁是否仍然符合最新规范
-- 需要检查多语言 key / value、locale 文件名、翻译资源归属或 `i18n-hygiene` 报告
+- 需要检查多语言 key / value、未引用 key、locale 文件名、翻译资源归属或 `i18n-hygiene` 报告
 - 需要分析昨天/今天、近两天或近期代码热点、反复修改、churn 来源，并把问题转化为 AI 下次少犯错的 skills / AGENTS / 质量门禁 / 代码环境优化
 
 **不要用于**

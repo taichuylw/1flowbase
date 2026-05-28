@@ -10,11 +10,6 @@
       "placeholder": "root / root@example.com",
       "required": "Enter an account or email."
     },
-    "language": {
-      "en_us": "English",
-      "trigger": "Switch language",
-      "zh_hans": "Chinese"
-    },
     "password": {
       "label": "Password",
       "placeholder": "Enter password",

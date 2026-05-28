@@ -2,6 +2,7 @@ import { Tag } from 'antd';
 import type { TFunction } from 'i18next';
 
 import type { DataTableColumn } from '../../../../shared/ui/data-table/DataTable';
+import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
 import type { ApplicationRunSummary } from '../../api/runtime';
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 
@@ -18,12 +19,12 @@ function formatTimestamp(value: string | null | undefined) {
     return '-';
   }
 
-  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+  return formatDateTime(value, { hour12: false });
 }
 
 function formatRunStatisticNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value)
-    ? value.toLocaleString('zh-CN')
+    ? formatNumber(value)
     : '-';
 }
 

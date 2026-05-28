@@ -28,8 +28,8 @@ vi.mock('@1flowbase/api-client', () => ({
     duration: {
       duration_recorded_count: 0,
       avg_duration_ms: 0,
-      p50_duration_ms: 0,
-      p95_duration_ms: 0,
+      percentile_fifty_duration_ms: 0,
+      percentile_ninety_five_duration_ms: 0,
       slow_run_rate: 0
     },
     tokens: {

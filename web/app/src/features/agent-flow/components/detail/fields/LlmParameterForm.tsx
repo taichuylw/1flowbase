@@ -214,7 +214,7 @@ function LlmNumericControl({
         />
         <div className="agent-flow-llm-parameter-form__number-actions">
           <InputNumber
-            aria-label={i18nText("agentFlow", "auto.k_2d161c320f", { value1: field.label })}
+            aria-label={i18nText("agentFlow", "auto.key_cnbgbmdcap", { value1: field.label })}
             min={min}
             max={max}
             step={step}
@@ -229,11 +229,11 @@ function LlmNumericControl({
               nextParameters(draftValue);
             }}
           />
-          <Tooltip title={i18nText("agentFlow", "auto.k_52cb049b18")}>
+          <Tooltip title={i18nText("agentFlow", "auto.key_fcmlaejlbi")}>
             <Button
               type="text"
               size="small"
-              aria-label={i18nText("agentFlow", "auto.k_fb3f374a25", { value1: field.label })}
+              aria-label={i18nText("agentFlow", "auto.key_pldpdhekcf", { value1: field.label })}
               className="agent-flow-llm-parameter-form__default-icon"
               icon={<ReloadOutlined />}
               onClick={restoreDefaultValue}
@@ -379,19 +379,19 @@ export function LlmParameterForm({
 
   if (providerOptionsQuery.isPending) {
     return (
-      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.k_df83f7b08f")}</Typography.Text>
+      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_npidphlaip")}</Typography.Text>
     );
   }
 
   if (providerOptionsQuery.isError) {
-    return <Alert type="error" showIcon message={i18nText("agentFlow", "auto.k_9097feb8a3")} />;
+    return <Alert type="error" showIcon message={i18nText("agentFlow", "auto.key_jajhpolikd")} />;
   }
 
   if (!modelProvider.model_id) {
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={block.empty_text ?? i18nText("agentFlow", "auto.k_5e7f96c88f")}
+        description={block.empty_text ?? i18nText("agentFlow", "auto.key_fohpjgmiip")}
       />
     );
   }
@@ -401,7 +401,7 @@ export function LlmParameterForm({
       <Alert
         type="warning"
         showIcon
-        message={i18nText("agentFlow", "auto.k_b411242e66")}
+        message={i18nText("agentFlow", "auto.key_lebbcecogg")}
       />
     );
   }
@@ -411,7 +411,7 @@ export function LlmParameterForm({
       <Alert
         type="warning"
         showIcon
-        message={i18nText("agentFlow", "auto.k_d7a6c568ea")}
+        message={i18nText("agentFlow", "auto.key_nhkgmfgiok")}
       />
     );
   }
@@ -420,7 +420,7 @@ export function LlmParameterForm({
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={i18nText("agentFlow", "auto.k_622b6ac668")}
+        description={i18nText("agentFlow", "auto.key_gcclgkmggi")}
       />
     );
   }
@@ -475,7 +475,7 @@ export function LlmParameterForm({
                           <Tooltip title={field.description}>
                             <QuestionCircleOutlined
                               className="agent-flow-llm-parameter-form__help-icon"
-                              aria-label={i18nText("agentFlow", "auto.k_1f1ac9b96c", { value1: field.label })}
+                              aria-label={i18nText("agentFlow", "auto.key_bpbkmjljgm", { value1: field.label })}
                             />
                           </Tooltip>
                         ) : null}
@@ -499,7 +499,7 @@ export function LlmParameterForm({
                           type="secondary"
                           className="agent-flow-llm-parameter-form__row-fixed"
                         >
-                          {i18nText("agentFlow", "auto.k_9830513247")}</Typography.Text>
+                          {i18nText("agentFlow", "auto.key_jidafbdceh")}</Typography.Text>
                       )}
                     </div>
                   </div>

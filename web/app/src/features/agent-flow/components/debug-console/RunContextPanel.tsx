@@ -72,14 +72,14 @@ export function RunContextPanel({
     <section className="agent-flow-editor__debug-console-section">
       <div className="agent-flow-editor__debug-console-section-header">
         <Space direction="vertical" size={2}>
-          <Typography.Text strong>Run Context</Typography.Text>
+          <Typography.Text strong>{i18nText("agentFlow", "auto.run_context")}</Typography.Text>
           <Typography.Text type="secondary">
-            {i18nText("agentFlow", "auto.k_4b442eb1b7")}</Typography.Text>
+            {i18nText("agentFlow", "auto.key_eleecolblh")}</Typography.Text>
         </Space>
         <Space size={8} wrap>
-          <Tag color="blue">draft</Tag>
+          <Tag color="blue">{i18nText("agentFlow", "auto.draft")}</Tag>
           <Tag color={runContext.remembered ? 'green' : 'default'}>
-            {runContext.remembered ? i18nText("agentFlow", "auto.k_889a2c11aa") : i18nText("agentFlow", "auto.k_79b0807a89")}
+            {runContext.remembered ? i18nText("agentFlow", "auto.key_iijkcmbbkk") : i18nText("agentFlow", "auto.key_hjlaiahkij")}
           </Tag>
         </Space>
       </div>

@@ -52,7 +52,7 @@ export function StartInputFieldSettingsPanel({
   onClose,
   onSave
 }: StartInputFieldSettingsPanelProps) {
-  const title = mode === 'create' ? i18nText("agentFlow", "auto.k_ada5f5ec56") : i18nText("agentFlow", "auto.k_5b16cf93bb");
+  const title = mode === 'create' ? i18nText("agentFlow", "auto.key_knkfpfomfg") : i18nText("agentFlow", "auto.key_flbgmpjdll");
   const options = normalizeOptions(field.options);
   const showDefaultValue =
     isStringDefaultType(field.inputType) ||
@@ -96,7 +96,7 @@ export function StartInputFieldSettingsPanel({
     <FloatingSettingsPanel
       open
       title={title}
-      closeLabel={i18nText("agentFlow", "auto.k_8a49271fb5", { value1: title })}
+      closeLabel={i18nText("agentFlow", "auto.key_ikejchbplf", { value1: title })}
       triggerRef={triggerRef}
       className="agent-flow-start-input-fields__panel"
       defaultWidth={420}
@@ -106,17 +106,17 @@ export function StartInputFieldSettingsPanel({
       onClose={onClose}
       footer={
         <div className="agent-flow-start-input-fields__panel-footer">
-          <Button onClick={onClose}>{i18nText("agentFlow", "auto.k_4d0b4688c7")}</Button>
-          <Button aria-label={i18nText("agentFlow", "auto.k_49aba967b5")} type="primary" onClick={onSave}>
-            {i18nText("agentFlow", "auto.k_fadf24dbc5")}</Button>
+          <Button onClick={onClose}>{i18nText("agentFlow", "auto.key_enalegiimh")}</Button>
+          <Button aria-label={i18nText("agentFlow", "auto.key_ejklkjghlf")} type="primary" onClick={onSave}>
+            {i18nText("agentFlow", "auto.key_pknpcenlmf")}</Button>
         </div>
       }
     >
       <div className="agent-flow-start-input-fields__form">
         <label className="agent-flow-start-input-fields__form-row">
-          <span>{i18nText("agentFlow", "auto.k_750cc3d873")}</span>
+          <span>{i18nText("agentFlow", "auto.key_hfammdnihd")}</span>
           <Select
-            aria-label={i18nText("agentFlow", "auto.k_c98fbf5a01")}
+            aria-label={i18nText("agentFlow", "auto.key_mjiplpfkab")}
             options={startInputTypeOptions}
             value={field.inputType}
             virtual={false}
@@ -124,26 +124,26 @@ export function StartInputFieldSettingsPanel({
           />
         </label>
         <label className="agent-flow-start-input-fields__form-row">
-          <span>{i18nText("agentFlow", "auto.k_63d5977de6")}</span>
+          <span>{i18nText("agentFlow", "auto.key_gdnfjhhnog")}</span>
           <Input
-            aria-label={i18nText("agentFlow", "auto.k_014e72d827")}
+            aria-label={i18nText("agentFlow", "auto.key_abeohcnich")}
             value={field.key}
             onChange={(event) => onChange({ key: event.target.value })}
           />
         </label>
         <label className="agent-flow-start-input-fields__form-row">
-          <span>{i18nText("agentFlow", "auto.k_c10bbf5ddd")}</span>
+          <span>{i18nText("agentFlow", "auto.key_mballpfnnn")}</span>
           <Input
-            aria-label={i18nText("agentFlow", "auto.k_f3793aa848")}
+            aria-label={i18nText("agentFlow", "auto.key_pdhjdkkiei")}
             value={field.label}
             onChange={(event) => onChange({ label: event.target.value })}
           />
         </label>
         {shouldShowMaxLength(field.inputType) ? (
           <label className="agent-flow-start-input-fields__form-row">
-            <span>{i18nText("agentFlow", "auto.k_c6f7a87b1e")}</span>
+            <span>{i18nText("agentFlow", "auto.key_mgphkihlbo")}</span>
             <InputNumber
-              aria-label={i18nText("agentFlow", "auto.k_81ff1b495f")}
+              aria-label={i18nText("agentFlow", "auto.key_ibppblejfp")}
               min={1}
               precision={0}
               value={field.maxLength}
@@ -159,7 +159,7 @@ export function StartInputFieldSettingsPanel({
 
         {field.inputType === 'select' ? (
           <div className="agent-flow-start-input-fields__form-row">
-            <span>{i18nText("agentFlow", "auto.k_690e1afab9")}</span>
+            <span>{i18nText("agentFlow", "auto.key_gjaobkpklj")}</span>
             <div className="agent-flow-start-input-fields__option-list">
               {options.map((option, index) => (
                 <div
@@ -167,14 +167,14 @@ export function StartInputFieldSettingsPanel({
                   key={index}
                 >
                   <Input
-                    aria-label={i18nText("agentFlow", "auto.k_cc5c9f453f", { value1: index + 1 })}
+                    aria-label={i18nText("agentFlow", "auto.key_mmfmjpefdp", { value1: index + 1 })}
                     value={option}
                     onChange={(event) =>
                       updateOption(index, event.target.value)
                     }
                   />
                   <Button
-                    aria-label={i18nText("agentFlow", "auto.k_55503a3793", { value1: index + 1 })}
+                    aria-label={i18nText("agentFlow", "auto.key_fffadkdhjd", { value1: index + 1 })}
                     icon={<DeleteOutlined />}
                     size="small"
                     type="text"
@@ -183,22 +183,22 @@ export function StartInputFieldSettingsPanel({
                 </div>
               ))}
               <Button
-                aria-label={i18nText("agentFlow", "auto.k_7ddfaf208e")}
+                aria-label={i18nText("agentFlow", "auto.key_hnnpkpcaio")}
                 icon={<PlusOutlined />}
                 size="small"
                 onClick={() => onChange({ options: [...options, ''] })}
               >
-                {i18nText("agentFlow", "auto.k_1a74b6f38d")}</Button>
+                {i18nText("agentFlow", "auto.key_bkhelgpdin")}</Button>
             </div>
           </div>
         ) : null}
 
         {showDefaultValue ? (
           <div className="agent-flow-start-input-fields__form-row">
-            <span>{i18nText("agentFlow", "auto.k_d93919c37b")}</span>
+            <span>{i18nText("agentFlow", "auto.key_njdjbjmdhl")}</span>
             {field.inputType === 'paragraph' ? (
               <Input.TextArea
-                aria-label={i18nText("agentFlow", "auto.k_532ca4c463")}
+                aria-label={i18nText("agentFlow", "auto.key_fdcmkemegd")}
                 autoSize={{ minRows: 2, maxRows: 4 }}
                 value={String(field.defaultValue ?? '')}
                 onChange={(event) =>
@@ -207,7 +207,7 @@ export function StartInputFieldSettingsPanel({
               />
             ) : field.inputType === 'number' ? (
               <InputNumber
-                aria-label={i18nText("agentFlow", "auto.k_532ca4c463")}
+                aria-label={i18nText("agentFlow", "auto.key_fdcmkemegd")}
                 value={
                   typeof field.defaultValue === 'number'
                     ? field.defaultValue
@@ -224,10 +224,10 @@ export function StartInputFieldSettingsPanel({
               />
             ) : field.inputType === 'checkbox' ? (
               <Select
-                aria-label={i18nText("agentFlow", "auto.k_532ca4c463")}
+                aria-label={i18nText("agentFlow", "auto.key_fdcmkemegd")}
                 options={[
-                  { value: true, label: i18nText("agentFlow", "auto.k_26eb5c7566") },
-                  { value: false, label: i18nText("agentFlow", "auto.k_e1ba440015") }
+                  { value: true, label: i18nText("agentFlow", "auto.key_cgolfmhfgg") },
+                  { value: false, label: i18nText("agentFlow", "auto.key_oblkeeaabf") }
                 ]}
                 value={
                   typeof field.defaultValue === 'boolean'
@@ -240,7 +240,7 @@ export function StartInputFieldSettingsPanel({
             ) : field.inputType === 'select' ? (
               <Select
                 allowClear
-                aria-label={i18nText("agentFlow", "auto.k_532ca4c463")}
+                aria-label={i18nText("agentFlow", "auto.key_fdcmkemegd")}
                 options={options
                   .map((option) => option.trim())
                   .filter(Boolean)
@@ -255,7 +255,7 @@ export function StartInputFieldSettingsPanel({
               />
             ) : (
               <Input
-                aria-label={i18nText("agentFlow", "auto.k_532ca4c463")}
+                aria-label={i18nText("agentFlow", "auto.key_fdcmkemegd")}
                 value={String(field.defaultValue ?? '')}
                 onChange={(event) =>
                   onChange({ defaultValue: event.target.value || undefined })
@@ -268,12 +268,12 @@ export function StartInputFieldSettingsPanel({
         <div className="agent-flow-start-input-fields__toggles">
           <label className="agent-flow-start-input-fields__toggle-row">
             <span>
-              <Typography.Text strong>{i18nText("agentFlow", "auto.k_32945d3e36")}</Typography.Text>
+              <Typography.Text strong>{i18nText("agentFlow", "auto.key_dcjefndodg")}</Typography.Text>
               <Typography.Text type="secondary">
-                {i18nText("agentFlow", "auto.k_d603c21783")}</Typography.Text>
+                {i18nText("agentFlow", "auto.key_ngadmcbhid")}</Typography.Text>
             </span>
             <Switch
-              aria-label={i18nText("agentFlow", "auto.k_5ee7d5e553")}
+              aria-label={i18nText("agentFlow", "auto.key_foohnfoffd")}
               checked={field.required}
               onChange={(required) =>
                 onChange({ required, hidden: required ? false : field.hidden })
@@ -282,12 +282,12 @@ export function StartInputFieldSettingsPanel({
           </label>
           <label className="agent-flow-start-input-fields__toggle-row">
             <span>
-              <Typography.Text strong>{i18nText("agentFlow", "auto.k_bb0e7e01aa")}</Typography.Text>
+              <Typography.Text strong>{i18nText("agentFlow", "auto.key_llaohoabkk")}</Typography.Text>
               <Typography.Text type="secondary">
-                {i18nText("agentFlow", "auto.k_40953c5469")}</Typography.Text>
+                {i18nText("agentFlow", "auto.key_eajfdmfegj")}</Typography.Text>
             </span>
             <Switch
-              aria-label={i18nText("agentFlow", "auto.k_e8c26a43b0")}
+              aria-label={i18nText("agentFlow", "auto.key_oimcgkedla")}
               checked={field.hidden}
               disabled={field.required}
               onChange={(hidden) =>

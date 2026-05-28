@@ -16,7 +16,7 @@ export const humanInputNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'config.prompt',
-          label: i18nText("agentFlow", "auto.k_b0b7c8309e"),
+          label: i18nText("agentFlow", "auto.key_lalhmidajo"),
           editor: 'templated_text',
           required: true
         }
@@ -25,7 +25,7 @@ export const humanInputNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.input', label: i18nText("agentFlow", "auto.k_640eee29f1"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.input', label: i18nText("agentFlow", "auto.key_geaooocjpb"), editor: 'text', required: true }]
     }
   ]
 };

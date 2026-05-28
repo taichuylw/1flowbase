@@ -349,7 +349,7 @@ export function applyDebugStreamEventToAssistantMessage(
       return {
         ...message,
         status: 'failed',
-        content: i18nText("agentFlow", "auto.k_758079798d")
+        content: i18nText("agentFlow", "auto.debug_stream_replay_expired")
       };
     default:
       return message;

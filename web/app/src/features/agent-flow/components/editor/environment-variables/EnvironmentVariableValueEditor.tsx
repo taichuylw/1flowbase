@@ -176,7 +176,7 @@ function StructuredJsonEditor({
       onApply(JSON.parse(content));
       onValueErrorChange?.(null);
     } catch {
-      onValueErrorChange?.(i18nText("agentFlow", "auto.k_b1ecff0cde"));
+      onValueErrorChange?.(i18nText("agentFlow", "auto.key_lbomppamno"));
     }
   }
 
@@ -193,9 +193,9 @@ function StructuredJsonEditor({
       />
       <div className="agent-flow-editor__env-value-json-actions">
         <Button size="small" onClick={onCancel}>
-          {i18nText("agentFlow", "auto.k_35e189d1cc")}</Button>
+          {i18nText("agentFlow", "auto.key_dfobijnbmm")}</Button>
         <Button size="small" type="primary" onClick={applyJson}>
-          {i18nText("agentFlow", "auto.k_ee52d34160")}</Button>
+          {i18nText("agentFlow", "auto.key_oofcndebga")}</Button>
       </div>
     </div>
   );
@@ -205,8 +205,8 @@ function ObjectValueEditor({
   value,
   onChange,
   onValueErrorChange,
-  addButtonLabel = i18nText("agentFlow", "auto.k_f2772f08ad"),
-  ariaLabelPrefix = i18nText("agentFlow", "auto.k_539cb3b0a6")
+  addButtonLabel = i18nText("agentFlow", "auto.key_pchhcpaikn"),
+  ariaLabelPrefix = i18nText("agentFlow", "auto.key_fdjmldlakg")
 }: ObjectValueEditorProps) {
   const [rows, setRows] = useState(() => createObjectRows(value));
   const lastEmittedValueRef = useRef<unknown>(value);
@@ -234,7 +234,7 @@ function ObjectValueEditor({
       {rows.map((row, index) => (
         <div className="agent-flow-editor__env-object-row" key={index}>
           <Input
-            aria-label={i18nText("agentFlow", "auto.k_6d9cbb7213", { value1: ariaLabelPrefix, value2: index + 1 })}
+            aria-label={i18nText("agentFlow", "auto.key_gnjmllhcbd", { value1: ariaLabelPrefix, value2: index + 1 })}
             placeholder="key"
             value={row.key}
             onChange={(event) =>
@@ -248,7 +248,7 @@ function ObjectValueEditor({
             }
           />
           <Select
-            aria-label={i18nText("agentFlow", "auto.k_7e538be644", { value1: ariaLabelPrefix, value2: index + 1 })}
+            aria-label={i18nText("agentFlow", "auto.key_hofdilogee", { value1: ariaLabelPrefix, value2: index + 1 })}
             className="agent-flow-editor__env-object-type-select"
             options={scalarObjectValueTypes.map((type) => ({
               label: type,
@@ -276,7 +276,7 @@ function ObjectValueEditor({
           />
           {row.type === 'number' ? (
             <InputNumber
-              aria-label={i18nText("agentFlow", "auto.k_5f0f74790b", { value1: ariaLabelPrefix, value2: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_fpaphehjal", { value1: ariaLabelPrefix, value2: index + 1 })}
               className="agent-flow-editor__env-object-value"
               value={typeof row.value === 'number' ? row.value : null}
               onChange={(nextValue) =>
@@ -310,7 +310,7 @@ function ObjectValueEditor({
             />
           ) : (
             <Input
-              aria-label={i18nText("agentFlow", "auto.k_5f0f74790b", { value1: ariaLabelPrefix, value2: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_fpaphehjal", { value1: ariaLabelPrefix, value2: index + 1 })}
               className="agent-flow-editor__env-object-value"
               placeholder="value"
               value={typeof row.value === 'string' ? row.value : ''}
@@ -326,7 +326,7 @@ function ObjectValueEditor({
             />
           )}
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_53da62d9f4", { value1: ariaLabelPrefix, value2: index + 1 })}
+            aria-label={i18nText("agentFlow", "auto.key_fdnkgcnjpe", { value1: ariaLabelPrefix, value2: index + 1 })}
             disabled={rows.length === 1}
             icon={<DeleteOutlined />}
             type="text"
@@ -363,17 +363,17 @@ function ArrayObjectValueEditor({
 }) {
   return (
     <div
-      aria-label={i18nText("agentFlow", "auto.k_746a5f8bbd", { value1: index + 1 })}
+      aria-label={i18nText("agentFlow", "auto.key_hegkfpilln", { value1: index + 1 })}
       className="agent-flow-editor__env-array-object-value"
     >
       <Typography.Text
         className="agent-flow-editor__env-array-object-title"
         type="secondary"
       >
-        {i18nText("agentFlow", "auto.k_a56077521a")}</Typography.Text>
+        {i18nText("agentFlow", "auto.key_kfgahhfcbk")}</Typography.Text>
       <ObjectValueEditor
-        addButtonLabel={i18nText("agentFlow", "auto.k_f235cd4e14", { value1: index + 1 })}
-        ariaLabelPrefix={i18nText("agentFlow", "auto.k_064c85e9b2", { value1: index + 1 })}
+        addButtonLabel={i18nText("agentFlow", "auto.key_pcdfmneobe", { value1: index + 1 })}
+        ariaLabelPrefix={i18nText("agentFlow", "auto.key_agemifojlc", { value1: index + 1 })}
         value={item}
         valueType="object"
         onChange={onChange}
@@ -430,7 +430,7 @@ function ArrayValueEditor({
           </Typography.Text>
           {valueType === 'array[number]' ? (
             <InputNumber
-              aria-label={i18nText("agentFlow", "auto.k_32583613f1", { value1: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_dcfidgbdpb", { value1: index + 1 })}
               className="agent-flow-editor__env-array-value"
               value={typeof item === 'number' ? item : null}
               onChange={(nextValue) =>
@@ -473,7 +473,7 @@ function ArrayValueEditor({
             />
           ) : (
             <Input
-              aria-label={i18nText("agentFlow", "auto.k_32583613f1", { value1: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_dcfidgbdpb", { value1: index + 1 })}
               className="agent-flow-editor__env-array-value"
               placeholder="value"
               value={typeof item === 'string' ? item : ''}
@@ -487,7 +487,7 @@ function ArrayValueEditor({
             />
           )}
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_758d730be9", { value1: index + 1 })}
+            aria-label={i18nText("agentFlow", "auto.key_hfinhdaloj", { value1: index + 1 })}
             disabled={items.length === 1}
             icon={<DeleteOutlined />}
             type="text"
@@ -500,12 +500,12 @@ function ArrayValueEditor({
         </div>
       ))}
       <Button
-        aria-label={i18nText("agentFlow", "auto.k_18e92f216d")}
+        aria-label={i18nText("agentFlow", "auto.key_biojcpcbgn")}
         icon={<PlusOutlined />}
         size="small"
         onClick={() => updateItems([...items, createDefaultItem(valueType)])}
       >
-        {i18nText("agentFlow", "auto.k_18e92f216d")}</Button>
+        {i18nText("agentFlow", "auto.key_biojcpcbgn")}</Button>
     </div>
   );
 }
@@ -527,7 +527,7 @@ export function EnvironmentVariableValueEditor({
     return (
       <InputNumber
         className="agent-flow-editor__environment-variable-number-input"
-        placeholder={i18nText("agentFlow", "auto.k_19dadd62f7")}
+        placeholder={i18nText("agentFlow", "auto.key_bjnknngcph")}
         value={typeof value === 'number' ? value : null}
         onChange={(nextValue) => {
           onValueErrorChange?.(null);
@@ -558,7 +558,7 @@ export function EnvironmentVariableValueEditor({
     return (
       <Input.TextArea
         autoSize={{ minRows: 3, maxRows: 10 }}
-        placeholder={i18nText("agentFlow", "auto.k_19dadd62f7")}
+        placeholder={i18nText("agentFlow", "auto.key_bjnknngcph")}
         value={typeof value === 'string' ? value : ''}
         onChange={(event) => {
           onValueErrorChange?.(null);
@@ -611,7 +611,7 @@ export function EnvironmentVariableValueEditor({
         />
       )}
       <Typography.Text type="secondary">
-        <FormOutlined /> {i18nText("agentFlow", "auto.k_09306c801f")}</Typography.Text>
+        <FormOutlined /> {i18nText("agentFlow", "auto.key_ajdagmiabp")}</Typography.Text>
     </div>
   );
 }

@@ -45,28 +45,28 @@ export function DataModelApiTab({
           },
           {
             key: 'readiness',
-            label: 'computed readiness',
+            label: i18nText("settings", "auto.computed_readiness"),
             children: (
-              <Tag color={ready ? 'green' : 'default'}>api_exposed_ready</Tag>
+              <Tag color={ready ? 'green' : 'default'}>{i18nText("settings", "auto.api_exposed_ready")}</Tag>
             )
           },
           {
             key: 'unsafe',
-            label: 'unsafe_external_source',
+            label: i18nText("settings", "auto.unsafe_external_source"),
             children: (
               <Tag color={unsafe ? 'red' : 'default'}>
-                {unsafe ? 'derived' : 'not_detected'}
+                {unsafe ? i18nText("settings", "auto.derived") : i18nText("settings", "auto.not_detected")}
               </Tag>
             )
           },
           {
             key: 'runtime',
-            label: 'Runtime',
+            label: i18nText("settings", "auto.runtime"),
             children: model.runtime_availability
           },
           {
             key: 'namespace',
-            label: 'ACL Namespace',
+            label: i18nText("settings", "auto.acl_namespace"),
             children: model.acl_namespace
           }
         ]}

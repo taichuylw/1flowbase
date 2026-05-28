@@ -69,14 +69,14 @@ function metricText(item: AgentFlowTraceItem) {
   const metrics = [
     typeof tokens === 'number' ? `${tokens} tokens` : null,
     duration,
-    toolCount > 0 ? i18nText("agentFlow", "auto.k_c3ef1c5910", { value1: toolCount }) : null
+    toolCount > 0 ? i18nText("agentFlow", "auto.key_mdopbmfjba", { value1: toolCount }) : null
   ].filter((metric): metric is string => Boolean(metric));
 
   if (metrics.length > 0) {
     return metrics.join(' · ');
   }
 
-  return i18nText("agentFlow", "auto.k_6f1972e48e");
+  return i18nText("agentFlow", "auto.key_gpbjhcoeio");
 }
 
 export function StatusIcon({ status }: { status: string }) {
@@ -85,7 +85,7 @@ export function StatusIcon({ status }: { status: string }) {
   if (tone === 'running') {
     return (
       <LoadingOutlined
-        aria-label={i18nText("agentFlow", "auto.k_7a74cbc1b2", { value1: status })}
+        aria-label={i18nText("agentFlow", "auto.key_hkhemlmblc", { value1: status })}
         className="agent-flow-editor__debug-workflow-status-icon"
         spin
       />
@@ -95,7 +95,7 @@ export function StatusIcon({ status }: { status: string }) {
   if (tone === 'error' || tone === 'warning') {
     return (
       <WarningFilled
-        aria-label={i18nText("agentFlow", "auto.k_7a74cbc1b2", { value1: status })}
+        aria-label={i18nText("agentFlow", "auto.key_hkhemlmblc", { value1: status })}
         className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
       />
     );
@@ -103,7 +103,7 @@ export function StatusIcon({ status }: { status: string }) {
 
   return (
     <CheckCircleFilled
-      aria-label={i18nText("agentFlow", "auto.k_7a74cbc1b2", { value1: status })}
+      aria-label={i18nText("agentFlow", "auto.key_hkhemlmblc", { value1: status })}
       className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
     />
   );
@@ -112,7 +112,7 @@ export function StatusIcon({ status }: { status: string }) {
 export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   return (
     <span
-      aria-label={i18nText("agentFlow", "auto.k_bdd8654569", { value1: nodeType })}
+      aria-label={i18nText("agentFlow", "auto.key_lnnigfefgj", { value1: nodeType })}
       className="agent-flow-editor__debug-workflow-node-icon"
       role="img"
     >

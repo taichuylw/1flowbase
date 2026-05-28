@@ -13,14 +13,14 @@ export function buildVersionSummary(
   const removed = before.graph.nodes.filter((node) => !afterIds.has(node.id));
 
   if (added.length > 0) {
-    return i18nText("agentFlow", "auto.k_930626d1b8", { value1: added.map((node) => node.alias).join('、') });
+    return i18nText("agentFlow", "auto.history_add_nodes", { value1: added.map((node) => node.alias).join('、') });
   }
 
   if (removed.length > 0) {
-    return i18nText("agentFlow", "auto.k_0eaf7902d7", { value1: removed.map((node) => node.alias).join('、') });
+    return i18nText("agentFlow", "auto.delete_item", { value1: removed.map((node) => node.alias).join('、') });
   }
 
   return classifyDocumentChange(before, after) === 'logical'
-    ? i18nText("agentFlow", "auto.k_284999d576")
-    : i18nText("agentFlow", "auto.k_9c0d2044d3");
+    ? i18nText("agentFlow", "auto.history_update_node_configuration")
+    : i18nText("agentFlow", "auto.history_update_canvas_layout");
 }

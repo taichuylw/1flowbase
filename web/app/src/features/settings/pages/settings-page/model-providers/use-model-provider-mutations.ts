@@ -374,7 +374,7 @@ export function useModelProviderMutations({
         isTaskTerminal(resolvedTask.status) &&
         !isTaskSucceeded(resolvedTask.status)
       ) {
-        throw new Error(resolvedTask.status_message ?? i18nText("settings", "auto.k_d339f95be6"));
+        throw new Error(resolvedTask.status_message ?? i18nText("settings", "auto.key_nddjpjflog"));
       }
 
       return resolvedTask;

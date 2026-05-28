@@ -16,13 +16,13 @@ export const llmNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'config.model_provider',
-          label: i18nText("agentFlow", "auto.k_98fd0cbd9c"),
+          label: i18nText("agentFlow", "auto.key_jipnamlnjm"),
           editor: 'llm_model',
           required: true
         },
         {
           key: 'bindings.prompt_messages',
-          label: i18nText("agentFlow", "auto.k_d9aa9fe0d6"),
+          label: i18nText("agentFlow", "auto.key_njkkjpoang"),
           editor: 'llm_prompt_messages'
         }
       ]
@@ -30,12 +30,12 @@ export const llmNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.k_16de2aff0e"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.key_bgnockppao"), editor: 'text', required: true }]
     },
     {
       key: 'advanced',
       title: 'Advanced',
-      fields: [{ key: 'config.response_format', label: i18nText("agentFlow", "auto.k_dac673286f"), editor: 'llm_response_format' }]
+      fields: [{ key: 'config.response_format', label: i18nText("agentFlow", "auto.key_nkmghdcigp"), editor: 'llm_response_format' }]
     }
   ]
 };

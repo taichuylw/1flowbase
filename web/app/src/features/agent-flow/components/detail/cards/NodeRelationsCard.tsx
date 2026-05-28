@@ -34,9 +34,9 @@ export function NodeRelationsCard({
   return (
     <div className="agent-flow-node-detail__section">
       <Typography.Title level={5} className="agent-flow-node-detail__section-title">
-        {i18nText("agentFlow", "auto.k_ea0ef2ae72")}</Typography.Title>
+        {i18nText("agentFlow", "auto.key_okaopckohc")}</Typography.Title>
       <Typography.Text className="agent-flow-node-detail__section-subtitle">
-        {i18nText("agentFlow", "auto.k_b31a0ef195")}</Typography.Text>
+        {i18nText("agentFlow", "auto.key_ldbkaopbjf")}</Typography.Text>
 
       <div className="agent-flow-node-detail__relation-list" style={{ marginTop: 12 }}>
         <div className="agent-flow-node-detail__relation-source">
@@ -63,7 +63,7 @@ export function NodeRelationsCard({
               openNodePicker(selectedNodeId);
             }}
           >
-            <PlusOutlined /> {i18nText("agentFlow", "auto.k_97473d57f8")}</div>
+            <PlusOutlined /> {i18nText("agentFlow", "auto.key_jhehdnfhpi")}</div>
         </div>
       </div>
     </div>

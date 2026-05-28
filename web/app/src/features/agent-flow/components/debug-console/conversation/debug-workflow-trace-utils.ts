@@ -13,11 +13,11 @@ export function getTraceItemKey(item: AgentFlowTraceItem) {
 
 export function nodeDisplayName(item: AgentFlowTraceItem) {
   if (item.nodeType === 'start') {
-    return i18nText("agentFlow", "auto.k_a10aaeeadd");
+    return i18nText("agentFlow", "auto.key_kbakkooknn");
   }
 
   if (item.nodeType === 'answer') {
-    return i18nText("agentFlow", "auto.k_0eef80d887");
+    return i18nText("agentFlow", "auto.key_aoopianiih");
   }
 
   return item.nodeAlias;

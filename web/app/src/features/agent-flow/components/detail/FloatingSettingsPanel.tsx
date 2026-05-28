@@ -542,7 +542,7 @@ export function FloatingSettingsPanel({
       </div>
 
       <div
-        aria-label={i18nText("agentFlow", "auto.k_237ff1cc40", { value1: title })}
+        aria-label={i18nText("agentFlow", "auto.key_cdhppbmmea", { value1: title })}
         aria-orientation="vertical"
         className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--left"
         data-testid={leftResizeHandleTestId}
@@ -551,7 +551,7 @@ export function FloatingSettingsPanel({
       />
 
       <div
-        aria-label={i18nText("agentFlow", "auto.k_1b02125555", { value1: title })}
+        aria-label={i18nText("agentFlow", "auto.key_blacbcffff", { value1: title })}
         aria-orientation="vertical"
         className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--right"
         data-testid={rightResizeHandleTestId}
@@ -560,7 +560,7 @@ export function FloatingSettingsPanel({
       />
 
       <div
-        aria-label={i18nText("agentFlow", "auto.k_e7e3f3a8e7", { value1: title })}
+        aria-label={i18nText("agentFlow", "auto.key_ohodpdkioh", { value1: title })}
         aria-orientation="horizontal"
         className="agent-flow-model-settings__resize-handle agent-flow-model-settings__resize-handle--bottom"
         data-testid={bottomResizeHandleTestId}

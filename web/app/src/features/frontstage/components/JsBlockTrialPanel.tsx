@@ -418,9 +418,9 @@ export function JsBlockTrialPanel({
       </Space>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>Context snapshot</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.context_snapshot")}</Typography.Text>
         <Input.TextArea
-          aria-label="Context snapshot"
+          aria-label={i18nText("frontstage", "auto.context_snapshot")}
           value={contextDraft}
           rows={4}
           onChange={(event) => setContextDraft(event.target.value)}
@@ -434,9 +434,9 @@ export function JsBlockTrialPanel({
       </Space>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>Runtime limits</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.runtime_limits")}</Typography.Text>
         <Input.TextArea
-          aria-label="Runtime limits"
+          aria-label={i18nText("frontstage", "auto.runtime_limits")}
           value={limitsDraft}
           rows={4}
           onChange={(event) => setLimitsDraft(event.target.value)}
@@ -490,32 +490,34 @@ export function JsBlockTrialPanel({
             items={[
               {
                 key: 'requestId',
-                label: 'Request ID',
+                label: i18nText("frontstage", "auto.request_id"),
                 children: runPlan.request.requestId
               },
               {
                 key: 'blockId',
-                label: 'Block ID',
+                label: i18nText("frontstage", "auto.block_id"),
                 children: runPlan.request.blockId
               },
               {
                 key: 'sourceLength',
-                label: 'Source length',
-                children: `${runPlan.request.source.length} chars`
+                label: i18nText("frontstage", "auto.source_length"),
+                children: i18nText("frontstage", "auto.char_count", {
+                  value1: String(runPlan.request.source.length)
+                })
               },
               {
                 key: 'timeout',
-                label: 'Timeout',
+                label: i18nText("frontstage", "auto.timeout"),
                 children: `${runPlan.request.limits.timeoutMs}ms`
               },
               {
                 key: 'props',
-                label: 'Props keys',
+                label: i18nText("frontstage", "auto.props_keys"),
                 children: formatKeys(runPlan.request.props)
               },
               {
                 key: 'context',
-                label: 'Context keys',
+                label: i18nText("frontstage", "auto.context_keys"),
                 children: formatKeys(runPlan.request.contextSnapshot)
               }
             ]}
@@ -524,36 +526,36 @@ export function JsBlockTrialPanel({
             bordered
             size="small"
             column={1}
-            title="Schema validation options"
+            title={i18nText("frontstage", "auto.schema_validation_options")}
             data-testid="js-block-trial-schema-options"
             items={[
               {
                 key: 'maxDepth',
-                label: 'Max depth',
+                label: i18nText("frontstage", "auto.max_depth"),
                 children: formatNumber(runPlan.schemaValidationOptions.maxDepth)
               },
               {
                 key: 'maxNodes',
-                label: 'Max nodes',
+                label: i18nText("frontstage", "auto.max_nodes"),
                 children: formatNumber(runPlan.schemaValidationOptions.maxNodes)
               },
               {
                 key: 'data',
-                label: 'Data permissions',
+                label: i18nText("frontstage", "auto.data_permissions"),
                 children: formatList(
                   runPlan.schemaValidationOptions.allowedDataPermissions
                 )
               },
               {
                 key: 'actions',
-                label: 'Actions',
+                label: i18nText("frontstage", "auto.actions"),
                 children: formatList(
                   runPlan.schemaValidationOptions.allowedActions
                 )
               },
               {
                 key: 'events',
-                label: 'Events',
+                label: i18nText("frontstage", "auto.events"),
                 children: formatList(runPlan.schemaValidationOptions.allowedEvents)
               }
             ]}
@@ -562,32 +564,32 @@ export function JsBlockTrialPanel({
             bordered
             size="small"
             column={1}
-            title="Mediator policy"
+            title={i18nText("frontstage", "auto.mediator_policy")}
             data-testid="js-block-trial-mediator-policy"
             items={[
               {
                 key: 'actions',
-                label: 'Actions',
+                label: i18nText("frontstage", "auto.actions"),
                 children: formatList(runPlan.mediatorPolicy.allowedActions)
               },
               {
                 key: 'events',
-                label: 'Events',
+                label: i18nText("frontstage", "auto.events"),
                 children: formatList(runPlan.mediatorPolicy.allowedEvents)
               },
               {
                 key: 'models',
-                label: 'Data models',
+                label: i18nText("frontstage", "auto.data_models"),
                 children: formatList(runPlan.mediatorPolicy.allowedDataModels)
               },
               {
                 key: 'operations',
-                label: 'Data operations',
+                label: i18nText("frontstage", "auto.data_operations"),
                 children: formatList(runPlan.mediatorPolicy.allowedDataOperations)
               },
               {
                 key: 'maxEventChainDepth',
-                label: 'Max event chain depth',
+                label: i18nText("frontstage", "auto.max_event_chain_depth"),
                 children: formatNumber(runPlan.mediatorPolicy.maxEventChainDepth)
               }
             ]}
@@ -607,14 +609,14 @@ export function JsBlockTrialPanel({
             bordered
             size="small"
             column={1}
-            title="Rejection"
+            title={i18nText("frontstage", "auto.rejection")}
             items={[
-              { key: 'code', label: 'Code', children: runPlan.code },
-              { key: 'path', label: 'Path', children: runPlan.path },
-              { key: 'blockId', label: 'Block ID', children: runPlan.blockId },
+              { key: 'code', label: i18nText("frontstage", "auto.code"), children: runPlan.code },
+              { key: 'path', label: i18nText("frontstage", "auto.path"), children: runPlan.path },
+              { key: 'blockId', label: i18nText("frontstage", "auto.block_id"), children: runPlan.blockId },
               {
                 key: 'catalogId',
-                label: 'Catalog ID',
+                label: i18nText("frontstage", "auto.catalog_id"),
                 children: runPlan.catalogId
               }
             ]}

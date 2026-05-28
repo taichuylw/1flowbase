@@ -5,16 +5,16 @@ import { Tooltip } from 'antd';
 import { i18nText } from '../../../../shared/i18n/text';
 
 export const dataModelStatusHelp =
-  i18nText("settings", "auto.k_841318af0b");
+  i18nText("settings", "auto.key_iebdbikpal");
 
 export const defaultApiExposureStatusHelp =
-  i18nText("settings", "auto.k_9ae58afd41");
+  i18nText("settings", "auto.key_jkofikpneb");
 
 export const dataModelCodeHelp =
-  i18nText("settings", "auto.k_5ce5022369");
+  i18nText("settings", "auto.key_fmofaccdgj");
 
 export const dataModelTitleHelp =
-  i18nText("settings", "auto.k_ed415f6486");
+  i18nText("settings", "auto.key_onebfpgeig");
 
 export function DataModelFieldLabel({
   label,
@@ -54,7 +54,7 @@ export function DataModelHelpTooltip({
         <QuestionCircleOutlined
           aria-describedby={decorative ? undefined : descriptionId}
           aria-hidden={decorative ? true : undefined}
-          aria-label={decorative ? undefined : i18nText("settings", "auto.k_e3c0ac30bb", { value1: label })}
+          aria-label={decorative ? undefined : i18nText("settings", "auto.key_odmakmdall", { value1: label })}
           className="data-model-panel__help-icon"
           tabIndex={decorative ? -1 : 0}
         />

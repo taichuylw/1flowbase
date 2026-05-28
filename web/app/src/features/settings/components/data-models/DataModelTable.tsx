@@ -41,10 +41,10 @@ import { DataModelHelpTooltip } from './DataModelHelpTooltip';
 import { i18nText } from '../../../../shared/i18n/text';
 
 const dataModelStatusHelp =
-  i18nText("settings", "auto.k_841318af0b");
+  i18nText("settings", "auto.key_iebdbikpal");
 
 const defaultApiExposureStatusHelp =
-  i18nText("settings", "auto.k_9ae58afd41");
+  i18nText("settings", "auto.key_jkofikpneb");
 
 type DefaultDataModelStatus =
   UpdateSettingsDataSourceDefaultsInput['default_data_model_status'];
@@ -52,16 +52,16 @@ type DefaultApiExposureStatus =
   UpdateSettingsDataSourceDefaultsInput['default_api_exposure_status'];
 
 const dataModelStatusOptions = [
-  { label: i18nText("settings", "auto.k_4bd191fb0d"), value: 'draft' },
-  { label: i18nText("settings", "auto.k_65a525c108"), value: 'published' },
-  { label: i18nText("settings", "auto.k_36bd66d67b"), value: 'disabled' },
-  { label: i18nText("settings", "auto.k_0b1d58b4a0"), value: 'broken' }
+  { label: i18nText("settings", "auto.key_elnbjbplan"), value: 'draft' },
+  { label: i18nText("settings", "auto.key_gfkfcfmbai"), value: 'published' },
+  { label: i18nText("settings", "auto.key_dglnggnghl"), value: 'disabled' },
+  { label: i18nText("settings", "auto.key_albnfileka"), value: 'broken' }
 ] satisfies Array<{ label: string; value: DefaultDataModelStatus }>;
 
 const apiExposureOptions = [
-  { label: i18nText("settings", "auto.k_b2c29bc1c0"), value: 'draft' },
-  { label: i18nText("settings", "auto.k_b75bad6b2d"), value: 'published_not_exposed' },
-  { label: i18nText("settings", "auto.k_e64aeccb70"), value: 'api_exposed_no_permission' }
+  { label: i18nText("settings", "auto.key_lcmcjlmbma"), value: 'draft' },
+  { label: i18nText("settings", "auto.key_lhflknglcn"), value: 'published_not_exposed' },
+  { label: i18nText("settings", "auto.key_ogekommlha"), value: 'api_exposed_no_permission' }
 ] satisfies Array<{ label: string; value: DefaultApiExposureStatus }>;
 
 const builtinMainSourceModelCodes = new Set(['attachments', 'users', 'roles']);
@@ -88,7 +88,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<CheckCircleOutlined />}
         >
-          {i18nText("settings", "auto.k_176a2eb4eb")}</Tag>
+          {i18nText("settings", "auto.key_bhgkcoleol")}</Tag>
       );
     case 'draft':
       return (
@@ -97,7 +97,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<EditOutlined />}
         >
-          {i18nText("settings", "auto.k_0f436818c0")}</Tag>
+          {i18nText("settings", "auto.key_apedgibima")}</Tag>
       );
     case 'disabled':
       return (
@@ -106,7 +106,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<StopOutlined />}
         >
-          {i18nText("settings", "auto.k_6c7dcbb73a")}</Tag>
+          {i18nText("settings", "auto.key_gmhnmllhdk")}</Tag>
       );
     case 'broken':
       return (
@@ -115,7 +115,7 @@ function getStatusTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<ExclamationCircleOutlined />}
         >
-          {i18nText("settings", "auto.k_5caf279339")}</Tag>
+          {i18nText("settings", "auto.key_fmkpchjddj")}</Tag>
       );
     default:
       return <Tag style={{ borderRadius: 6, margin: 0 }}>{status}</Tag>;
@@ -131,7 +131,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<CheckCircleOutlined />}
         >
-          {i18nText("settings", "auto.k_25c17b12f1")}</Tag>
+          {i18nText("settings", "auto.key_cfmbhlbcpb")}</Tag>
       );
     case 'api_exposed_no_permission':
       return (
@@ -140,7 +140,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<InfoCircleOutlined />}
         >
-          {i18nText("settings", "auto.k_64d55ec6b6")}</Tag>
+          {i18nText("settings", "auto.key_genffomglg")}</Tag>
       );
     case 'published_not_exposed':
       return (
@@ -149,7 +149,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<FileTextOutlined />}
         >
-          {i18nText("settings", "auto.k_365cbc93a4")}</Tag>
+          {i18nText("settings", "auto.key_dgfmlmjdke")}</Tag>
       );
     case 'draft':
       return (
@@ -158,7 +158,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<EditOutlined />}
         >
-          {i18nText("settings", "auto.k_0f436818c0")}</Tag>
+          {i18nText("settings", "auto.key_apedgibima")}</Tag>
       );
     case 'unsafe_external_source':
       return (
@@ -167,7 +167,7 @@ function getApiExposureTag(status: string) {
           style={{ borderRadius: 6, margin: 0 }}
           icon={<ExclamationCircleOutlined />}
         >
-          {i18nText("settings", "auto.k_4495641c08")}</Tag>
+          {i18nText("settings", "auto.key_eejfgebmai")}</Tag>
       );
     default:
       return <Tag style={{ borderRadius: 6, margin: 0 }}>API {status}</Tag>;
@@ -225,7 +225,7 @@ export function DataModelTable({
       return updateSettingsDataSourceDefaults(source.id, patch, csrfToken);
     },
     onSuccess: async () => {
-      message.success(i18nText("settings", "auto.k_67a3d27986"));
+      message.success(i18nText("settings", "auto.key_ghkdnchjig"));
       await queryClient.invalidateQueries({
         queryKey: settingsDataSourcesQueryKey
       });
@@ -272,7 +272,7 @@ export function DataModelTable({
       render: (value: string) => getApiExposureTag(value)
     },
     {
-      title: i18nText("settings", "auto.k_e8c66a5fcd"),
+      title: i18nText("settings", "auto.key_oimggkfpmn"),
       dataIndex: 'external_table_id',
       key: 'external_table_id',
       width: 180,
@@ -286,7 +286,7 @@ export function DataModelTable({
         )
     },
     {
-      title: i18nText("settings", "auto.k_b2404bdd45"),
+      title: i18nText("settings", "auto.key_lceaelnnef"),
       key: 'fields',
       width: 96,
       render: (_, model) => (
@@ -321,7 +321,7 @@ export function DataModelTable({
                 size="small"
                 icon={<DeleteOutlined aria-hidden="true" />}
                 style={{ padding: 0 }}
-                aria-label={i18nText("settings", "auto.k_24b7874b28", { value1: model.title })}
+                aria-label={i18nText("settings", "auto.key_celhihelci", { value1: model.title })}
                 disabled={!canManage}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -345,7 +345,7 @@ export function DataModelTable({
         wrap="wrap"
         gap={16}
       >
-        <span className="data-model-panel__sr-only">{i18nText("settings", "auto.k_61abbaa1c0")}</span>
+        <span className="data-model-panel__sr-only">{i18nText("settings", "auto.key_gbkllkkbma")}</span>
         <Button
           type="primary"
           icon={<PlusOutlined aria-hidden="true" />}
@@ -354,7 +354,7 @@ export function DataModelTable({
             setDrawerState({ open: true, mode: 'create', model: null })
           }
         >
-          {i18nText("settings", "auto.k_23e9246ed9")}</Button>
+          {i18nText("settings", "auto.key_cdojcegonj")}</Button>
 
         {selectedSource && (
           <Form
@@ -372,14 +372,14 @@ export function DataModelTable({
                   htmlFor="data-source-default-model-status"
                   className="data-model-panel__sr-only"
                 >
-                  {i18nText("settings", "auto.k_f907023cd8")}</label>
+                  {i18nText("settings", "auto.key_pjahacdmni")}</label>
                 <Select
                   id="data-source-default-model-status"
                   value={selectedSource.default_data_model_status}
                   options={dataModelStatusOptions}
                   disabled={updateDefaultsMutation.isPending}
                   style={{ minWidth: 140 }}
-                  placeholder={i18nText("settings", "auto.k_8da22d3410")}
+                  placeholder={i18nText("settings", "auto.key_inkccndeba")}
                   onChange={(value) =>
                     updateDefaultsMutation.mutate({
                       source: selectedSource,
@@ -394,7 +394,7 @@ export function DataModelTable({
                 />
                 <DataModelHelpTooltip
                   decorative
-                  label={i18nText("settings", "auto.k_f907023cd8")}
+                  label={i18nText("settings", "auto.key_pjahacdmni")}
                   title={dataModelStatusHelp}
                 />
               </Flex>
@@ -406,7 +406,7 @@ export function DataModelTable({
                   htmlFor="data-source-default-api-status"
                   className="data-model-panel__sr-only"
                 >
-                  {i18nText("settings", "auto.k_1ae4b76727")}</label>
+                  {i18nText("settings", "auto.key_bkoelhghch")}</label>
                 <Select
                   id="data-source-default-api-status"
                   value={toDefaultApiExposureStatus(
@@ -415,7 +415,7 @@ export function DataModelTable({
                   options={apiExposureOptions}
                   disabled={updateDefaultsMutation.isPending}
                   style={{ minWidth: 140 }}
-                  placeholder={i18nText("settings", "auto.k_1ae4b76727")}
+                  placeholder={i18nText("settings", "auto.key_bkoelhghch")}
                   onChange={(value: DefaultApiExposureStatus) =>
                     updateDefaultsMutation.mutate({
                       source: selectedSource,
@@ -429,7 +429,7 @@ export function DataModelTable({
                 />
                 <DataModelHelpTooltip
                   decorative
-                  label={i18nText("settings", "auto.k_1ae4b76727")}
+                  label={i18nText("settings", "auto.key_bkoelhghch")}
                   title={defaultApiExposureStatusHelp}
                 />
               </Flex>
@@ -491,12 +491,12 @@ export function DataModelTable({
                   {model.source_kind === 'external_source' &&
                   model.external_table_id ? (
                     <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                      {i18nText("settings", "auto.k_870407f93e")}{model.external_table_id}
+                      {i18nText("settings", "auto.key_ihaeahpjdo")}{model.external_table_id}
                     </Typography.Text>
                   ) : null}
                 </Space>
                 <Tag style={{ borderRadius: 6, margin: 0 }}>
-                  {model.fields.length} {i18nText("settings", "auto.k_77a49f2c38")}</Tag>
+                  {model.fields.length} {i18nText("settings", "auto.key_hhkejpcmdi")}</Tag>
               </Flex>
               <Flex gap={6} style={{ marginTop: 12 }} wrap="wrap">
                 {getStatusTag(model.status)}
@@ -531,7 +531,7 @@ export function DataModelTable({
                         size="small"
                         icon={<DeleteOutlined aria-hidden="true" />}
                         style={{ padding: 0 }}
-                        aria-label={i18nText("settings", "auto.k_24b7874b28", { value1: model.title })}
+                        aria-label={i18nText("settings", "auto.key_celhihelci", { value1: model.title })}
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleteTarget(model);
@@ -559,12 +559,12 @@ export function DataModelTable({
         onUpdate={onUpdateModel}
       />
       <Modal
-        title={i18nText("settings", "auto.k_2acd0aba22")}
+        title={i18nText("settings", "auto.key_ckmnaklkcc")}
         open={Boolean(deleteTarget)}
-        okText={i18nText("settings", "auto.k_b56d9ac6c5")}
+        okText={i18nText("settings", "auto.key_lfgnjkmgmf")}
         okType="danger"
         cancelText={i18nText("settings", "auto.cancel")}
-        okButtonProps={{ 'aria-label': i18nText("settings", "auto.k_b56d9ac6c5") }}
+        okButtonProps={{ 'aria-label': i18nText("settings", "auto.key_lfgnjkmgmf") }}
         onCancel={() => setDeleteTarget(null)}
         onOk={() => {
           if (deleteTarget) {
@@ -574,7 +574,7 @@ export function DataModelTable({
         }}
       >
         {deleteTarget
-          ? i18nText("settings", "auto.k_2f316ca1c1", { value1: deleteTarget.title, value2: deleteTarget.code })
+          ? i18nText("settings", "auto.key_cpdbgmkbmb", { value1: deleteTarget.title, value2: deleteTarget.code })
           : null}
       </Modal>
     </Flex>

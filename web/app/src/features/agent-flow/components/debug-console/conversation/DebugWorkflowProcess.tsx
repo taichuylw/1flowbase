@@ -55,7 +55,7 @@ export function DebugWorkflowProcess({
 
   return (
     <div
-      aria-label={i18nText("agentFlow", "auto.k_cc19798b0c")}
+      aria-label={i18nText("agentFlow", "auto.key_mmbjhjilam")}
       className="agent-flow-editor__debug-workflow-process"
       role="group"
     >
@@ -67,7 +67,7 @@ export function DebugWorkflowProcess({
       >
         <span className="agent-flow-editor__debug-workflow-title">
           <StatusIcon status={status} />
-          <Typography.Text>{i18nText("agentFlow", "auto.k_cc19798b0c")}</Typography.Text>
+          <Typography.Text>{i18nText("agentFlow", "auto.key_mmbjhjilam")}</Typography.Text>
         </span>
         {expanded ? (
           <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />

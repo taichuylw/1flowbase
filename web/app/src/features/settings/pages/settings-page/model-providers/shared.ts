@@ -93,11 +93,11 @@ export function parseTaskDetailNumber(
 export function formatTrustLabel(trustLevel: string) {
   switch (trustLevel) {
     case 'verified_official':
-      return i18nText("settings", "auto.k_c68fddcd14");
+      return i18nText("settings", "auto.key_mgipnnmnbe");
     case 'checksum_only':
-      return i18nText("settings", "auto.k_4a07104b7c");
+      return i18nText("settings", "auto.key_ekahbaelhm");
     default:
-      return i18nText("settings", "auto.k_4fe0a3b1f2");
+      return i18nText("settings", "auto.key_epoakdlbpc");
   }
 }
 

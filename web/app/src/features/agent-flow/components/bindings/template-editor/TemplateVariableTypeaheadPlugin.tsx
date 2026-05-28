@@ -32,7 +32,7 @@ export function TemplateVariableTypeaheadPlugin({
   onKeyDown,
   onSelect
 }: TemplateVariableTypeaheadPluginProps) {
-  const emptyDescription = query.trim().length > 0 ? i18nText("agentFlow", "auto.k_4ce85e7b5a") : i18nText("agentFlow", "auto.k_f196ae0d7e");
+  const emptyDescription = query.trim().length > 0 ? i18nText("agentFlow", "auto.key_emoifohlfk") : i18nText("agentFlow", "auto.key_pbjgkoanho");
   const popupStyle: CSSProperties | undefined = position
     ? {
         left: `${position.left}px`,
@@ -50,19 +50,19 @@ export function TemplateVariableTypeaheadPlugin({
       ref={popupRef}
       className="agent-flow-templated-text-field__typeahead"
       role="listbox"
-      aria-label={i18nText("agentFlow", "auto.k_2446fb79b8")}
+      aria-label={i18nText("agentFlow", "auto.key_ceegplhjli")}
       style={popupStyle}
       onKeyDown={onKeyDown}
       onMouseDown={(event) => event.preventDefault()}
     >
       <div className="agent-flow-templated-text-field__typeahead-search">
         <input
-          aria-label={i18nText("agentFlow", "auto.k_e11e701d58")}
+          aria-label={i18nText("agentFlow", "auto.key_obbohabnfi")}
           role="searchbox"
           className="agent-flow-templated-text-field__typeahead-searchbox"
           autoFocus
           value={query}
-          placeholder={i18nText("agentFlow", "auto.k_1fb012f9e2")}
+          placeholder={i18nText("agentFlow", "auto.key_bplabcpjoc")}
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </div>

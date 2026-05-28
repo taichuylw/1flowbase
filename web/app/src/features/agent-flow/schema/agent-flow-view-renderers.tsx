@@ -38,14 +38,14 @@ function renderSummaryView({ adapter, block }: SchemaViewRendererProps) {
           <Typography.Link href={meta.helpHref} target="_blank">
             <Space size={4}>
               <BookOutlined />
-              {i18nText("agentFlow", "auto.k_39c1887749")}</Space>
+              {i18nText("agentFlow", "auto.key_djmbiihhej")}</Space>
           </Typography.Link>
         ) : null
       }
-      title={block.title ?? i18nText("agentFlow", "auto.k_88a5351e42")}
+      title={block.title ?? i18nText("agentFlow", "auto.key_iikfdfboec")}
     >
       <Typography.Paragraph>
-        {meta?.summary ?? node.description ?? i18nText("agentFlow", "auto.k_9aab389dfe")}
+        {meta?.summary ?? node.description ?? i18nText("agentFlow", "auto.key_jkkldijnpo")}
       </Typography.Paragraph>
     </Card>
   );
@@ -98,7 +98,7 @@ function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
     description ||
     contract?.card.description ||
     meta?.summary ||
-    i18nText("agentFlow", "auto.k_e9cb930956");
+    i18nText("agentFlow", "auto.key_ojmljdajfg");
 
   return (
     <div className="agent-flow-node-card__description">{displayContent}</div>
@@ -120,7 +120,7 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
     return null;
   }
 
-  const title = node.type === 'start' ? i18nText("agentFlow", "auto.k_f4cbd6bd13") : i18nText("agentFlow", "auto.k_1860add605");
+  const title = node.type === 'start' ? i18nText("agentFlow", "auto.key_pemlnglnbd") : i18nText("agentFlow", "auto.key_bigaknngaf");
   return (
     <div className="agent-flow-node-detail__section">
       <div className="agent-flow-node-detail__section-header">
@@ -150,7 +150,7 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
           ))}
         </div>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.k_79bbc81592")} />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.key_hjllmibfjc")} />
       )}
     </div>
   );
@@ -164,18 +164,18 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
   const errorPolicyOptions = [
     {
       value: 'none',
-      label: i18nText("agentFlow", "auto.k_72077749f7"),
-      description: i18nText("agentFlow", "auto.k_544a35b974")
+      label: i18nText("agentFlow", "auto.key_hcahhhejph"),
+      description: i18nText("agentFlow", "auto.key_feekdfljhe")
     },
     {
       value: 'default_value',
-      label: i18nText("agentFlow", "auto.k_d93919c37b"),
-      description: i18nText("agentFlow", "auto.k_9be0a808e3")
+      label: i18nText("agentFlow", "auto.key_njdjbjmdhl"),
+      description: i18nText("agentFlow", "auto.key_jloakiaiod")
     },
     {
       value: 'error_branch',
-      label: i18nText("agentFlow", "auto.k_92879700a0"),
-      description: i18nText("agentFlow", "auto.k_938451d34e")
+      label: i18nText("agentFlow", "auto.key_jcihjhaaka"),
+      description: i18nText("agentFlow", "auto.key_jdiefbndeo")
     }
   ] satisfies Array<{ value: string; label: string; description: string }>;
 
@@ -186,9 +186,9 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          {i18nText("agentFlow", "auto.k_794ff5f046")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_hjeppfpaeg")}</Typography.Text>
         <Switch
-          aria-label={i18nText("agentFlow", "auto.k_794ff5f046")}
+          aria-label={i18nText("agentFlow", "auto.key_hjeppfpaeg")}
           checked={retryEnabled}
           className="agent-flow-node-detail__policy-control"
           onChange={(checked) =>
@@ -201,13 +201,13 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          {i18nText("agentFlow", "auto.k_066247572d")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_aggcehfhcn")}</Typography.Text>
         <div
           className="agent-flow-node-detail__policy-select-shell agent-flow-node-detail__policy-select-shell--compact"
           data-testid="node-policy-error"
         >
           <Select
-            aria-label={i18nText("agentFlow", "auto.k_066247572d")}
+            aria-label={i18nText("agentFlow", "auto.key_aggcehfhcn")}
             className="agent-flow-node-detail__policy-control agent-flow-node-detail__policy-select"
             options={errorPolicyOptions}
             optionRender={(option) => {
@@ -257,10 +257,10 @@ function renderRelationsView({ adapter, block }: SchemaViewRendererProps) {
         level={5}
         className="agent-flow-node-detail__section-title"
       >
-        {block.title ?? i18nText("agentFlow", "auto.k_ea0ef2ae72")}
+        {block.title ?? i18nText("agentFlow", "auto.key_okaopckohc")}
       </Typography.Title>
       <Typography.Text className="agent-flow-node-detail__section-subtitle">
-        {i18nText("agentFlow", "auto.k_b31a0ef195")}</Typography.Text>
+        {i18nText("agentFlow", "auto.key_ldbkaopbjf")}</Typography.Text>
       <div
         className="agent-flow-node-detail__relation-list"
         style={{ marginTop: 12 }}
@@ -287,7 +287,7 @@ function renderRelationsView({ adapter, block }: SchemaViewRendererProps) {
               adapter.dispatch('openNodePicker', { nodeId: node.id })
             }
           >
-            <PlusOutlined /> {i18nText("agentFlow", "auto.k_97473d57f8")}</div>
+            <PlusOutlined /> {i18nText("agentFlow", "auto.key_jhehdnfhpi")}</div>
         </div>
       </div>
     </div>
@@ -301,7 +301,7 @@ function renderRuntimeSummaryView({ adapter }: SchemaViewRendererProps) {
     | undefined;
   const emptyDescription =
     (adapter.getDerived('lastRunEmptyDescription') as string | null) ??
-    i18nText("agentFlow", "auto.k_b41d9db2a3");
+    i18nText("agentFlow", "auto.key_lebnjnlckd");
 
   return lastRun ? (
     <NodeRunSummaryCard lastRun={lastRun} />

@@ -55,6 +55,7 @@ import type { DataNode } from 'antd/es/tree';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '../../../../state/auth-store';
+import { formatDateTime, formatTime } from '../../../../shared/i18n/format';
 import { JsonPreviewBlock } from '../../../../shared/ui/json-preview/JsonPreviewBlock';
 import './host-infrastructure-panel.css';
 import {
@@ -106,7 +107,7 @@ function formatBytes(value: number) {
 
 function formatTtl(value: number | null) {
   if (value == null) {
-    return i18nText("settings", "auto.k_ff139dbaf3");
+    return i18nText("settings", "auto.key_ppbdjnlkpd");
   }
   if (value < 60) {
     return `${value}s`;
@@ -119,16 +120,16 @@ function formatTtl(value: number | null) {
 
 function formatUnixTimestamp(value: number | null) {
   if (value == null) {
-    return 'unknown';
+    return i18nText("settings", "auto.unknown");
   }
-  return new Date(value * 1000).toLocaleString();
+  return formatDateTime(new Date(value * 1000));
 }
 
 function formatUpdatedAt(value: number) {
   if (!value) {
-    return i18nText("settings", "auto.k_b6b13cc32c");
+    return i18nText("settings", "auto.key_lglbdmmdcm");
   }
-  return new Date(value).toLocaleTimeString();
+  return formatTime(new Date(value));
 }
 
 function resolveCanReveal(
@@ -145,7 +146,7 @@ function resolveCanReveal(
 }
 
 function formatInspectionPath(path: string[]) {
-  return path.length ? path.join(' / ') : 'root';
+  return path.length ? path.join(' / ') : i18nText("settings", "auto.root");
 }
 
 type MemoryTreeDataNode = DataNode & {
@@ -280,7 +281,7 @@ function MemoryStatsChart({
         top: 8,
         itemGap: 16,
         textStyle: { color: '#555555', fontSize: 12 },
-        data: [i18nText("settings", "auto.k_f6a6168878"), i18nText("settings", "auto.k_d87aa08a57"), i18nText("settings", "auto.k_e354350550")]
+        data: [i18nText("settings", "auto.key_pgkgbgiihi"), i18nText("settings", "auto.key_nihkkaikfh"), i18nText("settings", "auto.key_odfedfaffa")]
       },
       radar: [
         {
@@ -339,7 +340,7 @@ function MemoryStatsChart({
           data: [
             {
               value: stats.map((s) => s.entry_count),
-              name: i18nText("settings", "auto.k_f6a6168878"),
+              name: i18nText("settings", "auto.key_pgkgbgiihi"),
               symbol: 'circle',
               symbolSize: 4,
               itemStyle: { color: '#1677ff' },
@@ -348,7 +349,7 @@ function MemoryStatsChart({
             },
             {
               value: stats.map((s) => s.sensitive_entry_count),
-              name: i18nText("settings", "auto.k_d87aa08a57"),
+              name: i18nText("settings", "auto.key_nihkkaikfh"),
               symbol: 'circle',
               symbolSize: 4,
               itemStyle: { color: '#ff4d4f' },
@@ -363,7 +364,7 @@ function MemoryStatsChart({
           data: [
             {
               value: stats.map((s) => s.total_value_size_bytes),
-              name: i18nText("settings", "auto.k_e354350550"),
+              name: i18nText("settings", "auto.key_odfedfaffa"),
               symbol: 'circle',
               symbolSize: 4,
               itemStyle: { color: '#52c41a' },
@@ -389,7 +390,7 @@ function MemoryStatsChart({
   return (
     <div
       ref={chartRef}
-      aria-label="Memory statistics chart"
+      aria-label={i18nText("settings", "auto.memory_statistics_chart")}
       className="host-memory-panel__stats-chart"
       role="img"
     />
@@ -487,8 +488,8 @@ const getCustomServiceChartOption = (
             itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
             label: { show: false },
             data: [
-              { value: regularCount, name: i18nText("settings", "auto.k_b734552957"), itemStyle: { color: themeColors.primary } },
-              { value: sensitiveCount, name: i18nText("settings", "auto.k_f0dab5d046"), itemStyle: { color: themeColors.error } }
+              { value: regularCount, name: i18nText("settings", "auto.key_lhdeffcjfh"), itemStyle: { color: themeColors.primary } },
+              { value: sensitiveCount, name: i18nText("settings", "auto.key_panklfnaeg"), itemStyle: { color: themeColors.error } }
             ]
           }
         ]
@@ -510,12 +511,12 @@ const getCustomServiceChartOption = (
         },
         yAxis: {
           type: 'category',
-          data: [i18nText("settings", "auto.k_868d9aeab5")],
+          data: [i18nText("settings", "auto.key_iginjkoklf")],
           axisLine: { show: false }
         },
         series: [
           {
-            name: i18nText("settings", "auto.k_25d667351c"),
+            name: i18nText("settings", "auto.key_cfngghdfbm"),
             type: 'bar',
             stack: 'total',
             barWidth: 24,
@@ -523,7 +524,7 @@ const getCustomServiceChartOption = (
             data: [valueBytes]
           },
           {
-            name: i18nText("settings", "auto.k_7cf97c2e73"),
+            name: i18nText("settings", "auto.key_hmpjhmcohd"),
             type: 'bar',
             stack: 'total',
             itemStyle: { borderRadius: [0, 4, 4, 0], color: '#b37feb' },
@@ -560,7 +561,7 @@ const getCustomServiceChartOption = (
               color: 'var(--ant-color-text)',
               offsetCenter: [0, '35%']
             },
-            data: [{ value: entryCount, name: i18nText("settings", "auto.k_cf41e96d24") }]
+            data: [{ value: entryCount, name: i18nText("settings", "auto.key_mpebojgnce") }]
           }
         ]
       };
@@ -587,8 +588,8 @@ const getCustomServiceChartOption = (
             label: { show: true, position: 'inside' },
             itemStyle: { borderColor: '#fff', borderWidth: 1 },
             data: [
-              { value: entryCount, name: i18nText("settings", "auto.k_d90630afd6"), itemStyle: { color: themeColors.cyan } },
-              { value: sensitiveCount, name: i18nText("settings", "auto.k_bef5a9ad28"), itemStyle: { color: themeColors.primary } }
+              { value: entryCount, name: i18nText("settings", "auto.key_njagdakpng"), itemStyle: { color: themeColors.cyan } },
+              { value: sensitiveCount, name: i18nText("settings", "auto.key_lopfkjknci"), itemStyle: { color: themeColors.primary } }
             ]
           }
         ]
@@ -601,7 +602,7 @@ const getCustomServiceChartOption = (
         grid: { top: '20%', left: '10%', right: '10%', bottom: '15%' },
         xAxis: {
           type: 'category',
-          data: [i18nText("settings", "auto.k_ad6d33ced2"), i18nText("settings", "auto.k_5f3bf92cd4")],
+          data: [i18nText("settings", "auto.key_kngnddmonc"), i18nText("settings", "auto.key_fpdlpjcmne")],
           axisLine: { lineStyle: { color: '#f0f0f0' } },
           axisLabel: { color: 'var(--ant-color-text-secondary)' }
         },
@@ -611,7 +612,7 @@ const getCustomServiceChartOption = (
         },
         series: [
           {
-            name: i18nText("settings", "auto.k_cd75bc6231"),
+            name: i18nText("settings", "auto.key_mnhflmgcdb"),
             type: 'bar',
             barMaxWidth: 24,
             itemStyle: {
@@ -638,7 +639,7 @@ const getCustomServiceChartOption = (
         xAxis: {
           type: 'category',
           boundaryGap: false,
-          data: ['T-4s', 'T-3s', 'T-2s', 'T-1s', i18nText("settings", "auto.k_25e74dceac")],
+          data: ['T-4s', 'T-3s', 'T-2s', 'T-1s', i18nText("settings", "auto.key_cfohenmokm")],
           axisLine: { lineStyle: { color: '#f0f0f0' } }
         },
         yAxis: {
@@ -647,7 +648,7 @@ const getCustomServiceChartOption = (
         },
         series: [
           {
-            name: i18nText("settings", "auto.k_5edc792a96"),
+            name: i18nText("settings", "auto.key_fonmhjckjg"),
             type: 'line',
             smooth: true,
             symbol: 'none',
@@ -685,12 +686,12 @@ const getCustomServiceChartOption = (
         },
         yAxis: {
           type: 'category',
-          data: [i18nText("settings", "auto.k_170df708e6"), i18nText("settings", "auto.k_3d1b17281e")],
+          data: [i18nText("settings", "auto.key_bhanphaiog"), i18nText("settings", "auto.key_dnblbhcibo")],
           axisLine: { show: false }
         },
         series: [
           {
-            name: i18nText("settings", "auto.k_d27ec3ee4e"),
+            name: i18nText("settings", "auto.key_nchomdooeo"),
             type: 'bar',
             barMaxWidth: 14,
             itemStyle: {
@@ -715,7 +716,7 @@ function MemoryServiceBreakdownPane({
     <div className="host-memory-panel__breakdown-section">
       <div className="host-memory-panel__breakdown-header">
         <Typography.Text strong style={{ fontSize: 14 }}>
-          {i18nText("settings", "auto.k_a138d3a3d7")}</Typography.Text>
+          {i18nText("settings", "auto.key_kbdindkdnh")}</Typography.Text>
       </div>
       <div className="host-memory-panel__stats-chart-wrapper">
         <MemoryStatsChart stats={stats} />
@@ -723,7 +724,7 @@ function MemoryServiceBreakdownPane({
 
       <div className="host-memory-panel__breakdown-header" style={{ marginTop: 24 }}>
         <Typography.Text strong style={{ fontSize: 14 }}>
-          {i18nText("settings", "auto.k_c82fa2ffd6")}</Typography.Text>
+          {i18nText("settings", "auto.key_micpkcppng")}</Typography.Text>
       </div>
 
       <div className="host-memory-panel__services-list">
@@ -743,9 +744,9 @@ function MemoryServiceBreakdownPane({
                 <Space size={6}>
                   <Tag color="blue">{item.provider_code ?? 'local'}</Tag>
                   {item.supported ? (
-                    <Tag color="green">{i18nText("settings", "auto.k_25d2843150")}</Tag>
+                    <Tag color="green">{i18nText("settings", "auto.key_cfnciedbfa")}</Tag>
                   ) : (
-                    <Tag color="default">{i18nText("settings", "auto.k_8bb38ef00c")}</Tag>
+                    <Tag color="default">{i18nText("settings", "auto.key_illdiopaam")}</Tag>
                   )}
                 </Space>
               </div>
@@ -766,34 +767,34 @@ function MemoryServiceBreakdownPane({
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={i18nText("settings", "auto.k_d92352c698")}
+                    description={i18nText("settings", "auto.key_njcdfcmgji")}
                     style={{ margin: '32px 0' }}
                   />
                 )}
               </div>
               <div className="host-memory-panel__service-card-details">
                 <Descriptions column={1} size="small" bordered>
-                  <Descriptions.Item label={i18nText("settings", "auto.k_2e52abd100")}>
+                  <Descriptions.Item label={i18nText("settings", "auto.key_cofcklnbaa")}>
                     <Typography.Text strong>{item.entry_count}</Typography.Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label={i18nText("settings", "auto.k_c5af77a151")}>
+                  <Descriptions.Item label={i18nText("settings", "auto.key_mfkphhkbfb")}>
                     <Typography.Text type={item.sensitive_entry_count > 0 ? "danger" : "secondary"}>
                       {item.sensitive_entry_count}
                     </Typography.Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label={i18nText("settings", "auto.k_bc722cda0c")}>
+                  <Descriptions.Item label={i18nText("settings", "auto.key_lmhccmnkam")}>
                     <Typography.Text>{formatBytes(item.total_value_size_bytes)}</Typography.Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label={i18nText("settings", "auto.k_775c1e01d1")}>
+                  <Descriptions.Item label={i18nText("settings", "auto.key_hhfmboabnb")}>
                     <Space size={4} wrap>
                       {item.capabilities?.list_entries ? (
-                        <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.k_fdcf343c57")}</Tag>
+                        <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.key_pnmpdedmfh")}</Tag>
                       ) : null}
                       {item.capabilities?.list_tree ? (
-                        <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.k_adaf30cb73")}</Tag>
+                        <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.key_knkpdamlhd")}</Tag>
                       ) : null}
                       {item.capabilities?.reveal_value ? (
-                        <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.k_d75977efdd")}</Tag>
+                        <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>{i18nText("settings", "auto.key_nhfjhhopnn")}</Tag>
                       ) : null}
                     </Space>
                   </Descriptions.Item>
@@ -820,7 +821,7 @@ function MemoryStatsOverviewPane({
   const columns = useMemo<ColumnsType<SettingsHostInfrastructureMemoryStats>>(
     () => [
       {
-        title: 'Contract',
+        title: i18nText("settings", "auto.contract"),
         dataIndex: 'label',
         key: 'label',
         render: (label: string, item) => (
@@ -833,26 +834,26 @@ function MemoryStatsOverviewPane({
         )
       },
       {
-        title: 'Provider',
+        title: i18nText("settings", "auto.provider"),
         dataIndex: 'provider_code',
         key: 'provider_code',
         width: 140,
-        render: (providerCode: string | null) => providerCode ?? 'unknown'
+        render: (providerCode: string | null) => providerCode ?? i18nText("settings", "auto.unknown")
       },
       {
-        title: 'Entries',
+        title: i18nText("settings", "auto.entries"),
         dataIndex: 'entry_count',
         key: 'entry_count',
         width: 120
       },
       {
-        title: 'Sensitive',
+        title: i18nText("settings", "auto.sensitive"),
         dataIndex: 'sensitive_entry_count',
         key: 'sensitive_entry_count',
         width: 120
       },
       {
-        title: 'Value size',
+        title: i18nText("settings", "auto.value_size"),
         dataIndex: 'total_value_size_bytes',
         key: 'total_value_size_bytes',
         width: 140,
@@ -863,14 +864,14 @@ function MemoryStatsOverviewPane({
   );
 
   if (isError) {
-    return <Alert type="warning" showIcon message={i18nText("settings", "auto.k_6fc0a5e98c")} />;
+    return <Alert type="warning" showIcon message={i18nText("settings", "auto.key_gpmakfojim")} />;
   }
 
   return (
     <Space direction="vertical" size={16} className="host-memory-panel__stats">
       <div className="host-memory-panel__stats-report">
         <div className="host-memory-panel__stats-report-header">
-          <Typography.Text strong>Memory statistics</Typography.Text>
+          <Typography.Text strong>{i18nText("settings", "auto.memory_statistics")}</Typography.Text>
           <Typography.Text type="secondary">
             {formatInspectionPath(data?.inspection_path ?? [])}
           </Typography.Text>
@@ -882,9 +883,9 @@ function MemoryStatsOverviewPane({
             </div>
             <div className="host-memory-panel__stat-content">
               <Statistic
-                title="Entries"
+                title={i18nText("settings", "auto.entries")}
                 value={data?.entry_count ?? 0}
-                formatter={(value) => `${value} entries`}
+                formatter={(value) => i18nText("settings", "auto.entries_count", { value1: String(value) })}
                 loading={isLoading}
               />
             </div>
@@ -896,9 +897,9 @@ function MemoryStatsOverviewPane({
             </div>
             <div className="host-memory-panel__stat-content">
               <Statistic
-                title="Sensitive"
+                title={i18nText("settings", "auto.sensitive")}
                 value={data?.sensitive_entry_count ?? 0}
-                formatter={(value) => `${value} sensitive`}
+                formatter={(value) => i18nText("settings", "auto.sensitive_count", { value1: String(value) })}
                 loading={isLoading}
               />
             </div>
@@ -910,7 +911,7 @@ function MemoryStatsOverviewPane({
             </div>
             <div className="host-memory-panel__stat-content">
               <Statistic
-                title="Value size"
+                title={i18nText("settings", "auto.value_size")}
                 value={formatBytes(data?.total_value_size_bytes ?? 0)}
                 loading={isLoading}
               />
@@ -935,7 +936,7 @@ function MemoryStatsOverviewPane({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={i18nText("settings", "auto.k_9cf5deae81")}
+          description={i18nText("settings", "auto.key_jmpfnokoib")}
         />
       )}
     </Space>
@@ -1240,7 +1241,7 @@ export function HostInfrastructureMemoryObservationPanel({
   >(
     () => [
       {
-        title: 'Key',
+        title: i18nText("settings", "auto.key"),
         dataIndex: 'key',
         key: 'key',
         width: 220,
@@ -1258,7 +1259,7 @@ export function HostInfrastructureMemoryObservationPanel({
         )
       },
       {
-        title: 'Group',
+        title: i18nText("settings", "auto.group"),
         dataIndex: 'group_code',
         key: 'group_code',
         width: 160,
@@ -1274,38 +1275,38 @@ export function HostInfrastructureMemoryObservationPanel({
         )
       },
       {
-        title: 'Kind',
+        title: i18nText("settings", "auto.kind"),
         dataIndex: 'entry_kind',
         key: 'entry_kind',
         width: 130
       },
       {
-        title: 'Status',
+        title: i18nText("settings", "auto.status"),
         dataIndex: 'status',
         key: 'status',
         width: 110,
         render: (status: string) => <Tag>{status}</Tag>
       },
       {
-        title: 'Sensitive',
+        title: i18nText("settings", "auto.sensitive"),
         dataIndex: 'sensitive',
         key: 'sensitive',
         width: 110,
         render: (sensitive: boolean) => (
           <Tag color={sensitive ? 'red' : 'default'}>
-            {sensitive ? 'yes' : 'no'}
+            {sensitive ? i18nText("settings", "auto.yes") : i18nText("settings", "auto.no")}
           </Tag>
         )
       },
       {
-        title: 'TTL',
+        title: i18nText("settings", "auto.ttl"),
         dataIndex: 'ttl_seconds',
         key: 'ttl_seconds',
         width: 120,
         render: (ttl: number | null) => formatTtl(ttl)
       },
       {
-        title: 'Size',
+        title: i18nText("settings", "auto.size"),
         dataIndex: 'value_size_bytes',
         key: 'value_size_bytes',
         width: 110,
@@ -1317,17 +1318,17 @@ export function HostInfrastructureMemoryObservationPanel({
         width: canReveal ? 220 : 120,
         render: (_, entry) => (
           <Space size={4}>
-            <Tooltip title={i18nText("settings", "auto.k_07fc1551d4")}>
+            <Tooltip title={i18nText("settings", "auto.key_ahpmbffbne")}>
               <Button
                 icon={<FileSearchOutlined />}
                 onClick={() => setMetadataEntry(entry)}
                 size="small"
               >
-                Metadata
+                {i18nText("settings", "auto.metadata")}
               </Button>
             </Tooltip>
             {canReveal ? (
-              <Tooltip title={i18nText("settings", "auto.k_d02aad393c")}>
+              <Tooltip title={i18nText("settings", "auto.key_nackkndjdm")}>
                 <Button
                   icon={<EyeOutlined />}
                   loading={revealMutation.isPending}
@@ -1336,7 +1337,7 @@ export function HostInfrastructureMemoryObservationPanel({
                   }}
                   size="small"
                 >
-                  Reveal
+                  {i18nText("settings", "auto.reveal")}
                 </Button>
               </Tooltip>
             ) : null}
@@ -1353,8 +1354,8 @@ export function HostInfrastructureMemoryObservationPanel({
         <Alert
           type="error"
           showIcon
-          message={i18nText("settings", "auto.k_036b9c25ab")}
-          description={i18nText("settings", "auto.k_ad6683a1ac")}
+          message={i18nText("settings", "auto.key_adgljmcfkl")}
+          description={i18nText("settings", "auto.key_knggidkbkm")}
         />
         <Button
           icon={<ReloadOutlined />}
@@ -1370,12 +1371,16 @@ export function HostInfrastructureMemoryObservationPanel({
     <Space direction="vertical" size={16} className="host-memory-panel">
       <div className="host-memory-panel__toolbar">
         <Space size={[8, 8]} wrap>
-          <Tag color="blue">{contracts.length} contracts</Tag>
+          <Tag color="blue">{i18nText("settings", "auto.contracts_count", { value1: contracts.length })}</Tag>
           <Tag>
-            Reveal {overviewQuery.data?.can_manage ? 'available' : 'off'}
+            {i18nText("settings", "auto.reveal_status", {
+              value1: overviewQuery.data?.can_manage
+                ? i18nText("settings", "auto.available")
+                : i18nText("settings", "auto.off")
+            })}
           </Tag>
           <Typography.Text type="secondary">
-            {i18nText("settings", "auto.k_8827f80e7b")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
+            {i18nText("settings", "auto.key_iichpiaohl")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
           </Typography.Text>
         </Space>
         <Space size={12} align="center">
@@ -1386,7 +1391,7 @@ export function HostInfrastructureMemoryObservationPanel({
               size="small"
             />
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              {i18nText("settings", "auto.k_2a8f67fd50")}</Typography.Text>
+              {i18nText("settings", "auto.key_ckipghpnfa")}</Typography.Text>
           </Space>
           <Button
             icon={<ReloadOutlined />}
@@ -1408,15 +1413,15 @@ export function HostInfrastructureMemoryObservationPanel({
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.k_9cb10f5faa")}
-          description={i18nText("settings", "auto.k_08bfced71d")}
+          message={i18nText("settings", "auto.key_jmlbapfpkk")}
+          description={i18nText("settings", "auto.key_ailpmonhbn")}
         />
       ) : null}
 
       {overviewQuery.isSuccess && !contracts.length ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={i18nText("settings", "auto.k_c4facea5a7")}
+          description={i18nText("settings", "auto.key_mepkmokfkh")}
         />
       ) : null}
 
@@ -1427,7 +1432,7 @@ export function HostInfrastructureMemoryObservationPanel({
           items={[
             {
               key: MEMORY_STATS_TAB_KEY,
-              label: i18nText("settings", "auto.k_ca8ffc3990"),
+              label: i18nText("settings", "auto.key_mkippmdjja"),
               children: (
                 <div className="host-memory-panel__tab-pane">
                   <MemoryStatsOverviewPane
@@ -1466,18 +1471,18 @@ export function HostInfrastructureMemoryObservationPanel({
                             <Alert
                               type="warning"
                               showIcon
-                              message={i18nText("settings", "auto.k_7bae909c7e")}
+                              message={i18nText("settings", "auto.key_hlkojajmho")}
                             />
                           ) : rootTreeQuery.isError ? (
                             <Alert
                               type="error"
                               showIcon
-                              message={i18nText("settings", "auto.k_58d51c1020")}
+                              message={i18nText("settings", "auto.key_finfbmbaca")}
                             />
                           ) : rootTreeQuery.isSuccess && !rootNodes.length ? (
                             <Empty
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              description={i18nText("settings", "auto.k_9c7938fe9a")}
+                              description={i18nText("settings", "auto.key_jmhjdipojk")}
                             />
                           ) : (
                             <div
@@ -1515,7 +1520,7 @@ export function HostInfrastructureMemoryObservationPanel({
                         ) : (
                           <Empty
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={i18nText("settings", "auto.k_7da1855029")}
+                            description={i18nText("settings", "auto.key_hnkbiffacj")}
                           />
                         )}
                       </Layout.Sider>
@@ -1529,11 +1534,11 @@ export function HostInfrastructureMemoryObservationPanel({
                         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                           <div className="host-memory-panel__entries-header">
                             <Space direction="vertical" size={2}>
-                              <Typography.Text strong>Entries</Typography.Text>
+                              <Typography.Text strong>{i18nText("settings", "auto.entries")}</Typography.Text>
                               <Typography.Text type="secondary">
                                 {selectedInspectionPath
                                   ? formatInspectionPath(selectedInspectionPath)
-                                  : i18nText("settings", "auto.k_23a055bd87")}
+                                  : i18nText("settings", "auto.key_cdkafflnih")}
                               </Typography.Text>
                             </Space>
                             <Input.Search
@@ -1559,19 +1564,19 @@ export function HostInfrastructureMemoryObservationPanel({
                           {!selectedInspectionPath ? (
                             <Empty
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              description={i18nText("settings", "auto.k_64ebf116a8")}
+                              description={i18nText("settings", "auto.key_geolpbbgki")}
                             />
                           ) : entriesQuery.isError ? (
                             <Alert
                               type="error"
                               showIcon
-                              message={i18nText("settings", "auto.k_a7e34111a5")}
-                              description={i18nText("settings", "auto.k_44201a2c61")}
+                              message={i18nText("settings", "auto.key_khodebbbkf")}
+                              description={i18nText("settings", "auto.key_eecabkcmgb")}
                             />
                           ) : entriesQuery.isSuccess && !entries.length ? (
                             <Empty
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              description={i18nText("settings", "auto.k_d8050c1fad")}
+                              description={i18nText("settings", "auto.key_niafambpkn")}
                             />
                           ) : (
                             <>
@@ -1593,7 +1598,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                   {entriesQuery.data
                                     ? `${formatBytes(
                                         entriesQuery.data.emitted_bytes
-                                      )} emitted`
+                                      )} ${i18nText("settings", "auto.emitted")}`
                                     : null}
                                 </Typography.Text>
                                 <Space size={8}>
@@ -1613,7 +1618,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                       });
                                     }}
                                   >
-                                    {i18nText("settings", "auto.k_b41561d807")}</Button>
+                                    {i18nText("settings", "auto.key_lebfgbniah")}</Button>
                                   <Button
                                     size="small"
                                     disabled={!entriesQuery.data?.next_cursor}
@@ -1630,7 +1635,7 @@ export function HostInfrastructureMemoryObservationPanel({
                                       setEntryCursor(nextCursor);
                                     }}
                                   >
-                                    {i18nText("settings", "auto.k_67a246a344")}</Button>
+                                    {i18nText("settings", "auto.key_ghkcegkdee")}</Button>
                                 </Space>
                               </div>
                             </>
@@ -1647,7 +1652,7 @@ export function HostInfrastructureMemoryObservationPanel({
       ) : null}
 
       <Drawer
-        title="Entry metadata"
+        title={i18nText("settings", "auto.entry_metadata")}
         width={640}
         open={Boolean(metadataEntry)}
         onClose={() => setMetadataEntry(null)}
@@ -1660,44 +1665,44 @@ export function HostInfrastructureMemoryObservationPanel({
             className="host-memory-panel__drawer"
           >
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="Contract">
+              <Descriptions.Item label={i18nText("settings", "auto.contract")}>
                 {metadataEntry.contract_code}
               </Descriptions.Item>
-              <Descriptions.Item label="Group">
+              <Descriptions.Item label={i18nText("settings", "auto.group")}>
                 {metadataEntry.group_code}
               </Descriptions.Item>
-              <Descriptions.Item label="Key">
+              <Descriptions.Item label={i18nText("settings", "auto.key")}>
                 {metadataEntry.key}
               </Descriptions.Item>
-              <Descriptions.Item label="Entry ref">
+              <Descriptions.Item label={i18nText("settings", "auto.entry_ref")}>
                 {metadataEntry.entry_ref}
               </Descriptions.Item>
-              <Descriptions.Item label="Path">
+              <Descriptions.Item label={i18nText("settings", "auto.path")}>
                 {formatInspectionPath(metadataEntry.inspection_path)}
               </Descriptions.Item>
-              <Descriptions.Item label="Owner">
-                {metadataEntry.owner ?? 'unknown'}
+              <Descriptions.Item label={i18nText("settings", "auto.owner")}>
+                {metadataEntry.owner ?? i18nText("settings", "auto.unknown")}
               </Descriptions.Item>
-              <Descriptions.Item label="Created">
+              <Descriptions.Item label={i18nText("settings", "auto.created")}>
                 {formatUnixTimestamp(metadataEntry.created_at_unix)}
               </Descriptions.Item>
-              <Descriptions.Item label="Expires">
+              <Descriptions.Item label={i18nText("settings", "auto.expires")}>
                 {formatUnixTimestamp(metadataEntry.expires_at_unix)}
               </Descriptions.Item>
             </Descriptions>
             <JsonPreviewBlock
-              title="Metadata"
+              title={i18nText("settings", "auto.metadata")}
               value={metadataEntry.metadata}
               collapsible={false}
               height="320px"
-              copySuccessMessage={i18nText("settings", "auto.k_959ac0ecef")}
+              copySuccessMessage={i18nText("settings", "auto.key_jfjkmaomop")}
             />
           </Space>
         ) : null}
       </Drawer>
 
       <Drawer
-        title="Entry value"
+        title={i18nText("settings", "auto.entry_value")}
         width={640}
         open={Boolean(revealedEntry)}
         onClose={() => setRevealedEntry(null)}
@@ -1710,63 +1715,63 @@ export function HostInfrastructureMemoryObservationPanel({
             className="host-memory-panel__drawer"
           >
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="Contract">
+              <Descriptions.Item label={i18nText("settings", "auto.contract")}>
                 {revealedEntry.metadata.contract_code}
               </Descriptions.Item>
-              <Descriptions.Item label="Group">
+              <Descriptions.Item label={i18nText("settings", "auto.group")}>
                 {revealedEntry.metadata.group_code}
               </Descriptions.Item>
-              <Descriptions.Item label="Key">
+              <Descriptions.Item label={i18nText("settings", "auto.key")}>
                 {revealedEntry.metadata.key}
               </Descriptions.Item>
-              <Descriptions.Item label="Entry ref">
+              <Descriptions.Item label={i18nText("settings", "auto.entry_ref")}>
                 {revealedEntry.metadata.entry_ref}
               </Descriptions.Item>
-              <Descriptions.Item label="Value state">
+              <Descriptions.Item label={i18nText("settings", "auto.value_state")}>
                 {revealedEntry.value_state}
               </Descriptions.Item>
-              <Descriptions.Item label="Reveal mode">
+              <Descriptions.Item label={i18nText("settings", "auto.reveal_mode")}>
                 {revealedEntry.reveal_mode}
               </Descriptions.Item>
-              <Descriptions.Item label="Size">
+              <Descriptions.Item label={i18nText("settings", "auto.size")}>
                 {formatBytes(revealedEntry.metadata.value_size_bytes)}
               </Descriptions.Item>
             </Descriptions>
             {revealedEntry.value_state === 'available' ? (
               <JsonPreviewBlock
-                title="Memory value"
+                title={i18nText("settings", "auto.memory_value")}
                 value={revealedEntry.value}
                 collapsible={false}
                 height="360px"
-                copySuccessMessage={i18nText("settings", "auto.k_5eea2fcd1b")}
+                copySuccessMessage={i18nText("settings", "auto.key_fookcpmnbl")}
               />
             ) : revealedEntry.value_preview ? (
               <Space direction="vertical" size={8}>
                 <Alert
                   type="info"
                   showIcon
-                  message="preview"
+                  message={i18nText("settings", "auto.preview")}
                   description={`${formatBytes(
                     revealedEntry.preview_size_bytes
-                  )} of ${formatBytes(revealedEntry.full_value_size_bytes)}`}
+                  )} ${i18nText("settings", "auto.of")} ${formatBytes(revealedEntry.full_value_size_bytes)}`}
                 />
                 <JsonPreviewBlock
-                  title="Memory value preview"
+                  title={i18nText("settings", "auto.memory_value_preview")}
                   value={revealedEntry.value_preview}
                   rawText={revealedEntry.value_preview}
                   collapsible={false}
                   height="320px"
-                  copySuccessMessage={i18nText("settings", "auto.k_892f5db7fe")}
+                  copySuccessMessage={i18nText("settings", "auto.key_ijcpfnlhpo")}
                 />
               </Space>
             ) : (
               <Alert
                 type="warning"
                 showIcon
-                message="value_too_large"
+                message={i18nText("settings", "auto.value_too_large")}
                 description={`${formatBytes(
                   revealedEntry.full_value_size_bytes
-                )} exceeds full reveal limit.`}
+                )} ${i18nText("settings", "auto.exceeds_full_reveal_limit")}`}
               />
             )}
             {canReveal && revealedEntry.value_state === 'preview' ? (
@@ -1780,7 +1785,7 @@ export function HostInfrastructureMemoryObservationPanel({
                   })
                 }
               >
-                Full reveal
+                {i18nText("settings", "auto.full_reveal")}
               </Button>
             ) : null}
           </Space>

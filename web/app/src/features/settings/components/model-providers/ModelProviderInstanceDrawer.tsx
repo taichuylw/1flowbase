@@ -373,7 +373,7 @@ function ModelProviderInstanceDrawerContent({
     }
   }
 
-  const title = mode === 'create' ? i18nText("settings", "auto.k_1564473559") : i18nText("settings", "auto.k_ade729d6f5");
+  const title = mode === 'create' ? i18nText("settings", "auto.key_bfgeehdffj") : i18nText("settings", "auto.key_knohcjngpf");
   const formSchema = (catalogEntry?.form_schema ?? []).filter(
     (field) => !isPreviewOnlyField(field)
   );
@@ -490,13 +490,13 @@ function ModelProviderInstanceDrawerContent({
         ? previewSource.includes('****')
           ? previewSource
           : maskSecretPreview(previewSource)
-        : i18nText("settings", "auto.k_63595e95b7");
+        : i18nText("settings", "auto.key_gdfjfojflh");
 
       return (
         <Form.Item
           key={field.key}
           label={label}
-          extra={i18nText("settings", "auto.k_344057d169")}
+          extra={i18nText("settings", "auto.key_deeafhnbgj")}
         >
           {revealedSecretKeys[field.key] ? (
             <Space.Compact block>
@@ -522,7 +522,7 @@ function ModelProviderInstanceDrawerContent({
                   }));
                 }}
               >
-                {i18nText("settings", "auto.k_bb0e7e01aa")}{label}
+                {i18nText("settings", "auto.key_llaohoabkk")}{label}
               </Button>
             </Space.Compact>
           ) : (
@@ -534,7 +534,7 @@ function ModelProviderInstanceDrawerContent({
                   void handleRevealSecret(field.key).catch(() => undefined);
                 }}
               >
-                {i18nText("settings", "auto.k_71b6771bc7")}{label}
+                {i18nText("settings", "auto.key_hblghhblmh")}{label}
               </Button>
             </Space.Compact>
           )}
@@ -549,21 +549,21 @@ function ModelProviderInstanceDrawerContent({
         name={['config', field.key]}
         rules={
           field.required && (!isSecret || mode === 'create')
-            ? [{ required: true, message: i18nText("settings", "auto.k_217f87b851", { value1: label }) }]
+            ? [{ required: true, message: i18nText("settings", "auto.key_cbhpihlifb", { value1: label }) }]
             : undefined
         }
         extra={
           isSecret
-            ? i18nText("settings", "auto.k_7830ef2888")
+            ? i18nText("settings", "auto.key_hidaopciii")
             : field.key === 'base_url'
-              ? i18nText("settings", "auto.k_cf05d115e4")
+              ? i18nText("settings", "auto.key_mpafnbbfoe")
               : undefined
         }
       >
         {isSecret ? (
           <Input.Password
             autoComplete="off"
-            placeholder={i18nText("settings", "auto.k_601816e170")}
+            placeholder={i18nText("settings", "auto.key_gabibgobha")}
           />
         ) : useTextArea ? (
           <Input.TextArea
@@ -628,8 +628,8 @@ function ModelProviderInstanceDrawerContent({
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', fontWeight: 'normal', fontSize: '12px' }}>
                   <Tag color="blue" style={{ margin: 0 }}>{catalogEntry.provider_code}</Tag>
                   <Tag color="cyan" style={{ margin: 0 }}>{catalogEntry.protocol}</Tag>
-                  <Tag color="purple" style={{ margin: 0 }}>{i18nText("settings", "auto.k_0d22afe6d2")}{catalogEntry.model_discovery_mode}</Tag>
-                  <Tag color="gold" style={{ margin: 0 }}>{i18nText("settings", "auto.k_3318f83ae9")}{catalogEntry.predefined_models.length}</Tag>
+                  <Tag color="purple" style={{ margin: 0 }}>{i18nText("settings", "auto.key_ancckpognc")}{catalogEntry.model_discovery_mode}</Tag>
+                  <Tag color="gold" style={{ margin: 0 }}>{i18nText("settings", "auto.key_ddbipidkoj")}{catalogEntry.predefined_models.length}</Tag>
                 </div>
               </div>
               <div className="model-provider-drawer__card-body">
@@ -638,20 +638,20 @@ function ModelProviderInstanceDrawerContent({
                     <Form.Item
                       label={i18nText("settings", "auto.name")}
                       name="display_name"
-                      rules={[{ required: true, message: i18nText("settings", "auto.k_1502ce6c39") }]}
+                      rules={[{ required: true, message: i18nText("settings", "auto.key_bfacmogmdj") }]}
                       style={{ marginBottom: 0 }}
                     >
-                      <Input placeholder={i18nText("settings", "auto.k_e5727c5f9a")} />
+                      <Input placeholder={i18nText("settings", "auto.key_ofhchmfpjk")} />
                     </Form.Item>
                   </div>
                   <div style={{ flex: 'none' }}>
                     <Form.Item
-                      label={i18nText("settings", "auto.k_435790cecc")}
+                      label={i18nText("settings", "auto.key_edfhjamomm")}
                       name="included_in_main"
                       valuePropName="checked"
                       style={{ marginBottom: 0 }}
                     >
-                      <Switch aria-label={i18nText("settings", "auto.k_435790cecc")} />
+                      <Switch aria-label={i18nText("settings", "auto.key_edfhjamomm")} />
                     </Form.Item>
                   </div>
                 </Flex>
@@ -662,7 +662,7 @@ function ModelProviderInstanceDrawerContent({
               <div className="model-provider-drawer__card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <CheckCircleOutlined />
-                  <span>{i18nText("settings", "auto.k_7d057b6681")}</span>
+                  <span>{i18nText("settings", "auto.key_hnafhlggib")}</span>
                 </div>
                 <div>
                   <Button
@@ -673,7 +673,7 @@ function ModelProviderInstanceDrawerContent({
                       void handlePreviewModels().catch(() => undefined);
                     }}
                   >
-                    {i18nText("settings", "auto.k_b3ff0c7392")}</Button>
+                    {i18nText("settings", "auto.key_ldppamhdjc")}</Button>
                 </div>
               </div>
               <div className="model-provider-drawer__card-body">
@@ -685,7 +685,7 @@ function ModelProviderInstanceDrawerContent({
                       items={[
                         {
                           key: 'advanced-config',
-                          header: i18nText("settings", "auto.k_17d1fcbb78"),
+                          header: i18nText("settings", "auto.key_bhnbpmllhi"),
                           children: advancedConfigFields.map(renderConfigField)
                         }
                       ]}
@@ -698,7 +698,7 @@ function ModelProviderInstanceDrawerContent({
             <div className="model-provider-drawer__card">
               <div className="model-provider-drawer__card-title">
                 <PlusOutlined />
-                <span>{i18nText("settings", "auto.k_4db4aab1da")}</span>
+                <span>{i18nText("settings", "auto.key_enlekklbnk")}</span>
               </div>
               <div className="model-provider-drawer__card-body">
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -706,16 +706,16 @@ function ModelProviderInstanceDrawerContent({
                     <div style={{ flex: 1 }}>
                       <CachedModelSelect
                         modelIds={previewModels.map((model) => model.model_id)}
-                        ariaLabel={i18nText("settings", "auto.k_1d1ff57695")}
-                        placeholder={i18nText("settings", "auto.k_1d1ff57695")}
+                        ariaLabel={i18nText("settings", "auto.key_bnbppfhgjf")}
+                        placeholder={i18nText("settings", "auto.key_bnbppfhgjf")}
                         value={selectedCachedModelId}
                         emptyMode="select"
                         style={{ width: '100%' }}
                         onChange={applyCachedModelSelection}
                       />
                     </div>
-                    <Button type="dashed" aria-label={i18nText("settings", "auto.k_94191ce210")} onClick={() => appendConfiguredModelRow()}>
-                      {i18nText("settings", "auto.k_94191ce210")}</Button>
+                    <Button type="dashed" aria-label={i18nText("settings", "auto.key_jebjbmocba")} onClick={() => appendConfiguredModelRow()}>
+                      {i18nText("settings", "auto.key_jebjbmocba")}</Button>
                     {previewModels.length > 0 && (
                       <Button
                         type="primary"
@@ -740,7 +740,7 @@ function ModelProviderInstanceDrawerContent({
                           });
                         }}
                       >
-                        {i18nText("settings", "auto.k_d5e350e514")}</Button>
+                        {i18nText("settings", "auto.key_nfodfaofbe")}</Button>
                     )}
                   </Flex>
 
@@ -753,8 +753,8 @@ function ModelProviderInstanceDrawerContent({
                         alignItems: 'center'
                       }}
                     >
-                      <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.k_2b7c96b260")}</Typography.Text>
-                      <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.k_d9aa9fe0d6")}</Typography.Text>
+                      <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.key_clhmjglcga")}</Typography.Text>
+                      <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.key_njkkjpoang")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
                         {i18nText("settings", "auto.enabled")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
@@ -783,8 +783,8 @@ function ModelProviderInstanceDrawerContent({
                               }}
                               placeholder={
                                 previewModels.length > 0
-                                  ? i18nText("settings", "auto.k_b9a90bf263")
-                                  : i18nText("settings", "auto.k_5a559b40b1")
+                                  ? i18nText("settings", "auto.key_ljkjalpcgd")
+                                  : i18nText("settings", "auto.key_fkffjlealb")
                               }
                               filterOption={(inputValue, option) =>
                                 String(option?.value ?? '')
@@ -793,7 +793,7 @@ function ModelProviderInstanceDrawerContent({
                               }
                               style={{ width: '100%' }}
                             >
-                              <Input aria-label={i18nText("settings", "auto.k_1c667406ce", { value1: index + 1 })} />
+                              <Input aria-label={i18nText("settings", "auto.key_bmggheagmo", { value1: index + 1 })} />
                             </AutoComplete>
                           </div>
                           <div>
@@ -809,7 +809,7 @@ function ModelProviderInstanceDrawerContent({
                                   context_window_error: parsedContextWindow.error
                                 });
                               }}
-                              placeholder={i18nText("settings", "auto.k_4f965d1ce2")}
+                              placeholder={i18nText("settings", "auto.key_epjgfnbmoc")}
                               filterOption={(inputValue, option) =>
                                 String(option?.value ?? '')
                                   .toLowerCase()
@@ -817,7 +817,7 @@ function ModelProviderInstanceDrawerContent({
                               }
                               style={{ width: '100%' }}
                             >
-                              <Input aria-label={i18nText("settings", "auto.k_b4603d087e", { value1: index + 1 })} />
+                              <Input aria-label={i18nText("settings", "auto.key_legadnaiho", { value1: index + 1 })} />
                             </AutoComplete>
                             {row.context_window_error ? (
                               <Typography.Text
@@ -831,7 +831,7 @@ function ModelProviderInstanceDrawerContent({
                           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
                             <Switch
                               size="small"
-                              aria-label={i18nText("settings", "auto.k_69a9d0a95a", { value1: index + 1 })}
+                              aria-label={i18nText("settings", "auto.key_gjkjnakjfk", { value1: index + 1 })}
                               checked={row.enabled}
                               onChange={(checked) => {
                                 updateConfiguredModelRow(row.key, {
@@ -846,7 +846,7 @@ function ModelProviderInstanceDrawerContent({
                               size="small"
                               type="text"
                               icon={<DeleteOutlined />}
-                              aria-label={i18nText("settings", "auto.k_3b178e31cf", { value1: index + 1 })}
+                              aria-label={i18nText("settings", "auto.key_dlbhiodbmp", { value1: index + 1 })}
                               className="model-provider-drawer__delete-btn"
                               style={{ height: 'auto', padding: '4px 8px' }}
                               onClick={() => removeConfiguredModelRow(row.key)}
@@ -863,7 +863,7 @@ function ModelProviderInstanceDrawerContent({
                       >
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description={i18nText("settings", "auto.k_881231b666")}
+                          description={i18nText("settings", "auto.key_iibcdblggg")}
                         />
                       </div>
                     )}
@@ -873,7 +873,7 @@ function ModelProviderInstanceDrawerContent({
             </div>
           </>
         ) : (
-          <Typography.Text type="secondary">{i18nText("settings", "auto.k_ff50229123")}</Typography.Text>
+          <Typography.Text type="secondary">{i18nText("settings", "auto.key_ppfaccjbcd")}</Typography.Text>
         )}
       </Form>
     </Drawer>

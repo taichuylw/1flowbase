@@ -137,10 +137,10 @@ function QueryValueInput({
   return (
     <Space.Compact block>
       <Select
-        aria-label={sourceAriaLabel ?? i18nText("agentFlow", "auto.k_9dfbef6c3d", { value1: ariaLabel })}
+        aria-label={sourceAriaLabel ?? i18nText("agentFlow", "auto.key_jnplopgmdn", { value1: ariaLabel })}
         options={[
-          { value: 'constant', label: i18nText("agentFlow", "auto.k_cec3d5c599") },
-          { value: 'selector', label: i18nText("agentFlow", "auto.k_b418ca60d4") }
+          { value: 'constant', label: i18nText("agentFlow", "auto.key_momdnfmfjj") },
+          { value: 'selector', label: i18nText("agentFlow", "auto.key_lebimkgane") }
         ]}
         value={value.kind}
         onChange={(kind) =>
@@ -234,7 +234,7 @@ function DataModelQueryConditionsField({
         {query.filters.map((filter, index) => (
           <Space.Compact key={`filter-${index}`} block>
             <Select
-              aria-label={i18nText("agentFlow", "auto.k_77c6704e4a", { value1: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_hhmghaeoek", { value1: index + 1 })}
               options={filterOptions}
               value={filter.field_code || undefined}
               onChange={(fieldCode) => {
@@ -261,7 +261,7 @@ function DataModelQueryConditionsField({
               }}
             />
             <Select
-              aria-label={i18nText("agentFlow", "auto.k_486fdb5a10", { value1: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_eigpnlfkba", { value1: index + 1 })}
               options={operators(fields, filter.field_code)}
               value={filter.operator}
               onChange={(operator) =>
@@ -278,13 +278,13 @@ function DataModelQueryConditionsField({
               }
             />
             <QueryValueInput
-              ariaLabel={i18nText("agentFlow", "auto.k_418821a25d", { value1: index + 1 })}
+              ariaLabel={i18nText("agentFlow", "auto.key_ebiicbkcfn", { value1: index + 1 })}
               valueType={
                 fields.find((field) => field.code === filter.field_code)
                   ?.valueType
               }
-              sourceAriaLabel={i18nText("agentFlow", "auto.k_a2cc392f62", { value1: index + 1 })}
-              selectorAriaLabel={i18nText("agentFlow", "auto.k_6eea6fbf5e", { value1: index + 1 })}
+              sourceAriaLabel={i18nText("agentFlow", "auto.key_kcmmdjcpgc", { value1: index + 1 })}
+              selectorAriaLabel={i18nText("agentFlow", "auto.key_gookgplpfo", { value1: index + 1 })}
               selectorOptions={selectorOptions}
               value={filter.value}
               onChange={(nextValue) =>
@@ -308,7 +308,7 @@ function DataModelQueryConditionsField({
                 })
               }
             >
-              {i18nText("agentFlow", "auto.k_3755f56f2f")}</Button>
+              {i18nText("agentFlow", "auto.key_dhffpfgpcp")}</Button>
           </Space.Compact>
         ))}
         <Button
@@ -318,13 +318,13 @@ function DataModelQueryConditionsField({
             onChange({ filters: [...query.filters, nextFilter(fields)] })
           }
         >
-          {i18nText("agentFlow", "auto.k_c86f698210")}</Button>
+          {i18nText("agentFlow", "auto.key_migpgjicba")}</Button>
       </Flex>
       <Flex vertical gap={8}>
         {query.sorts.map((sort, index) => (
           <Space.Compact key={`sort-${index}`} block>
             <Select
-              aria-label={i18nText("agentFlow", "auto.k_7fd3b7068e", { value1: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_hpndlhagio", { value1: index + 1 })}
               options={sortOptions}
               value={sort.field_code || undefined}
               onChange={(fieldCode) =>
@@ -338,7 +338,7 @@ function DataModelQueryConditionsField({
               }
             />
             <Select
-              aria-label={i18nText("agentFlow", "auto.k_b97ff0cd4c", { value1: index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_ljhppamnem", { value1: index + 1 })}
               options={[
                 { value: 'asc', label: 'asc' },
                 { value: 'desc', label: 'desc' }
@@ -365,7 +365,7 @@ function DataModelQueryConditionsField({
                 })
               }
             >
-              {i18nText("agentFlow", "auto.k_3755f56f2f")}</Button>
+              {i18nText("agentFlow", "auto.key_dhffpfgpcp")}</Button>
           </Space.Compact>
         ))}
         <Button
@@ -373,10 +373,10 @@ function DataModelQueryConditionsField({
           disabled={sortOptions.length === 0}
           onClick={() => onChange({ sorts: [...query.sorts, nextSort(fields)] })}
         >
-          {i18nText("agentFlow", "auto.k_62743827e8")}</Button>
+          {i18nText("agentFlow", "auto.key_gchedichoi")}</Button>
       </Flex>
       <Select
-        aria-label={i18nText("agentFlow", "auto.k_35373e5338")}
+        aria-label={i18nText("agentFlow", "auto.key_dfdhdofddi")}
         mode="multiple"
         options={expandOptions}
         value={query.expand_relations}
@@ -387,14 +387,14 @@ function DataModelQueryConditionsField({
       {includePagination ? (
         <Space.Compact block>
           <QueryValueInput
-            ariaLabel={i18nText("agentFlow", "auto.k_7b0930e205")}
+            ariaLabel={i18nText("agentFlow", "auto.key_hlajdaocaf")}
             numeric
             selectorOptions={selectorOptions}
             value={query.page}
             onChange={(page) => onChange({ page })}
           />
           <QueryValueInput
-            ariaLabel={i18nText("agentFlow", "auto.k_c1f841e508")}
+            ariaLabel={i18nText("agentFlow", "auto.key_mbpiebofai")}
             numeric
             selectorOptions={selectorOptions}
             value={query.page_size}
@@ -421,7 +421,7 @@ export function DataModelQueryField({
 
   if (!hasDataModelSelected) {
     return (
-      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.k_18d296d69f")}</Typography.Text>
+      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_bincjgngjp")}</Typography.Text>
     );
   }
 

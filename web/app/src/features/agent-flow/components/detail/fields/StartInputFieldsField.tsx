@@ -91,11 +91,11 @@ function systemVariableExample(variableKey: string) {
       return [
         {
           role: 'user',
-          content: i18nText("agentFlow", "auto.k_e5d5e52f35")
+          content: i18nText("agentFlow", "auto.key_ofnfofcpdf")
         },
         {
           role: 'assistant',
-          content: i18nText("agentFlow", "auto.k_69a1988133")
+          content: i18nText("agentFlow", "auto.key_gjkbjiibdd")
         }
       ];
     case 'files':
@@ -230,7 +230,7 @@ export function StartInputFieldsField({
     <div className="agent-flow-start-input-fields">
       <div className="agent-flow-start-input-fields__header">
         <Button
-          aria-label={i18nText("agentFlow", "auto.k_ada5f5ec56")}
+          aria-label={i18nText("agentFlow", "auto.key_knkfpfomfg")}
           icon={<PlusOutlined />}
           size="small"
           type="text"
@@ -250,7 +250,7 @@ export function StartInputFieldsField({
               onDrop={() => handleDrop(index)}
             >
               <button
-                aria-label={i18nText("agentFlow", "auto.k_d542a2eabf", { value1: field.key })}
+                aria-label={i18nText("agentFlow", "auto.key_nfeckcoklp", { value1: field.key })}
                 className="agent-flow-start-input-fields__drag-handle"
                 draggable
                 onDragStart={() => handleDragStart(index)}
@@ -260,7 +260,7 @@ export function StartInputFieldsField({
                 <HolderOutlined />
               </button>
               <button
-                aria-label={i18nText("agentFlow", "auto.k_2e256226f5", { value1: field.key })}
+                aria-label={i18nText("agentFlow", "auto.key_cocfgccgpf", { value1: field.key })}
                 className="agent-flow-start-input-fields__variable-main"
                 type="button"
                 onClick={() => openEditPanel(field, index)}
@@ -283,11 +283,11 @@ export function StartInputFieldsField({
                 <span className="agent-flow-start-input-fields__item-meta">
                   {field.required ? (
                     <span className="agent-flow-start-input-fields__badge">
-                      {i18nText("agentFlow", "auto.k_32945d3e36")}</span>
+                      {i18nText("agentFlow", "auto.key_dcjefndodg")}</span>
                   ) : null}
                   {field.hidden ? (
                     <span className="agent-flow-start-input-fields__badge">
-                      {i18nText("agentFlow", "auto.k_bb0e7e01aa")}</span>
+                      {i18nText("agentFlow", "auto.key_llaohoabkk")}</span>
                   ) : null}
                   <span className="agent-flow-node-detail__list-item-type">
                     {formatValueType(field.valueType)}
@@ -295,7 +295,7 @@ export function StartInputFieldsField({
                 </span>
               </button>
               <Button
-                aria-label={i18nText("agentFlow", "auto.k_c418492b8c", { value1: field.key })}
+                aria-label={i18nText("agentFlow", "auto.key_mebiejclim", { value1: field.key })}
                 className="agent-flow-start-input-fields__delete"
                 danger
                 icon={<DeleteOutlined />}
@@ -313,7 +313,7 @@ export function StartInputFieldsField({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={i18nText("agentFlow", "auto.k_7b45c5dd27")}
+          description={i18nText("agentFlow", "auto.key_hlefmfnnch")}
         />
       )}
 
@@ -322,7 +322,7 @@ export function StartInputFieldsField({
           strong
           className="agent-flow-start-input-fields__system-title"
         >
-          {i18nText("agentFlow", "auto.k_872d17db93")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_ihcnbhnljd")}</Typography.Text>
         <div className="agent-flow-node-detail__list">
           {startSystemVariables.map((variable) => {
             const example = systemVariableExample(variable.key);
@@ -380,9 +380,9 @@ export function StartInputFieldsField({
                   <JsonPreviewBlock
                     className="agent-flow-start-input-fields__system-json"
                     collapsible={false}
-                    copyAriaLabel={i18nText("agentFlow", "auto.k_af7984470a", { value1: variable.title })}
+                    copyAriaLabel={i18nText("agentFlow", "auto.key_kphjieehak", { value1: variable.title })}
                     displayTitle=""
-                    fullscreenAriaLabel={i18nText("agentFlow", "auto.k_2032827601", { value1: variable.title })}
+                    fullscreenAriaLabel={i18nText("agentFlow", "auto.key_cadcichgab", { value1: variable.title })}
                     height="180px"
                     title={variable.title}
                     value={example}

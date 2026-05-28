@@ -26,7 +26,7 @@ export function HostInfrastructurePanel({ canManage }: { canManage: boolean }) {
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.k_79f0be43f4")}
+          message={i18nText("settings", "auto.key_hjpaloedpe")}
         />
         <HostInfrastructureProviderTable
           providers={providersQuery.data ?? []}

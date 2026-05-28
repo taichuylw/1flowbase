@@ -1,7 +1,7 @@
 import { i18nText } from '../../../../shared/i18n/text';
 
 export const MODEL_CONTEXT_WINDOW_VALIDATION_MESSAGE =
-  i18nText("settings", "auto.k_4b1b72bbbf");
+  i18nText("settings", "auto.key_elblhclllp");
 
 export const MODEL_CONTEXT_WINDOW_PRESET_OPTIONS = [
   { label: '16K', value: '16K' },

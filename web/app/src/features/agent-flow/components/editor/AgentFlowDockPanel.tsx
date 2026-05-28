@@ -57,7 +57,7 @@ export function AgentFlowDockPanel({
         <Space size={4} wrap>
           {actions}
           <Button
-            aria-label={closeLabel ?? i18nText("agentFlow", "auto.k_8a49271fb5", { value1: title })}
+            aria-label={closeLabel ?? i18nText("agentFlow", "auto.key_ikejchbplf", { value1: title })}
             icon={<CloseOutlined />}
             size="small"
             type="text"

@@ -203,10 +203,10 @@ export function buildLlmModelMetadataSummary(model: LlmModelOption) {
     model.value,
     model.tag,
     model.effectiveContextWindow !== null
-      ? i18nText("agentFlow", "auto.k_b4603d087e", { value1: formatLlmTokenCount(model.effectiveContextWindow) })
+      ? i18nText("agentFlow", "auto.key_legadnaiho", { value1: formatLlmTokenCount(model.effectiveContextWindow) })
       : null,
     model.maxOutputTokens !== null
-      ? i18nText("agentFlow", "auto.k_e74704f9d8", { value1: formatLlmTokenCount(model.maxOutputTokens) })
+      ? i18nText("agentFlow", "auto.key_ohehaepjni", { value1: formatLlmTokenCount(model.maxOutputTokens) })
       : null
   ]
     .filter(Boolean)

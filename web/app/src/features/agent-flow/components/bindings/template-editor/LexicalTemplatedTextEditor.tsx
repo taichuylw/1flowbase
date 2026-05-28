@@ -560,7 +560,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
           }
           placeholder={
             <div className="agent-flow-templated-text-field__placeholder">
-              {placeholder || i18nText("agentFlow", "auto.k_10f59112ea")}
+              {placeholder || i18nText("agentFlow", "auto.key_bapfjbbcok")}
             </div>
           }
           ErrorBoundary={LexicalErrorBoundary}

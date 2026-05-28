@@ -206,10 +206,10 @@ export function useModelProviderData({
   const providerCount = families.length;
   const officialCount = officialCatalogEntries.length;
   const overviewRows = [
-    { key: 'providers', label: i18nText("settings", "auto.k_f97a4befa3"), value: String(providerCount) },
-    { key: 'ready', label: i18nText("settings", "auto.k_c15b72a2b6"), value: String(readyCount) },
-    { key: 'invalid', label: i18nText("settings", "auto.k_c3804bc16f"), value: String(invalidCount) },
-    { key: 'official', label: i18nText("settings", "auto.k_ca352b0aa3"), value: String(officialCount) }
+    { key: 'providers', label: i18nText("settings", "auto.key_pjhkelopkd"), value: String(providerCount) },
+    { key: 'ready', label: i18nText("settings", "auto.key_mbflhckclg"), value: String(readyCount) },
+    { key: 'invalid', label: i18nText("settings", "auto.key_mdiaelmbgp"), value: String(invalidCount) },
+    { key: 'official', label: i18nText("settings", "auto.key_mkdfclakkd"), value: String(officialCount) }
   ];
 
   return {

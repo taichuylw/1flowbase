@@ -109,7 +109,7 @@ export function DataModelFormDrawer({
 
   return (
     <Drawer
-      title={mode === 'create' ? i18nText("settings", "auto.k_bcd246f770") : i18nText("settings", "auto.edit_data_model")}
+      title={mode === 'create' ? i18nText("settings", "auto.key_lmncegphha") : i18nText("settings", "auto.edit_data_model")}
       open={open}
       width={520}
       onClose={onClose}
@@ -135,18 +135,18 @@ export function DataModelFormDrawer({
         <Form.Item
           name="title"
           label={
-            <DataModelFieldLabel label={i18nText("settings", "auto.k_748d7dc7e3")} title={dataModelTitleHelp} />
+            <DataModelFieldLabel label={i18nText("settings", "auto.key_heinhnmhod")} title={dataModelTitleHelp} />
           }
-          rules={[{ required: true, message: i18nText("settings", "auto.k_901722e5f3") }]}
+          rules={[{ required: true, message: i18nText("settings", "auto.key_jabhccofpd") }]}
         >
-          <Input aria-label={i18nText("settings", "auto.k_748d7dc7e3")} />
+          <Input aria-label={i18nText("settings", "auto.key_heinhnmhod")} />
         </Form.Item>
         <Form.Item
           name="code"
           label={
             <DataModelFieldLabel label="Code" title={dataModelCodeHelp} />
           }
-          rules={[{ required: true, message: i18nText("settings", "auto.k_a443b39d6f") }]}
+          rules={[{ required: true, message: i18nText("settings", "auto.key_keedldjngp") }]}
         >
           <Input aria-label="Code" disabled={mode === 'edit'} />
         </Form.Item>
@@ -155,7 +155,7 @@ export function DataModelFormDrawer({
           label={
             <DataModelFieldLabel label={i18nText("settings", "auto.status")} title={dataModelStatusHelp} />
           }
-          rules={[{ required: true, message: i18nText("settings", "auto.k_dba277df58") }]}
+          rules={[{ required: true, message: i18nText("settings", "auto.key_nlkchhnpfi") }]}
         >
           <Select aria-label={i18nText("settings", "auto.status")} options={dataModelStatusOptions} />
         </Form.Item>
@@ -165,8 +165,8 @@ export function DataModelFormDrawer({
         {isExternalModel ? (
           <Form.Item
             name="external_table_id"
-            label={i18nText("settings", "auto.k_e8c66a5fcd")}
-            rules={[{ required: true, message: i18nText("settings", "auto.k_39d63adf01") }]}
+            label={i18nText("settings", "auto.key_oimggkfpmn")}
+            rules={[{ required: true, message: i18nText("settings", "auto.key_djngdknpab") }]}
           >
             <Input />
           </Form.Item>

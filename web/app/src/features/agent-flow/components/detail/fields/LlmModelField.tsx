@@ -48,8 +48,8 @@ const MODEL_SETTINGS_MOUSE_LEAVE_CLOSE_DELAY_MS = 2_000;
 const LLM_PARAMETERS_BLOCK: SchemaDynamicFormBlock = {
   kind: 'dynamic_form',
   form_key: 'llm_parameters',
-  title: i18nText("agentFlow", "auto.k_0b7d951bfa"),
-  empty_text: i18nText("agentFlow", "auto.k_597fc692b0")
+  title: i18nText("agentFlow", "auto.key_alhnjfblpk"),
+  empty_text: i18nText("agentFlow", "auto.key_fjhpmgjcla")
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,7 +96,7 @@ function buildModelSelection(nextModel: LlmModelOption) {
 
 function buildOutputLabel(value: number | null | undefined) {
   const formattedValue = formatLlmTokenCount(value);
-  return formattedValue ? i18nText("agentFlow", "auto.k_e74704f9d8", { value1: formattedValue }) : null;
+  return formattedValue ? i18nText("agentFlow", "auto.key_ohehaepjni", { value1: formattedValue }) : null;
 }
 
 function ContextMarker({ value }: { value: number | null | undefined }) {
@@ -109,8 +109,8 @@ function ContextMarker({ value }: { value: number | null | undefined }) {
   return (
     <span
       className="agent-flow-model-meta-pill agent-flow-model-meta-pill--context"
-      aria-label={i18nText("agentFlow", "auto.k_b4603d087e", { value1: formattedValue })}
-      title={i18nText("agentFlow", "auto.k_b4603d087e", { value1: formattedValue })}
+      aria-label={i18nText("agentFlow", "auto.key_legadnaiho", { value1: formattedValue })}
+      title={i18nText("agentFlow", "auto.key_legadnaiho", { value1: formattedValue })}
     >
       {formattedValue}
     </span>
@@ -122,7 +122,7 @@ function ModelChip({
   modelLabel,
   providerIcon,
   metaItems = [],
-  placeholder = i18nText("agentFlow", "auto.k_928ffcb406")
+  placeholder = i18nText("agentFlow", "auto.key_jcippmleag")
 }: {
   providerLabel?: string | null;
   modelLabel?: string | null;
@@ -149,7 +149,7 @@ function ModelChip({
       </span>
       <span className="agent-flow-model-chip__content">
         <span className="agent-flow-model-chip__eyebrow">
-          {providerLabel || i18nText("agentFlow", "auto.k_77d78db072")}
+          {providerLabel || i18nText("agentFlow", "auto.key_hhnhinlahc")}
         </span>
         <span className="agent-flow-model-chip__label">
           {modelLabel || placeholder}
@@ -357,8 +357,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const floatingPanel = (
     <FloatingSettingsPanel
       open={open}
-      title={i18nText("agentFlow", "auto.k_ec4725bd2f")}
-      closeLabel={i18nText("agentFlow", "auto.k_52d35d55c0")}
+      title={i18nText("agentFlow", "auto.key_omehcflncp")}
+      closeLabel={i18nText("agentFlow", "auto.key_fcndfnffma")}
       triggerRef={triggerRef}
       dragHandleTestId="agent-flow-model-settings-drag-handle"
       leftResizeHandleTestId="agent-flow-model-settings-resize-handle-left"
@@ -372,7 +372,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           className="agent-flow-model-settings__notice"
           type="error"
           showIcon
-          message={i18nText("agentFlow", "auto.k_8218349b3e")}
+          message={i18nText("agentFlow", "auto.key_icbidejldo")}
         />
       ) : null}
       {providerUnavailable ? (
@@ -380,7 +380,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           className="agent-flow-model-settings__notice"
           type="error"
           showIcon
-          message={i18nText("agentFlow", "auto.k_5ceb3b103a")}
+          message={i18nText("agentFlow", "auto.key_fmoldlbadk")}
         />
       ) : null}
       {modelUnavailable ? (
@@ -388,7 +388,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           className="agent-flow-model-settings__notice"
           type="error"
           showIcon
-          message={i18nText("agentFlow", "auto.k_ae7c6c671e")}
+          message={i18nText("agentFlow", "auto.key_kohmgmghbo")}
         />
       ) : null}
 
@@ -398,18 +398,18 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             level={5}
             className="agent-flow-model-settings__section-title"
           >
-            {i18nText("agentFlow", "auto.k_98fd0cbd9c")}</Typography.Title>
+            {i18nText("agentFlow", "auto.key_jipnamlnjm")}</Typography.Title>
           {providerCode || modelValue ? (
             <Button type="link" onClick={clearSelection}>
-              {i18nText("agentFlow", "auto.k_84fcd70d42")}</Button>
+              {i18nText("agentFlow", "auto.key_iepmnhanec")}</Button>
           ) : null}
         </div>
         <Typography.Text className="agent-flow-model-settings__section-subtitle">
-          {i18nText("agentFlow", "auto.k_2e8e9e04a2")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_coiojoaekc")}</Typography.Text>
         <Select
-          aria-label={i18nText("agentFlow", "auto.k_928ffcb406")}
+          aria-label={i18nText("agentFlow", "auto.key_jcippmleag")}
           className="agent-flow-model-settings__select"
-          placeholder={i18nText("agentFlow", "auto.k_928ffcb406")}
+          placeholder={i18nText("agentFlow", "auto.key_jcippmleag")}
           value={selectedModel?.selectionValue}
           open={dropdownOpen}
           options={selectOptions}
@@ -427,8 +427,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={
                       searchText.trim().length > 0
-                        ? i18nText("agentFlow", "auto.k_e3881329da")
-                        : i18nText("agentFlow", "auto.k_a5bcaacb3a")
+                        ? i18nText("agentFlow", "auto.key_odiibdcjnk")
+                        : i18nText("agentFlow", "auto.key_kflmkkmldk")
                     }
                   />
                 </div>
@@ -472,8 +472,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                 {provider.label}
                               </Typography.Text>
                               <div className="agent-flow-model-settings__provider-meta">
-                                {i18nText("agentFlow", "auto.k_7ab6201454")}{provider.modelGroups.length}{' '}
-                                {i18nText("agentFlow", "auto.k_0b69afd1ce")}{provider.models.length} {i18nText("agentFlow", "auto.k_674373aef1")}</div>
+                                {i18nText("agentFlow", "auto.key_hklgcabefe")}{provider.modelGroups.length}{' '}
+                                {i18nText("agentFlow", "auto.key_algjkpnbmo")}{provider.models.length} {i18nText("agentFlow", "auto.key_ghedhdkopb")}</div>
                             </div>
                           </div>
                           <span
@@ -491,7 +491,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                               >
                                 <div className="agent-flow-model-settings__group-head">
                                   <span>{group.label}</span>
-                                  <span>{group.models.length} {i18nText("agentFlow", "auto.k_674373aef1")}</span>
+                                  <span>{group.models.length} {i18nText("agentFlow", "auto.key_ghedhdkopb")}</span>
                                 </div>
                                 <div className="agent-flow-model-settings__options">
                                   {group.models.map((option) => {
@@ -558,7 +558,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                   window.location.assign('/settings/model-providers')
                 }
               >
-                {i18nText("agentFlow", "auto.k_666ce2d526")}</button>
+                {i18nText("agentFlow", "auto.key_gggmocnfcg")}</button>
             </div>
           )}
         />
@@ -571,7 +571,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           level={5}
           className="agent-flow-model-settings__section-title"
         >
-          {i18nText("agentFlow", "auto.k_749d765242")}</Typography.Title>
+          {i18nText("agentFlow", "auto.key_hejnhgfcec")}</Typography.Title>
         <LlmParameterForm adapter={adapter} block={LLM_PARAMETERS_BLOCK} />
       </div>
     </FloatingSettingsPanel>

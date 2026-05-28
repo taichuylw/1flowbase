@@ -59,10 +59,10 @@ const TIME_RANGE_OPTIONS: Array<{
   value: ApplicationLogTimeRange;
 }> = [
   { labelKey: 'auto.today', value: '1' },
-  { labelKey: 'auto.past_7_days', value: '7' },
-  { labelKey: 'auto.past_4_weeks', value: '28' },
-  { labelKey: 'auto.past_3_months', value: '90' },
-  { labelKey: 'auto.past_12_months', value: '365' },
+  { labelKey: 'auto.past_seven_days', value: '7' },
+  { labelKey: 'auto.past_four_weeks', value: '28' },
+  { labelKey: 'auto.past_three_months', value: '90' },
+  { labelKey: 'auto.past_twelve_months', value: '365' },
   { labelKey: 'auto.all_time', value: 'all' }
 ];
 const RUN_SORT_FIELD_OPTIONS: Array<{

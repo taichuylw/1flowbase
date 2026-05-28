@@ -178,7 +178,7 @@ export function MemberManagementPanel({
   const columns = useMemo(
     () => [
       {
-        title: i18nText("settings", "auto.k_9ba763ea34"),
+        title: i18nText("settings", "auto.key_jlkhgdokde"),
         key: 'user',
         render: (_: unknown, member: SettingsMember) => (
           <Space>
@@ -203,7 +203,7 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: i18nText("settings", "auto.k_60beedc8f2"),
+        title: i18nText("settings", "auto.key_galoonmipc"),
         key: 'contact',
         render: (_: unknown, member: SettingsMember) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -224,12 +224,12 @@ export function MemberManagementPanel({
         width: 80,
         render: (_: unknown, member: SettingsMember) => (
           <Tag color={member.status === 'active' ? 'green' : 'default'}>
-            {member.status === 'active' ? i18nText("settings", "auto.enabled") : i18nText("settings", "auto.k_d989e55188")}
+            {member.status === 'active' ? i18nText("settings", "auto.enabled") : i18nText("settings", "auto.key_njijoffbii")}
           </Tag>
         )
       },
       {
-        title: i18nText("settings", "auto.k_6b26695e4d"),
+        title: i18nText("settings", "auto.key_glcggjfoen"),
         key: 'roles',
         render: (_: unknown, member: SettingsMember) => {
           const isRootMember = member.role_codes.includes('root');
@@ -279,13 +279,13 @@ export function MemberManagementPanel({
                           icon={<StopOutlined />}
                           disabled
                         >
-                          {i18nText("settings", "auto.k_d989e55188")}</Button>
+                          {i18nText("settings", "auto.key_njijoffbii")}</Button>
                       ) : (
                         <Popconfirm
-                          title={i18nText("settings", "auto.k_fcd9326404")}
-                          description={i18nText("settings", "auto.k_20daa2e828", { value1: member.name })}
+                          title={i18nText("settings", "auto.key_pmnjdcgeae")}
+                          description={i18nText("settings", "auto.key_cankkcoici", { value1: member.name })}
                           onConfirm={() => disableMutation.mutate(member.id)}
-                          okText={i18nText("settings", "auto.k_f3abd89419")}
+                          okText={i18nText("settings", "auto.key_pdklnijebj")}
                           cancelText={i18nText("settings", "auto.cancel")}
                           okButtonProps={{ danger: true }}
                         >
@@ -295,21 +295,21 @@ export function MemberManagementPanel({
                             icon={<StopOutlined />}
                             loading={disableMutation.isPending}
                           >
-                            {i18nText("settings", "auto.k_d989e55188")}</Button>
+                            {i18nText("settings", "auto.key_njijoffbii")}</Button>
                         </Popconfirm>
                       )
                     ) : null}
                     {isRootMember ? (
                       <Button size="small" icon={<KeyOutlined />} disabled>
-                        {i18nText("settings", "auto.k_7e422146dd")}</Button>
+                        {i18nText("settings", "auto.key_hoeccbegnn")}</Button>
                     ) : (
                       <Popconfirm
-                        title={i18nText("settings", "auto.k_7e422146dd")}
-                        description={i18nText("settings", "auto.k_1320a9789d", { value1: member.name })}
+                        title={i18nText("settings", "auto.key_hoeccbegnn")}
+                        description={i18nText("settings", "auto.key_bdcakjhijn", { value1: member.name })}
                         onConfirm={() =>
                           resetPasswordMutation.mutate(member.id)
                         }
-                        okText={i18nText("settings", "auto.k_30a6079ce3")}
+                        okText={i18nText("settings", "auto.key_dakgahjmod")}
                         cancelText={i18nText("settings", "auto.cancel")}
                       >
                         <Button
@@ -317,7 +317,7 @@ export function MemberManagementPanel({
                           icon={<KeyOutlined />}
                           loading={resetPasswordMutation.isPending}
                         >
-                          {i18nText("settings", "auto.k_7e422146dd")}</Button>
+                          {i18nText("settings", "auto.key_hoeccbegnn")}</Button>
                       </Popconfirm>
                     )}
                   </Space>
@@ -346,7 +346,7 @@ export function MemberManagementPanel({
               icon={<UserAddOutlined />}
               onClick={() => setCreateModalOpen(true)}
             >
-              {i18nText("settings", "auto.k_30416407e5")}</Button>
+              {i18nText("settings", "auto.key_daebgeahof")}</Button>
           </div>
         ) : null}
 
@@ -360,11 +360,11 @@ export function MemberManagementPanel({
         />
 
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {i18nText("settings", "auto.k_98314eb9f7")}</Typography.Text>
+          {i18nText("settings", "auto.key_jidbeoljph")}</Typography.Text>
 
         {/* Create Member Modal */}
         <Modal
-          title={i18nText("settings", "auto.k_30416407e5")}
+          title={i18nText("settings", "auto.key_daebgeahof")}
           open={createModalOpen}
           onCancel={() => {
             setCreateModalOpen(false);
@@ -391,54 +391,54 @@ export function MemberManagementPanel({
               }}
             >
               <Form.Item
-                label={i18nText("settings", "auto.k_9013849179")}
+                label={i18nText("settings", "auto.key_jabdiejbhj")}
                 name="account"
-                rules={[{ required: true, message: i18nText("settings", "auto.k_dfcc84468b") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.key_npmmieegil") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.k_be4c2616b1")}
+                label={i18nText("settings", "auto.key_loemcgbglb")}
                 name="name"
-                rules={[{ required: true, message: i18nText("settings", "auto.k_675b3ee2af") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.key_ghfldoockp") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.k_9ed627bcf6")}
+                label={i18nText("settings", "auto.key_jongchlmpg")}
                 name="email"
                 rules={[
-                  { required: true, message: i18nText("settings", "auto.k_f2dc24deb8") },
-                  { type: 'email', message: i18nText("settings", "auto.k_bc18737362") }
+                  { required: true, message: i18nText("settings", "auto.key_pcnmcenoli") },
+                  { type: 'email', message: i18nText("settings", "auto.key_lmbihdhdgc") }
                 ]}
               >
                 <Input />
               </Form.Item>
-              <Form.Item label={i18nText("settings", "auto.k_5a9cc5e891")} name="phone">
+              <Form.Item label={i18nText("settings", "auto.key_fkjmmfoijb")} name="phone">
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.k_25124ed74c")}
+                label={i18nText("settings", "auto.key_cfbceonhem")}
                 name="nickname"
-                rules={[{ required: true, message: i18nText("settings", "auto.k_5dbe6b07eb") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.key_fnloglahol") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.k_961fcbb15b")}
+                label={i18nText("settings", "auto.key_jgbpmllbfl")}
                 name="password"
                 initialValue={TEMP_PASSWORD}
-                rules={[{ required: true, message: i18nText("settings", "auto.k_aebb4bd95f") }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.key_kollelnjfp") }]}
               >
                 <Input.Password />
               </Form.Item>
             </div>
-            <Form.Item label={i18nText("settings", "auto.k_eff7665554")} name="introduction">
+            <Form.Item label={i18nText("settings", "auto.key_opphggfffe")} name="introduction">
               <Input.TextArea rows={2} />
             </Form.Item>
             <div style={{ display: 'flex', gap: 24 }}>
               <Form.Item
-                label={i18nText("settings", "auto.k_35e18cc8fd")}
+                label={i18nText("settings", "auto.key_dfobimmipn")}
                 name="email_login_enabled"
                 valuePropName="checked"
                 initialValue
@@ -446,7 +446,7 @@ export function MemberManagementPanel({
                 <Switch />
               </Form.Item>
               <Form.Item
-                label={i18nText("settings", "auto.k_20feae5e89")}
+                label={i18nText("settings", "auto.key_capokofoij")}
                 name="phone_login_enabled"
                 valuePropName="checked"
                 initialValue={false}
@@ -460,7 +460,7 @@ export function MemberManagementPanel({
         {/* Role Edit Modal */}
         <Modal
           title={
-            roleEditMember ? i18nText("settings", "auto.k_97c19a33ef", { value1: roleEditMember.name }) : i18nText("settings", "auto.k_b9dcd82a7b")
+            roleEditMember ? i18nText("settings", "auto.key_jhmbjkddop", { value1: roleEditMember.name }) : i18nText("settings", "auto.key_ljnmnickhl")
           }
           open={Boolean(roleEditMember)}
           onCancel={() => setRoleEditMember(null)}
@@ -477,14 +477,14 @@ export function MemberManagementPanel({
                 type="secondary"
                 style={{ display: 'block', marginBottom: 12, fontSize: 13 }}
               >
-                {i18nText("settings", "auto.k_02385e4b97")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.k_43356d3ef8")}</Typography.Text>
+                {i18nText("settings", "auto.key_acdifoeljh")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.key_eddfgndopi")}</Typography.Text>
               <Select
                 mode="multiple"
                 style={{ width: '100%' }}
                 value={editingRoleCodes}
                 onChange={setEditingRoleCodes}
                 options={roleOptions}
-                placeholder={i18nText("settings", "auto.k_2150939fb1")}
+                placeholder={i18nText("settings", "auto.key_cbfajdjplb")}
               />
             </div>
           ) : null}

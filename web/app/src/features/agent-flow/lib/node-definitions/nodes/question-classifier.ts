@@ -16,7 +16,7 @@ export const questionClassifierNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.question',
-          label: i18nText("agentFlow", "auto.k_1c781a63d7"),
+          label: i18nText("agentFlow", "auto.key_bmhibkgdnh"),
           editor: 'selector',
           required: true
         }
@@ -25,7 +25,7 @@ export const questionClassifierNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.label', label: i18nText("agentFlow", "auto.k_0effee892c"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.label', label: i18nText("agentFlow", "auto.key_aoppooijcm"), editor: 'text', required: true }]
     }
   ]
 };

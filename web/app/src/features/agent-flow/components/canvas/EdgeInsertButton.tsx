@@ -18,7 +18,7 @@ export function EdgeInsertButton({
 }) {
   return (
     <NodePickerPopover
-      ariaLabel={i18nText("agentFlow", "auto.k_d21f90596a")}
+      ariaLabel={i18nText("agentFlow", "auto.key_ncbpjafjgk")}
       open={open}
       options={options}
       onOpenChange={onOpenChange}

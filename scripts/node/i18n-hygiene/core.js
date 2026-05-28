@@ -15,6 +15,11 @@ const SKIPPED_DIRS = new Set([
 const I18N_ROOTS = ['web/app/src', 'api/plugins'];
 const I18N_LOCALES = ['en_US', 'zh_Hans'];
 const I18N_KEY_SEGMENT_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
+const FRONTEND_SOURCE_ROOT = 'web/app/src';
+const FRONTEND_I18N_BOOTSTRAP = 'web/app/src/shared/i18n/app-i18n.ts';
+const FRONTEND_SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
+const SOURCE_TEST_PATH_PATTERN = /(^|\/)(_tests|__tests__|test)(\/|$)|\.(test|spec)\.[cm]?[jt]sx?$/u;
+const ROUTE_I18N_REFERENCE_NAMESPACE = 'appShell';
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -109,6 +114,17 @@ function collectI18nJsonFiles(repoRoot) {
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
+function collectFrontendSourceFiles(repoRoot) {
+  return walkFiles(path.join(repoRoot, FRONTEND_SOURCE_ROOT))
+    .map((absolutePath) => ({
+      absolutePath,
+      relativePath: normalizePath(path.relative(repoRoot, absolutePath)),
+    }))
+    .filter(({ relativePath }) => FRONTEND_SOURCE_EXTENSIONS.has(path.extname(relativePath)))
+    .filter(({ relativePath }) => !SOURCE_TEST_PATH_PATTERN.test(relativePath))
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
 function schemeForOwner(owner) {
   if (owner.startsWith('web/app/src/')) {
     return {
@@ -145,6 +161,11 @@ function schemeForOwner(owner) {
 
 function ownerFromRelativePath(relativePath) {
   return relativePath.replace(/\/i18n\/[^/]+\.json$/u, '');
+}
+
+function ownerFromI18nImportPath(relativePath) {
+  const owner = ownerFromRelativePath(relativePath);
+  return owner === relativePath ? null : owner;
 }
 
 function localeFromFileName(fileName) {
@@ -321,6 +342,158 @@ function groupBy(values, resolveKey) {
   return groups;
 }
 
+function collectFrontendNamespaceOwners(repoRoot) {
+  const appI18nPath = path.join(repoRoot, FRONTEND_I18N_BOOTSTRAP);
+  const ownersByNamespace = new Map();
+
+  if (!fs.existsSync(appI18nPath)) {
+    return ownersByNamespace;
+  }
+
+  const appI18nContent = fs.readFileSync(appI18nPath, 'utf8');
+  const namespaceImportPattern =
+    /([A-Za-z][A-Za-z0-9]*):\s*\{\s*zh_Hans:\s*\(\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/gu;
+  let match = namespaceImportPattern.exec(appI18nContent);
+
+  while (match) {
+    const [, namespace, importPath] = match;
+    const importAbsolutePath = path.resolve(path.dirname(appI18nPath), importPath);
+    const importRelativePath = normalizePath(path.relative(repoRoot, importAbsolutePath));
+    const owner = ownerFromI18nImportPath(importRelativePath);
+
+    if (owner?.startsWith(`${FRONTEND_SOURCE_ROOT}/`)) {
+      ownersByNamespace.set(namespace, owner);
+    }
+
+    match = namespaceImportPattern.exec(appI18nContent);
+  }
+
+  return ownersByNamespace;
+}
+
+function extractStaticStringLiterals(content) {
+  const values = new Set();
+  const literalPatterns = [
+    /'((?:\\.|[^'\\\r\n])*)'/gu,
+    /"((?:\\.|[^"\\\r\n])*)"/gu,
+    /`((?:\\.|[^`\\])*)`/gu,
+  ];
+
+  for (const pattern of literalPatterns) {
+    let match = pattern.exec(content);
+    while (match) {
+      const rawValue = match[1];
+      if (!rawValue.includes('${')) {
+        values.add(rawValue.replace(/\\(['"`\\])/gu, '$1'));
+      }
+      match = pattern.exec(content);
+    }
+  }
+
+  return values;
+}
+
+function inferFrontendI18nOwnersForSource({
+  relativePath,
+  ownerKeys,
+  namespaceOwners,
+}) {
+  const owners = new Set();
+
+  if (relativePath.startsWith(`${FRONTEND_SOURCE_ROOT}/routes/`)) {
+    const routeOwner = namespaceOwners.get(ROUTE_I18N_REFERENCE_NAMESPACE);
+    if (routeOwner) {
+      owners.add(routeOwner);
+    }
+  }
+
+  for (const owner of ownerKeys.keys()) {
+    if (relativePath.startsWith(`${owner}/`)) {
+      owners.add(owner);
+    }
+  }
+
+  return owners;
+}
+
+function addFrontendI18nReference({ referencesByOwner, ownerKeys, owner, key }) {
+  if (!ownerKeys.get(owner)?.has(key)) {
+    return;
+  }
+
+  const references = referencesByOwner.get(owner) || new Set();
+  references.add(key);
+  referencesByOwner.set(owner, references);
+}
+
+function collectFrontendI18nReferences({
+  repoRoot,
+  ownerKeys,
+  namespaceOwners = collectFrontendNamespaceOwners(repoRoot),
+}) {
+  const referencesByOwner = new Map();
+  const files = collectFrontendSourceFiles(repoRoot);
+
+  for (const file of files) {
+    const content = fs.readFileSync(file.absolutePath, 'utf8');
+    const stringLiterals = extractStaticStringLiterals(content);
+    const inferredOwners = inferFrontendI18nOwnersForSource({
+      relativePath: file.relativePath,
+      ownerKeys,
+      namespaceOwners,
+    });
+
+    const i18nTextPattern = /i18nText\(\s*(['"`])([^'"`\r\n]+)\1\s*,\s*(['"`])([^'"`\r\n]+)\3/gu;
+    let i18nTextMatch = i18nTextPattern.exec(content);
+    while (i18nTextMatch) {
+      const namespace = i18nTextMatch[2];
+      const key = i18nTextMatch[4];
+      const owner = namespaceOwners.get(namespace);
+      if (owner) {
+        addFrontendI18nReference({ referencesByOwner, ownerKeys, owner, key });
+      }
+      i18nTextMatch = i18nTextPattern.exec(content);
+    }
+
+    const useTranslationNamespaces = new Set();
+    const useTranslationPattern = /useTranslation\(\s*(['"`])([^'"`\r\n]+)\1\s*\)/gu;
+    let useTranslationMatch = useTranslationPattern.exec(content);
+    while (useTranslationMatch) {
+      useTranslationNamespaces.add(useTranslationMatch[2]);
+      useTranslationMatch = useTranslationPattern.exec(content);
+    }
+
+    const tLiteralPattern = /\bt\(\s*(['"`])([^'"`\r\n]+)\1/gu;
+    const tLiteralKeys = new Set();
+    let tLiteralMatch = tLiteralPattern.exec(content);
+    while (tLiteralMatch) {
+      tLiteralKeys.add(tLiteralMatch[2]);
+      tLiteralMatch = tLiteralPattern.exec(content);
+    }
+
+    for (const namespace of useTranslationNamespaces) {
+      const owner = namespaceOwners.get(namespace);
+      if (!owner) {
+        continue;
+      }
+      for (const key of tLiteralKeys) {
+        addFrontendI18nReference({ referencesByOwner, ownerKeys, owner, key });
+      }
+      for (const key of stringLiterals) {
+        addFrontendI18nReference({ referencesByOwner, ownerKeys, owner, key });
+      }
+    }
+
+    for (const owner of inferredOwners) {
+      for (const key of stringLiterals) {
+        addFrontendI18nReference({ referencesByOwner, ownerKeys, owner, key });
+      }
+    }
+  }
+
+  return referencesByOwner;
+}
+
 function collectOwnerFindings({ owner, files }) {
   const findings = [];
   const scheme = schemeForOwner(owner);
@@ -452,7 +625,7 @@ function collectLocaleKeyMismatchFindings({ owners, keysByOwnerLocale }) {
   return findings;
 }
 
-function collectDuplicateEntryFindings(entries) {
+function collectDuplicateEntryFindings(entries, { includeCrossOwnerWarnings = false } = {}) {
   const findings = [];
   const entriesWithValues = entries.filter((entry) => entry.normalizedValue);
 
@@ -478,47 +651,111 @@ function collectDuplicateEntryFindings(entries) {
     }));
   }
 
-  for (const [groupKey, groupEntries] of groupBy(
-    entriesWithValues,
-    (entry) => `${entry.locale}\0${entry.normalizedValue}`
-  )) {
-    const [locale, normalizedValue] = groupKey.split('\0');
-    const owners = [...new Set(groupEntries.map((entry) => entry.owner))];
-    if (owners.length <= 1) {
-      continue;
+  if (includeCrossOwnerWarnings) {
+    for (const [groupKey, groupEntries] of groupBy(
+      entriesWithValues,
+      (entry) => `${entry.locale}\0${entry.normalizedValue}`
+    )) {
+      const [locale, normalizedValue] = groupKey.split('\0');
+      const owners = [...new Set(groupEntries.map((entry) => entry.owner))];
+      if (owners.length <= 1) {
+        continue;
+      }
+
+      findings.push(createFinding({
+        severity: 'warning',
+        rule: 'duplicate-value-across-owners',
+        file: groupEntries[0].file,
+        locale,
+        value: normalizedValue,
+        files: groupEntries.map((entry) => `${entry.file}:${entry.key}`),
+        message: `i18n value "${normalizedValue}" appears in multiple owners; only extract to common when semantics are identical`,
+      }));
     }
 
-    findings.push(createFinding({
-      severity: 'warning',
-      rule: 'duplicate-value-across-owners',
-      file: groupEntries[0].file,
-      locale,
-      value: normalizedValue,
-      files: groupEntries.map((entry) => `${entry.file}:${entry.key}`),
-      message: `i18n value "${normalizedValue}" appears in multiple owners; only extract to common when semantics are identical`,
-    }));
-  }
+    for (const [key, groupEntries] of groupBy(entries, (entry) => entry.key)) {
+      const owners = [...new Set(groupEntries.map((entry) => entry.owner))];
+      if (owners.length <= 1) {
+        continue;
+      }
 
-  for (const [key, groupEntries] of groupBy(entries, (entry) => entry.key)) {
-    const owners = [...new Set(groupEntries.map((entry) => entry.owner))];
-    if (owners.length <= 1) {
-      continue;
+      findings.push(createFinding({
+        severity: 'warning',
+        rule: 'duplicate-key-across-owners',
+        file: groupEntries[0].file,
+        key,
+        files: groupEntries.map((entry) => `${entry.file}:${entry.key}`),
+        message: `i18n key "${key}" appears in multiple owners; keep only if owner paths express different semantics`,
+      }));
     }
-
-    findings.push(createFinding({
-      severity: 'warning',
-      rule: 'duplicate-key-across-owners',
-      file: groupEntries[0].file,
-      key,
-      files: groupEntries.map((entry) => `${entry.file}:${entry.key}`),
-      message: `i18n key "${key}" appears in multiple owners; keep only if owner paths express different semantics`,
-    }));
   }
 
   return findings;
 }
 
-function collectI18nHygieneFindings({ repoRoot = getRepoRoot() } = {}) {
+function collectFrontendOwnerKeyData(entries) {
+  const ownerKeys = new Map();
+  const entriesByOwnerKey = new Map();
+  const frontendEntries = entries.filter(
+    (entry) => entry.owner.startsWith(`${FRONTEND_SOURCE_ROOT}/`) && I18N_LOCALES.includes(entry.locale)
+  );
+
+  for (const [groupKey, keyEntries] of groupBy(frontendEntries, (entry) => `${entry.owner}\0${entry.key}`)) {
+    const [owner, key] = groupKey.split('\0');
+    const keys = ownerKeys.get(owner) || new Set();
+    keys.add(key);
+    ownerKeys.set(owner, keys);
+    entriesByOwnerKey.set(
+      groupKey,
+      [...keyEntries].sort(
+        (left, right) =>
+          I18N_LOCALES.indexOf(left.locale) - I18N_LOCALES.indexOf(right.locale)
+          || left.file.localeCompare(right.file)
+      )
+    );
+  }
+
+  return { entriesByOwnerKey, ownerKeys };
+}
+
+function collectUnusedFrontendI18nKeyFindings({ repoRoot, entries }) {
+  const findings = [];
+  const { entriesByOwnerKey, ownerKeys } = collectFrontendOwnerKeyData(entries);
+
+  if (ownerKeys.size === 0) {
+    return findings;
+  }
+
+  const referencesByOwner = collectFrontendI18nReferences({ repoRoot, ownerKeys });
+
+  for (const [owner, keys] of ownerKeys) {
+    const referencedKeys = referencesByOwner.get(owner) || new Set();
+
+    for (const key of [...keys].sort((left, right) => left.localeCompare(right))) {
+      if (referencedKeys.has(key)) {
+        continue;
+      }
+
+      const keyEntries = entriesByOwnerKey.get(`${owner}\0${key}`) || [];
+      findings.push(createFinding({
+        severity: 'warning',
+        rule: 'unused-i18n-key',
+        file: keyEntries[0]?.file || `${owner}/i18n`,
+        owner,
+        key,
+        files: keyEntries.map((entry) => entry.file),
+        message: `frontend i18n key "${key}" has no static code reference; remove it or keep it only with an explicit dynamic-key reason`,
+      }));
+    }
+  }
+
+  return findings;
+}
+
+function collectI18nHygieneFindings({
+  repoRoot = getRepoRoot(),
+  includeCrossOwnerWarnings = false,
+} = {}) {
   const files = collectI18nJsonFiles(repoRoot);
   const owners = groupBy(files, (file) => ownerFromRelativePath(file.relativePath));
   const findings = [];
@@ -530,7 +767,8 @@ function collectI18nHygieneFindings({ repoRoot = getRepoRoot() } = {}) {
   const parsed = collectParsedFileEntries(files);
   findings.push(...parsed.findings);
   findings.push(...collectLocaleKeyMismatchFindings({ owners, keysByOwnerLocale: parsed.keysByOwnerLocale }));
-  findings.push(...collectDuplicateEntryFindings(parsed.entries));
+  findings.push(...collectDuplicateEntryFindings(parsed.entries, { includeCrossOwnerWarnings }));
+  findings.push(...collectUnusedFrontendI18nKeyFindings({ repoRoot, entries: parsed.entries }));
 
   return findings.sort((left, right) => {
     const severityOrder = left.severity.localeCompare(right.severity);
@@ -550,6 +788,7 @@ function parseCliArgs(argv) {
   }
 
   let maxFindings = DEFAULT_MAX_FINDINGS;
+  let includeCrossOwnerWarnings = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--max-findings') {
@@ -561,11 +800,16 @@ function parseCliArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === '--include-cross-owner-warnings') {
+      includeCrossOwnerWarnings = true;
+      continue;
+    }
     throw new Error(`Unknown i18n-hygiene option: ${arg}`);
   }
 
   return {
     help: false,
+    includeCrossOwnerWarnings,
     maxFindings,
   };
 }
@@ -588,7 +832,8 @@ function writeReport({ repoRoot, findings }) {
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
     'Usage: node scripts/node/tooling.js i18n-hygiene [--max-findings <n>]\n'
-      + 'Checks i18n locale file names, key naming, key alignment, duplicate JSON keys, and semantic value reuse.\n'
+      + 'Checks i18n locale file names, key naming, key alignment, duplicate JSON keys, owner-local semantic value reuse, and unused frontend keys.\n'
+      + 'Pass --include-cross-owner-warnings for advisory cross-owner key/value reuse findings.\n'
   );
 }
 
@@ -603,7 +848,10 @@ async function main(argv = [], deps = {}) {
   }
 
   const repoRoot = deps.repoRoot || getRepoRoot();
-  const findings = collectI18nHygieneFindings({ repoRoot });
+  const findings = collectI18nHygieneFindings({
+    repoRoot,
+    includeCrossOwnerWarnings: options.includeCrossOwnerWarnings,
+  });
   const report = writeReport({ repoRoot, findings });
   const reportPath = normalizePath(path.join(OUTPUT_ROOT, REPORT_FILE));
 

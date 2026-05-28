@@ -472,7 +472,7 @@ export function SettingsDataModelsSection({
                 <div className="data-model-panel__source-meta">
                   <span className="data-model-panel__source-meta-item">
                     <IdcardOutlined className="data-model-panel__source-meta-icon" />
-                    <Typography.Text type="secondary">ID:</Typography.Text>
+                    <Typography.Text type="secondary">{i18nText("settings", "auto.id_label")}</Typography.Text>
                     <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.id}
                     </Typography.Text>
@@ -493,7 +493,7 @@ export function SettingsDataModelsSection({
                   </span>
                   <span className="data-model-panel__source-meta-item">
                     <SyncOutlined className="data-model-panel__source-meta-icon" />
-                    <Typography.Text type="secondary">Catalog:</Typography.Text>
+                    <Typography.Text type="secondary">{i18nText("settings", "auto.catalog_label")}</Typography.Text>
                     <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.catalog_refresh_status ?? '-'}
                     </Typography.Text>

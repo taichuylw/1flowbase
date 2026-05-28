@@ -3,7 +3,7 @@ import { i18nText } from '../../../../shared/i18n/text';
 
 export function ModelProviderTagList({
   modelIds,
-  emptyText = i18nText("settings", "auto.k_55a04b58cd")
+  emptyText = i18nText("settings", "auto.key_ffkaelfimn")
 }: {
   modelIds: string[];
   emptyText?: string;

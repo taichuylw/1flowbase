@@ -78,7 +78,7 @@ export function ModelProviderInstancesModal({
     0
   );
   const displayName = catalogEntry?.display_name ?? providerDisplayName;
-  const title = displayName ? i18nText("settings", "auto.k_c13a981c98", { value1: displayName }) : i18nText("settings", "auto.k_9743810bab");
+  const title = displayName ? i18nText("settings", "auto.key_mbdkjibmji", { value1: displayName }) : i18nText("settings", "auto.key_jhedibalkl");
 
   return (
     <Modal
@@ -95,10 +95,10 @@ export function ModelProviderInstancesModal({
           <Alert
             type="warning"
             showIcon
-            message={i18nText("settings", "auto.k_29dbe8fcae")}
+            message={i18nText("settings", "auto.key_cjnloipmko")}
             description={
               versionSwitchNotice.targetVersion
-                ? i18nText("settings", "auto.k_e66794c6e4", { value1: versionSwitchNotice.targetVersion, value2: versionSwitchNotice.migratedInstanceCount ?? 0 })
+                ? i18nText("settings", "auto.key_ogghjemgoe", { value1: versionSwitchNotice.targetVersion, value2: versionSwitchNotice.migratedInstanceCount ?? 0 })
                 : undefined
             }
           />
@@ -107,15 +107,15 @@ export function ModelProviderInstancesModal({
         <section className="model-provider-panel__main-instance-card">
           <div className="model-provider-panel__main-instance-head">
             <div className="model-provider-panel__main-instance-title-row">
-              <Typography.Text strong>{i18nText("settings", "auto.k_4be73cdcc7")}</Typography.Text>
+              <Typography.Text strong>{i18nText("settings", "auto.key_elohdmnmmh")}</Typography.Text>
               <div className="model-provider-panel__main-instance-summary">
                 <Tag bordered={false} color="blue">
-                  {i18nText("settings", "auto.k_b4dbe5471c")}</Tag>
+                  {i18nText("settings", "auto.key_lenlofehbm")}</Tag>
                 <Typography.Text type="secondary">
-                  {i18nText("settings", "auto.k_c161648890")}{includedCount}
+                  {i18nText("settings", "auto.key_mbgbgeiija")}{includedCount}
                 </Typography.Text>
                 <Typography.Text type="secondary">
-                  {i18nText("settings", "auto.k_7ac64a2b44")}{aggregatedModelCount}
+                  {i18nText("settings", "auto.key_hkmgekclee")}{aggregatedModelCount}
                 </Typography.Text>
               </div>
             </div>
@@ -125,9 +125,9 @@ export function ModelProviderInstancesModal({
               className="model-provider-panel__main-instance-toggle"
             >
               <Typography.Text type="secondary">
-                {i18nText("settings", "auto.k_ce4d3a041d")}</Typography.Text>
+                {i18nText("settings", "auto.key_moendkaebn")}</Typography.Text>
               <Switch
-                aria-label={i18nText("settings", "auto.k_ce4d3a041d")}
+                aria-label={i18nText("settings", "auto.key_moendkaebn")}
                 checked={mainInstance?.auto_include_new_instances ?? false}
                 disabled={!canManage || updatingMainInstance}
                 onChange={onToggleAutoIncludeNewInstances}
@@ -138,7 +138,7 @@ export function ModelProviderInstancesModal({
           {modelGroups.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={i18nText("settings", "auto.k_5d440ac4d7")}
+              description={i18nText("settings", "auto.key_fneeakmenh")}
             />
           ) : (
             <div className="model-provider-panel__main-instance-groups">
@@ -152,7 +152,7 @@ export function ModelProviderInstancesModal({
                   </Typography.Text>
                   <ModelProviderTagList
                     modelIds={group.models.map((model) => model.model_id)}
-                    emptyText={i18nText("settings", "auto.k_b14db0a516")}
+                    emptyText={i18nText("settings", "auto.key_lbenlakfbg")}
                   />
                 </section>
               ))}

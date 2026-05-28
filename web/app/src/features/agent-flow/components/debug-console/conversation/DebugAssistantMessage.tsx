@@ -17,26 +17,26 @@ import { i18nText } from '../../../../../shared/i18n/text';
 
 function fallbackContent(message: AgentFlowDebugMessage) {
   if (message.status === 'running') {
-    return i18nText("agentFlow", "auto.k_3e33259570");
+    return i18nText("agentFlow", "auto.key_doddcfjfha");
   }
 
   if (message.status === 'waiting_human') {
-    return i18nText("agentFlow", "auto.k_c5d96f01b8");
+    return i18nText("agentFlow", "auto.key_mfnjgpabli");
   }
 
   if (message.status === 'waiting_callback') {
-    return i18nText("agentFlow", "auto.k_b28bac2bdb");
+    return i18nText("agentFlow", "auto.key_lcilkmclnl");
   }
 
   if (message.status === 'cancelled') {
-    return i18nText("agentFlow", "auto.k_b7c35c23e9");
+    return i18nText("agentFlow", "auto.key_lhmdfmcdoj");
   }
 
   if (message.status === 'failed') {
-    return i18nText("agentFlow", "auto.k_98888c450b");
+    return i18nText("agentFlow", "auto.key_jiiiimefal");
   }
 
-  return i18nText("agentFlow", "auto.k_d93ec60a2a");
+  return i18nText("agentFlow", "auto.key_njdomgakck");
 }
 
 const TYPEWRITER_INTERVAL_MS = 24;
@@ -119,9 +119,9 @@ export function DebugAssistantMessage({
 
     try {
       await copyTextToClipboard(parsedFullContent.answerText);
-      messageApi.success(i18nText("agentFlow", "auto.k_e381a5763d"));
+      messageApi.success(i18nText("agentFlow", "auto.key_odibkfhgdn"));
     } catch {
-      messageApi.error(i18nText("agentFlow", "auto.k_f2c6b5167b"));
+      messageApi.error(i18nText("agentFlow", "auto.key_pcmglfbghl"));
     }
   }
 
@@ -134,7 +134,7 @@ export function DebugAssistantMessage({
         />
         {hasReasoning ? (
           <section
-            aria-label={i18nText("agentFlow", "auto.k_a6c1499244")}
+            aria-label={i18nText("agentFlow", "auto.key_kgmbejjcee")}
             className="agent-flow-editor__debug-reasoning"
           >
             <button
@@ -145,7 +145,7 @@ export function DebugAssistantMessage({
             >
               {isReasoningExpanded ? <DownOutlined /> : <RightOutlined />}
               <span className="agent-flow-editor__debug-reasoning-title">
-                {i18nText("agentFlow", "auto.k_a6c1499244")}</span>
+                {i18nText("agentFlow", "auto.key_kgmbejjcee")}</span>
             </button>
             {isReasoningExpanded ? (
               <DebugMarkdownContent
@@ -165,7 +165,7 @@ export function DebugAssistantMessage({
         ) : null}
       </div>
       <div
-        aria-label={i18nText("agentFlow", "auto.k_a921964558")}
+        aria-label={i18nText("agentFlow", "auto.key_kjcbjgeffi")}
         className="agent-flow-editor__debug-message-action-row"
         role="group"
       >
@@ -174,9 +174,9 @@ export function DebugAssistantMessage({
           size={8}
           wrap
         >
-          <Tooltip title={i18nText("agentFlow", "auto.k_ce47028426")}>
+          <Tooltip title={i18nText("agentFlow", "auto.key_moehaciecg")}>
             <Button
-              aria-label={i18nText("agentFlow", "auto.k_ce47028426")}
+              aria-label={i18nText("agentFlow", "auto.key_moehaciecg")}
               disabled={!parsedFullContent.answerText}
               icon={<CopyOutlined />}
               size="small"
@@ -186,9 +186,9 @@ export function DebugAssistantMessage({
             />
           </Tooltip>
           {onOpenLog && canOpenLog ? (
-            <Tooltip title={i18nText("agentFlow", "auto.k_d460d0ef5b")}>
+            <Tooltip title={i18nText("agentFlow", "auto.key_neganaopfl")}>
               <Button
-                aria-label={i18nText("agentFlow", "auto.k_d460d0ef5b")}
+                aria-label={i18nText("agentFlow", "auto.key_neganaopfl")}
                 icon={<FileTextOutlined />}
                 size="small"
                 onClick={() => onOpenLog(message)}

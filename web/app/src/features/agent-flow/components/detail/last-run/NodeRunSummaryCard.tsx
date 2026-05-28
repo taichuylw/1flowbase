@@ -11,7 +11,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 function formatDuration(startedAt: string, finishedAt: string | null) {
   if (!finishedAt) {
-    return i18nText("agentFlow", "auto.k_6f1972e48e");
+    return i18nText("agentFlow", "auto.key_gpbjhcoeio");
   }
 
   const durationMs =
@@ -70,7 +70,7 @@ export function NodeRunSummaryCard({
 
   const columns = [
     {
-      title: i18nText("agentFlow", "auto.k_62e951a692"),
+      title: i18nText("agentFlow", "auto.key_gcojfbkgjc"),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
@@ -78,7 +78,7 @@ export function NodeRunSummaryCard({
       )
     },
     {
-      title: i18nText("agentFlow", "auto.k_a674a545db"),
+      title: i18nText("agentFlow", "auto.key_kghekfefnl"),
       dataIndex: 'duration',
       key: 'duration'
     },
@@ -90,7 +90,7 @@ export function NodeRunSummaryCard({
   ];
 
   return (
-    <Card title={i18nText("agentFlow", "auto.k_535a2a9419")}>
+    <Card title={i18nText("agentFlow", "auto.key_fdfkckjebj")}>
       <Table
         columns={columns}
         dataSource={[row]}

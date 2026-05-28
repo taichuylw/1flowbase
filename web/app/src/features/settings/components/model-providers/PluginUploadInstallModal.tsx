@@ -29,32 +29,32 @@ export function PluginUploadInstallModal({
   return (
     <Modal
       open={open}
-      title={i18nText("settings", "auto.k_31f407d6e8")}
+      title={i18nText("settings", "auto.key_dbpeahngoi")}
       onCancel={onClose}
       footer={null}
       destroyOnHidden
     >
       <div className="model-provider-panel__upload-modal">
         <Typography.Paragraph type="secondary">
-          {i18nText("settings", "auto.k_927a527651")}</Typography.Paragraph>
+          {i18nText("settings", "auto.key_jchkfchgfb")}</Typography.Paragraph>
         <Upload.Dragger
           beforeUpload={() => false}
           maxCount={1}
           fileList={fileList}
           onChange={({ fileList: nextFiles }) => onChange(nextFiles)}
         >
-          {i18nText("settings", "auto.k_44f5a61f61")}</Upload.Dragger>
+          {i18nText("settings", "auto.key_eepfkgbpgb")}</Upload.Dragger>
         {resultSummary ? (
           <Alert
             type="success"
             showIcon
             message={`${resultSummary.displayName} ${resultSummary.version}`}
-            description={i18nText("settings", "auto.k_06f54eb8b2", { value1: resultSummary.trustLabel, value2: resultSummary.availabilityLabel })}
+            description={i18nText("settings", "auto.key_agpfeolilc", { value1: resultSummary.trustLabel, value2: resultSummary.availabilityLabel })}
           />
         ) : null}
         {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
         <Button type="primary" block loading={submitting} onClick={onSubmit}>
-          {i18nText("settings", "auto.k_3be0af10dc")}</Button>
+          {i18nText("settings", "auto.key_dloakpbanm")}</Button>
       </div>
     </Modal>
   );

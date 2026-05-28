@@ -6,6 +6,7 @@ import { DeleteOutlined, KeyOutlined, QuestionCircleOutlined } from '@ant-design
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Form, Input, Modal, Space, Table, Tooltip, Typography } from 'antd';
 
+import { formatDateTime } from '../../../../shared/i18n/format';
 import { copyTextToClipboard } from '../../../../shared/ui/clipboard/copy-text';
 import { applicationDetailQueryKey } from '../../api/applications';
 import {
@@ -17,35 +18,27 @@ import {
   type CreatedApplicationApiKey
 } from '../../api/public-api';
 
-const SHANGHAI_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Asia/Shanghai',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23'
-});
-
-function formatDateTime(value: string) {
+function formatShanghaiDateTime(value: string) {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  const parts = SHANGHAI_DATE_TIME_FORMATTER.formatToParts(date);
-  const partByType = new Map(parts.map((part) => [part.type, part.value]));
-
-  return [
-    `${partByType.get('year')}-${partByType.get('month')}-${partByType.get('day')}`,
-    `${partByType.get('hour')}:${partByType.get('minute')}:${partByType.get('second')}`
-  ].join(' ');
+  return formatDateTime(date, {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  });
 }
 
 function formatOptionalDateTime(value: string | null | undefined, t: TFunction<'applications'>) {
-  return value ? formatDateTime(value) : t('auto.not_used');
+  return value ? formatShanghaiDateTime(value) : t('auto.not_used');
 }
 
 export function ApplicationApiKeysPanel({
@@ -253,7 +246,7 @@ export function ApplicationApiKeysPanel({
     <section className="application-api-panel">
       <div className="application-api-panel__header">
         <div>
-          <Typography.Title level={4}>API Keys</Typography.Title>
+          <Typography.Title level={4}>{t('auto.api_keys')}</Typography.Title>
           <Typography.Text type="secondary">{t('auto.current_application_public_api_usage')}</Typography.Text>
         </div>
         <Button type="primary" onClick={() => setCreateOpen(true)}>

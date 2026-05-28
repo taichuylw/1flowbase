@@ -148,9 +148,9 @@ export function TemplatedTextField({
   async function handleCopy() {
     try {
       await copy(draftValue);
-      message.success(i18nText("agentFlow", "auto.k_e381a5763d"));
+      message.success(i18nText("agentFlow", "auto.key_odibkfhgdn"));
     } catch {
-      message.error(i18nText("agentFlow", "auto.k_f2c6b5167b"));
+      message.error(i18nText("agentFlow", "auto.key_pcmglfbghl"));
     }
   }
 
@@ -196,7 +196,7 @@ export function TemplatedTextField({
           placeholder={placeholder}
           onChange={scheduleDraftCommit}
         />
-        <Tooltip title={i18nText("agentFlow", "auto.k_b292c4c90e")}>
+        <Tooltip title={i18nText("agentFlow", "auto.key_lcjcmemjao")}>
           <Button
             className="agent-flow-templated-text-field__input-action"
             type="text"
@@ -207,7 +207,7 @@ export function TemplatedTextField({
               </span>
             }
             disabled={options.length === 0}
-            aria-label={i18nText("agentFlow", "auto.k_b292c4c90e")}
+            aria-label={i18nText("agentFlow", "auto.key_lcjcmemjao")}
             onClick={() => editorRef.current?.openVariablePicker()}
           />
         </Tooltip>
@@ -245,7 +245,7 @@ export function TemplatedTextField({
               <span className="agent-flow-templated-text-field__action agent-flow-templated-text-field__counter">
                 {draftValue.length}
               </span>
-              <Tooltip title={i18nText("agentFlow", "auto.k_b292c4c90e")}>
+              <Tooltip title={i18nText("agentFlow", "auto.key_lcjcmemjao")}>
                 <Button
                   className="agent-flow-templated-text-field__action"
                   type="text"
@@ -256,27 +256,27 @@ export function TemplatedTextField({
                     </span>
                   }
                   disabled={options.length === 0}
-                  aria-label={i18nText("agentFlow", "auto.k_b292c4c90e")}
+                  aria-label={i18nText("agentFlow", "auto.key_lcjcmemjao")}
                   onClick={() => editorRef.current?.openVariablePicker()}
                 />
               </Tooltip>
-              <Tooltip title={i18nText("agentFlow", "auto.k_3aeb16d4b1")}>
+              <Tooltip title={i18nText("agentFlow", "auto.key_dkolbgnelb")}>
                 <Button
                   className="agent-flow-templated-text-field__action"
                   type="text"
                   size="small"
                   icon={copied ? <CheckOutlined /> : <CopyOutlined />}
-                  aria-label={i18nText("agentFlow", "auto.k_65296bf55b", { value1: label })}
+                  aria-label={i18nText("agentFlow", "auto.key_gfcjglpffl", { value1: label })}
                   onClick={handleCopy}
                 />
               </Tooltip>
-              <Tooltip title={i18nText("agentFlow", "auto.k_a3da8d5c30")}>
+              <Tooltip title={i18nText("agentFlow", "auto.key_kdnkinfmda")}>
                 <Button
                   className="agent-flow-templated-text-field__action"
                   type="text"
                   size="small"
                   icon={<FullscreenOutlined />}
-                  aria-label={i18nText("agentFlow", "auto.k_9738dae0ab", { value1: label })}
+                  aria-label={i18nText("agentFlow", "auto.key_jhdinkoakl", { value1: label })}
                   onClick={() => setExpanded(true)}
                 />
               </Tooltip>
@@ -312,7 +312,7 @@ export function TemplatedTextField({
             ref={expandedEditorRef}
             value={draftValue}
             options={options}
-            ariaLabel={i18nText("agentFlow", "auto.k_f4da8c52d6", { value1: ariaLabel })}
+            ariaLabel={i18nText("agentFlow", "auto.key_penkimfcng", { value1: ariaLabel })}
             placeholder={placeholder}
             onChange={scheduleDraftCommit}
           />

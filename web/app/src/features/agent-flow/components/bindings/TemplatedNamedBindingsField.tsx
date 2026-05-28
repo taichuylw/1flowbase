@@ -30,7 +30,7 @@ export function TemplatedNamedBindingsField({
   return (
     <div className="agent-flow-templated-binding-list">
       {value.map((entry, index) => {
-        const entryLabel = entry.name || i18nText("agentFlow", "auto.k_9fdebca240", { value1: index + 1 });
+        const entryLabel = entry.name || i18nText("agentFlow", "auto.key_jpnolmkcea", { value1: index + 1 });
 
         return (
           <div
@@ -40,7 +40,7 @@ export function TemplatedNamedBindingsField({
             <div className="agent-flow-templated-binding-row__name">
               <Input
                 aria-label={`${ariaLabel}-${index}-name`}
-                placeholder={i18nText("agentFlow", "auto.k_63d5977de6")}
+                placeholder={i18nText("agentFlow", "auto.key_gdnfjhhnog")}
                 value={entry.name}
                 onChange={(event) =>
                   onChange(
@@ -59,7 +59,7 @@ export function TemplatedNamedBindingsField({
                 displayMode="input"
                 label={entryLabel}
                 options={options}
-                placeholder={i18nText("agentFlow", "auto.k_faa6bb45af")}
+                placeholder={i18nText("agentFlow", "auto.key_pkkgllefkp")}
                 value={entry.content.value}
                 onChange={(nextValue) =>
                   onChange(
@@ -79,7 +79,7 @@ export function TemplatedNamedBindingsField({
               />
             </div>
             <Button
-              aria-label={i18nText("agentFlow", "auto.k_4a86499cd0", { value1: entry.name || index + 1 })}
+              aria-label={i18nText("agentFlow", "auto.key_ekigejjmna", { value1: entry.name || index + 1 })}
               className="agent-flow-templated-binding-row__delete"
               danger
               icon={<DeleteOutlined />}
@@ -101,7 +101,7 @@ export function TemplatedNamedBindingsField({
           ])
         }
       >
-        {i18nText("agentFlow", "auto.k_b81a7d3e3c")}</Button>
+        {i18nText("agentFlow", "auto.key_libkhndodm")}</Button>
     </div>
   );
 }

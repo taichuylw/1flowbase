@@ -61,7 +61,7 @@ export function ApplicationSectionState({
   if (sectionKey === 'api') {
     return (
       <Space direction="vertical" size="middle">
-        <Typography.Title level={4}>API</Typography.Title>
+        <Typography.Title level={4}>{t('auto.api')}</Typography.Title>
         <Typography.Paragraph>
           {t('auto.public_api_section_description')}</Typography.Paragraph>
         <Descriptions

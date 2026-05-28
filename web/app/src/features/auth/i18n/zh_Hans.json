@@ -10,11 +10,6 @@
       "placeholder": "root / root@example.com",
       "required": "请输入账号或邮箱。"
     },
-    "language": {
-      "en_us": "English",
-      "trigger": "切换语言",
-      "zh_hans": "Chinese"
-    },
     "password": {
       "label": "密码",
       "placeholder": "请输入密码",

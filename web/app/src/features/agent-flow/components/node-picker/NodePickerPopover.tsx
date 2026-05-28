@@ -25,28 +25,28 @@ interface NodePickerGroup {
 const BUILTIN_NODE_PICKER_GROUPS: NodePickerGroup[] = [
   {
     key: 'io',
-    title: i18nText("agentFlow", "auto.k_a8651e4e38"),
-    description: i18nText("agentFlow", "auto.k_28784497e1"),
+    title: i18nText("agentFlow", "auto.key_kigfboeodi"),
+    description: i18nText("agentFlow", "auto.key_cihieejhob"),
   },
   {
     key: 'generation',
-    title: i18nText("agentFlow", "auto.k_5247aeb989"),
-    description: i18nText("agentFlow", "auto.k_8fd686e0cc"),
+    title: i18nText("agentFlow", "auto.key_fcehkoljij"),
+    description: i18nText("agentFlow", "auto.key_ipngigoamm"),
   },
   {
     key: 'control',
-    title: i18nText("agentFlow", "auto.k_5bc1919bff"),
-    description: i18nText("agentFlow", "auto.k_2c2de4b4c4"),
+    title: i18nText("agentFlow", "auto.key_flmbjbjlpp"),
+    description: i18nText("agentFlow", "auto.key_cmcnoeleme"),
   },
   {
     key: 'data',
-    title: i18nText("agentFlow", "auto.k_bd32031626"),
-    description: i18nText("agentFlow", "auto.k_9d33e90522"),
+    title: i18nText("agentFlow", "auto.key_lndcadbgcg"),
+    description: i18nText("agentFlow", "auto.key_jnddojafcc"),
   },
   {
     key: 'external',
-    title: i18nText("agentFlow", "auto.k_da7de2c62d"),
-    description: i18nText("agentFlow", "auto.k_09c331e725"),
+    title: i18nText("agentFlow", "auto.key_nkhnocmgcn"),
+    description: i18nText("agentFlow", "auto.key_ajmddbohcf"),
   }
 ];
 
@@ -178,7 +178,7 @@ export function NodePickerPopover({
         <div className="agent-flow-node-picker">
           <div className="agent-flow-node-picker__header">
             <div
-              aria-label={i18nText("agentFlow", "auto.k_39926b9c47")}
+              aria-label={i18nText("agentFlow", "auto.key_djjcgljmeh")}
               className="agent-flow-node-picker__tabs"
               role="tablist"
             >
@@ -189,7 +189,7 @@ export function NodePickerPopover({
                 type="button"
                 onClick={() => setActiveTab('builtin')}
               >
-                {i18nText("agentFlow", "auto.k_09ceea7644")}</button>
+                {i18nText("agentFlow", "auto.key_ajmookhgee")}</button>
               <button
                 aria-selected={activeTab === 'plugin'}
                 className={`agent-flow-node-picker__tab${activeTab === 'plugin' ? ' agent-flow-node-picker__tab--active' : ''}`}
@@ -197,13 +197,13 @@ export function NodePickerPopover({
                 type="button"
                 onClick={() => setActiveTab('plugin')}
               >
-                {i18nText("agentFlow", "auto.k_17d13aa49d")}</button>
+                {i18nText("agentFlow", "auto.key_bhnbdkkejn")}</button>
             </div>
             <div className="agent-flow-node-picker__search">
               <Input
                 allowClear
-                aria-label={i18nText("agentFlow", "auto.k_91ab9a4e6d")}
-                placeholder={i18nText("agentFlow", "auto.k_91ab9a4e6d")}
+                aria-label={i18nText("agentFlow", "auto.key_jbkljkeogn")}
+                placeholder={i18nText("agentFlow", "auto.key_jbkljkeogn")}
                 prefix={<SearchOutlined />}
                 size="small"
                 value={searchValue}
@@ -235,7 +235,7 @@ export function NodePickerPopover({
                 ))}
                 {uncategorizedBuiltinOptions.length > 0 ? (
                   <NodePickerSection
-                    title={i18nText("agentFlow", "auto.k_802f06c8f7")}
+                    title={i18nText("agentFlow", "auto.key_iacpagmiph")}
                   >
                     {uncategorizedBuiltinOptions.map((option) => (
                       <NodePickerOptionButton
@@ -254,7 +254,7 @@ export function NodePickerPopover({
               <>
                 {filteredPluginOptions.length > 0 ? (
                   <NodePickerSection
-                    title={i18nText("agentFlow", "auto.k_13e64fb2cd")}
+                    title={i18nText("agentFlow", "auto.plugin_node_label")}
                   >
                     {filteredPluginOptions.map((option) => (
                       <NodePickerOptionButton
@@ -277,10 +277,10 @@ export function NodePickerPopover({
             {!hasVisibleOptions ? (
               <div className="agent-flow-node-picker__empty">
                 {normalizedSearchValue.length > 0
-                  ? i18nText("agentFlow", "auto.k_1e6d03870e")
+                  ? i18nText("agentFlow", "auto.key_bognadihao")
                   : activeTab === 'plugin'
-                    ? i18nText("agentFlow", "auto.k_31463adc9d")
-                    : i18nText("agentFlow", "auto.k_18266961d9")}
+                    ? i18nText("agentFlow", "auto.key_dbegdknmjn")
+                    : i18nText("agentFlow", "auto.key_bicggjgbnj")}
               </div>
             ) : null}
           </div>

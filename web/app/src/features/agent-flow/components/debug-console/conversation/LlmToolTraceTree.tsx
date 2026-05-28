@@ -13,11 +13,11 @@ import { i18nText } from '../../../../../shared/i18n/text';
 function callbackStatusLabel(status: LlmToolCallback['callbackStatus']) {
   switch (status) {
     case 'returned':
-      return i18nText("agentFlow", "auto.k_6db09446c4");
+      return i18nText("agentFlow", "auto.key_gnlajeegme");
     case 'cancelled':
-      return i18nText("agentFlow", "auto.k_a5ffdc95ee");
+      return i18nText("agentFlow", "auto.key_kfppnmjfoo");
     default:
-      return i18nText("agentFlow", "auto.k_7037431c8f");
+      return i18nText("agentFlow", "auto.key_hadhedbmip");
   }
 }
 
@@ -35,15 +35,15 @@ function callbackStatusColor(status: LlmToolCallback['callbackStatus']) {
 function executionStatusLabel(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
-      return i18nText("agentFlow", "auto.k_6c189aad4d");
+      return i18nText("agentFlow", "auto.key_gmbijkknen");
     case 'failed':
-      return i18nText("agentFlow", "auto.k_9746cfc7d2");
+      return i18nText("agentFlow", "auto.key_jhegmpmhnc");
     case 'timed_out':
-      return i18nText("agentFlow", "auto.k_f2c3abf134");
+      return i18nText("agentFlow", "auto.key_pcmdklpbde");
     case 'cancelled':
-      return i18nText("agentFlow", "auto.k_5f786c8983");
+      return i18nText("agentFlow", "auto.key_fphigmijid");
     default:
-      return i18nText("agentFlow", "auto.k_c0ceb72e8f");
+      return i18nText("agentFlow", "auto.key_mamolhcoip");
   }
 }
 
@@ -151,21 +151,21 @@ function LlmToolCallbackItem({
       </button>
       {expanded ? (
         <div className="agent-flow-editor__debug-llm-tool-detail">
-          {loading ? <Tag color="processing">{i18nText("agentFlow", "auto.k_ce56f617e4")}</Tag> : null}
-          {loadFailed ? <Tag color="error">{i18nText("agentFlow", "auto.k_f6b7a41e56")}</Tag> : null}
+          {loading ? <Tag color="processing">{i18nText("agentFlow", "auto.key_mofgpgbhoe")}</Tag> : null}
+          {loadFailed ? <Tag color="error">{i18nText("agentFlow", "auto.key_pglhkebofg")}</Tag> : null}
           {!loading && !loadFailed ? (
             <>
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
-                title={i18nText("agentFlow", "auto.k_3d4d1075e7")}
+                title={i18nText("agentFlow", "auto.key_dnenbahfoh")}
                 onLoadArtifact={onLoadArtifact}
               />
               {callback.parsedResult ? (
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.parsedResult}
-                  title={i18nText("agentFlow", "auto.k_97cea043a3")}
+                  title={i18nText("agentFlow", "auto.key_jhmokaedkd")}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : null}
@@ -173,11 +173,11 @@ function LlmToolCallbackItem({
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.callbackPayload}
-                  title={i18nText("agentFlow", "auto.k_63afb65b7f")}
+                  title={i18nText("agentFlow", "auto.key_gdkplgflhp")}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : (
-                <Typography.Text type="secondary">{i18nText("agentFlow", "auto.k_c18af0108d")}</Typography.Text>
+                <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_mbikpabain")}</Typography.Text>
               )}
             </>
           ) : null}
@@ -314,12 +314,12 @@ export function LlmToolTraceTree({
 
   const summaryText =
     effectiveToolCallbacks.length > 0
-      ? i18nText("agentFlow", "auto.k_1b9c78b0cf", { value1: effectiveToolCallbacks.length })
-      : i18nText("agentFlow", "auto.k_eb2b60ac6f");
+      ? i18nText("agentFlow", "auto.key_bljmhilamp", { value1: effectiveToolCallbacks.length })
+      : i18nText("agentFlow", "auto.key_olclgakmgp");
 
   return (
     <section
-      aria-label="LLM Tools"
+      aria-label={i18nText("agentFlow", "auto.llm_tools")}
       className="agent-flow-editor__debug-llm-tools"
     >
       <button
@@ -330,7 +330,7 @@ export function LlmToolTraceTree({
       >
         <span className="agent-flow-editor__debug-llm-tools-title">
           <ToolOutlined className="agent-flow-editor__debug-llm-tools-icon" />
-          <Typography.Text strong>Tools</Typography.Text>
+          <Typography.Text strong>{i18nText("agentFlow", "auto.tools")}</Typography.Text>
           <Typography.Text type="secondary">{summaryText}</Typography.Text>
         </span>
         {toolsExpanded ? (
@@ -344,7 +344,7 @@ export function LlmToolTraceTree({
           {effectiveToolCallbacks.length > 0 ? (
             <>
               <div
-                aria-label={i18nText("agentFlow", "auto.k_eda4781499")}
+                aria-label={i18nText("agentFlow", "auto.key_onkehibejj")}
                 className="agent-flow-editor__debug-llm-tool-list"
               >
                 {effectiveToolCallbacks.map((callback) => {
@@ -372,7 +372,7 @@ export function LlmToolTraceTree({
               </div>
             </>
           ) : (
-            <Typography.Text type="secondary">{i18nText("agentFlow", "auto.k_31bc802e7a")}</Typography.Text>
+            <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_dblmiacohk")}</Typography.Text>
           )}
         </div>
       ) : null}

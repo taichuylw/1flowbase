@@ -927,7 +927,7 @@ export function useAgentFlowDebugSession({
       setMessages((currentMessages) =>
         replaceAssistantMessageWithError(
           currentMessages,
-          error instanceof Error ? error.message : i18nText("agentFlow", "auto.k_6ec96fa2a4"),
+          error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_run_failed"),
           { runId }
         )
       );
@@ -981,7 +981,7 @@ export function useAgentFlowDebugSession({
       setMessages((currentMessages) =>
         replaceAssistantMessageWithError(
           currentMessages,
-          i18nText("agentFlow", "auto.k_0f012c0de9"),
+          i18nText("agentFlow", "auto.debug_run_csrf_missing"),
           { fallbackMessageId: runningMessage.id }
         )
       );
@@ -1133,7 +1133,7 @@ export function useAgentFlowDebugSession({
       streamAbortControllerRef.current = null;
       if (activeRunIdRef.current) {
         const errorMessage =
-          error instanceof Error ? error.message : i18nText("agentFlow", "auto.k_4b1ea00f81");
+          error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_stream_connection_interrupted");
         clearScheduledAssistantMessageFlush();
         setStatus('failed');
         setMessages((currentMessages) =>
@@ -1172,7 +1172,7 @@ export function useAgentFlowDebugSession({
       return detail;
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : i18nText("agentFlow", "auto.k_6ec96fa2a4");
+        error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_run_failed");
 
       setStatus('failed');
       setMessages((currentMessages) =>

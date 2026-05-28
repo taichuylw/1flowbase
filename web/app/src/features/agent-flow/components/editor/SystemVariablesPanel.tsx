@@ -11,17 +11,17 @@ interface SystemVariablesPanelProps {
 export function SystemVariablesPanel({ onClose }: SystemVariablesPanelProps) {
   return (
     <section
-      aria-label={i18nText("agentFlow", "auto.k_872d17db93")}
+      aria-label={i18nText("agentFlow", "auto.key_ihcnbhnljd")}
       className="agent-flow-editor__system-variables-panel"
     >
       <header className="agent-flow-editor__system-variables-header">
         <div className="agent-flow-editor__system-variables-heading">
-          <Typography.Title level={3}>{i18nText("agentFlow", "auto.k_872d17db93")}</Typography.Title>
+          <Typography.Title level={3}>{i18nText("agentFlow", "auto.key_ihcnbhnljd")}</Typography.Title>
           <Typography.Text type="secondary">
-            {i18nText("agentFlow", "auto.k_0cab8a6c06")}</Typography.Text>
+            {i18nText("agentFlow", "auto.key_amklikgmag")}</Typography.Text>
         </div>
         <Button
-          aria-label={i18nText("agentFlow", "auto.k_71f2b1a617")}
+          aria-label={i18nText("agentFlow", "auto.key_hbpclbkgbh")}
           icon={<CloseOutlined />}
           type="text"
           onClick={onClose}

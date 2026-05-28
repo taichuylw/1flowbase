@@ -81,7 +81,7 @@ export function AgentFlowNodeCard({
     {
       key: 'run',
       icon: <PlayCircleOutlined />,
-      label: i18nText("agentFlow", "auto.k_1653f23042"),
+      label: i18nText("agentFlow", "auto.key_bgfdpcdaec"),
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
         data.onSelectNode(data.nodeId);
@@ -91,13 +91,13 @@ export function AgentFlowNodeCard({
     {
       key: 'replace',
       icon: <SwapOutlined />,
-      label: i18nText("agentFlow", "auto.k_1b65ffa951"),
+      label: i18nText("agentFlow", "auto.key_blgfppkjfb"),
       children: replaceItems
     },
     {
       key: 'delete',
       icon: <DeleteOutlined />,
-      label: i18nText("agentFlow", "auto.k_ff37dc39f9"),
+      label: i18nText("agentFlow", "auto.key_ppdhnmdjpj"),
       danger: true,
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
@@ -191,9 +191,9 @@ export function AgentFlowNodeCard({
           onMouseLeave={scheduleHideQuickActions}
           onMouseDown={stopActionEvent}
         >
-          <Tooltip title={i18nText("agentFlow", "auto.k_1653f23042")}>
+          <Tooltip title={i18nText("agentFlow", "auto.key_bgfdpcdaec")}>
             <Button
-              aria-label={i18nText("agentFlow", "auto.k_c01e834653", { value1: data.alias })}
+              aria-label={i18nText("agentFlow", "auto.key_maboidegfd", { value1: data.alias })}
               className="agent-flow-node-card__quick-action"
               icon={<PlayCircleOutlined />}
               shape="circle"
@@ -208,7 +208,7 @@ export function AgentFlowNodeCard({
           </Tooltip>
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <Button
-              aria-label={i18nText("agentFlow", "auto.k_50e4a06654", { value1: data.alias })}
+              aria-label={i18nText("agentFlow", "auto.key_faoekaggfe", { value1: data.alias })}
               className="agent-flow-node-card__quick-action"
               icon={<MoreOutlined />}
               shape="circle"
@@ -221,7 +221,7 @@ export function AgentFlowNodeCard({
       </div>
       {data.showSourceHandle ? (
         <NodePickerPopover
-          ariaLabel={i18nText("agentFlow", "auto.k_26446aa5c9", { value1: data.alias })}
+          ariaLabel={i18nText("agentFlow", "auto.key_cgeegkkfmj", { value1: data.alias })}
           open={data.pickerOpen}
           options={data.nodePickerOptions}
           onOpenChange={(open) => {
@@ -239,8 +239,8 @@ export function AgentFlowNodeCard({
               <div
                 style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}
               >
-                <div>{i18nText("agentFlow", "auto.k_eb0626a201")}</div>
-                <div>{i18nText("agentFlow", "auto.k_a37bad8c54")}</div>
+                <div>{i18nText("agentFlow", "auto.key_olagcgkcab")}</div>
+                <div>{i18nText("agentFlow", "auto.key_kdhlknimfe")}</div>
               </div>
             }
             placement="top"
@@ -261,7 +261,7 @@ export function AgentFlowNodeCard({
               position={Position.Right}
               aria-expanded={data.pickerOpen}
               aria-haspopup="menu"
-              aria-label={i18nText("agentFlow", "auto.k_26446aa5c9", { value1: data.alias })}
+              aria-label={i18nText("agentFlow", "auto.key_cgeegkkfmj", { value1: data.alias })}
               className="agent-flow-node-handle agent-flow-node-handle--source"
               role="button"
               tabIndex={0}

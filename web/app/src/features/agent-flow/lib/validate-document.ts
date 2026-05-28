@@ -369,8 +369,8 @@ function validateAnswerPresentationReferences(
       issues,
       answerNode,
       'bindings.answer_template',
-      i18nText("agentFlow", "auto.k_8ddb3ef04a"),
-      i18nText("agentFlow", "auto.k_233c242d44", { value1: formatAnswerPresentationReference(
+      i18nText("agentFlow", "auto.key_innldopaek"),
+      i18nText("agentFlow", "auto.key_cddmcecnee", { value1: formatAnswerPresentationReference(
         reference,
         nodeById
       ) })
@@ -388,8 +388,8 @@ function validateAnswerPresentationReferences(
         issues,
         answerNode,
         'bindings.answer_template',
-        i18nText("agentFlow", "auto.k_d088ac228b"),
-        i18nText("agentFlow", "auto.k_7ec89eb5f1", { value1: formatAnswerPresentationReference(
+        i18nText("agentFlow", "auto.key_naiikmccil"),
+        i18nText("agentFlow", "auto.key_homijolfpb", { value1: formatAnswerPresentationReference(
           current,
           nodeById
         ), value2: formatAnswerPresentationReference(
@@ -432,8 +432,8 @@ export function validateDocument(
       nodeId: null,
       sectionKey: null,
       fieldKey: null,
-      title: i18nText("agentFlow", "auto.k_ec4fe5d27f"),
-      message: i18nText("agentFlow", "auto.k_df4dcc7220")
+      title: i18nText("agentFlow", "auto.key_omepofnchp"),
+      message: i18nText("agentFlow", "auto.key_npenmmhcca")
     });
   }
 
@@ -445,8 +445,8 @@ export function validateDocument(
       nodeId: null,
       sectionKey: null,
       fieldKey: null,
-      title: i18nText("agentFlow", "auto.k_7e0914363c"),
-      message: i18nText("agentFlow", "auto.k_aa95340236")
+      title: i18nText("agentFlow", "auto.key_hoajbedgdm"),
+      message: i18nText("agentFlow", "auto.key_kkjfdeacdg")
     });
   }
 
@@ -463,8 +463,8 @@ export function validateDocument(
         nodeId: edge.source,
         sectionKey: 'basics',
         fieldKey: null,
-        title: i18nText("agentFlow", "auto.k_2e9a93d149"),
-        message: i18nText("agentFlow", "auto.k_b343ad9eb0")
+        title: i18nText("agentFlow", "auto.key_cojkjdnbej"),
+        message: i18nText("agentFlow", "auto.key_ldedknjola")
       });
     }
   }
@@ -489,8 +489,8 @@ export function validateDocument(
                 issues,
                 node,
                 field.key,
-                providerMissing ? i18nText("agentFlow", "auto.k_024ea49d91") : i18nText("agentFlow", "auto.k_41120ce991"),
-                providerMissing ? i18nText("agentFlow", "auto.k_bf767813d4") : i18nText("agentFlow", "auto.k_faa88f53cb")
+                providerMissing ? i18nText("agentFlow", "auto.key_aceokejnjb") : i18nText("agentFlow", "auto.key_ebbcamojjb"),
+                providerMissing ? i18nText("agentFlow", "auto.key_lphghibdne") : i18nText("agentFlow", "auto.key_pkkiipfdml")
               );
               continue;
             }
@@ -499,8 +499,8 @@ export function validateDocument(
               issues,
               node,
               field.key,
-              i18nText("agentFlow", "auto.k_eac7be0d60", { value1: field.label }),
-              i18nText("agentFlow", "auto.k_7379c1eb7d", { value1: field.label })
+              i18nText("agentFlow", "auto.key_okmhloanga", { value1: field.label }),
+              i18nText("agentFlow", "auto.key_hdhjmbolhn", { value1: field.label })
             );
           }
         }
@@ -520,8 +520,8 @@ export function validateDocument(
             issues,
             node,
             'config.model_provider',
-            i18nText("agentFlow", "auto.k_8b8ced23f7"),
-            i18nText("agentFlow", "auto.k_c2d9373321"),
+            i18nText("agentFlow", "auto.key_ilimoncdph"),
+            i18nText("agentFlow", "auto.key_mcnjdhddcb"),
             'inputs'
           );
         } else if (model.length > 0) {
@@ -534,16 +534,16 @@ export function validateDocument(
               issues,
               node,
               'config.model_provider',
-              i18nText("agentFlow", "auto.k_a24c3d32e6"),
-              i18nText("agentFlow", "auto.k_d497ba2a81")
+              i18nText("agentFlow", "auto.key_kcemdndcog"),
+              i18nText("agentFlow", "auto.key_nejhlkckib")
             );
           } else if (matchingModelGroups.length > 1) {
             pushFieldIssue(
               issues,
               node,
               'config.model_provider',
-              i18nText("agentFlow", "auto.k_be4f860b2b"),
-              i18nText("agentFlow", "auto.k_65fb2ddddd")
+              i18nText("agentFlow", "auto.key_loepigalcl"),
+              i18nText("agentFlow", "auto.key_gfplcnnnnn")
             );
           }
         }
@@ -558,9 +558,9 @@ export function validateDocument(
         nodeId: node.id,
         sectionKey: 'basics',
         fieldKey: null,
-        title: i18nText("agentFlow", "auto.k_76b2f7c78b"),
+        title: i18nText("agentFlow", "auto.key_hglcphmhil"),
         message:
-          i18nText("agentFlow", "auto.k_1323179e36")
+          i18nText("agentFlow", "auto.key_bdcdbhjodg")
       });
     }
 
@@ -595,8 +595,8 @@ export function validateDocument(
             issues,
             node,
             `bindings.${bindingKey}`,
-            i18nText("agentFlow", "auto.k_3c5c696e82"),
-            i18nText("agentFlow", "auto.k_8f4b29ccbe", { value1: sourceNodeId })
+            i18nText("agentFlow", "auto.key_dmfmgjgoic"),
+            i18nText("agentFlow", "auto.key_ipelcjmmlo", { value1: sourceNodeId })
           );
           continue;
         }
@@ -605,8 +605,8 @@ export function validateDocument(
           issues,
           node,
           `bindings.${bindingKey}`,
-          i18nText("agentFlow", "auto.k_e96bd1da50"),
-          i18nText("agentFlow", "auto.k_b772b3b2b2")
+          i18nText("agentFlow", "auto.key_ojglnbnkfa"),
+          i18nText("agentFlow", "auto.key_lhhcldlclc")
         );
       }
     }
@@ -625,8 +625,8 @@ export function validateDocument(
           issues,
           node,
           'config.language',
-          i18nText("agentFlow", "auto.k_d0ce6fae48"),
-          i18nText("agentFlow", "auto.k_da8dd565b0")
+          i18nText("agentFlow", "auto.key_namogpkoei"),
+          i18nText("agentFlow", "auto.key_nkinnfgfla")
         );
       }
     }
@@ -636,8 +636,8 @@ export function validateDocument(
         issues,
         node,
         'config.output_contract',
-        i18nText("agentFlow", "auto.k_1ac0f51ab0"),
-        i18nText("agentFlow", "auto.k_946646d9b6")
+        i18nText("agentFlow", "auto.key_bkmapfbkla"),
+        i18nText("agentFlow", "auto.key_jeggegnjlg")
       );
     }
 
@@ -649,8 +649,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.k_437801c02f"),
-          i18nText("agentFlow", "auto.k_05d855be28")
+          i18nText("agentFlow", "auto.key_edhiabmacp"),
+          i18nText("agentFlow", "auto.key_afniffloci")
         );
         continue;
       }
@@ -660,8 +660,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.k_afbae2cee4"),
-          i18nText("agentFlow", "auto.k_912653eed6")
+          i18nText("agentFlow", "auto.key_kplkocmooe"),
+          i18nText("agentFlow", "auto.key_jbcgfdoong")
         );
         continue;
       }
@@ -675,8 +675,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.k_d0ba848f7b"),
-          i18nText("agentFlow", "auto.k_129a5a768b")
+          i18nText("agentFlow", "auto.key_nalkieiphl"),
+          i18nText("agentFlow", "auto.key_bcjkfkhgil")
         );
         continue;
       }
@@ -686,8 +686,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.k_0873e82e58"),
-          i18nText("agentFlow", "auto.k_74bdd135cd")
+          i18nText("agentFlow", "auto.key_aihdoicofi"),
+          i18nText("agentFlow", "auto.key_helnnbdfmn")
         );
       }
     }
@@ -705,8 +705,8 @@ export function validateDocument(
         nodeId: node.id,
         sectionKey: 'basics',
         fieldKey: null,
-        title: i18nText("agentFlow", "auto.k_dcd585ab01", { value1: node.alias }),
-        message: i18nText("agentFlow", "auto.k_f98a7352a1")
+        title: i18nText("agentFlow", "auto.key_nmnfifklab", { value1: node.alias }),
+        message: i18nText("agentFlow", "auto.key_pjikhdfckb")
       });
     }
   }

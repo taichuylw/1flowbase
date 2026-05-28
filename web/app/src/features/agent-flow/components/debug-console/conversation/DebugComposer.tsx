@@ -45,7 +45,7 @@ export function DebugComposer({
         <Input.TextArea
           autoSize={{ minRows: 1, maxRows: 4 }}
           variant="borderless"
-          placeholder={i18nText("agentFlow", "auto.k_173e435c26")}
+          placeholder={i18nText("agentFlow", "auto.key_bhdoedfmcg")}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onCompositionStart={() => setIsComposing(true)}
@@ -69,7 +69,7 @@ export function DebugComposer({
         <div className="agent-flow-editor__debug-composer-actions">
           {showStop ? (
             <Button
-              aria-label={stopping ? i18nText("agentFlow", "auto.k_ea4594f7ae") : i18nText("agentFlow", "auto.k_e860579abc")}
+              aria-label={stopping ? i18nText("agentFlow", "auto.key_okefjephko") : i18nText("agentFlow", "auto.key_oigafhjklm")}
               className="agent-flow-editor__debug-composer-submit agent-flow-editor__debug-composer-stop"
               disabled={stopping}
               icon={<CloseCircleOutlined />}
@@ -79,7 +79,7 @@ export function DebugComposer({
             />
           ) : (
             <Button
-              aria-label={i18nText("agentFlow", "auto.k_a18211cd0d")}
+              aria-label={i18nText("agentFlow", "auto.key_kbicbbmnan")}
               className="agent-flow-editor__debug-composer-submit"
               disabled={disabled}
               icon={<ArrowUpOutlined />}
@@ -95,16 +95,16 @@ export function DebugComposer({
           <span className="agent-flow-editor__debug-feature-icon">
             <MessageOutlined />
           </span>
-          <Typography.Text>{i18nText("agentFlow", "auto.k_52dc9b5456")}</Typography.Text>
+          <Typography.Text>{i18nText("agentFlow", "auto.key_fcnmjlfefg")}</Typography.Text>
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_7ba74eba3b")}
+            aria-label={i18nText("agentFlow", "auto.key_hlkheolkdl")}
             className="agent-flow-editor__debug-feature-manage"
             icon={<ArrowRightOutlined />}
             iconPosition="end"
             size="small"
             type="link"
           >
-            {i18nText("agentFlow", "auto.k_4989b5cf94")}</Button>
+            {i18nText("agentFlow", "auto.key_ejijlfmpje")}</Button>
         </div>
       ) : null}
     </div>

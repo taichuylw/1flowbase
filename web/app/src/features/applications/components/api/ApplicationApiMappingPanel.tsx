@@ -60,7 +60,7 @@ export function ApplicationApiMappingPanel({
   return (
     <section className="application-api-panel">
       <Space direction="vertical" size={12} className="application-api-panel__stack">
-        <Typography.Title level={4}>Mapping</Typography.Title>
+        <Typography.Title level={4}>{t('auto.mapping')}</Typography.Title>
         <Typography.Text type="secondary">
           {t('auto.model_target_empty_notice')}</Typography.Text>
         {publication && currentMappingText !== publishedMappingText ? (

@@ -23,6 +23,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '../../../../state/auth-store';
+import { formatDateTime, formatTime } from '../../../../shared/i18n/format';
 import { JsonPreviewBlock } from '../../../../shared/ui/json-preview/JsonPreviewBlock';
 import {
   clearSettingsHostInfrastructureCacheDomain,
@@ -50,7 +51,7 @@ function formatBytes(value: number) {
 
 function formatTtl(value: number | null) {
   if (value == null) {
-    return i18nText("settings", "auto.k_ff139dbaf3");
+    return i18nText("settings", "auto.key_ppbdjnlkpd");
   }
   if (value < 60) {
     return `${value}s`;
@@ -63,16 +64,16 @@ function formatTtl(value: number | null) {
 
 function formatUnixTimestamp(value: number | null) {
   if (value == null) {
-    return 'unknown';
+    return i18nText("settings", "auto.unknown");
   }
-  return new Date(value * 1000).toLocaleString();
+  return formatDateTime(new Date(value * 1000));
 }
 
 function formatUpdatedAt(value: number) {
   if (!value) {
-    return i18nText("settings", "auto.k_b6b13cc32c");
+    return i18nText("settings", "auto.key_lglbdmmdcm");
   }
-  return new Date(value).toLocaleTimeString();
+  return formatTime(new Date(value));
 }
 
 export function HostInfrastructureCachePanel({
@@ -152,7 +153,7 @@ export function HostInfrastructureCachePanel({
     },
     onSuccess: async (_, entry) => {
       await refreshCacheQueries(entry.domain_code);
-      messageApi.success(i18nText("settings", "auto.k_3a49d24203"));
+      messageApi.success(i18nText("settings", "auto.key_dkejncecad"));
     }
   });
   const clearDomainMutation = useMutation({
@@ -164,7 +165,7 @@ export function HostInfrastructureCachePanel({
     },
     onSuccess: async (_, domainCode) => {
       await refreshCacheQueries(domainCode);
-      messageApi.success(i18nText("settings", "auto.k_4a8f5abd96"));
+      messageApi.success(i18nText("settings", "auto.key_ekipfklnjg"));
     }
   });
 
@@ -212,26 +213,26 @@ export function HostInfrastructureCachePanel({
                 disabled={!canReveal || revealMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: i18nText("settings", "auto.k_81f04f1ca1"),
+                    title: i18nText("settings", "auto.key_ibpaepbmkb"),
                     content:
-                      i18nText("settings", "auto.k_17f57796d8"),
-                    okText: i18nText("settings", "auto.k_190bf928b1"),
+                      i18nText("settings", "auto.key_bhpfhhjgni"),
+                    okText: i18nText("settings", "auto.key_bjalpjcilb"),
                     cancelText: i18nText("settings", "auto.cancel"),
                     onOk: () => revealMutation.mutateAsync(entry)
                   });
                 }}
                 size="small"
               >
-                {i18nText("settings", "auto.k_ea8b000633")}</Button>
+                {i18nText("settings", "auto.key_okilaaagdd")}</Button>
               <Button
                 danger
                 icon={<DeleteOutlined />}
                 disabled={!canClearEntry || clearEntryMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: i18nText("settings", "auto.k_073c7b8b23"),
-                    content: i18nText("settings", "auto.k_30cbb97b6a", { value1: entry.key }),
-                    okText: i18nText("settings", "auto.k_f1c3ef7622"),
+                    title: i18nText("settings", "auto.key_ahdmhlilcd"),
+                    content: i18nText("settings", "auto.key_damlljhlgk", { value1: entry.key }),
+                    okText: i18nText("settings", "auto.key_pbmdophgcc"),
                     okButtonProps: { danger: true },
                     cancelText: i18nText("settings", "auto.cancel"),
                     onOk: () => clearEntryMutation.mutateAsync(entry)
@@ -239,10 +240,10 @@ export function HostInfrastructureCachePanel({
                 }}
                 size="small"
               >
-                {i18nText("settings", "auto.k_907c3945d8")}</Button>
+                {i18nText("settings", "auto.key_jahmdjefni")}</Button>
             </Space>
           ) : (
-            <Typography.Text type="secondary">{i18nText("settings", "auto.k_c27081c863")}</Typography.Text>
+            <Typography.Text type="secondary">{i18nText("settings", "auto.key_mchaibmigd")}</Typography.Text>
           )
       }
     ],
@@ -268,15 +269,15 @@ export function HostInfrastructureCachePanel({
         <Alert
           type="warning"
           showIcon
-          message={i18nText("settings", "auto.k_0f6be2f3d5")}
-          description={i18nText("settings", "auto.k_15d732c71c")}
+          message={i18nText("settings", "auto.key_apglocpdnf")}
+          description={i18nText("settings", "auto.key_bfnhdcmhbm")}
         />
         <Button
           icon={<ReloadOutlined />}
           onClick={() => overviewQuery.refetch()}
           loading={overviewQuery.isFetching}
         >
-          {i18nText("settings", "auto.k_dc6755b83a")}</Button>
+          {i18nText("settings", "auto.key_nmghfflidk")}</Button>
       </Space>
     );
   }
@@ -296,7 +297,7 @@ export function HostInfrastructureCachePanel({
             Value inspection {capabilities?.reveal_value ? 'on' : 'off'}
           </Tag>
           <Typography.Text type="secondary">
-            {i18nText("settings", "auto.k_8827f80e7b")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
+            {i18nText("settings", "auto.key_iichpiaohl")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
           </Typography.Text>
         </Space>
         <Button
@@ -316,8 +317,8 @@ export function HostInfrastructureCachePanel({
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.k_db605406d8")}
-          description={i18nText("settings", "auto.k_061e7014e0")}
+          message={i18nText("settings", "auto.key_nlgafeagni")}
+          description={i18nText("settings", "auto.key_agbohabeoa")}
         />
       ) : null}
 
@@ -325,14 +326,14 @@ export function HostInfrastructureCachePanel({
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.k_b486563b7c")}
-          description={i18nText("settings", "auto.k_5c6f5a6b5a")}
+          message={i18nText("settings", "auto.key_leigfgdlhm")}
+          description={i18nText("settings", "auto.key_fmgpfkglfk")}
         />
       ) : null}
 
       <div className="host-cache-panel__layout">
         <aside className="host-cache-panel__domains">
-          <div className="host-cache-panel__section-title">{i18nText("settings", "auto.k_d4766fc965")}</div>
+          <div className="host-cache-panel__section-title">{i18nText("settings", "auto.key_nehggpmjgf")}</div>
           {domains.length ? (
             <Space
               direction="vertical"
@@ -364,7 +365,7 @@ export function HostInfrastructureCachePanel({
           ) : (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={i18nText("settings", "auto.k_9e6e8a15d8")}
+              description={i18nText("settings", "auto.key_jogoikbfni")}
             />
           )}
         </aside>
@@ -373,7 +374,7 @@ export function HostInfrastructureCachePanel({
           <div className="host-cache-panel__entries-header">
             <Space direction="vertical" size={2}>
               <Typography.Text strong>
-                {activeDomain ?? i18nText("settings", "auto.k_bfbe272414")}
+                {activeDomain ?? i18nText("settings", "auto.key_lplochcebe")}
               </Typography.Text>
               {activeDomainSummary ? (
                 <Typography.Text type="secondary">
@@ -389,16 +390,16 @@ export function HostInfrastructureCachePanel({
                 disabled={!canClearDomain || clearDomainMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: i18nText("settings", "auto.k_39dc9b475e"),
-                    content: i18nText("settings", "auto.k_c509239c72", { value1: activeDomain }),
-                    okText: i18nText("settings", "auto.k_f1c3ef7622"),
+                    title: i18nText("settings", "auto.key_djnmjlehfo"),
+                    content: i18nText("settings", "auto.key_mfajcdjmhc", { value1: activeDomain }),
+                    okText: i18nText("settings", "auto.key_pbmdophgcc"),
                     okButtonProps: { danger: true },
                     cancelText: i18nText("settings", "auto.cancel"),
                     onOk: () => clearDomainMutation.mutateAsync(activeDomain)
                   });
                 }}
               >
-                {i18nText("settings", "auto.k_39dc9b475e")}</Button>
+                {i18nText("settings", "auto.key_djnmjlehfo")}</Button>
             ) : null}
           </div>
           <Table
@@ -450,7 +451,7 @@ export function HostInfrastructureCachePanel({
               value={revealedEntry.value}
               collapsible={false}
               height="360px"
-              copySuccessMessage={i18nText("settings", "auto.k_4e4a4870f7")}
+              copySuccessMessage={i18nText("settings", "auto.key_eoekeihaph")}
             />
           </Space>
         ) : null}

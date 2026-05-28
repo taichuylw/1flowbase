@@ -35,12 +35,12 @@ export function LlmResponseFormatField({ adapter, block }: SchemaFieldRendererPr
       const parsed = JSON.parse(schemaText);
 
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return i18nText("agentFlow", "auto.k_3e77625796");
+        return i18nText("agentFlow", "auto.key_dohhgcfhjg");
       }
 
       return null;
     } catch {
-      return i18nText("agentFlow", "auto.k_aeb7937de9");
+      return i18nText("agentFlow", "auto.key_kolhjdhnoj");
     }
   }, [responseFormat.mode, schemaText]);
 
@@ -64,8 +64,8 @@ export function LlmResponseFormatField({ adapter, block }: SchemaFieldRendererPr
         block
         value={responseFormat.mode}
         options={[
-          { label: i18nText("agentFlow", "auto.k_f1926e9b33"), value: 'text' },
-          { label: i18nText("agentFlow", "auto.k_6b8049bb2d"), value: 'json_object' },
+          { label: i18nText("agentFlow", "auto.key_pbjcgojldd"), value: 'text' },
+          { label: i18nText("agentFlow", "auto.key_gliaejllcn"), value: 'json_object' },
           { label: 'JSON Schema', value: 'json_schema' }
         ]}
         onChange={(nextValue) =>
@@ -75,7 +75,7 @@ export function LlmResponseFormatField({ adapter, block }: SchemaFieldRendererPr
       {responseFormat.mode === 'json_schema' ? (
         <>
           <Typography.Text type="secondary">
-            {i18nText("agentFlow", "auto.k_bd9eebf6c8")}</Typography.Text>
+            {i18nText("agentFlow", "auto.key_lnjoolpgmi")}</Typography.Text>
           <Input.TextArea
             rows={8}
             aria-label={`${block.label} JSON Schema`}

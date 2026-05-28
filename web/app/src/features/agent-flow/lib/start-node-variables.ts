@@ -13,13 +13,13 @@ import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 import { i18nText } from '../../../shared/i18n/text';
 
 export const startInputTypeOptions = [
-  { value: 'text', label: i18nText("agentFlow", "auto.k_f1926e9b33"), valueType: 'string' },
-  { value: 'paragraph', label: i18nText("agentFlow", "auto.k_918a0c837b"), valueType: 'string' },
-  { value: 'select', label: i18nText("agentFlow", "auto.k_690e1afab9"), valueType: 'string' },
-  { value: 'number', label: i18nText("agentFlow", "auto.k_7a4dc8253f"), valueType: 'number' },
-  { value: 'checkbox', label: i18nText("agentFlow", "auto.k_8fd2b13003"), valueType: 'boolean' },
-  { value: 'file', label: i18nText("agentFlow", "auto.k_49deaf7da2"), valueType: 'json' },
-  { value: 'file_list', label: i18nText("agentFlow", "auto.k_cf750851bf"), valueType: 'array[object]' },
+  { value: 'text', label: i18nText("agentFlow", "auto.key_pbjcgojldd"), valueType: 'string' },
+  { value: 'paragraph', label: i18nText("agentFlow", "auto.key_jbikamidhl"), valueType: 'string' },
+  { value: 'select', label: i18nText("agentFlow", "auto.key_gjaobkpklj"), valueType: 'string' },
+  { value: 'number', label: i18nText("agentFlow", "auto.key_hkenmicfdp"), valueType: 'number' },
+  { value: 'checkbox', label: i18nText("agentFlow", "auto.key_ipnclbdaad"), valueType: 'boolean' },
+  { value: 'file', label: i18nText("agentFlow", "auto.key_ejnokphnkc"), valueType: 'json' },
+  { value: 'file_list', label: i18nText("agentFlow", "auto.key_mphfaifblp"), valueType: 'array[object]' },
   { value: 'url', label: 'URL', valueType: 'string' }
 ] satisfies Array<{
   value: FlowStartInputType;

@@ -50,7 +50,7 @@ function formatVersionCreatedAt(value: string) {
 function getVersionTitle(version: ConsoleFlowVersionSummary) {
   return version.summary_is_custom && version.summary.trim().length > 0
     ? version.summary
-    : i18nText("agentFlow", "auto.k_7e478c6485", { value1: version.sequence });
+    : i18nText("agentFlow", "auto.key_hoehimgeif", { value1: version.sequence });
 }
 
 export function VersionHistoryPanel({
@@ -88,14 +88,14 @@ export function VersionHistoryPanel({
     <AgentFlowDockPanel
       bodyClassName="agent-flow-editor__history-panel-body"
       className="agent-flow-editor__history-panel"
-      closeLabel={i18nText("agentFlow", "auto.k_3d0688a54a")}
-      title={i18nText("agentFlow", "auto.k_5ec45258f8")}
+      closeLabel={i18nText("agentFlow", "auto.key_dnagiikfek")}
+      title={i18nText("agentFlow", "auto.key_fomefcfipi")}
       onClose={onClose}
     >
       <List
         className="agent-flow-editor__history-list"
         dataSource={versions}
-        locale={{ emptyText: i18nText("agentFlow", "auto.k_d4cc0063d5") }}
+        locale={{ emptyText: i18nText("agentFlow", "auto.key_nemmaagdnf") }}
         renderItem={(version) => {
           const createdAt = formatVersionCreatedAt(version.created_at);
           const title = getVersionTitle(version);
@@ -105,7 +105,7 @@ export function VersionHistoryPanel({
             <List.Item
               actions={[
                 <Button
-                  aria-label={`${version.is_protected ? i18nText("agentFlow", "auto.k_679a137b49") : i18nText("agentFlow", "auto.k_b027928578")} ${title}`}
+                  aria-label={`${version.is_protected ? i18nText("agentFlow", "auto.key_ghjkbdhlej") : i18nText("agentFlow", "auto.key_lachjcifhi")} ${title}`}
                   icon={
                     version.is_protected ? (
                       <PushpinFilled />
@@ -123,7 +123,7 @@ export function VersionHistoryPanel({
                   }}
                 />,
                 <Button
-                  aria-label={i18nText("agentFlow", "auto.k_9a908cebba", { value1: title })}
+                  aria-label={i18nText("agentFlow", "auto.key_jkjaimollk", { value1: title })}
                   icon={<EditOutlined />}
                   key="edit"
                   type="text"
@@ -139,7 +139,7 @@ export function VersionHistoryPanel({
                     void onRestore(version.id);
                   }}
                 >
-                  {i18nText("agentFlow", "auto.k_0c3b243673")}{version.sequence}
+                  {i18nText("agentFlow", "auto.key_amdlcedghd")}{version.sequence}
                 </Button>
               ]}
             >
@@ -148,7 +148,7 @@ export function VersionHistoryPanel({
                   <Space size={6}>
                     <span>{title}</span>
                     {version.is_protected ? (
-                      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.k_e7057fb565")}</Typography.Text>
+                      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.key_ohafhplfgf")}</Typography.Text>
                     ) : null}
                   </Space>
                 }
@@ -164,12 +164,12 @@ export function VersionHistoryPanel({
         }
         destroyOnHidden
         okButtonProps={{
-          'aria-label': i18nText("agentFlow", "auto.k_d4dd59ebb7"),
+          'aria-label': i18nText("agentFlow", "auto.key_nennfjollh"),
           disabled: editingTitle.trim().length === 0
         }}
-        okText={i18nText("agentFlow", "auto.k_fadf24dbc5")}
+        okText={i18nText("agentFlow", "auto.key_pknpcenlmf")}
         open={Boolean(editingVersion)}
-        title={i18nText("agentFlow", "auto.k_2115ceb46c")}
+        title={i18nText("agentFlow", "auto.key_cbbfmolegm")}
         onCancel={() => {
           setEditingVersion(null);
           setEditingTitle('');
@@ -179,9 +179,9 @@ export function VersionHistoryPanel({
         }}
       >
         <Input
-          aria-label={i18nText("agentFlow", "auto.k_51575f72f0")}
+          aria-label={i18nText("agentFlow", "auto.key_fbfhfphcpa")}
           maxLength={80}
-          placeholder={i18nText("agentFlow", "auto.k_3285861a93")}
+          placeholder={i18nText("agentFlow", "auto.key_dcifigbkjd")}
           value={editingTitle}
           onChange={(event) => setEditingTitle(event.target.value)}
         />

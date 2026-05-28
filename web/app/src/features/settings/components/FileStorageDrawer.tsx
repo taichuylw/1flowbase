@@ -44,10 +44,10 @@ interface StorageFormValues {
 
 const DRIVER_TYPE_OPTIONS = [
   { label: i18nText("settings", "auto.local_file_system"), value: 'local' },
-  { label: i18nText("settings", "auto.aws_s3_compatible"), value: 's3' },
+  { label: i18nText("settings", "auto.aws_s_three_compatible"), value: 's3' },
   { label: i18nText("settings", "auto.alibaba_cloud_oss"), value: 'oss' },
   { label: i18nText("settings", "auto.tencent_cloud_cos"), value: 'cos' },
-  { label: i18nText("settings", "auto.rustfs_s3_compatible"), value: 'rustfs' }
+  { label: i18nText("settings", "auto.rustfs_s_three_compatible"), value: 'rustfs' }
 ];
 
 const DRIVER_FIELDS: Record<string, { key: string; label: string; type: 'string' | 'number' }[]> = {

@@ -39,6 +39,7 @@
 - 仅开发辅助信息允许在 `import.meta.env.DEV` 下渲染。
 - 路由相关改动必须同步维护导航文案、`route id`、`path`、选中态和权限键。
 - 前端消费后端字段时保持接口字段原名；表格列名、文案和 i18n label 可独立展示，但不要把同一字段映射成新的业务字段名。
+- 前端 `i18n/` key 没有静态代码引用时由 `i18n-hygiene` 以 `unused-i18n-key` warning 暴露；保留动态 key 必须写明原因。
 - 样式改动固定按 `theme token -> first-party wrapper -> explicit slot -> stop`；禁止裸写 `.ant-*` 递归覆盖。
 - 管理台/后台页面禁止 `Card` 套 `Card` 和卡片墙式堆叠；优先使用 `Table`、`Descriptions`、`Form`、`Typography`、`Divider`、`Space/Flex` 组织信息。
 - 前端测试资源限制统一由仓库根 `.1flowbase.verify.local.json` 驱动；需要调整 `turbo` 并发或 `vitest` workers 时，同步更新 `.1flowbase.verify.local.json.example`，不要在 `web/package.json` 或 `web/app/package.json` 重新写死并发。

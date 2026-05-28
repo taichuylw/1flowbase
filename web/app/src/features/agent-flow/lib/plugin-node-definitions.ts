@@ -58,9 +58,9 @@ export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =
     });
 
 const DEPENDENCY_STATUS_LABELS: Record<string, string> = {
-  missing_plugin: i18nText("agentFlow", "auto.k_6b6de3f794"),
-  version_mismatch: i18nText("agentFlow", "auto.k_d02c1e42f3"),
-  disabled_plugin: i18nText("agentFlow", "auto.k_ac5ad3e071")
+  missing_plugin: i18nText("agentFlow", "auto.dependency_missing_plugin"),
+  version_mismatch: i18nText("agentFlow", "auto.dependency_version_mismatch"),
+  disabled_plugin: i18nText("agentFlow", "auto.dependency_plugin_not_ready")
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,25 +76,25 @@ function getContributionOutputSchemaSnapshot(
 }
 
 export const pluginNodeDefinition: NodeDefinition = {
-  label: 'Plugin Node',
-  summary: i18nText("agentFlow", "auto.k_860eca1805"),
+  label: i18nText("agentFlow", "auto.plugin_node_label"),
+  summary: i18nText("agentFlow", "auto.plugin_node_definition_summary"),
   helpHref: null,
   sections: [
     {
       key: 'basics',
-      title: i18nText("agentFlow", "auto.k_41654e0268"),
+      title: i18nText("agentFlow", "auto.basic_information"),
       fields: []
     },
     {
       key: 'outputs',
-      title: i18nText("agentFlow", "auto.k_ded698ae1e"),
+      title: i18nText("agentFlow", "auto.outputs"),
       fields: []
     }
   ]
 };
 
 export const pluginNodeDefinitionMeta: NodeDefinitionMeta = {
-  summary: i18nText("agentFlow", "auto.k_9e476e2364"),
+  summary: i18nText("agentFlow", "auto.plugin_node_meta_summary"),
   helpHref: null
 };
 
@@ -112,7 +112,7 @@ export function buildNodePickerOptions(
         contribution.dependency_status === 'ready'
           ? null
           : DEPENDENCY_STATUS_LABELS[contribution.dependency_status] ??
-            i18nText("agentFlow", "auto.k_3b27308086")
+            i18nText("agentFlow", "auto.plugin_node_unavailable")
     }))
   ];
 }

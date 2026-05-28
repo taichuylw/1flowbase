@@ -16,7 +16,7 @@ export const ifElseNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.condition_group',
-          label: i18nText("agentFlow", "auto.k_536d57e2cb"),
+          label: i18nText("agentFlow", "auto.key_fdgnfhocml"),
           editor: 'condition_group',
           required: true
         }

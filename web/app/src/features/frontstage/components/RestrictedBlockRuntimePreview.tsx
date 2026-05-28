@@ -88,23 +88,23 @@ function RuntimeErrorSummary({
       items={[
         {
           key: 'kind',
-          label: 'Kind',
-          children: snapshot.error?.kind ?? 'unknown'
+          label: i18nText("frontstage", "auto.kind"),
+          children: snapshot.error?.kind ?? i18nText("frontstage", "auto.unknown")
         },
         {
           key: 'message',
-          label: 'Message',
-          children: snapshot.error?.message ?? 'Runtime failed.'
+          label: i18nText("frontstage", "auto.message"),
+          children: snapshot.error?.message ?? i18nText("frontstage", "auto.runtime_failed")
         },
         {
           key: 'code',
-          label: 'Code',
-          children: firstError?.code ?? snapshot.error?.kind ?? 'runtime_error'
+          label: i18nText("frontstage", "auto.code"),
+          children: firstError?.code ?? snapshot.error?.kind ?? i18nText("frontstage", "auto.runtime_error")
         },
         {
           key: 'path',
-          label: 'Path',
-          children: firstError?.path ?? 'runtime'
+          label: i18nText("frontstage", "auto.path"),
+          children: firstError?.path ?? i18nText("frontstage", "auto.runtime")
         }
       ]}
     />
@@ -118,7 +118,7 @@ function RuntimeActivitySummary({
 }) {
   return (
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
-      <Typography.Text strong>Logs</Typography.Text>
+      <Typography.Text strong>{i18nText("frontstage", "auto.logs")}</Typography.Text>
       {snapshot.logs.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
@@ -134,7 +134,7 @@ function RuntimeActivitySummary({
         <Typography.Text type="secondary">{i18nText("frontstage", "auto.none")}</Typography.Text>
       )}
 
-      <Typography.Text strong>Effects</Typography.Text>
+      <Typography.Text strong>{i18nText("frontstage", "auto.effects")}</Typography.Text>
       {snapshot.effects.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
@@ -149,7 +149,7 @@ function RuntimeActivitySummary({
         <Typography.Text type="secondary">{i18nText("frontstage", "auto.none")}</Typography.Text>
       )}
 
-      <Typography.Text strong>Rejections</Typography.Text>
+      <Typography.Text strong>{i18nText("frontstage", "auto.rejections")}</Typography.Text>
       {snapshot.rejections.length > 0 ? (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
@@ -173,10 +173,10 @@ function formatEffect(
 ): string {
   switch (effect.type) {
     case 'action':
-      return `action: ${effect.actionId}`;
+      return `${i18nText("frontstage", "auto.effect_action")}: ${effect.actionId}`;
     case 'data':
-      return `data: ${effect.operation}`;
+      return `${i18nText("frontstage", "auto.effect_data")}: ${effect.operation}`;
     case 'event':
-      return `event: ${effect.name}`;
+      return `${i18nText("frontstage", "auto.effect_event")}: ${effect.name}`;
   }
 }

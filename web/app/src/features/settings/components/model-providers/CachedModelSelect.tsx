@@ -10,7 +10,7 @@ export function CachedModelSelect({
   ariaLabel,
   className,
   style,
-  placeholder = i18nText("settings", "auto.k_1d1ff57695"),
+  placeholder = i18nText("settings", "auto.key_bnbppfhgjf"),
   value,
   values,
   defaultValue,
@@ -36,7 +36,7 @@ export function CachedModelSelect({
   }));
 
   if (options.length === 0 && emptyMode === 'text') {
-    return <Typography.Text type="secondary">{i18nText("settings", "auto.k_0a8eb954a0")}</Typography.Text>;
+    return <Typography.Text type="secondary">{i18nText("settings", "auto.key_akioljfeka")}</Typography.Text>;
   }
 
   return (

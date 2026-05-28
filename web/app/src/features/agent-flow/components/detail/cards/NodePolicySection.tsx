@@ -31,18 +31,18 @@ export function NodePolicySection({
   const errorPolicyOptions = [
     {
       value: 'none',
-      label: i18nText("agentFlow", "auto.k_72077749f7"),
-      description: i18nText("agentFlow", "auto.k_544a35b974")
+      label: i18nText("agentFlow", "auto.key_hcahhhejph"),
+      description: i18nText("agentFlow", "auto.key_feekdfljhe")
     },
     {
       value: 'default_value',
-      label: i18nText("agentFlow", "auto.k_d93919c37b"),
-      description: i18nText("agentFlow", "auto.k_9be0a808e3")
+      label: i18nText("agentFlow", "auto.key_njdjbjmdhl"),
+      description: i18nText("agentFlow", "auto.key_jloakiaiod")
     },
     {
       value: 'error_branch',
-      label: i18nText("agentFlow", "auto.k_92879700a0"),
-      description: i18nText("agentFlow", "auto.k_938451d34e")
+      label: i18nText("agentFlow", "auto.key_jcihjhaaka"),
+      description: i18nText("agentFlow", "auto.key_jdiefbndeo")
     }
   ] satisfies Array<{
     value: string;
@@ -54,9 +54,9 @@ export function NodePolicySection({
     <div className="agent-flow-node-detail__policies">
       <div className="agent-flow-node-detail__policy-row" data-testid="node-policy-row">
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          {i18nText("agentFlow", "auto.k_794ff5f046")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_hjeppfpaeg")}</Typography.Text>
         <Switch
-          aria-label={i18nText("agentFlow", "auto.k_794ff5f046")}
+          aria-label={i18nText("agentFlow", "auto.key_hjeppfpaeg")}
           checked={Boolean(selectedNode.config.retry_enabled)}
           className="agent-flow-node-detail__policy-control"
           onChange={(checked) => {
@@ -74,13 +74,13 @@ export function NodePolicySection({
         data-testid="node-policy-row"
       >
         <Typography.Text className="agent-flow-node-detail__policy-label">
-          {i18nText("agentFlow", "auto.k_066247572d")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_aggcehfhcn")}</Typography.Text>
         <div
           className="agent-flow-node-detail__policy-select-shell agent-flow-node-detail__policy-select-shell--compact"
           data-testid="node-policy-error"
         >
           <Select
-            aria-label={i18nText("agentFlow", "auto.k_066247572d")}
+            aria-label={i18nText("agentFlow", "auto.key_aggcehfhcn")}
             className="agent-flow-node-detail__policy-control agent-flow-node-detail__policy-select"
             options={errorPolicyOptions}
             optionRender={(option) => {

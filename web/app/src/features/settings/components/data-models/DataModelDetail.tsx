@@ -137,7 +137,7 @@ export function DataModelDetail({
 
   const fieldColumns: ColumnsType<SettingsDataModelField> = [
     {
-      title: i18nText("settings", "auto.k_46cdebc806"),
+      title: i18nText("settings", "auto.key_egmnolmiag"),
       dataIndex: 'title',
       key: 'title',
       render: (value: string, field) => {
@@ -169,7 +169,7 @@ export function DataModelDetail({
                 style={{ borderRadius: 6, margin: 0, fontSize: 10 }}
                 icon={<LockOutlined style={{ fontSize: 10 }} />}
               >
-                {i18nText("settings", "auto.k_ffc1d065fb")}</Tag>
+                {i18nText("settings", "auto.key_ppmbnagfpl")}</Tag>
             )}
           </Space>
         );
@@ -184,33 +184,33 @@ export function DataModelDetail({
       )
     },
     {
-      title: i18nText("settings", "auto.k_e4e46c7235"),
+      title: i18nText("settings", "auto.kind"),
       dataIndex: 'field_kind',
       key: 'field_kind',
       render: (value: string) => getFieldKindTag(value)
     },
     {
-      title: i18nText("settings", "auto.k_32945d3e36"),
+      title: i18nText("settings", "auto.key_dcjefndodg"),
       dataIndex: 'is_required',
       key: 'is_required',
       width: 80,
       render: (value: boolean) =>
         value ? (
           <Tag color="error" style={{ borderRadius: 4, margin: 0 }}>
-            {i18nText("settings", "auto.k_32945d3e36")}</Tag>
+            {i18nText("settings", "auto.key_dcjefndodg")}</Tag>
         ) : (
           <span style={{ color: 'var(--text-tertiary)' }}>-</span>
         )
     },
     {
-      title: i18nText("settings", "auto.k_e805014aa5"),
+      title: i18nText("settings", "auto.key_oiafabekkf"),
       dataIndex: 'is_unique',
       key: 'is_unique',
       width: 80,
       render: (value: boolean) =>
         value ? (
           <Tag color="warning" style={{ borderRadius: 4, margin: 0 }}>
-            {i18nText("settings", "auto.k_e805014aa5")}</Tag>
+            {i18nText("settings", "auto.key_oiafabekkf")}</Tag>
         ) : (
           <span style={{ color: 'var(--text-tertiary)' }}>-</span>
         )
@@ -245,7 +245,7 @@ export function DataModelDetail({
   const summaryItems = [
     {
       key: 'title',
-      label: i18nText("settings", "auto.k_748d7dc7e3"),
+      label: i18nText("settings", "auto.key_heinhnmhod"),
       value: model.title,
       strong: true,
       icon: <TagOutlined />
@@ -253,7 +253,7 @@ export function DataModelDetail({
     { key: 'code', label: 'Code', value: model.code, icon: <CodeOutlined /> },
     {
       key: 'source',
-      label: i18nText("settings", "auto.k_c63f79e636"),
+      label: i18nText("settings", "auto.key_mgdphjogdg"),
       value: model.source_kind === 'main_source' ? i18nText("settings", "auto.built_in_data_source") : i18nText("settings", "auto.external_data_source"),
       icon:
         model.source_kind === 'main_source' ? (
@@ -272,7 +272,7 @@ export function DataModelDetail({
       ? [
           {
             key: 'external_table_id',
-            label: i18nText("settings", "auto.k_e8c66a5fcd"),
+            label: i18nText("settings", "auto.key_oimggkfpmn"),
             value: model.external_table_id ?? '-',
             icon: <TableOutlined />
           }
@@ -280,14 +280,14 @@ export function DataModelDetail({
       : []),
     {
       key: 'table',
-      label: i18nText("settings", "auto.k_1b729397db"),
+      label: i18nText("settings", "auto.key_blhcjdjhnl"),
       value: model.physical_table_name,
       icon: <DeploymentUnitOutlined />
     }
   ];
 
   return (
-    <section className="data-model-panel__detail" aria-label={i18nText("settings", "auto.k_0e59d360d4")}>
+    <section className="data-model-panel__detail" aria-label={i18nText("settings", "auto.key_aofjndgane")}>
       <div
         className="data-model-panel__meta-grid"
         data-testid="data-model-detail-summary"
@@ -323,9 +323,9 @@ export function DataModelDetail({
             className="data-model-panel__status-label"
             data-testid="data-model-status-label"
           >
-            <label htmlFor="data-model-status-select">{i18nText("settings", "auto.k_bf0ac89783")}</label>
+            <label htmlFor="data-model-status-select">{i18nText("settings", "auto.key_lpakmijhid")}</label>
             <DataModelHelpTooltip
-              label={i18nText("settings", "auto.k_dfba75f296")}
+              label={i18nText("settings", "auto.key_nplkhfpcjg")}
               title={dataModelStatusHelp}
             />
           </div>
@@ -346,7 +346,7 @@ export function DataModelDetail({
         items={[
           {
             key: 'fields',
-            label: i18nText("settings", "auto.k_77a49f2c38"),
+            label: i18nText("settings", "auto.key_hhkejpcmdi"),
             children: (
               <Flex vertical gap={12}>
                 <Flex justify="flex-end">
@@ -362,7 +362,7 @@ export function DataModelDetail({
                       })
                     }
                   >
-                    {i18nText("settings", "auto.k_1687c80b94")}</Button>
+                    {i18nText("settings", "auto.key_bgihmialje")}</Button>
                 </Flex>
                 <Table
                   rowKey="id"
@@ -395,15 +395,15 @@ export function DataModelDetail({
           },
           {
             key: 'relations',
-            label: i18nText("settings", "auto.k_daf4f2dc0e"),
+            label: i18nText("settings", "auto.key_nkpepcnmao"),
             children: (
               <Table
                 rowKey="id"
                 size="small"
                 columns={[
-                  { title: i18nText("settings", "auto.k_77a49f2c38"), dataIndex: 'title', key: 'title' },
+                  { title: i18nText("settings", "auto.key_hhkejpcmdi"), dataIndex: 'title', key: 'title' },
                   {
-                    title: i18nText("settings", "auto.k_438c3ec816"),
+                    title: i18nText("settings", "auto.key_edimdomibg"),
                     dataIndex: 'relation_target_model_id',
                     key: 'relation_target_model_id'
                   }
@@ -415,7 +415,7 @@ export function DataModelDetail({
           },
           {
             key: 'permissions',
-            label: i18nText("settings", "auto.k_560165a6d7"),
+            label: i18nText("settings", "auto.key_fgabgfkgnh"),
             children: (
               <DataModelPermissionsTab
                 grants={grants}
@@ -439,7 +439,7 @@ export function DataModelDetail({
           },
           {
             key: 'records',
-            label: i18nText("settings", "auto.k_d157fe7113"),
+            label: i18nText("settings", "auto.key_nbfhpohbbd"),
             children: (
               <DataModelRecordPreview
                 preview={recordPreview}

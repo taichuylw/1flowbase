@@ -120,7 +120,7 @@ export function HostInfrastructureProviderDrawer({
   return (
     <>
       <Drawer
-        title={provider ? i18nText("settings", "auto.k_15b3fcbeb3", { value1: provider.display_name }) : i18nText("settings", "auto.k_bc124a41b0")}
+        title={provider ? i18nText("settings", "auto.key_bfldpmlold", { value1: provider.display_name }) : i18nText("settings", "auto.key_lmbcekebla")}
         width={520}
         open={open}
         onClose={onClose}
@@ -134,7 +134,7 @@ export function HostInfrastructureProviderDrawer({
               disabled={!canManage || saveMutation.isPending}
               loading={saveMutation.isPending}
             >
-              {i18nText("settings", "auto.k_1ac546145a")}</Button>
+              {i18nText("settings", "auto.key_bkmfegbefk")}</Button>
           </Space>
         }
       >
@@ -177,7 +177,7 @@ export function HostInfrastructureProviderDrawer({
                   rules={[
                     {
                       required: field.required,
-                      message: i18nText("settings", "auto.k_14cc0ae4e6", { value1: field.label })
+                      message: i18nText("settings", "auto.key_bemmakoeog", { value1: field.label })
                     }
                   ]}
                 >

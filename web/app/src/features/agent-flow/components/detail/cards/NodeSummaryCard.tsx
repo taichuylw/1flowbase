@@ -44,10 +44,10 @@ export function NodeSummaryCard({
       extra={
         definitionMeta.helpHref ? (
           <Typography.Link href={definitionMeta.helpHref} target="_blank">
-            {i18nText("agentFlow", "auto.k_39c1887749")}</Typography.Link>
+            {i18nText("agentFlow", "auto.key_djmbiihhej")}</Typography.Link>
         ) : null
       }
-      title={i18nText("agentFlow", "auto.k_88a5351e42")}
+      title={i18nText("agentFlow", "auto.key_iikfdfboec")}
     >
       <Typography.Paragraph>
         {definition.summary ?? definitionMeta.summary}

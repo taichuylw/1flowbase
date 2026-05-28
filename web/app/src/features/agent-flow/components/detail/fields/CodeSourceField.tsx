@@ -26,7 +26,7 @@ const CODE_EDITOR_OPTIONS = {
 function CodeSourceEditorFallback() {
   return (
     <div className="agent-flow-code-source-field__loading">
-      {i18nText("agentFlow", "auto.k_e1e1e4582e")}</div>
+      {i18nText("agentFlow", "auto.key_oboboefico")}</div>
   );
 }
 

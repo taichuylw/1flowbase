@@ -16,7 +16,7 @@ export const loopNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.entry_condition',
-          label: i18nText("agentFlow", "auto.k_ed57abc592"),
+          label: i18nText("agentFlow", "auto.key_onfhklmfjc"),
           editor: 'condition_group',
           required: true
         }
@@ -25,12 +25,12 @@ export const loopNodeDefinition: NodeDefinition = {
     {
       key: 'policy',
       title: 'Policy',
-      fields: [{ key: 'config.max_rounds', label: i18nText("agentFlow", "auto.k_7b621d26b8"), editor: 'number' }]
+      fields: [{ key: 'config.max_rounds', label: i18nText("agentFlow", "auto.key_hlgcbncgli"), editor: 'number' }]
     },
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.k_bad648c3c2"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.key_lkngeimdmc"), editor: 'text', required: true }]
     }
   ]
 };

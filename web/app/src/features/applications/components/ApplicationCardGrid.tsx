@@ -1,6 +1,7 @@
 import { Button, Flex, List, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import { formatDateTime } from '../../../shared/i18n/format';
 import type { Application } from '../api/applications';
 
 interface ApplicationCardGridProps {
@@ -42,7 +43,7 @@ export function ApplicationCardGrid({ applications }: ApplicationCardGridProps) 
             </Typography.Paragraph>
 
             <Typography.Text type="secondary">
-              {t('auto.recently_updated')}{new Date(application.updated_at).toLocaleString('zh-CN')}
+              {t('auto.recently_updated')}{formatDateTime(application.updated_at)}
             </Typography.Text>
 
             <a href={`/applications/${application.id}/orchestration`}>

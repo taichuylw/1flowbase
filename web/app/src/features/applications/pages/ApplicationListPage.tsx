@@ -35,6 +35,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../../../state/auth-store';
+import { formatDateTime } from '../../../shared/i18n/format';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import {
   applicationCatalogQueryKey,
@@ -431,7 +432,7 @@ export function ApplicationListPage() {
                     </Typography.Title>
                     <Typography.Text type="secondary">
                       {typeLabel} {t('auto.edited_at_prefix')}{' '}
-                      {new Date(application.updated_at).toLocaleString('zh-CN', {
+                      {formatDateTime(application.updated_at, {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',

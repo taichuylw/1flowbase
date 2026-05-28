@@ -16,7 +16,7 @@ export const templateTransformNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.template',
-          label: i18nText("agentFlow", "auto.k_06d0f38dd2"),
+          label: i18nText("agentFlow", "auto.key_agnapdinnc"),
           editor: 'templated_text',
           required: true
         }
@@ -25,7 +25,7 @@ export const templateTransformNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.k_da17da584d"), editor: 'text', required: true }]
+      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.key_nkbhnkfien"), editor: 'text', required: true }]
     }
   ]
 };

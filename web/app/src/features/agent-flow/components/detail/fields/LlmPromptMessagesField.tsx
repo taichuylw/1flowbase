@@ -196,9 +196,9 @@ export function LlmPromptMessagesField({
       >
         <div className="agent-flow-llm-prompt-messages__body">
           <TemplatedTextField
-            ariaLabel={i18nText("agentFlow", "auto.k_0cc8b6ac45", { value1: roleLabel })}
+            ariaLabel={i18nText("agentFlow", "auto.key_ammilgkmef", { value1: roleLabel })}
             draggable={isDraggableMessage}
-            dragLabel={i18nText("agentFlow", "auto.k_a825b8c3cd", { value1: roleLabel })}
+            dragLabel={i18nText("agentFlow", "auto.key_kicflimdmn", { value1: roleLabel })}
             label={roleLabel}
             labelContent={
               isSystemMessage ? (
@@ -210,7 +210,7 @@ export function LlmPromptMessagesField({
                 </Typography.Text>
               ) : (
                 <PromptMessageRoleSelect
-                  ariaLabel={roleLabel + i18nText("agentFlow", "auto.k_4aa036182f")}
+                  ariaLabel={roleLabel + i18nText("agentFlow", "auto.key_ekkadgbicp")}
                   value={message.role}
                   onChange={(role) => updateRole(index, role)}
                 />
@@ -219,7 +219,7 @@ export function LlmPromptMessagesField({
             toolbarExtraActions={
               isSystemMessage ? null : (
                 <Button
-                  aria-label={i18nText("agentFlow", "auto.k_33932e5754", { value1: roleLabel })}
+                  aria-label={i18nText("agentFlow", "auto.key_ddjdcofhfe", { value1: roleLabel })}
                   className="agent-flow-templated-text-field__action"
                   danger
                   icon={<DeleteOutlined />}
@@ -230,7 +230,7 @@ export function LlmPromptMessagesField({
               )
             }
             options={options}
-            placeholder={i18nText("agentFlow", "auto.k_faa6bb45af")}
+            placeholder={i18nText("agentFlow", "auto.key_pkkgllefkp")}
             value={message.content.value}
             onChange={(nextValue) => updateContent(index, nextValue)}
             onDragEnd={() => setDraggingIndex(null)}
@@ -245,7 +245,7 @@ export function LlmPromptMessagesField({
     <div className="agent-flow-llm-prompt-messages">
       <div className="agent-flow-llm-prompt-messages__header">
         <Typography.Text className="agent-flow-node-detail__section-subtitle">
-          {i18nText("agentFlow", "auto.k_30827d1c96")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_daichnbmjg")}</Typography.Text>
       </div>
 
       <div className="agent-flow-llm-prompt-messages__list">
@@ -258,14 +258,14 @@ export function LlmPromptMessagesField({
             renderPromptMessage(message, dynamicIndex + 1)
           )}
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_bc38ae0484")}
+            aria-label={i18nText("agentFlow", "auto.key_lmdikoaeie")}
             className="agent-flow-llm-prompt-messages__add-message"
             icon={<PlusOutlined />}
             size="small"
             type="dashed"
             onClick={addMessage}
           >
-            {i18nText("agentFlow", "auto.k_bc38ae0484")}</Button>
+            {i18nText("agentFlow", "auto.key_lmdikoaeie")}</Button>
         </div>
       </div>
     </div>

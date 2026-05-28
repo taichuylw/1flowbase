@@ -18,21 +18,21 @@ function getInstallButtonLabel(
   activePluginId: string | null
 ) {
   if (activePluginId === entry.plugin_id && installState === 'installing') {
-    return i18nText("settings", "auto.k_411642f1d0");
+    return i18nText("settings", "auto.key_ebbgecpbna");
   }
 
   if (
     entry.install_status === 'assigned' ||
     (activePluginId === entry.plugin_id && installState === 'success')
   ) {
-    return i18nText("settings", "auto.k_f0d2fb13dd");
+    return i18nText("settings", "auto.key_pancplbdnn");
   }
 
   if (activePluginId === entry.plugin_id && installState === 'failed') {
-    return i18nText("settings", "auto.k_87c0fd2d68");
+    return i18nText("settings", "auto.key_ihmapncngi");
   }
 
-  return i18nText("settings", "auto.k_662ccf68d0");
+  return i18nText("settings", "auto.key_ggcmmpgina");
 }
 
 function compareOfficialVersion(left: string, right: string) {
@@ -119,7 +119,7 @@ function renderTagLabel(tag: string) {
     return (
       <span className="model-provider-panel__tag-label">
         latest
-        <Tooltip title={i18nText("settings", "auto.k_9b281e3e0a")}>
+        <Tooltip title={i18nText("settings", "auto.key_jlcibodoak")}>
           <QuestionCircleOutlined className="model-provider-panel__tag-help" />
         </Tooltip>
       </span>
@@ -133,10 +133,10 @@ function renderTagLabel(tag: string) {
         <Tooltip
           title={
             tag === 'hybrid'
-              ? i18nText("settings", "auto.k_b99bc4228a")
+              ? i18nText("settings", "auto.key_ljjlmeccik")
               : tag === 'dynamic'
-                ? i18nText("settings", "auto.k_557571148f")
-                : i18nText("settings", "auto.k_be8ea55915")
+                ? i18nText("settings", "auto.key_ffhfhbbeip")
+                : i18nText("settings", "auto.key_loiokffjbf")
           }
         >
           <QuestionCircleOutlined className="model-provider-panel__tag-help" />
@@ -259,19 +259,19 @@ export function OfficialPluginInstallPanel({
           <Typography.Title level={5}>{i18nText("settings", "auto.model_providers")}</Typography.Title>
           {sourceMeta ? (
             <Typography.Text type="secondary">
-              {i18nText("settings", "auto.k_47a3d3a019")}{sourceMeta.sourceLabel}
-              {i18nText("settings", "auto.k_4540c3f939")}</Typography.Text>
+              {i18nText("settings", "auto.key_ehkdndkabj")}{sourceMeta.sourceLabel}
+              {i18nText("settings", "auto.key_efeamdpjdj")}</Typography.Text>
           ) : null}
           <div className="model-provider-panel__official-toolbar">
             {canManage ? (
-              <Button onClick={onOpenUpload}>{i18nText("settings", "auto.k_31f407d6e8")}</Button>
+              <Button onClick={onOpenUpload}>{i18nText("settings", "auto.key_dbpeahngoi")}</Button>
             ) : null}
             {sourceMeta ? (
               <Button onClick={() => openExternal(sourceMeta.registryUrl)}>
-                {i18nText("settings", "auto.k_c63f79e636")}</Button>
+                {i18nText("settings", "auto.key_mgdphjogdg")}</Button>
             ) : null}
             <Button onClick={() => openExternal(OFFICIAL_PLUGIN_RELEASES_URL)}>
-              {i18nText("settings", "auto.k_9e0c8a3d10")}</Button>
+              {i18nText("settings", "auto.key_joamikdnba")}</Button>
           </div>
         </div>
       </div>
@@ -279,7 +279,7 @@ export function OfficialPluginInstallPanel({
         allowClear
         showSearch
         className="model-provider-panel__official-select"
-        placeholder={i18nText("settings", "auto.k_9cdcc87be5")}
+        placeholder={i18nText("settings", "auto.key_jmnmmihlof")}
         optionFilterProp="label"
         value={selectedPluginId}
         onChange={(value) => setSelectedPluginId(value ?? null)}
@@ -294,7 +294,7 @@ export function OfficialPluginInstallPanel({
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              loading ? i18nText("settings", "auto.k_6133694e11") : i18nText("settings", "auto.k_de2cfb189b")
+              loading ? i18nText("settings", "auto.key_gbddgjeobb") : i18nText("settings", "auto.key_nocmplbijl")
             }
           />
         </div>
@@ -313,9 +313,9 @@ export function OfficialPluginInstallPanel({
             const buttonLabel = family
               ? family.has_update
                 ? upgrading
-                  ? i18nText("settings", "auto.k_fdb8b1f420")
-                  : i18nText("settings", "auto.k_eed748acf2")
-                : i18nText("settings", "auto.k_db620f1761")
+                  ? i18nText("settings", "auto.key_pnlilbpeca")
+                  : i18nText("settings", "auto.key_oonheikmpc")
+                : i18nText("settings", "auto.key_nlgcapbhgb")
               : getInstallButtonLabel(entry, installState, activePluginId);
             const buttonDisabled = family ? !family.has_update : installed;
 
@@ -370,7 +370,7 @@ export function OfficialPluginInstallPanel({
                   <div className="model-provider-panel__catalog-item-actions">
                     {entry.help_url ? (
                       <Button onClick={() => openExternal(entry.help_url!)}>
-                        {i18nText("settings", "auto.k_1069127253")}</Button>
+                        {i18nText("settings", "auto.key_bagjbchcfd")}</Button>
                     ) : null}
                     <Button
                       type={buttonDisabled ? 'default' : 'primary'}
@@ -378,7 +378,7 @@ export function OfficialPluginInstallPanel({
                       disabled={buttonDisabled}
                       onClick={() => {
                         void modal.confirm({
-                          title: family ? i18nText("settings", "auto.k_aa22ba464e") : i18nText("settings", "auto.k_76a38f0a4c"),
+                          title: family ? i18nText("settings", "auto.key_kkcclkegeo") : i18nText("settings", "auto.key_hgkdipakem"),
                           icon: null,
                           centered: true,
                           okText: buttonLabel,
@@ -395,13 +395,13 @@ export function OfficialPluginInstallPanel({
                                 </Typography.Title>
                                 <Typography.Paragraph type="secondary">
                                   {family
-                                    ? i18nText("settings", "auto.k_75aedfd084", { value1: entry.display_name, value2: entry.latest_version })
-                                    : i18nText("settings", "auto.k_8585bc2c84", { value1: entry.latest_version })}
+                                    ? i18nText("settings", "auto.key_hfkonpnaie", { value1: entry.display_name, value2: entry.latest_version })
+                                    : i18nText("settings", "auto.key_ififlmcmie", { value1: entry.latest_version })}
                                 </Typography.Paragraph>
                                 <div className="model-provider-panel__catalog-item-meta">
-                                  <span>{i18nText("settings", "auto.k_47f7f369a7")}{entry.protocol}</span>
+                                  <span>{i18nText("settings", "auto.key_ehphpdgjkh")}{entry.protocol}</span>
                                   <span>
-                                    {i18nText("settings", "auto.k_0d22afe6d2")}{entry.model_discovery_mode}
+                                    {i18nText("settings", "auto.key_ancckpognc")}{entry.model_discovery_mode}
                                   </span>
                                 </div>
                               </div>
@@ -424,7 +424,7 @@ export function OfficialPluginInstallPanel({
                 ) : entry.help_url ? (
                   <div className="model-provider-panel__catalog-item-actions">
                     <Button onClick={() => openExternal(entry.help_url!)}>
-                      {i18nText("settings", "auto.k_1069127253")}</Button>
+                      {i18nText("settings", "auto.key_bagjbchcfd")}</Button>
                   </div>
                 ) : null}
               </article>

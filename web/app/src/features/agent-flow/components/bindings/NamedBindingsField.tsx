@@ -26,9 +26,9 @@ export function NamedBindingsField({
   value,
   options,
   nameOptions,
-  namePlaceholder = i18nText("agentFlow", "auto.k_63d5977de6"),
+  namePlaceholder = i18nText("agentFlow", "auto.key_gdnfjhhnog"),
   selectorLabel = 'selector',
-  addButtonLabel = i18nText("agentFlow", "auto.k_b81a7d3e3c"),
+  addButtonLabel = i18nText("agentFlow", "auto.key_libkhndodm"),
   onChange
 }: NamedBindingsFieldProps) {
   return (
@@ -84,7 +84,7 @@ export function NamedBindingsField({
             />
           </div>
           <Button
-            aria-label={i18nText("agentFlow", "auto.k_4a86499cd0", { value1: entry.name || index + 1 })}
+            aria-label={i18nText("agentFlow", "auto.key_ekigejjmna", { value1: entry.name || index + 1 })}
             className="agent-flow-binding-row__delete"
             danger
             icon={<DeleteOutlined />}

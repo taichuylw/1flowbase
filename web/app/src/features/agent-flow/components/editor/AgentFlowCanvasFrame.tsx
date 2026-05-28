@@ -234,10 +234,10 @@ export function AgentFlowCanvasFrame({
         applicationEnvironmentVariablesQueryKey(applicationId),
         nextVariables
       );
-      message.success(i18nText("agentFlow", "auto.k_ec0f4d0a1e"));
+      message.success(i18nText("agentFlow", "auto.key_omapenakbo"));
     },
     onError() {
-      message.error(i18nText("agentFlow", "auto.k_b0739fb6e2"));
+      message.error(i18nText("agentFlow", "auto.key_lahdjplgoc"));
     }
   });
   const publishMutation = useMutation({
@@ -256,10 +256,10 @@ export function AgentFlowCanvasFrame({
       void queryClient.invalidateQueries({
         queryKey: applicationDetailQueryKey(applicationId)
       });
-      message.success(i18nText("agentFlow", "auto.k_ec00233618"));
+      message.success(i18nText("agentFlow", "auto.key_omaacddgbi"));
     },
     onError() {
-      message.error(i18nText("agentFlow", "auto.k_7e7f5d44c4"));
+      message.error(i18nText("agentFlow", "auto.key_hohpfneeme"));
     }
   });
   const versionMetadataMutation = useMutation({
@@ -279,10 +279,10 @@ export function AgentFlowCanvasFrame({
     onSuccess(nextState) {
       syncSavedServerState(nextState);
       queryClient.setQueryData(orchestrationQueryKey(applicationId), nextState);
-      message.success(i18nText("agentFlow", "auto.k_1e3a053ca9"));
+      message.success(i18nText("agentFlow", "auto.key_bodkafdmkj"));
     },
     onError() {
-      message.error(i18nText("agentFlow", "auto.k_c0201ed037"));
+      message.error(i18nText("agentFlow", "auto.key_macabonadh"));
     }
   });
 
@@ -929,7 +929,7 @@ export function AgentFlowCanvasFrame({
   function handleResetVariableCache() {
     debugSession.resetVariableCache();
     setSelectedVariable(null);
-    message.success(i18nText("agentFlow", "auto.k_115f88b14e"));
+    message.success(i18nText("agentFlow", "auto.key_bbfpiilbeo"));
   }
 
   function handleVariableCacheValueChange(key: string, value: unknown) {
@@ -1067,7 +1067,7 @@ export function AgentFlowCanvasFrame({
     >
       <AgentFlowOverlay
         applicationName={applicationName}
-        autosaveLabel={i18nText("agentFlow", "auto.k_50d33a9abe", { value1: Math.round(autosaveIntervalMs / 1000) })}
+        autosaveLabel={i18nText("agentFlow", "auto.key_fanddkjklo", { value1: Math.round(autosaveIntervalMs / 1000) })}
         autosaveStatus={autosaveStatus}
         onSaveDraft={() => {
           void draftSync.saveNow();
@@ -1085,9 +1085,9 @@ export function AgentFlowCanvasFrame({
       />
       {activeContainerId ? (
         <div className="agent-flow-editor__breadcrumb">
-          <Button onClick={navigation.returnToRoot}>{i18nText("agentFlow", "auto.k_7238370c78")}</Button>
+          <Button onClick={navigation.returnToRoot}>{i18nText("agentFlow", "auto.key_hcdidhamhi")}</Button>
           <Typography.Text type="secondary">
-            {i18nText("agentFlow", "auto.k_af3098d4be")}{' '}
+            {i18nText("agentFlow", "auto.key_kpdajinelo")}{' '}
             {
               workingDocument.graph.nodes.find(
                 (node) => node.id === activeContainerId
@@ -1119,14 +1119,14 @@ export function AgentFlowCanvasFrame({
           style={{ left: variableCacheCenterLeft }}
           onClick={() => setVariableCacheOpen(true)}
         >
-          {i18nText("agentFlow", "auto.k_ec763ccf4c")}</Button>
+          {i18nText("agentFlow", "auto.key_omhgdmmpem")}</Button>
         {variablesDockOpen ? (
           <AgentFlowSideDock
             className="agent-flow-editor__variables-dock"
             data-testid="agent-flow-editor-variables-dock"
             isResizing={isResizingVariablesDock}
             resizeLabel={
-              environmentVariablesOpen ? i18nText("agentFlow", "auto.k_5cfee2d078") : i18nText("agentFlow", "auto.k_ab9e42f016")
+              environmentVariablesOpen ? i18nText("agentFlow", "auto.key_fmpoocnahi") : i18nText("agentFlow", "auto.key_kljoecpabg")
             }
             width={boundedVariablesDockWidth}
             onResizeStart={handleVariablesDockResizeStart}
@@ -1161,7 +1161,7 @@ export function AgentFlowCanvasFrame({
             }}
           >
             <div
-              aria-label={i18nText("agentFlow", "auto.k_1b598e1a7f")}
+              aria-label={i18nText("agentFlow", "auto.key_blfjiobkhp")}
               aria-orientation="vertical"
               className="agent-flow-editor__detail-resize-handle"
               onMouseDown={handleNodeDetailResizeStart}
@@ -1181,7 +1181,7 @@ export function AgentFlowCanvasFrame({
         ) : null}
         {variableCacheOpen ? (
           <section
-            aria-label={i18nText("agentFlow", "auto.k_8402171cae")}
+            aria-label={i18nText("agentFlow", "auto.key_ieacbhbmko")}
             className="agent-flow-editor__variable-cache-panel"
             data-resizing={isResizingVariableCache ? 'true' : 'false'}
             data-sidebar-resizing={
@@ -1193,7 +1193,7 @@ export function AgentFlowCanvasFrame({
             }}
           >
             <div
-              aria-label={i18nText("agentFlow", "auto.k_7611b6be74")}
+              aria-label={i18nText("agentFlow", "auto.key_hgbblglohe")}
               aria-orientation="horizontal"
               className="agent-flow-editor__variable-cache-resize-handle"
               onMouseDown={handleVariableCacheResizeStart}
@@ -1201,10 +1201,10 @@ export function AgentFlowCanvasFrame({
             />
             <header className="agent-flow-editor__variable-cache-header">
               <div className="agent-flow-editor__variable-cache-title-line">
-                <Typography.Text strong>{i18nText("agentFlow", "auto.k_8402171cae")}</Typography.Text>
-                <Tooltip title={i18nText("agentFlow", "auto.k_e0825e60b7")}>
+                <Typography.Text strong>{i18nText("agentFlow", "auto.key_ieacbhbmko")}</Typography.Text>
+                <Tooltip title={i18nText("agentFlow", "auto.key_oaicfogalh")}>
                   <QuestionCircleOutlined
-                    aria-label={i18nText("agentFlow", "auto.k_8c94e7e371")}
+                    aria-label={i18nText("agentFlow", "auto.key_imjeohodhb")}
                     className="agent-flow-editor__variable-cache-help-icon"
                   />
                 </Tooltip>
@@ -1216,7 +1216,7 @@ export function AgentFlowCanvasFrame({
                       {selectedVariable.label}
                     </Typography.Text>
                     <Button
-                      aria-label={i18nText("agentFlow", "auto.k_85e5c2ace7")}
+                      aria-label={i18nText("agentFlow", "auto.key_ifofmckmoh")}
                       icon={<CopyOutlined />}
                       size="small"
                       type="text"
@@ -1226,23 +1226,23 @@ export function AgentFlowCanvasFrame({
                             ? selectedVariable.value
                             : JSON.stringify(selectedVariable.value, null, 2);
                         copyTextToClipboard(text).then(
-                          () => message.success(i18nText("agentFlow", "auto.k_e381a5763d")),
-                          () => message.error(i18nText("agentFlow", "auto.k_f2c6b5167b"))
+                          () => message.success(i18nText("agentFlow", "auto.key_odibkfhgdn")),
+                          () => message.error(i18nText("agentFlow", "auto.key_pcmglfbghl"))
                         );
                       }}
                     >
-                      {i18nText("agentFlow", "auto.k_4edd1d0087")}</Button>
+                      {i18nText("agentFlow", "auto.key_eonnbnaaih")}</Button>
                   </div>
                 )}
                 <Button
-                  aria-label={i18nText("agentFlow", "auto.k_06e2bb6a0e")}
+                  aria-label={i18nText("agentFlow", "auto.key_agocllgkao")}
                   size="small"
                   type="text"
                   onClick={handleResetVariableCache}
                 >
-                  {i18nText("agentFlow", "auto.k_dbe3a18d13")}</Button>
+                  {i18nText("agentFlow", "auto.key_nlodkbinbd")}</Button>
                 <Button
-                  aria-label={i18nText("agentFlow", "auto.k_43e5a6e24c")}
+                  aria-label={i18nText("agentFlow", "auto.key_edofkgocem")}
                   icon={<CloseOutlined />}
                   type="text"
                   onClick={() => setVariableCacheOpen(false)}
@@ -1270,7 +1270,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__conversation-log-dock"
             data-testid="agent-flow-editor-conversation-log-dock"
             isResizing={isResizingConversationLog}
-            resizeLabel={i18nText("agentFlow", "auto.k_52908a7dab")}
+            resizeLabel={i18nText("agentFlow", "auto.key_fcjaikhnkl")}
             style={{
               right: `${16 + boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP}px`
             }}
@@ -1291,7 +1291,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__debug-console-dock"
             data-testid="agent-flow-editor-debug-console-dock"
             isResizing={isResizingDebugConsole}
-            resizeLabel={i18nText("agentFlow", "auto.k_3f868b7897")}
+            resizeLabel={i18nText("agentFlow", "auto.key_dpigilhijh")}
             width={boundedDebugConsoleWidth}
             onResizeStart={handleDebugConsoleResizeStart}
           >
@@ -1329,7 +1329,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__history-dock"
             data-testid="agent-flow-editor-history-dock"
             isResizing={isResizingHistoryDock}
-            resizeLabel={i18nText("agentFlow", "auto.k_fea6486652")}
+            resizeLabel={i18nText("agentFlow", "auto.key_pokgeiggfc")}
             width={boundedHistoryDockWidth}
             onResizeStart={handleHistoryDockResizeStart}
           >
@@ -1352,7 +1352,7 @@ export function AgentFlowCanvasFrame({
       </div>
       {issues.some((issue) => issue.scope === 'global') ? (
         <Typography.Text type="danger">
-          {i18nText("agentFlow", "auto.k_d65b0dc124")}</Typography.Text>
+          {i18nText("agentFlow", "auto.key_ngflanmbce")}</Typography.Text>
       ) : null}
       <NodePreviewVariablesModal
         confirmLoading={nodePreviewMutation.isPending}
