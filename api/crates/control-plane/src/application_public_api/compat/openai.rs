@@ -1,6 +1,7 @@
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
+use crate::application_public_api::callback_tool_ids::decode_openai_callback_tool_call_id;
 use crate::application_public_api::native::NativeRunRequest;
 
 const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID: &str = "1flowbase";
@@ -79,10 +80,11 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
         }
         let mut history_entry = serde_json::json!({ "role": role, "content": content });
         if let Some(tool_calls) = message.get("tool_calls").filter(|value| value.is_array()) {
-            history_entry["tool_calls"] = tool_calls.clone();
+            history_entry["tool_calls"] = openai_chat_history_tool_calls(tool_calls);
         }
         if let Some(tool_call_id) = message.get("tool_call_id").and_then(Value::as_str) {
-            history_entry["tool_call_id"] = Value::String(tool_call_id.to_string());
+            history_entry["tool_call_id"] =
+                Value::String(openai_chat_history_tool_call_id(tool_call_id));
         }
         history.push(history_entry);
     }
@@ -282,6 +284,36 @@ fn normalize_model_descriptor(value: &Value) -> Option<OpenAiCompatibleModel> {
         id: id.to_string(),
         name,
     })
+}
+
+fn openai_chat_history_tool_calls(tool_calls: &Value) -> Value {
+    let Some(calls) = tool_calls.as_array() else {
+        return tool_calls.clone();
+    };
+    Value::Array(
+        calls
+            .iter()
+            .map(|call| {
+                let Some(object) = call.as_object() else {
+                    return call.clone();
+                };
+                let mut normalized = object.clone();
+                if let Some(id) = object.get("id").and_then(Value::as_str) {
+                    normalized.insert(
+                        "id".to_string(),
+                        Value::String(openai_chat_history_tool_call_id(id)),
+                    );
+                }
+                Value::Object(normalized)
+            })
+            .collect(),
+    )
+}
+
+fn openai_chat_history_tool_call_id(value: &str) -> String {
+    decode_openai_callback_tool_call_id(value)
+        .map(|(_, original_tool_call_id)| original_tool_call_id)
+        .unwrap_or_else(|| value.to_string())
 }
 
 fn reject_unsupported(request: &Value) -> Result<(), OpenAiCompatError> {
@@ -642,6 +674,90 @@ mod tests {
         assert_eq!(inputs["tool_choice"], json!("auto"));
         assert!(inputs.get("function_call").is_none());
         assert!(inputs.get("compatibility").is_none());
+    }
+
+    #[test]
+    fn chat_history_decodes_external_callback_tool_ids_before_native_history() {
+        let external_tool_call_id = "calltask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_call_weather_lookup";
+
+        let request = map_chat_completion_request(json!({
+            "model": "deepseek-v4-flash",
+            "messages": [
+                { "role": "user", "content": "first question" },
+                {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [
+                        {
+                            "id": external_tool_call_id,
+                            "type": "function",
+                            "function": {
+                                "name": "lookup_weather",
+                                "arguments": "{}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": external_tool_call_id,
+                    "content": "{\"temperature\":21}"
+                },
+                { "role": "assistant", "content": "old answer" },
+                { "role": "user", "content": "next question" }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "next question");
+        assert_eq!(
+            request.history[1]["tool_calls"][0]["id"],
+            json!("call_weather_lookup")
+        );
+        assert_eq!(
+            request.history[2]["tool_call_id"],
+            json!("call_weather_lookup")
+        );
+    }
+
+    #[test]
+    fn chat_history_preserves_unrecognized_tool_ids() {
+        let request = map_chat_completion_request(json!({
+            "model": "deepseek-v4-flash",
+            "messages": [
+                { "role": "user", "content": "first question" },
+                {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [
+                        {
+                            "id": "calltask_not-a-valid-callback",
+                            "type": "function",
+                            "function": {
+                                "name": "lookup_weather",
+                                "arguments": "{}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "provider_native_call",
+                    "content": "{\"temperature\":21}"
+                },
+                { "role": "user", "content": "next question" }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.history[1]["tool_calls"][0]["id"],
+            json!("calltask_not-a-valid-callback")
+        );
+        assert_eq!(
+            request.history[2]["tool_call_id"],
+            json!("provider_native_call")
+        );
     }
 
     #[test]

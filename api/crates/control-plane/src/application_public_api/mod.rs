@@ -1,4 +1,5 @@
 pub mod api_keys;
+pub mod callback_tool_ids;
 pub mod compat;
 pub mod conversations;
 pub mod mapping;

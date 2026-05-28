@@ -1283,7 +1283,7 @@ mod tests {
             .as_str()
             .expect("tool call id should be a string");
         assert!(tool_call_id.starts_with(
-            crate::routes::application_public_api::tool_callback_ids::OPENAI_CALLBACK_TOOL_CALL_PREFIX
+            control_plane::application_public_api::callback_tool_ids::OPENAI_CALLBACK_TOOL_CALL_PREFIX
         ));
         assert_eq!(
             decode_openai_callback_tool_call_id(tool_call_id),
