@@ -13,8 +13,7 @@ const SKIPPED_DIRS = new Set([
   'tmp',
 ]);
 const I18N_ROOTS = ['web/app/src', 'api/plugins'];
-const FRONTEND_LOCALES = ['zh-CN', 'en-US'];
-const PROVIDER_LOCALES = ['en_US', 'zh_Hans'];
+const I18N_LOCALES = ['en_US', 'zh_Hans'];
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -113,14 +112,14 @@ function schemeForOwner(owner) {
   if (owner.startsWith('web/app/src/')) {
     return {
       name: 'frontend',
-      locales: FRONTEND_LOCALES,
+      locales: I18N_LOCALES,
       canonicalFileName(fileName) {
-        const normalized = fileName.toLowerCase().replace(/_/gu, '-');
-        if (normalized === 'zh-cn.json' || normalized === 'zh-hans.json') {
-          return 'zh-CN.json';
+        const normalized = fileName.toLowerCase().replace(/-/gu, '_');
+        if (normalized === 'zh_hans.json' || normalized === 'zh_cn.json') {
+          return 'zh_Hans.json';
         }
-        if (normalized === 'en-us.json' || normalized === 'en.json') {
-          return 'en-US.json';
+        if (normalized === 'en_us.json' || normalized === 'en.json') {
+          return 'en_US.json';
         }
         return null;
       },
@@ -129,7 +128,7 @@ function schemeForOwner(owner) {
 
   return {
     name: 'provider',
-    locales: PROVIDER_LOCALES,
+    locales: I18N_LOCALES,
     canonicalFileName(fileName) {
       const normalized = fileName.toLowerCase().replace(/-/gu, '_');
       if (normalized === 'zh_hans.json' || normalized === 'zh_cn.json') {

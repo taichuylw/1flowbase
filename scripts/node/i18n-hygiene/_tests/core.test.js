@@ -17,13 +17,13 @@ function writeFile(repoRoot, relativePath, content) {
 }
 
 function writeI18nPair(repoRoot, owner, zhContent, enContent) {
-  writeFile(repoRoot, `${owner}/i18n/zh-CN.json`, `${JSON.stringify(zhContent, null, 2)}\n`);
-  writeFile(repoRoot, `${owner}/i18n/en-US.json`, `${JSON.stringify(enContent, null, 2)}\n`);
+  writeFile(repoRoot, `${owner}/i18n/zh_Hans.json`, `${JSON.stringify(zhContent, null, 2)}\n`);
+  writeFile(repoRoot, `${owner}/i18n/en_US.json`, `${JSON.stringify(enContent, null, 2)}\n`);
 }
 
 test('scanJsonDuplicateKeys reports duplicate keys with line evidence', () => {
   const findings = scanJsonDuplicateKeys({
-    relativePath: 'web/app/src/features/example/i18n/zh-CN.json',
+    relativePath: 'web/app/src/features/example/i18n/zh_Hans.json',
     content: [
       '{',
       '  "actions": {',
@@ -45,12 +45,12 @@ test('collectI18nHygieneFindings reports locale and key contract errors', () => 
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-hygiene-'));
   writeFile(
     repoRoot,
-    'web/app/src/features/auth/i18n/zh-cn.json',
+    'web/app/src/features/auth/i18n/zh-CN.json',
     '{"signIn":{"title":"登录"}}\n'
   );
   writeFile(
     repoRoot,
-    'web/app/src/features/auth/i18n/en-US.json',
+    'web/app/src/features/auth/i18n/en_US.json',
     '{"signIn":{"title":"Sign in","submit":"Sign in"}}\n'
   );
 
@@ -67,6 +67,27 @@ test('collectI18nHygieneFindings reports locale and key contract errors', () => 
   assert.equal(
     findings.some((finding) => finding.rule === 'locale-key-mismatch'),
     true
+  );
+});
+
+test('collectI18nHygieneFindings accepts backend canonical locale names for frontend owners', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-canonical-'));
+  writeI18nPair(
+    repoRoot,
+    'web/app/src/features/auth',
+    { signIn: { title: '登录' } },
+    { signIn: { title: 'Sign in' } }
+  );
+
+  const findings = collectI18nHygieneFindings({ repoRoot });
+
+  assert.equal(
+    findings.some((finding) => finding.rule === 'invalid-locale-file-name'),
+    false
+  );
+  assert.equal(
+    findings.some((finding) => finding.rule === 'missing-locale-file'),
+    false
   );
 });
 

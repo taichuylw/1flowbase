@@ -6,16 +6,16 @@ import { FALLBACK_APP_LOCALE, SUPPORTED_APP_LOCALES } from './locales';
 
 const appTranslationLoaders = {
   appShell: {
-    'zh-CN': () => import('../../app-shell/i18n/zh-CN.json'),
-    'en-US': () => import('../../app-shell/i18n/en-US.json')
+    zh_Hans: () => import('../../app-shell/i18n/zh_Hans.json'),
+    en_US: () => import('../../app-shell/i18n/en_US.json')
   },
   auth: {
-    'zh-CN': () => import('../../features/auth/i18n/zh-CN.json'),
-    'en-US': () => import('../../features/auth/i18n/en-US.json')
+    zh_Hans: () => import('../../features/auth/i18n/zh_Hans.json'),
+    en_US: () => import('../../features/auth/i18n/en_US.json')
   },
   me: {
-    'zh-CN': () => import('../../features/me/i18n/zh-CN.json'),
-    'en-US': () => import('../../features/me/i18n/en-US.json')
+    zh_Hans: () => import('../../features/me/i18n/zh_Hans.json'),
+    en_US: () => import('../../features/me/i18n/en_US.json')
   }
 } as const;
 

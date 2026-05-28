@@ -104,7 +104,7 @@ describe('AppShellFrame', () => {
 
     await waitFor(() => {
       const helpTrigger = screen.getByLabelText('帮助');
-      const languageTrigger = screen.getByLabelText('切换语言');
+      const languageTrigger = screen.getByLabelText('Switch language');
       const accountLabel = screen.getByText('Root');
 
       expect(
@@ -121,7 +121,7 @@ describe('AppShellFrame', () => {
   test('updates the current session locale from the language switcher', async () => {
     renderShell('/settings/data-models');
 
-    fireEvent.mouseEnter(await screen.findByLabelText('切换语言'));
+    fireEvent.mouseEnter(await screen.findByLabelText('Switch language'));
     fireEvent.click(await screen.findByText('English'));
 
     await waitFor(() => {

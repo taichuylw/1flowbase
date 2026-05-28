@@ -183,7 +183,7 @@ describe('JsBlockTrialPanel', () => {
         block={createBlock()}
         catalogEntry={createCatalogEntry()}
         code="export default { render() {} }"
-        contextSnapshot={{ pageId: 'page-1', locale: 'zh-CN' }}
+        contextSnapshot={{ pageId: 'page-1', locale: 'zh_Hans' }}
         limits={createLimits()}
       />
     );

@@ -13,12 +13,12 @@ import {
 } from '../shared/user-preferences/locale-preference';
 
 const PROFILE_LOCALE_BY_MENU_KEY = {
-  'zh-CN': 'zh_Hans',
-  'en-US': 'en_US'
+  zh_Hans: 'zh_Hans',
+  en_US: 'en_US'
 } as const;
 
 function getSelectedLanguageKey(preferredLocale: string | null | undefined) {
-  return preferredLocale === 'en_US' ? 'en-US' : 'zh-CN';
+  return preferredLocale === 'en_US' ? 'en_US' : 'zh_Hans';
 }
 
 export function LanguageChromeMenu() {
@@ -88,11 +88,11 @@ export function LanguageChromeMenu() {
           popupClassName: 'app-shell-language-popup',
           children: [
             {
-              key: 'zh-CN',
+              key: 'zh_Hans',
               label: t('language.zhHans')
             },
             {
-              key: 'en-US',
+              key: 'en_US',
               label: t('language.enUs')
             }
           ]

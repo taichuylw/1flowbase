@@ -24,6 +24,6 @@ node scripts/node/tooling.js i18n-hygiene
 - 同 owner 重复 value：优先让调用方复用已有 key，或调整文案使语义更精确。
 - 跨 owner 重复 value：默认保留局部 owner；不要为了消灭 warning 抽错 common。
 - 新增 common 前先确认它是短 UI 词，不是业务句子。
-- locale 格式转换只在边界发生：前端 App / UI 资源使用 `zh-CN`、`en-US`；后端 profile、API locale、插件 / provider catalog 使用 `zh_Hans`、`en_US`。
-- 格式转换不得引入前后端字段别名；接口字段名仍以 DTO / 领域语义为准。
+- 全仓 canonical locale 固定为 `zh_Hans` 与 `en_US`；前端 UI、后端 profile / API locale、插件 / provider catalog 都使用同一套文件名和运行态 locale。
+- URL、浏览器语言和 `Accept-Language` 的别名只允许在入口处归一化，不得引入前后端字段别名；接口字段名仍以 DTO / 领域语义为准。
 - QA 报告必须列出命令、报告路径、error 数、warning 数和未修 warning 的保留原因。

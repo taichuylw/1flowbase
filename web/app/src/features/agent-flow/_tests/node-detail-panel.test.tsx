@@ -139,10 +139,10 @@ describe('NodeDetailPanel', () => {
     fetchModelProviderOptionsSpy.mockReset();
     fetchModelProviderOptionsSpy.mockResolvedValue({
       locale_meta: {
-        requested_locale: 'zh-CN',
-        resolved_locale: 'zh-CN',
-        fallback_locale: 'en-US',
-        supported_locales: ['zh-CN', 'en-US']
+        requested_locale: 'zh_Hans',
+        resolved_locale: 'zh_Hans',
+        fallback_locale: 'en_US',
+        supported_locales: ['zh_Hans', 'en_US']
       },
       i18n_catalog: {},
       providers: []
