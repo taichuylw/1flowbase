@@ -26,8 +26,10 @@ use crate::{
     routes::application_public_api::{
         native::{service_error, NativeApiError},
         stream_terminal_fallback::{
+            enrich_terminal_runtime_event_with_durable_answer,
             load_latest_native_run_for_terminal_fallback, terminal_answer_deltas_from_payload,
-            terminal_runtime_event_from_native_run, TerminalAnswerDelta, TerminalAnswerDeltaKind,
+            terminal_answer_text_from_payload, terminal_runtime_event_from_native_run,
+            TerminalAnswerDelta, TerminalAnswerDeltaKind,
         },
         tool_callback_ids::{
             encode_anthropic_callback_tool_use_id, encode_openai_callback_tool_call_id,
@@ -37,6 +39,69 @@ use crate::{
 
 type CompatRunSseStream = tokio_stream::wrappers::ReceiverStream<Result<Event, Infallible>>;
 
+const OPENAI_CHAT_SSE_PROJECTION: &str = "openai_chat";
+const OPENAI_RESPONSES_SSE_PROJECTION: &str = "openai_responses";
+const ANTHROPIC_SSE_PROJECTION: &str = "anthropic";
+
+#[derive(Debug, Default)]
+struct CompatibleStreamStats {
+    emitted_public_event: bool,
+    emitted_content_bytes: usize,
+    emitted_text_content: bool,
+    emitted_reasoning_content: bool,
+}
+
+impl CompatibleStreamStats {
+    fn emitted_content(&self) -> bool {
+        self.emitted_content_bytes > 0
+    }
+
+    fn record_sent_runtime_event(
+        &mut self,
+        run: &NativeRunResult,
+        event: &RuntimeEventEnvelope,
+        emitted_public_event: bool,
+    ) {
+        self.emitted_public_event |= emitted_public_event;
+        if is_answer_presentation_delta(event) {
+            let Some(text) = event.text.as_deref().filter(|text| !text.is_empty()) else {
+                return;
+            };
+            match event.event_type.as_str() {
+                "reasoning_delta" => self.record_reasoning_content(text),
+                "text_delta" => self.record_text_content(text),
+                _ => {}
+            }
+            return;
+        }
+
+        if !matches!(event.event_type.as_str(), "flow_finished" | "flow_failed") {
+            return;
+        }
+        for delta in terminal_answer_deltas_from_run_or_payload(run, &event.payload) {
+            match delta.kind {
+                TerminalAnswerDeltaKind::Reasoning if !self.emitted_reasoning_content => {
+                    self.record_reasoning_content(&delta.text);
+                }
+                TerminalAnswerDeltaKind::Text if !self.emitted_text_content => {
+                    self.record_text_content(&delta.text);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn record_text_content(&mut self, text: &str) {
+        self.emitted_text_content = true;
+        self.emitted_content_bytes += text.len();
+    }
+
+    fn record_reasoning_content(&mut self, text: &str) {
+        self.emitted_reasoning_content = true;
+        self.emitted_content_bytes += text.len();
+    }
+}
+
 pub(crate) async fn start_openai_run_stream(
     state: Arc<ApiState>,
     run: NativeRunResult,
@@ -44,9 +109,12 @@ pub(crate) async fn start_openai_run_stream(
 ) -> Result<Response, NativeApiError> {
     let mut mapper =
         OpenAiChatStreamMapper::new(model, openai_chat_completion_id_from_run_id(run.id), true);
-    start_compatible_run_stream(state, run, move |run, envelope| {
-        mapper.runtime_event_to_sse(run, envelope)
-    })
+    start_compatible_run_stream(
+        state,
+        run,
+        OPENAI_CHAT_SSE_PROJECTION,
+        move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+    )
     .await
 }
 
@@ -57,9 +125,12 @@ pub(crate) async fn start_openai_response_stream(
     previous_response_id: Option<String>,
 ) -> Result<Response, NativeApiError> {
     let mut mapper = OpenAiResponseStreamMapper::new(model, previous_response_id, true);
-    start_compatible_run_stream(state, run, move |run, envelope| {
-        mapper.runtime_event_to_sse(run, envelope)
-    })
+    start_compatible_run_stream(
+        state,
+        run,
+        OPENAI_RESPONSES_SSE_PROJECTION,
+        move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+    )
     .await
 }
 
@@ -71,9 +142,13 @@ pub(crate) async fn start_openai_chat_resume_stream(
     command: CompleteCallbackTaskCommand,
 ) -> Result<Response, NativeApiError> {
     let mut mapper = OpenAiChatStreamMapper::new(model, chat_completion_id, true);
-    start_compatible_resume_stream(state, run, command, move |run, envelope| {
-        mapper.runtime_event_to_sse(run, envelope)
-    })
+    start_compatible_resume_stream(
+        state,
+        run,
+        command,
+        OPENAI_CHAT_SSE_PROJECTION,
+        move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+    )
     .await
 }
 
@@ -85,9 +160,13 @@ pub(crate) async fn start_openai_response_resume_stream(
     command: CompleteCallbackTaskCommand,
 ) -> Result<Response, NativeApiError> {
     let mut mapper = OpenAiResponseStreamMapper::new(model, previous_response_id, true);
-    start_compatible_resume_stream(state, run, command, move |run, envelope| {
-        mapper.runtime_event_to_sse(run, envelope)
-    })
+    start_compatible_resume_stream(
+        state,
+        run,
+        command,
+        OPENAI_RESPONSES_SSE_PROJECTION,
+        move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+    )
     .await
 }
 
@@ -97,9 +176,12 @@ pub(crate) async fn start_anthropic_run_stream(
     model: String,
 ) -> Result<Response, NativeApiError> {
     let mut stateful_mapper = AnthropicStreamMapper::new(model);
-    start_compatible_run_stream(state, run, move |run, envelope| {
-        stateful_mapper.runtime_event_to_sse(run, envelope)
-    })
+    start_compatible_run_stream(
+        state,
+        run,
+        ANTHROPIC_SSE_PROJECTION,
+        move |run, envelope| stateful_mapper.runtime_event_to_sse(run, envelope),
+    )
     .await
 }
 
@@ -120,6 +202,7 @@ fn completed_compatible_stream(events: Vec<Result<Event, Infallible>>) -> Respon
 async fn start_compatible_run_stream<F>(
     state: Arc<ApiState>,
     run: NativeRunResult,
+    sse_projection: &'static str,
     mut mapper: F,
 ) -> Result<Response, NativeApiError>
 where
@@ -148,6 +231,7 @@ where
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
+        sse_projection,
         None,
         None,
         sender,
@@ -199,6 +283,7 @@ where
     info!(
         flow_run_id = %run.id,
         application_id = %run.application_id,
+        sse_projection = %sse_projection,
         heartbeat_interval_secs = 10_u64,
         heartbeat_text = "heartbeat",
         "compatible public API stream opened"
@@ -217,6 +302,7 @@ async fn start_compatible_resume_stream<F>(
     state: Arc<ApiState>,
     run: NativeRunResult,
     command: CompleteCallbackTaskCommand,
+    sse_projection: &'static str,
     mut mapper: F,
 ) -> Result<Response, NativeApiError>
 where
@@ -242,6 +328,7 @@ where
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
+        sse_projection,
         Some(resume_started.sequence.saturating_sub(1)),
         Some(command.callback_task_id),
         sender,
@@ -295,6 +382,7 @@ where
 async fn send_compatible_runtime_event_stream<F>(
     state: Arc<ApiState>,
     initial_run: NativeRunResult,
+    sse_projection: &'static str,
     from_sequence: Option<i64>,
     ignored_waiting_callback_task_id: Option<uuid::Uuid>,
     sender: mpsc::Sender<Result<Event, Infallible>>,
@@ -302,6 +390,7 @@ async fn send_compatible_runtime_event_stream<F>(
 ) where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
+    let mut stats = CompatibleStreamStats::default();
     let stream = state.runtime_event_stream.clone();
     let Ok(mut subscription) = stream.subscribe(initial_run.id, from_sequence).await else {
         warn!(
@@ -309,10 +398,17 @@ async fn send_compatible_runtime_event_stream<F>(
             application_id = %initial_run.application_id,
             "failed to subscribe compatible public API runtime event stream"
         );
+        log_compatible_sse_closed(
+            sse_projection,
+            &initial_run,
+            &stats,
+            "subscribe_failed",
+            "subscribe",
+            false,
+        );
         return;
     };
 
-    let mut emitted_public_event = false;
     let mut last_forwarded_sequence = from_sequence.unwrap_or(0);
     let mut last_forwarded_durable_sequence = durable_sequence_for_ignored_waiting_callback(
         state.as_ref(),
@@ -326,7 +422,7 @@ async fn send_compatible_runtime_event_stream<F>(
         initial_run: &initial_run,
         sender: &sender,
         mapper: &mut mapper,
-        emitted_public_event: &mut emitted_public_event,
+        stats: &mut stats,
         ignored_waiting_callback_task_id,
         last_forwarded_sequence: &mut last_forwarded_sequence,
         resume_durable_sequence_before_terminal: Some(&mut last_forwarded_durable_sequence),
@@ -334,11 +430,19 @@ async fn send_compatible_runtime_event_stream<F>(
     })
     .await
     {
-        CompatibleForwardOutcome::Terminal => {
+        CompatibleForwardOutcome::Terminal { event_type } => {
             debug!(
                 flow_run_id = %initial_run.id,
                 application_id = %initial_run.application_id,
                 "compatible public API stream replay reached terminal event"
+            );
+            log_compatible_sse_closed(
+                sse_projection,
+                &initial_run,
+                &stats,
+                &event_type,
+                "replay",
+                false,
             );
             return;
         }
@@ -347,6 +451,14 @@ async fn send_compatible_runtime_event_stream<F>(
                 flow_run_id = %initial_run.id,
                 application_id = %initial_run.application_id,
                 "compatible public API stream client disconnected during replay"
+            );
+            log_compatible_sse_closed(
+                sse_projection,
+                &initial_run,
+                &stats,
+                "client_disconnected",
+                "replay",
+                true,
             );
             return;
         }
@@ -367,7 +479,7 @@ async fn send_compatible_runtime_event_stream<F>(
                     initial_run: &initial_run,
                     sender: &sender,
                     mapper: &mut mapper,
-                    emitted_public_event: &mut emitted_public_event,
+                    stats: &mut stats,
                     ignored_waiting_callback_task_id,
                     last_forwarded_sequence: &mut last_forwarded_sequence,
                     resume_durable_sequence_before_terminal: Some(
@@ -377,12 +489,20 @@ async fn send_compatible_runtime_event_stream<F>(
                 })
                 .await
                 {
-                    CompatibleForwardOutcome::Terminal => {
+                    CompatibleForwardOutcome::Terminal { event_type: _ } => {
                         debug!(
                             flow_run_id = %initial_run.id,
                             application_id = %initial_run.application_id,
                             event_type = %event_type,
                             "compatible public API stream reached terminal event"
+                        );
+                        log_compatible_sse_closed(
+                            sse_projection,
+                            &initial_run,
+                            &stats,
+                            &event_type,
+                            "live",
+                            false,
                         );
                         return;
                     }
@@ -391,6 +511,14 @@ async fn send_compatible_runtime_event_stream<F>(
                             flow_run_id = %initial_run.id,
                             application_id = %initial_run.application_id,
                             "compatible public API stream client disconnected"
+                        );
+                        log_compatible_sse_closed(
+                            sse_projection,
+                            &initial_run,
+                            &stats,
+                            "client_disconnected",
+                            "live",
+                            true,
                         );
                         return;
                     }
@@ -410,7 +538,7 @@ async fn send_compatible_runtime_event_stream<F>(
                         initial_run: &initial_run,
                         sender: &sender,
                         mapper: &mut mapper,
-                        emitted_public_event: &mut emitted_public_event,
+                        stats: &mut stats,
                         ignored_waiting_callback_task_id,
                         last_forwarded_sequence: &mut last_forwarded_sequence,
                         resume_durable_sequence_before_terminal: Some(
@@ -420,16 +548,34 @@ async fn send_compatible_runtime_event_stream<F>(
                     })
                     .await
                     {
-                        CompatibleForwardOutcome::Terminal => {
+                        CompatibleForwardOutcome::Terminal { event_type } => {
                             debug!(
                                 flow_run_id = %initial_run.id,
                                 application_id = %initial_run.application_id,
                                 trigger = "durable_poll",
                                 "compatible public API stream drained runtime terminal event before durable fallback"
                             );
+                            log_compatible_sse_closed(
+                                sse_projection,
+                                &initial_run,
+                                &stats,
+                                &event_type,
+                                "durable_poll_stream",
+                                false,
+                            );
                             return;
                         }
-                        CompatibleForwardOutcome::ClientDisconnected => return,
+                        CompatibleForwardOutcome::ClientDisconnected => {
+                            log_compatible_sse_closed(
+                                sse_projection,
+                                &initial_run,
+                                &stats,
+                                "client_disconnected",
+                                "durable_poll_stream",
+                                true,
+                            );
+                            return;
+                        }
                         CompatibleForwardOutcome::Open { saw_event: true } => continue,
                         CompatibleForwardOutcome::Open { saw_event: false } => {}
                     }
@@ -466,7 +612,7 @@ async fn send_compatible_runtime_event_stream<F>(
                         initial_run: &initial_run,
                         sender: &sender,
                         mapper: &mut mapper,
-                        emitted_public_event: &mut emitted_public_event,
+                        stats: &mut stats,
                         ignored_waiting_callback_task_id,
                         last_forwarded_sequence: &mut last_forwarded_durable_sequence,
                         resume_durable_sequence_before_terminal: None,
@@ -474,16 +620,34 @@ async fn send_compatible_runtime_event_stream<F>(
                     })
                     .await
                     {
-                        CompatibleForwardOutcome::Terminal => {
+                        CompatibleForwardOutcome::Terminal { event_type } => {
                             debug!(
                                 flow_run_id = %initial_run.id,
                                 application_id = %initial_run.application_id,
                                 trigger = "durable_poll",
                                 "compatible public API stream drained durable terminal event before fallback"
                             );
+                            log_compatible_sse_closed(
+                                sse_projection,
+                                &initial_run,
+                                &stats,
+                                &event_type,
+                                "durable_poll_records",
+                                false,
+                            );
                             return;
                         }
-                        CompatibleForwardOutcome::ClientDisconnected => return,
+                        CompatibleForwardOutcome::ClientDisconnected => {
+                            log_compatible_sse_closed(
+                                sse_projection,
+                                &initial_run,
+                                &stats,
+                                "client_disconnected",
+                                "durable_poll_records",
+                                true,
+                            );
+                            return;
+                        }
                         CompatibleForwardOutcome::Open { saw_event: true } => continue,
                         CompatibleForwardOutcome::Open { saw_event: false } => {
                             if ignored_waiting_callback_task_id.is_some() && !saw_durable_record {
@@ -493,35 +657,103 @@ async fn send_compatible_runtime_event_stream<F>(
                     }
                 }
 
-                if emit_compatible_terminal_fallback(CompatibleTerminalFallback {
+                match emit_compatible_terminal_fallback(CompatibleTerminalFallback {
                     state: &state,
                     initial_run: &initial_run,
                     sender: &sender,
                     mapper: &mut mapper,
-                    emitted_public_event,
+                    stats: &mut stats,
                     trigger: "durable_poll",
                     warn_if_not_terminal: false,
                     ignored_waiting_callback_task_id,
                 })
                 .await
                 {
-                    return;
+                    CompatibleTerminalFallbackOutcome::Sent { event_type } => {
+                        log_compatible_sse_closed(
+                            sse_projection,
+                            &initial_run,
+                            &stats,
+                            &event_type,
+                            "durable_terminal_fallback",
+                            false,
+                        );
+                        return;
+                    }
+                    CompatibleTerminalFallbackOutcome::ClientDisconnected { event_type } => {
+                        let terminal_reason =
+                            event_type.as_deref().unwrap_or("client_disconnected");
+                        log_compatible_sse_closed(
+                            sse_projection,
+                            &initial_run,
+                            &stats,
+                            terminal_reason,
+                            "durable_terminal_fallback",
+                            true,
+                        );
+                        return;
+                    }
+                    CompatibleTerminalFallbackOutcome::NotTerminal
+                    | CompatibleTerminalFallbackOutcome::IgnoredWaitingCallback => {}
                 }
             }
         }
     }
 
-    emit_compatible_terminal_fallback(CompatibleTerminalFallback {
+    match emit_compatible_terminal_fallback(CompatibleTerminalFallback {
         state: &state,
         initial_run: &initial_run,
         sender: &sender,
         mapper: &mut mapper,
-        emitted_public_event,
+        stats: &mut stats,
         trigger: "stream_closed",
         warn_if_not_terminal: true,
         ignored_waiting_callback_task_id,
     })
-    .await;
+    .await
+    {
+        CompatibleTerminalFallbackOutcome::Sent { event_type } => {
+            log_compatible_sse_closed(
+                sse_projection,
+                &initial_run,
+                &stats,
+                &event_type,
+                "stream_closed_terminal_fallback",
+                false,
+            );
+        }
+        CompatibleTerminalFallbackOutcome::ClientDisconnected { event_type } => {
+            let terminal_reason = event_type.as_deref().unwrap_or("client_disconnected");
+            log_compatible_sse_closed(
+                sse_projection,
+                &initial_run,
+                &stats,
+                terminal_reason,
+                "stream_closed_terminal_fallback",
+                true,
+            );
+        }
+        CompatibleTerminalFallbackOutcome::IgnoredWaitingCallback => {
+            log_compatible_sse_closed(
+                sse_projection,
+                &initial_run,
+                &stats,
+                "ignored_waiting_callback",
+                "stream_closed_terminal_fallback",
+                false,
+            );
+        }
+        CompatibleTerminalFallbackOutcome::NotTerminal => {
+            log_compatible_sse_closed(
+                sse_projection,
+                &initial_run,
+                &stats,
+                "stream_closed_before_terminal",
+                "stream_closed",
+                false,
+            );
+        }
+    }
 }
 
 async fn durable_sequence_for_ignored_waiting_callback(
@@ -543,6 +775,27 @@ async fn durable_sequence_for_ignored_waiting_callback(
         })
         .map(|record| record.sequence)
         .max()
+}
+
+fn log_compatible_sse_closed(
+    sse_projection: &'static str,
+    run: &NativeRunResult,
+    stats: &CompatibleStreamStats,
+    terminal_reason: &str,
+    close_trigger: &str,
+    client_disconnected: bool,
+) {
+    info!(
+        flow_run_id = %run.id,
+        application_id = %run.application_id,
+        sse_projection = %sse_projection,
+        emitted_content = stats.emitted_content(),
+        content_bytes = stats.emitted_content_bytes,
+        terminal_reason = %terminal_reason,
+        close_trigger = %close_trigger,
+        client_disconnected = client_disconnected,
+        "compatible public API SSE stream closed"
+    );
 }
 
 fn durable_record_to_runtime_event_envelope(
@@ -603,7 +856,7 @@ struct CompatibleRuntimeEventsForward<'a, F> {
     initial_run: &'a NativeRunResult,
     sender: &'a mpsc::Sender<Result<Event, Infallible>>,
     mapper: &'a mut F,
-    emitted_public_event: &'a mut bool,
+    stats: &'a mut CompatibleStreamStats,
     ignored_waiting_callback_task_id: Option<uuid::Uuid>,
     last_forwarded_sequence: &'a mut i64,
     resume_durable_sequence_before_terminal: Option<&'a mut i64>,
@@ -612,7 +865,7 @@ struct CompatibleRuntimeEventsForward<'a, F> {
 
 enum CompatibleForwardOutcome {
     Open { saw_event: bool },
-    Terminal,
+    Terminal { event_type: String },
     ClientDisconnected,
 }
 
@@ -627,7 +880,7 @@ where
         initial_run,
         sender,
         mapper,
-        emitted_public_event,
+        stats,
         ignored_waiting_callback_task_id,
         last_forwarded_sequence,
         resume_durable_sequence_before_terminal,
@@ -658,15 +911,15 @@ where
                         initial_run,
                         sender,
                         mapper,
-                        emitted_public_event,
+                        stats,
                         ignored_waiting_callback_task_id,
                         last_forwarded_durable_sequence,
                     },
                 )
                 .await
                 {
-                    CompatibleForwardOutcome::Terminal => {
-                        return CompatibleForwardOutcome::Terminal;
+                    CompatibleForwardOutcome::Terminal { event_type } => {
+                        return CompatibleForwardOutcome::Terminal { event_type };
                     }
                     CompatibleForwardOutcome::ClientDisconnected => {
                         return CompatibleForwardOutcome::ClientDisconnected;
@@ -691,12 +944,14 @@ where
             initial_run,
             sender,
             mapper,
-            emitted_public_event,
+            stats,
             event,
         )
         .await
         {
-            CompatibleForwardOutcome::Terminal => return CompatibleForwardOutcome::Terminal,
+            CompatibleForwardOutcome::Terminal { event_type } => {
+                return CompatibleForwardOutcome::Terminal { event_type };
+            }
             CompatibleForwardOutcome::ClientDisconnected => {
                 return CompatibleForwardOutcome::ClientDisconnected;
             }
@@ -774,7 +1029,7 @@ where
         initial_run,
         sender,
         mapper,
-        emitted_public_event,
+        stats,
         ignored_waiting_callback_task_id,
         last_forwarded_sequence,
         resume_durable_sequence_before_terminal: _,
@@ -798,12 +1053,14 @@ where
             initial_run,
             sender,
             mapper,
-            emitted_public_event,
+            stats,
             event,
         )
         .await
         {
-            CompatibleForwardOutcome::Terminal => return CompatibleForwardOutcome::Terminal,
+            CompatibleForwardOutcome::Terminal { event_type } => {
+                return CompatibleForwardOutcome::Terminal { event_type };
+            }
             CompatibleForwardOutcome::ClientDisconnected => {
                 return CompatibleForwardOutcome::ClientDisconnected;
             }
@@ -819,7 +1076,7 @@ async fn forward_single_compatible_runtime_event<F>(
     initial_run: &NativeRunResult,
     sender: &mpsc::Sender<Result<Event, Infallible>>,
     mapper: &mut F,
-    emitted_public_event: &mut bool,
+    stats: &mut CompatibleStreamStats,
     event: RuntimeEventEnvelope,
 ) -> CompatibleForwardOutcome
 where
@@ -833,13 +1090,20 @@ where
     } else {
         initial_run
     };
-    let events = mapper(run, event);
-    *emitted_public_event |= !events.is_empty();
+    let event = if is_terminal {
+        enrich_terminal_runtime_event_with_durable_answer(state, run, event).await
+    } else {
+        event
+    };
+    let event_type = event.event_type.clone();
+    let events = mapper(run, event.clone());
+    let emitted_public_event = !events.is_empty();
     if !send_compatible_sse_events(sender, events).await {
         return CompatibleForwardOutcome::ClientDisconnected;
     }
+    stats.record_sent_runtime_event(run, &event, emitted_public_event);
     if is_terminal {
-        return CompatibleForwardOutcome::Terminal;
+        return CompatibleForwardOutcome::Terminal { event_type };
     }
     CompatibleForwardOutcome::Open { saw_event: true }
 }
@@ -849,7 +1113,7 @@ struct CompatibleDurableRuntimeEventsForward<'a, F> {
     initial_run: &'a NativeRunResult,
     sender: &'a mpsc::Sender<Result<Event, Infallible>>,
     mapper: &'a mut F,
-    emitted_public_event: &'a mut bool,
+    stats: &'a mut CompatibleStreamStats,
     ignored_waiting_callback_task_id: Option<uuid::Uuid>,
     last_forwarded_durable_sequence: &'a mut i64,
 }
@@ -865,7 +1129,7 @@ where
         initial_run,
         sender,
         mapper,
-        emitted_public_event,
+        stats,
         ignored_waiting_callback_task_id,
         last_forwarded_durable_sequence,
     } = forward;
@@ -911,7 +1175,7 @@ where
             initial_run,
             sender,
             mapper,
-            emitted_public_event,
+            stats,
             ignored_waiting_callback_task_id,
             last_forwarded_sequence: last_forwarded_durable_sequence,
             resume_durable_sequence_before_terminal: None,
@@ -990,13 +1254,22 @@ struct CompatibleTerminalFallback<'a, F> {
     initial_run: &'a NativeRunResult,
     sender: &'a mpsc::Sender<Result<Event, Infallible>>,
     mapper: &'a mut F,
-    emitted_public_event: bool,
+    stats: &'a mut CompatibleStreamStats,
     trigger: &'static str,
     warn_if_not_terminal: bool,
     ignored_waiting_callback_task_id: Option<uuid::Uuid>,
 }
 
-async fn emit_compatible_terminal_fallback<F>(fallback: CompatibleTerminalFallback<'_, F>) -> bool
+enum CompatibleTerminalFallbackOutcome {
+    NotTerminal,
+    Sent { event_type: String },
+    ClientDisconnected { event_type: Option<String> },
+    IgnoredWaitingCallback,
+}
+
+async fn emit_compatible_terminal_fallback<F>(
+    fallback: CompatibleTerminalFallback<'_, F>,
+) -> CompatibleTerminalFallbackOutcome
 where
     F: FnMut(&NativeRunResult, RuntimeEventEnvelope) -> Vec<Result<Event, Infallible>>,
 {
@@ -1005,7 +1278,7 @@ where
         initial_run,
         sender,
         mapper,
-        emitted_public_event,
+        stats,
         trigger,
         warn_if_not_terminal,
         ignored_waiting_callback_task_id,
@@ -1022,7 +1295,7 @@ where
                 "compatible public API stream ended before durable run reached a terminal state"
             );
         }
-        return false;
+        return CompatibleTerminalFallbackOutcome::NotTerminal;
     };
 
     warn!(
@@ -1039,21 +1312,34 @@ where
             trigger = %trigger,
             "compatible public API resume stream ignored stale waiting callback terminal fallback"
         );
-        return false;
+        return CompatibleTerminalFallbackOutcome::IgnoredWaitingCallback;
     }
 
-    if !emitted_public_event {
+    if !stats.emitted_public_event {
         let started_event = RuntimeEventEnvelope::new(
             latest_run.id,
             0,
             debug_stream_events::flow_started(latest_run.id),
         );
-        if !send_compatible_sse_events(sender, mapper(&latest_run, started_event)).await {
-            return true;
+        let events = mapper(&latest_run, started_event.clone());
+        let emitted_public_event = !events.is_empty();
+        if !send_compatible_sse_events(sender, events).await {
+            return CompatibleTerminalFallbackOutcome::ClientDisconnected { event_type: None };
         }
+        stats.record_sent_runtime_event(&latest_run, &started_event, emitted_public_event);
     }
-    let _ = send_compatible_sse_events(sender, mapper(&latest_run, terminal_event)).await;
-    true
+    let terminal_event =
+        enrich_terminal_runtime_event_with_durable_answer(state, &latest_run, terminal_event).await;
+    let event_type = terminal_event.event_type.clone();
+    let events = mapper(&latest_run, terminal_event.clone());
+    let emitted_public_event = !events.is_empty();
+    if !send_compatible_sse_events(sender, events).await {
+        return CompatibleTerminalFallbackOutcome::ClientDisconnected {
+            event_type: Some(event_type),
+        };
+    }
+    stats.record_sent_runtime_event(&latest_run, &terminal_event, emitted_public_event);
+    CompatibleTerminalFallbackOutcome::Sent { event_type }
 }
 
 fn is_ignored_waiting_callback(
@@ -1292,19 +1578,12 @@ impl OpenAiResponseStreamMapper {
 }
 
 fn terminal_answer_text(run: &NativeRunResult, payload: &Value) -> Option<String> {
-    payload
-        .get("output")
-        .and_then(|output| output.get("answer"))
-        .or_else(|| payload.get("answer"))
-        .and_then(Value::as_str)
-        .filter(|answer| !answer.is_empty())
-        .map(ToOwned::to_owned)
-        .or_else(|| {
-            run.answer
-                .as_ref()
-                .filter(|answer| !answer.is_empty())
-                .cloned()
-        })
+    terminal_answer_text_from_payload(payload).or_else(|| {
+        run.answer
+            .as_ref()
+            .filter(|answer| !answer.is_empty())
+            .cloned()
+    })
 }
 
 fn terminal_answer_deltas_from_run_or_payload(
@@ -2189,6 +2468,8 @@ mod tests {
     use tokio::sync::mpsc;
     use uuid::Uuid;
 
+    use crate::routes::application_public_api::stream_terminal_fallback::recover_terminal_answer_deltas_from_durable_runtime_events;
+
     struct ReplayBeforeFallbackRuntimeEventStream {
         events: Vec<RuntimeEventEnvelope>,
         subscription_replay: Vec<RuntimeEventEnvelope>,
@@ -2682,6 +2963,41 @@ mod tests {
         assert!(body.contains("event: response.completed"), "{body}");
     }
 
+    #[tokio::test]
+    async fn openai_chat_terminal_answer_fallback_decodes_artifact_preview_answer() {
+        let run = native_run();
+        let mut mapper =
+            OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(
+                    run.id,
+                    json!({
+                        "answer": {
+                            "__runtime_debug_artifact": true,
+                            "artifact_ref": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                            "is_truncated": false,
+                            "preview": "\"最终回答\""
+                        }
+                    }),
+                ),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("\"content\":\"最终回答\""), "{body}");
+        assert!(body.contains("\"finish_reason\":\"stop\""), "{body}");
+        assert!(body.contains("[DONE]"), "{body}");
+    }
+
     #[test]
     fn openai_chat_terminal_answer_fallback_ignores_provider_raw_delta() {
         let run = native_run();
@@ -2706,6 +3022,35 @@ mod tests {
 
         assert!(text_events.is_empty());
         assert_eq!(terminal_events.len(), 3);
+    }
+
+    #[test]
+    fn compatible_stream_stats_count_answer_content_bytes_once_for_terminal_fallback() {
+        let run = native_run();
+        let mut stats = CompatibleStreamStats::default();
+        let answer_delta = RuntimeEventEnvelope::new(
+            run.id,
+            1,
+            debug_stream_events::answer_text_delta(
+                "node-answer",
+                "已输出".to_string(),
+                0,
+                Some("node-llm"),
+                None,
+                Some("text"),
+            ),
+        );
+        stats.record_sent_runtime_event(&run, &answer_delta, true);
+
+        let terminal_event = RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            debug_stream_events::flow_finished(run.id, json!({ "answer": "最终回答" })),
+        );
+        stats.record_sent_runtime_event(&run, &terminal_event, true);
+
+        assert!(stats.emitted_content());
+        assert_eq!(stats.emitted_content_bytes, "已输出".len());
     }
 
     #[test]
@@ -2842,6 +3187,7 @@ mod tests {
             send_compatible_runtime_event_stream(
                 state,
                 run.clone(),
+                OPENAI_CHAT_SSE_PROJECTION,
                 Some(0),
                 None,
                 sender,
@@ -2865,6 +3211,51 @@ mod tests {
         assert!(body.contains("lookup_next"), "{body}");
         assert!(body.contains("\"finish_reason\":\"tool_calls\""), "{body}");
         assert!(body.contains("[DONE]"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn terminal_answer_recovery_prefers_durable_answer_presentation() {
+        let run = native_run();
+        let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
+        seed_flow_run_for_compat_sse_test(&base_state, &run).await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "text_delta",
+            json!({
+                "type": "text_delta",
+                "event_type": "text_delta",
+                "node_id": "node-answer",
+                "text": "durable presentation answer",
+                "presentation": {
+                    "kind": "answer",
+                    "answer_node_id": "node-answer",
+                    "source_node_id": "node-llm",
+                    "source_output_key": "text",
+                    "segment_index": 0
+                }
+            }),
+        )
+        .await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "flow_finished",
+            json!({
+                "type": "flow_finished",
+                "run_id": run.id,
+                "status": "succeeded",
+                "output": { "answer": "terminal output answer" }
+            }),
+        )
+        .await;
+
+        let deltas =
+            recover_terminal_answer_deltas_from_durable_runtime_events(&base_state, &run).await;
+
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].kind, TerminalAnswerDeltaKind::Text);
+        assert_eq!(deltas[0].text, "durable presentation answer");
     }
 
     #[tokio::test]
@@ -3013,6 +3404,7 @@ mod tests {
             send_compatible_runtime_event_stream(
                 state,
                 run.clone(),
+                OPENAI_CHAT_SSE_PROJECTION,
                 Some(0),
                 Some(previous_callback_task_id),
                 sender,
@@ -3179,6 +3571,7 @@ mod tests {
             send_compatible_runtime_event_stream(
                 state,
                 run.clone(),
+                OPENAI_CHAT_SSE_PROJECTION,
                 Some(0),
                 None,
                 sender,
