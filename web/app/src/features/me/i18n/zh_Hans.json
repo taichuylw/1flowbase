@@ -1,22 +1,22 @@
 {
   "auto": {
-    "k_00348363de": "两次输入的新密码不一致。",
-    "k_00e69bd114": "已登录",
-    "k_10a57ef7c7": "当前账号暂无可访问内容",
-    "k_22ee0f0313": "个人资料不可用",
-    "k_25410d575c": "当前会话缺少必要的用户上下文，请重新登录后重试。",
-    "k_2f3ed4c7a4": "更新密码",
-    "k_4850ecf733": "请再次输入新密码。",
-    "k_5ccbfd6edd": "请输入当前密码。",
-    "k_7543b01a32": "请输入新密码。",
-    "k_8bf435e8a8": "安全设置",
-    "k_8cabb0c543": "该页面用于管理个人资料与安全设置。",
-    "k_c839a8ff17": "密码",
-    "k_d22c9c0085": "新密码",
-    "k_d4477adb6f": "确认新密码",
-    "k_d562e344b9": "个人资料",
-    "k_e8041a8c93": "未登录",
-    "k_f10b511381": "更新密码后会立即清除当前会话，你需要使用新密码重新登录。"
+    "account_has_no_content": "当前账号暂无可访问内容",
+    "confirm_new_password": "确认新密码",
+    "current_password_required": "请输入当前密码。",
+    "logged_in": "已登录",
+    "new_password": "新密码",
+    "new_password_required": "请输入新密码。",
+    "not_logged_in": "未登录",
+    "password": "密码",
+    "password_mismatch": "两次输入的新密码不一致。",
+    "password_update_notice": "更新密码后会立即清除当前会话，你需要使用新密码重新登录。",
+    "profile": "个人资料",
+    "profile_description": "该页面用于管理个人资料与安全设置。",
+    "profile_unavailable": "个人资料不可用",
+    "security_settings": "安全设置",
+    "session_missing_user_context": "当前会话缺少必要的用户上下文，请重新登录后重试。",
+    "update_password": "更新密码",
+    "verify_new_password_required": "请再次输入新密码。"
   },
   "profile": {
     "actions": {
@@ -33,9 +33,9 @@
     },
     "fields": {
       "account": "账号名称",
-      "avatarUrl": "头像地址",
+      "avatar_url": "头像地址",
       "email": "联系邮箱",
-      "interfaceLanguage": "界面语言",
+      "interface_language": "界面语言",
       "introduction": "个人介绍",
       "name": "真实姓名",
       "nickname": "昵称",
@@ -43,14 +43,14 @@
       "phone": "手机号码"
     },
     "form": {
-      "avatarUrl": {
+      "avatar_url": {
         "extra": "支持外链图片地址。",
         "placeholder": "https://example.com/avatar.png"
       },
       "email": {
         "required": "请输入有效的邮箱地址。"
       },
-      "interfaceLanguage": {
+      "interface_language": {
         "extra": "不选择时使用系统自动解析到的默认语言。"
       },
       "introduction": {
@@ -68,8 +68,8 @@
     },
     "locale": {
       "default": "跟随系统默认",
-      "enUs": "English",
-      "zhHans": "简体中文"
+      "en_us": "English",
+      "zh_hans": "简体中文"
     },
     "title": "个人信息"
   }

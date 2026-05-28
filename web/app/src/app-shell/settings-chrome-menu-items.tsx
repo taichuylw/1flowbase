@@ -91,7 +91,7 @@ export function createSettingsChromeMenuItems({
     {
       key: 'settings',
       label: (
-        <span className="app-shell-settings-block" aria-label={i18nText("appShell", "auto.k_7debf9cb03")}>
+        <span className="app-shell-settings-block" aria-label={i18nText("appShell", "auto.settings")}>
           <SettingOutlined />
         </span>
       ),

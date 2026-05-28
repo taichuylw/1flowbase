@@ -466,7 +466,7 @@ export function HeroAnimation() {
         <div className="hero-tagline" aria-label="brand name and slogan">
           <div className="hero-text-line hero-title-line">1flowbase</div>
           <div className="hero-text-line hero-slogan-line">
-            {i18nText("auth", "auto.k_c40407a8a5")}</div>
+            {i18nText("auth", "auto.product_tagline")}</div>
         </div>
       </div>
 

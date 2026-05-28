@@ -25,9 +25,9 @@ export function ChangePasswordForm({
   return (
     <Space className={className} direction="vertical" size="large">
       <div>
-        <Typography.Title level={3}>{i18nText("me", "auto.k_8bf435e8a8")}</Typography.Title>
+        <Typography.Title level={3}>{i18nText("me", "auto.security_settings")}</Typography.Title>
         <Typography.Paragraph>
-          {i18nText("me", "auto.k_f10b511381")}</Typography.Paragraph>
+          {i18nText("me", "auto.password_update_notice")}</Typography.Paragraph>
       </div>
 
       {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
@@ -44,32 +44,32 @@ export function ChangePasswordForm({
         }}
       >
         <Form.Item
-          label={i18nText("me", "auto.k_c839a8ff17")}
+          label={i18nText("me", "auto.password")}
           name="old_password"
-          rules={[{ required: true, message: i18nText("me", "auto.k_5ccbfd6edd") }]}
+          rules={[{ required: true, message: i18nText("me", "auto.current_password_required") }]}
         >
           <Input.Password />
         </Form.Item>
         <Form.Item
-          label={i18nText("me", "auto.k_d22c9c0085")}
+          label={i18nText("me", "auto.new_password")}
           name="new_password"
-          rules={[{ required: true, message: i18nText("me", "auto.k_7543b01a32") }]}
+          rules={[{ required: true, message: i18nText("me", "auto.new_password_required") }]}
         >
           <Input.Password />
         </Form.Item>
         <Form.Item
-          label={i18nText("me", "auto.k_d4477adb6f")}
+          label={i18nText("me", "auto.confirm_new_password")}
           name="confirm_password"
           dependencies={['new_password']}
           rules={[
-            { required: true, message: i18nText("me", "auto.k_4850ecf733") },
+            { required: true, message: i18nText("me", "auto.verify_new_password_required") },
             ({ getFieldValue }) => ({
               validator(_, value) {
                 if (!value || value === getFieldValue('new_password')) {
                   return Promise.resolve();
                 }
 
-                return Promise.reject(new Error(i18nText("me", "auto.k_00348363de")));
+                return Promise.reject(new Error(i18nText("me", "auto.password_mismatch")));
               }
             })
           ]}
@@ -77,7 +77,7 @@ export function ChangePasswordForm({
           <Input.Password />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={submitting}>
-          {i18nText("me", "auto.k_2f3ed4c7a4")}</Button>
+          {i18nText("me", "auto.update_password")}</Button>
       </Form>
     </Space>
   );

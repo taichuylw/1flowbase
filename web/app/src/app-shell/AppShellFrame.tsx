@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react';
 import { AppShell } from '@1flowbase/ui';
 import { Link } from '@tanstack/react-router';
 import { Space } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import { AccountMenu } from './AccountMenu';
 import { FrontstageDesignModeAction } from './FrontstageDesignModeAction';
@@ -47,6 +48,7 @@ export function AppShellFrame({
   pathname = '/',
   useRouterLinks = false
 }: PropsWithChildren<{ pathname?: string; useRouterLinks?: boolean }>) {
+  const { t } = useTranslation('appShell');
   const secondaryActions = getSecondaryChromeRoutes();
 
   return (
@@ -70,7 +72,7 @@ export function AppShellFrame({
                 ) : (
                   renderActionLink(
                     route.path,
-                    route.navLabel!,
+                    t(route.navLabelKey!),
                     useRouterLinks,
                     route.selectedMatchers.some((match) => match(pathname))
                   )

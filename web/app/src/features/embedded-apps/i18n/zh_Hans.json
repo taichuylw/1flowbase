@@ -1,10 +1,10 @@
 {
   "auto": {
-    "k_1c41ed3edc": "子系统",
-    "k_6e356eadf5": "路由前缀、挂载上下文和宿主约束",
-    "k_7f32bd041b": "当前页用于统一查看已接入子系统的运行边界和接入状态。",
-    "k_87e2ff5369": "后续接入发布、回滚和运行态诊断的入口",
-    "k_8be9a885e6": "管理已接入子系统的发布清单、路由前缀与宿主约束。",
-    "k_f223c2c4fe": "已接入应用的版本与构建产物清单"
+    "access_status_description": "当前页用于统一查看已接入子系统的运行边界和接入状态。",
+    "build_artifact_list": "已接入应用的版本与构建产物清单",
+    "release_diagnostics_entry": "后续接入发布、回滚和运行态诊断的入口",
+    "route_host_constraints": "路由前缀、挂载上下文和宿主约束",
+    "subsystem": "子系统",
+    "subsystem_page_description": "管理已接入子系统的发布清单、路由前缀与宿主约束。"
   }
 }

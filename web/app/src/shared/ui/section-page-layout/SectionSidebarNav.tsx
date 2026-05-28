@@ -72,9 +72,9 @@ export function SectionSidebarNav({
   return (
     <div className="section-page-layout__drawer-trigger">
       <Button type="default" onClick={() => setDrawerOpen(true)}>
-        {i18nText("sharedUi", "auto.k_9a49e95d8e")}</Button>
+        {i18nText("sharedUi", "auto.more_sections")}</Button>
       <Drawer
-        title={i18nText("sharedUi", "auto.k_9a49e95d8e")}
+        title={i18nText("sharedUi", "auto.more_sections")}
         placement="left"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}

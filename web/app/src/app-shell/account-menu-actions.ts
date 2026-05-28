@@ -42,5 +42,5 @@ export function createAccountMenuClickHandler({
 }
 
 export function selectAccountLabel({ me, actor }: AccountLabelSnapshot) {
-  return me?.nickname || me?.name || actor?.account || i18nText("appShell", "auto.k_9ba763ea34");
+  return me?.nickname || me?.name || actor?.account || i18nText("appShell", "auto.user");
 }

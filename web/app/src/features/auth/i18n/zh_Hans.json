@@ -1,9 +1,9 @@
 {
   "auto": {
-    "k_c40407a8a5": "对话即是壁垒，AI应用原生底座"
+    "product_tagline": "对话即是壁垒，AI应用原生底座"
   },
-  "signIn": {
-    "errorFallback": "登录失败，请稍后重试。",
+  "sign_in": {
+    "error_fallback": "登录失败，请稍后重试。",
     "footer": "power by taichuy",
     "identifier": {
       "label": "账号",
@@ -11,9 +11,9 @@
       "required": "请输入账号或邮箱。"
     },
     "language": {
-      "enUs": "English",
+      "en_us": "English",
       "trigger": "切换语言",
-      "zhHans": "Chinese"
+      "zh_hans": "Chinese"
     },
     "password": {
       "label": "密码",

@@ -46,7 +46,7 @@ function formatJsonPreview(value: unknown) {
 function JsonEditorFallback({ minHeight }: { minHeight: string }) {
   return (
     <div className="json-preview-block__loading" style={{ minHeight }}>
-      {i18nText("sharedUi", "auto.k_e3a250d891")}</div>
+      {i18nText("sharedUi", "auto.loading_json_viewer")}</div>
   );
 }
 
@@ -71,8 +71,8 @@ export function JsonPreviewBlock({
   className,
   collapsible = true,
   copyAriaLabel,
-  copyFailureMessage = i18nText("sharedUi", "auto.k_f2c6b5167b"),
-  copySuccessMessage = i18nText("sharedUi", "auto.k_e381a5763d"),
+  copyFailureMessage = i18nText("sharedUi", "auto.copy_failed"),
+  copySuccessMessage = i18nText("sharedUi", "auto.copied"),
   defaultCollapsed = false,
   displayTitle = title,
   fullscreenAriaLabel,
@@ -138,18 +138,18 @@ export function JsonPreviewBlock({
         </button>
         <div className="json-preview-block__actions">
           {actions}
-          <Tooltip title={i18nText("sharedUi", "auto.k_651cff2967")}>
+          <Tooltip title={i18nText("sharedUi", "auto.copy_json")}>
             <Button
-              aria-label={copyAriaLabel ?? i18nText("sharedUi", "auto.k_af7984470a", { value1: title })}
+              aria-label={copyAriaLabel ?? i18nText("sharedUi", "auto.copy_named_json", { value1: title })}
               icon={copied ? <CheckOutlined /> : <CopyOutlined />}
               onClick={handleCopy}
               size="small"
               type="text"
             />
           </Tooltip>
-          <Tooltip title={i18nText("sharedUi", "auto.k_c5d7f819ba")}>
+          <Tooltip title={i18nText("sharedUi", "auto.enlarge_view")}>
             <Button
-              aria-label={fullscreenAriaLabel ?? i18nText("sharedUi", "auto.k_2032827601", { value1: title })}
+              aria-label={fullscreenAriaLabel ?? i18nText("sharedUi", "auto.zoom_view_named_json", { value1: title })}
               disabled={isCollapsed}
               icon={<FullscreenOutlined />}
               onClick={() => setExpanded(true)}

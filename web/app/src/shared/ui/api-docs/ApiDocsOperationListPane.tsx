@@ -48,17 +48,17 @@ export function ApiDocsOperationListPane({
 }: ApiDocsOperationListPaneProps) {
   if (categoriesLength === 0) {
     return (
-      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.k_14f70b1746")}>
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>{i18nText("sharedUi", "auto.k_14f70b1746")}</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              {i18nText("sharedUi", "auto.k_f9d7f46db7")}</Typography.Text>
+              {i18nText("sharedUi", "auto.no_accessible_categories")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-body">
           <Empty
-            description={i18nText("sharedUi", "auto.k_b457de4013")}
+            description={i18nText("sharedUi", "auto.no_interface_categories")}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         </div>
@@ -68,19 +68,19 @@ export function ApiDocsOperationListPane({
 
   if (!selectedCategoryId && !showAllOperationsWhenNoCategory) {
     return (
-      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.k_14f70b1746")}>
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>{i18nText("sharedUi", "auto.k_14f70b1746")}</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              {i18nText("sharedUi", "auto.k_866cd947b2")}</Typography.Text>
+              {i18nText("sharedUi", "auto.select_category_then_display_interfaces")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-body">
           <Result
             status="info"
-            title={i18nText("sharedUi", "auto.k_df1e4ab2a0")}
-            subTitle={i18nText("sharedUi", "auto.k_203014aed2")}
+            title={i18nText("sharedUi", "auto.select_category_to_view_interface_list")}
+            subTitle={i18nText("sharedUi", "auto.category_header_hint")}
           />
         </div>
       </section>
@@ -89,12 +89,12 @@ export function ApiDocsOperationListPane({
 
   if (loading) {
     return (
-      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.k_14f70b1746")}>
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>{i18nText("sharedUi", "auto.k_14f70b1746")}</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              {i18nText("sharedUi", "auto.k_3667cb105a")}{selectedCategoryLabel ?? i18nText("sharedUi", "auto.k_a8e369c4b6")} {i18nText("sharedUi", "auto.k_d1e639b007")}</Typography.Text>
+              {i18nText("sharedUi", "auto.loading")}{selectedCategoryLabel ?? i18nText("sharedUi", "auto.all_categories")} {i18nText("sharedUi", "auto.interfaces_in_suffix")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-state">
@@ -106,19 +106,19 @@ export function ApiDocsOperationListPane({
 
   if (error) {
     return (
-      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.k_14f70b1746")}>
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>{i18nText("sharedUi", "auto.k_14f70b1746")}</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              {selectedCategoryId ? i18nText("sharedUi", "auto.k_162b9c0d9c") : i18nText("sharedUi", "auto.k_a8e369c4b6")}{i18nText("sharedUi", "auto.k_b24005bd49")}</Typography.Text>
+              {selectedCategoryId ? i18nText("sharedUi", "auto.current_category") : i18nText("sharedUi", "auto.all_categories")}{i18nText("sharedUi", "auto.interface_load_failed")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-body">
           <Result
             status="error"
-            title={i18nText("sharedUi", "auto.k_63d7e0bd78")}
-            subTitle={i18nText("sharedUi", "auto.k_2f6e1b8cc2")}
+            title={i18nText("sharedUi", "auto.interface_list_load_failed")}
+            subTitle={i18nText("sharedUi", "auto.refresh_or_switch_category")}
           />
         </div>
       </section>
@@ -126,23 +126,23 @@ export function ApiDocsOperationListPane({
   }
 
   return (
-    <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.k_14f70b1746")}>
+    <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
       <div className="api-docs-panel__pane-header">
         <div className="api-docs-panel__pane-copy">
-          <Typography.Text strong>{i18nText("sharedUi", "auto.k_14f70b1746")}</Typography.Text>
+          <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
           <Typography.Text type="secondary">
-            {selectedCategoryLabel ?? i18nText("sharedUi", "auto.k_a8e369c4b6")} {i18nText("sharedUi", "auto.k_3b6ef811b8")}{' '}
+            {selectedCategoryLabel ?? i18nText("sharedUi", "auto.all_categories")} {i18nText("sharedUi", "auto.total")}{' '}
             {selectedCategoryId
               ? selectedCategoryOperationTotal
               : operations.length}{' '}
-            {i18nText("sharedUi", "auto.k_b4eda10b96")}</Typography.Text>
+            {i18nText("sharedUi", "auto.interface_count_suffix")}</Typography.Text>
         </div>
       </div>
       <div className="api-docs-panel__pane-toolbar">
         <Input
-          aria-label={i18nText("sharedUi", "auto.k_fec0b01c0c")}
+          aria-label={i18nText("sharedUi", "auto.search_interface")}
           allowClear
-          placeholder={i18nText("sharedUi", "auto.k_fec0b01c0c")}
+          placeholder={i18nText("sharedUi", "auto.search_interface")}
           value={operationSearch}
           onChange={(event) => onOperationSearchChange(event.target.value)}
         />
@@ -152,16 +152,16 @@ export function ApiDocsOperationListPane({
           <Empty
             description={
               operationSearch.trim()
-                ? i18nText("sharedUi", "auto.k_6bc6b4abd5")
+                ? i18nText("sharedUi", "auto.no_matching_interface")
                 : selectedCategoryId
-                  ? i18nText("sharedUi", "auto.k_bb7bfaac4e")
-                  : i18nText("sharedUi", "auto.k_744891d58f")
+                  ? i18nText("sharedUi", "auto.no_interfaces_in_current_category")
+                  : i18nText("sharedUi", "auto.no_interfaces")
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : filteredOperations.length === 0 ? (
           <Empty
-            description={i18nText("sharedUi", "auto.k_6bc6b4abd5")}
+            description={i18nText("sharedUi", "auto.no_matching_interface")}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (

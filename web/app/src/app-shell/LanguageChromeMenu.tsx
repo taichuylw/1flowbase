@@ -89,11 +89,11 @@ export function LanguageChromeMenu() {
           children: [
             {
               key: 'zh_Hans',
-              label: t('language.zhHans')
+              label: t('language.zh_hans')
             },
             {
               key: 'en_US',
-              label: t('language.enUs')
+              label: t('language.en_us')
             }
           ]
         }

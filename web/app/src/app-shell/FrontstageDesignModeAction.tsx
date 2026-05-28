@@ -67,7 +67,7 @@ function FrontstageDesignModeActionBase({
     return null;
   }
 
-  const label = isDesignMode ? i18nText("appShell", "auto.k_49dbad4d69") : i18nText("appShell", "auto.k_fb0257aeea");
+  const label = isDesignMode ? i18nText("appShell", "auto.exit_design_mode") : i18nText("appShell", "auto.enter_design_mode");
 
   const handleClick = () => {
     toggleDesignMode();

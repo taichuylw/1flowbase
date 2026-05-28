@@ -16,7 +16,7 @@ const HELP_LINKS = [
   },
   {
     key: 'docs',
-    label: i18nText("appShell", "auto.k_1069127253"),
+    label: i18nText("appShell", "auto.documentation"),
     icon: <FileTextOutlined />,
     href: 'https://docs.taichuy.com/'
   }
@@ -37,7 +37,7 @@ export function HelpChromeMenu() {
         {
           key: 'help',
           label: (
-            <span className="app-shell-help-block" aria-label={i18nText("appShell", "auto.k_adf465ebf0")}>
+            <span className="app-shell-help-block" aria-label={i18nText("appShell", "auto.help")}>
               <QuestionCircleOutlined />
             </span>
           ),

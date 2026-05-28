@@ -36,7 +36,7 @@ export function SignInPage() {
       });
       await navigate({ to: '/' });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('signIn.errorFallback'));
+      setErrorMessage(error instanceof Error ? error.message : t('sign_in.error_fallback'));
     } finally {
       setSubmitting(false);
     }
@@ -62,27 +62,27 @@ export function SignInPage() {
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
             <Typography.Title level={2} style={{ margin: 0 }}>
-              {t('signIn.title')}
+              {t('sign_in.title')}
             </Typography.Title>
           </div>
           {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
           <Form layout="vertical" onFinish={handleFinish} autoComplete="off">
             <Form.Item
-              label={t('signIn.identifier.label')}
+              label={t('sign_in.identifier.label')}
               name="identifier"
-              rules={[{ required: true, message: t('signIn.identifier.required') }]}
+              rules={[{ required: true, message: t('sign_in.identifier.required') }]}
             >
-              <Input placeholder={t('signIn.identifier.placeholder')} size="large" />
+              <Input placeholder={t('sign_in.identifier.placeholder')} size="large" />
             </Form.Item>
             <Form.Item
-              label={t('signIn.password.label')}
+              label={t('sign_in.password.label')}
               name="password"
-              rules={[{ required: true, message: t('signIn.password.required') }]}
+              rules={[{ required: true, message: t('sign_in.password.required') }]}
             >
-              <Input.Password placeholder={t('signIn.password.placeholder')} size="large" />
+              <Input.Password placeholder={t('sign_in.password.placeholder')} size="large" />
             </Form.Item>
             <Button type="primary" htmlType="submit" loading={submitting} block size="large">
-              {t('signIn.submit')}
+              {t('sign_in.submit')}
             </Button>
           </Form>
         </Space>
@@ -95,7 +95,7 @@ export function SignInPage() {
               rel="noreferrer" 
               style={{ color: token.colorTextDescription, textDecoration: 'none' }}
             >
-              {t('signIn.footer')}
+              {t('sign_in.footer')}
             </a>
           </Typography.Text>
         </div>

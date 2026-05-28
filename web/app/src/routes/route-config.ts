@@ -1,10 +1,9 @@
 import type { AppRouteId } from '@1flowbase/shared-types';
-import { i18nText } from '../shared/i18n/text';
 
 export interface AppRouteDefinition {
   id: AppRouteId;
   path: string;
-  navLabel: string | null;
+  navLabelKey: string | null;
   chromeSlot: 'primary' | 'secondary' | 'hidden';
   selectedMatchers: Array<(pathname: string) => boolean>;
   permissionKey: string | null;
@@ -15,7 +14,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'home',
     path: '/',
-    navLabel: i18nText("appShell", "auto.k_8483cd2b08"),
+    navLabelKey: "auto.workbench",
     chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname === '/'],
     permissionKey: 'route_page.view.all',
@@ -24,7 +23,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'frontstage',
     path: '/frontstage',
-    navLabel: i18nText("appShell", "auto.k_89408f6d5a"),
+    navLabelKey: "auto.frontstage",
     chromeSlot: 'primary',
     selectedMatchers: [
       (pathname) =>
@@ -37,7 +36,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'application-detail',
     path: '/applications',
-    navLabel: null,
+    navLabelKey: null,
     chromeSlot: 'hidden',
     selectedMatchers: [(pathname) => /^\/applications\/[^/]+(\/|$)/.test(pathname)],
     permissionKey: 'route_page.view.all',
@@ -46,7 +45,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'embedded-apps',
     path: '/embedded-apps',
-    navLabel: i18nText("appShell", "auto.k_1c41ed3edc"),
+    navLabelKey: "auto.subsystem",
     chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname.startsWith('/embedded-apps')],
     permissionKey: 'embedded_app.view.all',
@@ -55,7 +54,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'tools',
     path: '/tools',
-    navLabel: i18nText("appShell", "auto.k_a72ef18d9a"),
+    navLabelKey: "auto.tools",
     chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname.startsWith('/tools')],
     permissionKey: 'route_page.view.all',
@@ -64,7 +63,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'settings',
     path: '/settings',
-    navLabel: i18nText("appShell", "auto.k_7debf9cb03"),
+    navLabelKey: "auto.settings",
     chromeSlot: 'secondary',
     selectedMatchers: [(pathname) => pathname === '/settings' || pathname.startsWith('/settings/')],
     permissionKey: null,
@@ -73,7 +72,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'me',
     path: '/me',
-    navLabel: null,
+    navLabelKey: null,
     chromeSlot: 'hidden',
     selectedMatchers: [(pathname) => pathname === '/me' || pathname.startsWith('/me/')],
     permissionKey: null,
@@ -82,7 +81,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
   {
     id: 'sign-in',
     path: '/sign-in',
-    navLabel: null,
+    navLabelKey: null,
     chromeSlot: 'hidden',
     selectedMatchers: [(pathname) => pathname.startsWith('/sign-in')],
     permissionKey: null,

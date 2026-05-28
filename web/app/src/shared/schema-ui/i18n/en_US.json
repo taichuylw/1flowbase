@@ -1,6 +1,6 @@
 {
   "auto": {
-    "k_6c14bd7f6f": "Close",
-    "k_8a49271fb5": "Close {{value1}}"
+    "close": "Close",
+    "close_named_panel": "Close {{value1}}"
   }
 }

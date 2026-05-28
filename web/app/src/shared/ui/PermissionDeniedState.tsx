@@ -5,8 +5,8 @@ export function PermissionDeniedState() {
   return (
     <Result
       status="403"
-      title={i18nText("sharedUi", "auto.k_9dd50f94f3")}
-      subTitle={i18nText("sharedUi", "auto.k_d66f2a8fbe")}
+      title={i18nText("sharedUi", "auto.no_access")}
+      subTitle={i18nText("sharedUi", "auto.permission_required_description")}
     />
   );
 }

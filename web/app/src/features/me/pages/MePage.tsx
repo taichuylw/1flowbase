@@ -87,8 +87,8 @@ export function MePage({
     return (
       <Result
         status="warning"
-        title={i18nText("me", "auto.k_22ee0f0313")}
-        subTitle={i18nText("me", "auto.k_25410d575c")}
+        title={i18nText("me", "auto.profile_unavailable")}
+        subTitle={i18nText("me", "auto.session_missing_user_context")}
       />
     );
   }
@@ -96,12 +96,12 @@ export function MePage({
   if (!fallbackSection) {
     return (
       <SectionPageLayout
-        pageTitle={i18nText("me", "auto.k_d562e344b9")}
-        pageDescription={i18nText("me", "auto.k_8cabb0c543")}
+        pageTitle={i18nText("me", "auto.profile")}
+        pageDescription={i18nText("me", "auto.profile_description")}
         navItems={[]}
         activeKey=""
         contentWidth="narrow"
-        emptyState={<Result status="info" title={i18nText("me", "auto.k_10a57ef7c7")} />}
+        emptyState={<Result status="info" title={i18nText("me", "auto.account_has_no_content")} />}
       >
         {null}
       </SectionPageLayout>
@@ -114,8 +114,8 @@ export function MePage({
 
   return (
     <SectionPageLayout
-      pageTitle={i18nText("me", "auto.k_d562e344b9")}
-      pageDescription={i18nText("me", "auto.k_8cabb0c543")}
+      pageTitle={i18nText("me", "auto.profile")}
+      pageDescription={i18nText("me", "auto.profile_description")}
       navItems={visibleSections}
       activeKey={activeSection.key}
       contentWidth="narrow"
@@ -124,7 +124,7 @@ export function MePage({
         <div className="me-page">
           <ProfileForm
             me={currentProfile}
-            statusLabel={sessionStatus === 'authenticated' ? i18nText("me", "auto.k_00e69bd114") : i18nText("me", "auto.k_e8041a8c93")}
+            statusLabel={sessionStatus === 'authenticated' ? i18nText("me", "auto.logged_in") : i18nText("me", "auto.not_logged_in")}
             submitting={profileMutation.isPending}
             errorMessage={getErrorMessage(profileMutation.error)}
             onSubmit={async (input) => {

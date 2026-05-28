@@ -85,6 +85,13 @@ describe('AppShellFrame', () => {
     });
   });
 
+  test('translates primary navigation labels at render time', async () => {
+    renderShell('/');
+
+    expect(await screen.findByText('workbench')).toBeInTheDocument();
+    expect(screen.queryByText('auto.workbench')).not.toBeInTheDocument();
+  });
+
   test('places the account menu after the secondary top actions', async () => {
     renderShell('/settings/data-models');
 

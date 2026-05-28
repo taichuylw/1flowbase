@@ -1,23 +1,23 @@
 {
   "auto": {
-    "k_094774b4a7": "退出登录",
-    "k_1069127253": "文档",
-    "k_1c41ed3edc": "子系统",
-    "k_212e81e6d0": "官方源",
-    "k_49dbad4d69": "退出设计模式",
-    "k_7debf9cb03": "设置",
-    "k_8483cd2b08": "工作台",
-    "k_89408f6d5a": "前台",
-    "k_9ba763ea34": "用户",
-    "k_a72ef18d9a": "工具",
-    "k_adf465ebf0": "帮助",
-    "k_d562e344b9": "个人资料",
-    "k_fb0257aeea": "进入设计模式"
+    "documentation": "文档",
+    "enter_design_mode": "进入设计模式",
+    "exit_design_mode": "退出设计模式",
+    "frontstage": "前台",
+    "help": "帮助",
+    "logout": "退出登录",
+    "official_source": "官方源",
+    "profile": "个人资料",
+    "settings": "设置",
+    "subsystem": "子系统",
+    "tools": "工具",
+    "user": "用户",
+    "workbench": "工作台"
   },
   "language": {
     "current": "中",
-    "enUs": "English",
+    "en_us": "English",
     "trigger": "切换语言",
-    "zhHans": "简体中文"
+    "zh_hans": "简体中文"
   }
 }

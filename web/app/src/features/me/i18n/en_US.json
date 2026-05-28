@@ -1,22 +1,22 @@
 {
   "auto": {
-    "k_00348363de": "The new passwords entered twice are inconsistent.",
-    "k_00e69bd114": "Logged in",
-    "k_10a57ef7c7": "The current account has no access to content.",
-    "k_22ee0f0313": "Profile is unavailable",
-    "k_25410d575c": "The current session is missing the necessary user context, please log in again and try again.",
-    "k_2f3ed4c7a4": "Update password",
-    "k_4850ecf733": "Please enter your new password again.",
-    "k_5ccbfd6edd": "Please enter your current password.",
-    "k_7543b01a32": "Please enter a new password.",
-    "k_8bf435e8a8": "Security settings",
-    "k_8cabb0c543": "This page is used to manage personal information and security settings.",
-    "k_c839a8ff17": "Password",
-    "k_d22c9c0085": "new password",
-    "k_d4477adb6f": "Confirm new password",
-    "k_d562e344b9": "personal information",
-    "k_e8041a8c93": "Not logged in",
-    "k_f10b511381": "Updating your password will immediately clear your current session and you will need to log in again with your new password."
+    "account_has_no_content": "The current account has no access to content.",
+    "confirm_new_password": "Confirm new password",
+    "current_password_required": "Please enter your current password.",
+    "logged_in": "Logged in",
+    "new_password": "new password",
+    "new_password_required": "Please enter a new password.",
+    "not_logged_in": "Not logged in",
+    "password": "Password",
+    "password_mismatch": "The new passwords entered twice are inconsistent.",
+    "password_update_notice": "Updating your password will immediately clear your current session and you will need to log in again with your new password.",
+    "profile": "personal information",
+    "profile_description": "This page is used to manage personal information and security settings.",
+    "profile_unavailable": "Profile is unavailable",
+    "security_settings": "Security settings",
+    "session_missing_user_context": "The current session is missing the necessary user context, please log in again and try again.",
+    "update_password": "Update password",
+    "verify_new_password_required": "Please enter your new password again."
   },
   "profile": {
     "actions": {
@@ -33,9 +33,9 @@
     },
     "fields": {
       "account": "Account name",
-      "avatarUrl": "Avatar URL",
+      "avatar_url": "Avatar URL",
       "email": "Email",
-      "interfaceLanguage": "Interface language",
+      "interface_language": "Interface language",
       "introduction": "Bio",
       "name": "Legal name",
       "nickname": "Nickname",
@@ -43,14 +43,14 @@
       "phone": "Phone"
     },
     "form": {
-      "avatarUrl": {
+      "avatar_url": {
         "extra": "External image URLs are supported.",
         "placeholder": "https://example.com/avatar.png"
       },
       "email": {
         "required": "Enter a valid email address."
       },
-      "interfaceLanguage": {
+      "interface_language": {
         "extra": "Leave blank to use the system-resolved default language."
       },
       "introduction": {
@@ -68,8 +68,8 @@
     },
     "locale": {
       "default": "Follow system default",
-      "enUs": "English",
-      "zhHans": "Simplified Chinese"
+      "en_us": "English",
+      "zh_hans": "Simplified Chinese"
     },
     "title": "Personal information"
   }

@@ -49,7 +49,7 @@ const SettingsPage = lazy(() =>
 );
 
 function NotFoundPage() {
-  return <Result status="404" title={i18nText("app", "auto.k_55c9e10608")} />;
+  return <Result status="404" title={i18nText("app", "auto.page_not_found")} />;
 }
 
 function RouteLoadingFallback() {

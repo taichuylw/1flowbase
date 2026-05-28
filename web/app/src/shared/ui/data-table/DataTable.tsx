@@ -41,12 +41,12 @@ function ResizeHeaderCell({
 }
 
 export function DataTableColumnSettings<T extends object>({
-  ariaLabel = i18nText("sharedUi", "auto.k_e33a2514ed"),
+  ariaLabel = i18nText("sharedUi", "auto.field_configuration"),
   className,
   columns,
   configuration,
-  placeholder = i18nText("sharedUi", "auto.k_e33a2514ed"),
-  resetLabel = i18nText("sharedUi", "auto.k_4b510238a8")
+  placeholder = i18nText("sharedUi", "auto.field_configuration"),
+  resetLabel = i18nText("sharedUi", "auto.reset_default_fields")
 }: {
   ariaLabel?: string;
   className?: string;
@@ -270,7 +270,7 @@ export function DataTable<T extends object>({
         pageSize={pageSize}
         total={total}
         showSizeChanger={false}
-        showTotal={(paginationTotal) => i18nText("sharedUi", "auto.k_f183b6ff3e", { value1: paginationTotal })}
+        showTotal={(paginationTotal) => i18nText("sharedUi", "auto.total_items", { value1: paginationTotal })}
         onChange={onPageChange}
       />
     </section>

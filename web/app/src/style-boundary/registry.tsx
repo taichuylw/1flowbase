@@ -152,7 +152,7 @@ const styleBoundaryPluginFamiliesCatalog = {
 
 const styleBoundaryOfficialPluginCatalog = {
   source_kind: 'official_registry',
-  source_label: i18nText("appShell", "auto.k_212e81e6d0"),
+  source_label: i18nText("appShell", "auto.official_source"),
   registry_url:
     'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
   locale_meta: modelProviderCatalogContract.locale_meta,

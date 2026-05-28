@@ -43,8 +43,8 @@ export function SchemaDockPanel({
           <div>{schema.title}</div>
           {headerExtra}
           {onClose ? (
-            <Button aria-label={i18nText("schemaUi", "auto.k_8a49271fb5", { value1: schema.title })} type="text" onClick={onClose}>
-              {i18nText("schemaUi", "auto.k_6c14bd7f6f")}</Button>
+            <Button aria-label={i18nText("schemaUi", "auto.close_named_panel", { value1: schema.title })} type="text" onClick={onClose}>
+              {i18nText("schemaUi", "auto.close")}</Button>
           ) : null}
         </header>
       )}

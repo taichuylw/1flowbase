@@ -1,23 +1,23 @@
 {
   "auto": {
-    "k_094774b4a7": "Log out",
-    "k_1069127253": "Documentation",
-    "k_1c41ed3edc": "Subsystem",
-    "k_212e81e6d0": "official source",
-    "k_49dbad4d69": "Exit design mode",
-    "k_7debf9cb03": "settings",
-    "k_8483cd2b08": "workbench",
-    "k_89408f6d5a": "front desk",
-    "k_9ba763ea34": "User",
-    "k_a72ef18d9a": "Tools",
-    "k_adf465ebf0": "help",
-    "k_d562e344b9": "personal information",
-    "k_fb0257aeea": "Enter design mode"
+    "documentation": "Documentation",
+    "enter_design_mode": "Enter design mode",
+    "exit_design_mode": "Exit design mode",
+    "frontstage": "front desk",
+    "help": "help",
+    "logout": "Log out",
+    "official_source": "official source",
+    "profile": "personal information",
+    "settings": "settings",
+    "subsystem": "Subsystem",
+    "tools": "Tools",
+    "user": "User",
+    "workbench": "workbench"
   },
   "language": {
     "current": "EN",
-    "enUs": "English",
+    "en_us": "English",
     "trigger": "Switch language",
-    "zhHans": "Chinese"
+    "zh_hans": "Chinese"
   }
 }

@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { Menu } from 'antd';
 import type { MenuProps } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { getPrimaryNavigationRoutes } from '../routes/route-helpers';
 import { getSelectedRouteId } from '../routes/route-config';
 
@@ -40,6 +41,7 @@ export function Navigation({
   pathname: string;
   useRouterLinks: boolean;
 }) {
+  const { t } = useTranslation('appShell');
   const selectedKey = getSelectedRouteId(pathname);
   const items: MenuProps['items'] = getPrimaryNavigationRoutes().map(
     (route) => {
@@ -47,7 +49,7 @@ export function Navigation({
         key: route.id,
         label: renderNavigationLink(
           route.path,
-          route.navLabel!,
+          t(route.navLabelKey!),
           useRouterLinks,
           route.id === selectedKey
         )

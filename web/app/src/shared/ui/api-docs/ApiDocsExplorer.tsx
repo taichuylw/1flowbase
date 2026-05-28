@@ -407,10 +407,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
 
   function renderCategorySelector() {
     return (
-      <section className="api-docs-panel__toolbar" aria-label={i18nText("sharedUi", "auto.k_5bdcfd64f7")}>
+      <section className="api-docs-panel__toolbar" aria-label={i18nText("sharedUi", "auto.document_filter")}>
         <div className="api-docs-panel__header-control">
           <Select
-            aria-label={i18nText("sharedUi", "auto.k_6328c9d25d")}
+            aria-label={i18nText("sharedUi", "auto.interface_category")}
             className="api-docs-panel__category-select"
             showSearch
             allowClear
@@ -419,10 +419,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
             options={categoryOptions}
             placeholder={
               categories.length === 0
-                ? i18nText("sharedUi", "auto.k_b457de4013")
+                ? i18nText("sharedUi", "auto.no_interface_categories")
                 : showAllOperationsWhenNoCategory
-                  ? i18nText("sharedUi", "auto.k_54eb6f4c5d")
-                  : i18nText("sharedUi", "auto.k_2fe7420637")
+                  ? i18nText("sharedUi", "auto.all_interfaces")
+                  : i18nText("sharedUi", "auto.select_interface_category")
             }
             optionRender={(option) => {
               const category = option.data as CategorySelectOption;
@@ -444,7 +444,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
                     className="api-docs-panel__category-option-count"
                     aria-hidden="true"
                   >
-                    {category.operationCount} {i18nText("sharedUi", "auto.k_b4eda10b96")}</span>
+                    {category.operationCount} {i18nText("sharedUi", "auto.interface_count_suffix")}</span>
                 </div>
               );
             }}
@@ -459,11 +459,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
                 operationId: null
               })
             }
-            notFoundContent={i18nText("sharedUi", "auto.k_5d81a88762")}
+            notFoundContent={i18nText("sharedUi", "auto.no_matching_category")}
           />
         </div>
         <Typography.Text className="api-docs-panel__count">
-          {i18nText("sharedUi", "auto.k_3b6ef811b8")}{totalOperations} {i18nText("sharedUi", "auto.k_b4eda10b96")}</Typography.Text>
+          {i18nText("sharedUi", "auto.total")}{totalOperations} {i18nText("sharedUi", "auto.interface_count_suffix")}</Typography.Text>
       </section>
     );
   }
@@ -507,11 +507,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Result
             status="info"
-            title={i18nText("sharedUi", "auto.k_9802607ef1")}
+            title={i18nText("sharedUi", "auto.view_details_after_selecting_interface")}
             subTitle={
               showAllOperationsWhenNoCategory
-                ? i18nText("sharedUi", "auto.k_8d2ecb0ce3")
-                : i18nText("sharedUi", "auto.k_42c68783d0")
+                ? i18nText("sharedUi", "auto.open_interface_from_left")
+                : i18nText("sharedUi", "auto.select_category_then_open_interface")
             }
           />
         </div>
@@ -523,7 +523,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Spin size="large" />
           <Typography.Text type="secondary">
-            {i18nText("sharedUi", "auto.k_3667cb105a")}{selectedOperation?.path ?? i18nText("sharedUi", "auto.k_e556eefd90")} {i18nText("sharedUi", "auto.k_6056170c73")}</Typography.Text>
+            {i18nText("sharedUi", "auto.loading")}{selectedOperation?.path ?? i18nText("sharedUi", "auto.current_interface")} {i18nText("sharedUi", "auto.details_suffix")}</Typography.Text>
         </div>
       );
     }
@@ -533,8 +533,8 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Result
             status="error"
-            title={i18nText("sharedUi", "auto.k_ae9226014a")}
-            subTitle={i18nText("sharedUi", "auto.k_ff8140d881")}
+            title={i18nText("sharedUi", "auto.interface_details_load_failed")}
+            subTitle={i18nText("sharedUi", "auto.interface_document_return_failed")}
           />
         </div>
       );
@@ -566,15 +566,15 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     content = (
       <div className="api-docs-panel__detail-state">
         <Spin size="large" />
-        <Typography.Text type="secondary">{i18nText("sharedUi", "auto.k_ad11ccaa05")}</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("sharedUi", "auto.loading_interface_directory")}</Typography.Text>
       </div>
     );
   } else if (catalogQuery.isError) {
     content = (
       <Result
         status="error"
-        title={i18nText("sharedUi", "auto.k_c3b0850520")}
-        subTitle={i18nText("sharedUi", "auto.k_7062198413")}
+        title={i18nText("sharedUi", "auto.interface_directory_load_failed")}
+        subTitle={i18nText("sharedUi", "auto.api_doc_permission_retry")}
       />
     );
   } else {
@@ -583,7 +583,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         {toolbarPortalElement ? null : renderCategorySelector()}
         <div className="api-docs-panel__workspace">
           {renderOperationPane()}
-          <section className="api-docs-panel__detail" aria-label={i18nText("sharedUi", "auto.k_552c849b13")}>
+          <section className="api-docs-panel__detail" aria-label={i18nText("sharedUi", "auto.api_documentation_details")}>
             {renderDetailPane()}
           </section>
         </div>
