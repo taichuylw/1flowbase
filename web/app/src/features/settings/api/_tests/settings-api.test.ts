@@ -934,6 +934,104 @@ describe('settings api wrappers', () => {
     expect(validatedInstance.instance).not.toHaveProperty('is_primary');
   });
 
+  test('localizes model provider config schema labels and select options', async () => {
+    vi.mocked(listConsoleModelProviderCatalog).mockResolvedValueOnce({
+      ...modelProviderCatalogContract,
+      locale_meta: {
+        requested_locale: 'zh_Hans',
+        resolved_locale: 'zh_Hans',
+        user_preferred_locale: 'zh_Hans',
+        accept_language: 'zh-Hans-CN,zh;q=0.9,en;q=0.8',
+        fallback_locale: 'en_US',
+        supported_locales: ['zh_Hans', 'en_US']
+      },
+      i18n_catalog: {
+        'plugin.openai': {
+          zh_Hans: {
+            fields: {
+              transport_mode: {
+                label: '传输模式',
+                description: '选择 OpenAI Responses 的流式传输方式。',
+                options: {
+                  http_sse: {
+                    label: 'HTTP SSE',
+                    description: '默认使用 Responses HTTP 流式传输。'
+                  },
+                  responses_websocket: {
+                    label: 'Responses WebSocket',
+                    description: '显式使用 Responses WebSocket 传输。'
+                  }
+                }
+              }
+            }
+          },
+          en_US: {
+            fields: {
+              transport_mode: {
+                label: 'Transport mode'
+              }
+            }
+          }
+        }
+      },
+      entries: [
+        {
+          ...modelProviderCatalogEntries[0],
+          namespace: 'plugin.openai',
+          form_schema: [
+            {
+              key: 'transport_mode',
+              field_type: 'enum',
+              label: 'fields.transport_mode.label',
+              control: 'select',
+              required: false,
+              advanced: true,
+              description: 'fields.transport_mode.description',
+              default_value: 'http_sse',
+              options: [
+                {
+                  label: 'fields.transport_mode.options.http_sse.label',
+                  value: 'http_sse',
+                  description:
+                    'fields.transport_mode.options.http_sse.description'
+                },
+                {
+                  label:
+                    'fields.transport_mode.options.responses_websocket.label',
+                  value: 'responses_websocket',
+                  description:
+                    'fields.transport_mode.options.responses_websocket.description'
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const [entry] = await fetchSettingsModelProviderCatalog();
+
+    expect(entry.form_schema[0]).toEqual(
+      expect.objectContaining({
+        key: 'transport_mode',
+        label: '传输模式',
+        description: '选择 OpenAI Responses 的流式传输方式。'
+      })
+    );
+    expect(entry.form_schema[0].options).toEqual([
+      {
+        label: 'HTTP SSE',
+        value: 'http_sse',
+        description: '默认使用 Responses HTTP 流式传输。'
+      },
+      {
+        label: 'Responses WebSocket',
+        value: 'responses_websocket',
+        description: '显式使用 Responses WebSocket 传输。'
+      }
+    ]);
+  });
+
   test('forwards plugin query keys and request helpers', async () => {
     const uploadFile = new File(['zip'], 'provider.zip', {
       type: 'application/zip'

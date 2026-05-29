@@ -12,6 +12,7 @@ import {
   updateConsoleModelProviderInstance,
   updateConsoleModelProviderMainInstance,
   validateConsoleModelProviderInstance,
+  type ConsoleModelProviderCatalogResponse,
   type ConsoleModelProviderCatalogEntry,
   type ConsoleModelProviderInstance,
   type ConsoleModelProviderMainInstance,
@@ -61,8 +62,175 @@ export function settingsModelProviderModelsQueryKey(instanceId: string) {
   return ['settings', 'model-providers', 'models', instanceId] as const;
 }
 
+function pickCatalogLocales(localeMeta: Record<string, unknown>) {
+  const candidates = [
+    localeMeta.resolved_locale,
+    localeMeta.fallback_locale,
+    'zh_Hans',
+    'en_US'
+  ];
+
+  return candidates.filter(
+    (value, index): value is string =>
+      typeof value === 'string' && candidates.indexOf(value) === index
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readCatalogLocalizedValue(
+  bundle: Record<string, unknown>,
+  dottedKey: string
+): string | null {
+  let current: unknown = bundle;
+
+  for (const segment of dottedKey.split('.')) {
+    current = asRecord(current)?.[segment];
+    if (current === undefined) {
+      return null;
+    }
+  }
+
+  return typeof current === 'string' ? current : null;
+}
+
+function resolveCatalogLocalizedValue(
+  response: Pick<
+    ConsoleModelProviderCatalogResponse,
+    'locale_meta' | 'i18n_catalog'
+  >,
+  namespace: string,
+  value: string
+): string;
+function resolveCatalogLocalizedValue(
+  response: Pick<
+    ConsoleModelProviderCatalogResponse,
+    'locale_meta' | 'i18n_catalog'
+  >,
+  namespace: string,
+  value: null | undefined
+): null | undefined;
+function resolveCatalogLocalizedValue(
+  response: Pick<ConsoleModelProviderCatalogResponse, 'locale_meta' | 'i18n_catalog'>,
+  namespace: string,
+  value: string | null | undefined
+) {
+  if (!value) {
+    return value;
+  }
+
+  const namespaceCatalog = asRecord(response.i18n_catalog)?.[namespace];
+  const localeCatalog = asRecord(namespaceCatalog);
+  if (!localeCatalog) {
+    return value;
+  }
+
+  for (const locale of pickCatalogLocales(response.locale_meta)) {
+    const localizedBundle = asRecord(localeCatalog[locale]);
+    if (!localizedBundle) {
+      continue;
+    }
+
+    const localizedValue = readCatalogLocalizedValue(localizedBundle, value);
+    if (localizedValue) {
+      return localizedValue;
+    }
+  }
+
+  for (const localizedBundle of Object.values(localeCatalog)) {
+    const normalizedBundle = asRecord(localizedBundle);
+    if (!normalizedBundle) {
+      continue;
+    }
+
+    const localizedValue = readCatalogLocalizedValue(normalizedBundle, value);
+    if (localizedValue) {
+      return localizedValue;
+    }
+  }
+
+  return value;
+}
+
+function resolveOptionalCatalogLocalizedValue(
+  response: Pick<
+    ConsoleModelProviderCatalogResponse,
+    'locale_meta' | 'i18n_catalog'
+  >,
+  namespace: string,
+  value: string | null | undefined
+) {
+  return value == null
+    ? value
+    : resolveCatalogLocalizedValue(response, namespace, value);
+}
+
+function localizeCatalogEntryConfigSchema(
+  response: Pick<ConsoleModelProviderCatalogResponse, 'locale_meta' | 'i18n_catalog'>,
+  entry: ConsoleModelProviderCatalogEntry
+) {
+  return {
+    ...entry,
+    form_schema: entry.form_schema.map((field) => {
+      const label = resolveOptionalCatalogLocalizedValue(
+        response,
+        entry.namespace,
+        field.label
+      );
+      const description = resolveOptionalCatalogLocalizedValue(
+        response,
+        entry.namespace,
+        field.description
+      );
+      const placeholder = resolveOptionalCatalogLocalizedValue(
+        response,
+        entry.namespace,
+        field.placeholder
+      );
+
+      return {
+        ...field,
+        ...(label === undefined ? {} : { label }),
+        ...(description === undefined ? {} : { description }),
+        ...(placeholder === undefined ? {} : { placeholder }),
+        ...(field.options
+          ? {
+              options: field.options.map((option) => {
+                const optionDescription = resolveOptionalCatalogLocalizedValue(
+                  response,
+                  entry.namespace,
+                  option.description
+                );
+
+                return {
+                  ...option,
+                  label: resolveCatalogLocalizedValue(
+                    response,
+                    entry.namespace,
+                    option.label
+                  ),
+                  ...(optionDescription === undefined || optionDescription === null
+                    ? {}
+                    : { description: optionDescription })
+                };
+              })
+            }
+          : {})
+      };
+    })
+  };
+}
+
 export function fetchSettingsModelProviderCatalog() {
-  return listConsoleModelProviderCatalog().then((response) => response.entries);
+  return listConsoleModelProviderCatalog().then((response) =>
+    response.entries.map((entry) =>
+      localizeCatalogEntryConfigSchema(response, entry)
+    )
+  );
 }
 
 export function fetchSettingsModelProviderInstances() {

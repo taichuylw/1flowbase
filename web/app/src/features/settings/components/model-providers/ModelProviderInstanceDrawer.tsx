@@ -19,8 +19,7 @@ import {
   ApiOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
-  PlusOutlined,
-  ImportOutlined
+  PlusOutlined
 } from '@ant-design/icons';
 
 import type {
@@ -543,6 +542,12 @@ function ModelProviderInstanceDrawerContent({
     const isSecret = field.field_type === 'secret';
     const useTextArea = isTextAreaField(field.key);
     const useSelect = isSelectConfigField(field);
+    const fieldExtra = isSecret
+      ? '敏感字段仅用于加密存储，不会在列表和接口中回显。'
+      : field.description ??
+        (field.key === 'base_url'
+          ? '支持输入标准 OpenAI 兼容地址；未填写时会优先使用插件默认值。'
+          : undefined);
 
     if (isSecret && mode === 'edit') {
       const previewSource =
@@ -616,13 +621,7 @@ function ModelProviderInstanceDrawerContent({
             ? [{ required: true, message: `请填写 ${label}` }]
             : undefined
         }
-        extra={
-          isSecret
-            ? '敏感字段仅用于加密存储，不会在列表和接口中回显。'
-            : field.key === 'base_url'
-              ? '支持输入标准 OpenAI 兼容地址；未填写时会优先使用插件默认值。'
-              : undefined
-        }
+        extra={fieldExtra}
       >
         {isSecret ? (
           <Input.Password

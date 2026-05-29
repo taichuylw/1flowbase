@@ -2,7 +2,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -268,6 +268,44 @@ fn write_legacy_invoke_runtime(package: &TempProviderPackage) {
     );
 }
 
+fn write_slow_invoke_runtime(package: &TempProviderPackage) {
+    package.write(
+        "bin/fixture_provider",
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+
+payload="$(cat)"
+case "${payload}" in
+  *'"method":"validate"'*)
+    printf '%s' '{"ok":true,"result":{"ok":true,"sanitized":{"api_key":"***"}}}'
+    ;;
+  *'"method":"list_models"'*)
+    printf '%s' '{"ok":true,"result":[]}'
+    ;;
+  *'"method":"invoke"'*)
+    printf '%s\n' '{"type":"text_delta","delta":"slow"}'
+    sleep 1
+    printf '%s\n' '{"type":"finish","reason":"stop"}'
+    printf '%s\n' '{"type":"result","result":{"final_content":"slow","finish_reason":"stop","provider_metadata":{"transport":"responses_websocket"}}}'
+    ;;
+  *)
+    printf '%s' '{"ok":false,"error":{"kind":"provider_invalid_response","message":"unknown method","provider_summary":null}}'
+    exit 1
+    ;;
+esac
+"#,
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = package.path().join("bin/fixture_provider");
+        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+}
+
 fn make_fixture_package() -> TempProviderPackage {
     let package = TempProviderPackage::new();
     package.write(
@@ -462,11 +500,159 @@ async fn request_json(app: &Router, method: Method, uri: &str, body: Value) -> (
     (status, payload)
 }
 
+async fn request_empty(app: &Router, method: Method, uri: &str) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload = serde_json::from_slice(&body).unwrap();
+    (status, payload)
+}
+
+async fn wait_for_single_active_stream(app: &Router) -> Value {
+    for _ in 0..20 {
+        let (status, payload) = request_empty(app, Method::GET, "/providers/active-streams").await;
+        assert_eq!(status, StatusCode::OK);
+        if payload["streams"]
+            .as_array()
+            .is_some_and(|streams| streams.len() == 1)
+        {
+            return payload;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    panic!("active stream snapshot did not expose the running stream");
+}
+
 fn find_model<'a>(models: &'a [Value], model_id: &str) -> &'a Value {
     models
         .iter()
         .find(|model| model["model_id"] == model_id)
         .unwrap()
+}
+
+#[tokio::test]
+async fn provider_runner_exposes_and_cleans_active_stream_snapshot() {
+    let package = make_fixture_package();
+    write_slow_invoke_runtime(&package);
+    let app = app();
+
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/load",
+        json!({
+            "package_root": package.path(),
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let plugin_id = load_payload["plugin_id"].as_str().unwrap().to_string();
+
+    let invoke_app = app.clone();
+    let invoke_body = json!({
+        "plugin_id": plugin_id,
+        "input": {
+            "provider_instance_id": "instance-active",
+            "provider_code": "fixture_provider",
+            "protocol": "openai_compatible",
+            "model": "fixture_dynamic",
+            "provider_config": {
+                "transport_mode": "responses_websocket"
+            },
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "hello",
+                }
+            ]
+        }
+    });
+    let invoke_task = tokio::spawn(async move {
+        request_json(
+            &invoke_app,
+            Method::POST,
+            "/providers/invoke-stream",
+            invoke_body,
+        )
+        .await
+    });
+
+    let active_payload = wait_for_single_active_stream(&app).await;
+    let stream = &active_payload["streams"][0];
+    assert!(!stream["invocation_id"].as_str().unwrap().is_empty());
+    assert_eq!(stream["plugin_id"], load_payload["plugin_id"]);
+    assert_eq!(stream["provider_instance_id"], "instance-active");
+    assert_eq!(stream["transport"], "responses_websocket");
+    assert_eq!(stream["status"], "running");
+    assert!(stream["duration_ms"].as_u64().is_some());
+    assert!(!stream["started_at"].as_str().unwrap().is_empty());
+    assert!(!stream["last_event_at"].as_str().unwrap().is_empty());
+
+    let (status, invoke_payload) = invoke_task.await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(invoke_payload["result"]["final_content"], "slow");
+
+    let (status, empty_payload) =
+        request_empty(&app, Method::GET, "/providers/active-streams").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(empty_payload["streams"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn provider_runner_cleans_active_stream_snapshot_after_error() {
+    let package = make_fixture_package();
+    write_legacy_invoke_runtime(&package);
+    let app = app();
+
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/load",
+        json!({
+            "package_root": package.path(),
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = request_json(
+        &app,
+        Method::POST,
+        "/providers/invoke-stream",
+        json!({
+            "plugin_id": load_payload["plugin_id"],
+            "input": {
+                "provider_instance_id": "instance-error",
+                "provider_code": "fixture_provider",
+                "protocol": "openai_compatible",
+                "model": "fixture_dynamic",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "hello",
+                    }
+                ]
+            }
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+
+    let (status, payload) = request_empty(&app, Method::GET, "/providers/active-streams").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(payload["streams"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]

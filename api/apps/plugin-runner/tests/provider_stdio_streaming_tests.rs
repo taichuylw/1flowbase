@@ -61,6 +61,7 @@ printf '%s\n' '{"type":"result","result":{"final_content":"hello","usage":{"inpu
         &invoke_request(),
         &limits(),
         None,
+        None,
     )
     .await
     .unwrap();
@@ -83,6 +84,7 @@ printf '%s\n' '{not-json'
         &script,
         &invoke_request(),
         &limits(),
+        None,
         None,
     )
     .await
@@ -108,11 +110,11 @@ done
     let mut worker = plugin_runner::stdio_runtime::ProviderWorker::new(script, limits());
 
     let first = worker
-        .call_streaming(&invoke_request(), None)
+        .call_streaming(&invoke_request(), None, None)
         .await
         .expect("first worker invoke should succeed");
     let second = worker
-        .call_streaming(&invoke_request(), None)
+        .call_streaming(&invoke_request(), None, None)
         .await
         .expect("second worker invoke should reuse process");
 

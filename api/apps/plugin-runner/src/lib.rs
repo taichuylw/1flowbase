@@ -32,8 +32,8 @@ use crate::data_source_host::{
     LoadedDataSourceSummary,
 };
 use crate::provider_host::{
-    LoadedProviderSummary, ProviderBalanceOutput, ProviderHost, ProviderInvokeStreamOutput,
-    ProviderModelsOutput, ProviderValidationOutput,
+    LoadedProviderSummary, ProviderActiveStreamsOutput, ProviderBalanceOutput, ProviderHost,
+    ProviderInvokeStreamOutput, ProviderModelsOutput, ProviderValidationOutput,
 };
 pub use capability_host::CapabilityHost;
 pub use data_source_host::DataSourceHost;
@@ -284,6 +284,13 @@ async fn invoke_stream(
         .map_err(map_framework_error)
 }
 
+async fn active_provider_streams(
+    State(state): State<AppState>,
+) -> Result<Json<ProviderActiveStreamsOutput>, (StatusCode, Json<ErrorResponse>)> {
+    let host = state.provider_host.read().await;
+    Ok(Json(host.active_stream_snapshot().await))
+}
+
 async fn validate_capability_config(
     State(state): State<AppState>,
     Json(request): Json<ValidateCapabilityRequest>,
@@ -506,6 +513,7 @@ pub fn app_with_state(state: AppState) -> Router {
         .route("/providers/list-models", post(list_models))
         .route("/providers/balance", post(get_balance))
         .route("/providers/invoke-stream", post(invoke_stream))
+        .route("/providers/active-streams", get(active_provider_streams))
         .route("/data-sources/load", post(load_data_source))
         .route("/data-sources/reload", post(reload_data_source))
         .route(

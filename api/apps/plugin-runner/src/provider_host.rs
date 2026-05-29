@@ -2,6 +2,10 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs,
     path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use plugin_framework::{
@@ -15,6 +19,7 @@ use plugin_framework::{
 };
 use serde::Serialize;
 use serde_json::Value;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::Mutex;
 
 use crate::package_loader::{LoadedProviderPackage, PackageLoader};
@@ -86,11 +91,81 @@ pub struct ProviderInvokeStreamOutput {
     pub result: ProviderInvocationResult,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProviderActiveStreamsOutput {
+    pub streams: Vec<ProviderActiveStreamSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProviderActiveStreamSnapshot {
+    pub invocation_id: String,
+    pub plugin_id: String,
+    pub provider_instance_id: String,
+    pub provider_code: String,
+    pub protocol: String,
+    pub model: String,
+    pub transport: String,
+    pub status: String,
+    pub started_at: String,
+    pub last_event_at: String,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveProviderStreamRecord {
+    invocation_id: String,
+    plugin_id: String,
+    provider_instance_id: String,
+    provider_code: String,
+    protocol: String,
+    model: String,
+    transport: String,
+    status: String,
+    started_at: OffsetDateTime,
+    last_event_at: OffsetDateTime,
+}
+
+impl ActiveProviderStreamRecord {
+    fn new(invocation_id: String, plugin_id: &str, input: &ProviderInvocationInput) -> Self {
+        let now = OffsetDateTime::now_utc();
+        Self {
+            invocation_id,
+            plugin_id: plugin_id.to_string(),
+            provider_instance_id: input.provider_instance_id.clone(),
+            provider_code: input.provider_code.clone(),
+            protocol: input.protocol.clone(),
+            model: input.model.clone(),
+            transport: provider_stream_transport(input),
+            status: "running".to_string(),
+            started_at: now,
+            last_event_at: now,
+        }
+    }
+
+    fn snapshot(&self, now: OffsetDateTime) -> ProviderActiveStreamSnapshot {
+        ProviderActiveStreamSnapshot {
+            invocation_id: self.invocation_id.clone(),
+            plugin_id: self.plugin_id.clone(),
+            provider_instance_id: self.provider_instance_id.clone(),
+            provider_code: self.provider_code.clone(),
+            protocol: self.protocol.clone(),
+            model: self.model.clone(),
+            transport: self.transport.clone(),
+            status: self.status.clone(),
+            started_at: format_timestamp(self.started_at),
+            last_event_at: format_timestamp(self.last_event_at),
+            duration_ms: elapsed_milliseconds(self.started_at, now),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ProviderHost {
     loaded_packages: HashMap<String, LoadedProviderPackage>,
     loaded_sources: HashMap<String, LoadedProviderSource>,
     provider_workers: Mutex<HashMap<String, ProviderWorker>>,
+    active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
+    next_invocation_sequence: AtomicU64,
 }
 
 impl Default for ProviderHost {
@@ -99,6 +174,8 @@ impl Default for ProviderHost {
             loaded_packages: HashMap::new(),
             loaded_sources: HashMap::new(),
             provider_workers: Mutex::new(HashMap::new()),
+            active_streams: Arc::new(Mutex::new(HashMap::new())),
+            next_invocation_sequence: AtomicU64::new(1),
         }
     }
 }
@@ -259,6 +336,8 @@ impl ProviderHost {
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
         let loaded = self.loaded_package(plugin_id)?;
+        let invocation_id = self.register_active_stream(plugin_id, &input).await;
+        let event_observer = Some(self.active_stream_event_observer(invocation_id.clone()));
         let request = ProviderStdioRequest {
             method: ProviderStdioMethod::Invoke,
             input: serde_json::to_value(input).unwrap(),
@@ -270,8 +349,9 @@ impl ProviderHost {
                     &request,
                     &loaded.package.manifest.runtime.limits,
                     live_events,
+                    event_observer,
                 )
-                .await?
+                .await
             }
             PluginExecutionMode::StatefulProviderWorker => {
                 let mut workers = self.provider_workers.lock().await;
@@ -281,18 +361,70 @@ impl ProviderHost {
                         loaded.package.manifest.runtime.limits.clone(),
                     )
                 });
-                worker.call_streaming(&request, live_events).await?
+                worker
+                    .call_streaming(&request, live_events, event_observer)
+                    .await
             }
-            _ => {
-                return Err(PluginFrameworkError::invalid_provider_package(
-                    "model provider package declares unsupported execution_mode",
-                ));
-            }
+            _ => Err(PluginFrameworkError::invalid_provider_package(
+                "model provider package declares unsupported execution_mode",
+            )),
         };
+        self.remove_active_stream(&invocation_id).await;
+        let output = output?;
         Ok(ProviderInvokeStreamOutput {
             events: output.events,
             result: output.result,
         })
+    }
+
+    pub async fn active_stream_snapshot(&self) -> ProviderActiveStreamsOutput {
+        let now = OffsetDateTime::now_utc();
+        let mut streams = self
+            .active_streams
+            .lock()
+            .await
+            .values()
+            .map(|record| record.snapshot(now))
+            .collect::<Vec<_>>();
+        streams.sort_by(|left, right| left.started_at.cmp(&right.started_at));
+        ProviderActiveStreamsOutput { streams }
+    }
+
+    async fn register_active_stream(
+        &self,
+        plugin_id: &str,
+        input: &ProviderInvocationInput,
+    ) -> String {
+        let sequence = self
+            .next_invocation_sequence
+            .fetch_add(1, Ordering::Relaxed);
+        let invocation_id = format!("{plugin_id}:{sequence}");
+        let record = ActiveProviderStreamRecord::new(invocation_id.clone(), plugin_id, input);
+        self.active_streams
+            .lock()
+            .await
+            .insert(invocation_id.clone(), record);
+        invocation_id
+    }
+
+    fn active_stream_event_observer(
+        &self,
+        invocation_id: String,
+    ) -> tokio::sync::mpsc::UnboundedSender<()> {
+        let active_streams = Arc::clone(&self.active_streams);
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while receiver.recv().await.is_some() {
+                if let Some(record) = active_streams.lock().await.get_mut(&invocation_id) {
+                    record.last_event_at = OffsetDateTime::now_utc();
+                }
+            }
+        });
+        sender
+    }
+
+    async fn remove_active_stream(&self, invocation_id: &str) {
+        self.active_streams.lock().await.remove(invocation_id);
     }
 
     fn loaded_package(&self, plugin_id: &str) -> FrameworkResult<&LoadedProviderPackage> {
@@ -335,6 +467,45 @@ impl ProviderHost {
             )),
         }
     }
+}
+
+fn provider_stream_transport(input: &ProviderInvocationInput) -> String {
+    if let Some(transport_mode) = provider_config_transport_mode(&input.provider_config) {
+        return normalize_transport_mode_hint(&transport_mode);
+    }
+    if input.protocol == "openai_responses" || input.provider_code == "openai" {
+        return "http_sse".to_string();
+    }
+    "provider_stream".to_string()
+}
+
+fn provider_config_transport_mode(provider_config: &Value) -> Option<String> {
+    let value = provider_config.get("transport_mode")?;
+    let text = match value {
+        Value::String(text) => text.trim().to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    };
+    (!text.is_empty()).then_some(text)
+}
+
+fn normalize_transport_mode_hint(transport_mode: &str) -> String {
+    match transport_mode.trim().to_ascii_lowercase().as_str() {
+        "" => "http_sse".to_string(),
+        "sse" | "http" | "http_sse" => "http_sse".to_string(),
+        "ws" | "websocket" | "responses_websocket" => "responses_websocket".to_string(),
+        "auto" => "auto".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn elapsed_milliseconds(started_at: OffsetDateTime, now: OffsetDateTime) -> u64 {
+    let milliseconds = (now - started_at).whole_milliseconds();
+    u64::try_from(milliseconds).unwrap_or(0)
+}
+
+fn format_timestamp(value: OffsetDateTime) -> String {
+    value.format(&Rfc3339).unwrap_or_else(|_| value.to_string())
 }
 
 fn normalize_models(raw: Value) -> FrameworkResult<Vec<ProviderModelDescriptor>> {

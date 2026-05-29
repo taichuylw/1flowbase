@@ -69,11 +69,12 @@ impl ProviderWorker {
         &mut self,
         request: &ProviderStdioRequest,
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+        event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
     ) -> FrameworkResult<StreamingProviderOutput> {
         let timeout_ms = self.limits.timeout_ms.unwrap_or(30_000);
         match tokio::time::timeout(
             Duration::from_millis(timeout_ms),
-            self.call_streaming_inner(request, live_events),
+            self.call_streaming_inner(request, live_events, event_observer),
         )
         .await
         {
@@ -119,6 +120,7 @@ impl ProviderWorker {
         &mut self,
         request: &ProviderStdioRequest,
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+        event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
     ) -> FrameworkResult<StreamingProviderOutput> {
         let executable_path = self.executable_path.clone();
         let process = self.ensure_process()?;
@@ -152,6 +154,9 @@ impl ProviderWorker {
                 }
                 other => {
                     if let Some(event) = other.into_stream_event() {
+                        if let Some(event_observer) = &event_observer {
+                            let _ = event_observer.send(());
+                        }
                         if let Some(live_events) = &live_events {
                             let _ = live_events.send(event.clone());
                         }
@@ -229,6 +234,7 @@ pub async fn call_executable_streaming(
     request: &ProviderStdioRequest,
     limits: &PluginRuntimeLimits,
     live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+    event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
 ) -> FrameworkResult<StreamingProviderOutput> {
     let mut command = Command::new(executable_path);
     command
@@ -303,6 +309,9 @@ pub async fn call_executable_streaming(
                 }
                 other => {
                     if let Some(event) = other.into_stream_event() {
+                        if let Some(event_observer) = &event_observer {
+                            let _ = event_observer.send(());
+                        }
                         if let Some(live_events) = &live_events {
                             let _ = live_events.send(event.clone());
                         }

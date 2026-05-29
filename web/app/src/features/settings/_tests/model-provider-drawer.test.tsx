@@ -69,6 +69,7 @@ describe('ModelProviderInstanceDrawer', () => {
             required: false,
             advanced: false,
             control: 'select',
+            description: '选择模型供应商 API 协议。',
             default_value: 'openai_chat',
             options: [
               {
@@ -108,6 +109,7 @@ describe('ModelProviderInstanceDrawer', () => {
       expect(
         await screen.findByRole('combobox', { name: 'API 协议' })
       ).toBeInTheDocument();
+      expect(screen.getByText('选择模型供应商 API 协议。')).toBeInTheDocument();
       expect(screen.getByText('OpenAI Chat Completions')).toBeInTheDocument();
 
       fireEvent.change(screen.getByLabelText('API Endpoint'), {

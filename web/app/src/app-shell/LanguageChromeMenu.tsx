@@ -7,7 +7,6 @@ import { useAuthStore } from '../state/auth-store';
 import { patchUserPreferences } from '../shared/user-preferences/user-preferences';
 import {
   mergeLocalePreferenceMeta,
-  resolveUserLocalePreference,
   writeLocalePreferenceToStorage,
   type ProfileLocalePreference
 } from '../shared/user-preferences/locale-preference';
@@ -17,18 +16,11 @@ const PROFILE_LOCALE_BY_MENU_KEY = {
   'en-US': 'en_US'
 } as const;
 
-function getSelectedLanguageKey(preferredLocale: string | null | undefined) {
-  return preferredLocale === 'en_US' ? 'en-US' : 'zh-CN';
-}
-
 export function LanguageChromeMenu() {
   const { t } = useTranslation('appShell');
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const me = useAuthStore((state) => state.me);
   const setMe = useAuthStore((state) => state.setMe);
-  const selectedLanguageKey = getSelectedLanguageKey(
-    resolveUserLocalePreference(me?.preferred_locale, me?.meta)
-  );
 
   const handleClick: MenuProps['onClick'] = ({ key }) => {
     if (!(key in PROFILE_LOCALE_BY_MENU_KEY)) {
@@ -74,7 +66,6 @@ export function LanguageChromeMenu() {
       className="app-shell-language-menu"
       mode="horizontal"
       selectable={false}
-      selectedKeys={[selectedLanguageKey]}
       onClick={handleClick}
       items={[
         {
