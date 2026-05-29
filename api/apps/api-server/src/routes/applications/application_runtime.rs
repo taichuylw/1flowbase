@@ -604,6 +604,16 @@ where
 {
     let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
     let mut items = imported_context_messages_from_run(run, load_debug_artifact).await;
+    let system_items = if query.before.is_none() && query.after.is_none() {
+        items
+            .iter()
+            .filter(|item| item.role.as_deref() == Some("system"))
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    items.retain(|item| item.role.as_deref() != Some("system"));
     items.push(to_application_conversation_message_response(
         run.clone(),
         Some(run.id),
@@ -613,10 +623,14 @@ where
     let (start, end) = imported_context_window(run.id, total, limit, query);
 
     ApplicationConversationMessagesPageResponse {
-        items: items
+        items: system_items
             .into_iter()
-            .skip(start)
-            .take(end.saturating_sub(start))
+            .chain(
+                items
+                    .into_iter()
+                    .skip(start)
+                    .take(end.saturating_sub(start)),
+            )
             .collect(),
         page: ApplicationConversationMessagesPageInfoResponse {
             has_before: start > 0,
@@ -670,6 +684,9 @@ where
         };
 
         match role {
+            "system" if !items.iter().any(|item| item.role.as_deref() == Some("system")) => {
+                items.push(imported_context_item(run, items.len(), role, content))
+            }
             "user" | "assistant" => {
                 items.push(imported_context_item(run, items.len(), role, content))
             }
@@ -2893,24 +2910,30 @@ mod tests {
         )
         .await;
 
-        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items.len(), 3);
         assert!(page.page.has_before);
         assert!(!page.page.has_after);
-        assert_eq!(page.items[0].role.as_deref(), Some("assistant"));
-        assert_eq!(page.items[0].content.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[0].role.as_deref(), Some("system"));
+        assert_eq!(page.items[0].content.as_deref(), Some("hidden"));
         assert_eq!(page.items[0].query, None);
         assert_eq!(page.items[0].answer, None);
         assert!(!page.items[0].can_open_detail);
         assert_eq!(page.items[0].detail_run_id, None);
-        assert_eq!(page.items[1].run_id, run_id.to_string());
-        assert_eq!(page.items[1].role, None);
-        assert_eq!(page.items[1].content, None);
-        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
-        assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
-        assert!(page.items[1].can_open_detail);
+        assert_eq!(page.items[1].role.as_deref(), Some("assistant"));
+        assert_eq!(page.items[1].content.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[1].query, None);
+        assert_eq!(page.items[1].answer, None);
+        assert!(!page.items[1].can_open_detail);
+        assert_eq!(page.items[1].detail_run_id, None);
+        assert_eq!(page.items[2].run_id, run_id.to_string());
+        assert_eq!(page.items[2].role, None);
+        assert_eq!(page.items[2].content, None);
+        assert_eq!(page.items[2].query.as_deref(), Some("current question"));
+        assert_eq!(page.items[2].answer.as_deref(), Some("current answer"));
+        assert!(page.items[2].can_open_detail);
         let run_id_string = run_id.to_string();
         assert_eq!(
-            page.items[1].detail_run_id.as_deref(),
+            page.items[2].detail_run_id.as_deref(),
             Some(run_id_string.as_str())
         );
     }
