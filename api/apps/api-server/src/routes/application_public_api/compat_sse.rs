@@ -1722,11 +1722,10 @@ fn openai_response_runtime_event_to_sse(
             "response.completed",
             json!({
                 "type": "response.completed",
-                "response": openai_response_stream_snapshot(
+                "response": openai_response_completed_snapshot(
                     initial_run,
                     model,
-                    previous_response_id,
-                    "completed"
+                    previous_response_id
                 )
             }),
         )],
@@ -1736,11 +1735,10 @@ fn openai_response_runtime_event_to_sse(
                     "response.completed",
                     json!({
                         "type": "response.completed",
-                        "response": openai_response_stream_snapshot(
+                        "response": openai_response_completed_snapshot(
                             initial_run,
                             model,
-                            previous_response_id,
-                            "completed"
+                            previous_response_id
                         )
                     }),
                 )]
@@ -1818,6 +1816,33 @@ fn openai_response_stream_snapshot(
         "output": [],
         "output_text": "",
         "previous_response_id": previous_response_id
+    })
+}
+
+fn openai_response_completed_snapshot(
+    initial_run: &NativeRunResult,
+    model: &str,
+    previous_response_id: Option<&str>,
+) -> Value {
+    let mut response =
+        openai_response_stream_snapshot(initial_run, model, previous_response_id, "completed");
+    response["usage"] = openai_responses_usage_payload(initial_run.usage.as_ref());
+    response
+}
+
+fn openai_responses_usage_payload(usage: Option<&NativeUsage>) -> Value {
+    let Some(usage) = usage else {
+        return json!({
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0
+        });
+    };
+
+    json!({
+        "input_tokens": usage.prompt_tokens.unwrap_or_default(),
+        "output_tokens": usage.completion_tokens.unwrap_or_default(),
+        "total_tokens": usage.total_tokens.unwrap_or_default()
     })
 }
 
@@ -2028,7 +2053,7 @@ fn openai_response_stream_snapshot_with_output(
     status: &'static str,
     output: Vec<Value>,
 ) -> Value {
-    json!({
+    let mut response = json!({
         "id": response_id_from_run_id(initial_run.id),
         "object": "response",
         "created_at": initial_run.created_at.unix_timestamp(),
@@ -2037,7 +2062,9 @@ fn openai_response_stream_snapshot_with_output(
         "output": output,
         "output_text": "",
         "previous_response_id": previous_response_id
-    })
+    });
+    response["usage"] = openai_responses_usage_payload(initial_run.usage.as_ref());
+    response
 }
 
 fn anthropic_tool_use_blocks_from_waiting_payload(payload: &Value) -> Option<Vec<Value>> {
@@ -2961,6 +2988,37 @@ mod tests {
         assert!(body.contains("\"delta\":\"\\n最终回答\""), "{body}");
         assert!(!body.contains("<think>"), "{body}");
         assert!(body.contains("event: response.completed"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn openai_response_completed_event_includes_usage() {
+        let mut run = native_run();
+        run.usage = Some(NativeUsage {
+            prompt_tokens: Some(11),
+            completion_tokens: Some(7),
+            total_tokens: Some(18),
+        });
+        let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(run.id, json!({ "answer": "Final answer" })),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("event: response.completed"), "{body}");
+        assert!(body.contains("\"usage\""), "{body}");
+        assert!(body.contains("\"input_tokens\":11"), "{body}");
+        assert!(body.contains("\"output_tokens\":7"), "{body}");
+        assert!(body.contains("\"total_tokens\":18"), "{body}");
     }
 
     #[tokio::test]

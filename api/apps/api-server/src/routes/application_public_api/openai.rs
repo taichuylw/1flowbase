@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     body::Bytes,
-    extract::State,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -24,7 +24,7 @@ use control_plane::application_public_api::{
 use control_plane::orchestration_runtime::{
     CompleteCallbackTaskCommand, OrchestrationRuntimeService,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{info, warn};
 use utoipa::ToSchema;
@@ -169,6 +169,11 @@ pub struct OpenAiModelObject {
     pub owned_by: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OpenAiModelListQuery {
+    pub client_version: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -541,8 +546,9 @@ pub async fn create_response(
 )]
 pub async fn list_models(
     State(state): State<Arc<ApiState>>,
+    Query(query): Query<OpenAiModelListQuery>,
     headers: HeaderMap,
-) -> Result<Json<OpenAiModelListResponse>, OpenAiRouteError> {
+) -> Result<Response, OpenAiRouteError> {
     let credential = match openai_credential(&headers) {
         Ok(credential) => credential,
         Err(error) => {
@@ -603,10 +609,15 @@ pub async fn list_models(
         "openai compatible model list returned"
     );
 
+    if is_codex_model_list_request(&query) {
+        return Ok(Json(to_codex_model_list_response(models)).into_response());
+    }
+
     Ok(Json(to_openai_model_list_response(
         models,
         publication.created_at.unix_timestamp(),
-    )))
+    ))
+    .into_response())
 }
 
 fn openai_credential(headers: &HeaderMap) -> Result<OpenAiCredential, native::NativeApiError> {
@@ -701,6 +712,55 @@ fn to_openai_model_list_response(
             })
             .collect(),
     }
+}
+
+fn is_codex_model_list_request(query: &OpenAiModelListQuery) -> bool {
+    query
+        .client_version
+        .as_deref()
+        .is_some_and(|client_version| !client_version.trim().is_empty())
+}
+
+fn to_codex_model_list_response(models: Vec<OpenAiCompatibleModel>) -> Value {
+    let models = models
+        .into_iter()
+        .map(codex_model_metadata)
+        .collect::<Vec<_>>();
+    json!({ "models": models })
+}
+
+fn codex_model_metadata(model: OpenAiCompatibleModel) -> Value {
+    let display_name = model.name.unwrap_or_else(|| model.id.clone());
+    let max_context_window = model.max_context_window.or(model.context_window);
+    json!({
+        "slug": model.id,
+        "display_name": display_name,
+        "description": null,
+        "default_reasoning_level": null,
+        "supported_reasoning_levels": [],
+        "shell_type": "shell_command",
+        "visibility": "list",
+        "supported_in_api": true,
+        "priority": 0,
+        "availability_nux": null,
+        "upgrade": null,
+        "base_instructions": "You are a helpful coding assistant.",
+        "supports_reasoning_summaries": false,
+        "default_reasoning_summary": "auto",
+        "support_verbosity": false,
+        "default_verbosity": null,
+        "apply_patch_tool_type": null,
+        "web_search_tool_type": "text",
+        "truncation_policy": { "mode": "bytes", "limit": 10000 },
+        "supports_parallel_tool_calls": false,
+        "supports_image_detail_original": false,
+        "context_window": model.context_window,
+        "max_context_window": max_context_window,
+        "auto_compact_token_limit": model.auto_compact_token_limit,
+        "effective_context_window_percent": 95,
+        "experimental_supported_tools": [],
+        "input_modalities": ["text"]
+    })
 }
 
 async fn create_native_run(

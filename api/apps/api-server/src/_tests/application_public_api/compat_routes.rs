@@ -256,7 +256,12 @@ async fn publish_application(app: &Router, cookie: &str, csrf: &str, application
         .find(|node| node["type"] == "start")
         .expect("default draft should include a start node");
     start_node["config"]["model_list"] = json!([
-        { "id": "qwen3.6-35b-a3b", "name": "Qwen 3.6 35B" },
+        {
+            "id": "qwen3.6-35b-a3b",
+            "name": "Qwen 3.6 35B",
+            "context_window": 128000,
+            "auto_compact_token_limit": 110000
+        },
         "deepseek-v4-flash"
     ]);
 
@@ -879,6 +884,27 @@ async fn openai_models_lists_start_node_configured_models() {
     assert_eq!(payload["data"][0]["name"], json!("Qwen 3.6 35B"));
     assert_eq!(payload["data"][0]["object"], json!("model"));
     assert_eq!(payload["data"][1]["id"], json!("deepseek-v4-flash"));
+}
+
+#[tokio::test]
+async fn openai_models_with_client_version_returns_codex_model_metadata() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "Codex Compatible Models App").await;
+
+    let response = get_models(&app, "/v1/models?client_version=0.62.0", &token).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert!(payload.get("data").is_none(), "{payload}");
+    assert_eq!(payload["models"][0]["slug"], json!("qwen3.6-35b-a3b"));
+    assert_eq!(payload["models"][0]["display_name"], json!("Qwen 3.6 35B"));
+    assert_eq!(payload["models"][0]["context_window"], json!(128000));
+    assert_eq!(payload["models"][0]["max_context_window"], json!(128000));
+    assert_eq!(
+        payload["models"][0]["auto_compact_token_limit"],
+        json!(110000)
+    );
+    assert_eq!(payload["models"][1]["slug"], json!("deepseek-v4-flash"));
 }
 
 #[tokio::test]

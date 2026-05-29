@@ -12,6 +12,9 @@ const OPENAI_RESPONSES_COMPATIBILITY_MODE: &str = "openai-responses-v1";
 pub struct OpenAiCompatibleModel {
     pub id: String,
     pub name: Option<String>,
+    pub context_window: Option<u64>,
+    pub max_context_window: Option<u64>,
+    pub auto_compact_token_limit: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -268,6 +271,9 @@ fn default_model_list() -> Vec<OpenAiCompatibleModel> {
     vec![OpenAiCompatibleModel {
         id: DEFAULT_OPENAI_COMPATIBLE_MODEL_ID.to_string(),
         name: Some(DEFAULT_OPENAI_COMPATIBLE_MODEL_ID.to_string()),
+        context_window: None,
+        max_context_window: None,
+        auto_compact_token_limit: None,
     }]
 }
 
@@ -276,6 +282,9 @@ fn normalize_model_descriptor(value: &Value) -> Option<OpenAiCompatibleModel> {
         return Some(OpenAiCompatibleModel {
             id: id.to_string(),
             name: None,
+            context_window: None,
+            max_context_window: None,
+            auto_compact_token_limit: None,
         });
     }
 
@@ -295,7 +304,14 @@ fn normalize_model_descriptor(value: &Value) -> Option<OpenAiCompatibleModel> {
     Some(OpenAiCompatibleModel {
         id: id.to_string(),
         name,
+        context_window: model_token_u64(object, "context_window"),
+        max_context_window: model_token_u64(object, "max_context_window"),
+        auto_compact_token_limit: model_token_u64(object, "auto_compact_token_limit"),
     })
+}
+
+fn model_token_u64(object: &Map<String, Value>, key: &str) -> Option<u64> {
+    object.get(key).and_then(Value::as_u64)
 }
 
 fn openai_chat_history_tool_calls(tool_calls: &Value) -> Value {
@@ -600,7 +616,12 @@ mod tests {
                         "type": "start",
                         "config": {
                             "model_list": [
-                                {"id": "qwen3.6-35b-a3b", "name": "Qwen 3.6 35B"},
+                                {
+                                    "id": "qwen3.6-35b-a3b",
+                                    "name": "Qwen 3.6 35B",
+                                    "context_window": 128000,
+                                    "auto_compact_token_limit": 110000
+                                },
                                 "deepseek-v4-flash",
                                 {"value": "deepseek-v4-flash", "label": "Duplicate"}
                             ]
@@ -616,10 +637,16 @@ mod tests {
                 OpenAiCompatibleModel {
                     id: "qwen3.6-35b-a3b".into(),
                     name: Some("Qwen 3.6 35B".into()),
+                    context_window: Some(128000),
+                    max_context_window: None,
+                    auto_compact_token_limit: Some(110000),
                 },
                 OpenAiCompatibleModel {
                     id: "deepseek-v4-flash".into(),
                     name: None,
+                    context_window: None,
+                    max_context_window: None,
+                    auto_compact_token_limit: None,
                 },
             ]
         );
@@ -646,6 +673,9 @@ mod tests {
             vec![OpenAiCompatibleModel {
                 id: "1flowbase".into(),
                 name: Some("1flowbase".into()),
+                context_window: None,
+                max_context_window: None,
+                auto_compact_token_limit: None,
             }]
         );
     }
