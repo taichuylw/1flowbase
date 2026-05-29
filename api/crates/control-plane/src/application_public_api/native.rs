@@ -26,6 +26,8 @@ use crate::ports::{
 pub struct NativeRunRequest {
     pub query: String,
     #[serde(default, deserialize_with = "deserialize_optional_string_reject_null")]
+    pub system: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_reject_null")]
     pub model: Option<String>,
     #[serde(default, deserialize_with = "deserialize_native_object")]
     pub inputs: NativeObject,
@@ -220,11 +222,19 @@ impl NativeInputMapper {
             input.inputs_target.as_deref(),
             request.inputs.as_value(),
         )?;
+        let (system, history) = split_system_context_from_history(request);
         write_optional_selector(
             &mut node_input_payload,
             input.history_target.as_deref(),
-            Value::Array(request.history.clone()),
+            Value::Array(history),
         )?;
+        if let Some(system) = system {
+            write_optional_selector(
+                &mut node_input_payload,
+                system_target(input).as_deref(),
+                Value::String(system),
+            )?;
+        }
         write_optional_selector(
             &mut node_input_payload,
             input.attachments_target.as_deref(),
@@ -236,6 +246,54 @@ impl NativeInputMapper {
             metadata: build_run_metadata(request),
         })
     }
+}
+
+fn split_system_context_from_history(request: &NativeRunRequest) -> (Option<String>, Vec<Value>) {
+    let mut system_parts = request
+        .system
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| vec![value.to_string()])
+        .unwrap_or_default();
+    let mut history = Vec::new();
+
+    for message in &request.history {
+        if message.get("role").and_then(Value::as_str) == Some("system") {
+            if let Some(content) = message
+                .get("content")
+                .and_then(native_message_content_text)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                system_parts.push(content.to_string());
+            }
+            continue;
+        }
+        history.push(message.clone());
+    }
+
+    (
+        (!system_parts.is_empty()).then(|| system_parts.join("\n\n")),
+        history,
+    )
+}
+
+fn native_message_content_text(value: &Value) -> Option<&str> {
+    value.as_str()
+}
+
+fn system_target(input: &super::mapping::ApplicationApiMappingInput) -> Option<String> {
+    if let Some(history_target) = input.history_target.as_deref() {
+        if let Some(prefix) = history_target.strip_suffix(".history") {
+            return Some(format!("{prefix}.system"));
+        }
+    }
+
+    input
+        .inputs_target
+        .as_deref()
+        .map(|target| format!("{target}.system"))
 }
 
 #[derive(Debug, Clone)]
@@ -717,5 +775,31 @@ mod tests {
         assert!(mapped.node_input_payload["node-start"]
             .get("compatibility")
             .is_none());
+    }
+
+    #[test]
+    fn mapper_promotes_system_context_out_of_native_history() {
+        let request: NativeRunRequest = serde_json::from_value(json!({
+            "query": "hello",
+            "system": "Use the request system.",
+            "history": [
+                { "role": "system", "content": "Use the legacy history system." },
+                { "role": "user", "content": "Earlier question" }
+            ]
+        }))
+        .unwrap();
+
+        let mapped =
+            NativeInputMapper::map(&request, &ApplicationApiMappingConfig::default_native())
+                .unwrap();
+
+        assert_eq!(
+            mapped.node_input_payload["node-start"]["system"],
+            json!("Use the request system.\n\nUse the legacy history system.")
+        );
+        assert_eq!(
+            mapped.node_input_payload["node-start"]["history"],
+            json!([{ "role": "user", "content": "Earlier question" }])
+        );
     }
 }

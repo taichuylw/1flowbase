@@ -1,5 +1,5 @@
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
-import { Input, InputNumber, Select } from 'antd';
+import { Input, InputNumber, Select, Switch } from 'antd';
 
 import type {
   SchemaFieldRenderer,
@@ -33,6 +33,7 @@ import {
   normalizePromptMessagesBinding,
   toPromptMessagesBinding
 } from '../lib/llm-prompt-messages';
+import { getLlmContextPolicy } from '../lib/llm-node-config';
 import type { FlowSelectorOption } from '../lib/selector-options';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 
@@ -181,6 +182,9 @@ function renderLlmPromptMessagesField({
   adapter,
   block
 }: SchemaFieldRendererProps) {
+  const contextPolicy = getLlmContextPolicy({
+    context_policy: adapter.getValue('config.context_policy')
+  });
   const messages = normalizePromptMessagesBinding(
     adapter.getValue(block.path),
     adapter.getValue('bindings.system_prompt'),
@@ -189,10 +193,34 @@ function renderLlmPromptMessagesField({
 
   return (
     <LlmPromptMessagesField
+      integrationContextEnabled={
+        contextPolicy.integration_context === 'enabled'
+      }
       options={getSelectorOptions(adapter)}
       value={messages}
       onChange={(nextValue) =>
         adapter.setValue(block.path, toPromptMessagesBinding(nextValue))
+      }
+    />
+  );
+}
+
+function renderLlmContextPolicyField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const contextPolicy = getLlmContextPolicy({
+    context_policy: adapter.getValue(block.path)
+  });
+
+  return (
+    <Switch
+      aria-label={block.label}
+      checked={contextPolicy.integration_context === 'enabled'}
+      onChange={(checked) =>
+        adapter.setValue(block.path, {
+          integration_context: checked ? 'enabled' : 'disabled'
+        })
       }
     />
   );
@@ -428,6 +456,7 @@ export const agentFlowFieldRenderers = {
   data_model_query: renderDataModelQueryField,
   code_source: renderCodeSourceField,
   llm_model: LlmModelField,
+  llm_context_policy: renderLlmContextPolicyField,
   llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,
   number: renderNumberField,

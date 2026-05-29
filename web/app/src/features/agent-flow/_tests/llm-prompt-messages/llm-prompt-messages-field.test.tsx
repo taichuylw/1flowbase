@@ -284,9 +284,97 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    expect(await screen.findByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: '展开本地 SYSTEM' }));
+    expect(screen.getByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
     expect(screen.getByText('You are helpful.')).toBeInTheDocument();
     expect(screen.getByLabelText('USER 消息内容')).toBeInTheDocument();
+  });
+
+  test('collapses local system prompt when integration context is enabled', async () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-llm'
+        ? {
+            ...node,
+            config: {
+              ...node.config,
+              context_policy: {
+                integration_context: 'enabled'
+              }
+            },
+            bindings: {
+              prompt_messages: {
+                kind: 'prompt_messages',
+                value: [
+                  {
+                    id: 'system-1',
+                    role: 'system',
+                    content: { kind: 'templated_text', value: 'Keep answers short.' }
+                  },
+                  {
+                    id: 'user-1',
+                    role: 'user',
+                    content: { kind: 'templated_text', value: '{{node-start.query}}' }
+                  }
+                ]
+              }
+            }
+          }
+        : node
+    );
+    let latestDocument = document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState(document)}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(nextDocument) => {
+            latestDocument = nextDocument;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(
+      await screen.findByRole('button', { name: '展开本地 SYSTEM' })
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('SYSTEM 消息内容')).not.toBeInTheDocument();
+    expect(promptMessagesFrom(latestDocument)[0]?.content.value).toBe(
+      'Keep answers short.'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '展开本地 SYSTEM' }));
+
+    expect(screen.getByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
+    expect(screen.getByText('Keep answers short.')).toBeInTheDocument();
+  });
+
+  test('updates the LLM context policy from the inspector', async () => {
+    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState(latestDocument)}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const switchControl = await screen.findByRole('switch', {
+      name: '集成上下文'
+    });
+    expect(switchControl).toBeChecked();
+
+    fireEvent.click(switchControl);
+
+    expect(llmNodeFrom(latestDocument).config.context_policy).toEqual({
+      integration_context: 'disabled'
+    });
   });
 
   test('normalizes existing prompt messages so system remains the first fixed row', async () => {
@@ -328,7 +416,8 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    expect(await screen.findByText('Rules')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: '展开本地 SYSTEM' }));
+    expect(screen.getByText('Rules')).toBeInTheDocument();
     const rows = screen.getAllByTestId(/llm-prompt-message-row-/);
     expect(rows[0]).toHaveAttribute(
       'data-testid',

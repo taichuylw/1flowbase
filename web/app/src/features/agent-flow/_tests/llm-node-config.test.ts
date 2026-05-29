@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest';
 
 import {
   DEFAULT_LLM_PARAMETERS,
+  DEFAULT_LLM_CONTEXT_POLICY,
+  getLlmContextPolicy,
   getLlmParameterDefaultValue,
   getLlmModelProvider,
   getLlmParameters
@@ -57,6 +59,19 @@ describe('llm-node-config', () => {
         max_tokens: 1024
       })
     ).toEqual(DEFAULT_LLM_PARAMETERS);
+  });
+
+  test('getLlmContextPolicy defaults integration context to enabled', () => {
+    expect(getLlmContextPolicy({})).toEqual(DEFAULT_LLM_CONTEXT_POLICY);
+    expect(
+      getLlmContextPolicy({
+        context_policy: {
+          integration_context: 'disabled'
+        }
+      })
+    ).toEqual({
+      integration_context: 'disabled'
+    });
   });
 
   test('getLlmParameterDefaultValue derives stable defaults when schema omits them', () => {

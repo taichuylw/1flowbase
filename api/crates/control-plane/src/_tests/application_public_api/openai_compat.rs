@@ -1,5 +1,5 @@
 use control_plane::application_public_api::compat::openai::{
-    map_chat_completion_request, OpenAiCompatError,
+    map_chat_completion_request, map_response_request, OpenAiCompatError,
 };
 use serde_json::{json, Value};
 
@@ -38,7 +38,7 @@ fn last_user_text_maps_to_native_query() {
 }
 
 #[test]
-fn prior_messages_map_to_native_history() {
+fn prior_system_message_maps_to_native_system_context() {
     let native = map_chat_completion_request(json!({
         "model": "gpt-compatible",
         "messages": [
@@ -50,10 +50,10 @@ fn prior_messages_map_to_native_history() {
     }))
     .unwrap();
 
+    assert_eq!(native.system.as_deref(), Some("Use the support playbook."));
     assert_eq!(
         native.history,
         vec![
-            json!({"role": "system", "content": "Use the support playbook."}),
             json!({"role": "user", "content": "Earlier question"}),
             json!({"role": "assistant", "content": "Earlier answer"})
         ]
@@ -100,6 +100,23 @@ fn metadata_maps_to_native_metadata() {
             "customer_tier": "enterprise"
         })
     );
+}
+
+#[test]
+fn responses_instructions_map_to_native_system_context() {
+    let native = map_response_request(
+        json!({
+            "model": "gpt-compatible",
+            "instructions": "Use the support playbook.",
+            "input": "Final question"
+        }),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(native.query, "Final question");
+    assert_eq!(native.system.as_deref(), Some("Use the support playbook."));
+    assert!(native.history.is_empty());
 }
 
 #[test]

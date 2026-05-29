@@ -250,11 +250,14 @@ impl DocTextResolver {
             ("application_public_api.native.create_run.request.model", DocsLocale::ZhHans) => {
                 "可选模型标识，会通过应用 API 映射传入运行。"
             }
+            ("application_public_api.native.create_run.request.system", DocsLocale::ZhHans) => {
+                "系统指令上下文，会与历史中的旧 system 消息合并为运行级 system。"
+            }
             ("application_public_api.native.create_run.request.inputs", DocsLocale::ZhHans) => {
                 "附加输入对象，会通过应用 API 映射写入目标节点。"
             }
             ("application_public_api.native.create_run.request.history", DocsLocale::ZhHans) => {
-                "可供发布运行使用的会话历史。"
+                "可供发布运行使用的 user / assistant / tool 会话历史。"
             }
             (
                 "application_public_api.native.create_run.request.attachments",
@@ -316,11 +319,14 @@ impl DocTextResolver {
             ("application_public_api.native.create_run.request.model", DocsLocale::EnUs) => {
                 "Optional model identifier passed through application mapping."
             }
+            ("application_public_api.native.create_run.request.system", DocsLocale::EnUs) => {
+                "System instruction context merged with legacy system messages from history."
+            }
             ("application_public_api.native.create_run.request.inputs", DocsLocale::EnUs) => {
                 "Additional input values mapped by the application API mapping."
             }
             ("application_public_api.native.create_run.request.history", DocsLocale::EnUs) => {
-                "Conversation history entries available to the published run."
+                "User, assistant, and tool conversation history entries available to the published run."
             }
             ("application_public_api.native.create_run.request.attachments", DocsLocale::EnUs) => {
                 "Files or external assets available to the published run."
@@ -1241,6 +1247,10 @@ fn native_create_run_schema(docs: &DocTextResolver) -> Value {
             "model": {
                 "type": "string",
                 "description": docs.field_description("application_public_api.native.create_run.request.model")
+            },
+            "system": {
+                "type": "string",
+                "description": docs.field_description("application_public_api.native.create_run.request.system")
             },
             "inputs": {
                 "type": "object",

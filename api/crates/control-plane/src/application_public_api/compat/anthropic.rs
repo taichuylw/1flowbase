@@ -37,10 +37,13 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .and_then(Value::as_array)
         .ok_or_else(|| AnthropicCompatError::invalid("messages is required"))?;
 
+    let system = object
+        .get("system")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
     let mut history = Vec::new();
-    if let Some(system) = object.get("system").and_then(Value::as_str) {
-        history.push(serde_json::json!({ "role": "system", "content": system }));
-    }
 
     let last_user_index = messages
         .iter()
@@ -102,6 +105,9 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         "metadata": metadata,
         "compatibility_mode": "anthropic-messages-v1"
     });
+    if let Some(system) = system {
+        native["system"] = Value::String(system);
+    }
     if response_mode.is_none() {
         native
             .as_object_mut()

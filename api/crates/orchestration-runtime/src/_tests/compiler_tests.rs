@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use orchestration_runtime::compiled_plan::{
-    CodeIsolationProfile, CompileIssueCode, CompiledCodeDependency,
+    CodeIsolationProfile, CompileIssueCode, CompiledCodeDependency, CompiledLlmRouting,
 };
 use orchestration_runtime::compiler::{
     FlowCompileContext, FlowCompileJsDependency, FlowCompileNodeContribution,
@@ -810,6 +810,49 @@ fn compile_llm_node_ignores_legacy_prompt_bindings() {
     assert!(!plan.nodes["node-llm"]
         .bindings
         .contains_key("system_prompt"));
+}
+
+#[test]
+fn compile_llm_node_carries_context_policy_into_routing() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["context_policy"] = json!({
+        "integration_context": "enabled"
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+    let routing = plan.nodes["node-llm"]
+        .llm_runtime
+        .as_ref()
+        .and_then(|runtime| runtime.routing.as_ref())
+        .expect("llm routing should exist");
+
+    assert_eq!(
+        routing.context_policy,
+        json!({ "integration_context": "enabled" })
+    );
+}
+
+#[test]
+fn compiled_llm_routing_deserializes_missing_context_policy_with_default() {
+    let routing: CompiledLlmRouting = serde_json::from_value(json!({
+        "routing_mode": "fixed_model",
+        "fixed_model_target": {
+            "provider_instance_id": "provider-selected",
+            "provider_code": "fixture_provider",
+            "protocol": "openai_compatible",
+            "upstream_model_id": "gpt-5.4-mini"
+        },
+        "queue_template_id": null,
+        "queue_targets": [],
+        "stream_policy": {}
+    }))
+    .unwrap();
+
+    assert_eq!(
+        routing.context_policy,
+        json!({ "integration_context": "enabled" })
+    );
 }
 
 #[test]

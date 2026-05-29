@@ -278,6 +278,9 @@ function createLlmContract(): NodeRuntimeUiContract {
         schema_version: '1.0.0',
         items: {}
       },
+      context_policy: {
+        integration_context: 'enabled'
+      },
       response_format: {
         mode: 'text'
       }
@@ -305,6 +308,12 @@ function createLlmContract(): NodeRuntimeUiContract {
           renderer: 'llm_model',
           valueType: 'json',
           required: true
+        }),
+        panelField({
+          key: 'config.context_policy',
+          title: '集成上下文',
+          renderer: 'llm_context_policy',
+          valueType: 'json'
         }),
         panelField({
           key: 'bindings.prompt_messages',

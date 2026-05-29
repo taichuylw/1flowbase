@@ -15,6 +15,9 @@ describe('LLM node defaults', () => {
   test('manual LLM nodes seed only an empty system prompt message', () => {
     const node = createNodeDocument('llm', 'node-llm-2');
 
+    expect(node.config.context_policy).toEqual({
+      integration_context: 'enabled'
+    });
     expect(node.bindings.prompt_messages).toEqual({
       kind: 'prompt_messages',
       value: [

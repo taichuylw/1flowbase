@@ -64,8 +64,13 @@ pub struct CompiledLlmRouting {
     pub queue_snapshot_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub queue_targets: Vec<CompiledLlmRouteTarget>,
+    #[serde(default = "default_llm_context_policy")]
     pub context_policy: serde_json::Value,
     pub stream_policy: serde_json::Value,
+}
+
+fn default_llm_context_policy() -> serde_json::Value {
+    serde_json::json!({ "integration_context": "enabled" })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

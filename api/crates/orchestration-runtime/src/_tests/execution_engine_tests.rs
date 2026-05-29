@@ -1210,6 +1210,175 @@ async fn llm_runtime_sends_rendered_prompt_messages_to_provider() {
 }
 
 #[tokio::test]
+async fn llm_runtime_exposes_effective_system_and_promotes_legacy_history_system() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "enabled"
+    });
+    llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Use the node policy."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Question: {{ node-start.query }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "system": "Use the run policy.",
+                "history": [
+                    { "role": "system", "content": "Use the legacy history policy." },
+                    { "role": "user", "content": "Earlier question" }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(
+        input.system.as_deref(),
+        Some("Use the run policy.\n\nUse the legacy history policy.\n\nUse the node policy.")
+    );
+    assert_eq!(input.messages.len(), 2);
+    assert_eq!(input.messages[0].role, ProviderMessageRole::User);
+    assert_eq!(input.messages[0].content, "Earlier question");
+    assert_eq!(input.messages[1].role, ProviderMessageRole::User);
+    assert_eq!(input.messages[1].content, "Question: hello");
+
+    let trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+    assert_eq!(
+        trace.debug_payload["llm_context"]["effective_system"],
+        json!("Use the run policy.\n\nUse the legacy history policy.\n\nUse the node policy.")
+    );
+    assert_eq!(
+        trace.debug_payload["llm_context"]["provider_messages"],
+        json!([
+            { "role": "user", "content": "Earlier question" },
+            { "role": "user", "content": "Question: hello" }
+        ])
+    );
+    assert_eq!(
+        trace.debug_payload["llm_context"]["compatibility_promotions"],
+        json!([
+            {
+                "source": "node-start.history",
+                "source_kind": "history",
+                "message_index": 0,
+                "target": "effective_system"
+            }
+        ])
+    );
+}
+
+#[tokio::test]
+async fn llm_runtime_context_policy_can_disable_run_level_system_context() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "disabled"
+    });
+    llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Use only the local node policy."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "{{ node-start.query }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "system": "Ignored run-level policy."
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(
+        input.system.as_deref(),
+        Some("Use only the local node policy.")
+    );
+}
+
+#[tokio::test]
 async fn llm_runtime_forwards_compatible_tools_and_tool_history_to_provider() {
     let captured_input = Arc::new(Mutex::new(None));
     let invoker = StubProviderInvoker {

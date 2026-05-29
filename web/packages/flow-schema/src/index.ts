@@ -419,6 +419,9 @@ export function createDefaultAgentFlowDocument({
               schema_version: '1.0.0',
               items: {}
             },
+            context_policy: {
+              integration_context: 'enabled'
+            },
             response_format: {
               mode: 'text'
             }

@@ -27,6 +27,14 @@ export interface LlmNodeResponseFormat {
   schema?: Record<string, unknown>;
 }
 
+export interface LlmNodeContextPolicy {
+  integration_context: 'enabled' | 'disabled';
+}
+
+export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
+  integration_context: 'enabled'
+};
+
 export const DEFAULT_LLM_PARAMETERS: LlmNodeParameters = {
   schema_version: '1.0.0',
   items: {}
@@ -173,6 +181,21 @@ export function getLlmParameters(
   }
 
   return DEFAULT_LLM_PARAMETERS;
+}
+
+export function getLlmContextPolicy(
+  config: Record<string, unknown>
+): LlmNodeContextPolicy {
+  const contextPolicy = config.context_policy;
+
+  if (!isRecord(contextPolicy)) {
+    return DEFAULT_LLM_CONTEXT_POLICY;
+  }
+
+  return {
+    integration_context:
+      contextPolicy.integration_context === 'disabled' ? 'disabled' : 'enabled'
+  };
 }
 
 export function getLlmResponseFormat(

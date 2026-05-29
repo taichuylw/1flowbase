@@ -614,7 +614,13 @@ fn compile_llm_runtime(
         .and_then(Value::as_str)
         .is_some_and(|value| value == "failover_queue")
     {
-        return compile_failover_queue_runtime(node_id, provider_config, context, compile_issues);
+        return compile_failover_queue_runtime(
+            node_id,
+            provider_config,
+            config,
+            context,
+            compile_issues,
+        );
     }
 
     let provider_code = provider_config
@@ -663,13 +669,27 @@ fn compile_llm_runtime(
         compile_issues,
     )?;
 
+    let context_policy = compile_llm_context_policy(config);
+
     Some(CompiledLlmRuntime {
         provider_instance_id: provider_instance.provider_instance_id.clone(),
         provider_code: provider_instance.provider_code.clone(),
         protocol: provider_instance.protocol.clone(),
         model: model.clone(),
-        routing: Some(fixed_model_routing(provider_instance, &model)),
+        routing: Some(fixed_model_routing(
+            provider_instance,
+            &model,
+            context_policy,
+        )),
     })
+}
+
+fn compile_llm_context_policy(config: &Value) -> Value {
+    config
+        .get("context_policy")
+        .filter(|value| value.is_object())
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({ "integration_context": "enabled" }))
 }
 
 fn resolve_fixed_model_provider_instance<'a>(
@@ -755,6 +775,7 @@ fn provider_instance_supports_model(instance: &FlowCompileProviderInstance, mode
 fn fixed_model_routing(
     provider_instance: &FlowCompileProviderInstance,
     model: &str,
+    context_policy: Value,
 ) -> CompiledLlmRouting {
     CompiledLlmRouting {
         routing_mode: LlmRoutingMode::FixedModel,
@@ -767,7 +788,7 @@ fn fixed_model_routing(
         queue_template_id: None,
         queue_snapshot_id: None,
         queue_targets: Vec::new(),
-        context_policy: serde_json::json!({}),
+        context_policy,
         stream_policy: serde_json::json!({}),
     }
 }
@@ -775,6 +796,7 @@ fn fixed_model_routing(
 fn compile_failover_queue_runtime(
     node_id: &str,
     provider_config: Option<&Value>,
+    config: &Value,
     context: &FlowCompileContext,
     compile_issues: &mut Vec<CompileIssue>,
 ) -> Option<CompiledLlmRuntime> {
@@ -830,7 +852,7 @@ fn compile_failover_queue_runtime(
             queue_template_id,
             queue_snapshot_id,
             queue_targets: targets,
-            context_policy: serde_json::json!({}),
+            context_policy: compile_llm_context_policy(config),
             stream_policy: serde_json::json!({}),
         }),
     })

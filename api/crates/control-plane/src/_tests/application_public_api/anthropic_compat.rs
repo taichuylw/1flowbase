@@ -27,15 +27,19 @@ fn assert_anthropic_unsupported_feature(error: AnthropicCompatError) {
 }
 
 #[test]
-fn system_maps_to_system_history_context() {
+fn system_maps_to_native_system_context() {
     let mut request = base_request();
     request["system"] = json!("Use the support playbook.");
 
     let native = map_messages_request(request).unwrap();
 
+    assert_eq!(native.system.as_deref(), Some("Use the support playbook."));
     assert_eq!(
-        native.history.first(),
-        Some(&json!({"role": "system", "content": "Use the support playbook."}))
+        native.history,
+        vec![
+            json!({"role": "user", "content": "Earlier question"}),
+            json!({"role": "assistant", "content": "Earlier answer"})
+        ]
     );
 }
 

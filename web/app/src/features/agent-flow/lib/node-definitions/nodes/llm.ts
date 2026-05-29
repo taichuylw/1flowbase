@@ -20,6 +20,11 @@ export const llmNodeDefinition: NodeDefinition = {
           required: true
         },
         {
+          key: 'config.context_policy',
+          label: '集成上下文',
+          editor: 'llm_context_policy'
+        },
+        {
           key: 'bindings.prompt_messages',
           label: '上下文',
           editor: 'llm_prompt_messages'
@@ -34,7 +39,9 @@ export const llmNodeDefinition: NodeDefinition = {
     {
       key: 'advanced',
       title: 'Advanced',
-      fields: [{ key: 'config.response_format', label: '返回格式', editor: 'llm_response_format' }]
+      fields: [
+        { key: 'config.response_format', label: '返回格式', editor: 'llm_response_format' }
+      ]
     }
   ]
 };

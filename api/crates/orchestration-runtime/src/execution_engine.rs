@@ -574,7 +574,7 @@ where
     let mut failed_attempts = Vec::new();
 
     for (attempt_index, attempt_runtime) in attempt_runtimes.iter().enumerate() {
-        let invocation_input = build_provider_invocation_input(
+        let invocation = build_provider_invocation(
             node,
             attempt_runtime,
             resolved_inputs,
@@ -587,9 +587,9 @@ where
             resolved_inputs,
             rendered_templates,
             variable_pool,
-            &invocation_input,
+            &invocation.input,
         );
-        if invocation_input.messages.is_empty() {
+        if invocation.input.messages.is_empty() {
             let error_payload = build_empty_prompt_messages_error_payload(attempt_runtime);
             let attempt = build_attempt_metric(AttemptMetricInput {
                 attempt_index,
@@ -620,9 +620,10 @@ where
                 Vec::new(),
                 true,
                 &invocation_messages,
+                Some(&invocation.debug_context),
             );
         }
-        let output = match invoker.invoke_llm(attempt_runtime, invocation_input).await {
+        let output = match invoker.invoke_llm(attempt_runtime, invocation.input).await {
             Ok(output) => output,
             Err(error) => {
                 let provider_error = provider_runtime_error_from_anyhow(&error);
@@ -660,6 +661,7 @@ where
                     Vec::new(),
                     true,
                     &invocation_messages,
+                    Some(&invocation.debug_context),
                 );
             }
         };
@@ -733,6 +735,7 @@ where
                 output.events,
                 true,
                 &invocation_messages,
+                Some(&invocation.debug_context),
             );
         }
 
@@ -752,6 +755,7 @@ where
             ),
             output.events,
             &invocation_messages,
+            &invocation.debug_context,
         );
     }
 
@@ -776,6 +780,7 @@ where
         Vec::new(),
         true,
         &[],
+        None,
     )
 }
 
@@ -1000,32 +1005,119 @@ fn build_llm_route_payload(runtime: &CompiledLlmRuntime) -> Value {
     }
 }
 
-fn build_provider_invocation_input(
+#[derive(Debug, Clone)]
+struct BuiltProviderInvocation {
+    input: ProviderInvocationInput,
+    debug_context: LlmInvocationDebugContext,
+}
+
+#[derive(Debug, Clone)]
+struct LlmInvocationDebugContext {
+    context_policy: Value,
+    effective_system: Option<String>,
+    provider_messages: Vec<Value>,
+    compatibility_promotions: Vec<Value>,
+    system_sources: Vec<Value>,
+    previous_response_id: Option<String>,
+}
+
+impl LlmInvocationDebugContext {
+    fn from_provider_context(
+        context_policy: Value,
+        previous_response_id: Option<String>,
+        context: &ProviderPromptContext,
+    ) -> Self {
+        Self {
+            context_policy,
+            effective_system: context.system.clone(),
+            provider_messages: prompt_messages_from_provider_messages(&context.messages),
+            compatibility_promotions: context.compatibility_promotions.clone(),
+            system_sources: context.system_sources.clone(),
+            previous_response_id,
+        }
+    }
+
+    fn to_payload(&self) -> Value {
+        let mut payload = Map::new();
+        payload.insert("context_policy".to_string(), self.context_policy.clone());
+        payload.insert(
+            "effective_system".to_string(),
+            self.effective_system
+                .clone()
+                .map(Value::String)
+                .unwrap_or(Value::Null),
+        );
+        payload.insert(
+            "provider_messages".to_string(),
+            Value::Array(self.provider_messages.clone()),
+        );
+        payload.insert(
+            "compatibility_promotions".to_string(),
+            Value::Array(self.compatibility_promotions.clone()),
+        );
+        payload.insert(
+            "system_sources".to_string(),
+            Value::Array(self.system_sources.clone()),
+        );
+        if let Some(previous_response_id) = &self.previous_response_id {
+            payload.insert(
+                "previous_response_id".to_string(),
+                Value::String(previous_response_id.clone()),
+            );
+        }
+        Value::Object(payload)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ProviderPromptContext {
+    system: Option<String>,
+    messages: Vec<ProviderMessage>,
+    compatibility_promotions: Vec<Value>,
+    system_sources: Vec<Value>,
+}
+
+fn build_provider_invocation(
     node: &CompiledNode,
     runtime: &CompiledLlmRuntime,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
-) -> ProviderInvocationInput {
+) -> BuiltProviderInvocation {
     let previous_response_id =
         pending_llm_tool_callback_previous_response_id(node, runtime, variable_pool);
-    let (system, messages) = if previous_response_id.is_some() {
+    let context_policy = llm_context_policy(node, runtime);
+    let provider_context = if previous_response_id.is_some() {
         let prompt_messages = pending_llm_tool_callback_delta_messages(node, variable_pool)
             .unwrap_or_else(|| {
-                binding_prompt_messages(node, rendered_templates, resolved_inputs, variable_pool)
+                binding_prompt_messages_with_context_sources(
+                    node,
+                    rendered_templates,
+                    resolved_inputs,
+                    variable_pool,
+                    &context_policy,
+                )
             });
-        let (system, messages) = provider_messages_from_prompt_messages(prompt_messages);
-        (
-            system.or_else(|| pending_llm_tool_callback_system(node, variable_pool)),
-            messages,
-        )
+        let mut context = provider_context_from_prompt_messages(prompt_messages);
+        if context.system.is_none() {
+            if let Some(system) = pending_llm_tool_callback_system(node, variable_pool) {
+                context.system = Some(system);
+                context.system_sources.push(json!({
+                    "source": format!("{}.{}", node.node_id, LLM_TOOL_CALLBACK_STATE_KEY),
+                    "source_kind": "pending_tool_callback_history",
+                    "target": "effective_system"
+                }));
+            }
+        }
+        context
     } else {
-        provider_messages_from_prompt_messages(binding_prompt_messages(
+        provider_context_from_prompt_messages(binding_prompt_messages_with_context_sources(
             node,
             rendered_templates,
             resolved_inputs,
             variable_pool,
+            &context_policy,
         ))
     };
 
@@ -1033,16 +1125,21 @@ fn build_provider_invocation_input(
         ("node_id".to_string(), node.node_id.clone()),
         ("node_alias".to_string(), node.alias.clone()),
     ]);
+    let debug_context = LlmInvocationDebugContext::from_provider_context(
+        context_policy,
+        previous_response_id.clone(),
+        &provider_context,
+    );
 
-    ProviderInvocationInput {
+    let input = ProviderInvocationInput {
         provider_instance_id: runtime.provider_instance_id.clone(),
         provider_code: runtime.provider_code.clone(),
         protocol: runtime.protocol.clone(),
         model: runtime.model.clone(),
         previous_response_id,
         provider_config: Value::Null,
-        messages,
-        system,
+        messages: provider_context.messages,
+        system: provider_context.system,
         tools: provider_tools(
             node,
             resolved_inputs,
@@ -1058,6 +1155,11 @@ fn build_provider_invocation_input(
             "resolved_inputs".to_string(),
             Value::Object(resolved_inputs.clone()),
         )]),
+    };
+
+    BuiltProviderInvocation {
+        input,
+        debug_context,
     }
 }
 
@@ -1572,6 +1674,26 @@ fn build_response_format(config: &Value) -> Option<Value> {
     Some(response_format.clone())
 }
 
+const LLM_CONTEXT_SOURCE_KEY: &str = "__context_source";
+
+fn llm_context_policy(node: &CompiledNode, runtime: &CompiledLlmRuntime) -> Value {
+    runtime
+        .routing
+        .as_ref()
+        .map(|routing| routing.context_policy.clone())
+        .filter(|value| value.is_object())
+        .or_else(|| node.config.get("context_policy").cloned())
+        .filter(|value| value.is_object())
+        .unwrap_or_else(|| json!({ "integration_context": "enabled" }))
+}
+
+fn integration_context_enabled(context_policy: &Value) -> bool {
+    context_policy
+        .get("integration_context")
+        .and_then(Value::as_str)
+        != Some("disabled")
+}
+
 fn binding_prompt_messages<'a>(
     node: &'a CompiledNode,
     rendered_templates: &'a Map<String, Value>,
@@ -1590,6 +1712,159 @@ fn binding_prompt_messages<'a>(
     messages
 }
 
+fn binding_prompt_messages_with_context_sources(
+    node: &CompiledNode,
+    rendered_templates: &Map<String, Value>,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    context_policy: &Value,
+) -> Vec<Value> {
+    if let Some(history) = pending_llm_tool_callback_history(node, variable_pool) {
+        return annotate_prompt_messages(
+            history,
+            "pending_tool_callback_history",
+            format!("{}.{}", node.node_id, LLM_TOOL_CALLBACK_STATE_KEY),
+        );
+    }
+
+    let mut messages = Vec::new();
+    if integration_context_enabled(context_policy) {
+        messages.extend(run_level_system_prompt_messages(
+            node,
+            resolved_inputs,
+            variable_pool,
+        ));
+    }
+    messages.extend(compatible_history_messages_with_context_sources(
+        node,
+        resolved_inputs,
+        variable_pool,
+    ));
+    messages.extend(annotate_prompt_messages(
+        prompt_messages_from_bindings(Some(rendered_templates), resolved_inputs),
+        "node_prompt",
+        "bindings.prompt_messages".to_string(),
+    ));
+    messages
+}
+
+fn run_level_system_prompt_messages(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    let mut messages = Vec::new();
+    if let Some(system) = resolved_inputs
+        .get("system")
+        .and_then(value_to_text)
+        .and_then(|value| {
+            let trimmed = value.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        })
+    {
+        messages.push(system_prompt_message_with_source(
+            &system,
+            "run_level_system",
+            "resolved_inputs.system",
+        ));
+    }
+
+    for node_id in &node.dependency_node_ids {
+        if let Some(system) = variable_pool
+            .get(node_id)
+            .and_then(|payload| payload.get("system"))
+            .and_then(value_to_text)
+            .and_then(|value| {
+                let trimmed = value.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_string())
+            })
+        {
+            messages.push(system_prompt_message_with_source(
+                &system,
+                "run_level_system",
+                format!("{node_id}.system"),
+            ));
+        }
+    }
+
+    messages
+}
+
+fn system_prompt_message_with_source(
+    content: &str,
+    source_kind: &str,
+    source: impl Into<String>,
+) -> Value {
+    let mut message = Map::new();
+    message.insert("role".to_string(), Value::String("system".to_string()));
+    message.insert("content".to_string(), Value::String(content.to_string()));
+    message.insert(
+        LLM_CONTEXT_SOURCE_KEY.to_string(),
+        json!({
+            "source_kind": source_kind,
+            "source": source.into(),
+            "target": "effective_system",
+        }),
+    );
+    Value::Object(message)
+}
+
+fn compatible_history_messages_with_context_sources(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    let direct_history = resolved_inputs
+        .get("history")
+        .and_then(Value::as_array)
+        .cloned();
+    if let Some(history) = direct_history {
+        return annotate_prompt_messages(history, "history", "resolved_inputs.history".to_string());
+    }
+
+    node.dependency_node_ids
+        .iter()
+        .filter_map(|node_id| {
+            variable_pool
+                .get(node_id)?
+                .get("history")
+                .and_then(Value::as_array)
+                .cloned()
+                .filter(|history| !history.is_empty())
+                .map(|history| {
+                    annotate_prompt_messages(history, "history", format!("{node_id}.history"))
+                })
+        })
+        .next()
+        .unwrap_or_default()
+}
+
+fn annotate_prompt_messages(messages: Vec<Value>, source_kind: &str, source: String) -> Vec<Value> {
+    messages
+        .into_iter()
+        .enumerate()
+        .map(|(index, message)| annotate_prompt_message(message, source_kind, &source, index))
+        .collect()
+}
+
+fn annotate_prompt_message(message: Value, source_kind: &str, source: &str, index: usize) -> Value {
+    match message {
+        Value::Object(mut object) => {
+            object.insert(
+                LLM_CONTEXT_SOURCE_KEY.to_string(),
+                json!({
+                    "source": source,
+                    "source_kind": source_kind,
+                    "message_index": index,
+                    "target": "effective_system",
+                }),
+            );
+            Value::Object(object)
+        }
+        other => other,
+    }
+}
+
 fn prompt_messages_from_bindings(
     rendered_templates: Option<&Map<String, Value>>,
     resolved_inputs: &Map<String, Value>,
@@ -1605,10 +1880,18 @@ fn prompt_messages_from_bindings(
 fn provider_messages_from_prompt_messages(
     prompt_messages: Vec<Value>,
 ) -> (Option<String>, Vec<ProviderMessage>) {
+    let context = provider_context_from_prompt_messages(prompt_messages);
+
+    (context.system, context.messages)
+}
+
+fn provider_context_from_prompt_messages(prompt_messages: Vec<Value>) -> ProviderPromptContext {
     let mut system_parts = Vec::new();
     let mut messages = Vec::new();
+    let mut compatibility_promotions = Vec::new();
+    let mut system_sources = Vec::new();
 
-    for message in &prompt_messages {
+    for (index, message) in prompt_messages.iter().enumerate() {
         let content = message
             .get("content")
             .and_then(value_to_text)
@@ -1629,6 +1912,11 @@ fn provider_messages_from_prompt_messages(
 
         if role == ProviderMessageRole::System {
             system_parts.push(content);
+            let source = system_source_payload(message, index);
+            if source.get("source_kind").and_then(Value::as_str) == Some("history") {
+                compatibility_promotions.push(source.clone());
+            }
+            system_sources.push(source);
         } else {
             messages.push(ProviderMessage {
                 role,
@@ -1649,7 +1937,36 @@ fn provider_messages_from_prompt_messages(
 
     let system = (!system_parts.is_empty()).then(|| system_parts.join("\n\n"));
 
-    (system, messages)
+    ProviderPromptContext {
+        system,
+        messages,
+        compatibility_promotions,
+        system_sources,
+    }
+}
+
+fn system_source_payload(message: &Value, fallback_index: usize) -> Value {
+    let source = message
+        .get(LLM_CONTEXT_SOURCE_KEY)
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_else(Map::new);
+
+    json!({
+        "source": source
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or("prompt_messages"),
+        "source_kind": source
+            .get("source_kind")
+            .and_then(Value::as_str)
+            .unwrap_or("prompt_messages"),
+        "message_index": source
+            .get("message_index")
+            .and_then(Value::as_u64)
+            .unwrap_or(fallback_index as u64),
+        "target": "effective_system",
+    })
 }
 
 fn provider_tool_calls_payload(tool_calls: &Value) -> Value {
@@ -1969,6 +2286,7 @@ fn build_failed_llm_execution(
     provider_events: Vec<ProviderStreamEvent>,
     include_output_payload: bool,
     invocation_messages: &[Value],
+    invocation_debug_context: Option<&LlmInvocationDebugContext>,
 ) -> Result<LlmNodeExecution> {
     let mut executor_output = Map::new();
     executor_output.insert(
@@ -1985,7 +2303,13 @@ fn build_failed_llm_execution(
         executor_output,
         metrics_facts: object_from_value(metrics_payload)?,
         error_facts: object_from_value(error_payload)?,
-        debug_facts: build_llm_debug_facts(runtime, None, invocation_messages, None),
+        debug_facts: build_llm_debug_facts(
+            runtime,
+            None,
+            invocation_messages,
+            None,
+            invocation_debug_context,
+        ),
         provider_events: provider_events.clone(),
     };
     let built = build_llm_node_payloads(node, raw)?;
@@ -2022,6 +2346,7 @@ fn build_successful_llm_execution(
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
     invocation_messages: &[Value],
+    invocation_debug_context: &LlmInvocationDebugContext,
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
     let answer_text = strip_llm_think_tags(&raw_text);
@@ -2082,6 +2407,7 @@ fn build_successful_llm_execution(
         Some(result),
         invocation_messages,
         metrics_payload.get("usage"),
+        Some(invocation_debug_context),
     );
     let raw = RawNodeExecutionResult {
         executor_output,
@@ -2134,6 +2460,7 @@ fn build_llm_debug_facts(
     result: Option<&ProviderInvocationResult>,
     invocation_messages: &[Value],
     result_usage: Option<&Value>,
+    invocation_debug_context: Option<&LlmInvocationDebugContext>,
 ) -> Map<String, Value> {
     let mut debug = Map::new();
     let assistant_content = result
@@ -2155,6 +2482,12 @@ fn build_llm_debug_facts(
         debug.insert(
             "provider_route".to_string(),
             build_llm_provider_route_payload(runtime),
+        );
+    }
+    if let Some(invocation_debug_context) = invocation_debug_context {
+        debug.insert(
+            "llm_context".to_string(),
+            invocation_debug_context.to_payload(),
         );
     }
 

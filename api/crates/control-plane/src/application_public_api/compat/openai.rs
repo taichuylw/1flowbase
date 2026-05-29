@@ -68,6 +68,7 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
         .iter()
         .rposition(|message| message.get("role").and_then(Value::as_str) == Some("user"))
         .ok_or_else(|| OpenAiCompatError::invalid("messages", "user message is required"))?;
+    let mut system_parts = Vec::new();
     let mut history = Vec::new();
     for (index, message) in messages.iter().enumerate() {
         let role = message
@@ -76,6 +77,12 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
             .ok_or_else(|| OpenAiCompatError::invalid("messages", "message role is required"))?;
         let content = openai_message_text(message)?;
         if index == last_user_index {
+            continue;
+        }
+        if role == "system" {
+            if !content.trim().is_empty() {
+                system_parts.push(content);
+            }
             continue;
         }
         let mut history_entry = serde_json::json!({ "role": role, "content": content });
@@ -121,6 +128,9 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
         "metadata": metadata,
         "compatibility_mode": OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_MODE
     });
+    if let Some(system) = system_from_parts(system_parts) {
+        native["system"] = Value::String(system);
+    }
     if response_mode.is_none() {
         native
             .as_object_mut()
@@ -150,17 +160,12 @@ pub fn map_response_request(
     let (query, input_history) = responses_input_to_query_and_history(input)?;
     let mut history = responses_previous_history(previous_response.as_ref());
     history.extend(input_history);
-    if let Some(instructions) = object
+    let system = object
         .get("instructions")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-    {
-        history.insert(
-            0,
-            serde_json::json!({ "role": "system", "content": instructions }),
-        );
-    }
+        .map(ToOwned::to_owned);
 
     let response_mode = object
         .get("stream")
@@ -189,6 +194,9 @@ pub fn map_response_request(
         "metadata": metadata,
         "compatibility_mode": OPENAI_RESPONSES_COMPATIBILITY_MODE
     });
+    if let Some(system) = system {
+        native["system"] = Value::String(system);
+    }
     if response_mode.is_none() {
         native
             .as_object_mut()
@@ -198,6 +206,10 @@ pub fn map_response_request(
 
     serde_json::from_value(native)
         .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))
+}
+
+fn system_from_parts(parts: Vec<String>) -> Option<String> {
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
 pub fn response_id_from_run_id(run_id: Uuid) -> String {
