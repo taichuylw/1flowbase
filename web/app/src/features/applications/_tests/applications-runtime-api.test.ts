@@ -60,6 +60,10 @@ vi.mock('@1flowbase/api-client', () => ({
     high_token_runs: []
   }),
   getConsoleApplicationRuns: vi.fn().mockResolvedValue([]),
+  fetchConsoleRuntimeModelRecords: vi.fn().mockResolvedValue({
+    items: [],
+    total: 0
+  }),
   getConsoleRuntimeDebugStream: vi.fn().mockResolvedValue({ parts: [] }),
   resumeConsoleFlowRun: vi.fn().mockResolvedValue(undefined),
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800')
@@ -67,6 +71,7 @@ vi.mock('@1flowbase/api-client', () => ({
 
 import {
   completeConsoleCallbackTask,
+  fetchConsoleRuntimeModelRecords,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuns,
@@ -80,6 +85,7 @@ import {
   applicationRunsQueryKey,
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
+  fetchApplicationConversationMessages,
   fetchApplicationRunDetail,
   fetchApplicationRunMonitoringReport,
   fetchApplicationRuns,
@@ -102,7 +108,22 @@ describe('applications runtime api', () => {
       20,
       'all',
       'started_at',
-      'desc'
+      'desc',
+      ''
+    ]);
+    expect(
+      applicationRunsQueryKey('app-1', { titleIncludes: '退款' })
+    ).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      1,
+      20,
+      'all',
+      'started_at',
+      'desc',
+      '退款'
     ]);
     expect(applicationRunDetailQueryKey('app-1', 'run-1')).toEqual([
       'applications',
@@ -166,6 +187,124 @@ describe('applications runtime api', () => {
     expect(getConsoleRuntimeDebugStream).toHaveBeenCalledWith(
       'app-1',
       'run-1',
+      'http://127.0.0.1:7800'
+    );
+  });
+
+  test('reads run log summaries from Runtime Data Model records', async () => {
+    vi.mocked(fetchConsoleRuntimeModelRecords).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'run-1',
+          flow_run_id: 'run-1',
+          application_id: 'app-1',
+          scope_id: 'workspace-1',
+          run_mode: 'published_api_run',
+          status: 'succeeded',
+          target_node_id: null,
+          title: '退款总结',
+          external_conversation_id: 'conversation-1',
+          total_tokens: 120,
+          unique_node_count: 3,
+          tool_callback_count: 1,
+          started_at: '2026-05-08T00:00:00Z',
+          finished_at: '2026-05-08T00:00:01Z',
+          created_at: '2026-05-08T00:00:00Z',
+          updated_at: '2026-05-08T00:00:01Z'
+        }
+      ],
+      total: 1
+    });
+
+    await expect(
+      fetchApplicationRuns('app-1', { titleIncludes: '退款' })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          flow_run_id: 'run-1',
+          application_id: 'app-1',
+          scope_id: 'workspace-1',
+          title: '退款总结'
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20
+    });
+
+    expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
+      'application_run_log_summaries',
+      {
+        page: 1,
+        page_size: 20,
+        filter: {
+          application_id: { $eq: 'app-1' },
+          title: { $includes: '退款' }
+        },
+        sort: {
+          field: 'started_at',
+          direction: 'desc'
+        }
+      },
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
+  });
+
+  test('reads conversation messages from Runtime Data Model records', async () => {
+    vi.mocked(fetchConsoleRuntimeModelRecords).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'message-1',
+          application_id: 'app-1',
+          scope_id: 'workspace-1',
+          conversation_id: 'conversation-record-1',
+          flow_run_id: 'run-1',
+          role: 'assistant',
+          content: '退款政策摘要',
+          sequence: 2,
+          status: 'succeeded',
+          created_at: '2026-05-08T00:00:01Z'
+        }
+      ],
+      total: 1
+    });
+
+    await expect(
+      fetchApplicationConversationMessages('app-1', {
+        conversationId: 'conversation-record-1',
+        page: 1,
+        pageSize: 5
+      })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          id: 'message-1',
+          conversation_id: 'conversation-record-1',
+          flow_run_id: 'run-1',
+          role: 'assistant',
+          content: '退款政策摘要'
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5
+    });
+
+    expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
+      'application_conversation_messages',
+      {
+        page: 1,
+        page_size: 5,
+        filter: {
+          application_id: { $eq: 'app-1' },
+          conversation_id: { $eq: 'conversation-record-1' }
+        },
+        sort: {
+          field: 'sequence',
+          direction: 'desc'
+        }
+      },
       'http://127.0.0.1:7800'
     );
   });
