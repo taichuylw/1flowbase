@@ -1681,6 +1681,145 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
 }
 
 #[tokio::test]
+async fn terminal_published_run_projects_application_conversation_messages_once() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-05-29 13:00:00 UTC);
+    let conversation_id = Uuid::now_v7();
+    let run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "published-conversation-projection".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "退款政策".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "system": "请使用简洁中文回答。",
+                    "query": "退款政策是什么？"
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("customer-1".to_string()),
+            external_conversation_id: Some("conversation-1".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("native-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        insert into application_conversations (
+            id,
+            scope_id,
+            application_id,
+            api_key_id,
+            external_user,
+            external_conversation_id,
+            created_at,
+            updated_at
+        ) values ($1, $2, $3, $4, 'customer-1', 'conversation-1', $5, $5)
+        "#,
+    )
+    .bind(conversation_id)
+    .bind(seeded.workspace_id)
+    .bind(seeded.application_id)
+    .bind(api_key_id)
+    .bind(started_at)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "7 天内可申请退款。" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let projected_messages = sqlx::query_as::<_, (String, String, String, i64)>(
+        r#"
+        select role, content, status, sequence
+        from application_conversation_messages
+        where flow_run_id = $1
+        order by sequence asc, id asc
+        "#,
+    )
+    .bind(run.id)
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        projected_messages,
+        vec![
+            (
+                "system".to_string(),
+                "请使用简洁中文回答。".to_string(),
+                "succeeded".to_string(),
+                1_780_059_600_000_001
+            ),
+            (
+                "user".to_string(),
+                "退款政策是什么？".to_string(),
+                "succeeded".to_string(),
+                1_780_059_600_000_002
+            ),
+            (
+                "assistant".to_string(),
+                "7 天内可申请退款。".to_string(),
+                "succeeded".to_string(),
+                1_780_059_600_000_003
+            )
+        ]
+    );
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "7 天内可申请退款。" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(4)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let projected_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_conversation_messages where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(projected_count, 3);
+}
+
+#[tokio::test]
 async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

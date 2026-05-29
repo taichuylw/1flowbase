@@ -148,11 +148,7 @@ function buildConversationLogMessage(
 function conversationItemDetailRunId(
   item: ApplicationConversationMessagesPage['items'][number]
 ): string | null {
-  if (item.can_open_detail === false) {
-    return null;
-  }
-
-  return nonEmptyString(item.detail_run_id) ?? nonEmptyString(item.run_id);
+  return nonEmptyString(item.flow_run_id);
 }
 
 function conversationMessageRole(
@@ -172,18 +168,19 @@ function mapConversationItemToMessages(
   item: ApplicationConversationMessagesPage['items'][number]
 ): AgentFlowDebugMessage[] {
   const detailRunId = conversationItemDetailRunId(item);
-  const canOpenDetail = Boolean(detailRunId) && item.can_open_detail !== false;
+  const canOpenDetail = Boolean(detailRunId);
   const messageRole = conversationMessageRole(item);
   const messageContent = nonEmptyString(item.content);
+  const flowRunId = nonEmptyString(item.flow_run_id) ?? item.id;
 
   if (messageRole && messageContent) {
     return [
       {
-        id: `conversation-${messageRole}-${item.run_id}`,
+        id: `conversation-${messageRole}-${item.id}`,
         role: messageRole,
         content: messageContent,
         status: mapRunStatusToMessageStatus(item.status),
-        runId: item.run_id,
+        runId: flowRunId,
         detailRunId,
         canOpenDetail,
         rawOutput: null,
@@ -192,33 +189,7 @@ function mapConversationItemToMessages(
     ];
   }
 
-  const userContent = nonEmptyString(item.query) ?? i18nText("applications", "auto.none");
-  const assistantContent = nonEmptyString(item.answer) ?? i18nText("applications", "auto.no_output_yet");
-
-  return [
-    {
-      id: `conversation-user-${item.run_id}`,
-      role: 'user',
-      content: userContent,
-      status: 'completed',
-      runId: item.run_id,
-      detailRunId,
-      canOpenDetail,
-      rawOutput: null,
-      traceSummary: []
-    },
-    {
-      id: `conversation-assistant-${item.run_id}`,
-      role: 'assistant',
-      content: assistantContent,
-      status: mapRunStatusToMessageStatus(item.status),
-      runId: item.run_id,
-      detailRunId,
-      canOpenDetail,
-      rawOutput: null,
-      traceSummary: []
-    }
-  ];
+  return [];
 }
 
 function buildConversationPageMessages(
@@ -228,14 +199,15 @@ function buildConversationPageMessages(
     return [];
   }
 
-  return page.items.flatMap((item) => mapConversationItemToMessages(item));
+  return [...page.items]
+    .sort((left, right) => left.sequence - right.sequence)
+    .flatMap((item) => mapConversationItemToMessages(item));
 }
 
 function conversationSessionStatus(
   page: ApplicationConversationMessagesPage | null
 ): AgentFlowDebugSessionStatus {
-  const currentItem =
-    page?.items.find((item) => item.is_current) ?? page?.items.at(-1) ?? null;
+  const currentItem = page?.items[0] ?? null;
 
   return mapRunStatusToSessionStatus(currentItem?.status ?? 'succeeded');
 }
@@ -261,22 +233,29 @@ function RunConversation({
   const [conversationPage, setConversationPage] =
     useState<ApplicationConversationMessagesPage | null>(null);
   const initialConversationQuery = useQuery({
-    queryKey: applicationConversationMessagesQueryKey(applicationId, runId),
+    queryKey: applicationConversationMessagesQueryKey(applicationId, {
+      flowRunId: runId,
+      page: 1,
+      pageSize: 5
+    }),
     queryFn: () =>
-      fetchApplicationConversationMessages(applicationId, runId, {
-        limit: 5
+      fetchApplicationConversationMessages(applicationId, {
+        flowRunId: runId,
+        page: 1,
+        pageSize: 5
       })
   });
   const refetchInitialConversation = initialConversationQuery.refetch;
   const loadPreviousConversationMutation = useMutation({
     mutationFn: async () => {
-      if (!conversationPage?.page.before_cursor) {
+      if (!conversationPage || conversationPage.items.length >= conversationPage.total) {
         throw new Error('missing previous conversation cursor');
       }
 
-      return fetchApplicationConversationMessages(applicationId, runId, {
-        before: conversationPage.page.before_cursor,
-        limit: 5
+      return fetchApplicationConversationMessages(applicationId, {
+        flowRunId: runId,
+        page: conversationPage.page + 1,
+        pageSize: conversationPage.page_size
       });
     },
     onSuccess: (page) => {
@@ -285,21 +264,16 @@ function RunConversation({
           return page;
         }
 
-        const existingRunIds = new Set(
-          current.items.map((item) => item.run_id)
-        );
+        const existingIds = new Set(current.items.map((item) => item.id));
         const newItems = page.items.filter(
-          (item) => !existingRunIds.has(item.run_id)
+          (item) => !existingIds.has(item.id)
         );
 
         return {
-          items: [...newItems, ...current.items],
-          page: {
-            has_before: page.page.has_before,
-            has_after: current.page.has_after,
-            before_cursor: page.page.before_cursor,
-            after_cursor: current.page.after_cursor
-          }
+          items: [...current.items, ...newItems],
+          total: page.total,
+          page: page.page,
+          page_size: page.page_size
         };
       });
     }
@@ -370,7 +344,8 @@ function RunConversation({
         }}
         onReachConversationTop={() => {
           if (
-            conversationPage?.page.has_before &&
+            conversationPage &&
+            conversationPage.items.length < conversationPage.total &&
             !loadPreviousConversationMutation.isPending
           ) {
             loadPreviousConversationMutation.mutate();

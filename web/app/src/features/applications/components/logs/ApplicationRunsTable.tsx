@@ -48,7 +48,7 @@ export function ApplicationRunsTable({
   selectedRunId?: string | null;
   configuration: ApplicationRunsTableConfiguration;
   onPageChange: (page: number) => void;
-  onSelectRun: (runId: string) => void;
+  onSelectRun: (run: ApplicationRunSummary) => void;
 }) {
   const { t } = useTranslation('applications');
   const tableColumns = useMemo<Array<DataTableColumn<ApplicationRunSummary>>>(
@@ -61,8 +61,9 @@ export function ApplicationRunsTable({
         return {
           ...column,
           render: (_value: unknown, run: ApplicationRunSummary): ReactNode => (
-            <Button type="link" onClick={() => onSelectRun(run.id)}>
-              {t('auto.view_run_details')}</Button>
+            <Button type="link" onClick={() => onSelectRun(run)}>
+              {t('auto.view_run_details')}
+            </Button>
           )
         };
       }),
@@ -79,9 +80,11 @@ export function ApplicationRunsTable({
       page={page}
       pageSize={pageSize}
       rowClassName={(record) =>
-        record.id === selectedRunId ? 'application-runs-table__row--active' : ''
+        (record.flow_run_id ?? record.id) === selectedRunId
+          ? 'application-runs-table__row--active'
+          : ''
       }
-      rowKey="id"
+      rowKey={(record) => record.flow_run_id ?? record.id}
       total={total}
       onPageChange={onPageChange}
     />

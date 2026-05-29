@@ -19,6 +19,7 @@ const runtimeApi = vi.hoisted(() => ({
       sortBy?: 'started_at' | 'finished_at' | 'created_at';
       sortOrder?: 'asc' | 'desc';
       cacheMode?: 'default' | 'refresh';
+      titleIncludes?: string;
     }
   ) =>
     [
@@ -30,7 +31,8 @@ const runtimeApi = vi.hoisted(() => ({
       input?.pageSize ?? 20,
       input?.timeRangeDays ?? 'all',
       input?.sortBy ?? 'started_at',
-      input?.sortOrder ?? 'desc'
+      input?.sortOrder ?? 'desc',
+      input?.titleIncludes ?? ''
     ] as const,
   applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
@@ -60,6 +62,7 @@ vi.mock('../../api/runtime', () => runtimeApi);
 
 import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
 import { ApplicationLogsPage } from '../../pages/ApplicationLogsPage';
 
@@ -206,8 +209,10 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
   let innerWidthSpy: { mockRestore: () => void } | undefined;
   let dateNowSpy: { mockRestore: () => void } | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     dateNowSpy = vi
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
@@ -476,8 +481,47 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
     });
   });
 
-  test('filters application logs by time range and keyword within the current page', async () => {
+  test('filters application logs by time range and title records query', async () => {
     runtimeApi.fetchApplicationRuns
+      .mockResolvedValueOnce(
+        applicationRunsPage([
+          {
+            id: 'run-refund',
+            run_mode: 'debug_flow_run' as const,
+            status: 'succeeded',
+            target_node_id: null,
+            started_at: '2026-04-17T10:00:00Z',
+            finished_at: '2026-04-17T10:05:00Z',
+            created_at: '2026-04-17T10:00:00Z',
+            updated_at: '2026-04-17T10:05:00Z'
+          },
+          {
+            id: 'run-weather',
+            run_mode: 'debug_flow_run' as const,
+            status: 'succeeded',
+            target_node_id: null,
+            started_at: '2026-04-17T09:00:00Z',
+            finished_at: '2026-04-17T12:00:00Z',
+            created_at: '2026-04-17T09:00:00Z',
+            updated_at: '2026-04-17T12:00:00Z'
+          }
+        ])
+      )
+      .mockResolvedValueOnce(
+        applicationRunsPage([
+          {
+            id: 'run-refund',
+            run_mode: 'debug_flow_run' as const,
+            status: 'succeeded',
+            target_node_id: null,
+            title: '退款规则',
+            started_at: '2026-04-17T10:00:00Z',
+            finished_at: '2026-04-17T10:05:00Z',
+            created_at: '2026-04-17T10:00:00Z',
+            updated_at: '2026-04-17T10:05:00Z'
+          }
+        ])
+      )
       .mockResolvedValueOnce(
         applicationRunsPage([
           {
@@ -536,44 +580,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
           }
         ])
       );
-    runtimeApi.fetchApplicationRunDetail.mockImplementation(
-      async (_applicationId: string, runId: string) => {
-        const detail = sampleRunDetail();
-
-        if (runId === 'run-refund') {
-          detail.flow_run.id = runId;
-          detail.flow_run.query = '我想查退款规则';
-          detail.flow_run.input_payload = {
-            'node-start.query': '我想查退款规则'
-          };
-          detail.flow_run.output_payload = {
-            answer: '可以在 7 天内退款',
-            resolved_inputs: {
-              user_prompt: '我想查退款规则'
-            }
-          };
-          return detail;
-        }
-
-        detail.flow_run.id = runId;
-        detail.flow_run.query = '今天天气怎么样';
-        detail.flow_run.input_payload = {
-          'node-start.query': '今天天气怎么样'
-        };
-        detail.flow_run.output_payload = {
-          answer: '天气晴朗',
-          resolved_inputs: {
-            user_prompt: '今天天气怎么样'
-          }
-        };
-        detail.node_runs = detail.node_runs.map((nodeRun) => ({
-          ...nodeRun,
-          input_payload: { user_prompt: '今天天气怎么样' },
-          output_payload: { answer: '天气晴朗', rendered_templates: {} }
-        }));
-        return detail;
-      }
-    );
 
     render(
       <AppProviders>
@@ -600,19 +606,38 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
     expect(screen.getByText('2026/4/17 18:05:00')).toBeInTheDocument();
     expect(screen.getByText('2026/4/17 20:00:00')).toBeInTheDocument();
 
-    const searchInput = screen.getByPlaceholderText('搜索对话和回答');
+    const searchInput = screen.getByPlaceholderText('搜索标题');
     fireEvent.change(searchInput, { target: { value: '退款' } });
 
     await waitFor(() => {
       expect(screen.getByText('run-refund')).toBeInTheDocument();
       expect(screen.queryByText('run-weather')).not.toBeInTheDocument();
     });
-    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
-      'app-1',
-      'run-refund'
-    );
+    expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith('app-1', {
+      page: 1,
+      pageSize: 20,
+      timeRangeDays: 7,
+      sortBy: 'started_at',
+      sortOrder: 'desc',
+      titleIncludes: '退款'
+    });
+    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
 
-    fireEvent.change(searchInput, { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText('搜索标题'), {
+      target: { value: '' }
+    });
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRuns).toHaveBeenLastCalledWith(
+        'app-1',
+        {
+          page: 1,
+          pageSize: 20,
+          timeRangeDays: 7,
+          sortBy: 'started_at',
+          sortOrder: 'desc'
+        }
+      );
+    });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '时间间隔' }));
     fireEvent.click(
       await screen.findByText('所有时间', {

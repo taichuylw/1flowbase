@@ -138,6 +138,16 @@ pub fn system_metadata_templates() -> Vec<SystemMetadataModelTemplate> {
     vec![user_metadata_template(), role_metadata_template()]
 }
 
+const BUILTIN_RUNTIME_READ_MODEL_CODES: [&str; 7] = [
+    "application_run_log_summaries",
+    "application_conversations",
+    "application_conversation_messages",
+    "node_runs",
+    "flow_run_events",
+    "flow_run_checkpoints",
+    "flow_run_callback_tasks",
+];
+
 pub struct SystemMetadataBootstrapService<R> {
     repository: R,
 }
@@ -158,6 +168,53 @@ where
         for template in system_metadata_templates() {
             ensured.push(self.ensure_template(actor_user_id, template).await?);
         }
+        Ok(ensured)
+    }
+
+    pub async fn ensure_builtin_runtime_read_model_grants(
+        &self,
+        actor_user_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::ScopeDataModelGrantRecord>> {
+        let models = self
+            .repository
+            .list_model_definitions(SYSTEM_SCOPE_ID)
+            .await?;
+        let existing_grants = self
+            .repository
+            .list_scope_data_model_grants(DataModelScopeKind::Workspace, workspace_id)
+            .await?;
+        let mut ensured = Vec::new();
+
+        for model in models.into_iter().filter(|model| {
+            model.scope_kind == DataModelScopeKind::System
+                && model.scope_id == SYSTEM_SCOPE_ID
+                && model.source_kind == domain::DataModelSourceKind::MainSource
+                && BUILTIN_RUNTIME_READ_MODEL_CODES.contains(&model.code.as_str())
+        }) {
+            if let Some(existing) = existing_grants
+                .iter()
+                .find(|grant| grant.data_model_id == model.id)
+            {
+                ensured.push(existing.clone());
+                continue;
+            }
+
+            ensured.push(
+                self.repository
+                    .create_scope_data_model_grant(&CreateScopeDataModelGrantInput {
+                        grant_id: Uuid::now_v7(),
+                        scope_kind: DataModelScopeKind::Workspace,
+                        scope_id: workspace_id,
+                        data_model_id: model.id,
+                        enabled: true,
+                        permission_profile: domain::ScopeDataModelPermissionProfile::ScopeAll,
+                        created_by: Some(actor_user_id),
+                    })
+                    .await?,
+            );
+        }
+
         Ok(ensured)
     }
 

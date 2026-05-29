@@ -160,17 +160,19 @@ describe('applications runtime api', () => {
     });
     await fetchRuntimeDebugStream('app-1', 'run-1');
 
-    expect(getConsoleApplicationRuns).toHaveBeenCalledWith(
-      'app-1',
+    expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
+      'application_run_log_summaries',
       expect.objectContaining({
         page: 1,
         page_size: 20,
-        cache_mode: 'refresh',
-        sort_by: 'started_at',
-        sort_order: 'desc'
+        sort: {
+          field: 'started_at',
+          direction: 'desc'
+        }
       }),
       'http://127.0.0.1:7800'
     );
+    expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
     expect(getConsoleApplicationRunDetail).toHaveBeenCalledWith(
       'app-1',
       'run-1',

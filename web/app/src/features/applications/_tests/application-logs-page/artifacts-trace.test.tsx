@@ -58,6 +58,7 @@ vi.mock('../../api/runtime', () => runtimeApi);
 
 import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
 import { ApplicationLogsPage } from '../../pages/ApplicationLogsPage';
 
@@ -74,6 +75,33 @@ function applicationRunsPage<T>(
     total: overrides?.total ?? items.length,
     page: overrides?.page ?? 1,
     page_size: overrides?.page_size ?? 20
+  };
+}
+
+function conversationMessagesPage(
+  items: Array<{
+    id: string;
+    flow_run_id: string | null;
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+    sequence: number;
+    status?: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+  }>
+) {
+  return {
+    items: items.map((item) => ({
+      application_id: 'app-1',
+      scope_id: 'workspace-1',
+      conversation_id: 'conversation-1',
+      status: 'succeeded',
+      created_at: item.started_at ?? '2026-04-17T09:00:00Z',
+      ...item
+    })),
+    total: items.length,
+    page: 1,
+    page_size: 20
   };
 }
 
@@ -212,8 +240,10 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
   let innerWidthSpy: { mockRestore: () => void } | undefined;
   let dateNowSpy: { mockRestore: () => void } | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     dateNowSpy = vi
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
@@ -241,40 +271,46 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       ])
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
-      items: [
+    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
+      conversationMessagesPage([
         {
-          run_id: 'run-0',
-          detail_run_id: 'run-0',
-          can_open_detail: true,
+          id: 'msg-run-0-user',
+          flow_run_id: 'run-0',
+          role: 'user',
+          content: '上一轮问题',
+          sequence: 1,
           started_at: '2026-04-17T08:59:00Z',
-          finished_at: '2026-04-17T08:59:01Z',
-          status: 'succeeded',
-          query: '上一轮问题',
-          model: 'deepseek-chat',
-          answer: '上一轮回答',
-          is_current: false
+          finished_at: '2026-04-17T08:59:01Z'
         },
         {
-          run_id: 'run-1',
-          detail_run_id: 'run-1',
-          can_open_detail: true,
+          id: 'msg-run-0-assistant',
+          flow_run_id: 'run-0',
+          role: 'assistant',
+          content: '上一轮回答',
+          sequence: 2,
+          started_at: '2026-04-17T08:59:00Z',
+          finished_at: '2026-04-17T08:59:01Z'
+        },
+        {
+          id: 'msg-run-1-user',
+          flow_run_id: 'run-1',
+          role: 'user',
+          content: '总结退款政策',
+          sequence: 3,
           started_at: '2026-04-17T09:00:00Z',
-          finished_at: '2026-04-17T09:00:01Z',
-          status: 'succeeded',
-          query: '总结退款政策',
-          model: 'deepseek-chat',
-          answer: '退款政策摘要',
-          is_current: true
+          finished_at: '2026-04-17T09:00:01Z'
+        },
+        {
+          id: 'msg-run-1-assistant',
+          flow_run_id: 'run-1',
+          role: 'assistant',
+          content: '退款政策摘要',
+          sequence: 4,
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z'
         }
-      ],
-      page: {
-        has_before: false,
-        has_after: false,
-        before_cursor: 'run-0',
-        after_cursor: 'run-1'
-      }
-    });
+      ])
+    );
   });
 
   afterEach(() => {
@@ -493,7 +529,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     fireEvent.click(llmTraceNode);
 
     const toolsNode = within(logPanel).getByRole('button', {
-      name: /Tools.*2 次工具回调/
+      name: /工具 2 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
     expect(
@@ -521,70 +557,55 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
   }, 20_000);
 
   test('does not offer run log details for imported context messages', async () => {
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
-      items: [
+    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
+      conversationMessagesPage([
         {
-          run_id: 'run-1:history:0',
-          detail_run_id: null,
-          can_open_detail: false,
+          id: 'msg-history-system',
+          flow_run_id: null,
           role: 'system',
           content: '你是项目助手',
+          sequence: 1,
           started_at: '2026-04-17T08:58:59Z',
-          finished_at: '2026-04-17T08:59:00Z',
-          status: 'succeeded',
-          query: null,
-          model: 'deepseek-chat',
-          answer: null,
-          is_current: false
+          finished_at: '2026-04-17T08:59:00Z'
         },
         {
-          run_id: 'run-1:history:1',
-          detail_run_id: null,
-          can_open_detail: false,
+          id: 'msg-history-user',
+          flow_run_id: null,
           role: 'user',
           content: '外部传入的问题',
+          sequence: 2,
           started_at: '2026-04-17T08:59:00Z',
-          finished_at: '2026-04-17T08:59:01Z',
-          status: 'succeeded',
-          query: null,
-          model: 'deepseek-chat',
-          answer: null,
-          is_current: false
+          finished_at: '2026-04-17T08:59:01Z'
         },
         {
-          run_id: 'run-1:history:2',
-          detail_run_id: null,
-          can_open_detail: false,
+          id: 'msg-history-assistant',
+          flow_run_id: null,
           role: 'assistant',
           content: '外部传入的回答',
+          sequence: 3,
           started_at: '2026-04-17T08:59:01Z',
-          finished_at: '2026-04-17T08:59:02Z',
-          status: 'succeeded',
-          query: null,
-          model: 'deepseek-chat',
-          answer: null,
-          is_current: false
+          finished_at: '2026-04-17T08:59:02Z'
         },
         {
-          run_id: 'run-1',
-          detail_run_id: 'run-1',
-          can_open_detail: true,
+          id: 'msg-run-1-user',
+          flow_run_id: 'run-1',
+          role: 'user',
+          content: '总结退款政策',
+          sequence: 4,
           started_at: '2026-04-17T09:00:00Z',
-          finished_at: '2026-04-17T09:00:01Z',
-          status: 'succeeded',
-          query: '总结退款政策',
-          model: 'deepseek-chat',
-          answer: '退款政策摘要',
-          is_current: true
+          finished_at: '2026-04-17T09:00:01Z'
+        },
+        {
+          id: 'msg-run-1-assistant',
+          flow_run_id: 'run-1',
+          role: 'assistant',
+          content: '退款政策摘要',
+          sequence: 5,
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z'
         }
-      ],
-      page: {
-        has_before: false,
-        has_after: false,
-        before_cursor: null,
-        after_cursor: 'run-1'
-      }
-    });
+      ])
+    );
 
     render(
       <AppProviders>

@@ -237,8 +237,16 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             "attachments",
         )
         .await?;
-    control_plane::system_metadata::SystemMetadataBootstrapService::new(store.clone())
+    let system_metadata_bootstrap =
+        control_plane::system_metadata::SystemMetadataBootstrapService::new(store.clone());
+    system_metadata_bootstrap
         .ensure_builtin_user_and_role_models(bootstrap_result.root_user_id)
+        .await?;
+    system_metadata_bootstrap
+        .ensure_builtin_runtime_read_model_grants(
+            bootstrap_result.root_user_id,
+            bootstrap_result.workspace_id,
+        )
         .await?;
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(

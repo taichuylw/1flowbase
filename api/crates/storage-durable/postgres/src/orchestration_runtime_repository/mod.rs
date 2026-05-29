@@ -616,6 +616,37 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
         &self,
         input: &BindApplicationPublicConversationInput,
     ) -> Result<ApplicationPublicConversationRecord> {
+        sqlx::query(
+            r#"
+            insert into application_conversations (
+                id,
+                scope_id,
+                application_id,
+                api_key_id,
+                external_user,
+                external_conversation_id
+            )
+            select
+                $1,
+                applications.workspace_id,
+                applications.id,
+                $2,
+                $3,
+                $4
+            from applications
+            where applications.id = $5
+            on conflict (application_id, api_key_id, external_user, external_conversation_id)
+            do update set updated_at = now()
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.api_key_id)
+        .bind(&input.external_user)
+        .bind(&input.external_conversation_id)
+        .bind(input.application_id)
+        .execute(self.pool())
+        .await?;
+
         let row = sqlx::query(
             r#"
             insert into application_public_conversations (
