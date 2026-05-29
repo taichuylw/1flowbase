@@ -24,6 +24,7 @@ import type {
   StyleBoundaryManifestScene,
   StyleBoundaryRuntimeScene
 } from './types';
+import { i18nText } from '../shared/i18n/text';
 
 const styleBoundaryProviderInstances = [
   {
@@ -151,7 +152,7 @@ const styleBoundaryPluginFamiliesCatalog = {
 
 const styleBoundaryOfficialPluginCatalog = {
   source_kind: 'official_registry',
-  source_label: '官方源',
+  source_label: i18nText("appShell", "auto.official_source"),
   registry_url:
     'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
   locale_meta: modelProviderCatalogContract.locale_meta,

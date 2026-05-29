@@ -1,0 +1,23 @@
+{
+  "auto": {
+    "documentation": "文档",
+    "enter_design_mode": "进入设计模式",
+    "exit_design_mode": "退出设计模式",
+    "frontstage": "前台",
+    "help": "帮助",
+    "logout": "退出登录",
+    "official_source": "官方源",
+    "profile": "个人资料",
+    "settings": "设置",
+    "subsystem": "子系统",
+    "tools": "工具",
+    "user": "用户",
+    "workbench": "工作台"
+  },
+  "language": {
+    "current": "中",
+    "en_us": "English",
+    "trigger": "切换语言",
+    "zh_hans": "简体中文"
+  }
+}

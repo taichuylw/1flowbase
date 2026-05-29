@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons';
 
 import type { SettingsDataSourceInstance } from '../../api/data-models';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function toDefaultApiExposureStatus(status: string) {
   return status === 'api_exposed_ready' ? 'published_not_exposed' : status;
@@ -35,7 +36,7 @@ export function DataSourcePanel({
 
   const columns: ColumnsType<SettingsDataSourceInstance> = [
     {
-      title: '数据源名称',
+      title: i18nText("settings", "auto.data_source_name"),
       key: 'display_name',
       render: (_, source) => (
         <Space size={12}>
@@ -53,7 +54,7 @@ export function DataSourcePanel({
               {source.display_name}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              标识:{' '}
+              {i18nText("settings", "auto.logo")}{' '}
               <code className="data-model-panel__code-badge">
                 {source.source_code}
               </code>
@@ -63,7 +64,7 @@ export function DataSourcePanel({
       )
     },
     {
-      title: '类型',
+      title: i18nText("settings", "auto.kind"),
       dataIndex: 'source_kind',
       key: 'source_kind',
       width: 140,
@@ -72,12 +73,12 @@ export function DataSourcePanel({
           color={value === 'main_source' ? 'blue' : 'purple'}
           style={{ borderRadius: 6, margin: 0 }}
         >
-          {value === 'main_source' ? '内建主数据源' : '外部数据源'}
+          {value === 'main_source' ? i18nText("settings", "auto.built_master_data_source") : i18nText("settings", "auto.external_data_source")}
         </Tag>
       )
     },
     {
-      title: '状态',
+      title: i18nText("settings", "auto.status"),
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -86,17 +87,17 @@ export function DataSourcePanel({
           color={value === 'ready' ? 'success' : 'default'}
           style={{ borderRadius: 12, paddingInline: 8, margin: 0 }}
         >
-          {value === 'ready' ? '就绪' : value}
+          {value === 'ready' ? i18nText("settings", "auto.ready") : value}
         </Tag>
       )
     },
     {
-      title: '启用',
+      title: i18nText("settings", "auto.enabled"),
       key: 'enabled',
       width: 100,
       render: (_, source) => (
         <Checkbox
-          aria-label={`${source.display_name} 启用`}
+          aria-label={i18nText("settings", "auto.enable", { value1: source.display_name })}
           checked={source.status === 'ready'}
           className="data-model-panel__enabled-check"
           disabled
@@ -104,13 +105,13 @@ export function DataSourcePanel({
       )
     },
     {
-      title: '默认策略',
+      title: i18nText("settings", "auto.default_policy"),
       key: 'default_policies',
       width: 260,
       render: (_, source) => (
         <Space size={8}>
           <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
-            建模: {source.default_data_model_status}
+            {i18nText("settings", "auto.modeling")}{source.default_data_model_status}
           </Tag>
           <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
             API:{' '}
@@ -129,7 +130,7 @@ export function DataSourcePanel({
           type="primary"
           ghost
           size="small"
-          aria-label="配置"
+          aria-label={i18nText("settings", "auto.configuration_alt")}
           className="data-model-panel__enter-btn"
           icon={<RightOutlined aria-hidden="true" />}
           onClick={(event) => {
@@ -202,16 +203,16 @@ export function DataSourcePanel({
                   }
                   style={{ borderRadius: 6, margin: 0 }}
                 >
-                  {source.source_kind === 'main_source' ? '内建' : '外部'}
+                  {source.source_kind === 'main_source' ? i18nText("settings", "auto.built_in_source") : i18nText("settings", "auto.external")}
                 </Tag>
                 <Tag
                   color={source.status === 'ready' ? 'success' : 'default'}
                   style={{ borderRadius: 12, margin: 0 }}
                 >
-                  {source.status === 'ready' ? '就绪' : source.status}
+                  {source.status === 'ready' ? i18nText("settings", "auto.ready") : source.status}
                 </Tag>
                 <Tag style={{ borderRadius: 6, margin: 0 }} color="default">
-                  建模: {source.default_data_model_status}
+                  {i18nText("settings", "auto.modeling")}{source.default_data_model_status}
                 </Tag>
               </Flex>
             </div>

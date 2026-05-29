@@ -17,6 +17,7 @@ import {
   listFrontstageBuiltInJsBlockTemplates,
   type FrontstageBuiltInJsBlockTemplateId
 } from '../lib/block-templates';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface AddBlockCatalogPickerDrawerProps {
   open: boolean;
@@ -53,12 +54,12 @@ export const AddBlockCatalogPickerDrawer: FC<
       open={open}
       onClose={onClose}
       placement="right"
-      title="新增区块"
+      title={i18nText("frontstage", "auto.add_block")}
       width={520}
     >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space direction="vertical" size={6} style={{ width: '100%' }}>
-          <Typography.Text strong>内置模板</Typography.Text>
+          <Typography.Text strong>{i18nText("frontstage", "auto.built_in_templates")}</Typography.Text>
           <Radio.Group
             value={selectedTemplateId}
             disabled={isBusy}
@@ -85,7 +86,7 @@ export const AddBlockCatalogPickerDrawer: FC<
 
         {error ? (
           <Alert
-            message="区块目录加载失败"
+            message={i18nText("frontstage", "auto.block_catalog_load_failed")}
             description={error.message}
             type="error"
             showIcon
@@ -97,8 +98,7 @@ export const AddBlockCatalogPickerDrawer: FC<
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <Typography.Text type="secondary">
-                当前没有可用区块目录项，暂时无法新增区块。
-              </Typography.Text>
+                {i18nText("frontstage", "auto.no_available_block_catalog_entries")}</Typography.Text>
             }
           />
         ) : (
@@ -111,15 +111,14 @@ export const AddBlockCatalogPickerDrawer: FC<
                 actions={[
                   <Button
                     key="select"
-                    aria-label="选择"
+                    aria-label={i18nText("frontstage", "auto.select")}
                     type="primary"
                     size="small"
                     disabled={isBusy}
                     loading={saving}
                     onClick={() => onSelect(entry, selectedTemplateId)}
                   >
-                    选择
-                  </Button>
+                    {i18nText("frontstage", "auto.select")}</Button>
                 ]}
               >
                 <List.Item.Meta

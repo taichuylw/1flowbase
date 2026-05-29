@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { JsBlockTrialPanel } from '../components/JsBlockTrialPanel';
 import type { NormalizedFrontstageBlockCatalogEntry } from '../lib/block-catalog';
 import type { FrontstageRestrictedBlockRuntimeSession } from '../lib/frontstage-restricted-block-runtime-host';
@@ -151,6 +152,10 @@ function createFakeRuntimeSession() {
 }
 
 describe('JsBlockTrialPanel', () => {
+  beforeEach(async () => {
+    await appI18n.changeLanguage('zh_Hans');
+  });
+
   test('shows clear empty states when the selected block or catalog entry is missing', () => {
     const { rerender } = render(
       <JsBlockTrialPanel
@@ -183,7 +188,7 @@ describe('JsBlockTrialPanel', () => {
         block={createBlock()}
         catalogEntry={createCatalogEntry()}
         code="export default { render() {} }"
-        contextSnapshot={{ pageId: 'page-1', locale: 'zh-CN' }}
+        contextSnapshot={{ pageId: 'page-1', locale: 'zh_Hans' }}
         limits={createLimits()}
       />
     );

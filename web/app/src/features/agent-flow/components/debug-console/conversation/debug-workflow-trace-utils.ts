@@ -1,4 +1,5 @@
 import type { AgentFlowTraceItem } from '../../../api/runtime';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export interface AgentFlowTraceDisplayGroup {
   key: string;
@@ -12,11 +13,11 @@ export function getTraceItemKey(item: AgentFlowTraceItem) {
 
 export function nodeDisplayName(item: AgentFlowTraceItem) {
   if (item.nodeType === 'start') {
-    return '用户输入';
+    return i18nText("agentFlow", "auto.user_input");
   }
 
   if (item.nodeType === 'answer') {
-    return '直接回复';
+    return i18nText("agentFlow", "auto.reply_directly");
   }
 
   return item.nodeAlias;

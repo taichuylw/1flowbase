@@ -17,6 +17,7 @@ import {
   type UpdateSettingsFileStorageInput
 } from '../api/file-management';
 import { useAuthStore } from '../../../state/auth-store';
+import { i18nText } from '../../../shared/i18n/text';
 
 type DrawerMode = 'create' | 'view' | 'edit';
 
@@ -42,16 +43,16 @@ interface StorageFormValues {
 }
 
 const DRIVER_TYPE_OPTIONS = [
-  { label: '本地文件系统 (Local)', value: 'local' },
-  { label: 'AWS S3 / 兼容 (S3)', value: 's3' },
-  { label: '阿里云 OSS', value: 'oss' },
-  { label: '腾讯云 COS', value: 'cos' },
-  { label: '通用 S3 兼容 (RustFS)', value: 'rustfs' }
+  { label: i18nText("settings", "auto.local_file_system"), value: 'local' },
+  { label: i18nText("settings", "auto.aws_s_three_compatible"), value: 's3' },
+  { label: i18nText("settings", "auto.alibaba_cloud_oss"), value: 'oss' },
+  { label: i18nText("settings", "auto.tencent_cloud_cos"), value: 'cos' },
+  { label: i18nText("settings", "auto.rustfs_s_three_compatible"), value: 'rustfs' }
 ];
 
 const DRIVER_FIELDS: Record<string, { key: string; label: string; type: 'string' | 'number' }[]> = {
   local: [
-    { key: 'root_path', label: '根目录路径', type: 'string' }
+    { key: 'root_path', label: i18nText("settings", "auto.root_directory_path"), type: 'string' }
   ],
   s3: [
     { key: 'endpoint', label: 'Endpoint', type: 'string' },
@@ -149,10 +150,10 @@ export function FileStorageDrawer({
           rule_json: input.rule_json
         };
         await updateSettingsFileStorage(record.id, updateInput, csrfToken);
-        message.success('存储配置已更新');
+        message.success(i18nText("settings", "auto.storage_configuration_updated"));
       } else {
         await createSettingsFileStorage(input, csrfToken);
-        message.success('存储配置已创建');
+        message.success(i18nText("settings", "auto.storage_configuration_created"));
       }
 
       onSuccess();
@@ -160,7 +161,7 @@ export function FileStorageDrawer({
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return;
       const msg =
-        err instanceof Error ? err.message : '操作失败，请重试';
+        err instanceof Error ? err.message : i18nText("settings", "auto.operation_failed_retry");
       message.error(msg);
     } finally {
       setSubmitting(false);
@@ -173,10 +174,10 @@ export function FileStorageDrawer({
     <Drawer
       title={
         mode === 'create'
-          ? '新增存储配置'
+          ? i18nText("settings", "auto.add_storage_configuration")
           : mode === 'edit'
-            ? '编辑存储配置'
-            : '查看存储配置'
+            ? i18nText("settings", "auto.edit_storage_configuration")
+            : i18nText("settings", "auto.view_storage_configuration")
       }
       open={open}
       onClose={onClose}
@@ -184,7 +185,7 @@ export function FileStorageDrawer({
       extra={
         !isView ? (
           <Button type="primary" loading={submitting} onClick={handleSubmit}>
-            {mode === 'create' ? '创建' : '保存'}
+            {mode === 'create' ? i18nText("settings", "auto.create") : i18nText("settings", "auto.save")}
           </Button>
         ) : undefined
       }
@@ -203,39 +204,39 @@ export function FileStorageDrawer({
       >
         <Form.Item
           name="code"
-          label="存储标识"
-          rules={[{ required: true, message: '请输入存储标识' }]}
+          label={i18nText("settings", "auto.storage_code")}
+          rules={[{ required: true, message: i18nText("settings", "auto.storage_code_required") }]}
         >
-          <Input placeholder="例: local-storage" disabled={mode === 'edit' || isView} />
+          <Input placeholder={i18nText("settings", "auto.storage_code_placeholder")} disabled={mode === 'edit' || isView} />
         </Form.Item>
 
         <Form.Item
           name="title"
-          label="名称"
-          rules={[{ required: true, message: '请输入名称' }]}
+          label={i18nText("settings", "auto.name")}
+          rules={[{ required: true, message: i18nText("settings", "auto.name_required") }]}
         >
-          <Input placeholder="例: 本地存储" />
+          <Input placeholder={i18nText("settings", "auto.storage_name_placeholder")} />
         </Form.Item>
 
         <Form.Item
           name="driver_type"
-          label="驱动类型"
-          rules={[{ required: true, message: '请选择驱动类型' }]}
+          label={i18nText("settings", "auto.driver_type")}
+          rules={[{ required: true, message: i18nText("settings", "auto.driver_type_required") }]}
         >
           <Select options={DRIVER_TYPE_OPTIONS} disabled={mode === 'edit' || isView} />
         </Form.Item>
 
-        <Form.Item name="enabled" label="启用" valuePropName="checked">
+        <Form.Item name="enabled" label={i18nText("settings", "auto.enabled")} valuePropName="checked">
           <Switch />
         </Form.Item>
 
-        <Form.Item name="is_default" label="设为默认存储" valuePropName="checked">
+        <Form.Item name="is_default" label={i18nText("settings", "auto.set_as_default_storage")} valuePropName="checked">
           <Switch />
         </Form.Item>
 
         {currentDriver && DRIVER_FIELDS[currentDriver] && (
           <div className="storage-drawer-driver-config">
-            <h4>驱动配置</h4>
+            <h4>{i18nText("settings", "auto.driver_configuration")}</h4>
             {DRIVER_FIELDS[currentDriver].map((field) => (
               <Form.Item
                 key={field.key}
@@ -245,15 +246,15 @@ export function FileStorageDrawer({
                 {field.type === 'number' ? (
                   <InputNumber style={{ width: '100%' }} />
                 ) : (
-                  <Input placeholder={`请输入${field.label}`} />
+                  <Input placeholder={i18nText("settings", "auto.field_placeholder", { value1: field.label })} />
                 )}
               </Form.Item>
             ))}
           </div>
         )}
 
-        <Form.Item name={['rule_json', 'description']} label="规则描述">
-          <Input.TextArea rows={2} placeholder="可选" />
+        <Form.Item name={['rule_json', 'description']} label={i18nText("settings", "auto.rule_description")}>
+          <Input.TextArea rows={2} placeholder={i18nText("settings", "auto.optional")} />
         </Form.Item>
       </Form>
     </Drawer>

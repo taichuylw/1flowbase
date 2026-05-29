@@ -1,0 +1,23 @@
+{
+  "auto": {
+    "documentation": "Documentation",
+    "enter_design_mode": "Enter design mode",
+    "exit_design_mode": "Exit design mode",
+    "frontstage": "front desk",
+    "help": "help",
+    "logout": "Log out",
+    "official_source": "official source",
+    "profile": "personal information",
+    "settings": "settings",
+    "subsystem": "Subsystem",
+    "tools": "Tools",
+    "user": "User",
+    "workbench": "workbench"
+  },
+  "language": {
+    "current": "EN",
+    "en_us": "English",
+    "trigger": "Switch language",
+    "zh_hans": "Chinese"
+  }
+}

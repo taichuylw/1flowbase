@@ -1,4 +1,5 @@
 import type { FlowNodeOutputDocument } from '@1flowbase/flow-schema';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface AgentFlowSystemVariable extends FlowNodeOutputDocument {
   description: string;
@@ -11,36 +12,36 @@ export const agentFlowSystemVariables = [
     key: 'conversation_id',
     title: 'sys.conversation_id',
     valueType: 'string',
-    description: '会话 ID'
+    description: i18nText("agentFlow", "auto.system_variable_conversation_id")
   },
   {
     key: 'dialog_count',
     title: 'sys.dialog_count',
     valueType: 'number',
-    description: '会话次数'
+    description: i18nText("agentFlow", "auto.system_variable_dialog_count")
   },
   {
     key: 'user_id',
     title: 'sys.user_id',
     valueType: 'string',
-    description: '用户 ID'
+    description: i18nText("agentFlow", "auto.system_variable_user_id")
   },
   {
     key: 'app_id',
     title: 'sys.app_id',
     valueType: 'string',
-    description: '应用 ID'
+    description: i18nText("agentFlow", "auto.system_variable_app_id")
   },
   {
     key: 'workflow_id',
     title: 'sys.workflow_id',
     valueType: 'string',
-    description: '工作流 ID'
+    description: i18nText("agentFlow", "auto.system_variable_workflow_id")
   },
   {
     key: 'workflow_run_id',
     title: 'sys.workflow_run_id',
     valueType: 'string',
-    description: '工作流运行 ID'
+    description: i18nText("agentFlow", "auto.system_variable_workflow_run_id")
   }
 ] satisfies AgentFlowSystemVariable[];

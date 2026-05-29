@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import {
   modelProviderOptionsContract,
   modelProviderOptionsProviders
@@ -107,7 +108,7 @@ function getLlmNodeConfig(
 }
 
 async function openModelSettings() {
-  fireEvent.click(await screen.findByRole('button', { name: '模型' }));
+  fireEvent.click(await screen.findByRole('button', { name: /模型|model/ }));
   expect(
     await screen.findByRole('heading', { name: '模型设置' })
   ).toBeInTheDocument();
@@ -135,14 +136,16 @@ async function clickModelOption(label: string) {
 }
 
 describe('NodeDetailPanel', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     fetchModelProviderOptionsSpy.mockReset();
     fetchModelProviderOptionsSpy.mockResolvedValue({
       locale_meta: {
-        requested_locale: 'zh-CN',
-        resolved_locale: 'zh-CN',
-        fallback_locale: 'en-US',
-        supported_locales: ['zh-CN', 'en-US']
+        requested_locale: 'zh_Hans',
+        resolved_locale: 'zh_Hans',
+        fallback_locale: 'en_US',
+        supported_locales: ['zh_Hans', 'en_US']
       },
       i18n_catalog: {},
       providers: []
@@ -245,7 +248,7 @@ describe('NodeDetailPanel', () => {
 
       expect(screen.queryByText('节点说明')).not.toBeInTheDocument();
       expect(screen.queryByText('帮助文档')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '模型' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /模型|model/ })).toBeInTheDocument();
       expect(screen.queryByText('LLM 参数')).not.toBeInTheDocument();
       expect(screen.queryByText('返回格式')).not.toBeInTheDocument();
       expect(screen.queryByText('输出契约')).not.toBeInTheDocument();

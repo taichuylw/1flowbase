@@ -5,6 +5,7 @@ import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import { formatPluginAvailabilityStatus } from './plugin-installation-status';
 import { ModelProviderOverviewSummary } from '../../pages/settings-page/model-providers/ModelProviderOverviewSummary';
+import { i18nText } from '../../../../shared/i18n/text';
 
 
 function getCatalogDescription(
@@ -14,7 +15,7 @@ function getCatalogDescription(
   return (
     family.description?.trim() ||
     currentCatalogEntry?.description_key?.trim() ||
-    '未提供说明'
+    i18nText("settings", "auto.no_description_provided")
   );
 }
 
@@ -79,7 +80,7 @@ export function ModelProviderCatalogPanel({
           emptyText: (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={loading ? '正在加载供应商目录...' : '暂无可用供应商'}
+              description={loading ? i18nText("settings", "auto.loading_supplier_catalog") : i18nText("settings", "auto.suppliers_available_yet")}
             />
           )
         }}
@@ -87,7 +88,7 @@ export function ModelProviderCatalogPanel({
           ...(canManage
             ? [
               {
-                title: '操作',
+                title: i18nText("settings", "auto.operation"),
                 key: 'actions',
                 width: 120,
                 render: (_: unknown, entry: SettingsPluginFamilyEntry) => (
@@ -99,26 +100,23 @@ export function ModelProviderCatalogPanel({
                       type="link"
                       onClick={() => onViewInstances(entry)}
                     >
-                      配置
-                    </Button>
+                      {i18nText("settings", "auto.configuration_alt")}</Button>
                     <Button type="link" onClick={() => onCreate(entry)}>
-                      添加
-                    </Button>
+                      {i18nText("settings", "auto.add")}</Button>
                     <Button
                       danger
                       type="link"
                       loading={deletingProviderCode === entry.provider_code}
                       onClick={() => onDelete(entry)}
                     >
-                      删除
-                    </Button>
+                      {i18nText("settings", "auto.delete")}</Button>
                   </Space>
                 )
               }
             ]
             : []),
           {
-            title: '名称',
+            title: i18nText("settings", "auto.name"),
             key: 'provider',
             width: 180,
             render: (_, entry) => (
@@ -128,7 +126,7 @@ export function ModelProviderCatalogPanel({
             )
           },
           {
-            title: '状态',
+            title: i18nText("settings", "auto.status"),
             key: 'status',
             width: 130,
             render: (_, entry) => {
@@ -146,13 +144,13 @@ export function ModelProviderCatalogPanel({
                 >
                   <Tag color={status.color}>{status.label}</Tag>
                   <Tag>{entry.model_discovery_mode}</Tag>
-                  {entry.has_update ? <Tag color="gold">有可用更新</Tag> : null}
+                  {entry.has_update ? <Tag color="gold">{i18nText("settings", "auto.updates_available")}</Tag> : null}
                 </Space>
               );
             }
           },
           {
-            title: '版本',
+            title: i18nText("settings", "auto.version"),
             key: 'version',
             width: 120,
             render: (_, entry) => {
@@ -178,7 +176,7 @@ export function ModelProviderCatalogPanel({
                             root: 'model-provider-panel__version-dropdown'
                           }
                         }}
-                        aria-label={`切换 ${entry.display_name} 版本`}
+                        aria-label={i18nText("settings", "auto.switch_version", { value1: entry.display_name })}
                         loading={switchingProviderCode === entry.provider_code}
                         options={versionOptions}
                         onChange={(installationId) => {
@@ -196,8 +194,7 @@ export function ModelProviderCatalogPanel({
                           loading={upgradingProviderCode === entry.provider_code}
                           onClick={() => onUpgradeLatest(entry)}
                         >
-                          更新
-                        </Button>
+                          {i18nText("settings", "auto.update")}</Button>
                       ) : null}
                     </Space>
                   ) : (
@@ -208,7 +205,7 @@ export function ModelProviderCatalogPanel({
             }
           },
           {
-            title: '说明',
+            title: i18nText("settings", "auto.description"),
             key: 'summary',
             width: 200,
             render: (_, entry) => {

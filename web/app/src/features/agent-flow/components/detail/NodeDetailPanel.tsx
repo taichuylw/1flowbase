@@ -11,11 +11,12 @@ import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { NodeDetailHeader } from './NodeDetailHeader';
 import { NodeConfigTab } from './tabs/NodeConfigTab';
 import { NodeLastRunTab } from './tabs/NodeLastRunTab';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const nodeDetailShellSchema = {
   schemaVersion: '1.0.0',
   shellType: 'dock_panel',
-  title: '节点详情'
+  title: i18nText("agentFlow", "auto.node_details")
 } as const;
 
 export function NodeDetailPanel({
@@ -121,7 +122,7 @@ export function NodeDetailPanel({
           items={[
             {
               key: 'config',
-              label: '设置',
+              label: i18nText("agentFlow", "auto.settings"),
               children: (
                 <NodeConfigTab
                   adapter={runtime.adapter}
@@ -131,7 +132,7 @@ export function NodeDetailPanel({
             },
             {
               key: 'lastRun',
-              label: '上次运行',
+              label: i18nText("agentFlow", "auto.last_run"),
               forceRender: true,
               children: (
                 <NodeLastRunTab

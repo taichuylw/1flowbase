@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const templateTransformNodeDefinition: NodeDefinition = {
   label: 'Template Transform',
@@ -15,7 +16,7 @@ export const templateTransformNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.template',
-          label: '模板',
+          label: i18nText("agentFlow", "auto.template"),
           editor: 'templated_text',
           required: true
         }
@@ -24,7 +25,7 @@ export const templateTransformNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.text', label: '转换结果', editor: 'text', required: true }]
+      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.conversion_result"), editor: 'text', required: true }]
     }
   ]
 };

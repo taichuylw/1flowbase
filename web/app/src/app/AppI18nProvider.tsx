@@ -17,7 +17,7 @@ import {
 } from '../shared/user-preferences/locale-preference';
 
 function getAntdLocale(locale: AppLocale) {
-  return locale === 'en-US' ? enUS : zhCN;
+  return locale === 'en_US' ? enUS : zhCN;
 }
 
 export function AppI18nProvider({ children }: PropsWithChildren) {

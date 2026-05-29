@@ -1,4 +1,5 @@
 import { message } from 'antd';
+import { i18nText } from '../../../shared/i18n/text';
 
 type FlowseClipboard = Clipboard & {
   __flowbaseScalarPatched__?: boolean;
@@ -43,9 +44,9 @@ async function copyTextWithExecCommand(text: string) {
       throw new Error('Copy command failed');
     }
 
-    message.success('已复制: ' + text);
+    message.success(i18nText("settings", "auto.copied") + text);
   } catch (err) {
-    message.error('复制失败，请手动复制');
+    message.error(i18nText("settings", "auto.copy_failed_manual"));
     console.error('Copy failed:', err);
     throw err;
   } finally {

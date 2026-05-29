@@ -17,6 +17,7 @@ import { NodeRunIOCard } from '../last-run/NodeRunIOCard';
 import { NodeRunMetadataCard } from '../last-run/NodeRunMetadataCard';
 import { NodeRunSummaryCard } from '../last-run/NodeRunSummaryCard';
 import { NodeRunEmptyState } from '../last-run/NodeRunEmptyState';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function isNodeLastRun(value: unknown): value is NonNullable<
   Awaited<ReturnType<typeof fetchNodeLastRun>>
@@ -143,16 +144,16 @@ export function NodeLastRunTab({
     enabled: Boolean(applicationId && nodeId)
   });
   if (lastRunQuery.isPending) {
-    return <Result status="info" title="正在加载上次运行" />;
+    return <Result status="info" title={i18nText("agentFlow", "auto.loading_last_run")} />;
   }
 
   if (lastRunQuery.isError) {
-    return <Result status="error" title="上次运行加载失败" />;
+    return <Result status="error" title={i18nText("agentFlow", "auto.last_run_failed_load")} />;
   }
 
   const emptyDescription = activeRunId
-    ? '当前运行没有该节点记录'
-    : '当前节点还没有运行记录';
+    ? i18nText("agentFlow", "auto.record_node_run")
+    : i18nText("agentFlow", "auto.node_running_records_yet");
 
   if (!lastRunQuery.data) {
     return renderLastRunContent({
@@ -164,7 +165,7 @@ export function NodeLastRunTab({
   }
 
   if (!isNodeLastRun(lastRunQuery.data)) {
-    return <Result status="warning" title="上次运行数据异常" />;
+    return <Result status="warning" title={i18nText("agentFlow", "auto.abnormal_data_last_run")} />;
   }
 
   const lastRun = lastRunQuery.data;

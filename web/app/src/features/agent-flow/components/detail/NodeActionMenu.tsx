@@ -1,5 +1,6 @@
 import { MoreOutlined } from '@ant-design/icons';
 import { Button, Dropdown } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function NodeActionMenu({
   onLocate,
@@ -17,24 +18,24 @@ export function NodeActionMenu({
         items: [
           {
             key: 'locate',
-            label: '定位节点',
+            label: i18nText("agentFlow", "auto.locate_node"),
             onClick: onLocate
           },
           {
             key: 'copy',
-            label: '复制节点',
+            label: i18nText("agentFlow", "auto.copy_node"),
             onClick: onCopy
           },
           {
             key: 'delete',
-            label: '删除节点',
+            label: i18nText("agentFlow", "auto.delete_node"),
             danger: true,
             onClick: onDelete
           }
         ]
       }}
     >
-      <Button aria-label="更多操作" icon={<MoreOutlined />} type="text" />
+      <Button aria-label={i18nText("agentFlow", "auto.more_actions_alt")} icon={<MoreOutlined />} type="text" />
     </Dropdown>
   );
 }

@@ -1,5 +1,6 @@
 import { CaretRightOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function NodeRunButton({
   onRunNode,
@@ -10,7 +11,7 @@ export function NodeRunButton({
 }) {
   return (
     <Button
-      aria-label="运行当前节点"
+      aria-label={i18nText("agentFlow", "auto.run_current_node")}
       disabled={!onRunNode || loading}
       icon={<CaretRightOutlined />}
       loading={loading}

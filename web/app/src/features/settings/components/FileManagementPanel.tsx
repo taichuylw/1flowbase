@@ -36,6 +36,7 @@ import { FileStorageDrawer } from './FileStorageDrawer';
 import { FileTableDrawer } from './FileTableDrawer';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
 import './file-management-panel.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 interface FileManagementPanelProps {
   isRoot: boolean;
@@ -142,19 +143,19 @@ export function FileManagementPanel({
 
   const handleDeleteStorage = (record: SettingsFileStorage) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除存储配置 "${record.title}" (${record.code}) 吗？此操作不可撤销。`,
-      okText: '删除',
+      title: i18nText("settings", "auto.confirm_delete"),
+      content: i18nText("settings", "auto.delete_storage_configuration_content", { value1: record.title, value2: record.code }),
+      okText: i18nText("settings", "auto.delete"),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: i18nText("settings", "auto.cancel"),
       onOk: async () => {
         try {
           await deleteSettingsFileStorage(record.id, ensureCsrfToken());
-          message.success('存储配置已删除');
+          message.success(i18nText("settings", "auto.storage_configuration_deleted"));
           await refetchStorages();
         } catch (error) {
           message.error(
-            error instanceof Error ? error.message : '删除失败，请重试'
+            error instanceof Error ? error.message : i18nText("settings", "auto.delete_failed_retry")
           );
         }
       }
@@ -163,19 +164,19 @@ export function FileManagementPanel({
 
   const handleDeleteTable = (record: SettingsFileTable) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除文件表 "${record.title}" (${record.code}) 吗？此操作不可撤销。`,
-      okText: '删除',
+      title: i18nText("settings", "auto.confirm_delete"),
+      content: i18nText("settings", "auto.delete_file_table_content", { value1: record.title, value2: record.code }),
+      okText: i18nText("settings", "auto.delete"),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: i18nText("settings", "auto.cancel"),
       onOk: async () => {
         try {
           await deleteSettingsFileTable(record.id, ensureCsrfToken());
-          message.success('文件表已删除');
+          message.success(i18nText("settings", "auto.file_table_deleted"));
           await refetchTables();
         } catch (error) {
           message.error(
-            error instanceof Error ? error.message : '删除失败，请重试'
+            error instanceof Error ? error.message : i18nText("settings", "auto.delete_failed_retry")
           );
         }
       }
@@ -192,42 +193,42 @@ export function FileManagementPanel({
 
   const storageColumns: ColumnsType<SettingsFileStorage> = [
     {
-      title: '标识',
+      title: i18nText("settings", "auto.identifier"),
       dataIndex: 'code',
       key: 'code',
       width: 160
     },
     {
-      title: '名称',
+      title: i18nText("settings", "auto.name"),
       dataIndex: 'title',
       key: 'title',
       width: 180
     },
     {
-      title: '驱动',
+      title: i18nText("settings", "auto.driver"),
       dataIndex: 'driver_type',
       key: 'driver_type',
       width: 120,
       render: (driverType: string) => <Tag>{driverType}</Tag>
     },
     {
-      title: '默认',
+      title: i18nText("settings", "auto.default"),
       dataIndex: 'is_default',
       key: 'is_default',
       width: 90,
       render: (value: boolean) =>
-        value ? <Tag color="green">是</Tag> : <Tag>否</Tag>
+        value ? <Tag color="green">{i18nText("settings", "auto.yes")}</Tag> : <Tag>{i18nText("settings", "auto.no")}</Tag>
     },
     {
-      title: '启用',
+      title: i18nText("settings", "auto.enabled"),
       dataIndex: 'enabled',
       key: 'enabled',
       width: 90,
       render: (value: boolean) =>
-        value ? <Tag color="blue">是</Tag> : <Tag color="default">否</Tag>
+        value ? <Tag color="blue">{i18nText("settings", "auto.yes")}</Tag> : <Tag color="default">{i18nText("settings", "auto.no")}</Tag>
     },
     {
-      title: '健康状态',
+      title: i18nText("settings", "auto.health_status"),
       dataIndex: 'health_status',
       key: 'health_status',
       width: 120,
@@ -237,12 +238,12 @@ export function FileManagementPanel({
       }
     },
     {
-      title: '操作',
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: 220,
       render: (_value, record) => (
         <Space size="small">
-          <Tooltip title="查看">
+          <Tooltip title={i18nText("settings", "auto.view")}>
             <Button
               type="link"
               size="small"
@@ -251,10 +252,9 @@ export function FileManagementPanel({
                 setStorageDrawer({ open: true, mode: 'view', record })
               }
             >
-              查看
-            </Button>
+              {i18nText("settings", "auto.view")}</Button>
           </Tooltip>
-          <Tooltip title="编辑">
+          <Tooltip title={i18nText("settings", "auto.edit")}>
             <Button
               type="link"
               size="small"
@@ -263,10 +263,9 @@ export function FileManagementPanel({
                 setStorageDrawer({ open: true, mode: 'edit', record })
               }
             >
-              编辑
-            </Button>
+              {i18nText("settings", "auto.edit")}</Button>
           </Tooltip>
-          <Tooltip title={record.is_default ? '默认存储不可删除' : '删除'}>
+          <Tooltip title={record.is_default ? i18nText("settings", "auto.default_storage_cannot_be_deleted") : i18nText("settings", "auto.delete")}>
             <Button
               type="link"
               size="small"
@@ -275,8 +274,7 @@ export function FileManagementPanel({
               icon={<DeleteOutlined />}
               onClick={() => handleDeleteStorage(record)}
             >
-              删除
-            </Button>
+              {i18nText("settings", "auto.delete")}</Button>
           </Tooltip>
         </Space>
       )
@@ -285,26 +283,26 @@ export function FileManagementPanel({
 
   const tableColumns: ColumnsType<SettingsFileTable> = [
     {
-      title: '标识',
+      title: i18nText("settings", "auto.identifier"),
       dataIndex: 'code',
       key: 'code',
       width: 160
     },
     {
-      title: '名称',
+      title: i18nText("settings", "auto.name"),
       dataIndex: 'title',
       key: 'title',
       width: 180
     },
     {
-      title: '作用域',
+      title: i18nText("settings", "auto.scope"),
       dataIndex: 'scope_kind',
       key: 'scope_kind',
       width: 120,
       render: (scopeKind: string) => <Tag>{scopeKind}</Tag>
     },
     {
-      title: '绑定存储',
+      title: i18nText("settings", "auto.bound_storage"),
       dataIndex: 'bound_storage_title',
       key: 'bound_storage_title',
       width: 220,
@@ -315,13 +313,13 @@ export function FileManagementPanel({
 
         return (
           <Tag color="orange">
-            {record.bound_storage_id ? '未命名存储' : '未绑定'}
+            {record.bound_storage_id ? i18nText("settings", "auto.unnamed_storage") : i18nText("settings", "auto.unbound")}
           </Tag>
         );
       }
     },
     {
-      title: '状态',
+      title: i18nText("settings", "auto.status"),
       dataIndex: 'status',
       key: 'status',
       width: 120,
@@ -330,12 +328,12 @@ export function FileManagementPanel({
       )
     },
     {
-      title: '操作',
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: isRoot ? 220 : 96,
       render: (_value, record) => (
         <Space size="small">
-          <Tooltip title="查看">
+          <Tooltip title={i18nText("settings", "auto.view")}>
             <Button
               type="link"
               size="small"
@@ -344,11 +342,10 @@ export function FileManagementPanel({
                 setTableDrawer({ open: true, mode: 'view', record })
               }
             >
-              查看
-            </Button>
+              {i18nText("settings", "auto.view")}</Button>
           </Tooltip>
           {isRoot ? (
-            <Tooltip title="编辑">
+            <Tooltip title={i18nText("settings", "auto.edit")}>
               <Button
                 type="link"
                 size="small"
@@ -357,12 +354,11 @@ export function FileManagementPanel({
                   setTableDrawer({ open: true, mode: 'edit', record })
                 }
               >
-                编辑
-              </Button>
+                {i18nText("settings", "auto.edit")}</Button>
             </Tooltip>
           ) : null}
           {isRoot ? (
-            <Tooltip title={record.is_builtin ? '内置文件表不可删除' : '删除'}>
+            <Tooltip title={record.is_builtin ? i18nText("settings", "auto.built_in_file_table_cannot_be_deleted") : i18nText("settings", "auto.delete")}>
               <Button
                 type="link"
                 size="small"
@@ -371,8 +367,7 @@ export function FileManagementPanel({
                 icon={<DeleteOutlined />}
                 onClick={() => handleDeleteTable(record)}
               >
-                删除
-              </Button>
+                {i18nText("settings", "auto.delete")}</Button>
             </Tooltip>
           ) : null}
         </Space>
@@ -394,9 +389,8 @@ export function FileManagementPanel({
               setStorageDrawer({ open: true, mode: 'create', record: null })
             }
           >
-            新增
-          </Button>
-          <Tooltip title="刷新">
+            {i18nText("settings", "auto.new")}</Button>
+          <Tooltip title={i18nText("settings", "auto.refresh")}>
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -406,7 +400,7 @@ export function FileManagementPanel({
           <Input.Search
             allowClear
             value={storageSearch}
-            placeholder="搜索存储..."
+            placeholder={i18nText("settings", "auto.search_storage_placeholder")}
             size="small"
             style={{ width: 220 }}
             onChange={(event) => setStorageSearch(event.target.value)}
@@ -438,10 +432,9 @@ export function FileManagementPanel({
                 setTableDrawer({ open: true, mode: 'create', record: null })
               }
             >
-              新增
-            </Button>
+              {i18nText("settings", "auto.new")}</Button>
           ) : null}
-          <Tooltip title="刷新">
+          <Tooltip title={i18nText("settings", "auto.refresh")}>
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -451,7 +444,7 @@ export function FileManagementPanel({
           <Input.Search
             allowClear
             value={tableSearch}
-            placeholder="搜索文件表..."
+            placeholder={i18nText("settings", "auto.search_file_table_placeholder")}
             size="small"
             style={{ width: 220 }}
             onChange={(event) => setTableSearch(event.target.value)}
@@ -472,15 +465,15 @@ export function FileManagementPanel({
 
   const managementTabs = [
     ...(isRoot
-      ? [{ key: 'storages', label: '存储配置', children: storagePanel }]
+      ? [{ key: 'storages', label: i18nText("settings", "auto.storage_configuration"), children: storagePanel }]
       : []),
     ...(canViewTables
-      ? [{ key: 'tables', label: '文件表', children: tablePanel }]
+      ? [{ key: 'tables', label: i18nText("settings", "auto.file_table"), children: tablePanel }]
       : [])
   ];
 
   return (
-    <SettingsSectionSurface title="文件管理" hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.file_management")} hideHeader heightMode="fill">
       <div className="file-management-panel">
         {managementTabs.length > 0 ? (
           <section className="fm-section fm-tabs-section">
@@ -491,7 +484,7 @@ export function FileManagementPanel({
         {showCreateOnlyTable ? (
           <section className="fm-section">
             <div className="fm-section-header">
-              <h3>文件表</h3>
+              <h3>{i18nText("settings", "auto.file_table")}</h3>
               <div className="fm-toolbar">
                 <Button
                   type="primary"
@@ -501,13 +494,11 @@ export function FileManagementPanel({
                     setTableDrawer({ open: true, mode: 'create', record: null })
                   }
                 >
-                  新增
-                </Button>
+                  {i18nText("settings", "auto.new")}</Button>
               </div>
             </div>
             <p className="fm-create-only-info">
-              暂无权限查看文件表列表，您可以创建一个新文件表。
-            </p>
+              {i18nText("settings", "auto.create_file_table_without_view_permission_notice")}</p>
           </section>
         ) : null}
 

@@ -11,6 +11,7 @@ import {
 } from '../../lib/plugin-node-definitions';
 import { getAgentFlowNodeTypeIcon } from '../../lib/node-type-icons';
 import { calculateNodePickerMaxHeight } from './node-picker-layout';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type BuiltinNodePickerOption = Extract<NodePickerOption, { kind: 'builtin' }>;
 type NodePickerTab = 'builtin' | 'plugin';
@@ -24,28 +25,28 @@ interface NodePickerGroup {
 const BUILTIN_NODE_PICKER_GROUPS: NodePickerGroup[] = [
   {
     key: 'io',
-    title: '起止输出',
-    description: '定义输入入口和最终响应。',
+    title: i18nText("agentFlow", "auto.start_stop_output"),
+    description: i18nText("agentFlow", "auto.define_input_entry_final_response"),
   },
   {
     key: 'generation',
-    title: '模型与生成',
-    description: '调用模型、检索知识并组织生成内容。',
+    title: i18nText("agentFlow", "auto.model_and_generation"),
+    description: i18nText("agentFlow", "auto.invoke_models_retrieve_knowledge_organize_generated_content"),
   },
   {
     key: 'control',
-    title: '流程控制',
-    description: '分支、分类、循环和批量处理。',
+    title: i18nText("agentFlow", "auto.process_control"),
+    description: i18nText("agentFlow", "auto.branching_sorting_looping_batch_processing"),
   },
   {
     key: 'data',
-    title: '数据处理',
-    description: '读写结构化数据并维护流程变量。',
+    title: i18nText("agentFlow", "auto.data_processing"),
+    description: i18nText("agentFlow", "auto.read_write_structured_data_maintain_process_variables"),
   },
   {
     key: 'external',
-    title: '外部能力',
-    description: '调用接口、工具和系统外能力。',
+    title: i18nText("agentFlow", "auto.external_capabilities"),
+    description: i18nText("agentFlow", "auto.call_interfaces_tools_out_system_capabilities"),
   }
 ];
 
@@ -177,7 +178,7 @@ export function NodePickerPopover({
         <div className="agent-flow-node-picker">
           <div className="agent-flow-node-picker__header">
             <div
-              aria-label="节点来源"
+              aria-label={i18nText("agentFlow", "auto.node_source")}
               className="agent-flow-node-picker__tabs"
               role="tablist"
             >
@@ -188,8 +189,7 @@ export function NodePickerPopover({
                 type="button"
                 onClick={() => setActiveTab('builtin')}
               >
-                内置
-              </button>
+                {i18nText("agentFlow", "auto.built_in")}</button>
               <button
                 aria-selected={activeTab === 'plugin'}
                 className={`agent-flow-node-picker__tab${activeTab === 'plugin' ? ' agent-flow-node-picker__tab--active' : ''}`}
@@ -197,14 +197,13 @@ export function NodePickerPopover({
                 type="button"
                 onClick={() => setActiveTab('plugin')}
               >
-                扩展
-              </button>
+                {i18nText("agentFlow", "auto.expand")}</button>
             </div>
             <div className="agent-flow-node-picker__search">
               <Input
                 allowClear
-                aria-label="搜索节点"
-                placeholder="搜索节点"
+                aria-label={i18nText("agentFlow", "auto.search_node")}
+                placeholder={i18nText("agentFlow", "auto.search_node")}
                 prefix={<SearchOutlined />}
                 size="small"
                 value={searchValue}
@@ -236,7 +235,7 @@ export function NodePickerPopover({
                 ))}
                 {uncategorizedBuiltinOptions.length > 0 ? (
                   <NodePickerSection
-                    title="其他节点"
+                    title={i18nText("agentFlow", "auto.other_nodes")}
                   >
                     {uncategorizedBuiltinOptions.map((option) => (
                       <NodePickerOptionButton
@@ -255,7 +254,7 @@ export function NodePickerPopover({
               <>
                 {filteredPluginOptions.length > 0 ? (
                   <NodePickerSection
-                    title="插件节点"
+                    title={i18nText("agentFlow", "auto.plugin_node_label")}
                   >
                     {filteredPluginOptions.map((option) => (
                       <NodePickerOptionButton
@@ -278,10 +277,10 @@ export function NodePickerPopover({
             {!hasVisibleOptions ? (
               <div className="agent-flow-node-picker__empty">
                 {normalizedSearchValue.length > 0
-                  ? '没有匹配的节点'
+                  ? i18nText("agentFlow", "auto.no_matching_node")
                   : activeTab === 'plugin'
-                    ? '暂无扩展节点'
-                    : '暂无内置节点'}
+                    ? i18nText("agentFlow", "auto.expansion_node_yet")
+                    : i18nText("agentFlow", "auto.built_nodes_yet")}
               </div>
             ) : null}
           </div>

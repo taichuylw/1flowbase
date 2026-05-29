@@ -15,6 +15,7 @@ import {
   type NodeEditorKind
 } from '../lib/node-definitions';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
+import { i18nText } from '../../../shared/i18n/text';
 
 const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   text: 'text',
@@ -125,7 +126,7 @@ function buildSharedOutputVariableBlocks(
     {
       kind: 'view',
       renderer: 'output_contract',
-      title: '输出变量',
+      title: i18nText("agentFlow", "auto.output_variable"),
       key: `${nodeType}-generated-outputs`
     }
   ];
@@ -137,13 +138,13 @@ export function buildNodeDetailHeaderBlocks(): SchemaBlock[] {
       kind: 'field',
       renderer: 'header_alias',
       path: 'alias',
-      label: '节点别名'
+      label: i18nText("agentFlow", "auto.node_alias")
     },
     {
       kind: 'field',
       renderer: 'header_description',
       path: 'description',
-      label: '节点简介'
+      label: i18nText("agentFlow", "auto.node_introduction")
     }
   ];
 }
@@ -218,21 +219,21 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
   const policyBlocks: SchemaBlock[] =
     nodeType === 'start'
       ? []
-      : [{ kind: 'view', renderer: 'policy_group', title: '策略' }];
+      : [{ kind: 'view', renderer: 'policy_group', title: i18nText("agentFlow", "auto.strategy") }];
 
   return [
     ...definitionSections,
     ...buildSharedOutputVariableBlocks(nodeType),
     ...policyBlocks,
-    { kind: 'view', renderer: 'relations', title: '下一步' }
+    { kind: 'view', renderer: 'relations', title: i18nText("agentFlow", "auto.next_step") }
   ];
 }
 
 export function buildCommonLastRunBlocks(): SchemaBlock[] {
   return [
-    { kind: 'view', renderer: 'runtime_summary', title: '运行摘要' },
-    { kind: 'view', renderer: 'runtime_io', title: '运行输入输出' },
-    { kind: 'view', renderer: 'runtime_metadata', title: '运行元数据' }
+    { kind: 'view', renderer: 'runtime_summary', title: i18nText("agentFlow", "auto.running_summary") },
+    { kind: 'view', renderer: 'runtime_io', title: i18nText("agentFlow", "auto.run_input_output") },
+    { kind: 'view', renderer: 'runtime_metadata', title: i18nText("agentFlow", "auto.run_metadata") }
   ];
 }
 

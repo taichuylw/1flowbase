@@ -34,6 +34,7 @@ import {
 } from '../api/members';
 import { fetchSettingsRoles, settingsRolesQueryKey } from '../api/roles';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
+import { i18nText } from '../../../shared/i18n/text';
 
 const TEMP_PASSWORD = 'Temp@123456';
 
@@ -177,7 +178,7 @@ export function MemberManagementPanel({
   const columns = useMemo(
     () => [
       {
-        title: '用户',
+        title: i18nText("settings", "auto.user_alt"),
         key: 'user',
         render: (_: unknown, member: SettingsMember) => (
           <Space>
@@ -202,7 +203,7 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: '联系方式',
+        title: i18nText("settings", "auto.contact_information"),
         key: 'contact',
         render: (_: unknown, member: SettingsMember) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -218,17 +219,17 @@ export function MemberManagementPanel({
         )
       },
       {
-        title: '状态',
+        title: i18nText("settings", "auto.status"),
         key: 'status',
         width: 80,
         render: (_: unknown, member: SettingsMember) => (
           <Tag color={member.status === 'active' ? 'green' : 'default'}>
-            {member.status === 'active' ? '启用' : '停用'}
+            {member.status === 'active' ? i18nText("settings", "auto.enabled") : i18nText("settings", "auto.deactivate")}
           </Tag>
         )
       },
       {
-        title: '角色',
+        title: i18nText("settings", "auto.role"),
         key: 'roles',
         render: (_: unknown, member: SettingsMember) => {
           const isRootMember = member.role_codes.includes('root');
@@ -248,8 +249,7 @@ export function MemberManagementPanel({
                   isRootMember ? undefined : () => handleOpenRoleEdit(member)
                 }
               >
-                编辑
-              </Button>
+                {i18nText("settings", "auto.edit")}</Button>
             </Space>
           ) : (
             <Space wrap size={4}>
@@ -263,7 +263,7 @@ export function MemberManagementPanel({
       ...(canManageMembers
         ? [
             {
-              title: '操作',
+              title: i18nText("settings", "auto.operation"),
               key: 'action',
               width: 160,
               render: (_: unknown, member: SettingsMember) => {
@@ -279,15 +279,14 @@ export function MemberManagementPanel({
                           icon={<StopOutlined />}
                           disabled
                         >
-                          停用
-                        </Button>
+                          {i18nText("settings", "auto.deactivate")}</Button>
                       ) : (
                         <Popconfirm
-                          title="停用账号"
-                          description={`确定要停用 ${member.name} 的账号吗？停用后该用户将无法登录。`}
+                          title={i18nText("settings", "auto.deactivate_account")}
+                          description={i18nText("settings", "auto.sure_want_deactivate_s_account_deactivation_user_able_log", { value1: member.name })}
                           onConfirm={() => disableMutation.mutate(member.id)}
-                          okText="确认停用"
-                          cancelText="取消"
+                          okText={i18nText("settings", "auto.confirm_deactivation")}
+                          cancelText={i18nText("settings", "auto.cancel")}
                           okButtonProps={{ danger: true }}
                         >
                           <Button
@@ -296,32 +295,29 @@ export function MemberManagementPanel({
                             icon={<StopOutlined />}
                             loading={disableMutation.isPending}
                           >
-                            停用
-                          </Button>
+                            {i18nText("settings", "auto.deactivate")}</Button>
                         </Popconfirm>
                       )
                     ) : null}
                     {isRootMember ? (
                       <Button size="small" icon={<KeyOutlined />} disabled>
-                        重置密码
-                      </Button>
+                        {i18nText("settings", "auto.reset_password")}</Button>
                     ) : (
                       <Popconfirm
-                        title="重置密码"
-                        description={`将 ${member.name} 的密码重置为默认临时密码，用户登录后需立即修改。`}
+                        title={i18nText("settings", "auto.reset_password")}
+                        description={i18nText("settings", "auto.reset_password_temporary_password_needs_changed_immediately_user_logs", { value1: member.name })}
                         onConfirm={() =>
                           resetPasswordMutation.mutate(member.id)
                         }
-                        okText="确认重置"
-                        cancelText="取消"
+                        okText={i18nText("settings", "auto.confirm_reset")}
+                        cancelText={i18nText("settings", "auto.cancel")}
                       >
                         <Button
                           size="small"
                           icon={<KeyOutlined />}
                           loading={resetPasswordMutation.isPending}
                         >
-                          重置密码
-                        </Button>
+                          {i18nText("settings", "auto.reset_password")}</Button>
                       </Popconfirm>
                     )}
                   </Space>
@@ -341,7 +337,7 @@ export function MemberManagementPanel({
   );
 
   return (
-    <SettingsSectionSurface title="用户管理" hideHeader heightMode="fill">
+    <SettingsSectionSurface title={i18nText("settings", "auto.user_management")} hideHeader heightMode="fill">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {canManageMembers ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -350,8 +346,7 @@ export function MemberManagementPanel({
               icon={<UserAddOutlined />}
               onClick={() => setCreateModalOpen(true)}
             >
-              新建用户
-            </Button>
+              {i18nText("settings", "auto.create_new_user")}</Button>
           </div>
         ) : null}
 
@@ -365,12 +360,11 @@ export function MemberManagementPanel({
         />
 
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。
-        </Typography.Text>
+          {i18nText("settings", "auto.resetting_password_reset_target_account_password_temporary_password_require_user")}</Typography.Text>
 
         {/* Create Member Modal */}
         <Modal
-          title="新建用户"
+          title={i18nText("settings", "auto.create_new_user")}
           open={createModalOpen}
           onCancel={() => {
             setCreateModalOpen(false);
@@ -378,8 +372,8 @@ export function MemberManagementPanel({
           }}
           onOk={() => createForm.submit()}
           confirmLoading={createMutation.isPending}
-          okText="创建"
-          cancelText="取消"
+          okText={i18nText("settings", "auto.create")}
+          cancelText={i18nText("settings", "auto.cancel")}
           width={600}
           destroyOnHidden
         >
@@ -397,54 +391,54 @@ export function MemberManagementPanel({
               }}
             >
               <Form.Item
-                label="账号"
+                label={i18nText("settings", "auto.account_number")}
                 name="account"
-                rules={[{ required: true, message: '请输入账号' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_account_number") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label="姓名"
+                label={i18nText("settings", "auto.name_alt")}
                 name="name"
-                rules={[{ required: true, message: '请输入姓名' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_full_name") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label="邮箱"
+                label={i18nText("settings", "auto.email")}
                 name="email"
                 rules={[
-                  { required: true, message: '请输入邮箱' },
-                  { type: 'email', message: '请输入有效邮箱' }
+                  { required: true, message: i18nText("settings", "auto.enter_email") },
+                  { type: 'email', message: i18nText("settings", "auto.enter_valid_email_address") }
                 ]}
               >
                 <Input />
               </Form.Item>
-              <Form.Item label="手机号" name="phone">
+              <Form.Item label={i18nText("settings", "auto.mobile_phone_number")} name="phone">
                 <Input />
               </Form.Item>
               <Form.Item
-                label="昵称"
+                label={i18nText("settings", "auto.nickname")}
                 name="nickname"
-                rules={[{ required: true, message: '请输入昵称' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_nickname") }]}
               >
                 <Input />
               </Form.Item>
               <Form.Item
-                label="初始密码"
+                label={i18nText("settings", "auto.initial_password")}
                 name="password"
                 initialValue={TEMP_PASSWORD}
-                rules={[{ required: true, message: '请输入初始密码' }]}
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_initial_password") }]}
               >
                 <Input.Password />
               </Form.Item>
             </div>
-            <Form.Item label="个人介绍" name="introduction">
+            <Form.Item label={i18nText("settings", "auto.personal_introduction")} name="introduction">
               <Input.TextArea rows={2} />
             </Form.Item>
             <div style={{ display: 'flex', gap: 24 }}>
               <Form.Item
-                label="邮箱登录"
+                label={i18nText("settings", "auto.email_login")}
                 name="email_login_enabled"
                 valuePropName="checked"
                 initialValue
@@ -452,7 +446,7 @@ export function MemberManagementPanel({
                 <Switch />
               </Form.Item>
               <Form.Item
-                label="手机登录"
+                label={i18nText("settings", "auto.mobile_login")}
                 name="phone_login_enabled"
                 valuePropName="checked"
                 initialValue={false}
@@ -466,14 +460,14 @@ export function MemberManagementPanel({
         {/* Role Edit Modal */}
         <Modal
           title={
-            roleEditMember ? `编辑角色 — ${roleEditMember.name}` : '编辑角色'
+            roleEditMember ? i18nText("settings", "auto.edit_role", { value1: roleEditMember.name }) : i18nText("settings", "auto.edit_role_alt")
           }
           open={Boolean(roleEditMember)}
           onCancel={() => setRoleEditMember(null)}
           onOk={handleRoleEditOk}
           confirmLoading={replaceRolesMutation.isPending}
-          okText="保存"
-          cancelText="取消"
+          okText={i18nText("settings", "auto.save")}
+          cancelText={i18nText("settings", "auto.cancel")}
           width={480}
           destroyOnHidden
         >
@@ -483,15 +477,14 @@ export function MemberManagementPanel({
                 type="secondary"
                 style={{ display: 'block', marginBottom: 12, fontSize: 13 }}
               >
-                为用户 {roleEditMember.name}（{roleEditMember.account}）分配角色
-              </Typography.Text>
+                {i18nText("settings", "auto.for_users")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.assign_roles")}</Typography.Text>
               <Select
                 mode="multiple"
                 style={{ width: '100%' }}
                 value={editingRoleCodes}
                 onChange={setEditingRoleCodes}
                 options={roleOptions}
-                placeholder="选择角色"
+                placeholder={i18nText("settings", "auto.select_role")}
               />
             </div>
           ) : null}

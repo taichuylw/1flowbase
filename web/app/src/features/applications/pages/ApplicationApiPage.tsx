@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Result } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../../../state/auth-store';
 import {
@@ -24,6 +25,7 @@ export function ApplicationApiPage({
 }: {
   application: ApplicationDetail;
 }) {
+  const { t } = useTranslation('applications');
   const csrfToken = useAuthStore((state) => state.csrfToken) ?? '';
   const queryClient = useQueryClient();
   const docsToolbarId = `application-api-docs-toolbar-${application.id}`;
@@ -60,7 +62,7 @@ export function ApplicationApiPage({
   });
 
   if (!publication && publicationQuery.isLoading) {
-    return <Result status="info" title="正在加载公开 API 状态" />;
+    return <Result status="info" title={t('auto.loading_public_api_status')} />;
   }
 
   return (
@@ -87,16 +89,15 @@ export function ApplicationApiPage({
         <Alert
           type="warning"
           showIcon
-          message="需要先发布公开 API"
-          description="发布会保存当前工作流版本和公开 API 运行配置，并让 API Key 调用 active publication。"
+          message={t('auto.publish_public_api_required')}
+          description={t('auto.public_api_publish_description')}
           action={
             <Button
               type="primary"
               loading={publishMutation.isPending || mappingQuery.isLoading}
               onClick={() => publishMutation.mutate()}
             >
-              发布当前版本
-            </Button>
+              {t('auto.publish_current_version')}</Button>
           }
         />
       ) : null}

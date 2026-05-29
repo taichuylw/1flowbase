@@ -85,12 +85,19 @@ describe('AppShellFrame', () => {
     });
   });
 
+  test('translates primary navigation labels at render time', async () => {
+    renderShell('/');
+
+    expect(await screen.findByText('workbench')).toBeInTheDocument();
+    expect(screen.queryByText('auto.workbench')).not.toBeInTheDocument();
+  });
+
   test('places the account menu after the secondary top actions', async () => {
     renderShell('/settings/data-models');
 
     await waitFor(() => {
       const accountLabel = screen.getByText('Root');
-      const helpTrigger = screen.getByLabelText('帮助');
+      const helpTrigger = screen.getByLabelText('help');
 
       expect(
         helpTrigger.compareDocumentPosition(accountLabel) &
@@ -103,8 +110,8 @@ describe('AppShellFrame', () => {
     renderShell('/settings/data-models');
 
     await waitFor(() => {
-      const helpTrigger = screen.getByLabelText('帮助');
-      const languageTrigger = screen.getByLabelText('切换语言');
+      const helpTrigger = screen.getByLabelText('help');
+      const languageTrigger = screen.getByLabelText('Switch language');
       const accountLabel = screen.getByText('Root');
 
       expect(
@@ -121,7 +128,7 @@ describe('AppShellFrame', () => {
   test('updates the current session locale from the language switcher', async () => {
     renderShell('/settings/data-models');
 
-    fireEvent.mouseEnter(await screen.findByLabelText('切换语言'));
+    fireEvent.mouseEnter(await screen.findByLabelText('Switch language'));
     fireEvent.click(await screen.findByText('English'));
 
     await waitFor(() => {
@@ -175,9 +182,9 @@ describe('AppShellFrame', () => {
     renderShell('/frontstage');
 
     await waitFor(() => {
-      const settingsTrigger = screen.getByLabelText('设置');
-      const designButton = screen.getByLabelText('进入设计模式');
-      const helpTrigger = screen.getByLabelText('帮助');
+      const settingsTrigger = screen.getByLabelText('settings');
+      const designButton = screen.getByLabelText('Enter design mode');
+      const helpTrigger = screen.getByLabelText('help');
 
       expect(
         designButton.compareDocumentPosition(settingsTrigger) &
@@ -190,10 +197,10 @@ describe('AppShellFrame', () => {
       expect(designButton).toHaveAttribute('aria-pressed', 'false');
     });
 
-    fireEvent.click(screen.getByLabelText('进入设计模式'));
+    fireEvent.click(screen.getByLabelText('Enter design mode'));
 
     expect(useFrontstageDesignModeStore.getState().isDesignMode).toBe(true);
-    expect(screen.getByLabelText('退出设计模式')).toHaveAttribute(
+    expect(screen.getByLabelText('Exit design mode')).toHaveAttribute(
       'aria-pressed',
       'true'
     );
@@ -226,11 +233,11 @@ describe('AppShellFrame', () => {
     renderShell('/');
 
     await waitFor(() => {
-      const designButton = screen.getByLabelText('进入设计模式');
+      const designButton = screen.getByLabelText('Enter design mode');
       expect(designButton).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('进入设计模式'));
+    fireEvent.click(screen.getByLabelText('Enter design mode'));
 
     expect(useFrontstageDesignModeStore.getState().isDesignMode).toBe(true);
     expect(locationSpy).not.toHaveBeenCalled();

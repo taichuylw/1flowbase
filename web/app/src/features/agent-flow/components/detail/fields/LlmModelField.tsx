@@ -32,6 +32,7 @@ import {
 } from '../../../lib/model-options';
 import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
 import { LlmParameterForm } from './LlmParameterForm';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const EMPTY_MODEL_PROVIDER = {
   provider_code: '',
@@ -47,8 +48,8 @@ const MODEL_SETTINGS_MOUSE_LEAVE_CLOSE_DELAY_MS = 2_000;
 const LLM_PARAMETERS_BLOCK: SchemaDynamicFormBlock = {
   kind: 'dynamic_form',
   form_key: 'llm_parameters',
-  title: 'LLM 参数',
-  empty_text: '请先选择模型，随后再调整参数。'
+  title: i18nText("agentFlow", "auto.llm_parameters"),
+  empty_text: i18nText("agentFlow", "auto.select_model_first_adjust_parameters")
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,7 +96,7 @@ function buildModelSelection(nextModel: LlmModelOption) {
 
 function buildOutputLabel(value: number | null | undefined) {
   const formattedValue = formatLlmTokenCount(value);
-  return formattedValue ? `输出 ${formattedValue}` : null;
+  return formattedValue ? i18nText("agentFlow", "auto.output", { value1: formattedValue }) : null;
 }
 
 function ContextMarker({ value }: { value: number | null | undefined }) {
@@ -108,8 +109,8 @@ function ContextMarker({ value }: { value: number | null | undefined }) {
   return (
     <span
       className="agent-flow-model-meta-pill agent-flow-model-meta-pill--context"
-      aria-label={`上下文 ${formattedValue}`}
-      title={`上下文 ${formattedValue}`}
+      aria-label={i18nText("agentFlow", "auto.context", { value1: formattedValue })}
+      title={i18nText("agentFlow", "auto.context", { value1: formattedValue })}
     >
       {formattedValue}
     </span>
@@ -121,7 +122,7 @@ function ModelChip({
   modelLabel,
   providerIcon,
   metaItems = [],
-  placeholder = '选择供应商和模型'
+  placeholder = i18nText("agentFlow", "auto.select_supplier_model")
 }: {
   providerLabel?: string | null;
   modelLabel?: string | null;
@@ -148,7 +149,7 @@ function ModelChip({
       </span>
       <span className="agent-flow-model-chip__content">
         <span className="agent-flow-model-chip__eyebrow">
-          {providerLabel || '模型供应商'}
+          {providerLabel || i18nText("agentFlow", "auto.model_supplier")}
         </span>
         <span className="agent-flow-model-chip__label">
           {modelLabel || placeholder}
@@ -356,8 +357,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
   const floatingPanel = (
     <FloatingSettingsPanel
       open={open}
-      title="模型设置"
-      closeLabel="关闭模型设置"
+      title={i18nText("agentFlow", "auto.model_settings")}
+      closeLabel={i18nText("agentFlow", "auto.close_model_settings")}
       triggerRef={triggerRef}
       dragHandleTestId="agent-flow-model-settings-drag-handle"
       leftResizeHandleTestId="agent-flow-model-settings-resize-handle-left"
@@ -371,7 +372,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           className="agent-flow-model-settings__notice"
           type="error"
           showIcon
-          message="模型供应商列表加载失败。"
+          message={i18nText("agentFlow", "auto.model_supplier_list_failed_load")}
         />
       ) : null}
       {providerUnavailable ? (
@@ -379,7 +380,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           className="agent-flow-model-settings__notice"
           type="error"
           showIcon
-          message="当前节点引用的模型供应商不可用。"
+          message={i18nText("agentFlow", "auto.model_provider_referenced_node_unavailable")}
         />
       ) : null}
       {modelUnavailable ? (
@@ -387,7 +388,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           className="agent-flow-model-settings__notice"
           type="error"
           showIcon
-          message="当前节点引用的模型不在该供应商的生效模型列表中。"
+          message={i18nText("agentFlow", "auto.model_referenced_node_supplier_s_valid_model_list")}
         />
       ) : null}
 
@@ -397,21 +398,18 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
             level={5}
             className="agent-flow-model-settings__section-title"
           >
-            模型
-          </Typography.Title>
+            {i18nText("agentFlow", "auto.model")}</Typography.Title>
           {providerCode || modelValue ? (
             <Button type="link" onClick={clearSelection}>
-              清空
-            </Button>
+              {i18nText("agentFlow", "auto.clear")}</Button>
           ) : null}
         </div>
         <Typography.Text className="agent-flow-model-settings__section-subtitle">
-          节点保存稳定供应商和模型语义，运行时解析当前可用实例。
-        </Typography.Text>
+          {i18nText("agentFlow", "auto.nodes_store_stable_provider_model_semantics_resolve_currently_available_instances")}</Typography.Text>
         <Select
-          aria-label="选择供应商和模型"
+          aria-label={i18nText("agentFlow", "auto.select_supplier_model")}
           className="agent-flow-model-settings__select"
-          placeholder="选择供应商和模型"
+          placeholder={i18nText("agentFlow", "auto.select_supplier_model")}
           value={selectedModel?.selectionValue}
           open={dropdownOpen}
           options={selectOptions}
@@ -429,8 +427,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={
                       searchText.trim().length > 0
-                        ? '没有匹配的模型结果'
-                        : '当前还没有可选模型'
+                        ? i18nText("agentFlow", "auto.matching_model_results")
+                        : i18nText("agentFlow", "auto.currently_available_models")
                     }
                   />
                 </div>
@@ -474,9 +472,8 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                                 {provider.label}
                               </Typography.Text>
                               <div className="agent-flow-model-settings__provider-meta">
-                                主实例聚合 · {provider.modelGroups.length}{' '}
-                                个来源实例 · {provider.models.length} 个模型
-                              </div>
+                                {i18nText("agentFlow", "auto.master_instance_aggregation")}{provider.modelGroups.length}{' '}
+                                {i18nText("agentFlow", "auto.source_examples")}{provider.models.length} {i18nText("agentFlow", "auto.models")}</div>
                             </div>
                           </div>
                           <span
@@ -494,7 +491,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                               >
                                 <div className="agent-flow-model-settings__group-head">
                                   <span>{group.label}</span>
-                                  <span>{group.models.length} 个模型</span>
+                                  <span>{group.models.length} {i18nText("agentFlow", "auto.models")}</span>
                                 </div>
                                 <div className="agent-flow-model-settings__options">
                                   {group.models.map((option) => {
@@ -561,8 +558,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
                   window.location.assign('/settings/model-providers')
                 }
               >
-                模型供应商设置
-              </button>
+                {i18nText("agentFlow", "auto.model_supplier_settings")}</button>
             </div>
           )}
         />
@@ -575,8 +571,7 @@ export function LlmModelField({ adapter, block }: SchemaFieldRendererProps) {
           level={5}
           className="agent-flow-model-settings__section-title"
         >
-          参数
-        </Typography.Title>
+          {i18nText("agentFlow", "auto.parameters")}</Typography.Title>
         <LlmParameterForm adapter={adapter} block={LLM_PARAMETERS_BLOCK} />
       </div>
     </FloatingSettingsPanel>

@@ -1,4 +1,5 @@
 import { Descriptions, Result, Space, Tag, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import type { ApplicationDetail } from '../api/applications';
 import type { ApplicationSectionKey } from '../lib/application-sections';
@@ -14,42 +15,42 @@ export function ApplicationSectionState({
   application: ApplicationDetail;
   sectionKey: ApplicationSectionKey;
 }) {
+  const { t } = useTranslation('applications');
+
   if (sectionKey === 'orchestration') {
     return (
       <Space direction="vertical" size="middle">
-        <Typography.Title level={4}>编排</Typography.Title>
+        <Typography.Title level={4}>{t('auto.orchestration')}</Typography.Title>
         <Typography.Paragraph>
-          这里是当前应用主编排主体的挂载位。`03` 先冻结主体种类、状态和当前草稿锚点，
-          Draft / Version / Graph 在 `04` 接入。
-        </Typography.Paragraph>
+          {t('auto.orchestration_section_description')}</Typography.Paragraph>
         <Descriptions
           bordered
           column={1}
           items={[
             {
               key: 'status',
-              label: '能力状态',
+              label: t('auto.capability_status'),
               children: renderStatusTag(application.sections.orchestration.status)
             },
             {
               key: 'subject_kind',
-              label: '主体种类',
+              label: t('auto.subject_type'),
               children: application.sections.orchestration.subject_kind
             },
             {
               key: 'subject_status',
-              label: '主体状态',
+              label: t('auto.subject_state'),
               children: application.sections.orchestration.subject_status
             },
             {
               key: 'subject_id',
-              label: '当前主体 ID',
-              children: application.sections.orchestration.current_subject_id ?? '未绑定'
+              label: t('auto.current_subject_id'),
+              children: application.sections.orchestration.current_subject_id ?? t('auto.not_bound')
             },
             {
               key: 'draft_id',
-              label: '当前草稿 ID',
-              children: application.sections.orchestration.current_draft_id ?? '未生成'
+              label: t('auto.current_draft_id'),
+              children: application.sections.orchestration.current_draft_id ?? t('auto.not_generated')
             }
           ]}
         />
@@ -60,40 +61,38 @@ export function ApplicationSectionState({
   if (sectionKey === 'api') {
     return (
       <Space direction="vertical" size="middle">
-        <Typography.Title level={4}>API</Typography.Title>
+        <Typography.Title level={4}>{t('auto.api')}</Typography.Title>
         <Typography.Paragraph>
-          该分区固定承接应用级凭证与对外交付契约。统一调用 URL 由
-          `application_type` 冻结，应用归属由 API Key 绑定应用。
-        </Typography.Paragraph>
+          {t('auto.public_api_section_description')}</Typography.Paragraph>
         <Descriptions
           bordered
           column={1}
           items={[
             {
               key: 'status',
-              label: '能力状态',
+              label: t('auto.capability_status'),
               children: renderStatusTag(application.sections.api.status)
             },
             {
               key: 'credential_kind',
-              label: '凭证类型',
+              label: t('auto.credential_type'),
               children: application.sections.api.credential_kind
             },
             {
               key: 'routing_mode',
-              label: '路由模式',
+              label: t('auto.routing_mode'),
               children: application.sections.api.invoke_routing_mode
             },
             {
               key: 'path_template',
-              label: '调用路径模板',
+              label: t('auto.call_path_template'),
               children:
                 application.sections.api.invoke_path_template ??
-                '由 application_type 冻结，06B 再落地'
+                t('auto.frozen_by_application_type')
             },
             {
               key: 'credentials_status',
-              label: '凭证生命周期',
+              label: t('auto.credential_lifecycle'),
               children: application.sections.api.credentials_status
             }
           ]}
@@ -105,32 +104,31 @@ export function ApplicationSectionState({
   if (sectionKey === 'monitoring') {
     return (
       <Space direction="vertical" size="middle">
-        <Typography.Title level={4}>监控</Typography.Title>
+        <Typography.Title level={4}>{t('auto.monitoring')}</Typography.Title>
         <Typography.Paragraph>
-          该分区对应应用级聚合指标与 tracing / observability 配置，真实图表与配置编辑留到后续专题。
-        </Typography.Paragraph>
+          {t('auto.monitoring_section_description')}</Typography.Paragraph>
         <Descriptions
           bordered
           column={1}
           items={[
             {
               key: 'status',
-              label: '能力状态',
+              label: t('auto.capability_status'),
               children: renderStatusTag(application.sections.monitoring.status)
             },
             {
               key: 'metrics_kind',
-              label: '指标对象',
+              label: t('auto.metric_object'),
               children: application.sections.monitoring.metrics_object_kind
             },
             {
               key: 'metrics_status',
-              label: '指标聚合状态',
+              label: t('auto.metric_aggregation_status'),
               children: application.sections.monitoring.metrics_capability_status
             },
             {
               key: 'tracing_status',
-              label: 'Tracing 配置状态',
+              label: t('auto.tracing_configuration_status'),
               children: application.sections.monitoring.tracing_config_status
             }
           ]}
@@ -139,5 +137,5 @@ export function ApplicationSectionState({
     );
   }
 
-  return <Result status="info" title="未找到分区内容" />;
+  return <Result status="info" title={t('auto.section_content_not_found')} />;
 }

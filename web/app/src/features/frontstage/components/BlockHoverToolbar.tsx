@@ -11,6 +11,7 @@ import {
 import { Button, Divider, Popconfirm, Popover, Space, Typography, message } from 'antd';
 import type { CSSProperties, FC } from 'react';
 import { useState } from 'react';
+import { i18nText } from '../../../shared/i18n/text';
 
 type BlockHoverToolbarProps = {
   blockId: string;
@@ -58,16 +59,16 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(blockId).then(
         () => {
-          void message.success('已复制 UID');
+          void message.success(i18nText("frontstage", "auto.uid_copied"));
         },
         () => {
-          void message.warning('复制失败，请手动复制 UID');
+          void message.warning(i18nText("frontstage", "auto.copy_uid_failed"));
         }
       );
       return;
     }
 
-    void message.warning('当前环境不支持自动复制');
+    void message.warning(i18nText("frontstage", "auto.auto_copy_unsupported"));
   };
 
   const menuButtonStyle: CSSProperties = {
@@ -83,7 +84,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
         type="text"
         block
         icon={<ArrowUpOutlined />}
-        aria-label="上移区块"
+        aria-label={i18nText("frontstage", "auto.move_block_up")}
         disabled={disabled || !canMoveUp}
         onClick={(e) => {
           e.stopPropagation();
@@ -92,14 +93,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
         }}
         style={menuButtonStyle}
       >
-        上移区块
-      </Button>
+        {i18nText("frontstage", "auto.move_block_up")}</Button>
       <Button
         size="small"
         type="text"
         block
         icon={<ArrowDownOutlined />}
-        aria-label="下移区块"
+        aria-label={i18nText("frontstage", "auto.move_block_down")}
         disabled={disabled || !canMoveDown}
         onClick={(e) => {
           e.stopPropagation();
@@ -108,8 +108,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
         }}
         style={menuButtonStyle}
       >
-        下移区块
-      </Button>
+        {i18nText("frontstage", "auto.move_block_down")}</Button>
     </Space>
   );
 
@@ -126,7 +125,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           type="text"
           block
           icon={<EditOutlined />}
-          aria-label="标题和描述"
+          aria-label={i18nText("frontstage", "auto.title_and_description")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -135,14 +134,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          标题和描述
-        </Button>
+          {i18nText("frontstage", "auto.title_and_description")}</Button>
         <Button
           size="small"
           type="text"
           block
           icon={<SettingOutlined />}
-          aria-label="区块联动规则"
+          aria-label={i18nText("frontstage", "auto.block_linkage_rules")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -151,14 +149,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          区块联动规则
-        </Button>
+          {i18nText("frontstage", "auto.block_linkage_rules")}</Button>
         <Button
           size="small"
           type="text"
           block
           icon={<SettingOutlined />}
-          aria-label="区块高度"
+          aria-label={i18nText("frontstage", "auto.block_height")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -167,8 +164,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          区块高度
-        </Button>
+          {i18nText("frontstage", "auto.block_height")}</Button>
         <Button
           size="small"
           type="text"
@@ -190,17 +186,16 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           size="small"
           type="text"
           block
-          aria-label="保存为模板"
+          aria-label={i18nText("frontstage", "auto.save_as_template")}
           disabled
           style={menuButtonStyle}
         >
-          保存为模板
-        </Button>
+          {i18nText("frontstage", "auto.save_as_template")}</Button>
         <Button
           size="small"
           type="text"
           block
-          aria-label="复制 UID"
+          aria-label={i18nText("frontstage", "auto.copy_uid")}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
@@ -209,14 +204,13 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
           }}
           style={menuButtonStyle}
         >
-          复制 UID
-        </Button>
+          {i18nText("frontstage", "auto.copy_uid")}</Button>
         <Popconfirm
-          title="确定删除此区块？"
+          title={i18nText("frontstage", "auto.confirm_delete_this_block")}
           trigger="click"
-          okText="删除"
-          cancelText="取消"
-          okButtonProps={{ 'aria-label': '确认删除区块' }}
+          okText={i18nText("frontstage", "auto.delete")}
+          cancelText={i18nText("frontstage", "auto.cancel")}
+          okButtonProps={{ 'aria-label': i18nText("frontstage", "auto.confirm_delete_block") }}
           open={isDeleteConfirmOpen}
           onOpenChange={(open) => {
             setIsDeleteConfirmOpen(open);
@@ -238,7 +232,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             block
             danger
             icon={<DeleteOutlined />}
-            aria-label="删除区块"
+            aria-label={i18nText("frontstage", "auto.delete_block")}
             disabled={disabled}
             onClick={(event) => {
               event.stopPropagation();
@@ -247,13 +241,11 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             }}
             style={menuButtonStyle}
           >
-            删除
-          </Button>
+            {i18nText("frontstage", "auto.delete")}</Button>
         </Popconfirm>
       </Space>
       <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 11 }}>
-        保存为模板暂未开放
-      </Typography.Text>
+        {i18nText("frontstage", "auto.save_as_template_unavailable")}</Typography.Text>
     </div>
   );
 
@@ -280,7 +272,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             type="text"
             icon={<HolderOutlined />}
             disabled={disabled}
-            aria-label="移动或排序区块"
+            aria-label={i18nText("frontstage", "auto.move_or_sort_block")}
           />
         </Popover>
         <Button
@@ -292,7 +284,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             e.stopPropagation();
             onEditCode();
           }}
-          aria-label="编辑区块"
+          aria-label={i18nText("frontstage", "auto.edit_block")}
         />
         <Popover
           content={moreContent}
@@ -312,7 +304,7 @@ export const BlockHoverToolbar: FC<BlockHoverToolbarProps> = ({
             type="text"
             icon={<MoreOutlined />}
             disabled={disabled}
-            aria-label="更多区块操作"
+            aria-label={i18nText("frontstage", "auto.more_block_operations")}
           />
         </Popover>
       </Space>

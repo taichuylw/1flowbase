@@ -16,6 +16,7 @@ import { ChangePasswordForm } from '../components/ChangePasswordForm';
 import { ProfileForm } from '../components/ProfileForm';
 import { getMeSections, type MeSectionKey } from '../lib/me-sections';
 import './me-page.css';
+import { i18nText } from '../../../shared/i18n/text';
 
 function getErrorMessage(error: unknown): string | null {
   return error instanceof Error ? error.message : null;
@@ -86,8 +87,8 @@ export function MePage({
     return (
       <Result
         status="warning"
-        title="个人资料不可用"
-        subTitle="当前会话缺少必要的用户上下文，请重新登录后重试。"
+        title={i18nText("me", "auto.profile_unavailable")}
+        subTitle={i18nText("me", "auto.session_missing_user_context")}
       />
     );
   }
@@ -95,12 +96,12 @@ export function MePage({
   if (!fallbackSection) {
     return (
       <SectionPageLayout
-        pageTitle="个人资料"
-        pageDescription="该页面用于管理个人资料与安全设置。"
+        pageTitle={i18nText("me", "auto.profile")}
+        pageDescription={i18nText("me", "auto.profile_description")}
         navItems={[]}
         activeKey=""
         contentWidth="narrow"
-        emptyState={<Result status="info" title="当前账号暂无可访问内容" />}
+        emptyState={<Result status="info" title={i18nText("me", "auto.account_has_no_content")} />}
       >
         {null}
       </SectionPageLayout>
@@ -113,8 +114,8 @@ export function MePage({
 
   return (
     <SectionPageLayout
-      pageTitle="个人资料"
-      pageDescription="该页面用于管理个人资料与安全设置。"
+      pageTitle={i18nText("me", "auto.profile")}
+      pageDescription={i18nText("me", "auto.profile_description")}
       navItems={visibleSections}
       activeKey={activeSection.key}
       contentWidth="narrow"
@@ -123,7 +124,7 @@ export function MePage({
         <div className="me-page">
           <ProfileForm
             me={currentProfile}
-            statusLabel={sessionStatus === 'authenticated' ? '已登录' : '未登录'}
+            statusLabel={sessionStatus === 'authenticated' ? i18nText("me", "auto.logged_in") : i18nText("me", "auto.not_logged_in")}
             submitting={profileMutation.isPending}
             errorMessage={getErrorMessage(profileMutation.error)}
             onSubmit={async (input) => {

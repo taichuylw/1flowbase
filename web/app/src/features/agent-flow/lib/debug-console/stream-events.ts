@@ -10,6 +10,7 @@ import {
   closeOpenThinkBlock,
   parseAssistantContent
 } from './assistant-content';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function nowIso() {
   return new Date().toISOString();
@@ -348,7 +349,7 @@ export function applyDebugStreamEventToAssistantMessage(
       return {
         ...message,
         status: 'failed',
-        content: '调试流已过期，请重新运行。'
+        content: i18nText("agentFlow", "auto.debug_stream_replay_expired")
       };
     default:
       return message;

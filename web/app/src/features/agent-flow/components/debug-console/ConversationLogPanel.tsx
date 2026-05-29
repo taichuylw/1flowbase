@@ -13,6 +13,8 @@ import {
 } from './conversation/debug-workflow-trace-utils';
 import { stripLlmRoundsFromDebugPayload } from './conversation/llm-tool-callbacks';
 import './conversation-log-panel.css';
+import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function buildDetailInput(message: AgentFlowDebugMessage) {
   const firstTraceItem = message.traceSummary[0];
@@ -49,7 +51,7 @@ function formatTimestamp(value: string | null | undefined) {
     return '—';
   }
 
-  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+  return formatDateTime(value, { hour12: false });
 }
 
 function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
@@ -58,7 +60,7 @@ function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
 
 function formatNullableNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value)
-    ? value.toLocaleString('zh-CN')
+    ? formatNumber(value)
     : '-';
 }
 
@@ -84,55 +86,55 @@ function ConversationLogDetail({
         />
       </div>
       <section
-        aria-label="元数据"
+        aria-label={i18nText("agentFlow", "auto.metadata")}
         className="agent-flow-editor__conversation-log-metadata"
       >
-        <Typography.Text strong>元数据</Typography.Text>
+        <Typography.Text strong>{i18nText("agentFlow", "auto.metadata")}</Typography.Text>
         <Descriptions
           column={1}
           items={[
             {
               key: 'runId',
-              label: '运行 ID',
+              label: i18nText("agentFlow", "auto.run_id"),
               children: message.runId ?? '—'
             },
             {
               key: 'status',
-              label: '状态',
+              label: i18nText("agentFlow", "auto.status"),
               children: message.status
             },
             {
               key: 'compatibilityMode',
-              label: '协议',
+              label: i18nText("agentFlow", "auto.agreement"),
               children: messageCompatibilityModeLabel(message)
             },
             {
               key: 'totalTokens',
-              label: '总 tokens',
+              label: i18nText("agentFlow", "auto.total_tokens"),
               children: formatNullableNumber(message.statistics?.total_tokens)
             },
             {
               key: 'uniqueNodeCount',
-              label: '真实节点数',
+              label: i18nText("agentFlow", "auto.real_number_nodes"),
               children: formatNullableNumber(
                 message.statistics?.unique_node_count
               )
             },
             {
               key: 'toolCallbackCount',
-              label: '工具回调次数',
+              label: i18nText("agentFlow", "auto.number_tool_callbacks"),
               children: formatNullableNumber(
                 message.statistics?.tool_callback_count
               )
             },
             {
               key: 'startedAt',
-              label: '开始时间',
+              label: i18nText("agentFlow", "auto.start_time"),
               children: formatTimestamp(firstTraceItem?.startedAt)
             },
             {
               key: 'finishedAt',
-              label: '结束时间',
+              label: i18nText("agentFlow", "auto.end_time"),
               children: formatTimestamp(lastTraceItem?.finishedAt)
             }
           ]}
@@ -160,7 +162,7 @@ function ConversationTrace({
     return (
       <div className="agent-flow-editor__conversation-log-empty">
         <Empty
-          description="暂无追踪记录"
+          description={i18nText("agentFlow", "auto.tracking_record_yet")}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </div>
@@ -172,7 +174,7 @@ function ConversationTrace({
   return (
     <div className="agent-flow-editor__conversation-log-trace">
       <div
-        aria-label="追踪节点"
+        aria-label={i18nText("agentFlow", "auto.tracking_nodes")}
         className="agent-flow-editor__conversation-log-node-list"
       >
         {traceGroups.map((group) => {
@@ -191,7 +193,7 @@ function ConversationTrace({
               }
             >
               <section
-                aria-label={`${nodeDisplayName(item)} 节点详情`}
+                aria-label={i18nText("agentFlow", "auto.node_details_alt", { value1: nodeDisplayName(item) })}
                 className="agent-flow-editor__conversation-log-node-detail"
               >
                 <div className="agent-flow-editor__conversation-log-json-list">
@@ -239,8 +241,8 @@ export function ConversationLogPanel({
     <AgentFlowDockPanel
       bodyClassName="agent-flow-editor__conversation-log-body"
       className="agent-flow-editor__conversation-log-panel"
-      closeLabel="关闭对话日志"
-      title="对话日志"
+      closeLabel={i18nText("agentFlow", "auto.turn_off_conversation_log")}
+      title={i18nText("agentFlow", "auto.conversation_log")}
       onClose={onClose}
     >
       <Tabs
@@ -248,7 +250,7 @@ export function ConversationLogPanel({
         items={[
           {
             key: 'detail',
-            label: '详情',
+            label: i18nText("agentFlow", "auto.details"),
             children: (
               <ConversationLogDetail
                 message={message}
@@ -258,7 +260,7 @@ export function ConversationLogPanel({
           },
           {
             key: 'trace',
-            label: '追踪',
+            label: i18nText("agentFlow", "auto.track"),
             children: (
               <ConversationTrace
                 message={message}

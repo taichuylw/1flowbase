@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const loopNodeDefinition: NodeDefinition = {
   label: 'Loop',
@@ -15,7 +16,7 @@ export const loopNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.entry_condition',
-          label: '入口条件',
+          label: i18nText("agentFlow", "auto.entry_conditions"),
           editor: 'condition_group',
           required: true
         }
@@ -24,12 +25,12 @@ export const loopNodeDefinition: NodeDefinition = {
     {
       key: 'policy',
       title: 'Policy',
-      fields: [{ key: 'config.max_rounds', label: '最大轮数', editor: 'number' }]
+      fields: [{ key: 'config.max_rounds', label: i18nText("agentFlow", "auto.maximum_number_rounds"), editor: 'number' }]
     },
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.result', label: '聚合输出', editor: 'text', required: true }]
+      fields: [{ key: 'outputs.result', label: i18nText("agentFlow", "auto.aggregate_output"), editor: 'text', required: true }]
     }
   ]
 };

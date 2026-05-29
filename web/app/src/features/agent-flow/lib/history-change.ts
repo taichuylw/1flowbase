@@ -1,6 +1,7 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
 import { classifyDocumentChange } from './document/change-kind';
+import { i18nText } from '../../../shared/i18n/text';
 
 export function buildVersionSummary(
   before: FlowAuthoringDocument,
@@ -12,14 +13,14 @@ export function buildVersionSummary(
   const removed = before.graph.nodes.filter((node) => !afterIds.has(node.id));
 
   if (added.length > 0) {
-    return `新增 ${added.map((node) => node.alias).join('、')}`;
+    return i18nText("agentFlow", "auto.history_add_nodes", { value1: added.map((node) => node.alias).join('、') });
   }
 
   if (removed.length > 0) {
-    return `删除 ${removed.map((node) => node.alias).join('、')}`;
+    return i18nText("agentFlow", "auto.delete_item", { value1: removed.map((node) => node.alias).join('、') });
   }
 
   return classifyDocumentChange(before, after) === 'logical'
-    ? '更新节点配置'
-    : '更新画布布局';
+    ? i18nText("agentFlow", "auto.history_update_node_configuration")
+    : i18nText("agentFlow", "auto.history_update_canvas_layout");
 }

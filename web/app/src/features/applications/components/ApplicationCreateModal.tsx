@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Radio, Space, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 import { SchemaModalPanel } from '../../../shared/schema-ui/overlay-shell/SchemaModalPanel';
 import { applicationsQueryKey, createApplication } from '../api/applications';
@@ -20,7 +21,6 @@ interface ApplicationCreateFormValues {
 const applicationCreateShell = {
   schemaVersion: '1.0.0',
   shellType: 'modal_panel',
-  title: '新建应用',
   destroyOnHidden: true
 } as const;
 
@@ -30,6 +30,7 @@ export function ApplicationCreateModal({
   onClose,
   onCreated
 }: ApplicationCreateModalProps) {
+  const { t } = useTranslation('applications');
   const queryClient = useQueryClient();
   const [form] = Form.useForm<ApplicationCreateFormValues>();
   const mutation = useMutation({
@@ -54,7 +55,11 @@ export function ApplicationCreateModal({
   });
 
   return (
-    <SchemaModalPanel open={open} schema={applicationCreateShell} onClose={onClose}>
+    <SchemaModalPanel
+      open={open}
+      schema={{ ...applicationCreateShell, title: t('auto.new_application') }}
+      onClose={onClose}
+    >
       <Form<ApplicationCreateFormValues>
         form={form}
         layout="vertical"
@@ -65,34 +70,33 @@ export function ApplicationCreateModal({
         }}
         onFinish={(values) => mutation.mutate(values)}
       >
-        <Form.Item label="类型" name="application_type">
+        <Form.Item label={t('auto.type')} name="application_type">
           <Radio.Group>
             <Space direction="vertical" size="small">
-              <Radio value="agent_flow">AgentFlow</Radio>
+              <Radio value="agent_flow">{t('auto.application_type_agent_flow')}</Radio>
               <Radio value="workflow" disabled>
-                Workflow
+                {t('auto.application_type_workflow')}
               </Radio>
             </Space>
           </Radio.Group>
         </Form.Item>
 
-        <Typography.Text type="secondary">未开放</Typography.Text>
+        <Typography.Text type="secondary">{t('auto.not_open')}</Typography.Text>
 
         <Form.Item
-          label="名称"
+          label={t('auto.name')}
           name="name"
-          rules={[{ required: true, message: '请输入名称' }]}
+          rules={[{ required: true, message: t('auto.name_required') }]}
         >
           <Input />
         </Form.Item>
 
-        <Form.Item label="简介" name="description">
+        <Form.Item label={t('auto.description')} name="description">
           <Input.TextArea rows={3} />
         </Form.Item>
 
         <Button type="primary" htmlType="submit" loading={mutation.isPending}>
-          创建应用
-        </Button>
+          {t('auto.create_application')}</Button>
       </Form>
     </SchemaModalPanel>
   );

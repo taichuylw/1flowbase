@@ -1,5 +1,6 @@
 import type { editor } from 'monaco-editor';
 import { Suspense, lazy, useMemo } from 'react';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
@@ -25,8 +26,7 @@ const CODE_EDITOR_OPTIONS = {
 function CodeSourceEditorFallback() {
   return (
     <div className="agent-flow-code-source-field__loading">
-      正在加载 JavaScript 编辑器
-    </div>
+      {i18nText("agentFlow", "auto.loading_javascript_editor")}</div>
   );
 }
 

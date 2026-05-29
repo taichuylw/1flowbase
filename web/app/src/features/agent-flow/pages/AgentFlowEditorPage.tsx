@@ -16,6 +16,7 @@ import {
   orchestrationQueryKey
 } from '../api/orchestration';
 import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
+import { i18nText } from '../../../shared/i18n/text';
 
 export function AgentFlowEditorPage({
   applicationId,
@@ -42,7 +43,7 @@ export function AgentFlowEditorPage({
     nodeContributionsQuery.isPending ||
     environmentVariablesQuery.isPending
   ) {
-    return <Result status="info" title="正在加载编排" />;
+    return <Result status="info" title={i18nText("agentFlow", "auto.orchestration_loading")} />;
   }
 
   if (
@@ -61,10 +62,10 @@ export function AgentFlowEditorPage({
     }
 
     if (error instanceof ApiClientError && error.status === 404) {
-      return <Result status="404" title="编排主体不存在" />;
+      return <Result status="404" title={i18nText("agentFlow", "auto.orchestration_not_found")} />;
     }
 
-    return <Result status="error" title="编排加载失败" />;
+    return <Result status="error" title={i18nText("agentFlow", "auto.orchestration_load_failed")} />;
   }
 
   const state = orchestrationQuery.data;

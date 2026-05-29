@@ -1,0 +1,21 @@
+{
+  "auto": {
+    "product_tagline": "对话即是壁垒，AI应用原生底座"
+  },
+  "sign_in": {
+    "error_fallback": "登录失败，请稍后重试。",
+    "footer": "power by taichuy",
+    "identifier": {
+      "label": "账号",
+      "placeholder": "root / root@example.com",
+      "required": "请输入账号或邮箱。"
+    },
+    "password": {
+      "label": "密码",
+      "placeholder": "请输入密码",
+      "required": "请输入密码。"
+    },
+    "submit": "登录",
+    "title": "1flowbase"
+  }
+}

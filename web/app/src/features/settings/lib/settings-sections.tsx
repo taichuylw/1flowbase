@@ -15,38 +15,40 @@ export interface SettingsSectionNavItem extends SectionNavItem {
   key: SettingsSectionKey;
 }
 
-export interface SettingsSectionDefinition extends SettingsSectionNavItem {
+export interface SettingsSectionDefinition
+  extends Omit<SettingsSectionNavItem, 'label'> {
+  labelKey: string;
   requiredPermissions: string[];
 }
 
 export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   {
     key: 'docs',
-    label: 'API 文档',
+    labelKey: 'auto.api_documentation',
     to: '/settings/docs',
     requiredPermissions: ['api_reference.view.all']
   },
   {
     key: 'system-runtime',
-    label: '系统运行',
+    labelKey: 'auto.system_runtime',
     to: '/settings/system-runtime',
     requiredPermissions: ['system_runtime.view.all']
   },
   {
     key: 'host-infrastructure',
-    label: '基础设施',
+    labelKey: 'auto.infrastructure',
     to: '/settings/host-infrastructure',
     requiredPermissions: ['plugin_config.view.all']
   },
   {
     key: 'memory-observation',
-    label: '内存观察',
+    labelKey: 'auto.memory_observation',
     to: '/settings/memory-observation',
     requiredPermissions: ['plugin_config.view.all']
   },
   {
     key: 'files',
-    label: '文件管理',
+    labelKey: 'auto.file_management',
     to: '/settings/files',
     requiredPermissions: [
       'file_table.view.all',
@@ -56,7 +58,7 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'data-models',
-    label: '数据源',
+    labelKey: 'auto.data_source',
     to: '/settings/data-models',
     requiredPermissions: [
       'state_model.view.all',
@@ -67,7 +69,7 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'model-providers',
-    label: '模型供应商',
+    labelKey: 'auto.model_providers',
     to: '/settings/model-providers',
     requiredPermissions: [
       'state_model.view.all',
@@ -78,13 +80,13 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
   },
   {
     key: 'members',
-    label: '用户管理',
+    labelKey: 'auto.user_management',
     to: '/settings/members',
     requiredPermissions: ['user.view.all']
   },
   {
     key: 'roles',
-    label: '权限管理',
+    labelKey: 'auto.permission_management',
     to: '/settings/roles',
     requiredPermissions: ['role_permission.view.all']
   }

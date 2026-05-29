@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const questionClassifierNodeDefinition: NodeDefinition = {
   label: 'Question Classifier',
@@ -15,7 +16,7 @@ export const questionClassifierNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.question',
-          label: '待分类问题',
+          label: i18nText("agentFlow", "auto.questions_classified"),
           editor: 'selector',
           required: true
         }
@@ -24,7 +25,7 @@ export const questionClassifierNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.label', label: '分类标签', editor: 'text', required: true }]
+      fields: [{ key: 'outputs.label', label: i18nText("agentFlow", "auto.classification_tags"), editor: 'text', required: true }]
     }
   ]
 };

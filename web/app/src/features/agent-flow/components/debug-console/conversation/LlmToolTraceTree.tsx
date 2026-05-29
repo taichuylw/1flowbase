@@ -8,15 +8,16 @@ import {
   readLlmToolCallbackDetail,
   type LlmToolCallback
 } from './llm-tool-callbacks';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function callbackStatusLabel(status: LlmToolCallback['callbackStatus']) {
   switch (status) {
     case 'returned':
-      return '已返回';
+      return i18nText("agentFlow", "auto.returned");
     case 'cancelled':
-      return '已取消';
+      return i18nText("agentFlow", "auto.canceled");
     default:
-      return '等待回调';
+      return i18nText("agentFlow", "auto.wait_for_callback");
   }
 }
 
@@ -34,15 +35,15 @@ function callbackStatusColor(status: LlmToolCallback['callbackStatus']) {
 function executionStatusLabel(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
-      return '执行成功';
+      return i18nText("agentFlow", "auto.executed_successfully");
     case 'failed':
-      return '执行失败';
+      return i18nText("agentFlow", "auto.execution_failed");
     case 'timed_out':
-      return '执行超时';
+      return i18nText("agentFlow", "auto.execution_timeout");
     case 'cancelled':
-      return '执行取消';
+      return i18nText("agentFlow", "auto.execution_cancel");
     default:
-      return '执行未知';
+      return i18nText("agentFlow", "auto.execution_unknown");
   }
 }
 
@@ -150,21 +151,21 @@ function LlmToolCallbackItem({
       </button>
       {expanded ? (
         <div className="agent-flow-editor__debug-llm-tool-detail">
-          {loading ? <Tag color="processing">加载中</Tag> : null}
-          {loadFailed ? <Tag color="error">加载失败</Tag> : null}
+          {loading ? <Tag color="processing">{i18nText("agentFlow", "auto.loading")}</Tag> : null}
+          {loadFailed ? <Tag color="error">{i18nText("agentFlow", "auto.loading_failed")}</Tag> : null}
           {!loading && !loadFailed ? (
             <>
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
-                title="工具调用"
+                title={i18nText("agentFlow", "auto.tool_call")}
                 onLoadArtifact={onLoadArtifact}
               />
               {callback.parsedResult ? (
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.parsedResult}
-                  title="解析结果"
+                  title={i18nText("agentFlow", "auto.parse_results")}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : null}
@@ -172,11 +173,11 @@ function LlmToolCallbackItem({
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.callbackPayload}
-                  title="完整回调"
+                  title={i18nText("agentFlow", "auto.full_callback")}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : (
-                <Typography.Text type="secondary">等待回调返回</Typography.Text>
+                <Typography.Text type="secondary">{i18nText("agentFlow", "auto.wait_callback_return")}</Typography.Text>
               )}
             </>
           ) : null}
@@ -313,12 +314,12 @@ export function LlmToolTraceTree({
 
   const summaryText =
     effectiveToolCallbacks.length > 0
-      ? `${effectiveToolCallbacks.length} 次工具回调`
-      : '需加载';
+      ? i18nText("agentFlow", "auto.tool_callbacks", { value1: effectiveToolCallbacks.length })
+      : i18nText("agentFlow", "auto.need_to_load");
 
   return (
     <section
-      aria-label="LLM Tools"
+      aria-label={i18nText("agentFlow", "auto.llm_tools")}
       className="agent-flow-editor__debug-llm-tools"
     >
       <button
@@ -329,7 +330,7 @@ export function LlmToolTraceTree({
       >
         <span className="agent-flow-editor__debug-llm-tools-title">
           <ToolOutlined className="agent-flow-editor__debug-llm-tools-icon" />
-          <Typography.Text strong>Tools</Typography.Text>
+          <Typography.Text strong>{i18nText("agentFlow", "auto.tools")}</Typography.Text>
           <Typography.Text type="secondary">{summaryText}</Typography.Text>
         </span>
         {toolsExpanded ? (
@@ -343,7 +344,7 @@ export function LlmToolTraceTree({
           {effectiveToolCallbacks.length > 0 ? (
             <>
               <div
-                aria-label="工具回调列表"
+                aria-label={i18nText("agentFlow", "auto.tool_callback_list")}
                 className="agent-flow-editor__debug-llm-tool-list"
               >
                 {effectiveToolCallbacks.map((callback) => {
@@ -371,7 +372,7 @@ export function LlmToolTraceTree({
               </div>
             </>
           ) : (
-            <Typography.Text type="secondary">工具回调已截断</Typography.Text>
+            <Typography.Text type="secondary">{i18nText("agentFlow", "auto.tool_callback_truncated")}</Typography.Text>
           )}
         </div>
       ) : null}

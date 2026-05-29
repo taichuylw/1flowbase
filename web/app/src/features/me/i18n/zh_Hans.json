@@ -1,0 +1,76 @@
+{
+  "auto": {
+    "account_has_no_content": "当前账号暂无可访问内容",
+    "confirm_new_password": "确认新密码",
+    "current_password_required": "请输入当前密码。",
+    "logged_in": "已登录",
+    "new_password": "新密码",
+    "new_password_required": "请输入新密码。",
+    "not_logged_in": "未登录",
+    "password": "密码",
+    "password_mismatch": "两次输入的新密码不一致。",
+    "password_update_notice": "更新密码后会立即清除当前会话，你需要使用新密码重新登录。",
+    "profile": "个人资料",
+    "profile_description": "该页面用于管理个人资料与安全设置。",
+    "profile_unavailable": "个人资料不可用",
+    "security_settings": "安全设置",
+    "session_missing_user_context": "当前会话缺少必要的用户上下文，请重新登录后重试。",
+    "update_password": "更新密码",
+    "verify_new_password_required": "请再次输入新密码。"
+  },
+  "profile": {
+    "actions": {
+      "cancel": "取消",
+      "edit": "编辑资料",
+      "save": "保存资料"
+    },
+    "drawer": {
+      "title": "编辑个人信息"
+    },
+    "empty": {
+      "introduction": "暂无介绍",
+      "permissions": "暂无显式权限"
+    },
+    "fields": {
+      "account": "账号名称",
+      "avatar_url": "头像地址",
+      "email": "联系邮箱",
+      "interface_language": "界面语言",
+      "introduction": "个人介绍",
+      "name": "真实姓名",
+      "nickname": "昵称",
+      "permissions": "系统权限",
+      "phone": "手机号码"
+    },
+    "form": {
+      "avatar_url": {
+        "extra": "支持外链图片地址。",
+        "placeholder": "https://example.com/avatar.png"
+      },
+      "email": {
+        "required": "请输入有效的邮箱地址。"
+      },
+      "interface_language": {
+        "extra": "不选择时使用系统自动解析到的默认语言。"
+      },
+      "introduction": {
+        "placeholder": "简单介绍一下自己..."
+      },
+      "name": {
+        "extra": "你的真实姓名，用于后台实名记录。",
+        "label": "姓名",
+        "required": "请输入姓名。"
+      },
+      "nickname": {
+        "extra": "系统内的显示名称。",
+        "required": "请输入昵称。"
+      }
+    },
+    "locale": {
+      "default": "跟随系统默认",
+      "en_us": "English",
+      "zh_hans": "简体中文"
+    },
+    "title": "个人信息"
+  }
+}

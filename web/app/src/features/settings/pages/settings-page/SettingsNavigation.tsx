@@ -2,10 +2,11 @@ import type { ReactNode } from 'react';
 
 import type { SectionNavItem } from '../../../../shared/ui/section-page-layout/SectionPageLayout';
 import { SectionPageLayout } from '../../../../shared/ui/section-page-layout/SectionPageLayout';
+import { i18nText } from '../../../../shared/i18n/text';
 
-export const SETTINGS_PAGE_TITLE = '设置';
+export const SETTINGS_PAGE_TITLE = i18nText("settings", "auto.settings");
 export const SETTINGS_PAGE_DESCRIPTION =
-  '系统管理域包含文档、成员和权限相关配置。';
+  i18nText("settings", "auto.system_management_domain_contains_configurations_related_documents_members_permissions");
 
 export function SettingsNavigation({
   activeKey,

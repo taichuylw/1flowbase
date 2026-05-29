@@ -39,6 +39,7 @@ import {
 } from '../../lib/debug-console/variable-groups';
 import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
 import { getNodeVariableOutputs } from '../../lib/start-node-variables';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const RUN_DETAIL_POLL_INTERVAL_MS = 200;
 let debugMessageIdSequence = 0;
@@ -926,7 +927,7 @@ export function useAgentFlowDebugSession({
       setMessages((currentMessages) =>
         replaceAssistantMessageWithError(
           currentMessages,
-          error instanceof Error ? error.message : '调试运行失败',
+          error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_run_failed"),
           { runId }
         )
       );
@@ -980,7 +981,7 @@ export function useAgentFlowDebugSession({
       setMessages((currentMessages) =>
         replaceAssistantMessageWithError(
           currentMessages,
-          '缺少 CSRF token，无法发起调试运行。',
+          i18nText("agentFlow", "auto.debug_run_csrf_missing"),
           { fallbackMessageId: runningMessage.id }
         )
       );
@@ -1132,7 +1133,7 @@ export function useAgentFlowDebugSession({
       streamAbortControllerRef.current = null;
       if (activeRunIdRef.current) {
         const errorMessage =
-          error instanceof Error ? error.message : '调试流式连接中断';
+          error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_stream_connection_interrupted");
         clearScheduledAssistantMessageFlush();
         setStatus('failed');
         setMessages((currentMessages) =>
@@ -1171,7 +1172,7 @@ export function useAgentFlowDebugSession({
       return detail;
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : '调试运行失败';
+        error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_run_failed");
 
       setStatus('failed');
       setMessages((currentMessages) =>

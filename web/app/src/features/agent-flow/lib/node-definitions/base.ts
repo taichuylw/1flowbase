@@ -1,6 +1,7 @@
 import type { NodeDefinitionField } from './types';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export const basicFields: NodeDefinitionField[] = [
-  { key: 'alias', label: '节点别名', editor: 'text', required: true },
-  { key: 'description', label: '节点简介', editor: 'text' }
+  { key: 'alias', label: i18nText("agentFlow", "auto.node_alias"), editor: 'text', required: true },
+  { key: 'description', label: i18nText("agentFlow", "auto.node_introduction"), editor: 'text' }
 ];

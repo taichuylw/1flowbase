@@ -2,6 +2,7 @@ import { Button, Input, Space, Typography } from 'antd';
 import { useState } from 'react';
 
 import type { ApplicationRunDetail } from '../../api/runtime';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function ApplicationRunResumeCard({
   detail,
@@ -30,14 +31,14 @@ export function ApplicationRunResumeCard({
 
     return (
       <div>
-        <Typography.Title level={5}>继续执行</Typography.Title>
+        <Typography.Title level={5}>{i18nText("applications", "auto.continue_execution")}</Typography.Title>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Typography.Text>
             {(latestCheckpoint.external_ref_payload?.prompt as string | undefined) ??
-              '请提供人工输入'}
+              i18nText("applications", "auto.manual_input_required")}
           </Typography.Text>
           <Input.TextArea
-            aria-label="人工输入"
+            aria-label={i18nText("applications", "auto.manual_input")}
             rows={4}
             value={humanInput}
             onChange={(event) => setHumanInput(event.target.value)}
@@ -50,8 +51,7 @@ export function ApplicationRunResumeCard({
               })
             }
           >
-            提交并继续
-          </Button>
+            {i18nText("applications", "auto.submit_and_continue")}</Button>
         </Space>
       </div>
     );
@@ -60,11 +60,11 @@ export function ApplicationRunResumeCard({
   if (detail.flow_run.status === 'waiting_callback' && pendingCallback) {
     return (
       <div>
-        <Typography.Title level={5}>Callback 回填</Typography.Title>
+        <Typography.Title level={5}>{i18nText("applications", "auto.callback_backfill")}</Typography.Title>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Typography.Text>{pendingCallback.callback_kind}</Typography.Text>
           <Input.TextArea
-            aria-label="Callback 响应"
+            aria-label={i18nText("applications", "auto.callback_response")}
             rows={6}
             value={callbackJson}
             onChange={(event) => setCallbackJson(event.target.value)}
@@ -78,8 +78,7 @@ export function ApplicationRunResumeCard({
               )
             }
           >
-            回填并继续
-          </Button>
+            {i18nText("applications", "auto.backfill_and_continue")}</Button>
         </Space>
       </div>
     );

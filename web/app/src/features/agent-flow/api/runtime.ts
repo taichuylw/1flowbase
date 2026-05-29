@@ -35,6 +35,7 @@ import {
   getNodeVariableOutputs,
   getStartInputFields
 } from '../lib/start-node-variables';
+import { i18nText } from '../../../shared/i18n/text';
 
 export type NodeLastRun = ConsoleNodeLastRun;
 export type FlowDebugRunDetail = ConsoleApplicationRunDetail;
@@ -534,10 +535,10 @@ function buildStringPreviewValue(
   }
 
   if (outputKey === 'text' || outputKey === 'answer') {
-    return '这是调试预览输出';
+    return i18nText("agentFlow", "auto.debug_preview_output");
   }
 
-  return `${node?.alias ?? '节点'} ${outputKey} 调试值`;
+  return i18nText("agentFlow", "auto.debug_preview_value", { value1: node?.alias ?? i18nText("agentFlow", "auto.fallback_node_label"), value2: outputKey });
 }
 
 function buildPreviewValue(

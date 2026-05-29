@@ -6,6 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode
 } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type FloatingWindowRect = {
   left: number;
@@ -164,6 +165,7 @@ export function ApplicationLogsFloatingWindow({
   initialRect,
   onActivate
 }: ApplicationLogsFloatingWindowProps) {
+  const { t } = useTranslation('applications');
   const [rect, setRect] = useState(() =>
     clampRect(applyStoredWidth(initialRect(), testId), minWidth, minHeight)
   );
@@ -369,21 +371,21 @@ export function ApplicationLogsFloatingWindow({
     >
       <div className="application-logs-floating-window__body">{children}</div>
       <div
-        aria-label={`从右侧调整${title}宽度`}
+        aria-label={t('auto.adjust_width_from_right', { value1: title })}
         aria-orientation="vertical"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--right"
         role="separator"
         onMouseDown={(event) => startWidthResize('right', event)}
       />
       <div
-        aria-label={`从左侧调整${title}宽度`}
+        aria-label={t('auto.adjust_width_from_left', { value1: title })}
         aria-orientation="vertical"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--left"
         role="separator"
         onMouseDown={(event) => startWidthResize('left', event)}
       />
       <div
-        aria-label={`向下调整${title}高度`}
+        aria-label={t('auto.adjust_height_downward', { value1: title })}
         aria-orientation="horizontal"
         className="application-logs-floating-window__resize application-logs-floating-window__resize--bottom"
         role="separator"

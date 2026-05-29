@@ -22,18 +22,19 @@ import type {
   UpdateSettingsDataModelFieldInput
 } from '../../api/data-models';
 import { DataModelHelpTooltip } from './DataModelHelpTooltip';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const fieldKindOptions = [
-  { label: '短文本', value: 'string' },
-  { label: '数字', value: 'number' },
-  { label: '是/否', value: 'boolean' },
-  { label: '日期时间', value: 'datetime' },
-  { label: '枚举', value: 'enum' },
-  { label: '长文本', value: 'text' },
+  { label: i18nText("settings", "auto.short_text"), value: 'string' },
+  { label: i18nText("settings", "auto.numbers"), value: 'number' },
+  { label: i18nText("settings", "auto.yes_no"), value: 'boolean' },
+  { label: i18nText("settings", "auto.date_time"), value: 'datetime' },
+  { label: i18nText("settings", "auto.enumeration"), value: 'enum' },
+  { label: i18nText("settings", "auto.long_text"), value: 'text' },
   { label: 'JSON', value: 'json' },
-  { label: '多对一关系', value: 'many_to_one' },
-  { label: '一对多关系', value: 'one_to_many' },
-  { label: '多对多关系', value: 'many_to_many' }
+  { label: i18nText("settings", "auto.many_one_relationship"), value: 'many_to_one' },
+  { label: i18nText("settings", "auto.one_many_relationship"), value: 'one_to_many' },
+  { label: i18nText("settings", "auto.many_relationship"), value: 'many_to_many' }
 ];
 
 const displayInterfaceOptions = [
@@ -49,15 +50,15 @@ const displayInterfaceOptions = [
 ];
 
 const enumDisplayFormatOptions = [
-  { label: '单选', value: 'radio' },
-  { label: '多选', value: 'checkbox_group' },
-  { label: '下拉', value: 'select' },
-  { label: '多选下拉', value: 'multi_select' }
+  { label: i18nText("settings", "auto.single_choice"), value: 'radio' },
+  { label: i18nText("settings", "auto.multiple_choice"), value: 'checkbox_group' },
+  { label: i18nText("settings", "auto.drop_down"), value: 'select' },
+  { label: i18nText("settings", "auto.multiple_selection_drop_down"), value: 'multi_select' }
 ];
 
-const externalFieldKeyHelp = '外部数据源里的字段路径，例如 properties.email。';
-const enumOptionValueHelp = '存储值会写入数据库和 API payload。';
-const enumOptionLabelHelp = '显示值用于界面展示。';
+const externalFieldKeyHelp = i18nText("settings", "auto.field_path_external_data_source_such_properties_email");
+const enumOptionValueHelp = i18nText("settings", "auto.stored_values_written_database_api_payload");
+const enumOptionLabelHelp = i18nText("settings", "auto.displayed_value_used_interface_display");
 
 interface FieldFormValues {
   code: string;
@@ -349,8 +350,8 @@ export function DataModelFieldDrawer({
           name: 'default_value_input',
           errors:
             values.field_kind === 'json'
-              ? ['请输入合法 JSON']
-              : ['请输入符合字段类型的默认值']
+              ? [i18nText("settings", "auto.enter_valid_json")]
+              : [i18nText("settings", "auto.enter_value_matches_field_type")]
         }
       ]);
       return;
@@ -365,7 +366,7 @@ export function DataModelFieldDrawer({
       form.setFields([
         {
           name: 'display_options_json',
-          errors: ['请输入合法 JSON']
+          errors: [i18nText("settings", "auto.enter_valid_json")]
         }
       ]);
       return;
@@ -380,7 +381,7 @@ export function DataModelFieldDrawer({
       form.setFields([
         {
           name: 'relation_options_json',
-          errors: ['请输入合法 JSON']
+          errors: [i18nText("settings", "auto.enter_valid_json")]
         }
       ]);
       return;
@@ -475,8 +476,8 @@ export function DataModelFieldDrawer({
         <Select
           allowClear
           options={[
-            { label: '是', value: true },
-            { label: '否', value: false }
+            { label: i18nText("settings", "auto.yes"), value: true },
+            { label: i18nText("settings", "auto.no"), value: false }
           ]}
         />
       );
@@ -491,7 +492,7 @@ export function DataModelFieldDrawer({
         type={selectedFieldKind === 'number' ? 'number' : undefined}
         placeholder={
           selectedFieldKind === 'datetime'
-            ? '例如 2026-05-07T12:00:00Z'
+            ? i18nText("settings", "auto.example_two_zero_two_six_zero_five_zero_seven_t")
             : undefined
         }
       />
@@ -502,19 +503,19 @@ export function DataModelFieldDrawer({
     return (
       <>
         <Divider />
-        <Typography.Title level={5}>规则</Typography.Title>
+        <Typography.Title level={5}>{i18nText("settings", "auto.rules")}</Typography.Title>
         <Space size="large">
           <Form.Item name="is_required" valuePropName="checked">
-            <Checkbox>必填</Checkbox>
+            <Checkbox>{i18nText("settings", "auto.required")}</Checkbox>
           </Form.Item>
           <Form.Item name="is_unique" valuePropName="checked">
-            <Checkbox>唯一</Checkbox>
+            <Checkbox>{i18nText("settings", "auto.only")}</Checkbox>
           </Form.Item>
         </Space>
         {showsDefaultValue ? (
           <Form.Item
             name="default_value_input"
-            label={selectedFieldKind === 'json' ? '默认值 JSON' : '默认值'}
+            label={selectedFieldKind === 'json' ? i18nText("settings", "auto.default_value_json") : i18nText("settings", "auto.default_value")}
           >
             {renderDefaultValueControl()}
           </Form.Item>
@@ -526,7 +527,7 @@ export function DataModelFieldDrawer({
   return (
     <>
       <Drawer
-        title={mode === 'create' ? '新增字段' : '编辑字段'}
+        title={mode === 'create' ? i18nText("settings", "auto.add_new_field") : i18nText("settings", "auto.edit_field")}
         open={open}
         width={560}
         onClose={onClose}
@@ -534,8 +535,7 @@ export function DataModelFieldDrawer({
           <Space>
             {mode === 'edit' ? (
               <Button danger disabled={!canManage || saving} onClick={confirmDelete}>
-                删除字段
-              </Button>
+                {i18nText("settings", "auto.delete_field")}</Button>
             ) : null}
             <Button
               type="primary"
@@ -543,7 +543,7 @@ export function DataModelFieldDrawer({
               disabled={!canManage}
               onClick={handleSubmit}
             >
-              {mode === 'create' ? '创建字段' : '保存字段'}
+              {mode === 'create' ? i18nText("settings", "auto.create_fields") : i18nText("settings", "auto.save_field")}
             </Button>
           </Space>
         }
@@ -561,25 +561,25 @@ export function DataModelFieldDrawer({
             relation_options_json: '{}'
           }}
         >
-          <Typography.Title level={5}>基础信息</Typography.Title>
+          <Typography.Title level={5}>{i18nText("settings", "auto.basic_information")}</Typography.Title>
           <Form.Item
             name="title"
-            label="字段标题"
-            rules={[{ required: true, message: '请输入字段标题' }]}
+            label={i18nText("settings", "auto.field_title")}
+            rules={[{ required: true, message: i18nText("settings", "auto.enter_field_title") }]}
           >
             <Input />
           </Form.Item>
           <Form.Item
             name="code"
-            label="字段 Code"
-            rules={[{ required: true, message: '请输入字段 Code' }]}
+            label={i18nText("settings", "auto.field_code")}
+            rules={[{ required: true, message: i18nText("settings", "auto.enter_field_code") }]}
           >
             <Input disabled={mode === 'edit'} />
           </Form.Item>
           <Form.Item
             name="field_kind"
-            label="字段类型"
-            rules={[{ required: true, message: '请选择字段类型' }]}
+            label={i18nText("settings", "auto.field_type")}
+            rules={[{ required: true, message: i18nText("settings", "auto.select_field_type") }]}
           >
             <Select options={fieldKindOptions} disabled={mode === 'edit'} />
           </Form.Item>
@@ -587,12 +587,12 @@ export function DataModelFieldDrawer({
           {isExternalModel ? (
             <Form.Item
               name="external_field_key"
-              label="外部字段映射 Key"
+              label={i18nText("settings", "auto.external_field_mapping_key")}
               tooltip={externalFieldKeyHelp}
               rules={[
                 {
                   required: mode === 'create',
-                  message: '请输入外部字段映射 Key'
+                  message: i18nText("settings", "auto.enter_external_field_mapping_key")
                 }
               ]}
             >
@@ -605,11 +605,11 @@ export function DataModelFieldDrawer({
           {showsEnumSettings ? (
             <>
               <Divider />
-              <Typography.Title level={5}>枚举配置</Typography.Title>
+              <Typography.Title level={5}>{i18nText("settings", "auto.enum_configuration")}</Typography.Title>
               <Form.Item
                 name="enum_display_format"
-                label="显示格式"
-                rules={[{ required: true, message: '请选择显示格式' }]}
+                label={i18nText("settings", "auto.display_format")}
+                rules={[{ required: true, message: i18nText("settings", "auto.select_display_format") }]}
               >
                 <Select
                   options={enumDisplayFormatOptions}
@@ -637,7 +637,7 @@ export function DataModelFieldDrawer({
                 />
               </Form.Item>
               <Form.Item
-                label="枚举选项"
+                label={i18nText("settings", "auto.enum_options")}
               >
                 <Form.List
                   name="enum_options"
@@ -648,16 +648,16 @@ export function DataModelFieldDrawer({
                       <div className="data-model-panel__enum-options-head">
                         <span className="data-model-panel__enum-options-index" />
                         <span className="data-model-panel__enum-options-heading">
-                          <span>存储值</span>
+                          <span>{i18nText("settings", "auto.stored_value")}</span>
                           <DataModelHelpTooltip
-                            label="存储值"
+                            label={i18nText("settings", "auto.stored_value")}
                             title={enumOptionValueHelp}
                           />
                         </span>
                         <span className="data-model-panel__enum-options-heading">
-                          <span>显示值</span>
+                          <span>{i18nText("settings", "auto.display_value")}</span>
                           <DataModelHelpTooltip
-                            label="显示值"
+                            label={i18nText("settings", "auto.display_value")}
                             title={enumOptionLabelHelp}
                           />
                         </span>
@@ -672,10 +672,10 @@ export function DataModelFieldDrawer({
                             <Form.Item
                               {...restField}
                               name={[name, 'value']}
-                              rules={[{ required: true, message: '请输入存储值' }]}
+                              rules={[{ required: true, message: i18nText("settings", "auto.enter_stored_value") }]}
                             >
                               <Input
-                                aria-label={`选项 ${index + 1} 存储值`}
+                                aria-label={i18nText("settings", "auto.option_stores_value", { value1: index + 1 })}
                                 placeholder="value"
                               />
                             </Form.Item>
@@ -684,10 +684,10 @@ export function DataModelFieldDrawer({
                             <Form.Item
                               {...restField}
                               name={[name, 'label']}
-                              rules={[{ required: true, message: '请输入显示值' }]}
+                              rules={[{ required: true, message: i18nText("settings", "auto.enter_display_value") }]}
                             >
                               <Input
-                                aria-label={`选项 ${index + 1} 显示值`}
+                                aria-label={i18nText("settings", "auto.option_display_value", { value1: index + 1 })}
                                 placeholder="label"
                               />
                             </Form.Item>
@@ -695,7 +695,7 @@ export function DataModelFieldDrawer({
                           <Button
                             danger
                             type="text"
-                            aria-label={`删除选项 ${index + 1}`}
+                            aria-label={i18nText("settings", "auto.delete_option", { value1: index + 1 })}
                             icon={<DeleteOutlined />}
                             disabled={fields.length <= 1}
                             onClick={() => remove(name)}
@@ -705,13 +705,12 @@ export function DataModelFieldDrawer({
                       ))}
                       <Button
                         block
-                        aria-label="添加选项"
+                        aria-label={i18nText("settings", "auto.add_options")}
                         icon={<PlusOutlined />}
                         onClick={() => add(createDefaultEnumOption())}
                         className="data-model-panel__enum-add"
                       >
-                        添加选项
-                      </Button>
+                        {i18nText("settings", "auto.add_options")}</Button>
                     </div>
                   )}
                 </Form.List>
@@ -724,14 +723,14 @@ export function DataModelFieldDrawer({
           {showsRelationSettings ? (
             <>
               <Divider />
-              <Typography.Title level={5}>关系配置</Typography.Title>
+              <Typography.Title level={5}>{i18nText("settings", "auto.relationship_configuration")}</Typography.Title>
               <Form.Item
                 name="relation_target_model_id"
-                label="目标数据表"
+                label={i18nText("settings", "auto.target_data_table")}
                 rules={[
                   {
                     required: mode === 'create',
-                    message: '请选择目标数据表'
+                    message: i18nText("settings", "auto.select_target_data_table")
                   }
                 ]}
               >
@@ -746,25 +745,24 @@ export function DataModelFieldDrawer({
 
           <Divider />
           <Button type="link" onClick={() => setAdvancedOpen((value) => !value)}>
-            高级显示设置
-          </Button>
+            {i18nText("settings", "auto.advanced_display_settings")}</Button>
           {advancedOpen ? (
             <>
               {showsEnumSettings ? null : (
-                <Form.Item name="display_interface" label="显示控件">
+                <Form.Item name="display_interface" label={i18nText("settings", "auto.display_control")}>
                   <Select allowClear options={displayInterfaceOptions} />
                 </Form.Item>
               )}
               <Form.Item
                 name="display_options_json"
-                label="显示控件配置 JSON"
+                label={i18nText("settings", "auto.display_control_configuration_json")}
               >
                 <Input.TextArea rows={3} />
               </Form.Item>
               {showsRelationSettings ? (
                 <Form.Item
                   name="relation_options_json"
-                  label="关系配置 JSON"
+                  label={i18nText("settings", "auto.relationship_configuration_json")}
                 >
                   <Input.TextArea rows={3} />
                 </Form.Item>
@@ -774,12 +772,12 @@ export function DataModelFieldDrawer({
         </Form>
       </Drawer>
       <Modal
-        title="确认删除字段"
+        title={i18nText("settings", "auto.confirm_field_deletion")}
         open={deleteConfirmOpen}
-        okText="删除"
+        okText={i18nText("settings", "auto.delete")}
         okType="danger"
-        cancelText="取消"
-        okButtonProps={{ 'aria-label': '删除' }}
+        cancelText={i18nText("settings", "auto.cancel")}
+        okButtonProps={{ 'aria-label': i18nText("settings", "auto.delete") }}
         onCancel={() => setDeleteConfirmOpen(false)}
         onOk={() => {
           if (field) {
@@ -790,7 +788,7 @@ export function DataModelFieldDrawer({
         }}
       >
         {field
-          ? `确定删除字段 "${field.title}" (${field.code}) 吗？此操作会同步变更数据结构。`
+          ? i18nText("settings", "auto.sure_want_delete_field_operation_changes_data_structure_synchronously", { value1: field.title, value2: field.code })
           : null}
       </Modal>
     </>

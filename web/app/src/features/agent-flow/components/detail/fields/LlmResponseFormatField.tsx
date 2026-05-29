@@ -5,6 +5,7 @@ import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/r
 import {
   getLlmResponseFormat
 } from '../../../lib/llm-node-config';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function getNodeConfig(adapter: SchemaFieldRendererProps['adapter']) {
   const node = adapter.getDerived('node') as { config?: Record<string, unknown> } | null | undefined;
@@ -34,12 +35,12 @@ export function LlmResponseFormatField({ adapter, block }: SchemaFieldRendererPr
       const parsed = JSON.parse(schemaText);
 
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        return 'JSON Schema 必须是对象。';
+        return i18nText("agentFlow", "auto.json_schema_must_object");
       }
 
       return null;
     } catch {
-      return 'JSON Schema 不是合法 JSON。';
+      return i18nText("agentFlow", "auto.json_schema_valid_json");
     }
   }, [responseFormat.mode, schemaText]);
 
@@ -63,8 +64,8 @@ export function LlmResponseFormatField({ adapter, block }: SchemaFieldRendererPr
         block
         value={responseFormat.mode}
         options={[
-          { label: '文本', value: 'text' },
-          { label: 'JSON 对象', value: 'json_object' },
+          { label: i18nText("agentFlow", "auto.text"), value: 'text' },
+          { label: i18nText("agentFlow", "auto.json_object"), value: 'json_object' },
           { label: 'JSON Schema', value: 'json_schema' }
         ]}
         onChange={(nextValue) =>
@@ -74,8 +75,7 @@ export function LlmResponseFormatField({ adapter, block }: SchemaFieldRendererPr
       {responseFormat.mode === 'json_schema' ? (
         <>
           <Typography.Text type="secondary">
-            仅约束模型返回格式，不自动反推节点输出契约。
-          </Typography.Text>
+            {i18nText("agentFlow", "auto.constrains_model_return_format_automatically_infer_node_output_contract")}</Typography.Text>
           <Input.TextArea
             rows={8}
             aria-label={`${block.label} JSON Schema`}

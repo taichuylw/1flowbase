@@ -1,6 +1,7 @@
 import { Card, Table, Tag } from 'antd';
 
 import type { NodeLastRun } from '../../../api/runtime';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const STATUS_COLOR: Record<string, string> = {
   succeeded: 'green',
@@ -10,7 +11,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 function formatDuration(startedAt: string, finishedAt: string | null) {
   if (!finishedAt) {
-    return '进行中';
+    return i18nText("agentFlow", "auto.in_progress");
   }
 
   const durationMs =
@@ -69,7 +70,7 @@ export function NodeRunSummaryCard({
 
   const columns = [
     {
-      title: '状态',
+      title: i18nText("agentFlow", "auto.status"),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
@@ -77,7 +78,7 @@ export function NodeRunSummaryCard({
       )
     },
     {
-      title: '耗时(ms)',
+      title: i18nText("agentFlow", "auto.time_taken_ms"),
       dataIndex: 'duration',
       key: 'duration'
     },
@@ -89,7 +90,7 @@ export function NodeRunSummaryCard({
   ];
 
   return (
-    <Card title="运行摘要">
+    <Card title={i18nText("agentFlow", "auto.running_summary")}>
       <Table
         columns={columns}
         dataSource={[row]}

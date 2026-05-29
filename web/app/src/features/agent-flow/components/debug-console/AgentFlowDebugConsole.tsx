@@ -11,6 +11,7 @@ import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFl
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { ConversationLogPanel } from './ConversationLogPanel';
 import { DebugConversationPane } from './conversation/DebugConversationPane';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function AgentFlowDebugConsole({
   ariaLabel,
@@ -23,7 +24,7 @@ export function AgentFlowDebugConsole({
   status,
   stopping,
   subtitle,
-  title = '预览',
+  title = i18nText("agentFlow", "auto.preview"),
   onChangeRunContextValue,
   onClearSession,
   onClose,
@@ -80,7 +81,7 @@ export function AgentFlowDebugConsole({
         actions={
           showClearAction ? (
             <Button
-              aria-label="清空预览"
+              aria-label={i18nText("agentFlow", "auto.clear_preview")}
               disabled={messages.length === 0}
               icon={<ReloadOutlined />}
               size="small"
@@ -95,7 +96,7 @@ export function AgentFlowDebugConsole({
         ariaLabel={ariaLabel}
         bodyClassName="agent-flow-editor__debug-console-body"
         className="agent-flow-editor__debug-console"
-        closeLabel={closeLabel ?? `关闭${title}`}
+        closeLabel={closeLabel ?? i18nText("agentFlow", "auto.close", { value1: title })}
         subtitle={subtitle}
         title={title}
         onClose={onClose}

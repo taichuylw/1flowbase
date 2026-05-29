@@ -1,4 +1,4 @@
 {
-  "plugin.display_name": "数据源 HTTP 示例",
-  "plugin.description": "示例数据源运行时扩展包"
+  "plugin_display_name": "数据源 HTTP 示例",
+  "plugin_description": "示例数据源运行时扩展包"
 }

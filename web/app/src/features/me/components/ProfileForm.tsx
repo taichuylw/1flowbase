@@ -37,9 +37,9 @@ interface ProfileFormValues {
 function formatLocaleLabel(locale: string | null | undefined, t: TFunction<'me'>) {
   switch (locale) {
     case 'zh_Hans':
-      return t('profile.locale.zhHans');
+      return t('profile.locale.zh_hans');
     case 'en_US':
-      return t('profile.locale.enUs');
+      return t('profile.locale.en_us');
     default:
       return t('profile.locale.default');
   }
@@ -149,7 +149,7 @@ export function ProfileForm({
               <Descriptions.Item label={t('profile.fields.name')}>{me.name}</Descriptions.Item>
               <Descriptions.Item label={t('profile.fields.email')}>{me.email}</Descriptions.Item>
               <Descriptions.Item label={t('profile.fields.phone')}>{me.phone || '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('profile.fields.interfaceLanguage')} span={2}>
+              <Descriptions.Item label={t('profile.fields.interface_language')} span={2}>
                 {formatLocaleLabel(
                   resolveUserLocalePreference(me.preferred_locale, me.meta),
                   t
@@ -233,25 +233,25 @@ export function ProfileForm({
             <Input />
           </Form.Item>
           <Form.Item
-            label={t('profile.fields.interfaceLanguage')}
+            label={t('profile.fields.interface_language')}
             name="preferred_locale"
-            extra={t('profile.form.interfaceLanguage.extra')}
+            extra={t('profile.form.interface_language.extra')}
           >
             <Select
               allowClear
               placeholder={t('profile.locale.default')}
               options={[
-                { label: t('profile.locale.zhHans'), value: 'zh_Hans' },
-                { label: t('profile.locale.enUs'), value: 'en_US' }
+                { label: t('profile.locale.zh_hans'), value: 'zh_Hans' },
+                { label: t('profile.locale.en_us'), value: 'en_US' }
               ]}
             />
           </Form.Item>
           <Form.Item
-            label={t('profile.fields.avatarUrl')}
+            label={t('profile.fields.avatar_url')}
             name="avatar_url"
-            extra={t('profile.form.avatarUrl.extra')}
+            extra={t('profile.form.avatar_url.extra')}
           >
-            <Input placeholder={t('profile.form.avatarUrl.placeholder')} />
+            <Input placeholder={t('profile.form.avatar_url.placeholder')} />
           </Form.Item>
           <Form.Item label={t('profile.fields.introduction')} name="introduction">
             <Input.TextArea rows={4} placeholder={t('profile.form.introduction.placeholder')} />

@@ -1,0 +1,10 @@
+{
+  "auto": {
+    "access_status_description": "当前页用于统一查看已接入子系统的运行边界和接入状态。",
+    "build_artifact_list": "已接入应用的版本与构建产物清单",
+    "release_diagnostics_entry": "后续接入发布、回滚和运行态诊断的入口",
+    "route_host_constraints": "路由前缀、挂载上下文和宿主约束",
+    "subsystem": "子系统",
+    "subsystem_page_description": "管理已接入子系统的发布清单、路由前缀与宿主约束。"
+  }
+}

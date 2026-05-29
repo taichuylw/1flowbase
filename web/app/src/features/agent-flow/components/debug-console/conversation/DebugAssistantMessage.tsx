@@ -13,29 +13,30 @@ import { copyTextToClipboard } from '../../../../../shared/ui/clipboard/copy-tex
 import { DebugMarkdownContent } from './DebugMarkdownContent';
 import { DebugWorkflowProcess } from './DebugWorkflowProcess';
 import './debug-message.css';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function fallbackContent(message: AgentFlowDebugMessage) {
   if (message.status === 'running') {
-    return '运行中...';
+    return i18nText("agentFlow", "auto.running");
   }
 
   if (message.status === 'waiting_human') {
-    return '等待人工介入。';
+    return i18nText("agentFlow", "auto.wait_manual_intervention");
   }
 
   if (message.status === 'waiting_callback') {
-    return '等待外部回调。';
+    return i18nText("agentFlow", "auto.wait_external_callback");
   }
 
   if (message.status === 'cancelled') {
-    return '已停止运行。';
+    return i18nText("agentFlow", "auto.stopped");
   }
 
   if (message.status === 'failed') {
-    return '调试运行失败。';
+    return i18nText("agentFlow", "auto.debug_run_failed_alt");
   }
 
-  return '暂无输出。';
+  return i18nText("agentFlow", "auto.no_output_yet");
 }
 
 const TYPEWRITER_INTERVAL_MS = 24;
@@ -118,9 +119,9 @@ export function DebugAssistantMessage({
 
     try {
       await copyTextToClipboard(parsedFullContent.answerText);
-      messageApi.success('已复制');
+      messageApi.success(i18nText("agentFlow", "auto.copied"));
     } catch {
-      messageApi.error('复制失败');
+      messageApi.error(i18nText("agentFlow", "auto.copy_failed"));
     }
   }
 
@@ -133,7 +134,7 @@ export function DebugAssistantMessage({
         />
         {hasReasoning ? (
           <section
-            aria-label="思考"
+            aria-label={i18nText("agentFlow", "auto.think")}
             className="agent-flow-editor__debug-reasoning"
           >
             <button
@@ -144,8 +145,7 @@ export function DebugAssistantMessage({
             >
               {isReasoningExpanded ? <DownOutlined /> : <RightOutlined />}
               <span className="agent-flow-editor__debug-reasoning-title">
-                思考
-              </span>
+                {i18nText("agentFlow", "auto.think")}</span>
             </button>
             {isReasoningExpanded ? (
               <DebugMarkdownContent
@@ -165,7 +165,7 @@ export function DebugAssistantMessage({
         ) : null}
       </div>
       <div
-        aria-label="输出动作"
+        aria-label={i18nText("agentFlow", "auto.output_action")}
         className="agent-flow-editor__debug-message-action-row"
         role="group"
       >
@@ -174,9 +174,9 @@ export function DebugAssistantMessage({
           size={8}
           wrap
         >
-          <Tooltip title="复制输出">
+          <Tooltip title={i18nText("agentFlow", "auto.copy_output")}>
             <Button
-              aria-label="复制输出"
+              aria-label={i18nText("agentFlow", "auto.copy_output")}
               disabled={!parsedFullContent.answerText}
               icon={<CopyOutlined />}
               size="small"
@@ -186,9 +186,9 @@ export function DebugAssistantMessage({
             />
           </Tooltip>
           {onOpenLog && canOpenLog ? (
-            <Tooltip title="查看对话日志">
+            <Tooltip title={i18nText("agentFlow", "auto.view_conversation_log")}>
               <Button
-                aria-label="查看对话日志"
+                aria-label={i18nText("agentFlow", "auto.view_conversation_log")}
                 icon={<FileTextOutlined />}
                 size="small"
                 onClick={() => onOpenLog(message)}

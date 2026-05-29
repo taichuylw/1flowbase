@@ -1,0 +1,6 @@
+{
+  "auto": {
+    "close": "Close",
+    "close_named_panel": "Close {{value1}}"
+  }
+}

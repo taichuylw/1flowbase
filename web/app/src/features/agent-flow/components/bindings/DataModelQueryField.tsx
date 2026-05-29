@@ -22,6 +22,7 @@ import {
 } from '../../lib/data-model-query-binding';
 import type { FlowSelectorOption } from '../../lib/selector-options';
 import { SelectorField } from './SelectorField';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const FILTER_TYPES = new Set([
   'string',
@@ -136,10 +137,10 @@ function QueryValueInput({
   return (
     <Space.Compact block>
       <Select
-        aria-label={sourceAriaLabel ?? `${ariaLabel}来源`}
+        aria-label={sourceAriaLabel ?? i18nText("agentFlow", "auto.source", { value1: ariaLabel })}
         options={[
-          { value: 'constant', label: '常量' },
-          { value: 'selector', label: '变量' }
+          { value: 'constant', label: i18nText("agentFlow", "auto.constant") },
+          { value: 'selector', label: i18nText("agentFlow", "auto.variable_alt") }
         ]}
         value={value.kind}
         onChange={(kind) =>
@@ -233,7 +234,7 @@ function DataModelQueryConditionsField({
         {query.filters.map((filter, index) => (
           <Space.Compact key={`filter-${index}`} block>
             <Select
-              aria-label={`过滤字段 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.filter_field", { value1: index + 1 })}
               options={filterOptions}
               value={filter.field_code || undefined}
               onChange={(fieldCode) => {
@@ -260,7 +261,7 @@ function DataModelQueryConditionsField({
               }}
             />
             <Select
-              aria-label={`过滤操作符 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.filter_operator", { value1: index + 1 })}
               options={operators(fields, filter.field_code)}
               value={filter.operator}
               onChange={(operator) =>
@@ -277,13 +278,13 @@ function DataModelQueryConditionsField({
               }
             />
             <QueryValueInput
-              ariaLabel={`过滤值 ${index + 1}`}
+              ariaLabel={i18nText("agentFlow", "auto.filter_value", { value1: index + 1 })}
               valueType={
                 fields.find((field) => field.code === filter.field_code)
                   ?.valueType
               }
-              sourceAriaLabel={`过滤值来源 ${index + 1}`}
-              selectorAriaLabel={`过滤变量 ${index + 1}`}
+              sourceAriaLabel={i18nText("agentFlow", "auto.filter_value_source", { value1: index + 1 })}
+              selectorAriaLabel={i18nText("agentFlow", "auto.filter_variable", { value1: index + 1 })}
               selectorOptions={selectorOptions}
               value={filter.value}
               onChange={(nextValue) =>
@@ -307,8 +308,7 @@ function DataModelQueryConditionsField({
                 })
               }
             >
-              删除
-            </Button>
+              {i18nText("agentFlow", "auto.delete")}</Button>
           </Space.Compact>
         ))}
         <Button
@@ -318,14 +318,13 @@ function DataModelQueryConditionsField({
             onChange({ filters: [...query.filters, nextFilter(fields)] })
           }
         >
-          新增过滤条件
-        </Button>
+          {i18nText("agentFlow", "auto.add_new_filter")}</Button>
       </Flex>
       <Flex vertical gap={8}>
         {query.sorts.map((sort, index) => (
           <Space.Compact key={`sort-${index}`} block>
             <Select
-              aria-label={`排序字段 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.sorting_field", { value1: index + 1 })}
               options={sortOptions}
               value={sort.field_code || undefined}
               onChange={(fieldCode) =>
@@ -339,7 +338,7 @@ function DataModelQueryConditionsField({
               }
             />
             <Select
-              aria-label={`排序方向 ${index + 1}`}
+              aria-label={i18nText("agentFlow", "auto.sort_direction", { value1: index + 1 })}
               options={[
                 { value: 'asc', label: 'asc' },
                 { value: 'desc', label: 'desc' }
@@ -366,8 +365,7 @@ function DataModelQueryConditionsField({
                 })
               }
             >
-              删除
-            </Button>
+              {i18nText("agentFlow", "auto.delete")}</Button>
           </Space.Compact>
         ))}
         <Button
@@ -375,11 +373,10 @@ function DataModelQueryConditionsField({
           disabled={sortOptions.length === 0}
           onClick={() => onChange({ sorts: [...query.sorts, nextSort(fields)] })}
         >
-          新增排序规则
-        </Button>
+          {i18nText("agentFlow", "auto.add_new_sorting_rule")}</Button>
       </Flex>
       <Select
-        aria-label="展开关联"
+        aria-label={i18nText("agentFlow", "auto.expand_association")}
         mode="multiple"
         options={expandOptions}
         value={query.expand_relations}
@@ -390,14 +387,14 @@ function DataModelQueryConditionsField({
       {includePagination ? (
         <Space.Compact block>
           <QueryValueInput
-            ariaLabel="页码"
+            ariaLabel={i18nText("agentFlow", "auto.page_number")}
             numeric
             selectorOptions={selectorOptions}
             value={query.page}
             onChange={(page) => onChange({ page })}
           />
           <QueryValueInput
-            ariaLabel="每页数量"
+            ariaLabel={i18nText("agentFlow", "auto.quantity_per_page")}
             numeric
             selectorOptions={selectorOptions}
             value={query.page_size}
@@ -424,7 +421,7 @@ export function DataModelQueryField({
 
   if (!hasDataModelSelected) {
     return (
-      <Typography.Text type="secondary">请先选择 Data Model</Typography.Text>
+      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.select_data_model_first")}</Typography.Text>
     );
   }
 

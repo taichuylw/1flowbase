@@ -6,6 +6,7 @@ import type {
   ApiDocsExplorerQueryState,
   ApiDocsOperationWithCategory
 } from './ApiDocsExplorer';
+import { i18nText } from '../../i18n/text';
 
 export interface ApiDocsOperationListPaneProps {
   categoriesLength: number;
@@ -47,18 +48,17 @@ export function ApiDocsOperationListPane({
 }: ApiDocsOperationListPaneProps) {
   if (categoriesLength === 0) {
     return (
-      <section className="api-docs-panel__pane" aria-label="接口列表">
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>接口列表</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              当前暂无可访问分类
-            </Typography.Text>
+              {i18nText("sharedUi", "auto.no_accessible_categories")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-body">
           <Empty
-            description="暂无接口分类"
+            description={i18nText("sharedUi", "auto.no_interface_categories")}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         </div>
@@ -68,20 +68,19 @@ export function ApiDocsOperationListPane({
 
   if (!selectedCategoryId && !showAllOperationsWhenNoCategory) {
     return (
-      <section className="api-docs-panel__pane" aria-label="接口列表">
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>接口列表</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              在上方先选分类后展示接口
-            </Typography.Text>
+              {i18nText("sharedUi", "auto.select_category_then_display_interfaces")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-body">
           <Result
             status="info"
-            title="选择一个分类后查看接口列表"
-            subTitle="分类选择放在头部，下方列表只负责当前分类下的接口浏览。"
+            title={i18nText("sharedUi", "auto.select_category_to_view_interface_list")}
+            subTitle={i18nText("sharedUi", "auto.category_header_hint")}
           />
         </div>
       </section>
@@ -90,13 +89,12 @@ export function ApiDocsOperationListPane({
 
   if (loading) {
     return (
-      <section className="api-docs-panel__pane" aria-label="接口列表">
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>接口列表</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              正在加载 {selectedCategoryLabel ?? '全部分类'} 的接口
-            </Typography.Text>
+              {i18nText("sharedUi", "auto.loading")}{selectedCategoryLabel ?? i18nText("sharedUi", "auto.all_categories")} {i18nText("sharedUi", "auto.interfaces_in_suffix")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-state">
@@ -108,20 +106,19 @@ export function ApiDocsOperationListPane({
 
   if (error) {
     return (
-      <section className="api-docs-panel__pane" aria-label="接口列表">
+      <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
         <div className="api-docs-panel__pane-header">
           <div className="api-docs-panel__pane-copy">
-            <Typography.Text strong>接口列表</Typography.Text>
+            <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
             <Typography.Text type="secondary">
-              {selectedCategoryId ? '当前分类' : '全部分类'}接口加载失败
-            </Typography.Text>
+              {selectedCategoryId ? i18nText("sharedUi", "auto.current_category") : i18nText("sharedUi", "auto.all_categories")}{i18nText("sharedUi", "auto.interface_load_failed")}</Typography.Text>
           </div>
         </div>
         <div className="api-docs-panel__pane-body">
           <Result
             status="error"
-            title="接口列表加载失败"
-            subTitle="请刷新后重试，或切换到其他分类。"
+            title={i18nText("sharedUi", "auto.interface_list_load_failed")}
+            subTitle={i18nText("sharedUi", "auto.refresh_or_switch_category")}
           />
         </div>
       </section>
@@ -129,24 +126,23 @@ export function ApiDocsOperationListPane({
   }
 
   return (
-    <section className="api-docs-panel__pane" aria-label="接口列表">
+    <section className="api-docs-panel__pane" aria-label={i18nText("sharedUi", "auto.interface_list")}>
       <div className="api-docs-panel__pane-header">
         <div className="api-docs-panel__pane-copy">
-          <Typography.Text strong>接口列表</Typography.Text>
+          <Typography.Text strong>{i18nText("sharedUi", "auto.interface_list")}</Typography.Text>
           <Typography.Text type="secondary">
-            {selectedCategoryLabel ?? '全部分类'} 共{' '}
+            {selectedCategoryLabel ?? i18nText("sharedUi", "auto.all_categories")} {i18nText("sharedUi", "auto.total")}{' '}
             {selectedCategoryId
               ? selectedCategoryOperationTotal
               : operations.length}{' '}
-            个接口
-          </Typography.Text>
+            {i18nText("sharedUi", "auto.interface_count_suffix")}</Typography.Text>
         </div>
       </div>
       <div className="api-docs-panel__pane-toolbar">
         <Input
-          aria-label="搜索接口"
+          aria-label={i18nText("sharedUi", "auto.search_interface")}
           allowClear
-          placeholder="搜索接口"
+          placeholder={i18nText("sharedUi", "auto.search_interface")}
           value={operationSearch}
           onChange={(event) => onOperationSearchChange(event.target.value)}
         />
@@ -156,16 +152,16 @@ export function ApiDocsOperationListPane({
           <Empty
             description={
               operationSearch.trim()
-                ? '未找到匹配接口'
+                ? i18nText("sharedUi", "auto.no_matching_interface")
                 : selectedCategoryId
-                  ? '当前分类暂无接口'
-                  : '暂无接口'
+                  ? i18nText("sharedUi", "auto.no_interfaces_in_current_category")
+                  : i18nText("sharedUi", "auto.no_interfaces")
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : filteredOperations.length === 0 ? (
           <Empty
-            description="未找到匹配接口"
+            description={i18nText("sharedUi", "auto.no_matching_interface")}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (

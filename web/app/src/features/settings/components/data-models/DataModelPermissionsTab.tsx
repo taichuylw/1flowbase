@@ -6,6 +6,7 @@ import type {
   SettingsDataModelScopeGrant,
   UpdateSettingsDataModelScopeGrantInput
 } from '../../api/data-models';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const profileOptions = ['owner', 'scope_all', 'system_all'].map((value) => ({
   label: value,
@@ -66,7 +67,7 @@ export function DataModelPermissionsTab({
       key: 'permission_profile',
       render: (_, grant) => (
         <Select
-          aria-label={`权限 ${grant.id}`}
+          aria-label={i18nText("settings", "auto.permissions", { value1: grant.id })}
           value={grant.permission_profile}
           options={profileOptions}
           onChange={(value) => updateDraft(grant.id, { permission_profile: value })}
@@ -99,8 +100,7 @@ export function DataModelPermissionsTab({
             })
           }
         >
-          确认 system_all
-        </Checkbox>
+          {i18nText("settings", "auto.confirm_system_all")}</Checkbox>
       )
     }
   ];
@@ -133,8 +133,7 @@ export function DataModelPermissionsTab({
             });
           }}
         >
-          保存权限
-        </Button>
+          {i18nText("settings", "auto.save_permissions")}</Button>
       </div>
     </Form>
   );

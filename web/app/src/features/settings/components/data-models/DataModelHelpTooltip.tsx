@@ -2,18 +2,19 @@ import { useId } from 'react';
 
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { Tooltip } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export const dataModelStatusHelp =
-  'draft: 草稿，默认新建为未发布状态；published: 已发布，允许进入运行可用性和 API 暴露判断；disabled: 已停用，不进入运行面；broken: 当前定义、运行依赖或外部资源异常，需要修复后再发布。';
+  i18nText("settings", "auto.draft_created_unpublished_state_published_entry_running_availability_api_exposure");
 
 export const defaultApiExposureStatusHelp =
-  'draft: API 暴露草稿；published_not_exposed: 默认不生成 API 访问面；api_exposed_no_permission: 已请求生成 API 访问面，但默认不授予访问权限。';
+  i18nText("settings", "auto.draft_api_exposure_draft_published_exposed_api_access_surface_generated");
 
 export const dataModelCodeHelp =
-  'Code: Data Model 的稳定标识，用于 API、权限和内部引用；创建后不可编辑。';
+  i18nText("settings", "auto.code_stable_identifier_data_model_used_apis_permissions_internal_references");
 
 export const dataModelTitleHelp =
-  '标题: 管理台展示名称，可按业务语义调整，不影响稳定 Code。';
+  i18nText("settings", "auto.title_name_displayed_management_console_adjusted_according_business_semantics_affecting");
 
 export function DataModelFieldLabel({
   label,
@@ -53,7 +54,7 @@ export function DataModelHelpTooltip({
         <QuestionCircleOutlined
           aria-describedby={decorative ? undefined : descriptionId}
           aria-hidden={decorative ? true : undefined}
-          aria-label={decorative ? undefined : `${label}说明`}
+          aria-label={decorative ? undefined : i18nText("settings", "auto.description_option", { value1: label })}
           className="data-model-panel__help-icon"
           tabIndex={decorative ? -1 : 0}
         />

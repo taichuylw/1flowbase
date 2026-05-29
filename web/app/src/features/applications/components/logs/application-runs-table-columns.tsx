@@ -1,6 +1,8 @@
 import { Tag } from 'antd';
+import type { TFunction } from 'i18next';
 
 import type { DataTableColumn } from '../../../../shared/ui/data-table/DataTable';
+import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
 import type { ApplicationRunSummary } from '../../api/runtime';
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 
@@ -17,21 +19,22 @@ function formatTimestamp(value: string | null | undefined) {
     return '-';
   }
 
-  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+  return formatDateTime(value, { hour12: false });
 }
 
 function formatRunStatisticNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value)
-    ? value.toLocaleString('zh-CN')
+    ? formatNumber(value)
     : '-';
 }
 
-export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
-  DataTableColumn<ApplicationRunSummary>
-> = [
+export function getApplicationRunsTableColumns(
+  t: TFunction<'applications'>
+): Array<DataTableColumn<ApplicationRunSummary>> {
+  return [
   {
     key: 'title',
-    title: '标题',
+    title: t('auto.title'),
     dataIndex: 'title',
     width: 240,
     ellipsis: true,
@@ -47,7 +50,7 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'authorized_account',
-    title: '授权人',
+    title: t('auto.authorizer'),
     dataIndex: 'authorized_account',
     width: 160,
     ellipsis: true,
@@ -55,20 +58,20 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'id',
-    title: '运行 ID',
+    title: t('auto.run_id'),
     dataIndex: 'id',
     width: 180,
     ellipsis: true
   },
   {
     key: 'run_mode',
-    title: '模式',
+    title: t('auto.mode'),
     dataIndex: 'run_mode',
     width: 180
   },
   {
     key: 'compatibility_mode',
-    title: '协议',
+    title: t('auto.protocol'),
     dataIndex: 'compatibility_mode',
     width: 170,
     ellipsis: true,
@@ -79,14 +82,14 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'target_node_id',
-    title: '目标节点',
+    title: t('auto.target_node'),
     dataIndex: 'target_node_id',
     width: 160,
-    render: (value) => (typeof value === 'string' && value ? value : '全流')
+    render: (value) => (typeof value === 'string' && value ? value : t('auto.full_flow'))
   },
   {
     key: 'status',
-    title: '状态',
+    title: t('auto.status'),
     width: 120,
     render: (_: unknown, run) => (
       <Tag color={STATUS_COLOR[run.status] ?? 'default'}>{run.status}</Tag>
@@ -94,42 +97,43 @@ export const APPLICATION_RUNS_TABLE_COLUMNS: Array<
   },
   {
     key: 'total_tokens',
-    title: '总 tokens',
+    title: t('auto.total_tokens'),
     width: 130,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.total_tokens)
   },
   {
     key: 'unique_node_count',
-    title: '真实节点数',
+    title: t('auto.real_node_count'),
     width: 130,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.unique_node_count)
   },
   {
     key: 'tool_callback_count',
-    title: '工具回调次数',
+    title: t('auto.tool_callback_count'),
     width: 150,
     render: (_value, run) =>
       formatRunStatisticNumber(run.statistics?.tool_callback_count)
   },
   {
     key: 'started_at',
-    title: '开始时间',
+    title: t('auto.start_time'),
     dataIndex: 'started_at',
     width: 200,
     render: (value) => formatTimestamp(typeof value === 'string' ? value : null)
   },
   {
     key: 'updated_at',
-    title: '更新时间',
+    title: t('auto.updated_at'),
     dataIndex: 'updated_at',
     width: 200,
     render: (value) => formatTimestamp(typeof value === 'string' ? value : null)
   },
   {
     key: 'action',
-    title: '操作',
+    title: t('auto.operation'),
     width: 140
   }
-];
+  ];
+}

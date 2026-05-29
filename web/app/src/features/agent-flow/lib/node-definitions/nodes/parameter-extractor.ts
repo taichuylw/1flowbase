@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const parameterExtractorNodeDefinition: NodeDefinition = {
   label: 'Parameter Extractor',
@@ -15,7 +16,7 @@ export const parameterExtractorNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.source_text',
-          label: '源文本',
+          label: i18nText("agentFlow", "auto.source_text"),
           editor: 'selector',
           required: true
         }
@@ -27,7 +28,7 @@ export const parameterExtractorNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'outputs.parameters',
-          label: '提取参数',
+          label: i18nText("agentFlow", "auto.extract_parameters"),
           editor: 'text',
           required: true
         }

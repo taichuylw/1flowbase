@@ -2,6 +2,7 @@ import type { MenuProps } from 'antd';
 import type { ConsoleMe, ConsoleSessionActor } from '@1flowbase/api-client';
 
 import { signOut } from '../features/auth/api/session';
+import { i18nText } from '../shared/i18n/text';
 
 interface AccountMenuClickHandlerOptions {
   csrfToken: string | null;
@@ -41,5 +42,5 @@ export function createAccountMenuClickHandler({
 }
 
 export function selectAccountLabel({ me, actor }: AccountLabelSnapshot) {
-  return me?.nickname || me?.name || actor?.account || '用户';
+  return me?.nickname || me?.name || actor?.account || i18nText("appShell", "auto.user");
 }

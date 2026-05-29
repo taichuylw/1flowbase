@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 import type { SettingsHostInfrastructureProviderConfig } from '../../api/host-infrastructure';
 import { HostInfrastructureProviderDrawer } from './HostInfrastructureProviderDrawer';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function HostInfrastructureProviderTable({
   providers,
@@ -62,7 +63,7 @@ export function HostInfrastructureProviderTable({
         dataIndex: 'restart_required',
         key: 'restart_required',
         render: (required: boolean) =>
-          required ? <Tag color="gold">重启后生效</Tag> : null
+          required ? <Tag color="gold">{i18nText("settings", "auto.take_effect_restart")}</Tag> : null
       },
       {
         title: '',
@@ -70,8 +71,7 @@ export function HostInfrastructureProviderTable({
         width: 96,
         render: (_, provider) => (
           <Button type="link" onClick={() => setSelectedProvider(provider)}>
-            配置
-          </Button>
+            {i18nText("settings", "auto.configuration_alt")}</Button>
         )
       }
     ],
@@ -96,7 +96,7 @@ export function HostInfrastructureProviderTable({
           canManage={canManage}
           open
           onSaved={() => {
-            messageApi.success('已保存，重启 api-server 一次后生效。');
+            messageApi.success(i18nText("settings", "auto.saved_take_effect_restarting_api_server"));
           }}
           onClose={() => setSelectedProvider(null)}
         />

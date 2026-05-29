@@ -35,6 +35,7 @@ import {
   formatModelContextWindowValue,
   parseModelContextWindowInput
 } from './model-context-window';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type DrawerMode = 'create' | 'edit';
 type ModelProviderFormValue = string | boolean | number;
@@ -435,7 +436,7 @@ function ModelProviderInstanceDrawerContent({
     }
   }
 
-  const title = mode === 'create' ? 'API 密钥授权配置' : '编辑 API 密钥配置';
+  const title = mode === 'create' ? i18nText("settings", "auto.api_key_authorization_configuration") : i18nText("settings", "auto.edit_api_key_configuration");
   const formSchema = (catalogEntry?.form_schema ?? []).filter(
     (field) => !isPreviewOnlyField(field)
   );
@@ -543,10 +544,10 @@ function ModelProviderInstanceDrawerContent({
     const useTextArea = isTextAreaField(field.key);
     const useSelect = isSelectConfigField(field);
     const fieldExtra = isSecret
-      ? '敏感字段仅用于加密存储，不会在列表和接口中回显。'
+      ? i18nText("settings", "auto.sensitive_fields_used_encrypted_storage_echoed_lists_interfaces")
       : field.description ??
         (field.key === 'base_url'
-          ? '支持输入标准 OpenAI 兼容地址；未填写时会优先使用插件默认值。'
+          ? i18nText("settings", "auto.supports_input_standard_openai_compatible_addresses_filled_plug_value_used")
           : undefined);
 
     if (isSecret && mode === 'edit') {
@@ -559,13 +560,13 @@ function ModelProviderInstanceDrawerContent({
         ? previewSource.includes('****')
           ? previewSource
           : maskSecretPreview(previewSource)
-        : '未配置';
+        : i18nText("settings", "auto.not_configured");
 
       return (
         <Form.Item
           key={field.key}
           label={label}
-          extra="留空表示保留当前密钥；点击显示后才能查看和修改当前值。"
+          extra={i18nText("settings", "auto.leave_blank_retain_key_click_show_view_modify_value")}
         >
           {revealedSecretKeys[field.key] ? (
             <Space.Compact block>
@@ -591,7 +592,7 @@ function ModelProviderInstanceDrawerContent({
                   }));
                 }}
               >
-                隐藏 {label}
+                {i18nText("settings", "auto.hide")}{label}
               </Button>
             </Space.Compact>
           ) : (
@@ -603,7 +604,7 @@ function ModelProviderInstanceDrawerContent({
                   void handleRevealSecret(field.key).catch(() => undefined);
                 }}
               >
-                显示 {label}
+                {i18nText("settings", "auto.show")}{label}
               </Button>
             </Space.Compact>
           )}
@@ -618,7 +619,7 @@ function ModelProviderInstanceDrawerContent({
         name={['config', field.key]}
         rules={
           field.required && (!isSecret || mode === 'create')
-            ? [{ required: true, message: `请填写 ${label}` }]
+            ? [{ required: true, message: i18nText("settings", "auto.please_fill_in", { value1: label }) }]
             : undefined
         }
         extra={fieldExtra}
@@ -626,13 +627,13 @@ function ModelProviderInstanceDrawerContent({
         {isSecret ? (
           <Input.Password
             autoComplete="off"
-            placeholder={field.placeholder ?? '请输入'}
+            placeholder={field.placeholder ?? i18nText("settings", "auto.please_enter")}
           />
         ) : useSelect ? (
           <Select
             allowClear={!field.required}
             options={buildConfigSelectOptions(field)}
-            placeholder={field.placeholder ?? '请选择'}
+            placeholder={field.placeholder ?? i18nText("settings", "auto.please_enter")}
           />
         ) : useTextArea ? (
           <Input.TextArea
@@ -673,9 +674,8 @@ function ModelProviderInstanceDrawerContent({
                 void handleSubmit().catch(() => undefined);
               }}
             >
-              保存
-            </Button>
-            <Button onClick={onClose}>取消</Button>
+              {i18nText("settings", "auto.save")}</Button>
+            <Button onClick={onClose}>{i18nText("settings", "auto.cancel")}</Button>
           </Space>
         </div>
       }
@@ -700,30 +700,30 @@ function ModelProviderInstanceDrawerContent({
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', fontWeight: 'normal', fontSize: '12px' }}>
                   <Tag color="blue" style={{ margin: 0 }}>{catalogEntry.provider_code}</Tag>
                   <Tag color="cyan" style={{ margin: 0 }}>{catalogEntry.protocol}</Tag>
-                  <Tag color="purple" style={{ margin: 0 }}>发现模式: {catalogEntry.model_discovery_mode}</Tag>
-                  <Tag color="gold" style={{ margin: 0 }}>预置模型: {catalogEntry.predefined_models.length}</Tag>
+                  <Tag color="purple" style={{ margin: 0 }}>{i18nText("settings", "auto.discovery_mode")}{catalogEntry.model_discovery_mode}</Tag>
+                  <Tag color="gold" style={{ margin: 0 }}>{i18nText("settings", "auto.preset_models")}{catalogEntry.predefined_models.length}</Tag>
                 </div>
               </div>
               <div className="model-provider-drawer__card-body">
                 <Flex gap={16} align="flex-start">
                   <div style={{ flex: 1 }}>
                     <Form.Item
-                      label="名称"
+                      label={i18nText("settings", "auto.name")}
                       name="display_name"
-                      rules={[{ required: true, message: '请填写名称' }]}
+                      rules={[{ required: true, message: i18nText("settings", "auto.fill_name") }]}
                       style={{ marginBottom: 0 }}
                     >
-                      <Input placeholder="例如：OpenAI Production" />
+                      <Input placeholder={i18nText("settings", "auto.example_openai_production")} />
                     </Form.Item>
                   </div>
                   <div style={{ flex: 'none' }}>
                     <Form.Item
-                      label="注入主实例"
+                      label={i18nText("settings", "auto.inject_main_instance_alt")}
                       name="included_in_main"
                       valuePropName="checked"
                       style={{ marginBottom: 0 }}
                     >
-                      <Switch aria-label="注入主实例" />
+                      <Switch aria-label={i18nText("settings", "auto.inject_main_instance_alt")} />
                     </Form.Item>
                   </div>
                 </Flex>
@@ -734,7 +734,7 @@ function ModelProviderInstanceDrawerContent({
               <div className="model-provider-drawer__card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <CheckCircleOutlined />
-                  <span>连接配置</span>
+                  <span>{i18nText("settings", "auto.connection_configuration")}</span>
                 </div>
                 <div>
                   <Button
@@ -745,8 +745,7 @@ function ModelProviderInstanceDrawerContent({
                       void handlePreviewModels().catch(() => undefined);
                     }}
                   >
-                    检测
-                  </Button>
+                    {i18nText("settings", "auto.detection")}</Button>
                 </div>
               </div>
               <div className="model-provider-drawer__card-body">
@@ -758,7 +757,7 @@ function ModelProviderInstanceDrawerContent({
                       items={[
                         {
                           key: 'advanced-config',
-                          header: '高级配置（可选）',
+                          header: i18nText("settings", "auto.advanced_configuration_optional"),
                           children: advancedConfigFields.map(renderConfigField)
                         }
                       ]}
@@ -771,7 +770,7 @@ function ModelProviderInstanceDrawerContent({
             <div className="model-provider-drawer__card">
               <div className="model-provider-drawer__card-title">
                 <PlusOutlined />
-                <span>模型配置</span>
+                <span>{i18nText("settings", "auto.model_configuration")}</span>
               </div>
               <div className="model-provider-drawer__card-body">
                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -779,17 +778,16 @@ function ModelProviderInstanceDrawerContent({
                     <div style={{ flex: 1 }}>
                       <CachedModelSelect
                         modelIds={previewModels.map((model) => model.model_id)}
-                        ariaLabel="缓存模型"
-                        placeholder="缓存模型"
+                        ariaLabel={i18nText("settings", "auto.cache_model")}
+                        placeholder={i18nText("settings", "auto.cache_model")}
                         value={selectedCachedModelId}
                         emptyMode="select"
                         style={{ width: '100%' }}
                         onChange={applyCachedModelSelection}
                       />
                     </div>
-                    <Button type="dashed" aria-label="添加" onClick={() => appendConfiguredModelRow()}>
-                      添加
-                    </Button>
+                    <Button type="dashed" aria-label={i18nText("settings", "auto.add")} onClick={() => appendConfiguredModelRow()}>
+                      {i18nText("settings", "auto.add")}</Button>
                     {previewModels.length > 0 && (
                       <Button
                         type="primary"
@@ -814,8 +812,7 @@ function ModelProviderInstanceDrawerContent({
                           });
                         }}
                       >
-                        全部导入
-                      </Button>
+                        {i18nText("settings", "auto.import_all")}</Button>
                     )}
                   </Flex>
 
@@ -828,14 +825,12 @@ function ModelProviderInstanceDrawerContent({
                         alignItems: 'center'
                       }}
                     >
-                      <Typography.Text strong style={{ color: 'inherit' }}>模型 ID</Typography.Text>
-                      <Typography.Text strong style={{ color: 'inherit' }}>上下文</Typography.Text>
+                      <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.model_id_alt")}</Typography.Text>
+                      <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.context_alt")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
-                        启用
-                      </Typography.Text>
+                        {i18nText("settings", "auto.enabled")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
-                        操作
-                      </Typography.Text>
+                        {i18nText("settings", "auto.operation")}</Typography.Text>
                     </div>
 
                     {configuredModels.length > 0 ? (
@@ -860,8 +855,8 @@ function ModelProviderInstanceDrawerContent({
                               }}
                               placeholder={
                                 previewModels.length > 0
-                                  ? '输入或从检测缓存选择 model id'
-                                  : '输入 model id'
+                                  ? i18nText("settings", "auto.enter_select_model_id_detection_cache")
+                                  : i18nText("settings", "auto.enter_model_id")
                               }
                               filterOption={(inputValue, option) =>
                                 String(option?.value ?? '')
@@ -870,7 +865,7 @@ function ModelProviderInstanceDrawerContent({
                               }
                               style={{ width: '100%' }}
                             >
-                              <Input aria-label={`模型 ID ${index + 1}`} />
+                              <Input aria-label={i18nText("settings", "auto.model_id", { value1: index + 1 })} />
                             </AutoComplete>
                           </div>
                           <div>
@@ -886,7 +881,7 @@ function ModelProviderInstanceDrawerContent({
                                   context_window_error: parsedContextWindow.error
                                 });
                               }}
-                              placeholder="例如 128K"
+                              placeholder={i18nText("settings", "auto.example_one_two_eight_k")}
                               filterOption={(inputValue, option) =>
                                 String(option?.value ?? '')
                                   .toLowerCase()
@@ -894,7 +889,7 @@ function ModelProviderInstanceDrawerContent({
                               }
                               style={{ width: '100%' }}
                             >
-                              <Input aria-label={`上下文 ${index + 1}`} />
+                              <Input aria-label={i18nText("settings", "auto.context", { value1: index + 1 })} />
                             </AutoComplete>
                             {row.context_window_error ? (
                               <Typography.Text
@@ -908,7 +903,7 @@ function ModelProviderInstanceDrawerContent({
                           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
                             <Switch
                               size="small"
-                              aria-label={`启用模型 ${index + 1}`}
+                              aria-label={i18nText("settings", "auto.enable_model", { value1: index + 1 })}
                               checked={row.enabled}
                               onChange={(checked) => {
                                 updateConfiguredModelRow(row.key, {
@@ -923,7 +918,7 @@ function ModelProviderInstanceDrawerContent({
                               size="small"
                               type="text"
                               icon={<DeleteOutlined />}
-                              aria-label={`删除模型 ${index + 1}`}
+                              aria-label={i18nText("settings", "auto.delete_model", { value1: index + 1 })}
                               className="model-provider-drawer__delete-btn"
                               style={{ height: 'auto', padding: '4px 8px' }}
                               onClick={() => removeConfiguredModelRow(row.key)}
@@ -940,7 +935,7 @@ function ModelProviderInstanceDrawerContent({
                       >
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description="还没有配置模型，点击“添加”或使用检测自动导入。"
+                          description={i18nText("settings", "auto.text_option")}
                         />
                       </div>
                     )}
@@ -950,7 +945,7 @@ function ModelProviderInstanceDrawerContent({
             </div>
           </>
         ) : (
-          <Typography.Text type="secondary">当前没有可用 provider catalog。</Typography.Text>
+          <Typography.Text type="secondary">{i18nText("settings", "auto.currently_provider_catalog_available")}</Typography.Text>
         )}
       </Form>
     </Drawer>

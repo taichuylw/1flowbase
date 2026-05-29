@@ -9,6 +9,7 @@ import { Result, Select, Spin, Typography } from 'antd';
 
 import './api-docs-explorer.css';
 import { ApiDocsOperationListPane } from './ApiDocsOperationListPane';
+import { i18nText } from '../../i18n/text';
 
 type ScalarReferenceConfiguration = Exclude<
   Parameters<typeof ApiReferenceReact>[0]['configuration'],
@@ -406,10 +407,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
 
   function renderCategorySelector() {
     return (
-      <section className="api-docs-panel__toolbar" aria-label="文档筛选">
+      <section className="api-docs-panel__toolbar" aria-label={i18nText("sharedUi", "auto.document_filter")}>
         <div className="api-docs-panel__header-control">
           <Select
-            aria-label="接口分类"
+            aria-label={i18nText("sharedUi", "auto.interface_category")}
             className="api-docs-panel__category-select"
             showSearch
             allowClear
@@ -418,10 +419,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
             options={categoryOptions}
             placeholder={
               categories.length === 0
-                ? '暂无接口分类'
+                ? i18nText("sharedUi", "auto.no_interface_categories")
                 : showAllOperationsWhenNoCategory
-                  ? '全部接口'
-                  : '选择接口分类'
+                  ? i18nText("sharedUi", "auto.all_interfaces")
+                  : i18nText("sharedUi", "auto.select_interface_category")
             }
             optionRender={(option) => {
               const category = option.data as CategorySelectOption;
@@ -443,8 +444,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
                     className="api-docs-panel__category-option-count"
                     aria-hidden="true"
                   >
-                    {category.operationCount} 个接口
-                  </span>
+                    {category.operationCount} {i18nText("sharedUi", "auto.interface_count_suffix")}</span>
                 </div>
               );
             }}
@@ -459,12 +459,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
                 operationId: null
               })
             }
-            notFoundContent="未找到匹配分类"
+            notFoundContent={i18nText("sharedUi", "auto.no_matching_category")}
           />
         </div>
         <Typography.Text className="api-docs-panel__count">
-          共 {totalOperations} 个接口
-        </Typography.Text>
+          {i18nText("sharedUi", "auto.total")}{totalOperations} {i18nText("sharedUi", "auto.interface_count_suffix")}</Typography.Text>
       </section>
     );
   }
@@ -508,11 +507,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Result
             status="info"
-            title="选择接口后查看详情"
+            title={i18nText("sharedUi", "auto.view_details_after_selecting_interface")}
             subTitle={
               showAllOperationsWhenNoCategory
-                ? '从左侧接口列表打开要查看的接口。'
-                : '先在上方选择分类，再从左侧接口列表打开要查看的接口。'
+                ? i18nText("sharedUi", "auto.open_interface_from_left")
+                : i18nText("sharedUi", "auto.select_category_then_open_interface")
             }
           />
         </div>
@@ -524,8 +523,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Spin size="large" />
           <Typography.Text type="secondary">
-            正在加载 {selectedOperation?.path ?? '当前接口'} 的详情
-          </Typography.Text>
+            {i18nText("sharedUi", "auto.loading")}{selectedOperation?.path ?? i18nText("sharedUi", "auto.current_interface")} {i18nText("sharedUi", "auto.details_suffix")}</Typography.Text>
         </div>
       );
     }
@@ -535,8 +533,8 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Result
             status="error"
-            title="接口详情加载失败"
-            subTitle="当前接口文档未能成功返回，请刷新后重试。"
+            title={i18nText("sharedUi", "auto.interface_details_load_failed")}
+            subTitle={i18nText("sharedUi", "auto.interface_document_return_failed")}
           />
         </div>
       );
@@ -568,15 +566,15 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     content = (
       <div className="api-docs-panel__detail-state">
         <Spin size="large" />
-        <Typography.Text type="secondary">正在加载接口目录</Typography.Text>
+        <Typography.Text type="secondary">{i18nText("sharedUi", "auto.loading_interface_directory")}</Typography.Text>
       </div>
     );
   } else if (catalogQuery.isError) {
     content = (
       <Result
         status="error"
-        title="接口目录加载失败"
-        subTitle="请确认当前账号仍具备 API 文档权限，并稍后重试。"
+        title={i18nText("sharedUi", "auto.interface_directory_load_failed")}
+        subTitle={i18nText("sharedUi", "auto.api_doc_permission_retry")}
       />
     );
   } else {
@@ -585,7 +583,7 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         {toolbarPortalElement ? null : renderCategorySelector()}
         <div className="api-docs-panel__workspace">
           {renderOperationPane()}
-          <section className="api-docs-panel__detail" aria-label="API 文档详情">
+          <section className="api-docs-panel__detail" aria-label={i18nText("sharedUi", "auto.api_documentation_details")}>
             {renderDetailPane()}
           </section>
         </div>

@@ -12,6 +12,7 @@ import {
   builtinNodeRuntimeContractTypes,
   getBuiltinNodeRuntimeContract
 } from './node-definitions/contracts';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface BuiltinNodePickerOption {
   kind: 'builtin';
@@ -57,9 +58,9 @@ export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =
     });
 
 const DEPENDENCY_STATUS_LABELS: Record<string, string> = {
-  missing_plugin: '缺少依赖插件',
-  version_mismatch: '依赖版本不匹配',
-  disabled_plugin: '依赖插件未就绪'
+  missing_plugin: i18nText("agentFlow", "auto.dependency_missing_plugin"),
+  version_mismatch: i18nText("agentFlow", "auto.dependency_version_mismatch"),
+  disabled_plugin: i18nText("agentFlow", "auto.dependency_plugin_not_ready")
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,25 +76,25 @@ function getContributionOutputSchemaSnapshot(
 }
 
 export const pluginNodeDefinition: NodeDefinition = {
-  label: 'Plugin Node',
-  summary: '执行来自 capability plugin 的声明式节点贡献。',
+  label: i18nText("agentFlow", "auto.plugin_node_label"),
+  summary: i18nText("agentFlow", "auto.plugin_node_definition_summary"),
   helpHref: null,
   sections: [
     {
       key: 'basics',
-      title: '基础信息',
+      title: i18nText("agentFlow", "auto.basic_information"),
       fields: []
     },
     {
       key: 'outputs',
-      title: '输出',
+      title: i18nText("agentFlow", "auto.outputs"),
       fields: []
     }
   ]
 };
 
 export const pluginNodeDefinitionMeta: NodeDefinitionMeta = {
-  summary: '来自 capability plugin 的声明式节点，可被工作流显式选择并执行。',
+  summary: i18nText("agentFlow", "auto.plugin_node_meta_summary"),
   helpHref: null
 };
 
@@ -111,7 +112,7 @@ export function buildNodePickerOptions(
         contribution.dependency_status === 'ready'
           ? null
           : DEPENDENCY_STATUS_LABELS[contribution.dependency_status] ??
-            '当前插件节点不可用'
+            i18nText("agentFlow", "auto.plugin_node_unavailable")
     }))
   ];
 }

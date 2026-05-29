@@ -29,10 +29,13 @@ import {
   SearchOutlined,
   TagOutlined
 } from '@ant-design/icons';
+import type { TFunction } from 'i18next';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../../../state/auth-store';
+import { formatDateTime } from '../../../shared/i18n/format';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import {
   applicationCatalogQueryKey,
@@ -83,15 +86,16 @@ function mergeTagCatalog(
   return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function buildCopiedApplicationName(name: string) {
-  return `${name} 副本`;
+function buildCopiedApplicationName(name: string, t: TFunction<'applications'>) {
+  return t('auto.copied_application_name', { value1: name });
 }
 
 function toApplicationTypeTabs(
-  types: Array<{ value: Application['application_type']; label: string }>
+  types: Array<{ value: Application['application_type']; label: string }>,
+  t: TFunction<'applications'>
 ): ApplicationTypeTab[] {
   return [
-    { key: 'all', label: '全部', icon: <AppstoreOutlined /> },
+    { key: 'all', label: t('auto.all'), icon: <AppstoreOutlined /> },
     ...types.map((type) => ({
       key: type.value,
       label: type.label,
@@ -101,6 +105,7 @@ function toApplicationTypeTabs(
 }
 
 export function ApplicationListPage() {
+  const { t } = useTranslation('applications');
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const csrfToken = useAuthStore((state) => state.csrfToken);
@@ -132,7 +137,7 @@ export function ApplicationListPage() {
       createApplication(
         {
           application_type: application.application_type,
-          name: buildCopiedApplicationName(application.name),
+          name: buildCopiedApplicationName(application.name, t),
           description: application.description,
           icon: application.icon,
           icon_type: application.icon_type,
@@ -142,10 +147,10 @@ export function ApplicationListPage() {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: applicationsQueryKey });
-      messageApi.success('已复制应用');
+      messageApi.success(t('auto.application_copied'));
     },
     onError: () => {
-      messageApi.error('复制应用失败');
+      messageApi.error(t('auto.copy_application_failed'));
     }
   });
 
@@ -173,10 +178,10 @@ export function ApplicationListPage() {
         queryClient.invalidateQueries({ queryKey: applicationsQueryKey }),
         queryClient.invalidateQueries({ queryKey: applicationCatalogQueryKey })
       ]);
-      messageApi.success('已删除应用');
+      messageApi.success(t('auto.application_deleted'));
     },
     onError: () => {
-      messageApi.error('删除应用失败');
+      messageApi.error(t('auto.delete_application_failed'));
     }
   });
 
@@ -203,13 +208,13 @@ export function ApplicationListPage() {
   }
 
   if (applicationsQuery.isError || applicationCatalogQuery.isError) {
-    return <Result status="error" title="应用列表加载失败" />;
+    return <Result status="error" title={t('auto.application_list_load_failed')} />;
   }
 
   const applications = applicationsQuery.data ?? [];
   const catalog = applicationCatalogQuery.data ?? { types: [], tags: [] };
   const availableTags = mergeTagCatalog(catalog.tags, optimisticTags);
-  const typeTabs = toApplicationTypeTabs(catalog.types);
+  const typeTabs = toApplicationTypeTabs(catalog.types, t);
   const typeLabels = new Map(
     catalog.types.map((type) => [type.value, type.label] as const)
   );
@@ -239,11 +244,14 @@ export function ApplicationListPage() {
 
   const confirmDeleteApplication = (application: Application) => {
     modalApi.confirm({
-      title: '删除应用',
-      content: '删除后将一并删除“' + application.name + '”相关的编排、草稿、运行记录和标签绑定。',
-      okText: '删除',
+      title: t('auto.delete_application'),
+      content:
+        t('auto.delete_application_content_prefix') +
+        application.name +
+        t('auto.delete_application_content_suffix'),
+      okText: t('auto.delete'),
       okButtonProps: { danger: true },
-      cancelText: '取消',
+      cancelText: t('auto.cancel'),
       onOk: () => deleteApplicationMutation.mutateAsync(application)
     });
   };
@@ -279,12 +287,11 @@ export function ApplicationListPage() {
 
         <Space size="middle" wrap>
           <Checkbox checked={myCreated} onChange={(event) => setMyCreated(event.target.checked)}>
-            我创建的
-          </Checkbox>
+            {t('auto.created_by_me')}</Checkbox>
           <Select
             allowClear
             value={tagFilter}
-            placeholder="全部标签"
+            placeholder={t('auto.all_tags')}
             options={availableTags.map((tag) => ({
               value: tag.id,
               label: `${tag.name} (${tag.application_count})`
@@ -296,7 +303,7 @@ export function ApplicationListPage() {
           <Input
             value={keyword}
             prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            placeholder="搜索应用"
+            placeholder={t('auto.search_applications')}
             style={{ width: 220, borderRadius: 8 }}
             onChange={(event) => setKeyword(event.target.value)}
           />
@@ -323,31 +330,30 @@ export function ApplicationListPage() {
               border: '1px solid #dbe7f3'
             }}
           >
-            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>创建应用</Typography.Text>
+            <Typography.Text style={{ color: '#64748b', fontSize: 13 }}>
+              {t('auto.create_application')}
+            </Typography.Text>
             <Button
               type="text"
               icon={<AppstoreAddOutlined />}
               style={{ justifyContent: 'flex-start' }}
               onClick={() => setCreateOpen(true)}
             >
-              创建空白应用
-            </Button>
+              {t('auto.create_blank_application')}</Button>
             <Button
               type="text"
               icon={<FileTextOutlined />}
               style={{ justifyContent: 'flex-start' }}
               disabled
             >
-              从应用模板创建
-            </Button>
+              {t('auto.create_from_application_template')}</Button>
             <Button
               type="text"
               icon={<ImportOutlined />}
               style={{ justifyContent: 'flex-start' }}
               disabled
             >
-              导入 DSL 文件
-            </Button>
+              {t('auto.import_dsl_file')}</Button>
           </div>
         )}
 
@@ -360,19 +366,19 @@ export function ApplicationListPage() {
             {
               key: 'copy',
               icon: <CopyOutlined />,
-              label: '复制',
+              label: t('auto.copy'),
               disabled: !canCreate || duplicateApplicationMutation.isPending
             },
             {
               key: 'edit',
               icon: <EditOutlined />,
-              label: '编辑信息',
+              label: t('auto.edit_information'),
               disabled: !canEdit
             },
             {
               key: 'delete',
               icon: <DeleteOutlined />,
-              label: '删除',
+              label: t('auto.delete'),
               danger: true,
               disabled: !canDelete || deleteApplicationMutation.isPending
             }
@@ -395,7 +401,7 @@ export function ApplicationListPage() {
             >
               <a
                 href={applicationHref}
-                aria-label={`进入应用-${application.name}`}
+                aria-label={t('auto.enter_application_named', { value1: application.name })}
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -425,8 +431,8 @@ export function ApplicationListPage() {
                       {application.name}
                     </Typography.Title>
                     <Typography.Text type="secondary">
-                      {typeLabel} · 编辑于{' '}
-                      {new Date(application.updated_at).toLocaleString('zh-CN', {
+                      {typeLabel} {t('auto.edited_at_prefix')}{' '}
+                      {formatDateTime(application.updated_at, {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',
@@ -438,14 +444,13 @@ export function ApplicationListPage() {
                 </Flex>
 
                 <Typography.Paragraph style={{ color: '#334155', minHeight: 44 }}>
-                  {application.description || '当前应用尚未填写简介。'}
+                  {application.description || t('auto.application_description_empty')}
                 </Typography.Paragraph>
 
                 <Flex wrap gap={8} style={{ minHeight: 32, marginBottom: 16 }}>
                   {application.tags.length === 0 ? (
                     <Tag bordered={false} color="default">
-                      暂无标签
-                    </Tag>
+                      {t('auto.no_tags')}</Tag>
                   ) : (
                     application.tags.map((tag) => (
                       <Tag key={tag.id} bordered={false} color="blue">
@@ -465,18 +470,17 @@ export function ApplicationListPage() {
                   <Button
                     size="small"
                     icon={<TagOutlined />}
-                    aria-label={`管理标签-${application.name}`}
+                    aria-label={t('auto.manage_tags_named', { value1: application.name })}
                     onClick={() => setTaggingApplicationId(application.id)}
                     disabled={!canEdit}
                   >
-                    管理标签
-                  </Button>
+                    {t('auto.manage_tags')}</Button>
                 </Space>
                 <div style={{ position: 'relative' }}>
                   <Button
                     type="text"
                     icon={<MoreOutlined />}
-                    aria-label={`更多操作-${application.name}`}
+                    aria-label={t('auto.more_actions_named', { value1: application.name })}
                     aria-expanded={openActionApplicationId === application.id}
                     onMouseDown={(event) => {
                       event.preventDefault();
@@ -542,7 +546,7 @@ export function ApplicationListPage() {
 
       {visibleApplications.length === 0 ? (
         <div style={{ marginTop: 24 }}>
-          <Empty description="当前筛选条件下暂无应用" />
+          <Empty description={t('auto.no_applications_for_filter')} />
         </div>
       ) : null}
 

@@ -4,6 +4,7 @@ import type {
   SettingsDataModel,
   UpdateSettingsDataModelApiExposureInput
 } from '../../api/data-models';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function DataModelApiTab({
   model,
@@ -39,33 +40,33 @@ export function DataModelApiTab({
         items={[
           {
             key: 'status',
-            label: 'API 暴露状态',
+            label: i18nText("settings", "auto.api_exposure_status"),
             children: <Tag>{model.api_exposure_status}</Tag>
           },
           {
             key: 'readiness',
-            label: 'computed readiness',
+            label: i18nText("settings", "auto.computed_readiness"),
             children: (
-              <Tag color={ready ? 'green' : 'default'}>api_exposed_ready</Tag>
+              <Tag color={ready ? 'green' : 'default'}>{i18nText("settings", "auto.api_exposed_ready")}</Tag>
             )
           },
           {
             key: 'unsafe',
-            label: 'unsafe_external_source',
+            label: i18nText("settings", "auto.unsafe_external_source"),
             children: (
               <Tag color={unsafe ? 'red' : 'default'}>
-                {unsafe ? 'derived' : 'not_detected'}
+                {unsafe ? i18nText("settings", "auto.derived") : i18nText("settings", "auto.not_detected")}
               </Tag>
             )
           },
           {
             key: 'runtime',
-            label: 'Runtime',
+            label: i18nText("settings", "auto.runtime"),
             children: model.runtime_availability
           },
           {
             key: 'namespace',
-            label: 'ACL Namespace',
+            label: i18nText("settings", "auto.acl_namespace"),
             children: model.acl_namespace
           }
         ]}
@@ -81,8 +82,7 @@ export function DataModelApiTab({
             })
           }
         >
-          请求 API 暴露
-        </Button>
+          {i18nText("settings", "auto.request_api_exposure")}</Button>
         <Button
           loading={saving}
           disabled={!canManage || !canClose}
@@ -92,13 +92,11 @@ export function DataModelApiTab({
             })
           }
         >
-          关闭 API 暴露
-        </Button>
+          {i18nText("settings", "auto.turn_off_api_exposure")}</Button>
       </Space>
       {unsafe ? (
         <Typography.Text type="secondary">
-          unsafe_external_source 为系统派生状态，不能通过手动选择改为安全。
-        </Typography.Text>
+          {i18nText("settings", "auto.unsafe_external_source_notice")}</Typography.Text>
       ) : null}
     </Flex>
   );

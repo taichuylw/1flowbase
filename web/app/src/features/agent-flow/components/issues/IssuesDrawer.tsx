@@ -1,6 +1,7 @@
 import { Button, Drawer, List, Space, Tag, Typography } from 'antd';
 
 import type { AgentFlowIssue } from '../../lib/validate-document';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface IssuesDrawerProps {
   open: boolean;
@@ -26,7 +27,7 @@ export function IssuesDrawer({
     >
       <List
         dataSource={issues}
-        locale={{ emptyText: '当前草稿没有静态问题' }}
+        locale={{ emptyText: i18nText("agentFlow", "auto.static_issues_draft") }}
         renderItem={(issue) => (
           <List.Item>
             <Space direction="vertical" size={4}>
@@ -35,7 +36,7 @@ export function IssuesDrawer({
               </Button>
               <Space size={8}>
                 <Tag color={issue.level === 'error' ? 'red' : 'gold'}>
-                  {issue.level === 'error' ? '错误' : '警告'}
+                  {issue.level === 'error' ? i18nText("agentFlow", "auto.error") : i18nText("agentFlow", "auto.warning")}
                 </Tag>
                 {issue.sectionKey ? <Tag>{issue.sectionKey}</Tag> : null}
               </Space>

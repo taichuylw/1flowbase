@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { Select, Typography } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 type EmptyMode = 'text' | 'select';
 
@@ -9,7 +10,7 @@ export function CachedModelSelect({
   ariaLabel,
   className,
   style,
-  placeholder = '缓存模型',
+  placeholder = i18nText("settings", "auto.cache_model"),
   value,
   values,
   defaultValue,
@@ -35,7 +36,7 @@ export function CachedModelSelect({
   }));
 
   if (options.length === 0 && emptyMode === 'text') {
-    return <Typography.Text type="secondary">暂无缓存模型</Typography.Text>;
+    return <Typography.Text type="secondary">{i18nText("settings", "auto.cache_model_yet")}</Typography.Text>;
   }
 
   return (

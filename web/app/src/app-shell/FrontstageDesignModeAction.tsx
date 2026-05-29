@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 
 import { useAuthStore } from '../state/auth-store';
 import { useFrontstageDesignModeStore } from '../state/frontstage-design-mode-store';
+import { i18nText } from '../shared/i18n/text';
 
 const DESIGN_MODE_PERMISSION = 'frontstage.page.design';
 
@@ -66,7 +67,7 @@ function FrontstageDesignModeActionBase({
     return null;
   }
 
-  const label = isDesignMode ? '退出设计模式' : '进入设计模式';
+  const label = isDesignMode ? i18nText("appShell", "auto.exit_design_mode") : i18nText("appShell", "auto.enter_design_mode");
 
   const handleClick = () => {
     toggleDesignMode();

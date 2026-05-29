@@ -26,6 +26,7 @@ import {
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 import { isActiveRunStatus } from '../../lib/run-status';
 import './application-run-detail-panel.css';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
 
@@ -86,18 +87,18 @@ function RunIdSubtitle({ runId }: { runId: string }) {
   async function handleCopyRunId() {
     try {
       await copy(runId);
-      message.success('已复制 ID');
+      message.success(i18nText("applications", "auto.id_copied"));
     } catch {
-      message.error('复制失败');
+      message.error(i18nText("applications", "auto.copy_failed"));
     }
   }
 
   return (
     <span className="application-run-detail__run-id">
       <span className="application-run-detail__run-id-value">{runId}</span>
-      <Tooltip title="复制 ID">
+      <Tooltip title={i18nText("applications", "auto.copy_id")}>
         <Button
-          aria-label="复制运行 ID"
+          aria-label={i18nText("applications", "auto.copy_run_id")}
           className="application-run-detail__run-id-copy"
           icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           onClick={handleCopyRunId}
@@ -120,7 +121,7 @@ function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
 function buildConversationLogMessage(
   detail: ApplicationRunDetail
 ): AgentFlowDebugMessage {
-  const assistantContent = extractAssistantOutputText(detail) || '暂无输出';
+  const assistantContent = extractAssistantOutputText(detail) || i18nText("applications", "auto.no_output_yet");
   const rawOutput =
     Object.keys(detail.flow_run.output_payload).length > 0
       ? detail.flow_run.output_payload
@@ -191,8 +192,8 @@ function mapConversationItemToMessages(
     ];
   }
 
-  const userContent = nonEmptyString(item.query) ?? '无';
-  const assistantContent = nonEmptyString(item.answer) ?? '暂无输出';
+  const userContent = nonEmptyString(item.query) ?? i18nText("applications", "auto.none");
+  const assistantContent = nonEmptyString(item.answer) ?? i18nText("applications", "auto.no_output_yet");
 
   return [
     {
@@ -350,8 +351,8 @@ function RunConversation({
   return (
     <div className="application-run-detail__conversation-pane">
       <AgentFlowDebugConsole
-        ariaLabel="运行详情预览"
-        closeLabel="关闭运行详情"
+        ariaLabel={i18nText("applications", "auto.run_details_preview")}
+        closeLabel={i18nText("applications", "auto.close_run_details")}
         composerUiOnly
         messages={messages}
         runContext={runConversationContext}
@@ -360,7 +361,7 @@ function RunConversation({
         status={conversationSessionStatus(conversationPage)}
         stopping={false}
         subtitle={<RunIdSubtitle runId={runId} />}
-        title="运行详情"
+        title={i18nText("applications", "auto.run_details")}
         onChangeRunContextValue={() => {}}
         onClearSession={() => {}}
         onClose={onClose}
@@ -422,7 +423,7 @@ export function ApplicationRunDetailPanel({
 
   return (
     <aside
-      aria-label="运行详情"
+      aria-label={i18nText("applications", "auto.run_details")}
       className="application-run-detail application-run-detail--loaded"
     >
       <div className="application-run-detail__body">

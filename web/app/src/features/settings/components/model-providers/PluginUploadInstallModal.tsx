@@ -1,5 +1,6 @@
 import { Alert, Button, Modal, Typography, Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function PluginUploadInstallModal({
   open,
@@ -28,35 +29,32 @@ export function PluginUploadInstallModal({
   return (
     <Modal
       open={open}
-      title="上传插件"
+      title={i18nText("settings", "auto.upload_plugin")}
       onCancel={onClose}
       footer={null}
       destroyOnHidden
     >
       <div className="model-provider-panel__upload-modal">
         <Typography.Paragraph type="secondary">
-          支持 `.1flowbasepkg`，兼容 `.tar.gz` / `.zip`。上传后仍由宿主后端统一验签和安装。
-        </Typography.Paragraph>
+          {i18nText("settings", "auto.supports_one_flowbasepkg_compatible_tar_gz_zip_uploading_host_backend")}</Typography.Paragraph>
         <Upload.Dragger
           beforeUpload={() => false}
           maxCount={1}
           fileList={fileList}
           onChange={({ fileList: nextFiles }) => onChange(nextFiles)}
         >
-          选择插件包后上传并安装
-        </Upload.Dragger>
+          {i18nText("settings", "auto.select_plug_package_upload_install")}</Upload.Dragger>
         {resultSummary ? (
           <Alert
             type="success"
             showIcon
             message={`${resultSummary.displayName} ${resultSummary.version}`}
-            description={`来源：手工上传；信任级别：${resultSummary.trustLabel}；状态：${resultSummary.availabilityLabel}`}
+            description={i18nText("settings", "auto.source_manual_upload_trust_level_status", { value1: resultSummary.trustLabel, value2: resultSummary.availabilityLabel })}
           />
         ) : null}
         {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
         <Button type="primary" block loading={submitting} onClick={onSubmit}>
-          上传并安装
-        </Button>
+          {i18nText("settings", "auto.upload_and_install")}</Button>
       </div>
     </Modal>
   );

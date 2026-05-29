@@ -26,6 +26,7 @@ import {
   type AgentFlowEnvironmentVariable
 } from './application-environment-variables';
 import { systemVariableNodeId } from './system-variables';
+import { i18nText } from '../../../shared/i18n/text';
 
 export interface AgentFlowIssue {
   id: string;
@@ -368,11 +369,11 @@ function validateAnswerPresentationReferences(
       issues,
       answerNode,
       'bindings.answer_template',
-      'Answer 输出变量重复引用',
-      `同一个输出变量 ${formatAnswerPresentationReference(
+      i18nText("agentFlow", "auto.answer_repeated_reference_output_variable"),
+      i18nText("agentFlow", "auto.same_output_variable_referenced_answer_template", { value1: formatAnswerPresentationReference(
         reference,
         nodeById
-      )} 在 Answer 模板中只能引用一次。`
+      ) })
     );
   }
 
@@ -387,14 +388,14 @@ function validateAnswerPresentationReferences(
         issues,
         answerNode,
         'bindings.answer_template',
-        'Answer 展示顺序违反执行依赖',
-        `当前模板把 ${formatAnswerPresentationReference(
+        i18nText("agentFlow", "auto.answer_display_order_violates_execution_dependencies"),
+        i18nText("agentFlow", "auto.template_puts_front_former_depends_execution_result_latter_adjust_answer", { value1: formatAnswerPresentationReference(
           current,
           nodeById
-        )} 放在 ${formatAnswerPresentationReference(
+        ), value2: formatAnswerPresentationReference(
           later,
           nodeById
-        )} 前面，但前者依赖后者的执行结果。请按节点依赖顺序调整 Answer 模板。`
+        ) })
       );
       break;
     }
@@ -431,8 +432,8 @@ export function validateDocument(
       nodeId: null,
       sectionKey: null,
       fieldKey: null,
-      title: 'Start 节点数量非法',
-      message: '每个草稿必须保留且只保留一个 Start 节点。'
+      title: i18nText("agentFlow", "auto.number_start_nodes_illegal"),
+      message: i18nText("agentFlow", "auto.each_draft_must_retain_exactly_one_start_node")
     });
   }
 
@@ -444,8 +445,8 @@ export function validateDocument(
       nodeId: null,
       sectionKey: null,
       fieldKey: null,
-      title: '缺少 Answer 节点',
-      message: '第一版 agentFlow 至少需要一个 Answer 节点作为对话输出。'
+      title: i18nText("agentFlow", "auto.missing_answer_node"),
+      message: i18nText("agentFlow", "auto.first_version_agentflow_requires_least_one_answer_node_dialogue_output")
     });
   }
 
@@ -462,8 +463,8 @@ export function validateDocument(
         nodeId: edge.source,
         sectionKey: 'basics',
         fieldKey: null,
-        title: '节点连线指向无效目标',
-        message: '当前节点存在一条指向已删除节点的连线。'
+        title: i18nText("agentFlow", "auto.node_connection_points_invalid_target"),
+        message: i18nText("agentFlow", "auto.connection_node_deleted_node")
       });
     }
   }
@@ -488,8 +489,8 @@ export function validateDocument(
                 issues,
                 node,
                 field.key,
-                providerMissing ? 'LLM 缺少模型供应商' : 'LLM 缺少模型',
-                providerMissing ? '请先选择模型供应商。' : '请先选择模型。'
+                providerMissing ? i18nText("agentFlow", "auto.llm_missing_model_supplier") : i18nText("agentFlow", "auto.llm_missing_model"),
+                providerMissing ? i18nText("agentFlow", "auto.select_model_supplier_first") : i18nText("agentFlow", "auto.select_model_first")
               );
               continue;
             }
@@ -498,8 +499,8 @@ export function validateDocument(
               issues,
               node,
               field.key,
-              `${field.label} 未配置`,
-              `请先完善 ${field.label}。`
+              i18nText("agentFlow", "auto.not_configured", { value1: field.label }),
+              i18nText("agentFlow", "auto.please_complete_first", { value1: field.label })
             );
           }
         }
@@ -519,8 +520,8 @@ export function validateDocument(
             issues,
             node,
             'config.model_provider',
-            'LLM 模型供应商不可用',
-            '当前模型供应商不存在、未就绪或你无权访问。',
+            i18nText("agentFlow", "auto.llm_model_provider_unavailable"),
+            i18nText("agentFlow", "auto.model_provider_exist_ready_access"),
             'inputs'
           );
         } else if (model.length > 0) {
@@ -533,16 +534,16 @@ export function validateDocument(
               issues,
               node,
               'config.model_provider',
-              'LLM 模型不可用',
-              '当前模型不属于所选供应商的生效模型列表。'
+              i18nText("agentFlow", "auto.llm_model_available"),
+              i18nText("agentFlow", "auto.model_belong_selected_supplier_s_list_active_models")
             );
           } else if (matchingModelGroups.length > 1) {
             pushFieldIssue(
               issues,
               node,
               'config.model_provider',
-              'LLM 模型解析不唯一',
-              '当前供应商下有多个主实例提供同一模型，请先在供应商配置中收口。'
+              i18nText("agentFlow", "auto.llm_model_analysis_unique"),
+              i18nText("agentFlow", "auto.multiple_master_instances_supplier_provide_same_model_close_supplier_configuration")
             );
           }
         }
@@ -557,9 +558,9 @@ export function validateDocument(
         nodeId: node.id,
         sectionKey: 'basics',
         fieldKey: null,
-        title: '插件节点缺少贡献身份',
+        title: i18nText("agentFlow", "auto.plugin_node_missing_contribution_identity"),
         message:
-          '当前 plugin_node 缺少 plugin_id / plugin_version / contribution_code / node_shell / schema_version / plugin_unique_identifier / package_id / contribution_checksum / compiled_contribution_hash / output_schema_snapshot。'
+          i18nText("agentFlow", "auto.plugin_node_missing_plugin_id_plugin_version_contribution_code_node")
       });
     }
 
@@ -594,8 +595,8 @@ export function validateDocument(
             issues,
             node,
             `bindings.${bindingKey}`,
-            '绑定引用节点不存在',
-            `当前 binding 引用了已删除节点 ${sourceNodeId} 的输出。`
+            i18nText("agentFlow", "auto.binding_reference_node_exist"),
+            i18nText("agentFlow", "auto.binding_refers_output_deleted_node", { value1: sourceNodeId })
           );
           continue;
         }
@@ -604,8 +605,8 @@ export function validateDocument(
           issues,
           node,
           `bindings.${bindingKey}`,
-          '绑定引用不可见',
-          '当前 binding 引用了未接入上游链路的输出。'
+          i18nText("agentFlow", "auto.binding_reference_visible"),
+          i18nText("agentFlow", "auto.binding_refers_output_connected_upstream_link")
         );
       }
     }
@@ -624,8 +625,8 @@ export function validateDocument(
           issues,
           node,
           'config.language',
-          '不支持的运行语言',
-          '当前版本仅支持 JavaScript。'
+          i18nText("agentFlow", "auto.unsupported_runtime_language"),
+          i18nText("agentFlow", "auto.version_supports_javascript")
         );
       }
     }
@@ -635,8 +636,8 @@ export function validateDocument(
         issues,
         node,
         'config.output_contract',
-        '代码输出契约不能为空',
-        'Code 节点至少需要保留 1 个输出变量用于下游引用。'
+        i18nText("agentFlow", "auto.code_output_contract_empty"),
+        i18nText("agentFlow", "auto.code_node_needs_retain_least_one_output_variable_downstream_reference")
       );
     }
 
@@ -648,8 +649,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          '输出变量名未配置',
-          '输出契约中的变量名不能为空。'
+          i18nText("agentFlow", "auto.output_variable_name_configured"),
+          i18nText("agentFlow", "auto.variable_names_output_contracts_empty")
         );
         continue;
       }
@@ -659,8 +660,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          '输出契约重复',
-          '输出契约中的变量名必须唯一'
+          i18nText("agentFlow", "auto.duplicate_output_contract"),
+          i18nText("agentFlow", "auto.variable_names_output_contracts_must_unique")
         );
         continue;
       }
@@ -674,8 +675,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          '输出变量名保留',
-          '输出契约中的变量名是系统保留字段，请改用业务字段名。'
+          i18nText("agentFlow", "auto.output_variable_names_reserved"),
+          i18nText("agentFlow", "auto.variable_names_output_contract_system_reserved_fields_use_business_field")
         );
         continue;
       }
@@ -685,8 +686,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          '输出变量名未知',
-          '输出契约中的变量名不属于当前节点运行时契约。'
+          i18nText("agentFlow", "auto.output_variable_name_unknown"),
+          i18nText("agentFlow", "auto.variable_name_output_contract_belong_node_runtime_contract")
         );
       }
     }
@@ -704,8 +705,8 @@ export function validateDocument(
         nodeId: node.id,
         sectionKey: 'basics',
         fieldKey: null,
-        title: `${node.alias} 尚未接入主链路`,
-        message: '当前节点没有任何有效入边。'
+        title: i18nText("agentFlow", "auto.yet_connected_main_link", { value1: node.alias }),
+        message: i18nText("agentFlow", "auto.node_any_valid_incoming_edges")
       });
     }
   }

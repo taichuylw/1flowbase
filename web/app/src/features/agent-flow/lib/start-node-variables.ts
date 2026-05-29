@@ -10,15 +10,16 @@ import {
 } from '@1flowbase/flow-schema';
 
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
+import { i18nText } from '../../../shared/i18n/text';
 
 export const startInputTypeOptions = [
-  { value: 'text', label: '文本', valueType: 'string' },
-  { value: 'paragraph', label: '段落', valueType: 'string' },
-  { value: 'select', label: '下拉选项', valueType: 'string' },
-  { value: 'number', label: '数字', valueType: 'number' },
-  { value: 'checkbox', label: '复选框', valueType: 'boolean' },
-  { value: 'file', label: '文件', valueType: 'json' },
-  { value: 'file_list', label: '文件列表', valueType: 'array[object]' },
+  { value: 'text', label: i18nText("agentFlow", "auto.text"), valueType: 'string' },
+  { value: 'paragraph', label: i18nText("agentFlow", "auto.paragraph"), valueType: 'string' },
+  { value: 'select', label: i18nText("agentFlow", "auto.drop_down_options"), valueType: 'string' },
+  { value: 'number', label: i18nText("agentFlow", "auto.numbers"), valueType: 'number' },
+  { value: 'checkbox', label: i18nText("agentFlow", "auto.checkbox"), valueType: 'boolean' },
+  { value: 'file', label: i18nText("agentFlow", "auto.file"), valueType: 'json' },
+  { value: 'file_list', label: i18nText("agentFlow", "auto.file_list"), valueType: 'array[object]' },
   { value: 'url', label: 'URL', valueType: 'string' }
 ] satisfies Array<{
   value: FlowStartInputType;

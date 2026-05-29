@@ -3,6 +3,7 @@ import { Button } from 'antd';
 
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export function EdgeInsertButton({
   open,
@@ -17,7 +18,7 @@ export function EdgeInsertButton({
 }) {
   return (
     <NodePickerPopover
-      ariaLabel="在此连线上新增节点"
+      ariaLabel={i18nText("agentFlow", "auto.add_new_node_connection")}
       open={open}
       options={options}
       onOpenChange={onOpenChange}

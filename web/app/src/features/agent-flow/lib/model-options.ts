@@ -1,4 +1,5 @@
 import type { AgentFlowModelProviderOptions } from '../api/model-provider-options';
+import { i18nText } from '../../../shared/i18n/text';
 
 type LocaleAwareOptions = Pick<
   AgentFlowModelProviderOptions,
@@ -202,10 +203,10 @@ export function buildLlmModelMetadataSummary(model: LlmModelOption) {
     model.value,
     model.tag,
     model.effectiveContextWindow !== null
-      ? `上下文 ${formatLlmTokenCount(model.effectiveContextWindow)}`
+      ? i18nText("agentFlow", "auto.context", { value1: formatLlmTokenCount(model.effectiveContextWindow) })
       : null,
     model.maxOutputTokens !== null
-      ? `输出 ${formatLlmTokenCount(model.maxOutputTokens)}`
+      ? i18nText("agentFlow", "auto.output", { value1: formatLlmTokenCount(model.maxOutputTokens) })
       : null
   ]
     .filter(Boolean)

@@ -7,6 +7,7 @@ import {
   SaveOutlined
 } from '@ant-design/icons';
 import { Badge, Button, Space, Tag, Tooltip, Typography } from 'antd';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface AgentFlowOverlayProps {
   applicationName: string;
@@ -42,15 +43,15 @@ export function AgentFlowOverlay({
   publishDisabled
 }: AgentFlowOverlayProps) {
   const statusTag = {
-    idle: { color: 'default', label: '空闲' },
-    saving: { color: 'blue', label: '正在保存' },
-    saved: { color: 'green', label: '已保存' },
-    error: { color: 'red', label: '保存失败' }
+    idle: { color: 'default', label: i18nText("agentFlow", "auto.free") },
+    saving: { color: 'blue', label: i18nText("agentFlow", "auto.saving") },
+    saved: { color: 'green', label: i18nText("agentFlow", "auto.saved") },
+    error: { color: 'red', label: i18nText("agentFlow", "auto.save_failed") }
   }[autosaveStatus];
 
   return (
     <div
-      aria-label="Agent Flow 操作栏"
+      aria-label={i18nText("agentFlow", "auto.agent_flow_action_bar")}
       className="agent-flow-editor__overlay"
       role="region"
     >
@@ -62,14 +63,13 @@ export function AgentFlowOverlay({
       </Space>
       <Space size="small">
         <Button
-          aria-label="预览"
+          aria-label={i18nText("agentFlow", "auto.preview")}
           autoInsertSpace={false}
           icon={<PlayCircleOutlined />}
           onClick={onOpenDebugConsole}
-          title="预览"
+          title={i18nText("agentFlow", "auto.preview")}
         >
-          预览
-        </Button>
+          {i18nText("agentFlow", "auto.preview")}</Button>
         <Badge count={issueErrorCount} size="small">
           <Button
             aria-label="Issues"
@@ -79,26 +79,24 @@ export function AgentFlowOverlay({
           />
         </Badge>
         <Button
-          aria-label="系统变量"
+          aria-label={i18nText("agentFlow", "auto.system_variables")}
           autoInsertSpace={false}
           icon={<GlobalOutlined />}
           onClick={onOpenSystemVariables}
-          title="系统变量"
+          title={i18nText("agentFlow", "auto.system_variables")}
         >
-          系统变量
-        </Button>
+          {i18nText("agentFlow", "auto.system_variables")}</Button>
         <Button
-          aria-label="环境变量"
+          aria-label={i18nText("agentFlow", "auto.environment_variables")}
           autoInsertSpace={false}
           icon={<CodeOutlined />}
           onClick={onOpenEnvironmentVariables}
-          title="环境变量"
+          title={i18nText("agentFlow", "auto.environment_variables")}
         >
-          环境变量
-        </Button>
+          {i18nText("agentFlow", "auto.environment_variables")}</Button>
         <Tooltip title={autosaveLabel}>
           <Button
-            aria-label="保存"
+            aria-label={i18nText("agentFlow", "auto.save")}
             autoInsertSpace={false}
             disabled={saveDisabled}
             icon={<SaveOutlined />}
@@ -112,13 +110,12 @@ export function AgentFlowOverlay({
           disabled={publishDisabled}
           onClick={onOpenPublish}
         >
-          发布
-        </Button>
+          {i18nText("agentFlow", "auto.publish")}</Button>
         <Button
-          aria-label="历史版本"
+          aria-label={i18nText("agentFlow", "auto.historical_version")}
           icon={<HistoryOutlined />}
           onClick={onOpenHistory}
-          title="历史版本"
+          title={i18nText("agentFlow", "auto.historical_version")}
         />
       </Space>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Form, Input, Space, Typography } from 'antd';
@@ -23,6 +24,7 @@ export function ApplicationApiMappingPanel({
   csrfToken: string;
   publication: ApplicationApiPublication | null;
 }) {
+  const { t } = useTranslation('applications');
   const [form] = Form.useForm<ApplicationApiMapping>();
   const queryClient = useQueryClient();
   const mappingQuery = useQuery({
@@ -58,15 +60,14 @@ export function ApplicationApiMappingPanel({
   return (
     <section className="application-api-panel">
       <Space direction="vertical" size={12} className="application-api-panel__stack">
-        <Typography.Title level={4}>Mapping</Typography.Title>
+        <Typography.Title level={4}>{t('auto.mapping')}</Typography.Title>
         <Typography.Text type="secondary">
-          `model_target` 留空时，model 只保留在请求 metadata，不注入节点输入。
-        </Typography.Text>
+          {t('auto.model_target_empty_notice')}</Typography.Text>
         {publication && currentMappingText !== publishedMappingText ? (
           <Alert
             type="warning"
             showIcon
-            message="当前保存的 mapping 与 active publication snapshot 不一致"
+            message={t('auto.mapping_snapshot_mismatch')}
           />
         ) : null}
         <Form<ApplicationApiMapping>
@@ -79,7 +80,7 @@ export function ApplicationApiMappingPanel({
             <SelectorItem
               name={['input', 'model_target']}
               label="model_target"
-              help="pass-through target；留空不注入节点输入"
+              help={t('auto.model_target_help')}
             />
             <SelectorItem name={['input', 'inputs_target']} label="inputs_target" />
             <SelectorItem name={['input', 'history_target']} label="history_target" />
@@ -90,8 +91,7 @@ export function ApplicationApiMappingPanel({
             <SelectorItem name={['output', 'error_selector']} label="error_selector" />
           </div>
           <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
-            保存 Mapping
-          </Button>
+            {t('auto.save_mapping')}</Button>
         </Form>
       </Space>
     </section>
@@ -109,13 +109,15 @@ function SelectorItem({
   help?: string;
   required?: boolean;
 }) {
+  const { t } = useTranslation('applications');
+
   return (
     <Form.Item
       name={name}
       label={label}
       help={help}
       rules={[
-        ...(required ? [{ required: true, message: `${label} 不能为空` }] : []),
+        ...(required ? [{ required: true, message: t('auto.field_required', { value1: label }) }] : []),
         {
           validator: (_, value: string | null | undefined) => {
             if (!value) {
@@ -123,7 +125,7 @@ function SelectorItem({
             }
             return selectorPattern.test(value)
               ? Promise.resolve()
-              : Promise.reject(new Error('只能包含字母、数字、下划线、点和连字符'));
+              : Promise.reject(new Error(t('auto.selector_pattern_invalid')));
           }
         }
       ]}

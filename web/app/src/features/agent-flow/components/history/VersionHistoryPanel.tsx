@@ -12,6 +12,7 @@ import type {
 } from '@1flowbase/api-client';
 
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface VersionHistoryPanelProps {
   onClose: () => void;
@@ -49,7 +50,7 @@ function formatVersionCreatedAt(value: string) {
 function getVersionTitle(version: ConsoleFlowVersionSummary) {
   return version.summary_is_custom && version.summary.trim().length > 0
     ? version.summary
-    : `版本 ${version.sequence}`;
+    : i18nText("agentFlow", "auto.version", { value1: version.sequence });
 }
 
 export function VersionHistoryPanel({
@@ -87,14 +88,14 @@ export function VersionHistoryPanel({
     <AgentFlowDockPanel
       bodyClassName="agent-flow-editor__history-panel-body"
       className="agent-flow-editor__history-panel"
-      closeLabel="关闭历史版本"
-      title="历史版本"
+      closeLabel={i18nText("agentFlow", "auto.close_historical_version")}
+      title={i18nText("agentFlow", "auto.historical_version")}
       onClose={onClose}
     >
       <List
         className="agent-flow-editor__history-list"
         dataSource={versions}
-        locale={{ emptyText: '当前还没有可恢复的历史版本' }}
+        locale={{ emptyText: i18nText("agentFlow", "auto.currently_historical_version_restore") }}
         renderItem={(version) => {
           const createdAt = formatVersionCreatedAt(version.created_at);
           const title = getVersionTitle(version);
@@ -104,7 +105,7 @@ export function VersionHistoryPanel({
             <List.Item
               actions={[
                 <Button
-                  aria-label={`${version.is_protected ? '取消置顶保护' : '置顶保护'} ${title}`}
+                  aria-label={`${version.is_protected ? i18nText("agentFlow", "auto.cancel_top_protection") : i18nText("agentFlow", "auto.top_protection")} ${title}`}
                   icon={
                     version.is_protected ? (
                       <PushpinFilled />
@@ -122,7 +123,7 @@ export function VersionHistoryPanel({
                   }}
                 />,
                 <Button
-                  aria-label={`编辑标题 ${title}`}
+                  aria-label={i18nText("agentFlow", "auto.edit_title", { value1: title })}
                   icon={<EditOutlined />}
                   key="edit"
                   type="text"
@@ -138,7 +139,7 @@ export function VersionHistoryPanel({
                     void onRestore(version.id);
                   }}
                 >
-                  恢复版本 {version.sequence}
+                  {i18nText("agentFlow", "auto.recovery_version")}{version.sequence}
                 </Button>
               ]}
             >
@@ -147,7 +148,7 @@ export function VersionHistoryPanel({
                   <Space size={6}>
                     <span>{title}</span>
                     {version.is_protected ? (
-                      <Typography.Text type="secondary">已保护</Typography.Text>
+                      <Typography.Text type="secondary">{i18nText("agentFlow", "auto.protected")}</Typography.Text>
                     ) : null}
                   </Space>
                 }
@@ -163,12 +164,12 @@ export function VersionHistoryPanel({
         }
         destroyOnHidden
         okButtonProps={{
-          'aria-label': '保存版本标题',
+          'aria-label': i18nText("agentFlow", "auto.save_version_title"),
           disabled: editingTitle.trim().length === 0
         }}
-        okText="保存"
+        okText={i18nText("agentFlow", "auto.save")}
         open={Boolean(editingVersion)}
-        title="编辑版本标题"
+        title={i18nText("agentFlow", "auto.edit_version_title")}
         onCancel={() => {
           setEditingVersion(null);
           setEditingTitle('');
@@ -178,9 +179,9 @@ export function VersionHistoryPanel({
         }}
       >
         <Input
-          aria-label="版本标题"
+          aria-label={i18nText("agentFlow", "auto.version_title")}
           maxLength={80}
-          placeholder="输入版本标题"
+          placeholder={i18nText("agentFlow", "auto.enter_version_title")}
           value={editingTitle}
           onChange={(event) => setEditingTitle(event.target.value)}
         />

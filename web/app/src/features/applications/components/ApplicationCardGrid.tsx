@@ -1,5 +1,7 @@
 import { Button, Flex, List, Tag, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 
+import { formatDateTime } from '../../../shared/i18n/format';
 import type { Application } from '../api/applications';
 
 interface ApplicationCardGridProps {
@@ -11,6 +13,8 @@ function applicationTypeLabel(applicationType: Application['application_type']) 
 }
 
 export function ApplicationCardGrid({ applications }: ApplicationCardGridProps) {
+  const { t } = useTranslation('applications');
+
   return (
     <List
       grid={{ gutter: 16, column: 2 }}
@@ -35,15 +39,15 @@ export function ApplicationCardGrid({ applications }: ApplicationCardGridProps) 
             </Flex>
 
             <Typography.Paragraph style={{ marginBottom: 0 }}>
-              {application.description || '当前应用尚未填写简介。'}
+              {application.description || t('auto.application_description_empty')}
             </Typography.Paragraph>
 
             <Typography.Text type="secondary">
-              最近更新：{new Date(application.updated_at).toLocaleString('zh-CN')}
+              {t('auto.recently_updated')}{formatDateTime(application.updated_at)}
             </Typography.Text>
 
             <a href={`/applications/${application.id}/orchestration`}>
-              <Button type="primary">进入应用</Button>
+              <Button type="primary">{t('auto.enter_application')}</Button>
             </a>
           </Flex>
         </List.Item>

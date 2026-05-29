@@ -13,35 +13,38 @@ export type ApplicationSectionKey = 'orchestration' | 'api' | 'logs' | 'monitori
 
 const SECTION_DEFINITIONS: Array<{
   key: ApplicationSectionKey;
-  label: string;
+  labelKey: string;
   icon: ReactNode;
 }> = [
   {
     key: 'orchestration',
-    label: '编排',
+    labelKey: 'auto.orchestration',
     icon: <DeploymentUnitOutlined />
   },
   {
     key: 'api',
-    label: 'API',
+    labelKey: 'auto.api',
     icon: <ApiOutlined />
   },
   {
     key: 'logs',
-    label: '日志',
+    labelKey: 'auto.logs',
     icon: <UnorderedListOutlined />
   },
   {
     key: 'monitoring',
-    label: '监控',
+    labelKey: 'auto.monitoring',
     icon: <FundOutlined />
   }
 ];
 
-export function getApplicationSections(applicationId: string): SectionNavItem[] {
+export function getApplicationSections(
+  applicationId: string,
+  t: (key: string) => string
+): SectionNavItem[] {
   return SECTION_DEFINITIONS.map((section) => ({
     key: section.key,
-    label: section.label,
+    label: t(section.labelKey),
     icon: section.icon,
     to: `/applications/${applicationId}/${section.key}`
   }));

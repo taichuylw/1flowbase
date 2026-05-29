@@ -9,6 +9,7 @@ import { DebugWorkflowNodeItem, StatusIcon } from './DebugWorkflowNodeRow';
 import { LlmToolTraceTree } from './LlmToolTraceTree';
 import { groupTraceItemsForDisplay } from './debug-workflow-trace-utils';
 import { stripLlmRoundsFromDebugPayload } from './llm-tool-callbacks';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 function workflowStatus(items: AgentFlowTraceItem[]) {
   if (items.some((item) => item.status === 'failed')) {
@@ -55,7 +56,7 @@ export function DebugWorkflowProcess({
 
   return (
     <div
-      aria-label="工作流"
+      aria-label={i18nText("agentFlow", "auto.workflow")}
       className="agent-flow-editor__debug-workflow-process"
       role="group"
     >
@@ -67,7 +68,7 @@ export function DebugWorkflowProcess({
       >
         <span className="agent-flow-editor__debug-workflow-title">
           <StatusIcon status={status} />
-          <Typography.Text>工作流</Typography.Text>
+          <Typography.Text>{i18nText("agentFlow", "auto.workflow")}</Typography.Text>
         </span>
         {expanded ? (
           <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />

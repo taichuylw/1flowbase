@@ -25,6 +25,7 @@ import {
   type RestrictedBlockLoaderLimits
 } from '../lib/restricted-block-loader';
 import type { RestrictedBlockRuntimeHostSnapshot } from '../lib/restricted-block-runtime-host';
+import { i18nText } from '../../../shared/i18n/text';
 
 export type JsBlockTrialPanelRuntimeSessionFactory = (
   options: FrontstageRestrictedBlockRuntimeHostOptions
@@ -76,17 +77,17 @@ function parseJsonObject(
   try {
     const parsed = JSON.parse(value) as unknown;
     if (!isRecord(parsed)) {
-      return { ok: false, message: `${label} 必须是 JSON object。` };
+      return { ok: false, message: i18nText("frontstage", "auto.json_object_required", { value1: label }) };
     }
     return { ok: true, value: parsed };
   } catch {
-    return { ok: false, message: `${label} 不是有效 JSON。` };
+    return { ok: false, message: i18nText("frontstage", "auto.invalid_json", { value1: label }) };
   }
 }
 
 function formatList(values: readonly unknown[] | undefined): string {
   if (!values || values.length === 0) {
-    return '无';
+    return i18nText("frontstage", "auto.none");
   }
   return values.map(String).join(', ');
 }
@@ -96,7 +97,7 @@ function formatKeys(value: Record<string, unknown>): string {
 }
 
 function formatNumber(value: number | undefined): string {
-  return typeof value === 'number' ? String(value) : '未设置';
+  return typeof value === 'number' ? String(value) : i18nText("frontstage", "auto.not_set");
 }
 
 function toRuntimeLimitsDraft(
@@ -108,18 +109,18 @@ function toRuntimeLimitsDraft(
   if (timeoutMs === null) {
     return {
       ok: false,
-      message: 'Runtime limits.timeoutMs 必须是正数。'
+      message: i18nText("frontstage", "auto.timeout_positive")
     };
   }
 
   const maxRenderDepth = readOptionalPositiveNumber(value, 'maxRenderDepth');
   if (!maxRenderDepth.ok) {
-    return { ok: false, message: 'Runtime limits.maxRenderDepth 必须是正数。' };
+    return { ok: false, message: i18nText("frontstage", "auto.max_render_depth_positive") };
   }
 
   const maxRenderNodes = readOptionalPositiveNumber(value, 'maxRenderNodes');
   if (!maxRenderNodes.ok) {
-    return { ok: false, message: 'Runtime limits.maxRenderNodes 必须是正数。' };
+    return { ok: false, message: i18nText("frontstage", "auto.max_render_nodes_positive") };
   }
 
   const maxEventChainDepth = readOptionalPositiveNumber(
@@ -129,25 +130,25 @@ function toRuntimeLimitsDraft(
   if (!maxEventChainDepth.ok) {
     return {
       ok: false,
-      message: 'Runtime limits.maxEventChainDepth 必须是正数。'
+      message: i18nText("frontstage", "auto.max_event_chain_depth_positive")
     };
   }
 
   const allowedActions = readStringArray(value, 'allowedActions');
   if (!allowedActions.ok) {
-    return { ok: false, message: 'Runtime limits.allowedActions 必须是字符串数组。' };
+    return { ok: false, message: i18nText("frontstage", "auto.allowed_actions_string_array") };
   }
 
   const allowedEvents = readStringArray(value, 'allowedEvents');
   if (!allowedEvents.ok) {
-    return { ok: false, message: 'Runtime limits.allowedEvents 必须是字符串数组。' };
+    return { ok: false, message: i18nText("frontstage", "auto.allowed_events_string_array") };
   }
 
   const allowedDataModels = readStringArray(value, 'allowedDataModels');
   if (!allowedDataModels.ok) {
     return {
       ok: false,
-      message: 'Runtime limits.allowedDataModels 必须是字符串数组。'
+      message: i18nText("frontstage", "auto.allowed_data_models_string_array")
     };
   }
 
@@ -158,7 +159,7 @@ function toRuntimeLimitsDraft(
   if (!allowedDataOperations.ok) {
     return {
       ok: false,
-      message: 'Runtime limits.allowedDataOperations 只能包含 query/create/update/delete。'
+      message: i18nText("frontstage", "auto.allowed_data_operations_invalid")
     };
   }
 
@@ -383,8 +384,8 @@ export function JsBlockTrialPanel({
       <Alert
         type="info"
         showIcon
-        message="请选择一个区块"
-        description="JS Block 试运行计划需要当前选中的区块。"
+        message={i18nText("frontstage", "auto.select_block")}
+        description={i18nText("frontstage", "auto.js_block_trial_requires_selected_block")}
       />
     );
   }
@@ -394,8 +395,8 @@ export function JsBlockTrialPanel({
       <Alert
         type="warning"
         showIcon
-        message="缺少区块目录条目"
-        description="当前区块无法匹配可用 catalog entry。"
+        message={i18nText("frontstage", "auto.missing_block_catalog_entry")}
+        description={i18nText("frontstage", "auto.no_matching_block_catalog_entry")}
       />
     );
   }
@@ -403,13 +404,12 @@ export function JsBlockTrialPanel({
   return (
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
       <Typography.Title level={5} style={{ margin: 0 }}>
-        JS Block 试运行
-      </Typography.Title>
+        {i18nText("frontstage", "auto.js_block_trial_panel")}</Typography.Title>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>JS 代码</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.js_code")}</Typography.Text>
         <Input.TextArea
-          aria-label="JS 代码"
+          aria-label={i18nText("frontstage", "auto.js_code")}
           value={code}
           rows={5}
           readOnly={!onCodeChange}
@@ -418,9 +418,9 @@ export function JsBlockTrialPanel({
       </Space>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>Context snapshot</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.context_snapshot")}</Typography.Text>
         <Input.TextArea
-          aria-label="Context snapshot"
+          aria-label={i18nText("frontstage", "auto.context_snapshot")}
           value={contextDraft}
           rows={4}
           onChange={(event) => setContextDraft(event.target.value)}
@@ -430,14 +430,13 @@ export function JsBlockTrialPanel({
           disabled={!onContextSnapshotChange}
           onClick={applyContextDraft}
         >
-          更新 context
-        </Button>
+          {i18nText("frontstage", "auto.update_context")}</Button>
       </Space>
 
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Typography.Text strong>Runtime limits</Typography.Text>
+        <Typography.Text strong>{i18nText("frontstage", "auto.runtime_limits")}</Typography.Text>
         <Input.TextArea
-          aria-label="Runtime limits"
+          aria-label={i18nText("frontstage", "auto.runtime_limits")}
           value={limitsDraft}
           rows={4}
           onChange={(event) => setLimitsDraft(event.target.value)}
@@ -447,8 +446,7 @@ export function JsBlockTrialPanel({
           disabled={!onLimitsChange}
           onClick={applyLimitsDraft}
         >
-          更新 limits
-        </Button>
+          {i18nText("frontstage", "auto.update_limits")}</Button>
       </Space>
 
       {draftError ? (
@@ -457,8 +455,8 @@ export function JsBlockTrialPanel({
           showIcon
           message={
             draftError.kind === 'context'
-              ? 'Context 更新失败'
-              : 'Limits 更新失败'
+              ? i18nText("frontstage", "auto.context_update_failed")
+              : i18nText("frontstage", "auto.limits_update_failed")
           }
           description={draftError.message}
         />
@@ -466,59 +464,60 @@ export function JsBlockTrialPanel({
 
       {runPlan?.ok ? (
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <Alert type="success" showIcon message="Run plan 已生成" />
+          <Alert type="success" showIcon message={i18nText("frontstage", "auto.run_plan_generated")} />
           <Space size="small" wrap>
             <Button
-              aria-label="运行"
+              aria-label={i18nText("frontstage", "auto.run")}
               size="small"
               type="primary"
               onClick={runRuntimeSession}
             >
-              {canStopRuntimeSession ? '重新运行' : '运行'}
+              {canStopRuntimeSession ? i18nText("frontstage", "auto.rerun") : i18nText("frontstage", "auto.run")}
             </Button>
             <Button
-              aria-label="停止"
+              aria-label={i18nText("frontstage", "auto.stop")}
               size="small"
               disabled={!canStopRuntimeSession}
               onClick={stopRuntimeSession}
             >
-              停止
-            </Button>
+              {i18nText("frontstage", "auto.stop")}</Button>
           </Space>
           <Descriptions
             bordered
             size="small"
             column={1}
-            title="Request 摘要"
+            title={i18nText("frontstage", "auto.request_summary")}
             items={[
               {
                 key: 'requestId',
-                label: 'Request ID',
+                label: i18nText("frontstage", "auto.request_id"),
                 children: runPlan.request.requestId
               },
               {
                 key: 'blockId',
-                label: 'Block ID',
+                label: i18nText("frontstage", "auto.block_id"),
                 children: runPlan.request.blockId
               },
               {
                 key: 'sourceLength',
-                label: 'Source length',
-                children: `${runPlan.request.source.length} chars`
+                label: i18nText("frontstage", "auto.source_length"),
+                children: i18nText("frontstage", "auto.char_count", {
+                  value1: String(runPlan.request.source.length)
+                })
               },
               {
                 key: 'timeout',
-                label: 'Timeout',
+                label: i18nText("frontstage", "auto.timeout"),
                 children: `${runPlan.request.limits.timeoutMs}ms`
               },
               {
                 key: 'props',
-                label: 'Props keys',
+                label: i18nText("frontstage", "auto.props_keys"),
                 children: formatKeys(runPlan.request.props)
               },
               {
                 key: 'context',
-                label: 'Context keys',
+                label: i18nText("frontstage", "auto.context_keys"),
                 children: formatKeys(runPlan.request.contextSnapshot)
               }
             ]}
@@ -527,36 +526,36 @@ export function JsBlockTrialPanel({
             bordered
             size="small"
             column={1}
-            title="Schema validation options"
+            title={i18nText("frontstage", "auto.schema_validation_options")}
             data-testid="js-block-trial-schema-options"
             items={[
               {
                 key: 'maxDepth',
-                label: 'Max depth',
+                label: i18nText("frontstage", "auto.max_depth"),
                 children: formatNumber(runPlan.schemaValidationOptions.maxDepth)
               },
               {
                 key: 'maxNodes',
-                label: 'Max nodes',
+                label: i18nText("frontstage", "auto.max_nodes"),
                 children: formatNumber(runPlan.schemaValidationOptions.maxNodes)
               },
               {
                 key: 'data',
-                label: 'Data permissions',
+                label: i18nText("frontstage", "auto.data_permissions"),
                 children: formatList(
                   runPlan.schemaValidationOptions.allowedDataPermissions
                 )
               },
               {
                 key: 'actions',
-                label: 'Actions',
+                label: i18nText("frontstage", "auto.actions"),
                 children: formatList(
                   runPlan.schemaValidationOptions.allowedActions
                 )
               },
               {
                 key: 'events',
-                label: 'Events',
+                label: i18nText("frontstage", "auto.events"),
                 children: formatList(runPlan.schemaValidationOptions.allowedEvents)
               }
             ]}
@@ -565,32 +564,32 @@ export function JsBlockTrialPanel({
             bordered
             size="small"
             column={1}
-            title="Mediator policy"
+            title={i18nText("frontstage", "auto.mediator_policy")}
             data-testid="js-block-trial-mediator-policy"
             items={[
               {
                 key: 'actions',
-                label: 'Actions',
+                label: i18nText("frontstage", "auto.actions"),
                 children: formatList(runPlan.mediatorPolicy.allowedActions)
               },
               {
                 key: 'events',
-                label: 'Events',
+                label: i18nText("frontstage", "auto.events"),
                 children: formatList(runPlan.mediatorPolicy.allowedEvents)
               },
               {
                 key: 'models',
-                label: 'Data models',
+                label: i18nText("frontstage", "auto.data_models"),
                 children: formatList(runPlan.mediatorPolicy.allowedDataModels)
               },
               {
                 key: 'operations',
-                label: 'Data operations',
+                label: i18nText("frontstage", "auto.data_operations"),
                 children: formatList(runPlan.mediatorPolicy.allowedDataOperations)
               },
               {
                 key: 'maxEventChainDepth',
-                label: 'Max event chain depth',
+                label: i18nText("frontstage", "auto.max_event_chain_depth"),
                 children: formatNumber(runPlan.mediatorPolicy.maxEventChainDepth)
               }
             ]}
@@ -603,21 +602,21 @@ export function JsBlockTrialPanel({
           <Alert
             type="error"
             showIcon
-            message="Run plan 被拒绝"
+            message={i18nText("frontstage", "auto.run_plan_rejected")}
             description={runPlan.message}
           />
           <Descriptions
             bordered
             size="small"
             column={1}
-            title="Rejection"
+            title={i18nText("frontstage", "auto.rejection")}
             items={[
-              { key: 'code', label: 'Code', children: runPlan.code },
-              { key: 'path', label: 'Path', children: runPlan.path },
-              { key: 'blockId', label: 'Block ID', children: runPlan.blockId },
+              { key: 'code', label: i18nText("frontstage", "auto.code"), children: runPlan.code },
+              { key: 'path', label: i18nText("frontstage", "auto.path"), children: runPlan.path },
+              { key: 'blockId', label: i18nText("frontstage", "auto.block_id"), children: runPlan.blockId },
               {
                 key: 'catalogId',
-                label: 'Catalog ID',
+                label: i18nText("frontstage", "auto.catalog_id"),
                 children: runPlan.catalogId
               }
             ]}

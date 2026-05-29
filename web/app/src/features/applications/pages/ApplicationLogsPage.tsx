@@ -7,6 +7,7 @@ import {
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Empty, Input, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelect';
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
@@ -25,6 +26,7 @@ import {
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
 import { ApplicationLogsFloatingWindow } from '../components/logs/ApplicationLogsFloatingWindow';
+import { getApplicationRunsTableColumns } from '../components/logs/application-runs-table-columns';
 import {
   ApplicationRunsTable,
   ApplicationRunsTableColumnSettings
@@ -53,32 +55,33 @@ type SearchableRunSummary = ApplicationRunSummary & {
 };
 
 const TIME_RANGE_OPTIONS: Array<{
-  label: string;
+  labelKey: string;
   value: ApplicationLogTimeRange;
 }> = [
-  { label: '今天', value: '1' },
-  { label: '过去 7 天', value: '7' },
-  { label: '过去 4 周', value: '28' },
-  { label: '过去 3 月', value: '90' },
-  { label: '过去 12 月', value: '365' },
-  { label: '所有时间', value: 'all' }
+  { labelKey: 'auto.today', value: '1' },
+  { labelKey: 'auto.past_seven_days', value: '7' },
+  { labelKey: 'auto.past_four_weeks', value: '28' },
+  { labelKey: 'auto.past_three_months', value: '90' },
+  { labelKey: 'auto.past_twelve_months', value: '365' },
+  { labelKey: 'auto.all_time', value: 'all' }
 ];
 const RUN_SORT_FIELD_OPTIONS: Array<{
-  label: string;
+  labelKey: string;
   value: ApplicationRunSortField;
 }> = [
-  { label: '开始时间', value: 'started_at' },
-  { label: '更新时间', value: 'updated_at' }
+  { labelKey: 'auto.start_time', value: 'started_at' },
+  { labelKey: 'auto.updated_at', value: 'updated_at' }
 ];
 const DEFAULT_SORT_BY: ApplicationRunSortField = 'started_at';
 const DEFAULT_SORT_ORDER: ApplicationRunSortOrder = 'desc';
 
-const RUN_SORT_FIELD_MEASURE_LABELS = RUN_SORT_FIELD_OPTIONS.map(
-  (option) => `排序：${option.label}`
-);
-
-function getSortOrderToggleLabel(sortOrder: ApplicationRunSortOrder) {
-  return sortOrder === 'desc' ? '当前降序，切换为升序' : '当前升序，切换为降序';
+function getSortOrderToggleLabel(
+  sortOrder: ApplicationRunSortOrder,
+  t: (key: string) => string
+) {
+  return sortOrder === 'desc'
+    ? t('auto.sort_descending_toggle_to_ascending')
+    : t('auto.sort_ascending_toggle_to_descending');
 }
 
 function getViewportSize() {
@@ -192,6 +195,7 @@ export function ApplicationLogsPage({
 }: {
   applicationId: string;
 }) {
+  const { t } = useTranslation('applications');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
@@ -209,7 +213,31 @@ export function ApplicationLogsPage({
   >('run-detail');
   const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const runsTableConfiguration = useApplicationRunsTableConfiguration();
+  const timeRangeOptions = useMemo(
+    () =>
+      TIME_RANGE_OPTIONS.map((option) => ({
+        label: t(option.labelKey),
+        value: option.value
+      })),
+    [t]
+  );
+  const runSortFieldOptions = useMemo(
+    () =>
+      RUN_SORT_FIELD_OPTIONS.map((option) => ({
+        label: t(option.labelKey),
+        value: option.value
+      })),
+    [t]
+  );
+  const runSortFieldMeasureLabels = useMemo(
+    () =>
+      runSortFieldOptions.map((option) =>
+        t('auto.sort_by_value', { value1: option.label })
+      ),
+    [runSortFieldOptions, t]
+  );
+  const runsTableColumns = useMemo(() => getApplicationRunsTableColumns(t), [t]);
+  const runsTableConfiguration = useApplicationRunsTableConfiguration(runsTableColumns);
   const runsInput: FetchApplicationRunsInput = {
     page,
     pageSize: PAGE_SIZE,
@@ -297,7 +325,7 @@ export function ApplicationLogsPage({
         refreshedRuns
       );
     } catch {
-      message.error('刷新失败');
+      message.error(t('auto.refresh_failed'));
     } finally {
       setRefreshingRuns(false);
     }
@@ -315,8 +343,8 @@ export function ApplicationLogsPage({
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
         <AutosizeSelect<ApplicationLogTimeRange>
-          aria-label="时间间隔"
-          options={TIME_RANGE_OPTIONS}
+          aria-label={t('auto.time_range')}
+          options={timeRangeOptions}
           value={timeRange}
           onChange={setTimeRange}
         />
@@ -325,20 +353,19 @@ export function ApplicationLogsPage({
           data-testid="application-logs-sort-control"
         >
           <AutosizeSelect<ApplicationRunSortField>
-            aria-label="排序字段"
-            autosizeLabels={RUN_SORT_FIELD_MEASURE_LABELS}
+            aria-label={t('auto.sort_field')}
+            autosizeLabels={runSortFieldMeasureLabels}
             className="application-logs-page__sort-select"
-            options={RUN_SORT_FIELD_OPTIONS}
+            options={runSortFieldOptions}
             prefix={
               <span className="application-logs-page__sort-select-prefix">
-                排序：
-              </span>
+                {t('auto.sort_by_prefix')}</span>
             }
             value={sortBy}
             onChange={setSortBy}
           />
           <Button
-            aria-label={getSortOrderToggleLabel(sortOrder)}
+            aria-label={getSortOrderToggleLabel(sortOrder, t)}
             className="application-logs-page__sort-direction-button"
             icon={
               sortOrder === 'desc' ? (
@@ -352,17 +379,17 @@ export function ApplicationLogsPage({
         </span>
         <Input
           allowClear
-          aria-label="关键字搜索"
+          aria-label={t('auto.keyword_search')}
           className="application-logs-page__filter-search"
-          placeholder="搜索对话和回答"
+          placeholder={t('auto.search_conversations_and_answers')}
           prefix={<SearchOutlined />}
           value={keywordSearch}
           onChange={(event) => setKeywordSearch(event.target.value)}
         />
         <div className="application-logs-page__filter-actions">
-          <Tooltip title="刷新日志">
+          <Tooltip title={t('auto.refresh_logs')}>
             <Button
-              aria-label="刷新日志"
+              aria-label={t('auto.refresh_logs')}
               icon={<ReloadOutlined aria-hidden="true" />}
               loading={refreshingRuns}
               onClick={() => {
@@ -371,6 +398,7 @@ export function ApplicationLogsPage({
             />
           </Tooltip>
           <ApplicationRunsTableColumnSettings
+            columns={runsTableColumns}
             configuration={runsTableConfiguration}
           />
         </div>
@@ -393,6 +421,7 @@ export function ApplicationLogsPage({
           pageSize={PAGE_SIZE}
           total={total}
           configuration={runsTableConfiguration}
+          columns={runsTableColumns}
           runs={visibleRuns}
           selectedRunId={selectedRunId}
           onPageChange={setPage}
@@ -413,7 +442,7 @@ export function ApplicationLogsPage({
           active={activeFloatingWindow === 'conversation-log'}
           initialRect={getConversationLogInitialRect}
           testId="application-logs-floating-conversation-log"
-          title="对话日志"
+          title={t('auto.conversation_logs')}
           onActivate={() => setActiveFloatingWindow('conversation-log')}
         >
           <div className="application-logs-page__conversation-log-panel">
@@ -432,7 +461,7 @@ export function ApplicationLogsPage({
           active={activeFloatingWindow === 'run-detail'}
           initialRect={getRunDetailInitialRect}
           testId="application-logs-floating-run-detail"
-          title="运行详情"
+          title={t('auto.run_details')}
           onActivate={() => setActiveFloatingWindow('run-detail')}
         >
           <ApplicationRunDetailPanel

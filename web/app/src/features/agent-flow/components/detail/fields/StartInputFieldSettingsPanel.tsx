@@ -12,6 +12,7 @@ import {
   startInputTypeOptions
 } from '../../../lib/start-node-variables';
 import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 type StartInputFieldSettingsPanelProps = {
   mode: 'create' | 'edit';
@@ -51,7 +52,7 @@ export function StartInputFieldSettingsPanel({
   onClose,
   onSave
 }: StartInputFieldSettingsPanelProps) {
-  const title = mode === 'create' ? '新增输入字段' : '编辑输入字段';
+  const title = mode === 'create' ? i18nText("agentFlow", "auto.add_new_input_field") : i18nText("agentFlow", "auto.edit_input_field_alt");
   const options = normalizeOptions(field.options);
   const showDefaultValue =
     isStringDefaultType(field.inputType) ||
@@ -95,7 +96,7 @@ export function StartInputFieldSettingsPanel({
     <FloatingSettingsPanel
       open
       title={title}
-      closeLabel={`关闭${title}`}
+      closeLabel={i18nText("agentFlow", "auto.close", { value1: title })}
       triggerRef={triggerRef}
       className="agent-flow-start-input-fields__panel"
       defaultWidth={420}
@@ -105,18 +106,17 @@ export function StartInputFieldSettingsPanel({
       onClose={onClose}
       footer={
         <div className="agent-flow-start-input-fields__panel-footer">
-          <Button onClick={onClose}>取消</Button>
-          <Button aria-label="保存输入字段" type="primary" onClick={onSave}>
-            保存
-          </Button>
+          <Button onClick={onClose}>{i18nText("agentFlow", "auto.cancel")}</Button>
+          <Button aria-label={i18nText("agentFlow", "auto.save_input_field")} type="primary" onClick={onSave}>
+            {i18nText("agentFlow", "auto.save")}</Button>
         </div>
       }
     >
       <div className="agent-flow-start-input-fields__form">
         <label className="agent-flow-start-input-fields__form-row">
-          <span>字段类型</span>
+          <span>{i18nText("agentFlow", "auto.field_type")}</span>
           <Select
-            aria-label="输入字段类型"
+            aria-label={i18nText("agentFlow", "auto.input_field_type")}
             options={startInputTypeOptions}
             value={field.inputType}
             virtual={false}
@@ -124,26 +124,26 @@ export function StartInputFieldSettingsPanel({
           />
         </label>
         <label className="agent-flow-start-input-fields__form-row">
-          <span>变量名</span>
+          <span>{i18nText("agentFlow", "auto.variable_name")}</span>
           <Input
-            aria-label="输入字段变量名"
+            aria-label={i18nText("agentFlow", "auto.input_field_variable_name")}
             value={field.key}
             onChange={(event) => onChange({ key: event.target.value })}
           />
         </label>
         <label className="agent-flow-start-input-fields__form-row">
-          <span>显示名</span>
+          <span>{i18nText("agentFlow", "auto.display_name")}</span>
           <Input
-            aria-label="输入字段显示名"
+            aria-label={i18nText("agentFlow", "auto.input_field_display_name")}
             value={field.label}
             onChange={(event) => onChange({ label: event.target.value })}
           />
         </label>
         {shouldShowMaxLength(field.inputType) ? (
           <label className="agent-flow-start-input-fields__form-row">
-            <span>最大长度</span>
+            <span>{i18nText("agentFlow", "auto.maximum_length")}</span>
             <InputNumber
-              aria-label="输入字段最大长度"
+              aria-label={i18nText("agentFlow", "auto.maximum_input_field_length")}
               min={1}
               precision={0}
               value={field.maxLength}
@@ -159,7 +159,7 @@ export function StartInputFieldSettingsPanel({
 
         {field.inputType === 'select' ? (
           <div className="agent-flow-start-input-fields__form-row">
-            <span>下拉选项</span>
+            <span>{i18nText("agentFlow", "auto.drop_down_options")}</span>
             <div className="agent-flow-start-input-fields__option-list">
               {options.map((option, index) => (
                 <div
@@ -167,14 +167,14 @@ export function StartInputFieldSettingsPanel({
                   key={index}
                 >
                   <Input
-                    aria-label={`输入字段选项 ${index + 1}`}
+                    aria-label={i18nText("agentFlow", "auto.input_field_options", { value1: index + 1 })}
                     value={option}
                     onChange={(event) =>
                       updateOption(index, event.target.value)
                     }
                   />
                   <Button
-                    aria-label={`删除下拉选项 ${index + 1}`}
+                    aria-label={i18nText("agentFlow", "auto.remove_dropdown_option", { value1: index + 1 })}
                     icon={<DeleteOutlined />}
                     size="small"
                     type="text"
@@ -183,23 +183,22 @@ export function StartInputFieldSettingsPanel({
                 </div>
               ))}
               <Button
-                aria-label="新增下拉选项"
+                aria-label={i18nText("agentFlow", "auto.added_drop_down_options")}
                 icon={<PlusOutlined />}
                 size="small"
                 onClick={() => onChange({ options: [...options, ''] })}
               >
-                新增选项
-              </Button>
+                {i18nText("agentFlow", "auto.new_options")}</Button>
             </div>
           </div>
         ) : null}
 
         {showDefaultValue ? (
           <div className="agent-flow-start-input-fields__form-row">
-            <span>默认值</span>
+            <span>{i18nText("agentFlow", "auto.default_value")}</span>
             {field.inputType === 'paragraph' ? (
               <Input.TextArea
-                aria-label="输入字段默认值"
+                aria-label={i18nText("agentFlow", "auto.input_field_value")}
                 autoSize={{ minRows: 2, maxRows: 4 }}
                 value={String(field.defaultValue ?? '')}
                 onChange={(event) =>
@@ -208,7 +207,7 @@ export function StartInputFieldSettingsPanel({
               />
             ) : field.inputType === 'number' ? (
               <InputNumber
-                aria-label="输入字段默认值"
+                aria-label={i18nText("agentFlow", "auto.input_field_value")}
                 value={
                   typeof field.defaultValue === 'number'
                     ? field.defaultValue
@@ -225,10 +224,10 @@ export function StartInputFieldSettingsPanel({
               />
             ) : field.inputType === 'checkbox' ? (
               <Select
-                aria-label="输入字段默认值"
+                aria-label={i18nText("agentFlow", "auto.input_field_value")}
                 options={[
-                  { value: true, label: '默认选中' },
-                  { value: false, label: '默认不选中' }
+                  { value: true, label: i18nText("agentFlow", "auto.selected_by_default") },
+                  { value: false, label: i18nText("agentFlow", "auto.selected") }
                 ]}
                 value={
                   typeof field.defaultValue === 'boolean'
@@ -241,7 +240,7 @@ export function StartInputFieldSettingsPanel({
             ) : field.inputType === 'select' ? (
               <Select
                 allowClear
-                aria-label="输入字段默认值"
+                aria-label={i18nText("agentFlow", "auto.input_field_value")}
                 options={options
                   .map((option) => option.trim())
                   .filter(Boolean)
@@ -256,7 +255,7 @@ export function StartInputFieldSettingsPanel({
               />
             ) : (
               <Input
-                aria-label="输入字段默认值"
+                aria-label={i18nText("agentFlow", "auto.input_field_value")}
                 value={String(field.defaultValue ?? '')}
                 onChange={(event) =>
                   onChange({ defaultValue: event.target.value || undefined })
@@ -269,13 +268,12 @@ export function StartInputFieldSettingsPanel({
         <div className="agent-flow-start-input-fields__toggles">
           <label className="agent-flow-start-input-fields__toggle-row">
             <span>
-              <Typography.Text strong>必填</Typography.Text>
+              <Typography.Text strong>{i18nText("agentFlow", "auto.required")}</Typography.Text>
               <Typography.Text type="secondary">
-                用户运行前必须提供该输入
-              </Typography.Text>
+                {i18nText("agentFlow", "auto.user_must_provide_input_running")}</Typography.Text>
             </span>
             <Switch
-              aria-label="必填输入字段"
+              aria-label={i18nText("agentFlow", "auto.required_input_fields")}
               checked={field.required}
               onChange={(required) =>
                 onChange({ required, hidden: required ? false : field.hidden })
@@ -284,13 +282,12 @@ export function StartInputFieldSettingsPanel({
           </label>
           <label className="agent-flow-start-input-fields__toggle-row">
             <span>
-              <Typography.Text strong>隐藏</Typography.Text>
+              <Typography.Text strong>{i18nText("agentFlow", "auto.hide")}</Typography.Text>
               <Typography.Text type="secondary">
-                运行表单中不展示，但仍可作为变量使用
-              </Typography.Text>
+                {i18nText("agentFlow", "auto.displayed_run_form_still_used_variable")}</Typography.Text>
             </span>
             <Switch
-              aria-label="隐藏输入字段"
+              aria-label={i18nText("agentFlow", "auto.hide_input_fields")}
               checked={field.hidden}
               disabled={field.required}
               onChange={(hidden) =>

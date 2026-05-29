@@ -15,6 +15,7 @@ import {
   type BuiltinFlowNodeType
 } from '@1flowbase/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import {
   modelProviderOptionsContract,
   modelProviderOptionsProviders
@@ -295,14 +296,16 @@ async function selectDataModelOption(value: string) {
 }
 
 describe('NodeInspector', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     fetchModelProviderOptionsSpy.mockReset();
     fetchModelProviderOptionsSpy.mockResolvedValue({
       locale_meta: {
-        requested_locale: 'zh-CN',
-        resolved_locale: 'zh-CN',
-        fallback_locale: 'en-US',
-        supported_locales: ['zh-CN', 'en-US']
+        requested_locale: 'zh_Hans',
+        resolved_locale: 'zh_Hans',
+        fallback_locale: 'en_US',
+        supported_locales: ['zh_Hans', 'en_US']
       },
       i18n_catalog: {},
       providers: []
@@ -519,7 +522,7 @@ describe('NodeInspector', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '模型' })).toHaveFocus();
+      expect(screen.getByRole('button', { name: /模型|model/ })).toHaveFocus();
     });
   });
 
@@ -544,7 +547,7 @@ describe('NodeInspector', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    const modelTrigger = await screen.findByRole('button', { name: '模型' });
+    const modelTrigger = await screen.findByRole('button', { name: /模型|model/ });
 
     await waitFor(() => {
       expect(
@@ -624,7 +627,9 @@ describe('NodeInspector', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    expect(await screen.findByLabelText('JavaScript 代码')).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText(/JavaScript 代码|JavaScript code/)
+    ).toBeInTheDocument();
     expect(screen.queryByText('JavaScript 代码')).not.toBeInTheDocument();
     expect(screen.queryByText('输出契约')).not.toBeInTheDocument();
     expect(
@@ -679,14 +684,14 @@ describe('NodeInspector', () => {
     expect(sourceField.compareDocumentPosition(outputField)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-    expect(screen.getByLabelText('输入变量-0-name')).toHaveValue('arg1');
-    expect(screen.getByLabelText('输入变量-0-value')).toBeInTheDocument();
-    expect(screen.getByLabelText('输入变量-0-value')).toHaveAttribute(
+    expect(screen.getByLabelText(/输入变量-0-name|input variables-0-name/)).toHaveValue('arg1');
+    expect(screen.getByLabelText(/输入变量-0-value|input variables-0-value/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/输入变量-0-value|input variables-0-value/)).toHaveAttribute(
       'aria-multiline',
       'false'
     );
     expect(
-      screen.queryByLabelText('输入变量-0-selector')
+      screen.queryByLabelText(/输入变量-0-selector|input variables-0-selector/)
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '复制arg1' })
@@ -697,7 +702,7 @@ describe('NodeInspector', () => {
     expect(
       screen.getByRole('button', { name: '删除变量 arg1' })
     ).toBeInTheDocument();
-    const codeEditor = await screen.findByLabelText('JavaScript 代码');
+    const codeEditor = await screen.findByLabelText(/JavaScript 代码|JavaScript code/);
 
     expect(codeEditor).toHaveValue('return { riskScore: 0.82 };');
     expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
@@ -740,7 +745,7 @@ describe('NodeInspector', () => {
     const toolbar = screen.getByTestId('condition-group-toolbar');
 
     expect(
-      within(toolbar).getByRole('combobox', { name: '入口条件-operator' })
+      within(toolbar).getByRole('combobox', { name: /入口条件-operator|Entry conditions-operator/ })
     ).toBeInTheDocument();
     expect(
       within(toolbar).getByRole('button', { name: '新增条件' })

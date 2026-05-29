@@ -56,6 +56,7 @@ import { DataModelTable } from '../../components/data-models/DataModelTable';
 import { DataSourcePanel } from '../../components/data-models/DataSourcePanel';
 import '../../components/data-models/data-model-panel.css';
 import { SettingsSectionSurface } from '../../components/SettingsSectionSurface';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : null;
@@ -201,7 +202,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModel(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success('Data Model 已保存');
+      messageApi.success(i18nText("settings", "auto.data_model_saved"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -218,7 +219,7 @@ export function SettingsDataModelsSection({
       return createSettingsDataModel(input, csrfToken);
     },
     onSuccess: async (model) => {
-      messageApi.success('Data Model 已创建');
+      messageApi.success(i18nText("settings", "auto.data_model_created"));
       setSelectedModelId(model.id);
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
@@ -236,7 +237,7 @@ export function SettingsDataModelsSection({
       return deleteSettingsDataModel(model.id, csrfToken);
     },
     onSuccess: async (_result, model) => {
-      messageApi.success('Data Model 已删除');
+      messageApi.success(i18nText("settings", "auto.data_model_deleted"));
       if (selectedModelId === model.id) {
         setSelectedModelId(null);
       }
@@ -265,7 +266,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModelApiExposure(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success('API 暴露请求已保存');
+      messageApi.success(i18nText("settings", "auto.api_exposure_request_saved"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -288,7 +289,7 @@ export function SettingsDataModelsSection({
       return createSettingsDataModelField(model.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success('字段已创建');
+      messageApi.success(i18nText("settings", "auto.field_created"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -313,7 +314,7 @@ export function SettingsDataModelsSection({
       return updateSettingsDataModelField(model.id, field.id, input, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success('字段已保存');
+      messageApi.success(i18nText("settings", "auto.field_saved"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -336,7 +337,7 @@ export function SettingsDataModelsSection({
       return deleteSettingsDataModelField(model.id, field.id, csrfToken);
     },
     onSuccess: async () => {
-      messageApi.success('字段已删除');
+      messageApi.success(i18nText("settings", "auto.field_deleted"));
       if (effectiveSourceId) {
         await queryClient.invalidateQueries({
           queryKey: settingsDataModelsQueryKey(effectiveSourceId)
@@ -389,8 +390,8 @@ export function SettingsDataModelsSection({
 
   return (
     <SettingsSectionSurface
-      title="数据源"
-      description="管理内建主数据源和外部数据源的默认建模状态、API 暴露策略与 Data Model 访问面。"
+      title={i18nText("settings", "auto.data_source")}
+      description={i18nText("settings", "auto.data_source_description")}
       hideHeader={true}
       heightMode="fill"
       status={
@@ -414,8 +415,7 @@ export function SettingsDataModelsSection({
                         className="data-model-panel__breadcrumb-link"
                         onClick={closeSourceManager}
                       >
-                        数据源管理
-                      </Button>
+                        {i18nText("settings", "auto.data_source_management")}</Button>
                     )
                   },
                   { title: selectedSource.display_name }
@@ -429,7 +429,7 @@ export function SettingsDataModelsSection({
                 wrap="wrap"
               >
                 <Button
-                  aria-label="返回"
+                  aria-label={i18nText("settings", "auto.back")}
                   className="data-model-panel__back-button"
                   icon={<ArrowLeftOutlined />}
                   onClick={closeSourceManager}
@@ -458,7 +458,7 @@ export function SettingsDataModelsSection({
                   style={{ borderRadius: 12, margin: 0 }}
                 >
                   {selectedSource.status === 'ready'
-                    ? '就绪'
+                    ? i18nText("settings", "auto.ready")
                     : selectedSource.status}
                 </Tag>
                 <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -472,7 +472,7 @@ export function SettingsDataModelsSection({
                 <div className="data-model-panel__source-meta">
                   <span className="data-model-panel__source-meta-item">
                     <IdcardOutlined className="data-model-panel__source-meta-icon" />
-                    <Typography.Text type="secondary">ID:</Typography.Text>
+                    <Typography.Text type="secondary">{i18nText("settings", "auto.id_label")}</Typography.Text>
                     <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.id}
                     </Typography.Text>
@@ -484,17 +484,16 @@ export function SettingsDataModelsSection({
                       <CloudServerOutlined className="data-model-panel__source-meta-icon" />
                     )}
                     <Typography.Text type="secondary">
-                      来源类型:
-                    </Typography.Text>
+                      {i18nText("settings", "auto.source_type")}</Typography.Text>
                     <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.source_kind === 'main_source'
-                        ? '内建数据源'
-                        : '外部数据源'}
+                        ? i18nText("settings", "auto.built_in_data_source")
+                        : i18nText("settings", "auto.external_data_source")}
                     </Typography.Text>
                   </span>
                   <span className="data-model-panel__source-meta-item">
                     <SyncOutlined className="data-model-panel__source-meta-icon" />
-                    <Typography.Text type="secondary">Catalog:</Typography.Text>
+                    <Typography.Text type="secondary">{i18nText("settings", "auto.catalog_label")}</Typography.Text>
                     <Typography.Text className="data-model-panel__source-meta-value">
                       {selectedSource.catalog_refresh_status ?? '-'}
                     </Typography.Text>
@@ -527,7 +526,7 @@ export function SettingsDataModelsSection({
 
             <Drawer
               title={
-                editingModel ? `编辑 ${editingModel.title}` : '编辑 Data Model'
+                editingModel ? i18nText("settings", "auto.edit_item", { value1: editingModel.title }) : i18nText("settings", "auto.edit_data_model")
               }
               open={Boolean(editingModel)}
               width={980}

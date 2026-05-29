@@ -8,6 +8,7 @@ import type {
 import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgentFlowDebugSession';
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 const HISTORY_LOAD_SCROLL_THRESHOLD_PX = 96;
 
@@ -232,7 +233,7 @@ export function DebugConversationPane({
         >
           {messages.length === 0 ? (
             <Empty
-              description="还没有整流运行记录"
+              description={i18nText("agentFlow", "auto.rectification_operation_record_yet")}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : (

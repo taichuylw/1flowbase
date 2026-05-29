@@ -14,6 +14,7 @@ import {
   dataModelStatusHelp,
   dataModelTitleHelp
 } from './DataModelHelpTooltip';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
   (value) => ({ label: value, value })
@@ -108,18 +109,18 @@ export function DataModelFormDrawer({
 
   return (
     <Drawer
-      title={mode === 'create' ? '新建 Data Model' : '编辑 Data Model'}
+      title={mode === 'create' ? i18nText("settings", "auto.new_data_model") : i18nText("settings", "auto.edit_data_model")}
       open={open}
       width={520}
       onClose={onClose}
       extra={
         <Button
           type="primary"
-          aria-label={mode === 'create' ? '创建' : '保存'}
+          aria-label={mode === 'create' ? i18nText("settings", "auto.create") : i18nText("settings", "auto.save")}
           loading={saving}
           onClick={handleSubmit}
         >
-          {mode === 'create' ? '创建' : '保存'}
+          {mode === 'create' ? i18nText("settings", "auto.create") : i18nText("settings", "auto.save")}
         </Button>
       }
     >
@@ -134,38 +135,38 @@ export function DataModelFormDrawer({
         <Form.Item
           name="title"
           label={
-            <DataModelFieldLabel label="标题" title={dataModelTitleHelp} />
+            <DataModelFieldLabel label={i18nText("settings", "auto.title")} title={dataModelTitleHelp} />
           }
-          rules={[{ required: true, message: '请输入标题' }]}
+          rules={[{ required: true, message: i18nText("settings", "auto.enter_title") }]}
         >
-          <Input aria-label="标题" />
+          <Input aria-label={i18nText("settings", "auto.title")} />
         </Form.Item>
         <Form.Item
           name="code"
           label={
             <DataModelFieldLabel label="Code" title={dataModelCodeHelp} />
           }
-          rules={[{ required: true, message: '请输入 Data Model Code' }]}
+          rules={[{ required: true, message: i18nText("settings", "auto.enter_data_model_code") }]}
         >
           <Input aria-label="Code" disabled={mode === 'edit'} />
         </Form.Item>
         <Form.Item
           name="status"
           label={
-            <DataModelFieldLabel label="状态" title={dataModelStatusHelp} />
+            <DataModelFieldLabel label={i18nText("settings", "auto.status")} title={dataModelStatusHelp} />
           }
-          rules={[{ required: true, message: '请选择状态' }]}
+          rules={[{ required: true, message: i18nText("settings", "auto.select_status") }]}
         >
-          <Select aria-label="状态" options={dataModelStatusOptions} />
+          <Select aria-label={i18nText("settings", "auto.status")} options={dataModelStatusOptions} />
         </Form.Item>
-        <Form.Item name="data_source_instance_id" label="数据源">
+        <Form.Item name="data_source_instance_id" label={i18nText("settings", "auto.data_source")}>
           <Input disabled />
         </Form.Item>
         {isExternalModel ? (
           <Form.Item
             name="external_table_id"
-            label="表 ID"
-            rules={[{ required: true, message: '请输入表 ID' }]}
+            label={i18nText("settings", "auto.table_id_alt")}
+            rules={[{ required: true, message: i18nText("settings", "auto.enter_table_id") }]}
           >
             <Input />
           </Form.Item>

@@ -2,6 +2,7 @@ import { Button, Input, Select } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
 import { SelectorField } from './SelectorField';
+import { i18nText } from '../../../../shared/i18n/text';
 
 interface ConditionGroupFieldValue {
   operator: 'and' | 'or';
@@ -58,8 +59,7 @@ export function ConditionGroupField({
           type="dashed"
           onClick={appendCondition}
         >
-          新增条件
-        </Button>
+          {i18nText("agentFlow", "auto.new_conditions")}</Button>
       </div>
       {value.conditions.map((condition, index) => (
         <div key={`${condition.comparator}-${index}`} className="agent-flow-binding-row">
@@ -103,7 +103,7 @@ export function ConditionGroupField({
           {condition.comparator === 'exists' ? null : (
             <Input
               aria-label={`${ariaLabel}-${index}-right`}
-              placeholder="比较值"
+              placeholder={i18nText("agentFlow", "auto.comparison_value")}
               value={
                 Array.isArray(condition.right)
                   ? condition.right.join(' / ')
@@ -131,8 +131,7 @@ export function ConditionGroupField({
               })
             }
           >
-            删除
-          </Button>
+            {i18nText("agentFlow", "auto.delete")}</Button>
         </div>
       ))}
     </div>

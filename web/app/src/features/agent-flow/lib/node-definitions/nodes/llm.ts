@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const llmNodeDefinition: NodeDefinition = {
   label: 'LLM',
@@ -15,7 +16,7 @@ export const llmNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'config.model_provider',
-          label: '模型',
+          label: i18nText("agentFlow", "auto.model"),
           editor: 'llm_model',
           required: true
         },
@@ -26,7 +27,7 @@ export const llmNodeDefinition: NodeDefinition = {
         },
         {
           key: 'bindings.prompt_messages',
-          label: '上下文',
+          label: i18nText("agentFlow", "auto.context_alt"),
           editor: 'llm_prompt_messages'
         }
       ]
@@ -34,14 +35,12 @@ export const llmNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.text', label: '模型输出', editor: 'text', required: true }]
+      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.model_output"), editor: 'text', required: true }]
     },
     {
       key: 'advanced',
       title: 'Advanced',
-      fields: [
-        { key: 'config.response_format', label: '返回格式', editor: 'llm_response_format' }
-      ]
+      fields: [{ key: 'config.response_format', label: i18nText("agentFlow", "auto.return_format"), editor: 'llm_response_format' }]
     }
   ]
 };

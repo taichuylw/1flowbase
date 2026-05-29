@@ -1,0 +1,10 @@
+{
+  "auto": {
+    "access_status_description": "The current page is used to uniformly view the operating boundaries and access status of connected subsystems.",
+    "build_artifact_list": "List of versions and build products that have been connected to the application",
+    "release_diagnostics_entry": "Subsequent access to release, rollback and running diagnostics",
+    "route_host_constraints": "Route prefixes, mount contexts, and hosting constraints",
+    "subsystem": "Subsystem",
+    "subsystem_page_description": "Manage the publication list, routing prefix and host constraints of the connected subsystem."
+  }
+}

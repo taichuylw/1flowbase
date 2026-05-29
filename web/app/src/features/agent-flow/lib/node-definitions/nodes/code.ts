@@ -1,5 +1,6 @@
 import { basicFields } from '../base';
 import type { NodeDefinition } from '../types';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export const codeNodeDefinition: NodeDefinition = {
   label: 'Code',
@@ -15,7 +16,7 @@ export const codeNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'bindings.named_bindings',
-          label: '输入变量',
+          label: i18nText("agentFlow", "auto.input_variables"),
           editor: 'named_bindings'
         }
       ]
@@ -26,7 +27,7 @@ export const codeNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'config.source',
-          label: 'JavaScript 代码',
+          label: i18nText("agentFlow", "auto.javascript_code"),
           editor: 'code_source',
           required: true
         }
@@ -34,11 +35,11 @@ export const codeNodeDefinition: NodeDefinition = {
     },
     {
       key: 'outputs',
-      title: '输出变量',
+      title: i18nText("agentFlow", "auto.output_variable"),
       fields: [
         {
           key: 'config.output_contract',
-          label: '输出变量',
+          label: i18nText("agentFlow", "auto.output_variable"),
           editor: 'output_contract_definition'
         }
       ]

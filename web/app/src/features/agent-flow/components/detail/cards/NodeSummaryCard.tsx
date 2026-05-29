@@ -10,6 +10,7 @@ import {
   selectSelectedNodeId,
   selectWorkingDocument
 } from '../../../store/editor/selectors';
+import { i18nText } from '../../../../../shared/i18n/text';
 
 export function NodeSummaryCard({
   adapter
@@ -43,11 +44,10 @@ export function NodeSummaryCard({
       extra={
         definitionMeta.helpHref ? (
           <Typography.Link href={definitionMeta.helpHref} target="_blank">
-            帮助文档
-          </Typography.Link>
+            {i18nText("agentFlow", "auto.help_documentation")}</Typography.Link>
         ) : null
       }
-      title="节点说明"
+      title={i18nText("agentFlow", "auto.node_description")}
     >
       <Typography.Paragraph>
         {definition.summary ?? definitionMeta.summary}

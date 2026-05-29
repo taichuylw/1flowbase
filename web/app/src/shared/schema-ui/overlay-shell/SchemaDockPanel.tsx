@@ -2,6 +2,7 @@ import { Button } from 'antd';
 import type { CSSProperties, ReactNode } from 'react';
 
 import type { DockPanelSchema } from '../contracts/overlay-shell-schema';
+import { i18nText } from '../../i18n/text';
 
 export function SchemaDockPanel({
   schema,
@@ -42,9 +43,8 @@ export function SchemaDockPanel({
           <div>{schema.title}</div>
           {headerExtra}
           {onClose ? (
-            <Button aria-label={`关闭${schema.title}`} type="text" onClick={onClose}>
-              关闭
-            </Button>
+            <Button aria-label={i18nText("schemaUi", "auto.close_named_panel", { value1: schema.title })} type="text" onClick={onClose}>
+              {i18nText("schemaUi", "auto.close")}</Button>
           ) : null}
         </header>
       )}

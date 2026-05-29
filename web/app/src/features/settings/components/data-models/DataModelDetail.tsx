@@ -45,6 +45,7 @@ import {
 } from './DataModelHelpTooltip';
 import { DataModelPermissionsTab } from './DataModelPermissionsTab';
 import { DataModelRecordPreview } from './DataModelRecordPreview';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(
   (value) => ({ label: value, value })
@@ -136,7 +137,7 @@ export function DataModelDetail({
 
   const fieldColumns: ColumnsType<SettingsDataModelField> = [
     {
-      title: '字段标题',
+      title: i18nText("settings", "auto.field_title"),
       dataIndex: 'title',
       key: 'title',
       render: (value: string, field) => {
@@ -168,8 +169,7 @@ export function DataModelDetail({
                 style={{ borderRadius: 6, margin: 0, fontSize: 10 }}
                 icon={<LockOutlined style={{ fontSize: 10 }} />}
               >
-                只读
-              </Tag>
+                {i18nText("settings", "auto.read_only")}</Tag>
             )}
           </Space>
         );
@@ -184,41 +184,39 @@ export function DataModelDetail({
       )
     },
     {
-      title: '类型',
+      title: i18nText("settings", "auto.kind"),
       dataIndex: 'field_kind',
       key: 'field_kind',
       render: (value: string) => getFieldKindTag(value)
     },
     {
-      title: '必填',
+      title: i18nText("settings", "auto.required"),
       dataIndex: 'is_required',
       key: 'is_required',
       width: 80,
       render: (value: boolean) =>
         value ? (
           <Tag color="error" style={{ borderRadius: 4, margin: 0 }}>
-            必填
-          </Tag>
+            {i18nText("settings", "auto.required")}</Tag>
         ) : (
           <span style={{ color: 'var(--text-tertiary)' }}>-</span>
         )
     },
     {
-      title: '唯一',
+      title: i18nText("settings", "auto.only"),
       dataIndex: 'is_unique',
       key: 'is_unique',
       width: 80,
       render: (value: boolean) =>
         value ? (
           <Tag color="warning" style={{ borderRadius: 4, margin: 0 }}>
-            唯一
-          </Tag>
+            {i18nText("settings", "auto.only")}</Tag>
         ) : (
           <span style={{ color: 'var(--text-tertiary)' }}>-</span>
         )
     },
     {
-      title: '操作',
+      title: i18nText("settings", "auto.operation"),
       key: 'actions',
       width: 100,
       render: (_, field) => (
@@ -236,8 +234,7 @@ export function DataModelDetail({
             setFieldDrawerState({ open: true, mode: 'edit', field })
           }
         >
-          编辑
-        </Button>
+          {i18nText("settings", "auto.edit")}</Button>
       )
     }
   ];
@@ -248,7 +245,7 @@ export function DataModelDetail({
   const summaryItems = [
     {
       key: 'title',
-      label: '标题',
+      label: i18nText("settings", "auto.title"),
       value: model.title,
       strong: true,
       icon: <TagOutlined />
@@ -256,8 +253,8 @@ export function DataModelDetail({
     { key: 'code', label: 'Code', value: model.code, icon: <CodeOutlined /> },
     {
       key: 'source',
-      label: '来源',
-      value: model.source_kind === 'main_source' ? '内建数据源' : '外部数据源',
+      label: i18nText("settings", "auto.source"),
+      value: model.source_kind === 'main_source' ? i18nText("settings", "auto.built_in_data_source") : i18nText("settings", "auto.external_data_source"),
       icon:
         model.source_kind === 'main_source' ? (
           <DatabaseOutlined />
@@ -275,7 +272,7 @@ export function DataModelDetail({
       ? [
           {
             key: 'external_table_id',
-            label: '表 ID',
+            label: i18nText("settings", "auto.table_id_alt"),
             value: model.external_table_id ?? '-',
             icon: <TableOutlined />
           }
@@ -283,14 +280,14 @@ export function DataModelDetail({
       : []),
     {
       key: 'table',
-      label: '物理表',
+      label: i18nText("settings", "auto.physical_table"),
       value: model.physical_table_name,
       icon: <DeploymentUnitOutlined />
     }
   ];
 
   return (
-    <section className="data-model-panel__detail" aria-label="Data Model 详情">
+    <section className="data-model-panel__detail" aria-label={i18nText("settings", "auto.data_model_details")}>
       <div
         className="data-model-panel__meta-grid"
         data-testid="data-model-detail-summary"
@@ -326,9 +323,9 @@ export function DataModelDetail({
             className="data-model-panel__status-label"
             data-testid="data-model-status-label"
           >
-            <label htmlFor="data-model-status-select">状态：</label>
+            <label htmlFor="data-model-status-select">{i18nText("settings", "auto.status_alt")}</label>
             <DataModelHelpTooltip
-              label="Data Model 状态"
+              label={i18nText("settings", "auto.data_model_status")}
               title={dataModelStatusHelp}
             />
           </div>
@@ -342,15 +339,14 @@ export function DataModelDetail({
           />
         </div>
         <Button disabled={!canManage} onClick={() => setModelDrawerOpen(true)}>
-          编辑
-        </Button>
+          {i18nText("settings", "auto.edit")}</Button>
       </div>
 
       <Tabs
         items={[
           {
             key: 'fields',
-            label: '字段',
+            label: i18nText("settings", "auto.field"),
             children: (
               <Flex vertical gap={12}>
                 <Flex justify="flex-end">
@@ -366,8 +362,7 @@ export function DataModelDetail({
                       })
                     }
                   >
-                    新增字段
-                  </Button>
+                    {i18nText("settings", "auto.add_new_field")}</Button>
                 </Flex>
                 <Table
                   rowKey="id"
@@ -400,15 +395,15 @@ export function DataModelDetail({
           },
           {
             key: 'relations',
-            label: '关系',
+            label: i18nText("settings", "auto.relationship"),
             children: (
               <Table
                 rowKey="id"
                 size="small"
                 columns={[
-                  { title: '字段', dataIndex: 'title', key: 'title' },
+                  { title: i18nText("settings", "auto.field"), dataIndex: 'title', key: 'title' },
                   {
-                    title: '目标模型',
+                    title: i18nText("settings", "auto.target_model"),
                     dataIndex: 'relation_target_model_id',
                     key: 'relation_target_model_id'
                   }
@@ -420,7 +415,7 @@ export function DataModelDetail({
           },
           {
             key: 'permissions',
-            label: '权限',
+            label: i18nText("settings", "auto.permissions_alt"),
             children: (
               <DataModelPermissionsTab
                 grants={grants}
@@ -444,7 +439,7 @@ export function DataModelDetail({
           },
           {
             key: 'records',
-            label: '记录预览',
+            label: i18nText("settings", "auto.record_preview"),
             children: (
               <DataModelRecordPreview
                 preview={recordPreview}

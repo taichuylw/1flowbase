@@ -23,6 +23,7 @@ import {
   getNodePickerOptionDescription,
   getNodePickerOptionKey
 } from '../../lib/plugin-node-definitions';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const QUICK_ACTION_HIDE_DELAY_MS = 1000;
 
@@ -80,7 +81,7 @@ export function AgentFlowNodeCard({
     {
       key: 'run',
       icon: <PlayCircleOutlined />,
-      label: '执行此节点',
+      label: i18nText("agentFlow", "auto.execute_this_node"),
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
         data.onSelectNode(data.nodeId);
@@ -90,13 +91,13 @@ export function AgentFlowNodeCard({
     {
       key: 'replace',
       icon: <SwapOutlined />,
-      label: '更换节点',
+      label: i18nText("agentFlow", "auto.replace_node"),
       children: replaceItems
     },
     {
       key: 'delete',
       icon: <DeleteOutlined />,
-      label: '删除节点',
+      label: i18nText("agentFlow", "auto.delete_node"),
       danger: true,
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
@@ -190,9 +191,9 @@ export function AgentFlowNodeCard({
           onMouseLeave={scheduleHideQuickActions}
           onMouseDown={stopActionEvent}
         >
-          <Tooltip title="执行此节点">
+          <Tooltip title={i18nText("agentFlow", "auto.execute_this_node")}>
             <Button
-              aria-label={`执行 ${data.alias}`}
+              aria-label={i18nText("agentFlow", "auto.execute", { value1: data.alias })}
               className="agent-flow-node-card__quick-action"
               icon={<PlayCircleOutlined />}
               shape="circle"
@@ -207,7 +208,7 @@ export function AgentFlowNodeCard({
           </Tooltip>
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <Button
-              aria-label={`${data.alias} 更多操作`}
+              aria-label={i18nText("agentFlow", "auto.more_actions", { value1: data.alias })}
               className="agent-flow-node-card__quick-action"
               icon={<MoreOutlined />}
               shape="circle"
@@ -220,7 +221,7 @@ export function AgentFlowNodeCard({
       </div>
       {data.showSourceHandle ? (
         <NodePickerPopover
-          ariaLabel={`在 ${data.alias} 后新增节点`}
+          ariaLabel={i18nText("agentFlow", "auto.add_node_after", { value1: data.alias })}
           open={data.pickerOpen}
           options={data.nodePickerOptions}
           onOpenChange={(open) => {
@@ -238,8 +239,8 @@ export function AgentFlowNodeCard({
               <div
                 style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}
               >
-                <div>点击添加节点</div>
-                <div>拖拽连接节点</div>
+                <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
+                <div>{i18nText("agentFlow", "auto.drag_drop_connect_nodes")}</div>
               </div>
             }
             placement="top"
@@ -260,7 +261,7 @@ export function AgentFlowNodeCard({
               position={Position.Right}
               aria-expanded={data.pickerOpen}
               aria-haspopup="menu"
-              aria-label={`在 ${data.alias} 后新增节点`}
+              aria-label={i18nText("agentFlow", "auto.add_node_after", { value1: data.alias })}
               className="agent-flow-node-handle agent-flow-node-handle--source"
               role="button"
               tabIndex={0}

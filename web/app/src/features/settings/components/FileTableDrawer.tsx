@@ -13,6 +13,7 @@ import {
   type SettingsFileTable
 } from '../api/file-management';
 import { useAuthStore } from '../../../state/auth-store';
+import { i18nText } from '../../../shared/i18n/text';
 
 type DrawerMode = 'create' | 'view' | 'edit';
 
@@ -75,13 +76,13 @@ export function FileTableDrawer({
         csrfToken
       );
 
-      message.success('文件表已创建');
+      message.success(i18nText("settings", "auto.file_table_created"));
       onSuccess();
       onClose();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return;
       const msg =
-        err instanceof Error ? err.message : '创建失败，请重试';
+        err instanceof Error ? err.message : i18nText("settings", "auto.create_failed_retry");
       message.error(msg);
     } finally {
       setSubmitting(false);
@@ -94,12 +95,12 @@ export function FileTableDrawer({
       const values = form.getFieldsValue();
       setBindingSubmitting(true);
       await onUpdateBinding(record.id, values.bound_storage_id || '');
-      message.success('绑定已更新');
+      message.success(i18nText("settings", "auto.binding_updated"));
       onSuccess();
       onClose();
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : '更新绑定失败，请重试';
+        err instanceof Error ? err.message : i18nText("settings", "auto.binding_update_failed_retry");
       message.error(msg);
     } finally {
       setBindingSubmitting(false);
@@ -115,10 +116,10 @@ export function FileTableDrawer({
     <Drawer
       title={
         mode === 'create'
-          ? '新增文件表'
+          ? i18nText("settings", "auto.add_file_table")
           : mode === 'edit'
-            ? '编辑文件表'
-            : '查看文件表'
+            ? i18nText("settings", "auto.edit_file_table")
+            : i18nText("settings", "auto.view_file_table")
       }
       open={open}
       onClose={onClose}
@@ -131,12 +132,10 @@ export function FileTableDrawer({
               loading={bindingSubmitting}
               onClick={handleBindingSave}
             >
-              保存绑定
-            </Button>
+              {i18nText("settings", "auto.save_binding")}</Button>
           ) : (
             <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              创建
-            </Button>
+              {i18nText("settings", "auto.create")}</Button>
           )
         ) : undefined
       }
@@ -149,36 +148,36 @@ export function FileTableDrawer({
       >
         <Form.Item
           name="code"
-          label="表标识"
-          rules={[{ required: true, message: '请输入文件表标识' }]}
+          label={i18nText("settings", "auto.table_code")}
+          rules={[{ required: true, message: i18nText("settings", "auto.table_code_required") }]}
         >
-          <Input placeholder="例: attachments" disabled={mode !== 'create'} />
+          <Input placeholder={i18nText("settings", "auto.table_code_placeholder")} disabled={mode !== 'create'} />
         </Form.Item>
 
         <Form.Item
           name="title"
-          label="名称"
-          rules={[{ required: true, message: '请输入名称' }]}
+          label={i18nText("settings", "auto.name")}
+          rules={[{ required: true, message: i18nText("settings", "auto.name_required") }]}
         >
-          <Input placeholder="例: 附件表" disabled={isView} />
+          <Input placeholder={i18nText("settings", "auto.table_name_placeholder")} disabled={isView} />
         </Form.Item>
 
         {mode !== 'create' && (
           <>
             <Form.Item
               name="bound_storage_id"
-              label="绑定存储"
-              rules={[{ required: true, message: '请选择一个存储' }]}
+              label={i18nText("settings", "auto.bound_storage")}
+              rules={[{ required: true, message: i18nText("settings", "auto.storage_required") }]}
             >
               <Select
                 options={storageOptions}
-                placeholder="选择存储空间"
+                placeholder={i18nText("settings", "auto.select_storage")}
                 allowClear
                 disabled={isView}
               />
             </Form.Item>
 
-            <Form.Item label="作用域">
+            <Form.Item label={i18nText("settings", "auto.scope")}>
               <Input
                 value={
                   record
@@ -191,10 +190,10 @@ export function FileTableDrawer({
 
             {record && (
               <>
-                <Form.Item label="内置表">
-                  <Input value={record.is_builtin ? '是' : '否'} disabled />
+                <Form.Item label={i18nText("settings", "auto.built_in_table")}>
+                  <Input value={record.is_builtin ? i18nText("settings", "auto.yes") : i18nText("settings", "auto.no")} disabled />
                 </Form.Item>
-                <Form.Item label="状态">
+                <Form.Item label={i18nText("settings", "auto.status")}>
                   <Input value={record.status} disabled />
                 </Form.Item>
               </>
@@ -205,8 +204,7 @@ export function FileTableDrawer({
 
       {mode === 'edit' && record && !isView && (
         <div style={{ marginTop: 16, color: '#888', fontSize: 13 }}>
-          提示：编辑模式下仅可修改存储绑定。表标识和名称在创建后不可更改。
-        </div>
+          {i18nText("settings", "auto.file_table_edit_binding_notice")}</div>
       )}
     </Drawer>
   );

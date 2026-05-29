@@ -21,6 +21,7 @@ import {
   type LexicalTemplatedTextEditorHandle
 } from './template-editor/LexicalTemplatedTextEditor';
 import { NodeConfigFieldContainer } from '../field-container/NodeConfigFieldContainer';
+import { i18nText } from '../../../../shared/i18n/text';
 
 const TEMPLATE_EDIT_COMMIT_DELAY_MS = 200;
 
@@ -147,9 +148,9 @@ export function TemplatedTextField({
   async function handleCopy() {
     try {
       await copy(draftValue);
-      message.success('已复制');
+      message.success(i18nText("agentFlow", "auto.copied"));
     } catch {
-      message.error('复制失败');
+      message.error(i18nText("agentFlow", "auto.copy_failed"));
     }
   }
 
@@ -195,7 +196,7 @@ export function TemplatedTextField({
           placeholder={placeholder}
           onChange={scheduleDraftCommit}
         />
-        <Tooltip title="插入变量">
+        <Tooltip title={i18nText("agentFlow", "auto.insert_variable")}>
           <Button
             className="agent-flow-templated-text-field__input-action"
             type="text"
@@ -206,7 +207,7 @@ export function TemplatedTextField({
               </span>
             }
             disabled={options.length === 0}
-            aria-label="插入变量"
+            aria-label={i18nText("agentFlow", "auto.insert_variable")}
             onClick={() => editorRef.current?.openVariablePicker()}
           />
         </Tooltip>
@@ -244,7 +245,7 @@ export function TemplatedTextField({
               <span className="agent-flow-templated-text-field__action agent-flow-templated-text-field__counter">
                 {draftValue.length}
               </span>
-              <Tooltip title="插入变量">
+              <Tooltip title={i18nText("agentFlow", "auto.insert_variable")}>
                 <Button
                   className="agent-flow-templated-text-field__action"
                   type="text"
@@ -255,27 +256,27 @@ export function TemplatedTextField({
                     </span>
                   }
                   disabled={options.length === 0}
-                  aria-label="插入变量"
+                  aria-label={i18nText("agentFlow", "auto.insert_variable")}
                   onClick={() => editorRef.current?.openVariablePicker()}
                 />
               </Tooltip>
-              <Tooltip title="复制内容">
+              <Tooltip title={i18nText("agentFlow", "auto.copy_content")}>
                 <Button
                   className="agent-flow-templated-text-field__action"
                   type="text"
                   size="small"
                   icon={copied ? <CheckOutlined /> : <CopyOutlined />}
-                  aria-label={`复制${label}`}
+                  aria-label={i18nText("agentFlow", "auto.copy_alt", { value1: label })}
                   onClick={handleCopy}
                 />
               </Tooltip>
-              <Tooltip title="放大编辑">
+              <Tooltip title={i18nText("agentFlow", "auto.enlargeedit")}>
                 <Button
                   className="agent-flow-templated-text-field__action"
                   type="text"
                   size="small"
                   icon={<FullscreenOutlined />}
-                  aria-label={`放大编辑${label}`}
+                  aria-label={i18nText("agentFlow", "auto.zoom_edit", { value1: label })}
                   onClick={() => setExpanded(true)}
                 />
               </Tooltip>
@@ -311,7 +312,7 @@ export function TemplatedTextField({
             ref={expandedEditorRef}
             value={draftValue}
             options={options}
-            ariaLabel={`${ariaLabel} 放大编辑`}
+            ariaLabel={i18nText("agentFlow", "auto.zoom_edit_alt", { value1: ariaLabel })}
             placeholder={placeholder}
             onChange={scheduleDraftCommit}
           />

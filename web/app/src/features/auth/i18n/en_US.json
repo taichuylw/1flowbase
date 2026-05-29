@@ -1,0 +1,21 @@
+{
+  "auto": {
+    "product_tagline": "Dialogue is a barrier, the native base for AI applications"
+  },
+  "sign_in": {
+    "error_fallback": "Sign in failed. Please try again later.",
+    "footer": "power by taichuy",
+    "identifier": {
+      "label": "Account",
+      "placeholder": "root / root@example.com",
+      "required": "Enter an account or email."
+    },
+    "password": {
+      "label": "Password",
+      "placeholder": "Enter password",
+      "required": "Enter a password."
+    },
+    "submit": "Sign in",
+    "title": "1flowbase"
+  }
+}

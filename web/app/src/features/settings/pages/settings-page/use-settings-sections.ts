@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   settingsSectionDefinitions,
@@ -15,6 +16,7 @@ export function useSettingsSections({
   isRoot: boolean;
   permissions: string[];
 }) {
+  const { t } = useTranslation('settings');
   const visibleSections = useMemo<SettingsSectionNavItem[]>(
     () =>
       settingsSectionDefinitions
@@ -25,8 +27,8 @@ export function useSettingsSections({
               permissions.includes(permission)
             )
         )
-        .map(({ key, label, to }) => ({ key, label, to })),
-    [isRoot, permissions]
+        .map(({ key, labelKey, to }) => ({ key, label: t(labelKey), to })),
+    [isRoot, permissions, t]
   );
   const fallbackSection = visibleSections[0] ?? null;
   const activeSection = requestedSectionKey

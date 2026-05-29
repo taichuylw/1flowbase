@@ -1,72 +1,73 @@
 import type { NodeDefinitionMetaMap } from './types';
 import { dataModelNodeMeta } from './nodes/data-model';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export const nodeDefinitionMeta: NodeDefinitionMetaMap = {
   start: {
-    summary: '定义工作流入口并产出初始用户输入。',
+    summary: i18nText("agentFlow", "auto.define_workflow_entries_generate_initial_user_input"),
     helpHref: '/docs/agentflow/nodes/start'
   },
   answer: {
-    summary: '向最终用户输出本轮工作流的回复结果。',
+    summary: i18nText("agentFlow", "auto.output_response_results_round_workflow_end_user"),
     helpHref: '/docs/agentflow/nodes/answer'
   },
   llm: {
-    summary: '调用大语言模型生成文本结果。',
+    summary: i18nText("agentFlow", "auto.call_large_language_model_generate_text_results"),
     helpHref: '/docs/agentflow/nodes/llm'
   },
   knowledge_retrieval: {
-    summary: '根据输入问题检索知识库并返回文档结果。',
+    summary: i18nText("agentFlow", "auto.retrieve_knowledge_base_based_input_question_return_document_results"),
     helpHref: '/docs/agentflow/nodes/knowledge-retrieval'
   },
   question_classifier: {
-    summary: '对问题进行分类并输出命中的标签。',
+    summary: i18nText("agentFlow", "auto.classify_question_output_hit_labels"),
     helpHref: '/docs/agentflow/nodes/question-classifier'
   },
   if_else: {
-    summary: '根据条件判断决定当前节点输出结果。',
+    summary: i18nText("agentFlow", "auto.determine_output_result_node_based_conditional_judgment"),
     helpHref: '/docs/agentflow/nodes/if-else'
   },
   code: {
-    summary: '执行自定义代码并返回结构化结果。',
+    summary: i18nText("agentFlow", "auto.execute_custom_code_return_structured_results"),
     helpHref: '/docs/agentflow/nodes/code'
   },
   template_transform: {
-    summary: '基于模板和输入变量生成转换结果。',
+    summary: i18nText("agentFlow", "auto.generate_transformation_results_based_templates_input_variables"),
     helpHref: '/docs/agentflow/nodes/template-transform'
   },
   http_request: {
-    summary: '请求外部 HTTP 服务并读取响应数据。',
+    summary: i18nText("agentFlow", "auto.request_external_http_service_read_response_data"),
     helpHref: '/docs/agentflow/nodes/http-request'
   },
   tool: {
-    summary: '调用外部工具能力并返回工具执行结果。',
+    summary: i18nText("agentFlow", "auto.call_external_tool_capabilities_return_tool_execution_results"),
     helpHref: '/docs/agentflow/nodes/tool'
   },
   ...dataModelNodeMeta,
   variable_assigner: {
-    summary: '把上游数据写入或更新到工作流状态。',
+    summary: i18nText("agentFlow", "auto.write_update_upstream_data_workflow_state"),
     helpHref: '/docs/agentflow/nodes/variable-assigner'
   },
   parameter_extractor: {
-    summary: '从文本中提取结构化参数结果。',
+    summary: i18nText("agentFlow", "auto.extract_structured_parameter_results_text"),
     helpHref: '/docs/agentflow/nodes/parameter-extractor'
   },
   iteration: {
-    summary: '对输入集合执行逐项迭代并汇总结果。',
+    summary: i18nText("agentFlow", "auto.performs_item_iteration_over_input_collection_summarizes_results"),
     helpHref: '/docs/agentflow/nodes/iteration',
     canEnterContainer: true
   },
   loop: {
-    summary: '按条件循环执行容器内子流程。',
+    summary: i18nText("agentFlow", "auto.execute_sub_processes_within_container_conditional_loop"),
     helpHref: '/docs/agentflow/nodes/loop',
     canEnterContainer: true
   },
   human_input: {
-    summary: '等待人工补充输入后继续流程。',
+    summary: i18nText("agentFlow", "auto.wait_manual_input_continue_process"),
     helpHref: '/docs/agentflow/nodes/human-input'
   },
   plugin_node: {
-    summary: '执行来自 capability plugin 的声明式节点贡献。',
+    summary: i18nText("agentFlow", "auto.plugin_node_definition_summary"),
     helpHref: null
   }
 };

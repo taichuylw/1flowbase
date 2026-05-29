@@ -1,6 +1,7 @@
 import { Empty, List, Space, Tag, Typography } from 'antd';
 
 import type { SettingsDataModelAdvisorFinding } from '../../api/data-models';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function severityColor(severity: string) {
   if (severity === 'blocking') return 'red';
@@ -16,7 +17,7 @@ export function DataModelAdvisorTab({
   loading: boolean;
 }) {
   if (!loading && findings.length === 0) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Advisor 发现" />;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("settings", "auto.no_advisor_findings")} />;
   }
 
   return (
