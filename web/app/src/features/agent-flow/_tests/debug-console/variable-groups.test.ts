@@ -211,6 +211,7 @@ describe('debug console variable groups', () => {
           },
           output: {
             query: '22',
+            system: '',
             model: '',
             history: [],
             files: [],
@@ -225,6 +226,7 @@ describe('debug console variable groups', () => {
           nodeType: 'start',
           outputs: [
             { key: 'query', title: 'userinput.query', valueType: 'string' },
+            { key: 'system', title: 'userinput.system', valueType: 'string' },
             { key: 'model', title: 'userinput.model', valueType: 'string' },
             {
               key: 'history',
@@ -254,6 +256,7 @@ describe('debug console variable groups', () => {
     expect(groups[0]?.title).toBe('Start');
     expect(groups[0]?.items.map((item) => item.key)).toEqual([
       'node-start.query',
+      'node-start.system',
       'node-start.model',
       'node-start.history',
       'node-start.files',

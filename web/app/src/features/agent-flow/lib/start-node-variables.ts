@@ -33,6 +33,11 @@ export const startSystemVariables = [
     valueType: 'string'
   },
   {
+    key: 'system',
+    title: 'userinput.system',
+    valueType: 'string'
+  },
+  {
     key: 'model',
     title: 'userinput.model',
     valueType: 'string'

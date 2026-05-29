@@ -15,6 +15,7 @@ describe('node debug preview input', () => {
       input_payload: {
         'node-start': {
           query: '',
+          system: '',
           model: '',
           history: [],
           files: [],
@@ -47,6 +48,7 @@ describe('node debug preview input', () => {
       input_payload: {
         'node-start': {
           query: '请总结退款政策',
+          system: '',
           model: '',
           history: [],
           files: [{ filename: 'policy.pdf' }],

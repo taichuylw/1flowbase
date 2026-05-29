@@ -528,7 +528,7 @@ function buildStringPreviewValue(
 ) {
   if (
     node?.type === 'start' &&
-    (outputKey === 'query' || outputKey === 'model')
+    (outputKey === 'query' || outputKey === 'system' || outputKey === 'model')
   ) {
     return '';
   }

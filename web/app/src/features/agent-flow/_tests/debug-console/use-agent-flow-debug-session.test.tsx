@@ -466,6 +466,7 @@ describe('useAgentFlowDebugSession', () => {
             history: [],
             model: '',
             query: '请总结退款政策',
+            system: '',
             tool_choice: {},
             tools: []
           }
@@ -506,6 +507,7 @@ describe('useAgentFlowDebugSession', () => {
     const startKeys = (startGroup?.items ?? []).map((item) => item.key);
 
     expect(startKeys).toContain('node-start.query');
+    expect(startKeys).toContain('node-start.system');
     expect(startKeys).toContain('node-start.model');
     expect(startKeys).not.toContain('node-llm.user_prompt');
     expect(startKeys).not.toContain('node-answer.answer_template');

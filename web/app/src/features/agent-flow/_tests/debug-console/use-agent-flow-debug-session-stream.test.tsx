@@ -968,6 +968,7 @@ describe('useAgentFlowDebugSession streaming', () => {
             history: [],
             model: '',
             query: '请总结退款政策',
+            system: '',
             tool_choice: {},
             tools: []
           }
@@ -1067,6 +1068,7 @@ describe('useAgentFlowDebugSession streaming', () => {
             history: [],
             model: '',
             query: '',
+            system: '',
             tool_choice: {},
             tools: []
           }

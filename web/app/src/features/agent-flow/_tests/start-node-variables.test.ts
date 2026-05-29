@@ -88,6 +88,7 @@ describe('start node variables', () => {
           label: 'Start/attachments'
         },
         { value: ['node-start', 'query'], label: 'Start/query' },
+        { value: ['node-start', 'system'], label: 'Start/system' },
         { value: ['node-start', 'model'], label: 'Start/model' },
         { value: ['node-start', 'history'], label: 'Start/history' },
         { value: ['node-start', 'files'], label: 'Start/files' },
@@ -179,6 +180,7 @@ describe('start node variables', () => {
     expect(selectorLabels).toEqual(
       expect.arrayContaining([
         'Start/query',
+        'Start/system',
         'Start/model',
         'Start/history',
         'Start/files',
@@ -272,6 +274,7 @@ describe('start node variables', () => {
           files: [],
           tools: [],
           tool_choice: {},
+          system: '',
           model: '',
           history: [],
           query: ''
@@ -315,6 +318,7 @@ describe('start node variables', () => {
         'node-start': {
           priority: '低',
           confirmed: false,
+          system: '',
           model: '',
           history: [],
           files: [],

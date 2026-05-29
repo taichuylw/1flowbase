@@ -90,6 +90,7 @@ describe('start input fields', () => {
 
     expect(await screen.findAllByText('输入字段')).toHaveLength(1);
     expect(screen.getByText('userinput.query')).toBeInTheDocument();
+    expect(screen.getByText('userinput.system')).toBeInTheDocument();
     expect(screen.getByText('userinput.model')).toBeInTheDocument();
     expect(screen.getByText('userinput.history')).toBeInTheDocument();
     expect(screen.getByText('userinput.files')).toBeInTheDocument();
