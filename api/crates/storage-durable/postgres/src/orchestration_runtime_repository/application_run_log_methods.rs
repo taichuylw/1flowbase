@@ -48,8 +48,16 @@ impl PgControlPlaneStore {
                 updated_at
             ) values (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                (select name from api_keys where id = $10),
-                $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+                (select name from api_keys where id = $10), $11, $12, $13, $14, $15,
+                coalesce(
+                    (
+                        select sum(runtime_usage_ledger.total_tokens)::bigint
+                        from runtime_usage_ledger
+                        where runtime_usage_ledger.flow_run_id = $1
+                    ),
+                    $16
+                ),
+                $17, $18, $19, $20, $21, $22
             )
             on conflict (flow_run_id) do update
             set application_id = excluded.application_id,
@@ -125,7 +133,7 @@ impl PgControlPlaneStore {
         let total = sqlx::query_scalar::<_, i64>(
             r#"
             select count(*)::bigint
-            from flow_runs
+            from application_run_log_summaries
             where application_id = $1
               and ($2::timestamptz is null or created_at >= $2)
             "#,
@@ -137,101 +145,60 @@ impl PgControlPlaneStore {
 
         let rows = sqlx::query(&format!(
             r#"
-            with selected_runs as (
+            with selected_logs as (
                 select
-                    id,
+                    flow_run_id as id,
                     run_mode,
                     status,
                     target_node_id,
                     title,
                     input_payload,
                     external_user,
+                    authorized_account,
                     api_key_id,
                     publication_version_id,
                     external_conversation_id,
                     external_trace_id,
                     compatibility_mode,
                     idempotency_key,
-                    (
-                        select users.account
-                        from users
-                        where users.id = flow_runs.created_by
-                    ) as authorized_account,
+                    total_tokens,
+                    unique_node_count,
+                    tool_callback_count,
                     started_at,
                     finished_at,
                     created_at,
                     updated_at
-                from flow_runs
+                from application_run_log_summaries
                 where application_id = $1
                   and ($2::timestamptz is null or created_at >= $2)
-                order by {}
-                limit $3 offset $4
             )
             select
-                selected_runs.id,
-                selected_runs.run_mode,
-                selected_runs.status,
-                selected_runs.target_node_id,
-                selected_runs.title,
-                selected_runs.input_payload,
-                selected_runs.external_user,
-                selected_runs.authorized_account,
-                selected_runs.api_key_id,
-                selected_runs.publication_version_id,
-                selected_runs.external_conversation_id,
-                selected_runs.external_trace_id,
-                selected_runs.compatibility_mode,
-                selected_runs.idempotency_key,
-                node_statistics.total_tokens,
-                coalesce(node_statistics.unique_node_count, 0)::bigint as unique_node_count,
-                coalesce(callback_statistics.tool_callback_count, 0)::bigint as tool_callback_count,
-                selected_runs.started_at,
-                selected_runs.finished_at,
-                selected_runs.created_at,
-                selected_runs.updated_at
-            from selected_runs
-            left join lateral (
-                select
-                    (
-                        sum(
-                            case
-                                when node_runs.metrics_payload->'usage' ? 'total_tokens'
-                                    then (node_runs.metrics_payload->'usage'->>'total_tokens')::bigint
-                                when node_runs.metrics_payload ? 'usage'
-                                    and (
-                                        node_runs.metrics_payload->'usage' ? 'input_tokens'
-                                        or node_runs.metrics_payload->'usage' ? 'output_tokens'
-                                        or node_runs.metrics_payload->'usage' ? 'reasoning_tokens'
-                                    )
-                                    then coalesce((node_runs.metrics_payload->'usage'->>'input_tokens')::bigint, 0)
-                                        + coalesce((node_runs.metrics_payload->'usage'->>'output_tokens')::bigint, 0)
-                                        + coalesce((node_runs.metrics_payload->'usage'->>'reasoning_tokens')::bigint, 0)
-                                else null
-                            end
-                        )
-                    )::bigint as total_tokens,
-                    count(distinct node_runs.node_id)::bigint as unique_node_count
-                from node_runs
-                where node_runs.flow_run_id = selected_runs.id
-            ) node_statistics on true
-            left join lateral (
-                select coalesce(
-                    sum(
-                        case
-                            when flow_run_callback_tasks.callback_kind = 'llm_tool_calls'
-                                and jsonb_typeof(flow_run_callback_tasks.request_payload->'tool_calls') = 'array'
-                                then jsonb_array_length(flow_run_callback_tasks.request_payload->'tool_calls')
-                            else 0
-                        end
-                    ),
-                    0
-                )::bigint as tool_callback_count
-                from flow_run_callback_tasks
-                where flow_run_callback_tasks.flow_run_id = selected_runs.id
-            ) callback_statistics on true
+                id,
+                run_mode,
+                status,
+                target_node_id,
+                title,
+                input_payload,
+                external_user,
+                authorized_account,
+                api_key_id,
+                publication_version_id,
+                external_conversation_id,
+                external_trace_id,
+                compatibility_mode,
+                idempotency_key,
+                total_tokens,
+                unique_node_count,
+                tool_callback_count,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+            from selected_logs
             order by {}
+            limit $3 offset $4
             "#,
-            order_by, order_by
+            order_by
         ))
         .bind(application_id)
         .bind(created_after)

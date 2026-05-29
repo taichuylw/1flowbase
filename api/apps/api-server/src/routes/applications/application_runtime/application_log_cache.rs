@@ -23,7 +23,7 @@ pub(super) fn summary_page_cache_key(
     sort_order: &str,
 ) -> String {
     format!(
-        "application-logs:summary-page:v1:workspace:{workspace_id}:application:{application_id}:range:{}:sort:{sort_by}:{sort_order}:page:{page}:size:{page_size}",
+        "application-logs:summary-page:v2:workspace:{workspace_id}:application:{application_id}:range:{}:sort:{sort_by}:{sort_order}:page:{page}:size:{page_size}",
         time_range_segment(query)
     )
 }

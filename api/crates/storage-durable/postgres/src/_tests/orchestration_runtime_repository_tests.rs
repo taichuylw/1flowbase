@@ -1681,6 +1681,127 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
 }
 
 #[tokio::test]
+async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-05-29 02:45:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    let node_run = seed_node_run_for(
+        &store,
+        &run,
+        "node-llm",
+        "llm",
+        "LLM",
+        json!({ "prompt": "统计失败前已消耗 tokens" }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_node_run(
+        &store,
+        &UpdateNodeRunInput {
+            node_run_id: node_run.id,
+            status: NodeRunStatus::Failed,
+            output_payload: json!({}),
+            error_payload: Some(json!({ "message": "provider runtime timed out" })),
+            metrics_payload: json!({ "resumed": true, "callback_kind": "llm_tool_calls" }),
+            debug_payload: json!({}),
+            finished_at: Some(started_at + Duration::seconds(20)),
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::append_usage_ledger(
+        &store,
+        &AppendUsageLedgerInput {
+            flow_run_id: run.id,
+            node_run_id: Some(node_run.id),
+            span_id: None,
+            failover_attempt_id: None,
+            provider_instance_id: None,
+            gateway_route_id: None,
+            model_id: Some("gpt-5.3-codex-spark".into()),
+            upstream_model_id: Some("gpt-5.3-codex-spark".into()),
+            upstream_request_id: Some("req-timeout".into()),
+            input_tokens: Some(40),
+            cached_input_tokens: None,
+            output_tokens: Some(2),
+            reasoning_output_tokens: None,
+            total_tokens: Some(42),
+            input_cache_hit_tokens: None,
+            input_cache_miss_tokens: None,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            price_snapshot: None,
+            cost_snapshot: None,
+            usage_status: domain::UsageLedgerStatus::Recorded,
+            raw_usage: json!({ "total_tokens": 42 }),
+            normalized_usage: json!({ "total_tokens": 42 }),
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Failed,
+            output_payload: json!({}),
+            error_payload: Some(json!({ "message": "provider runtime timed out" })),
+            finished_at: Some(started_at + Duration::seconds(30)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let logs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationRunsPageInput {
+                page: 1,
+                page_size: 20,
+                created_after: None,
+                sort_by: Some("created_at".to_string()),
+                sort_order: Some("desc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(logs.items[0].run.id, run.id);
+    assert_eq!(logs.items[0].total_tokens, Some(42));
+
+    let report =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
+            &store,
+            seeded.application_id,
+            GetApplicationRunMonitoringReportInput {
+                started_from: Some(started_at - Duration::minutes(1)),
+                started_to: Some(started_at + Duration::minutes(1)),
+                bucket: "hour".to_string(),
+                slow_run_threshold_ms: 30_000,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(report.tokens.total_tokens_sum, 42);
+    assert_eq!(report.tokens.token_recorded_count, 1);
+    assert_eq!(report.high_token_runs[0].flow_run_id, run.id);
+}
+
+#[tokio::test]
 async fn application_run_logs_and_monitoring_read_static_summaries_only() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
