@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Alert, Space, Switch, Typography } from 'antd';
+import { Space, Switch, Typography } from 'antd';
 
 import type { ApplicationApiPublication } from '../../api/public-api';
 
@@ -24,12 +24,15 @@ export function ApplicationApiStatusBar({
     return (
       <section aria-label={t('auto.public_api_status')} className="application-api-status">
         <div className="application-api-status__header">
-          <Alert
-            type="warning"
-            showIcon
-            message={t('auto.public_api_version_missing')}
-            description={t('auto.api_key_bind_after_publish_description')}
-          />
+          <Space className="application-api-status__summary" align="center" wrap>
+            <Typography.Text strong>{t('auto.public_api')}</Typography.Text>
+            <Switch
+              checked={false}
+              disabled
+              checkedChildren={t('auto.enable')}
+              unCheckedChildren={t('auto.disable')}
+            />
+          </Space>
           <div className="application-api-status__docs-toolbar">{toolbar}</div>
           <div className="application-api-status__actions">{children}</div>
         </div>

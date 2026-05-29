@@ -5,7 +5,7 @@ import {
   RightOutlined,
   WarningFilled
 } from '@ant-design/icons';
-import { Tag, Typography } from 'antd';
+import { Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
@@ -14,6 +14,7 @@ import { nodeDisplayName } from './debug-workflow-trace-utils';
 import { collectLlmToolCallbacks } from './llm-tool-callbacks';
 import './debug-message.css';
 import { i18nText } from '../../../../../shared/i18n/text';
+import { formatTokens, formatDurationScaled } from './metrics-formatter';
 
 function statusTone(status: string) {
   switch (status) {
@@ -48,35 +49,55 @@ function readOutputTotalTokens(outputPayload: unknown) {
   return typeof totalTokens === 'number' ? totalTokens : null;
 }
 
-function formatDuration(durationMs: number) {
-  if (durationMs < 1000) {
-    return `${durationMs} ms`;
-  }
-
-  const seconds = durationMs / 1000;
-  const roundedSeconds = Math.round(seconds * 10) / 10;
-  return `${Number.isInteger(roundedSeconds) ? roundedSeconds.toFixed(0) : roundedSeconds.toFixed(1)} s`;
-}
-
 function metricText(item: AgentFlowTraceItem) {
   const tokens = readOutputTotalTokens(item.outputPayload);
-  const duration =
-    item.durationMs == null ? null : formatDuration(item.durationMs);
+  const durationMs = item.durationMs;
   const toolCount =
     item.nodeType === 'llm'
       ? collectLlmToolCallbacks(item.debugPayload).length
       : 0;
-  const metrics = [
-    typeof tokens === 'number' ? `${tokens} tokens` : null,
-    duration,
-    toolCount > 0 ? i18nText("agentFlow", "auto.tools_alt", { value1: toolCount }) : null
-  ].filter((metric): metric is string => Boolean(metric));
 
-  if (metrics.length > 0) {
-    return metrics.join(' · ');
+  const elements: ReactNode[] = [];
+
+  if (typeof tokens === 'number') {
+    const formattedTokens = `${formatTokens(tokens)} tokens`;
+    elements.push(
+      <Tooltip title={`${tokens.toLocaleString()} tokens`} key="tokens">
+        <span>{formattedTokens}</span>
+      </Tooltip>
+    );
   }
 
-  return i18nText("agentFlow", "auto.in_progress");
+  if (typeof durationMs === 'number') {
+    const formattedDuration = formatDurationScaled(durationMs);
+    elements.push(
+      <Tooltip title={`${durationMs.toLocaleString()} ms`} key="duration">
+        <span>{formattedDuration}</span>
+      </Tooltip>
+    );
+  }
+
+  if (toolCount > 0) {
+    elements.push(
+      <span key="tools">
+        {i18nText("agentFlow", "auto.tools_alt", { value1: toolCount })}
+      </span>
+    );
+  }
+
+  if (elements.length === 0) {
+    return i18nText("agentFlow", "auto.in_progress");
+  }
+
+  const joined: ReactNode[] = [];
+  elements.forEach((el, index) => {
+    joined.push(el);
+    if (index < elements.length - 1) {
+      joined.push(<span key={`dot-${index}`}> · </span>);
+    }
+  });
+
+  return <>{joined}</>;
 }
 
 export function StatusIcon({ status }: { status: string }) {

@@ -90,7 +90,6 @@ export function ApplicationApiPage({
           type="warning"
           showIcon
           message={t('auto.publish_public_api_required')}
-          description={t('auto.public_api_publish_description')}
           action={
             <Button
               type="primary"

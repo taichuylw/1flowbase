@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode, type ComponentProps } from 'react';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type {
   AgentFlowDebugMessage,
   AgentFlowRunContext
 } from '../../api/runtime';
 import { AgentFlowDebugConsole } from '../../components/debug-console/AgentFlowDebugConsole';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 
 const runContext: AgentFlowRunContext = {
   environmentLabel: 'draft',
@@ -457,6 +458,11 @@ function renderConsole(
 }
 
 describe('debug conversation log panel', () => {
+  beforeEach(async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
+  });
+
   test('opens from an assistant message and keeps detail limited to input, output and metadata', () => {
     renderConsole();
 
@@ -499,7 +505,7 @@ describe('debug conversation log panel', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
-    expect(within(panel).getByText('4.3 s')).toBeInTheDocument();
+    expect(within(panel).getByText('4.26 s')).toBeInTheDocument();
     expect(within(panel).queryByText('4257 ms')).not.toBeInTheDocument();
     const llmTraceNode = within(panel).getByRole('button', { name: /LLM/ });
 
@@ -562,7 +568,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /Tools.*1 次工具回调/
+      name: /工具.*1 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
     expect(
@@ -577,10 +583,10 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*\+10 tokens.*1\.2 s/
+      name: /lookup_weather.*\+10 tokens.*1\.23 s/
     });
     expect(toolCallback).toHaveTextContent('lookup_weather');
-    expect(toolCallback).toHaveTextContent('+10 tokens · 1.2 s');
+    expect(toolCallback).toHaveTextContent('+10 tokens · 1.23 s');
     expect(toolCallback).not.toHaveTextContent('14 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
     expect(
@@ -649,7 +655,7 @@ describe('debug conversation log panel', () => {
       name: 'LLM 节点详情'
     });
     const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /Tools.*2 次工具回调/
+      name: /工具.*2 次工具回调/
     });
     fireEvent.click(toolsNode);
 
@@ -752,7 +758,7 @@ describe('debug conversation log panel', () => {
       name: 'LLM 节点详情'
     });
     const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /Tools.*1 次工具回调/
+      name: /工具.*1 次工具回调/
     });
     fireEvent.click(toolsNode);
 
@@ -761,7 +767,7 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*\+10 tokens.*1\.2 s/
+      name: /lookup_weather.*\+10 tokens.*1\.23 s/
     });
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
