@@ -24,7 +24,8 @@ use control_plane::{
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
         LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
-        ListApplicationRunsPageInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+        ListApplicationRunsPageInput, OrchestrationRuntimeRepository,
+        UpdateCallbackTaskPayloadsInput, UpdateCheckpointPayloadsInput, UpdateFlowRunInput,
         UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
         UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
         UpsertDebugVariableCacheEntryInput,
@@ -205,6 +206,20 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: &UpdateRunEventPayloadInput,
     ) -> Result<domain::RunEventRecord> {
         PgControlPlaneStore::update_run_event_payload(self, input).await
+    }
+
+    async fn update_checkpoint_payloads(
+        &self,
+        input: &UpdateCheckpointPayloadsInput,
+    ) -> Result<domain::CheckpointRecord> {
+        PgControlPlaneStore::update_checkpoint_payloads(self, input).await
+    }
+
+    async fn update_callback_task_payloads(
+        &self,
+        input: &UpdateCallbackTaskPayloadsInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        PgControlPlaneStore::update_callback_task_payloads(self, input).await
     }
 
     async fn upsert_debug_variable_cache_entry(

@@ -1820,6 +1820,98 @@ async fn terminal_published_run_projects_application_conversation_messages_once(
 }
 
 #[tokio::test]
+async fn terminal_published_run_without_external_conversation_projects_run_messages() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-05-29 13:10:00 UTC);
+    let run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "published-run-scoped-conversation".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "hi".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "hi"
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: Some("openai-chat-completions-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({
+                "answer": {
+                    "preview": "\"Hello",
+                    "artifact_ref": "run-answer-artifact",
+                    "content_type": "application/json"
+                }
+            }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let projected_messages = sqlx::query_as::<_, (String, String, String)>(
+        r#"
+        select conversations.external_conversation_id, messages.role, messages.content
+        from application_conversation_messages messages
+        join application_conversations conversations on conversations.id = messages.conversation_id
+        where messages.flow_run_id = $1
+        order by messages.sequence asc, messages.id asc
+        "#,
+    )
+    .bind(run.id)
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+
+    assert_eq!(
+        projected_messages,
+        vec![
+            (
+                format!("flow-run:{}", run.id),
+                "user".to_string(),
+                "hi".to_string()
+            ),
+            (
+                format!("flow-run:{}", run.id),
+                "assistant".to_string(),
+                "Hello".to_string()
+            )
+        ]
+    );
+}
+
+#[tokio::test]
 async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

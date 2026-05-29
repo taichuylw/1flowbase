@@ -46,9 +46,15 @@ const runtimeApi = vi.hoisted(() => ({
       'around',
       runId
     ] as const,
+  applicationRunConversationMessagesQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()

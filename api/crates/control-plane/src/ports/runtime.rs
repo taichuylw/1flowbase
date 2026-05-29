@@ -171,6 +171,22 @@ pub struct UpdateRunEventPayloadInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateCheckpointPayloadsInput {
+    pub checkpoint_id: Uuid,
+    pub locator_payload: serde_json::Value,
+    pub variable_snapshot: serde_json::Value,
+    pub external_ref_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateCallbackTaskPayloadsInput {
+    pub callback_task_id: Uuid,
+    pub request_payload: serde_json::Value,
+    pub response_payload: Option<serde_json::Value>,
+    pub external_ref_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
 pub struct DebugVariableCacheKey {
     pub node_id: String,
     pub variable_key: String,
@@ -588,6 +604,20 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
     ) -> anyhow::Result<domain::RunEventRecord> {
         let _ = input;
         anyhow::bail!("update_run_event_payload not implemented")
+    }
+    async fn update_checkpoint_payloads(
+        &self,
+        input: &UpdateCheckpointPayloadsInput,
+    ) -> anyhow::Result<domain::CheckpointRecord> {
+        let _ = input;
+        anyhow::bail!("update_checkpoint_payloads not implemented")
+    }
+    async fn update_callback_task_payloads(
+        &self,
+        input: &UpdateCallbackTaskPayloadsInput,
+    ) -> anyhow::Result<domain::CallbackTaskRecord> {
+        let _ = input;
+        anyhow::bail!("update_callback_task_payloads not implemented")
     }
     async fn upsert_debug_variable_cache_entry(
         &self,

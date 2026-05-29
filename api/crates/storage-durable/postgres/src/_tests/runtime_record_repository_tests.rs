@@ -1494,6 +1494,11 @@ async fn runtime_record_repository_lists_application_run_logs_as_scoped_read_mod
                     operator: domain::ResourceFilterOperator::Eq,
                     value: json!(seed.workspace_id.to_string()),
                 },
+                domain::ResourceFilterExpr::Field {
+                    field: "started_at".into(),
+                    operator: domain::ResourceFilterOperator::Gte,
+                    value: json!("2026-05-29T07:59:00Z"),
+                },
             ]),
             sorts: vec![RuntimeSortInput {
                 field_code: "created_at".into(),

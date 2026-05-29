@@ -214,6 +214,73 @@ impl PgControlPlaneStore {
 
         Ok(map_run_event_record(row))
     }
+
+    async fn update_checkpoint_payloads(
+        &self,
+        input: &UpdateCheckpointPayloadsInput,
+    ) -> Result<domain::CheckpointRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_run_checkpoints
+            set locator_payload = $2,
+                variable_snapshot = $3,
+                external_ref_payload = $4
+            where id = $1
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                status,
+                reason,
+                locator_payload,
+                variable_snapshot,
+                external_ref_payload,
+                created_at
+            "#,
+        )
+        .bind(input.checkpoint_id)
+        .bind(&input.locator_payload)
+        .bind(&input.variable_snapshot)
+        .bind(&input.external_ref_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(map_checkpoint_record(row))
+    }
+
+    async fn update_callback_task_payloads(
+        &self,
+        input: &UpdateCallbackTaskPayloadsInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        let row = sqlx::query(
+            r#"
+            update flow_run_callback_tasks
+            set request_payload = $2,
+                response_payload = $3,
+                external_ref_payload = $4
+            where id = $1
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(input.callback_task_id)
+        .bind(&input.request_payload)
+        .bind(&input.response_payload)
+        .bind(&input.external_ref_payload)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_callback_task_record(row)
+    }
 }
 
 fn map_runtime_debug_artifact_record(

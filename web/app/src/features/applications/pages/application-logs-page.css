@@ -78,6 +78,16 @@
   overflow-y: hidden;
 }
 
+.application-logs-page__state {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 240px;
+  color: var(--ant-color-text-secondary);
+}
+
 .application-logs-page__filter-actions .ant-btn {
   display: inline-flex;
   align-items: center;

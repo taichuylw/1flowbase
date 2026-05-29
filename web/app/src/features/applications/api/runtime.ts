@@ -1,10 +1,13 @@
 import {
   completeConsoleCallbackTask,
   getConsoleApplicationRunDetail,
+  getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
+  type ConsoleApplicationConversationMessage,
+  type ConsoleApplicationConversationMessagesPage,
   type ConsoleApplicationRunMonitoringApiKeyUsage,
   type ConsoleApplicationRunMonitoringAuthorizedAccountUsage,
   type ConsoleApplicationRunMonitoringBucket,
@@ -114,6 +117,10 @@ export interface ApplicationConversationMessagesPage {
   page: number;
   page_size: number;
 }
+export type ApplicationRunConversationMessage =
+  ConsoleApplicationConversationMessage;
+export type ApplicationRunConversationMessagesPage =
+  ConsoleApplicationConversationMessagesPage;
 export interface ApplicationRunNodeRunsPage {
   items: ConsoleNodeRunDetail[];
   total: number;
@@ -217,6 +224,27 @@ export const applicationConversationMessagesQueryKey = (
     input.flowRunId ?? '',
     input.page ?? 1,
     input.pageSize ?? 5
+  ] as const;
+
+export const applicationRunConversationMessagesQueryKey = (
+  applicationId: string,
+  runId: string,
+  input: {
+    before?: string | null;
+    after?: string | null;
+    limit?: number;
+  } = {}
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'conversation-messages',
+    input.before ?? '',
+    input.after ?? '',
+    input.limit ?? 5
   ] as const;
 
 export const applicationRunTraceFragmentsQueryKey = (
@@ -372,6 +400,27 @@ export function fetchApplicationConversationMessages(
     page,
     page_size: pageSize
   }));
+}
+
+export function fetchApplicationRunConversationMessages(
+  applicationId: string,
+  runId: string,
+  input: {
+    before?: string | null;
+    after?: string | null;
+    limit?: number;
+  } = {}
+) {
+  return getConsoleApplicationRunConversationMessages(
+    applicationId,
+    runId,
+    {
+      before: input.before ?? undefined,
+      after: input.after ?? undefined,
+      limit: input.limit
+    },
+    getApplicationsApiBaseUrl()
+  );
 }
 
 export function fetchApplicationRunNodeRuns(

@@ -47,9 +47,15 @@ const runtimeApi = vi.hoisted(() => ({
       'around',
       runId
     ] as const,
+  applicationRunConversationMessagesQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
@@ -491,17 +497,11 @@ describe('ApplicationLogsPage - floating windows', () => {
     );
     fireEvent.click(openLogButton);
 
-    await waitFor(() => {
-      expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
-        'app-1',
-        'run-1'
-      );
-    });
-
-    const logPanel = screen.getByRole('complementary', {
+    const logPanel = await screen.findByRole('complementary', {
       name: '对话日志'
     });
     expect(logPanel).toBeInTheDocument();
+    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
     expect(
       screen.getByRole('dialog', { name: '对话日志' })
     ).toBeInTheDocument();
@@ -514,29 +514,17 @@ describe('ApplicationLogsPage - floating windows', () => {
       'aria-selected',
       'true'
     );
-    expect(within(logPanel).getByLabelText('输入 JSON')).toHaveTextContent(
-      'user_prompt'
-    );
     expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
       '退款政策摘要'
     );
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
-    expect(within(logPanel).getByText('OpenAI Responses')).toBeInTheDocument();
-    expect(within(logPanel).getByText('总 tokens')).toBeInTheDocument();
-    expect(within(logPanel).getByText('50')).toBeInTheDocument();
-    expect(within(logPanel).getByText('真实节点数')).toBeInTheDocument();
-    expect(within(logPanel).getByText('3')).toBeInTheDocument();
-    expect(within(logPanel).getByText('工具回调次数')).toBeInTheDocument();
-    expect(within(logPanel).getByText('20')).toBeInTheDocument();
+    expect(within(logPanel).getAllByText('—').length).toBeGreaterThan(0);
     expect(within(logPanel).queryByText('节点数')).not.toBeInTheDocument();
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
-    const logTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
-    fireEvent.click(logTraceNode);
-    expect(logTraceNode).toHaveAttribute('aria-expanded', 'true');
     expect(
-      within(logPanel).getByRole('region', { name: 'LLM 节点详情' })
-    ).toBeInTheDocument();
+      within(logPanel).queryByRole('region', { name: 'LLM 节点详情' })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '关闭运行详情' }));
 

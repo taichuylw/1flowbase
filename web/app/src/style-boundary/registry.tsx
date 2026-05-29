@@ -81,6 +81,34 @@ const styleBoundaryNodeContributions = [
   }
 ];
 
+const styleBoundaryApplicationRunRecord = {
+  id: 'run-1',
+  flow_run_id: 'run-1',
+  application_id: 'app-1',
+  scope_id: 'workspace-1',
+  run_mode: 'debug_flow_run',
+  status: 'succeeded',
+  target_node_id: null,
+  title: 'Boundary run',
+  expand_id: 'boundary-expand',
+  external_user: null,
+  authorized_account: 'root',
+  api_key_id: null,
+  api_key_name_snapshot: null,
+  publication_version_id: null,
+  external_conversation_id: null,
+  external_trace_id: null,
+  compatibility_mode: null,
+  idempotency_key: null,
+  total_tokens: 128,
+  unique_node_count: 3,
+  tool_callback_count: 0,
+  started_at: '2026-05-10T09:00:00Z',
+  finished_at: '2026-05-10T09:00:03Z',
+  created_at: '2026-05-10T09:00:00Z',
+  updated_at: '2026-05-10T09:00:03Z'
+};
+
 function expandDottedBundle(bundle: Record<string, string>) {
   const expanded: Record<string, unknown> = {};
 
@@ -874,26 +902,34 @@ function seedStyleBoundaryApplicationFetch() {
 
     if (
       method.toUpperCase() === 'GET' &&
+      requestUrl.pathname ===
+        '/api/runtime/models/application_run_log_summaries/records'
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            items: [styleBoundaryApplicationRunRecord],
+            total: 1,
+            page: 1,
+            page_size: 20
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
       requestUrl.pathname === '/api/console/applications/app-1/logs/runs'
     ) {
       return new Response(
         JSON.stringify({
           data: {
-            items: [
-              {
-                id: 'run-1',
-                run_mode: 'debug_flow_run',
-                status: 'succeeded',
-                target_node_id: null,
-                title: 'Boundary run',
-                expand_id: 'boundary-expand',
-                authorized_account: 'root',
-                started_at: '2026-05-10T09:00:00Z',
-                finished_at: '2026-05-10T09:00:03Z',
-                created_at: '2026-05-10T09:00:00Z',
-                updated_at: '2026-05-10T09:00:03Z'
-              }
-            ],
+            items: [styleBoundaryApplicationRunRecord],
             total: 1,
             page: 1,
             page_size: 20

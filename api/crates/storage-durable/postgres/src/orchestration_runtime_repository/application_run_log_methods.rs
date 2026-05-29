@@ -187,26 +187,63 @@ impl PgControlPlaneStore {
         &self,
         flow_run: &domain::FlowRunRecord,
     ) -> Result<()> {
-        let Some(external_conversation_id) = flow_run.external_conversation_id.as_deref() else {
+        let messages = application_conversation_messages_from_flow_run(flow_run);
+        if messages.is_empty() {
             return Ok(());
-        };
+        }
+        let conversation_key = application_conversation_key(flow_run);
 
         let Some(conversation) = sqlx::query(
             r#"
-            select id, scope_id
-            from application_conversations
-            where application_id = $1
-              and external_conversation_id = $2
-              and api_key_id is not distinct from $3
-              and external_user is not distinct from $4
-            order by updated_at desc, id desc
+            with existing as (
+                select id, scope_id, 0 as source_order
+                from application_conversations
+                where application_id = $1
+                  and external_conversation_id = $2
+                  and api_key_id is not distinct from (select id from api_keys where id = $3)
+                  and external_user is not distinct from $4
+                order by updated_at desc, id desc
+                limit 1
+            ),
+            inserted as (
+                insert into application_conversations (
+                    id,
+                    scope_id,
+                    application_id,
+                    api_key_id,
+                    external_user,
+                    external_conversation_id,
+                    created_at,
+                    updated_at
+                )
+                select
+                    $5,
+                    applications.workspace_id,
+                    applications.id,
+                    (select id from api_keys where id = $3),
+                    $4,
+                    $2,
+                    $6,
+                    $7
+                from applications
+                where applications.id = $1
+                  and not exists (select 1 from existing)
+                returning id, scope_id, 1 as source_order
+            )
+            select id, scope_id, source_order from existing
+            union all
+            select id, scope_id, source_order from inserted
+            order by source_order asc
             limit 1
             "#,
         )
         .bind(flow_run.application_id)
-        .bind(external_conversation_id)
+        .bind(&conversation_key)
         .bind(flow_run.api_key_id)
         .bind(&flow_run.external_user)
+        .bind(Uuid::now_v7())
+        .bind(flow_run.started_at)
+        .bind(flow_run.updated_at)
         .fetch_optional(self.pool())
         .await?
         else {
@@ -215,7 +252,6 @@ impl PgControlPlaneStore {
 
         let conversation_id: Uuid = conversation.get("id");
         let scope_id: Uuid = conversation.get("scope_id");
-        let messages = application_conversation_messages_from_flow_run(flow_run);
         let sequences = messages
             .iter()
             .map(|message| message.sequence)
@@ -1129,6 +1165,13 @@ struct ApplicationConversationMessageProjection {
 const APPLICATION_CONVERSATION_INPUT_KEYS: &[&str] =
     &["query", "question", "prompt", "message", "input", "input_text"];
 
+fn application_conversation_key(flow_run: &domain::FlowRunRecord) -> String {
+    flow_run
+        .external_conversation_id
+        .clone()
+        .unwrap_or_else(|| format!("flow-run:{}", flow_run.id))
+}
+
 fn application_conversation_messages_from_flow_run(
     flow_run: &domain::FlowRunRecord,
 ) -> Vec<ApplicationConversationMessageProjection> {
@@ -1289,23 +1332,68 @@ fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
 }
 
 fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
-    trimmed_string(part).or_else(|| {
-        part.get("text")
-            .or_else(|| part.get("content"))
-            .and_then(trimmed_string)
-    })
+    conversation_text_value(part)
 }
 
 fn string_field_value(value: &serde_json::Value, field: &str) -> Option<String> {
-    value.get(field).and_then(trimmed_string)
+    value.get(field).and_then(conversation_text_value)
+}
+
+fn conversation_text_value(value: &serde_json::Value) -> Option<String> {
+    trimmed_string(value).or_else(|| {
+        value.as_object()?;
+
+        artifact_preview_text(value).or_else(|| {
+            value
+                .get("text")
+                .or_else(|| value.get("content"))
+                .and_then(trimmed_string)
+        })
+    })
+}
+
+fn artifact_preview_text(value: &serde_json::Value) -> Option<String> {
+    let preview = value.get("preview").and_then(trimmed_string)?;
+    decode_artifact_preview_text(&preview).or(Some(preview))
+}
+
+fn decode_artifact_preview_text(preview: &str) -> Option<String> {
+    if let Ok(decoded) = serde_json::from_str::<String>(preview) {
+        return trimmed_text(&decoded);
+    }
+
+    let Some(stripped) = preview.strip_prefix('"') else {
+        return None;
+    };
+    let completed = if stripped.ends_with('"') {
+        preview.to_owned()
+    } else {
+        format!("{preview}\"")
+    };
+    if let Ok(decoded) = serde_json::from_str::<String>(&completed) {
+        return trimmed_text(&decoded);
+    }
+
+    trimmed_text(stripped.trim_end_matches('"'))
+        .map(|value| {
+            value
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"")
+        })
+        .and_then(|value| trimmed_text(&value))
 }
 
 fn trimmed_string(value: &serde_json::Value) -> Option<String> {
     value
         .as_str()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
+        .and_then(trimmed_text)
+}
+
+fn trimmed_text(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
 fn normalize_application_run_monitoring_bucket(input: &str) -> &'static str {

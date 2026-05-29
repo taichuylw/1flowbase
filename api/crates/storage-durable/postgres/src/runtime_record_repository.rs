@@ -13,6 +13,7 @@ use runtime_core::{
 };
 use serde_json::Value;
 use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::repositories::PgControlPlaneStore;
@@ -807,8 +808,8 @@ fn push_field_value(
     match field.field_kind {
         domain::ModelFieldKind::String
         | domain::ModelFieldKind::Enum
-        | domain::ModelFieldKind::Text
-        | domain::ModelFieldKind::Datetime => builder.push_bind(json_string(value)?),
+        | domain::ModelFieldKind::Text => builder.push_bind(json_string(value)?),
+        domain::ModelFieldKind::Datetime => builder.push_bind(json_datetime(value)?),
         domain::ModelFieldKind::Number => builder.push_bind(json_number(value)?),
         domain::ModelFieldKind::Boolean => builder.push_bind(json_bool(value)?),
         domain::ModelFieldKind::Json => builder.push_bind(value.clone()),
@@ -925,6 +926,10 @@ fn json_bool(value: &Value) -> Result<bool> {
     value
         .as_bool()
         .ok_or_else(|| anyhow!("expected boolean value"))
+}
+
+fn json_datetime(value: &Value) -> Result<OffsetDateTime> {
+    OffsetDateTime::parse(&json_string(value)?, &Rfc3339).map_err(Into::into)
 }
 
 fn json_uuid(value: &Value) -> Result<Uuid> {

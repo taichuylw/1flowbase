@@ -5,7 +5,7 @@ import {
   SortDescendingOutlined
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Empty, Input, Tooltip } from 'antd';
+import { Alert, App, Button, Empty, Input, Spin, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -228,14 +228,6 @@ export function ApplicationLogsPage({
     }
   }
 
-  if (runsQuery.isPending) {
-    return null;
-  }
-
-  if (runsQuery.isError) {
-    return null;
-  }
-
   const logsHeader = (
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
@@ -307,7 +299,29 @@ export function ApplicationLogsPage({
       className="application-logs-page__list"
       data-testid="application-logs-list"
     >
-      {runs.length === 0 ? (
+      {runsQuery.isPending ? (
+        <div className="application-logs-page__state" role="status">
+          <Spin aria-hidden="true" />
+          <span>{t('auto.logs_loading')}</span>
+        </div>
+      ) : runsQuery.isError ? (
+        <Alert
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                void runsQuery.refetch();
+              }}
+            >
+              {t('auto.refresh_logs')}
+            </Button>
+          }
+          description={t('auto.logs_load_failed_description')}
+          message={t('auto.logs_load_failed')}
+          showIcon
+          type="error"
+        />
+      ) : runs.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={null} />
       ) : (
         <ApplicationRunsTable

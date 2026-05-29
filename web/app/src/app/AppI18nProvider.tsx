@@ -2,7 +2,7 @@ import { ConfigProvider } from 'antd';
 import enUS from 'antd/locale/en_US';
 import zhCN from 'antd/locale/zh_CN';
 import type { PropsWithChildren } from 'react';
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
 
 import { useAuthStore } from '../state/auth-store';
@@ -60,9 +60,7 @@ export function AppI18nProvider({ children }: PropsWithChildren) {
 
   return (
     <I18nextProvider i18n={appI18n}>
-      <ConfigProvider locale={getAntdLocale(appLocale)}>
-        <Suspense fallback={null}>{children}</Suspense>
-      </ConfigProvider>
+      <ConfigProvider locale={getAntdLocale(appLocale)}>{children}</ConfigProvider>
     </I18nextProvider>
   );
 }

@@ -474,6 +474,12 @@ fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
         .get("tool_calls")
         .and_then(serde_json::Value::as_array)
         .map(|tool_calls| tool_calls.len() as i64)
+        .or_else(|| {
+            task.request_payload
+                .get("tool_calls")
+                .and_then(|value| value.get("tool_call_count"))
+                .and_then(serde_json::Value::as_i64)
+        })
         .unwrap_or(0)
 }
 
@@ -633,11 +639,17 @@ where
         .await
         .unwrap_or_else(|| run.input_payload.clone());
     let start_payload = start_input_payload(&source);
+    let mut items = Vec::new();
+
+    if let Some(system) = run_level_system_content(&source, &load_debug_artifact).await {
+        items.push(imported_context_item(run, items.len(), "system", system));
+    }
+
     let Some(history_value) = start_payload
         .get("history")
         .or_else(|| start_payload.get("messages"))
     else {
-        return Vec::new();
+        return items;
     };
     let history_source =
         match resolve_runtime_debug_artifact_value(history_value, &load_debug_artifact).await {
@@ -645,10 +657,8 @@ where
             None => history_value.clone(),
         };
     let Some(history) = history_source.as_array() else {
-        return Vec::new();
+        return items;
     };
-
-    let mut items = Vec::new();
 
     for message in history {
         let role = message
@@ -660,7 +670,7 @@ where
         };
 
         match role {
-            "system" | "user" | "assistant" => {
+            "user" | "assistant" => {
                 items.push(imported_context_item(run, items.len(), role, content))
             }
             _ => {}
@@ -764,6 +774,62 @@ fn imported_context_item(
         answer: None,
         is_current: false,
     }
+}
+
+async fn run_level_system_content<F, Fut>(
+    payload: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<String>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let start_payload = start_input_payload(payload);
+    let system_value = start_payload
+        .get("system")
+        .or_else(|| payload.get("system"))?;
+    let resolved_system =
+        resolve_runtime_debug_artifact_value(system_value, load_debug_artifact).await;
+
+    resolved_system
+        .as_ref()
+        .and_then(conversation_prompt_text)
+        .or_else(|| conversation_prompt_text(system_value))
+}
+
+fn conversation_prompt_text(value: &serde_json::Value) -> Option<String> {
+    if let Some(text) = value
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(array) = value.as_array() {
+        let text = array
+            .iter()
+            .filter_map(conversation_content_part_text)
+            .collect::<Vec<_>>()
+            .join("");
+        return (!text.is_empty()).then_some(text);
+    }
+
+    conversation_content_part_text(value).or_else(|| conversation_preview_text(value))
+}
+
+fn conversation_preview_text(value: &serde_json::Value) -> Option<String> {
+    let preview = value
+        .get("preview")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    serde_json::from_str::<serde_json::Value>(preview)
+        .ok()
+        .as_ref()
+        .and_then(conversation_prompt_text)
+        .or_else(|| Some(preview.to_string()))
 }
 
 fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
@@ -2296,6 +2362,40 @@ mod tests {
             Some(58)
         );
         assert_eq!(usage_total_tokens(&serde_json::json!({})), None);
+    }
+
+    #[test]
+    fn callback_task_tool_callback_count_reads_offloaded_tool_call_count() {
+        let base_task = domain::CallbackTaskRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: Uuid::now_v7(),
+            node_run_id: Uuid::now_v7(),
+            callback_kind: "llm_tool_calls".to_string(),
+            status: domain::CallbackTaskStatus::Completed,
+            request_payload: serde_json::json!({
+                "tool_calls": [
+                    { "id": "call-1" },
+                    { "id": "call-2" }
+                ]
+            }),
+            response_payload: None,
+            external_ref_payload: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            completed_at: Some(OffsetDateTime::UNIX_EPOCH),
+        };
+        assert_eq!(callback_task_tool_callback_count(&base_task), 2);
+
+        let offloaded_task = domain::CallbackTaskRecord {
+            request_payload: serde_json::json!({
+                "tool_calls": {
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": Uuid::now_v7().to_string(),
+                    "tool_call_count": 3
+                }
+            }),
+            ..base_task
+        };
+        assert_eq!(callback_task_tool_callback_count(&offloaded_task), 3);
     }
 
     #[test]
