@@ -1,6 +1,6 @@
 import { DownOutlined, RightOutlined, ToolOutlined } from '@ant-design/icons';
-import { Tag, Typography } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Tag, Tooltip, Typography } from 'antd';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { RuntimeDebugPayloadBlock } from '../../detail/last-run/NodeRunIOCard';
 import {
@@ -9,6 +9,7 @@ import {
   type LlmToolCallback
 } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
+import { formatTokenDelta, formatDurationScaled } from './metrics-formatter';
 
 function callbackStatusLabel(status: LlmToolCallback['callbackStatus']) {
   switch (status) {
@@ -61,44 +62,46 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
-function formatTokenDelta(tokenDelta: number) {
-  return tokenDelta >= 0 ? `+${tokenDelta}` : `${tokenDelta}`;
-}
+function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
+  const elements: ReactNode[] = [];
 
-function formatDuration(durationMs: number) {
-  if (durationMs < 1000) {
-    return `${durationMs} ms`;
+  if (typeof callback.token_delta === 'number') {
+    const formattedTokens = `${formatTokenDelta(callback.token_delta)} tokens`;
+    const sign = callback.token_delta >= 0 ? '+' : '';
+    elements.push(
+      <Tooltip title={`${sign}${callback.token_delta.toLocaleString()} tokens`} key="tokens">
+        <span>{formattedTokens}</span>
+      </Tooltip>
+    );
   }
 
-  const seconds = durationMs / 1000;
-  const roundedSeconds = Math.round(seconds * 10) / 10;
-  return `${Number.isInteger(roundedSeconds) ? roundedSeconds.toFixed(0) : roundedSeconds.toFixed(1)} s`;
-}
+  if (typeof callback.duration_ms === 'number') {
+    const formattedDuration = formatDurationScaled(callback.duration_ms);
+    elements.push(
+      <Tooltip title={`${callback.duration_ms.toLocaleString()} ms`} key="duration">
+        <span>{formattedDuration}</span>
+      </Tooltip>
+    );
+  }
 
-function toolMetricsSummary(callback: LlmToolCallback) {
-  const metrics = [
-    typeof callback.token_delta === 'number'
-      ? `${formatTokenDelta(callback.token_delta)} tokens`
-      : null,
-    typeof callback.duration_ms === 'number'
-      ? formatDuration(callback.duration_ms)
-      : null
-  ].filter((metric): metric is string => Boolean(metric));
-
-  return metrics.length > 0 ? metrics.join(' · ') : null;
-}
-
-function LlmToolInlineMetrics({ metricText }: { metricText: string | null }) {
-  if (metricText === null) {
+  if (elements.length === 0) {
     return null;
   }
+
+  const joined: ReactNode[] = [];
+  elements.forEach((el, index) => {
+    joined.push(el);
+    if (index < elements.length - 1) {
+      joined.push(<span key={`dot-${index}`}> · </span>);
+    }
+  });
 
   return (
     <Typography.Text
       className="agent-flow-editor__debug-llm-tool-inline-metrics"
       type="secondary"
     >
-      {metricText}
+      {joined}
     </Typography.Text>
   );
 }
@@ -118,8 +121,6 @@ function LlmToolCallbackItem({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onToggle: () => void;
 }) {
-  const metricsText = toolMetricsSummary(callback);
-
   return (
     <article
       className="agent-flow-editor__debug-llm-tool-item"
@@ -133,7 +134,7 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
-          <LlmToolInlineMetrics metricText={metricsText} />
+          <LlmToolInlineMetrics callback={callback} />
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
