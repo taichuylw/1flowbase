@@ -100,6 +100,56 @@
   align-items: center;
 }
 
+.agent-flow-editor__inspector-field--policy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f4ef;
+}
+
+.agent-flow-editor__inspector-field--policy
+  .agent-flow-editor__inspector-field-label.ant-typography {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1f3326;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.agent-flow-editor__inspector-field-label-tag.ant-tag {
+  margin-inline-end: 0;
+  border-radius: 6px;
+  background: #edf4ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.agent-flow-editor__inspector-field-help {
+  flex: none;
+  color: #7b8982;
+  font-size: 13px;
+  cursor: help;
+}
+
+.agent-flow-editor__inspector-field-help:hover {
+  color: #1677ff;
+}
+
+.agent-flow-editor__inspector-field--policy
+  .agent-flow-editor__inspector-field-control {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .agent-flow-editor__detail-dock[data-layout='compact']
   .agent-flow-editor__inspector-field--inline {
   grid-template-columns: 1fr;

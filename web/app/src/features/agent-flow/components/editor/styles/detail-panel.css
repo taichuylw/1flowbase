@@ -310,11 +310,25 @@
 }
 
 .agent-flow-node-detail__policy-label.ant-typography {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   color: #1f3326;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.agent-flow-node-detail__policy-help {
+  flex: none;
+  color: #7b8982;
+  font-size: 13px;
+  cursor: help;
+}
+
+.agent-flow-node-detail__policy-help:hover {
+  color: #1677ff;
 }
 
 .agent-flow-node-detail__policy-control {

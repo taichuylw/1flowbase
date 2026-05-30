@@ -366,7 +366,7 @@ describe('LLM prompt messages field', () => {
     );
 
     const switchControl = await screen.findByRole('switch', {
-      name: '集成上下文'
+      name: '继承上下文'
     });
     expect(switchControl).toBeChecked();
 
@@ -375,6 +375,39 @@ describe('LLM prompt messages field', () => {
     expect(llmNodeFrom(latestDocument).config.context_policy).toEqual({
       integration_context: 'disabled'
     });
+  });
+
+  test('renders LLM context policy as a single inspector row', async () => {
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        <SelectionSeed nodeId="node-llm" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const contextSwitch = await screen.findByRole('switch', {
+      name: '继承上下文'
+    });
+
+    const contextRow = contextSwitch.closest(
+      '.agent-flow-editor__inspector-field'
+    );
+
+    expect(contextRow).toHaveClass(
+      'agent-flow-editor__inspector-field--policy'
+    );
+    expect(
+      contextRow?.querySelector('.agent-flow-editor__inspector-field-label')
+        ?.textContent
+    ).toContain('继承上下文');
+    expect(
+      contextRow?.querySelector(
+        '.agent-flow-editor__inspector-field-label-tag'
+      )
+    ).toHaveTextContent('history');
+    expect(
+      screen.getByLabelText('将传入上下文注入当前LLM节点中')
+    ).toBeInTheDocument();
   });
 
   test('normalizes existing prompt messages so system remains the first fixed row', async () => {

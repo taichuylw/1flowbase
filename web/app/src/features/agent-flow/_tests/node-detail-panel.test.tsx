@@ -308,7 +308,13 @@ describe('NodeDetailPanel', () => {
         </AgentFlowEditorStoreProvider>
       );
 
-      expect(screen.getAllByTestId('node-policy-row')).toHaveLength(2);
+      const policyRows = screen.getAllByTestId('node-policy-row');
+      expect(policyRows).toHaveLength(3);
+      expect(policyRows[0]).toHaveTextContent('推理强度');
+      expect(policyRows[1]).toHaveTextContent('失败重试');
+      expect(
+        screen.getByLabelText('使用外部传入推理强度')
+      ).toBeInTheDocument();
       expect(
         screen.getByRole('switch', { name: '失败重试' })
       ).toBeInTheDocument();
@@ -363,6 +369,43 @@ describe('NodeDetailPanel', () => {
             id: 'node-llm',
             config: expect.objectContaining({
               error_policy: 'default_value'
+            })
+          })
+        ])
+      );
+    },
+    NODE_DETAIL_PANEL_TEST_TIMEOUT
+  );
+
+  test(
+    'writes the reasoning effort strategy from the policy group',
+    async () => {
+      let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+      renderWithProviders(
+        <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <DocumentObserver
+            onChange={(document) => {
+              latestDocument = document;
+            }}
+          />
+          <SelectionSeed nodeId="node-llm" />
+          <NodeConfigTab />
+        </AgentFlowEditorStoreProvider>
+      );
+
+      fireEvent.click(
+        screen.getByRole('switch', { name: '推理强度' })
+      );
+
+      expect(latestDocument.graph.nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'node-llm',
+            config: expect.objectContaining({
+              external_reasoning_policy: {
+                follow_external_reasoning: true
+              }
             })
           })
         ])

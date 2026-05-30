@@ -25,7 +25,7 @@
     "static_issues_draft": "当前草稿没有静态问题",
     "source_examples": "个来源实例 ·",
     "llm_parameters": "LLM 参数",
-    "follow_external_reasoning": "跟随外部 Reasoning",
+    "follow_external_reasoning": "推理强度",
     "system_variable_model_parameters": "模型运行参数",
     "edit_model": "编辑模型",
     "save_model": "保存模型",

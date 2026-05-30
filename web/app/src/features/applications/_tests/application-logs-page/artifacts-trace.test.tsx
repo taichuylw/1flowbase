@@ -98,16 +98,25 @@ function conversationMessagesPage(
 ) {
   return {
     items: items.map((item) => ({
-      application_id: 'app-1',
-      scope_id: 'workspace-1',
-      conversation_id: 'conversation-1',
-      status: 'succeeded',
-      created_at: item.started_at ?? '2026-04-17T09:00:00Z',
-      ...item
+      run_id: item.flow_run_id ?? item.id,
+      detail_run_id: item.flow_run_id,
+      can_open_detail: Boolean(item.flow_run_id),
+      role: item.role,
+      content: item.content,
+      started_at: item.started_at ?? '2026-04-17T09:00:00Z',
+      finished_at: item.finished_at ?? '2026-04-17T09:00:01Z',
+      status: item.status ?? 'succeeded',
+      query: null,
+      model: null,
+      answer: null,
+      is_current: item.flow_run_id === 'run-1'
     })),
-    total: items.length,
-    page: 1,
-    page_size: 20
+    page: {
+      has_before: false,
+      has_after: false,
+      before_cursor: null,
+      after_cursor: null
+    }
   };
 }
 
@@ -256,6 +265,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
+    runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
 
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
@@ -277,7 +287,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       ])
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
+    runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
           id: 'msg-run-0-user',
@@ -562,8 +572,146 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     expect(within(logPanel).queryByText('call_policy')).not.toBeInTheDocument();
   }, 20_000);
 
+  test('keeps expanded trace tools and loaded tool details across floating window activation', async () => {
+    const detail = sampleRunDetail();
+    const llmNodeRun = detail.node_runs[0]!;
+    detail.node_runs = [
+      {
+        ...llmNodeRun,
+        id: 'node-run-llm-1',
+        debug_payload: {
+          llm_rounds: {
+            __runtime_debug_artifact: true,
+            artifact_ref: 'artifact-llm-rounds',
+            tool_callbacks: [
+              {
+                id: 'call_weather',
+                name: 'lookup_weather',
+                callback_status: 'returned',
+                execution_status: 'succeeded',
+                artifact_ref: 'artifact-tool-weather'
+              }
+            ]
+          }
+        }
+      },
+      {
+        ...llmNodeRun,
+        id: 'node-run-llm-2',
+        debug_payload: {},
+        started_at: '2026-04-17T09:00:01Z',
+        finished_at: '2026-04-17T09:00:02Z'
+      }
+    ];
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
+      async (_applicationId: string, artifactRef: string) => {
+        if (artifactRef === 'artifact-tool-weather') {
+          return {
+            id: 'call_weather',
+            name: 'lookup_weather',
+            callback_status: 'returned',
+            execution_status: 'succeeded',
+            request_payload: {
+              city: 'Shanghai'
+            },
+            callback_payload: {
+              temperature: 'warm'
+            },
+            parsed_result: {
+              ok: true
+            }
+          };
+        }
+
+        throw new Error(`unexpected artifact: ${artifactRef}`);
+      }
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const logPanel = await screen.findByRole('complementary', {
+      name: '对话日志'
+    });
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+
+    const toolsNode = within(logPanel).getByRole('button', {
+      name: /工具 1 次工具回调/
+    });
+    fireEvent.click(toolsNode);
+
+    const toolCallbackNode = within(logPanel).getByRole('button', {
+      name: /lookup_weather/
+    });
+    fireEvent.click(toolCallbackNode);
+
+    await waitFor(() =>
+      expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledTimes(1)
+    );
+    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+      'app-1',
+      'artifact-tool-weather'
+    );
+
+    fireEvent.mouseDown(
+      screen.getByTestId('application-logs-floating-run-detail')
+    );
+
+    expect(
+      within(logPanel).getByRole('button', {
+        name: /工具 1 次工具回调/
+      })
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(logPanel).getByRole('button', {
+        name: /lookup_weather/
+      })
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+    expect(
+      within(logPanel).queryByRole('button', {
+        name: /lookup_weather/
+      })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      within(logPanel).getByRole('button', {
+        name: /工具 1 次工具回调/
+      })
+    );
+    fireEvent.click(
+      within(logPanel).getByRole('button', {
+        name: /lookup_weather/
+      })
+    );
+
+    await waitFor(() =>
+      expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledTimes(1)
+    );
+  }, 20_000);
+
   test('does not offer run log details for imported context messages', async () => {
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
+    runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
           id: 'msg-history-system',

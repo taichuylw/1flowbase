@@ -191,6 +191,40 @@ fn tool_use_and_tool_result_blocks_map_to_native_history_and_query() {
 }
 
 #[test]
+fn last_user_multimodal_content_maps_query_text_and_preserves_media_blocks() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "aW1hZ2U="
+                        }
+                    }
+                ]
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(native.query, "Describe this image");
+    assert_eq!(native.history.len(), 1);
+    assert_eq!(native.history[0]["role"], json!("user"));
+    assert_eq!(native.history[0]["content"], json!(""));
+    assert_eq!(native.history[0]["content_blocks"][0]["type"], json!("image"));
+    assert_eq!(
+        native.history[0]["content_blocks"][0]["source"]["media_type"],
+        json!("image/png")
+    );
+}
+
+#[test]
 fn computer_use_returns_unsupported_feature() {
     let mut request = base_request();
     request["messages"] = json!([

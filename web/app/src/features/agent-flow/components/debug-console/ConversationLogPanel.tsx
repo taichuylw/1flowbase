@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Descriptions, Empty, Tabs, Typography } from 'antd';
 
 import type { AgentFlowDebugMessage } from '../../api/runtime';
@@ -153,6 +153,10 @@ function ConversationTrace({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const [expandedNodeKey, setExpandedNodeKey] = useState<string | null>(null);
+  const traceGroups = useMemo(
+    () => groupTraceItemsForDisplay(message.traceSummary),
+    [message.traceSummary]
+  );
 
   useEffect(() => {
     setExpandedNodeKey(null);
@@ -168,8 +172,6 @@ function ConversationTrace({
       </div>
     );
   }
-
-  const traceGroups = groupTraceItemsForDisplay(message.traceSummary);
 
   return (
     <div className="agent-flow-editor__conversation-log-trace">
@@ -228,6 +230,51 @@ function ConversationTrace({
   );
 }
 
+function useConversationLogArtifactLoader(
+  messageId: string,
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>
+) {
+  const loadArtifactRef = useRef(onLoadArtifact);
+  const artifactRequestsRef = useRef<Map<string, Promise<unknown>>>(new Map());
+  const hasArtifactLoader = Boolean(onLoadArtifact);
+
+  useEffect(() => {
+    loadArtifactRef.current = onLoadArtifact;
+  }, [onLoadArtifact]);
+
+  useEffect(() => {
+    artifactRequestsRef.current.clear();
+  }, [messageId]);
+
+  const loadCachedArtifact = useCallback(
+    async (artifactRef: string) => {
+      const existingRequest = artifactRequestsRef.current.get(artifactRef);
+
+      if (existingRequest) {
+        return existingRequest;
+      }
+
+      const loadArtifact = loadArtifactRef.current;
+      if (!loadArtifact) {
+        throw new Error('missing_conversation_log_artifact_loader');
+      }
+
+      const request = loadArtifact(artifactRef).catch((error: unknown) => {
+        if (artifactRequestsRef.current.get(artifactRef) === request) {
+          artifactRequestsRef.current.delete(artifactRef);
+        }
+        throw error;
+      });
+
+      artifactRequestsRef.current.set(artifactRef, request);
+      return request;
+    },
+    []
+  );
+
+  return hasArtifactLoader ? loadCachedArtifact : undefined;
+}
+
 export function ConversationLogPanel({
   message,
   onClose,
@@ -237,6 +284,11 @@ export function ConversationLogPanel({
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
+  const loadArtifact = useConversationLogArtifactLoader(
+    message.id,
+    onLoadArtifact
+  );
+
   return (
     <AgentFlowDockPanel
       bodyClassName="agent-flow-editor__conversation-log-body"
@@ -254,7 +306,7 @@ export function ConversationLogPanel({
             children: (
               <ConversationLogDetail
                 message={message}
-                onLoadArtifact={onLoadArtifact}
+                onLoadArtifact={loadArtifact}
               />
             )
           },
@@ -264,7 +316,7 @@ export function ConversationLogPanel({
             children: (
               <ConversationTrace
                 message={message}
-                onLoadArtifact={onLoadArtifact}
+                onLoadArtifact={loadArtifact}
               />
             )
           }

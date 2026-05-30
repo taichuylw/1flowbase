@@ -22,13 +22,8 @@ export const llmNodeDefinition: NodeDefinition = {
         },
         {
           key: 'config.context_policy',
-          label: '集成上下文',
+          label: '继承上下文',
           editor: 'llm_context_policy'
-        },
-        {
-          key: 'config.external_reasoning_policy',
-          label: i18nText('agentFlow', 'auto.follow_external_reasoning'),
-          editor: 'llm_external_reasoning_policy'
         },
         {
           key: 'bindings.prompt_messages',

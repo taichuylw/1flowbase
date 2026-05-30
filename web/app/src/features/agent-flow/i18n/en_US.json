@@ -25,7 +25,7 @@
     "static_issues_draft": "There are no static issues with the current draft",
     "source_examples": "source examples ·",
     "llm_parameters": "LLM parameters",
-    "follow_external_reasoning": "Follow external reasoning",
+    "follow_external_reasoning": "Reasoning effort",
     "system_variable_model_parameters": "Model runtime parameters",
     "edit_model": "Edit model",
     "save_model": "Save model",

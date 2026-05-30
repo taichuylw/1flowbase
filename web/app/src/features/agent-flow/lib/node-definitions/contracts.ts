@@ -315,14 +315,8 @@ function createLlmContract(): NodeRuntimeUiContract {
         }),
         panelField({
           key: 'config.context_policy',
-          title: '集成上下文',
+          title: '继承上下文',
           renderer: 'llm_context_policy',
-          valueType: 'json'
-        }),
-        panelField({
-          key: 'config.external_reasoning_policy',
-          title: i18nText("agentFlow", "auto.follow_external_reasoning"),
-          renderer: 'llm_external_reasoning_policy',
           valueType: 'json'
         }),
         panelField({

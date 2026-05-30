@@ -558,4 +558,102 @@ mod tests {
             json!("{\"order\":\"ready\"}")
         );
     }
+
+    #[test]
+    fn anthropic_tool_resume_request_uses_latest_trailing_tool_result_message() {
+        let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+        let previous_tool_use_id =
+            encode_anthropic_callback_tool_use_id(previous_callback_task_id, "toolu_previous");
+        let current_tool_use_id =
+            encode_anthropic_callback_tool_use_id(current_callback_task_id, "toolu_current");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": previous_tool_use_id,
+                        "name": "lookup_previous",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": previous_tool_use_id,
+                        "content": "old result"
+                    }]
+                },
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": current_tool_use_id,
+                        "name": "lookup_current",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": current_tool_use_id,
+                        "content": "new result"
+                    }]
+                }
+            ]
+        }))
+        .expect("resume request should parse")
+        .expect("trailing tool_result should resume callback");
+
+        assert_eq!(resume.callback_task_id, current_callback_task_id);
+        assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
+        assert_eq!(
+            resume.tool_results[0]["tool_call_id"],
+            json!("toolu_current")
+        );
+        assert_eq!(resume.tool_results[0]["content"], json!("new result"));
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_ignores_historical_tool_results_before_latest_user_text() {
+        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_previous");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": tool_use_id,
+                        "name": "lookup_previous",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": "old result"
+                    }]
+                },
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next question"}
+            ]
+        }))
+        .expect("historical tool_result should parse");
+
+        assert!(resume.is_none());
+    }
 }

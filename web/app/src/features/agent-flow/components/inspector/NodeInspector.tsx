@@ -2,11 +2,12 @@ import type {
   SchemaBlock,
   CanvasNodeSchema
 } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { evaluateSchemaRule } from '../../../../shared/schema-ui/runtime/rule-evaluator';
 import type { SchemaAdapter } from '../../../../shared/schema-ui/registry/create-renderer-registry';
 import { useEffect, useRef } from 'react';
-import { Typography } from 'antd';
+import { Tag, Tooltip, Typography } from 'antd';
 
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 import type { AgentFlowIssue } from '../../lib/validate-document';
@@ -39,6 +40,23 @@ function hasEmbeddedLabel(renderer: string) {
     renderer === 'start_input_fields' ||
     renderer === 'start_model_list'
   );
+}
+
+function isPolicyFieldRenderer(renderer: string) {
+  return (
+    renderer === 'llm_context_policy' ||
+    renderer === 'llm_external_reasoning_policy'
+  );
+}
+
+function getFieldLabelTag(renderer: string) {
+  return renderer === 'llm_context_policy' ? 'history' : null;
+}
+
+function getFieldHelp(renderer: string) {
+  return renderer === 'llm_context_policy'
+    ? '将传入上下文注入当前LLM节点中'
+    : null;
 }
 
 function shouldRenderSectionTitle(title: string) {
@@ -162,6 +180,8 @@ export function NodeInspector({
                   const hasError = fieldIssues.some(
                     (issue) => issue.level === 'error'
                   );
+                  const labelTag = getFieldLabelTag(childBlock.renderer);
+                  const labelHelp = getFieldHelp(childBlock.renderer);
 
                   if (
                     !shouldRenderFieldBlock(
@@ -181,6 +201,9 @@ export function NodeInspector({
                         isInlineFieldRenderer(childBlock.renderer)
                           ? 'agent-flow-editor__inspector-field--inline'
                           : null,
+                        isPolicyFieldRenderer(childBlock.renderer)
+                          ? 'agent-flow-editor__inspector-field--policy'
+                          : null,
                         hasError
                           ? 'agent-flow-editor__inspector-field--error'
                           : null
@@ -196,6 +219,22 @@ export function NodeInspector({
                           className="agent-flow-editor__inspector-field-label"
                         >
                           {childBlock.label}
+                          {labelTag ? (
+                            <Tag
+                              bordered={false}
+                              className="agent-flow-editor__inspector-field-label-tag"
+                            >
+                              {labelTag}
+                            </Tag>
+                          ) : null}
+                          {labelHelp ? (
+                            <Tooltip title={labelHelp}>
+                              <QuestionCircleOutlined
+                                aria-label={labelHelp}
+                                className="agent-flow-editor__inspector-field-help"
+                              />
+                            </Tooltip>
+                          ) : null}
                         </Typography.Text>
                       )}
                       <div className="agent-flow-editor__inspector-field-control">

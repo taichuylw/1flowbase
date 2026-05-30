@@ -2825,6 +2825,95 @@ mod tests {
     }
 
     #[test]
+    fn anthropic_projects_answer_presentation_delta_not_provider_raw_delta() {
+        let run = native_run();
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let provider_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::text_delta(
+                    "node-llm",
+                    Uuid::from_u128(0x55555555555555555555555555555555),
+                    "provider raw".to_string(),
+                ),
+            ),
+        );
+        let presentation_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                2,
+                debug_stream_events::answer_text_delta(
+                    "node-answer",
+                    "answer presentation".to_string(),
+                    0,
+                    Some("node-llm"),
+                    None,
+                    Some("text"),
+                ),
+            ),
+        );
+
+        assert!(provider_events.is_empty());
+        assert_eq!(presentation_events.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn anthropic_terminal_answer_fallback_emits_text_before_stop() {
+        let run = native_run();
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(run.id, json!({ "answer": "最终回答" })),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("\"type\":\"text_delta\""), "{body}");
+        assert!(body.contains("\"text\":\"最终回答\""), "{body}");
+        assert!(body.contains("event: message_stop"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn anthropic_failed_terminal_with_answer_finishes_without_error_event() {
+        let mut run = native_run();
+        run.status = NativeRunStatus::Failed;
+        run.answer = Some("工具失败后的回答".to_string());
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_failed(
+                    run.id,
+                    json!({ "message": "tool callback failed" }),
+                ),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("工具失败后的回答"), "{body}");
+        assert!(body.contains("event: message_stop"), "{body}");
+        assert!(!body.contains("event: error"), "{body}");
+    }
+
+    #[test]
     fn openai_waiting_callback_maps_to_tool_call_chunk() {
         let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
         let chat_completion_id = "chatcmpl-tool-test";
