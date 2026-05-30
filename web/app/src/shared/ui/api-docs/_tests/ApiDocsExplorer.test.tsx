@@ -1,15 +1,50 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: ({ configuration }: { configuration: unknown }) => (
-    <div data-testid="scalar-viewer">{JSON.stringify(configuration)}</div>
+    <div data-testid="scalar-viewer">
+      {JSON.stringify(configuration)}
+      <a
+        className="endpoint"
+        onClick={() => {
+          window.location.hash = 'operation-create-chat-completion';
+        }}
+      >
+        <span className="endpoint-method">POST</span>
+        <span className="endpoint-path">/v1/chat/completions</span>
+      </a>
+    </div>
   )
+}));
+
+vi.mock('antd', async () => {
+  const actual = await vi.importActual<typeof import('antd')>('antd');
+
+  return {
+    ...actual,
+    message: {
+      ...actual.message,
+      error: vi.fn(),
+      success: vi.fn()
+    }
+  };
+});
+
+vi.mock('../../clipboard/copy-text', () => ({
+  copyTextToClipboard: vi.fn(() => Promise.resolve())
 }));
 
 import { AppProviders } from '../../../../app/AppProviders';
 import { appI18n } from '../../../i18n/app-i18n';
 import { ApiDocsExplorer } from '../ApiDocsExplorer';
+import { copyTextToClipboard } from '../../clipboard/copy-text';
 
 const catalog = {
   title: 'Application API',
@@ -247,5 +282,67 @@ describe('ApiDocsExplorer', () => {
     expect(
       screen.queryByText('选择一个分类后查看接口列表')
     ).not.toBeInTheDocument();
+  });
+
+  test('copies a Scalar operation link instead of navigating to its hash target', async () => {
+    const fetchOperationSpec = vi.fn(() =>
+      Promise.resolve({
+        openapi: '3.1.0',
+        paths: {
+          '/v1/chat/completions': {
+            post: {
+              operationId: 'create_chat_completion'
+            }
+          }
+        }
+      })
+    );
+    const onQueryStateChange = vi.fn();
+
+    render(
+      <AppProviders>
+        <ApiDocsExplorer
+          queryState={{
+            categoryId: 'openai-compatible-api',
+            operationId: 'create_chat_completion'
+          }}
+          onQueryStateChange={onQueryStateChange}
+          catalogQueryKey={['api-docs', 'catalog', 'copy-operation-link']}
+          fetchCatalog={() => Promise.resolve(catalog)}
+          categoryOperationsQueryKey={(categoryId) => [
+            'api-docs',
+            'category',
+            categoryId,
+            'copy-operation-link'
+          ]}
+          fetchCategoryOperations={(categoryId) =>
+            Promise.resolve(
+              operationsByCategory[
+                categoryId as keyof typeof operationsByCategory
+              ]
+            )
+          }
+          operationSpecQueryKey={(operationId) => [
+            'api-docs',
+            'operation',
+            operationId,
+            'copy-operation-link'
+          ]}
+          fetchOperationSpec={fetchOperationSpec}
+          baseServerUrl="http://127.0.0.1:3100"
+        />
+      </AppProviders>
+    );
+
+    const scalarViewer = await screen.findByTestId('scalar-viewer');
+    const operationLink = await within(scalarViewer).findByText(
+      '/v1/chat/completions'
+    );
+    fireEvent.click(operationLink);
+
+    expect(copyTextToClipboard).toHaveBeenCalledWith(
+      'POST /v1/chat/completions'
+    );
+    expect(window.location.hash).toBe('');
   });
 });
