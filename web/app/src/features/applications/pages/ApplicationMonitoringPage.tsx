@@ -24,7 +24,12 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState, type ReactNode } from 'react';
 
-import { formatDate, formatDateTime, formatNumber } from '../../../shared/i18n/format';
+import {
+  formatDate,
+  formatDateTime,
+  formatNumber,
+  formatTime as formatClockTime
+} from '../../../shared/i18n/format';
 import { LoadingState } from '../../../shared/ui/loading-state/LoadingState';
 import {
   applicationRunMonitoringReportQueryKey,
@@ -94,6 +99,23 @@ function formatSignedPercent(value: number) {
   return `${prefix}${formatPercent(value)}`;
 }
 
+function tokenComparisonMetric(report: ApplicationRunMonitoringReport) {
+  if (
+    report.tokens_comparison.previous_total_tokens_sum === 0 &&
+    report.tokens.total_tokens_sum > 0
+  ) {
+    return {
+      label: i18nText('applications', 'auto.token_increase_from_empty'),
+      value: formatInteger(report.tokens.total_tokens_sum)
+    };
+  }
+
+  return {
+    label: i18nText('applications', 'auto.token_change'),
+    value: formatSignedPercent(report.tokens_comparison.token_change_rate)
+  };
+}
+
 function formatDuration(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) {
     return '-';
@@ -109,6 +131,25 @@ function formatTime(value: string | null | undefined) {
     return '-';
   }
   return formatDateTime(value);
+}
+
+function formatTrendBucket(
+  value: string,
+  bucket: ApplicationRunMonitoringBucket
+) {
+  if (bucket === 'hour') {
+    return formatClockTime(value, {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+  if (bucket === 'month') {
+    return formatDate(value, {
+      year: 'numeric',
+      month: '2-digit'
+    });
+  }
+  return formatDate(value);
 }
 
 function sourceLabel(source: string) {
@@ -188,6 +229,48 @@ function RuntimeActivityMetric({
   );
 }
 
+function RuntimeActivityGroup({
+  children,
+  title
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="runtime-activity-group">
+      <Typography.Text className="runtime-activity-group__title" type="secondary">
+        {title}
+      </Typography.Text>
+      <div className="runtime-activity-group__metrics">{children}</div>
+    </section>
+  );
+}
+
+function RuntimeActivityTitle() {
+  return (
+    <span className="runtime-activity-panel__title">
+      {i18nText('applications', 'auto.runtime_activity')}
+      <Tooltip
+        title={
+          <span>
+            {i18nText('applications', 'auto.current_instance_runtime_data')}
+            <br />
+            {i18nText('applications', 'auto.runtime_activity_memory_scope')}
+          </span>
+        }
+      >
+        <Button
+          aria-label={i18nText('applications', 'auto.runtime_activity')}
+          className="runtime-activity-panel__help"
+          icon={<QuestionCircleOutlined aria-hidden="true" />}
+          size="small"
+          type="text"
+        />
+      </Tooltip>
+    </span>
+  );
+}
+
 function RuntimeActivityPanel({
   activity,
   loading,
@@ -199,7 +282,7 @@ function RuntimeActivityPanel({
 }) {
   if (loading && !activity) {
     return (
-      <MonitoringPanel title={i18nText('applications', 'auto.runtime_activity')}>
+      <MonitoringPanel title={<RuntimeActivityTitle />}>
         <LoadingState compact />
       </MonitoringPanel>
     );
@@ -207,7 +290,7 @@ function RuntimeActivityPanel({
 
   if (error || !activity) {
     return (
-      <MonitoringPanel title={i18nText('applications', 'auto.runtime_activity')}>
+      <MonitoringPanel title={<RuntimeActivityTitle />}>
         <Result
           status="warning"
           title={i18nText('applications', 'auto.runtime_activity_load_failed')}
@@ -222,109 +305,99 @@ function RuntimeActivityPanel({
   const fiveMinutes = activity.windows.five_minutes;
 
   return (
-    <MonitoringPanel title={i18nText('applications', 'auto.runtime_activity')}>
-      <div className="runtime-activity-panel__meta">
-        <Typography.Text type="secondary">
-          {i18nText('applications', 'auto.current_instance_runtime_data')}
-        </Typography.Text>
-        <Typography.Text type="secondary">
-          {i18nText('applications', 'auto.runtime_activity_memory_scope')}
-        </Typography.Text>
-      </div>
+    <MonitoringPanel title={<RuntimeActivityTitle />}>
+      <div className="runtime-activity-panel__groups">
+        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_overview')}>
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.runtime_health')}
+            value={runtimeHealthLabel(health.state)}
+            tone={runtimeHealthTone(health.state)}
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.active_total')}
+            value={formatInteger(active.total)}
+            tone="blue"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.process_peak')}
+            value={formatInteger(activity.peaks.process_peak_concurrency)}
+            tone="blue"
+          />
+        </RuntimeActivityGroup>
 
-      <div className="runtime-activity-panel__grid">
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.runtime_health')}
-          value={runtimeHealthLabel(health.state)}
-          tone={runtimeHealthTone(health.state)}
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.active_total')}
-          value={formatInteger(active.total)}
-          tone="blue"
-        />
-        <RuntimeActivityMetric
-          label="HTTP"
-          value={formatInteger(active.http_requests)}
-          tone="cyan"
-        />
-        <RuntimeActivityMetric
-          label="SSE"
-          value={formatInteger(active.sse_connections)}
-          tone="green"
-        />
-        <RuntimeActivityMetric
-          label="WebSocket"
-          value={formatInteger(active.websocket_connections)}
-          tone="purple"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.application_executions_active')}
-          value={formatInteger(active.application_executions)}
-          tone="gold"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.tool_calls_active')}
-          value={formatInteger(active.tool_calls)}
-          tone="purple"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.model_requests_active')}
-          value={formatInteger(active.model_requests)}
-          tone="blue"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.waiting_active')}
-          value={active.waiting == null ? '-' : formatInteger(active.waiting)}
-          tone="gold"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.five_minute_failure_rate')}
-          value={formatPercent(health.failure_rate_5m)}
-          tone="red"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.slow_ratio_now')}
-          value={formatPercent(health.slow_ratio)}
-          tone="gold"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.five_minute_disconnect_rate')}
-          value={formatPercent(health.disconnect_rate_5m)}
-          tone="purple"
-        />
-        <RuntimeActivityMetric
-          label={i18nText('applications', 'auto.five_minute_throughput')}
-          value={formatDecimal(health.throughput_5m_per_minute, 1)}
-          tone="green"
-        />
-      </div>
+        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_protocol')}>
+          <RuntimeActivityMetric
+            label="HTTP"
+            value={formatInteger(active.http_requests)}
+            tone="cyan"
+          />
+          <RuntimeActivityMetric
+            label="SSE"
+            value={formatInteger(active.sse_connections)}
+            tone="green"
+          />
+          <RuntimeActivityMetric
+            label="WebSocket"
+            value={formatInteger(active.websocket_connections)}
+            tone="purple"
+          />
+        </RuntimeActivityGroup>
 
-      <div className="runtime-activity-panel__secondary">
-        <span>
-          {i18nText('applications', 'auto.process_peak')}: {formatInteger(activity.peaks.process_peak_concurrency)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.recent_peak')}: {formatInteger(activity.peaks.recent_peak_concurrency)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.completed_last_minute')}: {formatInteger(activity.windows.one_minute.completed)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.failed_last_minute')}: {formatInteger(activity.windows.one_minute.failed)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.disconnected_last_minute')}: {formatInteger(activity.windows.one_minute.disconnected)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.completed_five_minutes')}: {formatInteger(fiveMinutes.completed)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.throughput_trend')}: {runtimeTrendLabel(health.throughput_trend)}
-        </span>
-        <span>
-          {i18nText('applications', 'auto.slow_active_executions')}: {formatInteger(pressure.slow_active_executions)}
-        </span>
+        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_execution')}>
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.application_executions_active')}
+            value={formatInteger(active.application_executions)}
+            tone="gold"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.tool_calls_active')}
+            value={formatInteger(active.tool_calls)}
+            tone="purple"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.model_requests_active')}
+            value={formatInteger(active.model_requests)}
+            tone="blue"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.waiting_active')}
+            value={active.waiting == null ? '-' : formatInteger(active.waiting)}
+            tone="gold"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.slow_active_executions')}
+            value={formatInteger(pressure.slow_active_executions)}
+            tone="gold"
+          />
+        </RuntimeActivityGroup>
+
+        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_five_minutes')}>
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.five_minute_failure_rate')}
+            value={formatPercent(health.failure_rate_5m)}
+            tone="red"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.five_minute_disconnect_rate')}
+            value={formatPercent(health.disconnect_rate_5m)}
+            tone="purple"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.completed_five_minutes')}
+            value={formatInteger(fiveMinutes.completed)}
+            tone="green"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.five_minute_throughput')}
+            value={formatDecimal(health.throughput_5m_per_minute, 1)}
+            tone="green"
+          />
+          <RuntimeActivityMetric
+            label={i18nText('applications', 'auto.throughput_trend')}
+            value={runtimeTrendLabel(health.throughput_trend)}
+            tone="cyan"
+          />
+        </RuntimeActivityGroup>
       </div>
     </MonitoringPanel>
   );
@@ -623,12 +696,34 @@ function MonitoringPanel({
   title
 }: {
   children: ReactNode;
-  title: string;
+  title: ReactNode;
 }) {
   return (
     <section className="application-monitoring-panel">
       <Typography.Title level={5}>{title}</Typography.Title>
       {children}
+    </section>
+  );
+}
+
+function MonitoringMetricGroup({
+  children,
+  title
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="application-monitoring-metric-group">
+      <Typography.Text
+        className="application-monitoring-metric-group__title"
+        type="secondary"
+      >
+        {title}
+      </Typography.Text>
+      <div className="application-monitoring-metric-group__items">
+        {children}
+      </div>
     </section>
   );
 }
@@ -674,7 +769,7 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
     xAxis: {
       type: 'category',
       data: report.tokens_trend.map((point) =>
-        formatDate(point.bucket_start)
+        formatTrendBucket(point.bucket_start, report.meta.bucket)
       ),
       axisLine: {
         lineStyle: {
@@ -1052,6 +1147,7 @@ export function ApplicationMonitoringPage({
     () => (report ? buildSourceOption(report) : null),
     [report]
   );
+  const tokenComparison = report ? tokenComparisonMetric(report) : null;
 
   if (reportQuery.isPending) {
     return <LoadingState compact />;
@@ -1066,6 +1162,12 @@ export function ApplicationMonitoringPage({
       className="application-monitoring-page"
       data-testid="application-monitoring-page"
     >
+      <RuntimeActivityPanel
+        activity={runtimeActivityQuery.data}
+        loading={runtimeActivityQuery.isPending}
+        error={runtimeActivityQuery.isError}
+      />
+
       <div className="application-monitoring-page__toolbar">
         <Radio.Group
           optionType="button"
@@ -1105,120 +1207,122 @@ export function ApplicationMonitoringPage({
       </div>
 
       <section className="application-monitoring-page__metrics">
-        <div className="application-monitoring-metric application-monitoring-metric--blue">
-          <div className="metric-card__icon-wrapper">
-            <DashboardOutlined />
+        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_outcome")}>
+          <div className="application-monitoring-metric application-monitoring-metric--blue">
+            <div className="metric-card__icon-wrapper">
+              <DashboardOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.total_runs")}</span>
+              <span className="metric-card__value">
+                {formatInteger(report.overview.total_count)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.total_runs")}</span>
-            <span className="metric-card__value">
-              {formatInteger(report.overview.total_count)}
-            </span>
-          </div>
-        </div>
 
-        <div className="application-monitoring-metric application-monitoring-metric--green">
-          <div className="metric-card__icon-wrapper">
-            <SafetyCertificateOutlined />
+          <div className="application-monitoring-metric application-monitoring-metric--green">
+            <div className="metric-card__icon-wrapper">
+              <SafetyCertificateOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.success_rate")}</span>
+              <span className="metric-card__value">
+                {formatPercent(report.overview.success_rate)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.success_rate")}</span>
-            <span className="metric-card__value">
-              {formatPercent(report.overview.success_rate)}
-            </span>
-          </div>
-        </div>
 
-        <div className="application-monitoring-metric application-monitoring-metric--red">
-          <div className="metric-card__icon-wrapper">
-            <CloseCircleOutlined />
+          <div className="application-monitoring-metric application-monitoring-metric--red">
+            <div className="metric-card__icon-wrapper">
+              <CloseCircleOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.failure_count")}</span>
+              <span className="metric-card__value">
+                {formatInteger(report.overview.failed_count)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.failure_count")}</span>
-            <span className="metric-card__value">
-              {formatInteger(report.overview.failed_count)}
-            </span>
-          </div>
-        </div>
+        </MonitoringMetricGroup>
 
-        <div className="application-monitoring-metric application-monitoring-metric--gold">
-          <div className="metric-card__icon-wrapper">
-            <ClockCircleOutlined />
+        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_performance")}>
+          <div className="application-monitoring-metric application-monitoring-metric--gold">
+            <div className="metric-card__icon-wrapper">
+              <ClockCircleOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.slow_request_rate")}</span>
+              <span className="metric-card__value">
+                {formatPercent(report.duration.slow_run_rate)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.slow_request_rate")}</span>
-            <span className="metric-card__value">
-              {formatPercent(report.duration.slow_run_rate)}
-            </span>
-          </div>
-        </div>
 
-        <div className="application-monitoring-metric application-monitoring-metric--cyan">
-          <div className="metric-card__icon-wrapper">
-            <HourglassOutlined />
-          </div>
-          <div className="metric-card__content">
+          <div className="application-monitoring-metric application-monitoring-metric--cyan">
+            <div className="metric-card__icon-wrapper">
+              <HourglassOutlined />
+            </div>
+            <div className="metric-card__content">
               <span className="metric-card__title">{i18nText("applications", "auto.percentile_ninety_five_duration")}</span>
-            <span className="metric-card__value">
-              {formatDuration(report.duration.p95_duration_ms)}
-            </span>
+              <span className="metric-card__value">
+                {formatDuration(report.duration.p95_duration_ms)}
+              </span>
+            </div>
           </div>
-        </div>
+        </MonitoringMetricGroup>
 
-        <div className="application-monitoring-metric application-monitoring-metric--purple">
-          <div className="metric-card__icon-wrapper">
-            <DatabaseOutlined />
+        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_tokens")}>
+          <div className="application-monitoring-metric application-monitoring-metric--purple">
+            <div className="metric-card__icon-wrapper">
+              <DatabaseOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.total_tokens_amount")}</span>
+              <span className="metric-card__value">
+                {formatInteger(report.tokens.total_tokens_sum)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.total_tokens_amount")}</span>
-            <span className="metric-card__value">
-              {formatInteger(report.tokens.total_tokens_sum)}
-            </span>
-          </div>
-        </div>
 
-        <div className="application-monitoring-metric application-monitoring-metric--cyan">
-          <div className="metric-card__icon-wrapper">
-            <DatabaseOutlined />
+          <div className="application-monitoring-metric application-monitoring-metric--cyan">
+            <div className="metric-card__icon-wrapper">
+              <DatabaseOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{tokenComparison?.label}</span>
+              <span className="metric-card__value">
+                {tokenComparison?.value}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.token_change")}</span>
-            <span className="metric-card__value">
-              {formatSignedPercent(report.tokens_comparison.token_change_rate)}
-            </span>
-          </div>
-        </div>
+        </MonitoringMetricGroup>
 
-        <div className="application-monitoring-metric application-monitoring-metric--orange">
-          <div className="metric-card__icon-wrapper">
-            <ApiOutlined />
+        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_execution")}>
+          <div className="application-monitoring-metric application-monitoring-metric--orange">
+            <div className="metric-card__icon-wrapper">
+              <ApiOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.tool_callback")}</span>
+              <span className="metric-card__value">
+                {formatInteger(report.tool_callbacks.total_tool_callback_count)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.tool_callback")}</span>
-            <span className="metric-card__value">
-              {formatInteger(report.tool_callbacks.total_tool_callback_count)}
-            </span>
-          </div>
-        </div>
 
-        <div className="application-monitoring-metric application-monitoring-metric--deep-blue">
-          <div className="metric-card__icon-wrapper">
-            <NodeIndexOutlined />
+          <div className="application-monitoring-metric application-monitoring-metric--deep-blue">
+            <div className="metric-card__icon-wrapper">
+              <NodeIndexOutlined />
+            </div>
+            <div className="metric-card__content">
+              <span className="metric-card__title">{i18nText("applications", "auto.peak_concurrency")}</span>
+              <span className="metric-card__value">
+                {formatInteger(report.concurrency.peak_concurrency)}
+              </span>
+            </div>
           </div>
-          <div className="metric-card__content">
-            <span className="metric-card__title">{i18nText("applications", "auto.peak_concurrency")}</span>
-            <span className="metric-card__value">
-              {formatInteger(report.concurrency.peak_concurrency)}
-            </span>
-          </div>
-        </div>
+        </MonitoringMetricGroup>
       </section>
-
-      <RuntimeActivityPanel
-        activity={runtimeActivityQuery.data}
-        loading={runtimeActivityQuery.isPending}
-        error={runtimeActivityQuery.isError}
-      />
 
       <div className="application-monitoring-page__chart-grid">
         <MonitoringPanel title={i18nText("applications", "auto.token_trend")}>

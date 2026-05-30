@@ -27,7 +27,25 @@
 
 .application-monitoring-page__metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.application-monitoring-metric-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.application-monitoring-metric-group__title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.application-monitoring-metric-group__items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
@@ -182,17 +200,40 @@
   gap: 20px;
 }
 
-.runtime-activity-panel__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
+.runtime-activity-panel__groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.runtime-activity-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
-.runtime-activity-panel__grid {
+.runtime-activity-panel__help {
+  color: var(--ant-color-text-tertiary, #8c8c8c);
+  flex: 0 0 auto;
+}
+
+.runtime-activity-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.runtime-activity-group__title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.runtime-activity-group__metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .runtime-activity-metric {
@@ -245,14 +286,6 @@
 
 .runtime-activity-metric--cyan {
   border-left-color: #13c2c2;
-}
-
-.runtime-activity-panel__secondary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  color: var(--ant-color-text-secondary, #8c8c8c);
-  font-size: 13px;
 }
 
 .application-monitoring-chart {
@@ -338,10 +371,6 @@
 }
 
 @media (max-width: 1280px) {
-  .application-monitoring-page__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .application-monitoring-page__chart-grid {
     grid-template-columns: 1fr;
   }
@@ -374,10 +403,6 @@
   .application-monitoring-page__toolbar-status {
     width: 100%;
     justify-content: space-between;
-  }
-
-  .application-monitoring-page__metrics {
-    grid-template-columns: 1fr;
   }
 
   .runtime-activity-panel__grid {

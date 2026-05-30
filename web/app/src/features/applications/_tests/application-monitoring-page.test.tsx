@@ -92,10 +92,10 @@ function monitoringReport() {
       token_recorded_count: 12
     },
     tokens_comparison: {
-      previous_total_tokens_sum: 3600,
-      previous_run_count: 9,
-      previous_avg_tokens_per_run: 400,
-      token_change_rate: 0.5556,
+      previous_total_tokens_sum: 0,
+      previous_run_count: 0,
+      previous_avg_tokens_per_run: 0,
+      token_change_rate: 5600,
       run_count_change_rate: 0.3333,
       avg_tokens_per_run_change_rate: 0.1667,
       traffic_effect: 1.3333,
@@ -212,6 +212,28 @@ function monitoringReport() {
         finished_at: '2026-05-02T10:00:40Z',
         duration_ms: 40000,
         total_tokens: 3000
+      }
+    ]
+  };
+}
+
+function hourlyMonitoringReport() {
+  return {
+    ...monitoringReport(),
+    meta: {
+      ...monitoringReport().meta,
+      bucket: 'hour' as const
+    },
+    tokens_trend: [
+      {
+        bucket_start: '2026-05-01T08:00:00Z',
+        run_count: 4,
+        total_tokens: 1200
+      },
+      {
+        bucket_start: '2026-05-01T09:00:00Z',
+        run_count: 8,
+        total_tokens: 4400
       }
     ]
   };
@@ -347,11 +369,22 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('Runtime activity')).toBeInTheDocument();
     expect(screen.getByText('Slow')).toBeInTheDocument();
     expect(screen.getByText('5m failure rate')).toBeInTheDocument();
-    expect(screen.getByText('Token change')).toBeInTheDocument();
-    expect(screen.getByText('+55.6%')).toBeInTheDocument();
+    expect(screen.getByText('New tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('5,600').length).toBeGreaterThan(0);
+    expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Current service instance realtime data')
+      screen
+        .getByText('Runtime activity')
+        .compareDocumentPosition(
+          screen.getByRole('radio', { name: 'past 7 days' })
+        ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Runtime activity' })
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Current service instance realtime data')
+    ).not.toBeInTheDocument();
     expect(screen.getByText('SSE')).toBeInTheDocument();
     expect(screen.getByText('Model requests')).toBeInTheDocument();
     expect(screen.getByText('customer-1')).toBeInTheDocument();
@@ -379,5 +412,33 @@ describe('ApplicationMonitoringPage', () => {
       });
     });
     expect(runtimeApi.fetchApplicationRuntimeActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test('formats token trend buckets as hours for the past 24 hours range', async () => {
+    runtimeApi.fetchApplicationRunMonitoringReport.mockResolvedValue(
+      hourlyMonitoringReport()
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationMonitoringPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('radio', { name: 'past 24 hours' })
+    );
+
+    await waitFor(() => {
+      const option = echartsMock.chart.setOption.mock.calls
+        .map((call) => call[0])
+        .find((candidate) => candidate?.xAxis?.data);
+      expect(option.xAxis.data).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/\d{1,2}:\d{2}/),
+          expect.stringMatching(/\d{1,2}:\d{2}/)
+        ])
+      );
+    });
   });
 });
