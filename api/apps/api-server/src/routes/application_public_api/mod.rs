@@ -17,6 +17,7 @@ use crate::app_state::ApiState;
 
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
+        .route("/models", get(native::list_native_models))
         .route("/runs", post(native::create_native_run))
         .route("/runs/:run_id", axum::routing::get(native::get_native_run))
         .route("/runs/:run_id/cancel", post(native::cancel_native_run))

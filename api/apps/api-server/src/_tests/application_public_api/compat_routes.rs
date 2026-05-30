@@ -260,7 +260,18 @@ async fn publish_application(app: &Router, cookie: &str, csrf: &str, application
             "id": "qwen3.6-35b-a3b",
             "name": "Qwen 3.6 35B",
             "context_window": 128000,
-            "auto_compact_token_limit": 110000
+            "max_output_tokens": 32000,
+            "auto_compact_token_limit": 110000,
+            "capabilities": {
+                "reasoning": true,
+                "tool_call": true,
+                "multimodal": false,
+                "structured_output": true
+            },
+            "reasoning": {
+                "default_effort": "medium",
+                "supported_efforts": ["low", "medium", "high"]
+            }
         },
         "deepseek-v4-flash"
     ]);
@@ -884,7 +895,41 @@ async fn openai_models_lists_start_node_configured_models() {
     assert_eq!(payload["data"][0]["id"], json!("qwen3.6-35b-a3b"));
     assert_eq!(payload["data"][0]["name"], json!("Qwen 3.6 35B"));
     assert_eq!(payload["data"][0]["object"], json!("model"));
+    assert_eq!(payload["data"][0]["context_window"], json!(128000));
+    assert_eq!(payload["data"][0]["max_output_tokens"], json!(32000));
+    assert_eq!(
+        payload["data"][0]["auto_compact_token_limit"],
+        json!(110000)
+    );
+    assert_eq!(
+        payload["data"][0]["limit"],
+        json!({
+            "context": 128000,
+            "input": 128000,
+            "output": 32000
+        })
+    );
     assert_eq!(payload["data"][1]["id"], json!("deepseek-v4-flash"));
+}
+
+#[tokio::test]
+async fn native_models_returns_canonical_start_node_model_capabilities() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "Native Canonical Models App").await;
+
+    let response = get_models(&app, "/api/agent/v1/models", &token).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["object"], json!("list"));
+    assert_eq!(payload["data"][0]["id"], json!("qwen3.6-35b-a3b"));
+    assert_eq!(payload["data"][0]["context_window"], json!(128000));
+    assert_eq!(payload["data"][0]["max_output_tokens"], json!(32000));
+    assert_eq!(payload["data"][0]["capabilities"]["reasoning"], json!(true));
+    assert_eq!(
+        payload["data"][0]["reasoning"]["supported_efforts"],
+        json!(["low", "medium", "high"])
+    );
 }
 
 #[tokio::test]
@@ -901,9 +946,18 @@ async fn openai_models_with_client_version_returns_codex_model_metadata() {
     assert_eq!(payload["models"][0]["display_name"], json!("Qwen 3.6 35B"));
     assert_eq!(payload["models"][0]["context_window"], json!(128000));
     assert_eq!(payload["models"][0]["max_context_window"], json!(128000));
+    assert_eq!(payload["models"][0]["max_output_tokens"], json!(32000));
     assert_eq!(
         payload["models"][0]["auto_compact_token_limit"],
         json!(110000)
+    );
+    assert_eq!(
+        payload["models"][0]["limit"],
+        json!({
+            "context": 128000,
+            "input": 128000,
+            "output": 32000
+        })
     );
     assert_eq!(payload["models"][1]["slug"], json!("deepseek-v4-flash"));
 }

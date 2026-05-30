@@ -270,7 +270,11 @@ where
             .await?;
         inject_application_environment_variables(&mut variable_pool, &environment_variables);
     }
-    inject_system_variables(&mut variable_pool, &flow_run);
+    inject_system_variables(
+        &mut variable_pool,
+        &flow_run,
+        compiled_plan_start_node_id(&compiled_plan),
+    );
     let runtime_context =
         orchestration_runtime::execution_engine::ExecutionRuntimeContext::from_plan_input(
             &compiled_plan,
@@ -1353,16 +1357,49 @@ where
 fn inject_system_variables(
     variable_pool: &mut serde_json::Map<String, Value>,
     flow_run: &domain::FlowRunRecord,
+    start_node_id: Option<&str>,
 ) {
     let conversation_id = flow_run
         .external_conversation_id
         .as_deref()
         .filter(|value| !value.is_empty())
         .unwrap_or(&flow_run.debug_session_id);
+    let model_parameters = variable_pool
+        .get("sys")
+        .and_then(|value| value.get("model_parameters"))
+        .cloned();
+    let has_model_parameters = model_parameters.is_some();
+    let start_has_reasoning_effort = start_node_id
+        .and_then(|node_id| variable_pool.get(node_id))
+        .and_then(Value::as_object)
+        .is_some_and(|payload| payload.contains_key("reasoning_effort"));
+    let sys_has_reasoning_effort = variable_pool
+        .get("sys")
+        .and_then(Value::as_object)
+        .is_some_and(|payload| payload.contains_key("reasoning_effort"));
+    let reasoning_effort = variable_pool
+        .get(start_node_id.unwrap_or("node-start"))
+        .and_then(|value| value.get("reasoning_effort"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            variable_pool
+                .get("sys")
+                .and_then(|value| value.get("reasoning_effort"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        })
+        .or_else(|| {
+            model_parameters
+                .as_ref()
+                .and_then(external_reasoning_effort)
+        });
 
-    variable_pool.insert(
-        "sys".to_string(),
-        json!({
+    let mut sys = json!({
             "conversation_id": conversation_id,
             "dialog_count": 0,
             "user_id": flow_run.created_by.to_string(),
@@ -1370,8 +1407,63 @@ fn inject_system_variables(
             "app_id": flow_run.application_id.to_string(),
             "workflow_id": flow_run.flow_id.to_string(),
             "workflow_run_id": flow_run.id.to_string(),
-        }),
-    );
+    });
+    if let Some(model_parameters) = model_parameters {
+        sys["model_parameters"] = model_parameters;
+    }
+
+    variable_pool.insert("sys".to_string(), sys);
+    if start_has_reasoning_effort || sys_has_reasoning_effort || has_model_parameters {
+        insert_start_reasoning_effort(
+            variable_pool,
+            start_node_id,
+            reasoning_effort.unwrap_or_default(),
+        );
+    }
+}
+
+fn compiled_plan_start_node_id(
+    compiled_plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+) -> Option<&str> {
+    compiled_plan
+        .nodes
+        .values()
+        .find(|node| node.node_type == "start")
+        .map(|node| node.node_id.as_str())
+}
+
+fn insert_start_reasoning_effort(
+    variable_pool: &mut serde_json::Map<String, Value>,
+    start_node_id: Option<&str>,
+    reasoning_effort: String,
+) {
+    let start_node_id = start_node_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("node-start");
+    let start_payload = variable_pool
+        .entry(start_node_id.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !start_payload.is_object() {
+        *start_payload = Value::Object(Map::new());
+    }
+    if let Some(start_payload) = start_payload.as_object_mut() {
+        start_payload.insert(
+            "reasoning_effort".to_string(),
+            Value::String(reasoning_effort),
+        );
+    }
+}
+
+fn external_reasoning_effort(model_parameters: &Value) -> Option<String> {
+    model_parameters
+        .get("reasoning")
+        .and_then(|value| value.get("effort"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn start_node_input_payload(

@@ -31,9 +31,18 @@ export interface LlmNodeContextPolicy {
   integration_context: 'enabled' | 'disabled';
 }
 
+export interface LlmNodeExternalReasoningPolicy {
+  follow_external_reasoning: boolean;
+}
+
 export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
   integration_context: 'enabled'
 };
+
+export const DEFAULT_LLM_EXTERNAL_REASONING_POLICY: LlmNodeExternalReasoningPolicy =
+  {
+    follow_external_reasoning: false
+  };
 
 export const DEFAULT_LLM_PARAMETERS: LlmNodeParameters = {
   schema_version: '1.0.0',
@@ -195,6 +204,21 @@ export function getLlmContextPolicy(
   return {
     integration_context:
       contextPolicy.integration_context === 'disabled' ? 'disabled' : 'enabled'
+  };
+}
+
+export function getLlmExternalReasoningPolicy(
+  config: Record<string, unknown>
+): LlmNodeExternalReasoningPolicy {
+  const externalReasoningPolicy = config.external_reasoning_policy;
+
+  if (!isRecord(externalReasoningPolicy)) {
+    return DEFAULT_LLM_EXTERNAL_REASONING_POLICY;
+  }
+
+  return {
+    follow_external_reasoning:
+      externalReasoningPolicy.follow_external_reasoning === true
   };
 }
 

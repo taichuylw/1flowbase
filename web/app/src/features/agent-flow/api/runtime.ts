@@ -529,16 +529,22 @@ function buildStringPreviewValue(
 ) {
   if (
     node?.type === 'start' &&
-    (outputKey === 'query' || outputKey === 'system' || outputKey === 'model')
+    (outputKey === 'query' ||
+      outputKey === 'system' ||
+      outputKey === 'model' ||
+      outputKey === 'reasoning_effort')
   ) {
     return '';
   }
 
   if (outputKey === 'text' || outputKey === 'answer') {
-    return i18nText("agentFlow", "auto.debug_preview_output");
+    return i18nText('agentFlow', 'auto.debug_preview_output');
   }
 
-  return i18nText("agentFlow", "auto.debug_preview_value", { value1: node?.alias ?? i18nText("agentFlow", "auto.fallback_node_label"), value2: outputKey });
+  return i18nText('agentFlow', 'auto.debug_preview_value', {
+    value1: node?.alias ?? i18nText('agentFlow', 'auto.fallback_node_label'),
+    value2: outputKey
+  });
 }
 
 function buildPreviewValue(

@@ -1149,7 +1149,7 @@ fn build_provider_invocation(
         ),
         mcp_bindings: Vec::new(),
         response_format: build_response_format(&node.config),
-        model_parameters: build_model_parameters(&node.config),
+        model_parameters: build_model_parameters(node, runtime, variable_pool),
         trace_context,
         run_context: BTreeMap::from([(
             "resolved_inputs".to_string(),
@@ -2187,7 +2187,19 @@ fn value_to_text(value: &Value) -> Option<String> {
     }
 }
 
-fn build_model_parameters(config: &Value) -> BTreeMap<String, Value> {
+fn build_model_parameters(
+    node: &CompiledNode,
+    runtime: &CompiledLlmRuntime,
+    variable_pool: &Map<String, Value>,
+) -> BTreeMap<String, Value> {
+    let mut parameters = build_configured_model_parameters(&node.config);
+    if llm_follows_external_reasoning(&node.config) {
+        apply_external_reasoning_parameters(&mut parameters, runtime, variable_pool);
+    }
+    parameters
+}
+
+fn build_configured_model_parameters(config: &Value) -> BTreeMap<String, Value> {
     if let Some(items) = config
         .get("llm_parameters")
         .and_then(Value::as_object)
@@ -2223,6 +2235,96 @@ fn build_model_parameters(config: &Value) -> BTreeMap<String, Value> {
             .map(|value| (key.to_string(), value))
     })
     .collect()
+}
+
+fn llm_follows_external_reasoning(config: &Value) -> bool {
+    config
+        .get("external_reasoning_policy")
+        .and_then(|value| value.get("follow_external_reasoning"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn apply_external_reasoning_parameters(
+    parameters: &mut BTreeMap<String, Value>,
+    runtime: &CompiledLlmRuntime,
+    variable_pool: &Map<String, Value>,
+) {
+    let Some(reasoning) = variable_pool
+        .get("sys")
+        .and_then(|value| value.get("model_parameters"))
+        .and_then(|value| value.get("reasoning"))
+        .and_then(Value::as_object)
+    else {
+        return;
+    };
+    let enabled = reasoning
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let effort = reasoning
+        .get("effort")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let budget_tokens = reasoning.get("budget_tokens").and_then(Value::as_u64);
+
+    if is_anthropic_reasoning_runtime(runtime) {
+        insert_model_parameter_if_absent(
+            parameters,
+            "thinking_type",
+            json!(if enabled { "enabled" } else { "disabled" }),
+        );
+        if enabled {
+            if let Some(budget_tokens) = budget_tokens {
+                insert_model_parameter_if_absent(
+                    parameters,
+                    "thinking_budget_tokens",
+                    json!(budget_tokens),
+                );
+            }
+        }
+        return;
+    }
+
+    if is_bailian_reasoning_runtime(runtime) {
+        insert_model_parameter_if_absent(parameters, "enable_thinking", json!(enabled));
+        if enabled {
+            if let Some(effort) = effort {
+                insert_model_parameter_if_absent(parameters, "reasoning_effort", json!(effort));
+            }
+        }
+        return;
+    }
+
+    if is_openai_reasoning_runtime(runtime) && enabled {
+        if let Some(effort) = effort {
+            insert_model_parameter_if_absent(parameters, "reasoning_effort", json!(effort));
+        }
+    }
+}
+
+fn insert_model_parameter_if_absent(
+    parameters: &mut BTreeMap<String, Value>,
+    key: &'static str,
+    value: Value,
+) {
+    parameters.entry(key.to_string()).or_insert(value);
+}
+
+fn is_openai_reasoning_runtime(runtime: &CompiledLlmRuntime) -> bool {
+    runtime.provider_code == "openai"
+        || runtime.provider_code == "openai_compatible"
+        || runtime.protocol == "openai_responses"
+        || runtime.protocol == "openai_compatible"
+}
+
+fn is_anthropic_reasoning_runtime(runtime: &CompiledLlmRuntime) -> bool {
+    runtime.provider_code == "anthropic" || runtime.protocol == "anthropic_messages"
+}
+
+fn is_bailian_reasoning_runtime(runtime: &CompiledLlmRuntime) -> bool {
+    runtime.provider_code == "aliyun_bailian" || runtime.provider_code == "bailian"
 }
 
 fn first_output_key(node: &CompiledNode) -> String {

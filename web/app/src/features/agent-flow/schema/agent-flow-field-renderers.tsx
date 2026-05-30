@@ -33,7 +33,10 @@ import {
   normalizePromptMessagesBinding,
   toPromptMessagesBinding
 } from '../lib/llm-prompt-messages';
-import { getLlmContextPolicy } from '../lib/llm-node-config';
+import {
+  getLlmContextPolicy,
+  getLlmExternalReasoningPolicy
+} from '../lib/llm-node-config';
 import type { FlowSelectorOption } from '../lib/selector-options';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
@@ -164,7 +167,10 @@ function renderTemplatedTextField({
     <TemplatedTextField
       label={block.label}
       ariaLabel={block.label}
-      placeholder={i18nText("agentFlow", "auto.support_text_variable_block_enter_left_curly_bracket_quick_reference")}
+      placeholder={i18nText(
+        'agentFlow',
+        'auto.support_text_variable_block_enter_left_curly_bracket_quick_reference'
+      )}
       options={selectorOptions}
       value={stringValue}
       onChange={(nextValue) =>
@@ -227,6 +233,27 @@ function renderLlmContextPolicyField({
   );
 }
 
+function renderLlmExternalReasoningPolicyField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const externalReasoningPolicy = getLlmExternalReasoningPolicy({
+    external_reasoning_policy: adapter.getValue(block.path)
+  });
+
+  return (
+    <Switch
+      aria-label={block.label}
+      checked={externalReasoningPolicy.follow_external_reasoning}
+      onChange={(checked) =>
+        adapter.setValue(block.path, {
+          follow_external_reasoning: checked
+        })
+      }
+    />
+  );
+}
+
 function renderNamedBindingsField({
   adapter,
   block
@@ -244,10 +271,12 @@ function renderNamedBindingsField({
       | undefined) ?? [];
   const isDataModelPayload = block.path === 'bindings.payload';
   const nameOptions = isDataModelPayload
-    ? fields.filter((field) => field.writable !== false).map((field) => ({
-        value: field.code,
-        label: field.title || field.code
-      }))
+    ? fields
+        .filter((field) => field.writable !== false)
+        .map((field) => ({
+          value: field.code,
+          label: field.title || field.code
+        }))
     : undefined;
 
   return (
@@ -256,9 +285,15 @@ function renderNamedBindingsField({
       options={getSelectorOptions(adapter)}
       value={binding}
       nameOptions={nameOptions}
-      namePlaceholder={isDataModelPayload ? i18nText("agentFlow", "auto.field") : undefined}
+      namePlaceholder={
+        isDataModelPayload ? i18nText('agentFlow', 'auto.field') : undefined
+      }
       selectorLabel={isDataModelPayload ? 'variable' : undefined}
-      addButtonLabel={isDataModelPayload ? i18nText("agentFlow", "auto.add_new_field_assignment") : undefined}
+      addButtonLabel={
+        isDataModelPayload
+          ? i18nText('agentFlow', 'auto.add_new_field_assignment')
+          : undefined
+      }
       onChange={(nextValue) =>
         adapter.setValue(block.path, {
           kind: 'named_bindings',
@@ -414,11 +449,7 @@ function renderDataModelQueryField({
 }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
   const binding = normalizeDataModelQueryBindingValue(
-    getBindingValue(
-      value,
-      'data_model_query',
-      DATA_MODEL_QUERY_DEFAULT_VALUE
-    )
+    getBindingValue(value, 'data_model_query', DATA_MODEL_QUERY_DEFAULT_VALUE)
   );
   const fields =
     (adapter.getValue('config.data_model_fields') as
@@ -458,6 +489,7 @@ export const agentFlowFieldRenderers = {
   code_source: renderCodeSourceField,
   llm_model: LlmModelField,
   llm_context_policy: renderLlmContextPolicyField,
+  llm_external_reasoning_policy: renderLlmExternalReasoningPolicyField,
   llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,
   number: renderNumberField,
@@ -491,7 +523,7 @@ export const agentFlowFieldRenderers = {
         aria-label={block.label}
         autoSize={{ minRows: 1, maxRows: 3 }}
         className="agent-flow-editor__inspector-description-input"
-        placeholder={i18nText("agentFlow", "auto.add_description")}
+        placeholder={i18nText('agentFlow', 'auto.add_description')}
         value={typeof value === 'string' ? value : ''}
         onChange={(event) => adapter.setValue(block.path, event.target.value)}
       />

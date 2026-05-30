@@ -623,6 +623,12 @@
   width: 100%;
 }
 
+.agent-flow-start-model-settings__token-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+}
+
 .agent-flow-start-input-fields__name-stack {
   display: flex;
   min-width: 0;

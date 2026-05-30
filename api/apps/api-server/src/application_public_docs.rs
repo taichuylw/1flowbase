@@ -141,6 +141,9 @@ impl DocTextResolver {
             ("application_public_api.native.cancel_run", DocsLocale::ZhHans) => "取消原生公开运行",
             ("application_public_api.native.resume_run", DocsLocale::ZhHans) => "恢复原生公开运行",
             ("application_public_api.native.upload_file", DocsLocale::ZhHans) => "上传原生公开文件",
+            ("application_public_api.native.list_models", DocsLocale::ZhHans) => {
+                "拉取原生模型能力列表"
+            }
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "创建 OpenAI 兼容聊天补全"
             }
@@ -165,6 +168,9 @@ impl DocTextResolver {
             }
             ("application_public_api.native.upload_file", DocsLocale::EnUs) => {
                 "Upload Native public file"
+            }
+            ("application_public_api.native.list_models", DocsLocale::EnUs) => {
+                "List Native model capabilities"
             }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Create OpenAI-compatible chat completion"
@@ -199,6 +205,9 @@ impl DocTextResolver {
             ("application_public_api.native.upload_file", DocsLocale::ZhHans) => {
                 "上传可供原生公开运行使用的文件。"
             }
+            ("application_public_api.native.list_models", DocsLocale::ZhHans) => {
+                "读取当前应用活跃发布版本中起始节点声明的模型能力目录。"
+            }
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "将 OpenAI Chat Completions 请求适配为原生公开运行。"
             }
@@ -225,6 +234,9 @@ impl DocTextResolver {
             }
             ("application_public_api.native.upload_file", DocsLocale::EnUs) => {
                 "Uploads a file for use by Native public runs."
+            }
+            ("application_public_api.native.list_models", DocsLocale::EnUs) => {
+                "Lists model capabilities declared by the active published application's start node."
             }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Adapts an OpenAI Chat Completions request to a Native public run."
@@ -282,7 +294,7 @@ impl DocTextResolver {
                 DocsLocale::ZhHans,
             ) => "流式返回选项，include_workflow_events=public 会启用公开工作流事件。",
             ("application_public_api.native.create_run.request.execution", DocsLocale::ZhHans) => {
-                "发布运行的执行选项。"
+                "发布运行的执行选项。支持 model_parameters.reasoning 作为运行时 reasoning 偏好。"
             }
             ("application_public_api.native.create_run.request.metadata", DocsLocale::ZhHans) => {
                 "调用方元数据，会随公开运行持久化。"
@@ -351,7 +363,7 @@ impl DocTextResolver {
                 "Streaming options. include_workflow_events=public enables public workflow events."
             }
             ("application_public_api.native.create_run.request.execution", DocsLocale::EnUs) => {
-                "Execution options for the published run."
+                "Execution options for the published run. Supports model_parameters.reasoning as runtime reasoning preference."
             }
             ("application_public_api.native.create_run.request.metadata", DocsLocale::EnUs) => {
                 "Caller metadata persisted with the public run."
@@ -384,6 +396,7 @@ impl DocTextResolver {
         match (key, self.locale) {
             ("compatible_response", DocsLocale::ZhHans) => "兼容响应",
             ("compatible_model_list", DocsLocale::ZhHans) => "OpenAI 兼容模型列表",
+            ("native_model_list", DocsLocale::ZhHans) => "原生模型能力列表",
             ("native_run", DocsLocale::ZhHans) => "原生运行",
             ("native_run_created", DocsLocale::ZhHans) => "原生运行已创建",
             ("file_uploaded", DocsLocale::ZhHans) => "文件已上传",
@@ -396,6 +409,7 @@ impl DocTextResolver {
             }
             ("compatible_response", DocsLocale::EnUs) => "Compatible response",
             ("compatible_model_list", DocsLocale::EnUs) => "OpenAI-compatible model list",
+            ("native_model_list", DocsLocale::EnUs) => "Native model capability list",
             ("native_run", DocsLocale::EnUs) => "Native run",
             ("native_run_created", DocsLocale::EnUs) => "Native run created",
             ("file_uploaded", DocsLocale::EnUs) => "File uploaded",
@@ -570,6 +584,14 @@ fn operation_request_body(operation: &PublicOperation, docs: &DocTextResolver) -
                 "title": "Customer incident summary",
                 "response_mode": "blocking",
                 "inputs": {"priority": "high"},
+                "execution": {
+                    "model_parameters": {
+                        "reasoning": {
+                            "enabled": true,
+                            "effort": "high"
+                        }
+                    }
+                },
                 "conversation": {"user": "external-user-1"},
                 "attachments": [{"source": "upload_file_id", "value": "00000000-0000-0000-0000-000000000000"}]
             }),
@@ -629,12 +651,28 @@ fn operation_responses(operation: &PublicOperation, docs: &DocTextResolver) -> V
         }
         "applicationNativeResumeRun" => native_responses(docs, "200", true),
         "applicationNativeUploadFile" => native_upload_responses(docs),
+        "applicationNativeListModels" => native_model_list_responses(docs),
         "applicationOpenAiCreateChatCompletion" => openai_responses(docs),
         "applicationOpenAiCreateResponse" => openai_response_responses(docs),
         "applicationOpenAiListModels" => openai_model_list_responses(docs),
         "applicationAnthropicCreateMessage" => anthropic_responses(docs),
         _ => json!({}),
     }
+}
+
+fn native_model_list_responses(docs: &DocTextResolver) -> Value {
+    json!({
+        "200": json_response(
+            docs.response_description("native_model_list"),
+            native_model_list_response_schema()
+        ),
+        "401": json_response(docs.response_description("invalid_application_api_key"), native_error_body_schema()),
+        "403": json_response(docs.response_description("forbidden"), native_error_body_schema()),
+        "409": json_response(
+            docs.response_description("application_not_published_or_run_state_not_supported"),
+            native_error_body_schema()
+        )
+    })
 }
 
 fn native_responses(
@@ -859,6 +897,62 @@ fn native_run_response_schema() -> Value {
     })
 }
 
+fn native_model_list_response_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["object", "data"],
+        "properties": {
+            "object": {"type": "string", "enum": ["list"]},
+            "data": {
+                "type": "array",
+                "items": native_model_object_schema()
+            }
+        }
+    })
+}
+
+fn native_model_object_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["id", "capabilities"],
+        "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "context_window": {"type": "integer"},
+            "max_context_window": {"type": "integer"},
+            "max_output_tokens": {"type": "integer"},
+            "auto_compact_token_limit": {"type": "integer"},
+            "capabilities": model_capabilities_schema(),
+            "reasoning": model_reasoning_schema()
+        }
+    })
+}
+
+fn model_capabilities_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "reasoning": {"type": "boolean"},
+            "tool_call": {"type": "boolean"},
+            "multimodal": {"type": "boolean"},
+            "structured_output": {"type": "boolean"}
+        }
+    })
+}
+
+fn model_reasoning_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "default_effort": {"type": "string"},
+            "supported_efforts": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        }
+    })
+}
+
 fn native_error_body_schema() -> Value {
     json!({
         "type": "object",
@@ -1015,6 +1109,20 @@ fn openai_model_list_response_schema() -> Value {
                         "object": {"type": "string", "enum": ["model"]},
                         "created": {"type": "integer"},
                         "owned_by": {"type": "string"},
+                        "context_window": {"type": "integer"},
+                        "max_context_window": {"type": "integer"},
+                        "max_output_tokens": {"type": "integer"},
+                        "auto_compact_token_limit": {"type": "integer"},
+                        "capabilities": model_capabilities_schema(),
+                        "reasoning": model_reasoning_schema(),
+                        "limit": {
+                            "type": "object",
+                            "properties": {
+                                "context": {"type": "integer"},
+                                "input": {"type": "integer"},
+                                "output": {"type": "integer"}
+                            }
+                        },
                         "name": {
                             "oneOf": [
                                 {"type": "string"},
@@ -1294,7 +1402,23 @@ fn native_create_run_schema(docs: &DocTextResolver) -> Value {
             "execution": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": docs.field_description("application_public_api.native.create_run.request.execution")
+                "description": docs.field_description("application_public_api.native.create_run.request.execution"),
+                "properties": {
+                    "idempotency_key": {"type": "string"},
+                    "model_parameters": {
+                        "type": "object",
+                        "properties": {
+                            "reasoning": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": {"type": "boolean"},
+                                    "effort": {"type": "string", "enum": ["minimal", "low", "medium", "high", "xhigh"]},
+                                    "budget_tokens": {"type": "integer", "minimum": 1}
+                                }
+                            }
+                        }
+                    }
+                }
             },
             "metadata": {
                 "type": "object",
@@ -1685,6 +1809,13 @@ fn public_operations() -> Vec<PublicOperation> {
             path: "/api/agent/v1/files",
             category_id: NATIVE_CATEGORY_ID,
             doc_key: "application_public_api.native.upload_file",
+        },
+        PublicOperation {
+            id: "applicationNativeListModels",
+            method: "GET",
+            path: "/api/agent/v1/models",
+            category_id: NATIVE_CATEGORY_ID,
+            doc_key: "application_public_api.native.list_models",
         },
         PublicOperation {
             id: "applicationOpenAiCreateChatCompletion",

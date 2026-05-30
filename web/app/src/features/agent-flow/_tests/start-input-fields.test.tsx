@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
+import { writeLocalePreferenceToStorage } from '../../../shared/user-preferences/locale-preference';
 
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
@@ -69,7 +71,10 @@ function DocumentObserver({
 }
 
 describe('start input fields', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.history.replaceState(null, '', '/?language=zh-Hans');
+    writeLocalePreferenceToStorage('zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     vi.clearAllMocks();
   });
 
@@ -88,10 +93,11 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    expect(await screen.findAllByText('输入字段')).toHaveLength(1);
+    expect(await screen.findAllByText('input field')).toHaveLength(1);
     expect(screen.getByText('userinput.query')).toBeInTheDocument();
     expect(screen.getByText('userinput.system')).toBeInTheDocument();
     expect(screen.getByText('userinput.model')).toBeInTheDocument();
+    expect(screen.getByText('userinput.reasoning_effort')).toBeInTheDocument();
     expect(screen.getByText('userinput.history')).toBeInTheDocument();
     expect(screen.getByText('userinput.files')).toBeInTheDocument();
     expect(screen.getByText('userinput.tools')).toBeInTheDocument();
@@ -150,7 +156,7 @@ describe('start input fields', () => {
       target: { value: '客户姓名' }
     });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '输入字段类型' }));
-    fireEvent.click(await screen.findByTitle('文件列表'));
+    fireEvent.click(await screen.findByTitle('file list'));
     fireEvent.click(screen.getByRole('button', { name: '保存输入字段' }));
 
     const startNode = latestDocument.graph.nodes.find(
@@ -175,7 +181,7 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    await screen.findAllByText('输入字段');
+    await screen.findAllByText('input field');
     fireEvent.click(screen.getByRole('button', { name: '新增输入字段' }));
 
     const dialog = await screen.findByRole('dialog', { name: '新增输入字段' });
@@ -215,7 +221,7 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    await screen.findAllByText('输入字段');
+    await screen.findAllByText('input field');
     fireEvent.click(screen.getByRole('button', { name: '新增输入字段' }));
 
     expect(
@@ -235,7 +241,7 @@ describe('start input fields', () => {
       target: { value: '优先级' }
     });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '输入字段类型' }));
-    fireEvent.click(await screen.findByTitle('下拉选项'));
+    fireEvent.click(await screen.findByTitle('drop down options'));
 
     fireEvent.change(screen.getByLabelText('输入字段选项 1'), {
       target: { value: '高' }
@@ -346,45 +352,6 @@ describe('start input fields', () => {
 
     expect(startNode?.config.input_fields).toEqual([
       expect.objectContaining({ key: 'first_name' })
-    ]);
-  });
-
-  test('edits OpenAI compatible model list on the start node', async () => {
-    let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-
-    renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
-        <SelectionSeed nodeId="node-start" />
-        <DocumentObserver
-          onChange={(document) => {
-            latestDocument = document;
-          }}
-        />
-        <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
-    );
-
-    expect(await screen.findByText('模型列表')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '新增模型' }));
-    fireEvent.change(screen.getByLabelText('模型 ID 1'), {
-      target: { value: 'qwen3.6-35b-a3b' }
-    });
-    fireEvent.change(screen.getByLabelText('模型显示名 1'), {
-      target: { value: 'Qwen 3.6 35B' }
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: '新增模型' }));
-    fireEvent.change(screen.getByLabelText('模型 ID 2'), {
-      target: { value: 'deepseek-v4-flash' }
-    });
-
-    const startNode = latestDocument.graph.nodes.find(
-      (node) => node.id === 'node-start'
-    );
-
-    expect(startNode?.config.model_list).toEqual([
-      { id: 'qwen3.6-35b-a3b', name: 'Qwen 3.6 35B' },
-      { id: 'deepseek-v4-flash' }
     ]);
   });
 });

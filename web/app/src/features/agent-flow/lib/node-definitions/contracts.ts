@@ -282,6 +282,9 @@ function createLlmContract(): NodeRuntimeUiContract {
       context_policy: {
         integration_context: 'enabled'
       },
+      external_reasoning_policy: {
+        follow_external_reasoning: false
+      },
       response_format: {
         mode: 'text'
       }
@@ -314,6 +317,12 @@ function createLlmContract(): NodeRuntimeUiContract {
           key: 'config.context_policy',
           title: '集成上下文',
           renderer: 'llm_context_policy',
+          valueType: 'json'
+        }),
+        panelField({
+          key: 'config.external_reasoning_policy',
+          title: i18nText("agentFlow", "auto.follow_external_reasoning"),
+          renderer: 'llm_external_reasoning_policy',
           valueType: 'json'
         }),
         panelField({

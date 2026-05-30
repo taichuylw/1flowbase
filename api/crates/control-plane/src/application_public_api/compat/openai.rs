@@ -2,20 +2,14 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::application_public_api::callback_tool_ids::decode_openai_callback_tool_call_id;
+pub use crate::application_public_api::model_catalog::{
+    extract_agent_model_catalog_from_start_node as extract_model_list_from_start_node,
+    AgentModelDescriptor as OpenAiCompatibleModel,
+};
 use crate::application_public_api::native::NativeRunRequest;
 
-const DEFAULT_OPENAI_COMPATIBLE_MODEL_ID: &str = "1flowbase";
 const OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_MODE: &str = "openai-chat-completions-v1";
 const OPENAI_RESPONSES_COMPATIBILITY_MODE: &str = "openai-responses-v1";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenAiCompatibleModel {
-    pub id: String,
-    pub name: Option<String>,
-    pub context_window: Option<u64>,
-    pub max_context_window: Option<u64>,
-    pub auto_compact_token_limit: Option<u64>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenAiCompatError {
@@ -225,93 +219,6 @@ pub fn run_id_from_response_id(response_id: &str) -> Result<Uuid, OpenAiCompatEr
         .ok_or_else(|| OpenAiCompatError::invalid("previous_response_id", "invalid response id"))?;
     Uuid::parse_str(run_id)
         .map_err(|_| OpenAiCompatError::invalid("previous_response_id", "invalid response id"))
-}
-
-pub fn extract_model_list_from_start_node(document: &Value) -> Vec<OpenAiCompatibleModel> {
-    let Some(nodes) = document
-        .get("graph")
-        .and_then(|graph| graph.get("nodes"))
-        .and_then(Value::as_array)
-    else {
-        return default_model_list();
-    };
-    let Some(start_node) = nodes
-        .iter()
-        .find(|node| node.get("type").and_then(Value::as_str) == Some("start"))
-    else {
-        return default_model_list();
-    };
-    let Some(model_list) = start_node
-        .get("config")
-        .and_then(|config| config.get("model_list"))
-        .and_then(Value::as_array)
-    else {
-        return default_model_list();
-    };
-
-    let mut models = Vec::new();
-    for value in model_list {
-        if let Some(model) = normalize_model_descriptor(value) {
-            if !models
-                .iter()
-                .any(|existing: &OpenAiCompatibleModel| existing.id == model.id)
-            {
-                models.push(model);
-            }
-        }
-    }
-    if models.is_empty() {
-        default_model_list()
-    } else {
-        models
-    }
-}
-
-fn default_model_list() -> Vec<OpenAiCompatibleModel> {
-    vec![OpenAiCompatibleModel {
-        id: DEFAULT_OPENAI_COMPATIBLE_MODEL_ID.to_string(),
-        name: Some(DEFAULT_OPENAI_COMPATIBLE_MODEL_ID.to_string()),
-        context_window: None,
-        max_context_window: None,
-        auto_compact_token_limit: None,
-    }]
-}
-
-fn normalize_model_descriptor(value: &Value) -> Option<OpenAiCompatibleModel> {
-    if let Some(id) = value.as_str().map(str::trim).filter(|id| !id.is_empty()) {
-        return Some(OpenAiCompatibleModel {
-            id: id.to_string(),
-            name: None,
-            context_window: None,
-            max_context_window: None,
-            auto_compact_token_limit: None,
-        });
-    }
-
-    let object = value.as_object()?;
-    let id = ["id", "model", "value"]
-        .iter()
-        .find_map(|key| object.get(*key).and_then(Value::as_str))
-        .map(str::trim)
-        .filter(|id| !id.is_empty())?;
-    let name = ["name", "label", "display_name"]
-        .iter()
-        .find_map(|key| object.get(*key).and_then(Value::as_str))
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned);
-
-    Some(OpenAiCompatibleModel {
-        id: id.to_string(),
-        name,
-        context_window: model_token_u64(object, "context_window"),
-        max_context_window: model_token_u64(object, "max_context_window"),
-        auto_compact_token_limit: model_token_u64(object, "auto_compact_token_limit"),
-    })
-}
-
-fn model_token_u64(object: &Map<String, Value>, key: &str) -> Option<u64> {
-    object.get(key).and_then(Value::as_u64)
 }
 
 fn openai_chat_history_tool_calls(tool_calls: &Value) -> Value {
@@ -605,6 +512,9 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::application_public_api::model_catalog::{
+        AgentModelCapabilities, AgentModelReasoning,
+    };
 
     #[test]
     fn extracts_start_node_model_list_from_strings_and_objects() {
@@ -623,7 +533,7 @@ mod tests {
                                     "auto_compact_token_limit": 110000
                                 },
                                 "deepseek-v4-flash",
-                                {"value": "deepseek-v4-flash", "label": "Duplicate"}
+                                {"id": "deepseek-v4-flash", "name": "Duplicate"}
                             ]
                         }
                     }
@@ -639,14 +549,20 @@ mod tests {
                     name: Some("Qwen 3.6 35B".into()),
                     context_window: Some(128000),
                     max_context_window: None,
+                    max_output_tokens: None,
                     auto_compact_token_limit: Some(110000),
+                    capabilities: AgentModelCapabilities::default(),
+                    reasoning: None,
                 },
                 OpenAiCompatibleModel {
                     id: "deepseek-v4-flash".into(),
                     name: None,
                     context_window: None,
                     max_context_window: None,
+                    max_output_tokens: None,
                     auto_compact_token_limit: None,
+                    capabilities: AgentModelCapabilities::default(),
+                    reasoning: None,
                 },
             ]
         );
@@ -673,9 +589,26 @@ mod tests {
             vec![OpenAiCompatibleModel {
                 id: "1flowbase".into(),
                 name: Some("1flowbase".into()),
-                context_window: None,
-                max_context_window: None,
-                auto_compact_token_limit: None,
+                context_window: Some(257000),
+                max_context_window: Some(128000),
+                max_output_tokens: Some(32000),
+                auto_compact_token_limit: Some(218450),
+                capabilities: AgentModelCapabilities {
+                    reasoning: true,
+                    tool_call: true,
+                    multimodal: true,
+                    structured_output: true,
+                },
+                reasoning: Some(AgentModelReasoning {
+                    default_effort: Some("medium".into()),
+                    supported_efforts: vec![
+                        "minimal".into(),
+                        "low".into(),
+                        "medium".into(),
+                        "high".into(),
+                        "xhigh".into(),
+                    ],
+                }),
             }]
         );
     }

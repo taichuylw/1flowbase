@@ -52,6 +52,24 @@ export interface FlowStartInputField {
 export interface FlowStartModelDescriptor {
   id: string;
   name?: string;
+  context_window?: number;
+  max_context_window?: number;
+  max_output_tokens?: number;
+  auto_compact_token_limit?: number;
+  capabilities?: FlowStartModelCapabilities;
+  reasoning?: FlowStartModelReasoning;
+}
+
+export interface FlowStartModelCapabilities {
+  reasoning?: boolean;
+  tool_call?: boolean;
+  multimodal?: boolean;
+  structured_output?: boolean;
+}
+
+export interface FlowStartModelReasoning {
+  default_effort?: string;
+  supported_efforts?: string[];
 }
 
 export interface FlowNodeOutputDocument {
@@ -421,6 +439,9 @@ export function createDefaultAgentFlowDocument({
             },
             context_policy: {
               integration_context: 'enabled'
+            },
+            external_reasoning_policy: {
+              follow_external_reasoning: false
             },
             response_format: {
               mode: 'text'

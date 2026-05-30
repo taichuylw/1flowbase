@@ -330,6 +330,7 @@ pub enum NativeRunValidationError {
     Forbidden,
     NotFound,
     InvalidMapping,
+    InvalidModelParameters(&'static str),
     InvalidState,
     ResumeContinuationNotImplemented,
 }

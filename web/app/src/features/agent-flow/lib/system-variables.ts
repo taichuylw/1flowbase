@@ -12,36 +12,42 @@ export const agentFlowSystemVariables = [
     key: 'conversation_id',
     title: 'sys.conversation_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.system_variable_conversation_id")
+    description: i18nText('agentFlow', 'auto.system_variable_conversation_id')
   },
   {
     key: 'dialog_count',
     title: 'sys.dialog_count',
     valueType: 'number',
-    description: i18nText("agentFlow", "auto.system_variable_dialog_count")
+    description: i18nText('agentFlow', 'auto.system_variable_dialog_count')
   },
   {
     key: 'user_id',
     title: 'sys.user_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.system_variable_user_id")
+    description: i18nText('agentFlow', 'auto.system_variable_user_id')
   },
   {
     key: 'app_id',
     title: 'sys.app_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.system_variable_app_id")
+    description: i18nText('agentFlow', 'auto.system_variable_app_id')
   },
   {
     key: 'workflow_id',
     title: 'sys.workflow_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.system_variable_workflow_id")
+    description: i18nText('agentFlow', 'auto.system_variable_workflow_id')
   },
   {
     key: 'workflow_run_id',
     title: 'sys.workflow_run_id',
     valueType: 'string',
-    description: i18nText("agentFlow", "auto.system_variable_workflow_run_id")
+    description: i18nText('agentFlow', 'auto.system_variable_workflow_run_id')
+  },
+  {
+    key: 'model_parameters',
+    title: 'sys.model_parameters',
+    valueType: 'json',
+    description: i18nText('agentFlow', 'auto.system_variable_model_parameters')
   }
 ] satisfies AgentFlowSystemVariable[];

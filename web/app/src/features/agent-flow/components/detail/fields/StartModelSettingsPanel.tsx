@@ -1,0 +1,439 @@
+import { Button, Input, InputNumber, Select, Switch, Typography } from 'antd';
+import { useEffect, useState, type RefObject } from 'react';
+
+import type {
+  FlowStartModelCapabilities,
+  FlowStartModelDescriptor,
+  FlowStartModelReasoning
+} from '@1flowbase/flow-schema';
+
+import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
+import { i18nText } from '../../../../../shared/i18n/text';
+
+type StartModelSettingsPanelProps = {
+  mode: 'create' | 'edit';
+  model: FlowStartModelDescriptor;
+  triggerRef: RefObject<HTMLElement | null>;
+  onChange: (patch: Partial<FlowStartModelDescriptor>) => void;
+  onClose: () => void;
+  onSave: () => void;
+};
+
+type TokenUnit = 'k' | 'm' | 'b';
+
+const REASONING_EFFORT_OPTIONS = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh'
+].map((value) => ({ value, label: value }));
+const TOKEN_UNITS: Array<{ value: TokenUnit; label: string; factor: number }> =
+  [
+    { value: 'k', label: 'k', factor: 1_000 },
+    { value: 'm', label: 'm', factor: 1_000_000 },
+    { value: 'b', label: 'b', factor: 1_000_000_000 }
+  ];
+
+function parseEffortList(value: unknown) {
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function effortListText(value: unknown) {
+  return parseEffortList(value).join(', ');
+}
+
+function tokenUnitFor(value: number | undefined): TokenUnit {
+  if (!value || value <= 0) {
+    return 'k';
+  }
+  if (value % 1_000_000_000 === 0) {
+    return 'b';
+  }
+  if (value % 1_000_000 === 0) {
+    return 'm';
+  }
+  return 'k';
+}
+
+function tokenFactor(unit: TokenUnit) {
+  return TOKEN_UNITS.find((item) => item.value === unit)?.factor ?? 1_000;
+}
+
+function tokenAmount(value: number | undefined, unit: TokenUnit) {
+  return value ? value / tokenFactor(unit) : null;
+}
+
+function tokenValue(amount: number | null, unit: TokenUnit) {
+  return typeof amount === 'number' && Number.isFinite(amount) && amount > 0
+    ? Math.round(amount * tokenFactor(unit))
+    : undefined;
+}
+
+function autoCompactPercent(model: FlowStartModelDescriptor) {
+  const base = model.context_window ?? model.max_context_window;
+  const limit = model.auto_compact_token_limit;
+
+  if (!base || !limit || base <= 0 || limit <= 0) {
+    return null;
+  }
+
+  return Math.round((limit / base) * 10_000) / 100;
+}
+
+function autoCompactLimitFromPercent(
+  percent: number | null,
+  model: FlowStartModelDescriptor
+) {
+  const base = model.context_window ?? model.max_context_window;
+
+  if (
+    typeof percent !== 'number' ||
+    !Number.isFinite(percent) ||
+    percent <= 0 ||
+    !base ||
+    base <= 0
+  ) {
+    return undefined;
+  }
+
+  return Math.round((base * percent) / 100);
+}
+
+function TokenAmountInput({
+  label,
+  unitLabel,
+  placeholder,
+  value,
+  onChange
+}: {
+  label: string;
+  unitLabel: string;
+  placeholder: string;
+  value: number | undefined;
+  onChange: (value: number | undefined) => void;
+}) {
+  const [unit, setUnit] = useState<TokenUnit>(() => tokenUnitFor(value));
+
+  useEffect(() => {
+    if (value) {
+      setUnit(tokenUnitFor(value));
+    }
+  }, [value]);
+
+  const amount = tokenAmount(value, unit);
+
+  return (
+    <div className="agent-flow-start-model-settings__token-row">
+      <InputNumber
+        aria-label={label}
+        min={0.001}
+        placeholder={placeholder}
+        value={amount}
+        onChange={(nextAmount) =>
+          onChange(
+            tokenValue(typeof nextAmount === 'number' ? nextAmount : null, unit)
+          )
+        }
+      />
+      <Select
+        aria-label={unitLabel}
+        options={TOKEN_UNITS}
+        value={unit}
+        virtual={false}
+        onChange={(nextUnit: TokenUnit) => {
+          setUnit(nextUnit);
+          onChange(tokenValue(amount, nextUnit));
+        }}
+      />
+    </div>
+  );
+}
+
+export function StartModelSettingsPanel({
+  mode,
+  model,
+  triggerRef,
+  onChange,
+  onClose,
+  onSave
+}: StartModelSettingsPanelProps) {
+  const title =
+    mode === 'create'
+      ? i18nText('agentFlow', 'auto.add_new_model')
+      : i18nText('agentFlow', 'auto.edit_model');
+  const canSave = model.id.trim().length > 0;
+
+  function patchCapabilities(patch: Partial<FlowStartModelCapabilities>) {
+    onChange({
+      capabilities: {
+        ...(model.capabilities ?? {}),
+        ...patch
+      }
+    });
+  }
+
+  function patchReasoning(patch: Partial<FlowStartModelReasoning>) {
+    onChange({
+      reasoning: {
+        ...(model.reasoning ?? {}),
+        ...patch
+      }
+    });
+  }
+
+  function updateContextWindow(context_window: number | undefined) {
+    const percent = autoCompactPercent(model);
+    onChange({
+      context_window,
+      auto_compact_token_limit:
+        percent === null
+          ? model.auto_compact_token_limit
+          : autoCompactLimitFromPercent(percent, {
+              ...model,
+              context_window
+            })
+    });
+  }
+
+  function updateMaxContextWindow(max_context_window: number | undefined) {
+    const percent = autoCompactPercent(model);
+    onChange({
+      max_context_window,
+      auto_compact_token_limit:
+        percent === null
+          ? model.auto_compact_token_limit
+          : autoCompactLimitFromPercent(percent, {
+              ...model,
+              max_context_window
+            })
+    });
+  }
+
+  return (
+    <FloatingSettingsPanel
+      open
+      title={title}
+      closeLabel={i18nText('agentFlow', 'auto.close', { value1: title })}
+      triggerRef={triggerRef}
+      className="agent-flow-start-input-fields__panel"
+      defaultWidth={480}
+      minWidth={400}
+      initialHeight={640}
+      gap={16}
+      onClose={onClose}
+      footer={
+        <div className="agent-flow-start-input-fields__panel-footer">
+          <Button onClick={onClose}>
+            {i18nText('agentFlow', 'auto.cancel')}
+          </Button>
+          <Button
+            aria-label={i18nText('agentFlow', 'auto.save_model')}
+            disabled={!canSave}
+            type="primary"
+            onClick={onSave}
+          >
+            {i18nText('agentFlow', 'auto.save')}
+          </Button>
+        </div>
+      }
+    >
+      <div className="agent-flow-start-input-fields__form">
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.model_id_label')}</span>
+          <Input
+            aria-label={i18nText('agentFlow', 'auto.model_id_input')}
+            autoFocus
+            placeholder="model-id"
+            value={model.id}
+            onChange={(event) => onChange({ id: event.target.value })}
+          />
+        </label>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.model_name_label')}</span>
+          <Input
+            aria-label={i18nText('agentFlow', 'auto.model_name_input')}
+            placeholder="Display name"
+            value={model.name ?? ''}
+            onChange={(event) =>
+              onChange({ name: event.target.value || undefined })
+            }
+          />
+        </label>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.context_window')}</span>
+          <TokenAmountInput
+            label={i18nText('agentFlow', 'auto.model_context_window_input')}
+            unitLabel={i18nText('agentFlow', 'auto.model_context_window_unit')}
+            placeholder="128"
+            value={model.context_window}
+            onChange={updateContextWindow}
+          />
+        </label>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.max_context_window')}</span>
+          <TokenAmountInput
+            label={i18nText('agentFlow', 'auto.model_max_context_window_input')}
+            unitLabel={i18nText(
+              'agentFlow',
+              'auto.model_max_context_window_unit'
+            )}
+            placeholder="128"
+            value={model.max_context_window}
+            onChange={updateMaxContextWindow}
+          />
+        </label>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.max_output_tokens')}</span>
+          <TokenAmountInput
+            label={i18nText('agentFlow', 'auto.model_max_output_tokens_input')}
+            unitLabel={i18nText(
+              'agentFlow',
+              'auto.model_max_output_tokens_unit'
+            )}
+            placeholder="32"
+            value={model.max_output_tokens}
+            onChange={(max_output_tokens) => onChange({ max_output_tokens })}
+          />
+        </label>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.auto_compact_percent')}</span>
+          <InputNumber
+            aria-label={i18nText(
+              'agentFlow',
+              'auto.auto_compact_percent_input'
+            )}
+            max={100}
+            min={1}
+            placeholder="85"
+            suffix="%"
+            value={autoCompactPercent(model)}
+            onChange={(percent) =>
+              onChange({
+                auto_compact_token_limit: autoCompactLimitFromPercent(
+                  typeof percent === 'number' ? percent : null,
+                  model
+                )
+              })
+            }
+          />
+        </label>
+        <div className="agent-flow-start-input-fields__toggles">
+          <Typography.Text strong>
+            {i18nText('agentFlow', 'auto.model_capabilities')}
+          </Typography.Text>
+          <label className="agent-flow-start-input-fields__toggle-row">
+            <span>
+              <Typography.Text strong>
+                {i18nText('agentFlow', 'auto.reasoning')}
+              </Typography.Text>
+            </span>
+            <Switch
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.model_reasoning_capability'
+              )}
+              checked={model.capabilities?.reasoning === true}
+              onChange={(reasoning) => patchCapabilities({ reasoning })}
+            />
+          </label>
+          <label className="agent-flow-start-input-fields__toggle-row">
+            <span>
+              <Typography.Text strong>
+                {i18nText('agentFlow', 'auto.tool_call')}
+              </Typography.Text>
+            </span>
+            <Switch
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.model_tool_call_capability'
+              )}
+              checked={model.capabilities?.tool_call === true}
+              onChange={(tool_call) => patchCapabilities({ tool_call })}
+            />
+          </label>
+          <label className="agent-flow-start-input-fields__toggle-row">
+            <span>
+              <Typography.Text strong>
+                {i18nText('agentFlow', 'auto.multimodal')}
+              </Typography.Text>
+            </span>
+            <Switch
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.model_multimodal_capability'
+              )}
+              checked={model.capabilities?.multimodal === true}
+              onChange={(multimodal) => patchCapabilities({ multimodal })}
+            />
+          </label>
+          <label className="agent-flow-start-input-fields__toggle-row">
+            <span>
+              <Typography.Text strong>
+                {i18nText('agentFlow', 'auto.structured_output')}
+              </Typography.Text>
+            </span>
+            <Switch
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.model_structured_output_capability'
+              )}
+              checked={model.capabilities?.structured_output === true}
+              onChange={(structured_output) =>
+                patchCapabilities({ structured_output })
+              }
+            />
+          </label>
+        </div>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>{i18nText('agentFlow', 'auto.default_reasoning_effort')}</span>
+          <Select
+            allowClear
+            aria-label={i18nText(
+              'agentFlow',
+              'auto.model_default_reasoning_effort_input'
+            )}
+            options={REASONING_EFFORT_OPTIONS}
+            value={model.reasoning?.default_effort}
+            virtual={false}
+            onChange={(default_effort?: string) =>
+              patchReasoning({ default_effort })
+            }
+          />
+        </label>
+        <label className="agent-flow-start-input-fields__form-row">
+          <span>
+            {i18nText('agentFlow', 'auto.supported_reasoning_efforts')}
+          </span>
+          <Input
+            aria-label={i18nText(
+              'agentFlow',
+              'auto.model_supported_reasoning_efforts_input'
+            )}
+            placeholder="minimal, low, medium, high, xhigh"
+            value={effortListText(model.reasoning?.supported_efforts)}
+            onChange={(event) =>
+              patchReasoning({
+                supported_efforts: parseEffortList(event.target.value)
+              })
+            }
+          />
+        </label>
+      </div>
+    </FloatingSettingsPanel>
+  );
+}

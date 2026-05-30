@@ -3,6 +3,7 @@ pub mod callback_tool_ids;
 pub mod compat;
 pub mod conversations;
 pub mod mapping;
+pub mod model_catalog;
 pub mod native;
 pub mod publications;
 pub mod run_service;

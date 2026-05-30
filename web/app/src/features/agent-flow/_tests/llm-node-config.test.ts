@@ -3,7 +3,9 @@ import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_LLM_PARAMETERS,
   DEFAULT_LLM_CONTEXT_POLICY,
+  DEFAULT_LLM_EXTERNAL_REASONING_POLICY,
   getLlmContextPolicy,
+  getLlmExternalReasoningPolicy,
   getLlmParameterDefaultValue,
   getLlmModelProvider,
   getLlmParameters
@@ -71,6 +73,21 @@ describe('llm-node-config', () => {
       })
     ).toEqual({
       integration_context: 'disabled'
+    });
+  });
+
+  test('getLlmExternalReasoningPolicy defaults follow external reasoning to false', () => {
+    expect(getLlmExternalReasoningPolicy({})).toEqual(
+      DEFAULT_LLM_EXTERNAL_REASONING_POLICY
+    );
+    expect(
+      getLlmExternalReasoningPolicy({
+        external_reasoning_policy: {
+          follow_external_reasoning: true
+        }
+      })
+    ).toEqual({
+      follow_external_reasoning: true
     });
   });
 

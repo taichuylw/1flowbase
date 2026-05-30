@@ -13,11 +13,16 @@ use axum::{
 use control_plane::{
     application_public_api::{
         api_keys::ApplicationApiKeyService,
+        model_catalog::{
+            extract_agent_model_catalog_from_start_node, AgentModelCapabilities,
+            AgentModelDescriptor, AgentModelReasoning,
+        },
         native::{
             ApplicationNativeRunService, CancelNativeRunCommand, CreateNativeRunCommand,
             GetNativeRunCommand, NativeRunRequest, NativeRunResult, NativeRunValidationError,
             ResumeNativeRunCommand,
         },
+        publications::{ApplicationPublicationService, LoadActiveApplicationPublicationCommand},
         run_service::native_result_from_run_detail,
     },
     file_management::{FileUploadService, UploadFileCommand},
@@ -74,6 +79,45 @@ pub struct NativeRunResponse {
     pub usage: Option<Value>,
     pub error: Option<Value>,
     pub created_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelListResponse {
+    pub object: &'static str,
+    pub data: Vec<NativeModelObject>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelObject {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_compact_token_limit: Option<u64>,
+    pub capabilities: NativeModelCapabilities,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<NativeModelReasoning>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelCapabilities {
+    pub reasoning: bool,
+    pub tool_call: bool,
+    pub multimodal: bool,
+    pub structured_output: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelReasoning {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_effort: Option<String>,
+    pub supported_efforts: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -136,6 +180,44 @@ pub(crate) fn bearer_token(headers: &HeaderMap) -> Result<String, NativeApiError
         })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/agent/v1/models",
+    operation_id = "list_native_agent_models",
+    responses(
+        (status = 200, body = NativeModelListResponse),
+        (status = 401, body = NativeErrorBody),
+        (status = 403, body = NativeErrorBody),
+        (status = 409, body = NativeErrorBody)
+    )
+)]
+pub async fn list_native_models(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<NativeModelListResponse>, NativeApiError> {
+    let bearer_token = bearer_token(&headers)?;
+    let actor = ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .authenticate_bearer_token(&bearer_token)
+        .await
+        .map_err(|_| native_error(NativeRunValidationError::NotAuthenticated))?;
+    let publication = ApplicationPublicationService::new(state.store.clone())
+        .load_active_publication(LoadActiveApplicationPublicationCommand {
+            application_id: actor.application_id,
+        })
+        .await
+        .map_err(|_| native_error(NativeRunValidationError::ApplicationNotPublished))?;
+    let models = extract_agent_model_catalog_from_start_node(&publication.document_snapshot)
+        .into_iter()
+        .map(NativeModelObject::from)
+        .collect();
+
+    Ok(Json(NativeModelListResponse {
+        object: "list",
+        data: models,
+    }))
+}
+
 pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
     match error {
         NativeRunValidationError::NotAuthenticated => NativeApiError::new(
@@ -163,6 +245,11 @@ pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
             "invalid_mapping",
             "application public API mapping is invalid",
         ),
+        NativeRunValidationError::InvalidModelParameters(field) => NativeApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_model_parameters",
+            format!("invalid native request model parameter field: {field}"),
+        ),
         NativeRunValidationError::InvalidState => NativeApiError::new(
             StatusCode::CONFLICT,
             "invalid_state",
@@ -173,6 +260,41 @@ pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
             "resume_not_implemented",
             "public callback resume continuation is not implemented",
         ),
+    }
+}
+
+impl From<AgentModelDescriptor> for NativeModelObject {
+    fn from(model: AgentModelDescriptor) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            context_window: model.context_window,
+            max_context_window: model.max_context_window.or(model.context_window),
+            max_output_tokens: model.max_output_tokens,
+            auto_compact_token_limit: model.auto_compact_token_limit,
+            capabilities: NativeModelCapabilities::from(model.capabilities),
+            reasoning: model.reasoning.map(NativeModelReasoning::from),
+        }
+    }
+}
+
+impl From<AgentModelCapabilities> for NativeModelCapabilities {
+    fn from(capabilities: AgentModelCapabilities) -> Self {
+        Self {
+            reasoning: capabilities.reasoning,
+            tool_call: capabilities.tool_call,
+            multimodal: capabilities.multimodal,
+            structured_output: capabilities.structured_output,
+        }
+    }
+}
+
+impl From<AgentModelReasoning> for NativeModelReasoning {
+    fn from(reasoning: AgentModelReasoning) -> Self {
+        Self {
+            default_effort: reasoning.default_effort,
+            supported_efforts: reasoning.supported_efforts,
+        }
     }
 }
 
