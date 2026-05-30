@@ -9,16 +9,16 @@ import {
   type LlmToolCallback
 } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
-import { formatTokenDelta, formatDurationScaled } from './metrics-formatter';
+import { formatTokens, formatDurationScaled } from './metrics-formatter';
 
 function callbackStatusLabel(status: LlmToolCallback['callbackStatus']) {
   switch (status) {
     case 'returned':
-      return i18nText("agentFlow", "auto.returned");
+      return i18nText('agentFlow', 'auto.returned');
     case 'cancelled':
-      return i18nText("agentFlow", "auto.canceled");
+      return i18nText('agentFlow', 'auto.canceled');
     default:
-      return i18nText("agentFlow", "auto.wait_for_callback");
+      return i18nText('agentFlow', 'auto.wait_for_callback');
   }
 }
 
@@ -36,15 +36,15 @@ function callbackStatusColor(status: LlmToolCallback['callbackStatus']) {
 function executionStatusLabel(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
-      return i18nText("agentFlow", "auto.executed_successfully");
+      return i18nText('agentFlow', 'auto.executed_successfully');
     case 'failed':
-      return i18nText("agentFlow", "auto.execution_failed");
+      return i18nText('agentFlow', 'auto.execution_failed');
     case 'timed_out':
-      return i18nText("agentFlow", "auto.execution_timeout");
+      return i18nText('agentFlow', 'auto.execution_timeout');
     case 'cancelled':
-      return i18nText("agentFlow", "auto.execution_cancel");
+      return i18nText('agentFlow', 'auto.execution_cancel');
     default:
-      return i18nText("agentFlow", "auto.execution_unknown");
+      return i18nText('agentFlow', 'auto.execution_unknown');
   }
 }
 
@@ -62,14 +62,22 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   }
 }
 
+function callUsageTotalTokens(callback: LlmToolCallback): number | null {
+  const totalTokens = callback.call_usage?.total_tokens;
+
+  return typeof totalTokens === 'number' && Number.isFinite(totalTokens)
+    ? totalTokens
+    : null;
+}
+
 function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
   const elements: ReactNode[] = [];
+  const totalTokens = callUsageTotalTokens(callback);
 
-  if (typeof callback.token_delta === 'number') {
-    const formattedTokens = `${formatTokenDelta(callback.token_delta)} tokens`;
-    const sign = callback.token_delta >= 0 ? '+' : '';
+  if (typeof totalTokens === 'number') {
+    const formattedTokens = `${formatTokens(totalTokens)} tokens`;
     elements.push(
-      <Tooltip title={`${sign}${callback.token_delta.toLocaleString()} tokens`} key="tokens">
+      <Tooltip title={`${totalTokens.toLocaleString()} tokens`} key="tokens">
         <span>{formattedTokens}</span>
       </Tooltip>
     );
@@ -78,7 +86,10 @@ function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
   if (typeof callback.duration_ms === 'number') {
     const formattedDuration = formatDurationScaled(callback.duration_ms);
     elements.push(
-      <Tooltip title={`${callback.duration_ms.toLocaleString()} ms`} key="duration">
+      <Tooltip
+        title={`${callback.duration_ms.toLocaleString()} ms`}
+        key="duration"
+      >
         <span>{formattedDuration}</span>
       </Tooltip>
     );
@@ -152,21 +163,29 @@ function LlmToolCallbackItem({
       </button>
       {expanded ? (
         <div className="agent-flow-editor__debug-llm-tool-detail">
-          {loading ? <Tag color="processing">{i18nText("agentFlow", "auto.loading")}</Tag> : null}
-          {loadFailed ? <Tag color="error">{i18nText("agentFlow", "auto.loading_failed")}</Tag> : null}
+          {loading ? (
+            <Tag color="processing">
+              {i18nText('agentFlow', 'auto.loading')}
+            </Tag>
+          ) : null}
+          {loadFailed ? (
+            <Tag color="error">
+              {i18nText('agentFlow', 'auto.loading_failed')}
+            </Tag>
+          ) : null}
           {!loading && !loadFailed ? (
             <>
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
-                title={i18nText("agentFlow", "auto.tool_call")}
+                title={i18nText('agentFlow', 'auto.tool_call')}
                 onLoadArtifact={onLoadArtifact}
               />
               {callback.parsedResult ? (
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.parsedResult}
-                  title={i18nText("agentFlow", "auto.parse_results")}
+                  title={i18nText('agentFlow', 'auto.parse_results')}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : null}
@@ -174,11 +193,13 @@ function LlmToolCallbackItem({
                 <RuntimeDebugPayloadBlock
                   height="11rem"
                   payload={callback.callbackPayload}
-                  title={i18nText("agentFlow", "auto.full_callback")}
+                  title={i18nText('agentFlow', 'auto.full_callback')}
                   onLoadArtifact={onLoadArtifact}
                 />
               ) : (
-                <Typography.Text type="secondary">{i18nText("agentFlow", "auto.wait_callback_return")}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {i18nText('agentFlow', 'auto.wait_callback_return')}
+                </Typography.Text>
               )}
             </>
           ) : null}
@@ -232,7 +253,6 @@ export function LlmToolTraceTree({
           result_context_usage:
             loadedCallback.result_context_usage ??
             callback.result_context_usage,
-          token_delta: loadedCallback.token_delta ?? callback.token_delta,
           duration_ms: loadedCallback.duration_ms ?? callback.duration_ms,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
@@ -315,12 +335,14 @@ export function LlmToolTraceTree({
 
   const summaryText =
     effectiveToolCallbacks.length > 0
-      ? i18nText("agentFlow", "auto.tool_callbacks", { value1: effectiveToolCallbacks.length })
-      : i18nText("agentFlow", "auto.need_to_load");
+      ? i18nText('agentFlow', 'auto.tool_callbacks', {
+          value1: effectiveToolCallbacks.length
+        })
+      : i18nText('agentFlow', 'auto.need_to_load');
 
   return (
     <section
-      aria-label={i18nText("agentFlow", "auto.llm_tools")}
+      aria-label={i18nText('agentFlow', 'auto.llm_tools')}
       className="agent-flow-editor__debug-llm-tools"
     >
       <button
@@ -331,7 +353,9 @@ export function LlmToolTraceTree({
       >
         <span className="agent-flow-editor__debug-llm-tools-title">
           <ToolOutlined className="agent-flow-editor__debug-llm-tools-icon" />
-          <Typography.Text strong>{i18nText("agentFlow", "auto.tools")}</Typography.Text>
+          <Typography.Text strong>
+            {i18nText('agentFlow', 'auto.tools')}
+          </Typography.Text>
           <Typography.Text type="secondary">{summaryText}</Typography.Text>
         </span>
         {toolsExpanded ? (
@@ -345,7 +369,7 @@ export function LlmToolTraceTree({
           {effectiveToolCallbacks.length > 0 ? (
             <>
               <div
-                aria-label={i18nText("agentFlow", "auto.tool_callback_list")}
+                aria-label={i18nText('agentFlow', 'auto.tool_callback_list')}
                 className="agent-flow-editor__debug-llm-tool-list"
               >
                 {effectiveToolCallbacks.map((callback) => {
@@ -373,7 +397,9 @@ export function LlmToolTraceTree({
               </div>
             </>
           ) : (
-            <Typography.Text type="secondary">{i18nText("agentFlow", "auto.tool_callback_truncated")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {i18nText('agentFlow', 'auto.tool_callback_truncated')}
+            </Typography.Text>
           )}
         </div>
       ) : null}

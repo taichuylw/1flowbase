@@ -72,10 +72,6 @@ impl LlmToolCallbackArtifact {
         }
     }
 
-    fn token_delta(&self) -> Option<i64> {
-        llm_usage_token_delta(self.call_usage.as_ref(), self.result_context_usage.as_ref())
-    }
-
     fn detail_payload(&self) -> Value {
         json!({
             "id": self.id,
@@ -89,7 +85,6 @@ impl LlmToolCallbackArtifact {
             "result_round_index": self.result_round_index,
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
-            "token_delta": self.token_delta(),
             "duration_ms": self.duration_ms,
         })
     }
@@ -105,7 +100,6 @@ impl LlmToolCallbackArtifact {
             "artifact_ref": artifact_id.to_string(),
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
-            "token_delta": self.token_delta(),
             "duration_ms": self.duration_ms,
         })
     }
@@ -166,27 +160,6 @@ fn record_i64_field(record: &Map<String, Value>, keys: &[&str]) -> Option<i64> {
 
         value.as_u64().and_then(|value| i64::try_from(value).ok())
     })
-}
-
-fn llm_usage_total_tokens(usage: Option<&Value>) -> Option<i64> {
-    let total_tokens = usage?.get("total_tokens")?;
-    if let Some(value) = total_tokens.as_i64() {
-        return Some(value);
-    }
-
-    total_tokens
-        .as_u64()
-        .and_then(|value| i64::try_from(value).ok())
-}
-
-fn llm_usage_token_delta(
-    call_usage: Option<&Value>,
-    result_context_usage: Option<&Value>,
-) -> Option<i64> {
-    let call_total = llm_usage_total_tokens(call_usage)?;
-    let result_total = llm_usage_total_tokens(result_context_usage)?;
-
-    result_total.checked_sub(call_total)
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -1585,7 +1558,7 @@ mod tests {
     }
 
     #[test]
-    fn llm_tool_callback_payloads_include_context_token_delta() {
+    fn llm_tool_callback_payloads_keep_context_usage_without_token_delta() {
         let rounds = json!([
             {
                 "round_index": 0,
@@ -1628,11 +1601,19 @@ mod tests {
         let callbacks = collect_llm_tool_callbacks(&rounds, &std::collections::HashMap::new());
 
         assert_eq!(callbacks.len(), 1);
-        assert_eq!(callbacks[0].detail_payload()["token_delta"], json!(102));
         assert_eq!(
-            callbacks[0].summary_payload(Uuid::now_v7())["token_delta"],
-            json!(102)
+            callbacks[0].detail_payload()["call_usage"]["total_tokens"],
+            json!(8122)
         );
+        assert_eq!(
+            callbacks[0].detail_payload()["result_context_usage"]["total_tokens"],
+            json!(8224)
+        );
+        assert!(callbacks[0].detail_payload().get("token_delta").is_none());
+        assert!(callbacks[0]
+            .summary_payload(Uuid::now_v7())
+            .get("token_delta")
+            .is_none());
     }
 
     #[test]

@@ -656,6 +656,7 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         tool_callbacks[0]["result_context_usage"]["total_tokens"],
         24
     );
+    assert!(tool_callbacks[0].get("token_delta").is_none());
     assert!(tool_callbacks[0].get("result_input_tokens").is_none());
     assert!(tool_callbacks[0].get("token_count_method").is_none());
     let tool_callback_artifact_ref = tool_callbacks[0]["artifact_ref"].as_str().unwrap();
@@ -705,6 +706,7 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         tool_callback_detail["result_context_usage"]["total_tokens"],
         24
     );
+    assert!(tool_callback_detail.get("token_delta").is_none());
     assert!(tool_callback_detail.get("result_input_tokens").is_none());
     assert!(tool_callback_detail.get("token_count_method").is_none());
 }

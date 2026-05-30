@@ -2692,12 +2692,6 @@ fn tool_calls_with_call_usage(tool_calls: &[ProviderToolCall], usage: Option<&Va
 }
 
 fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: &Value) {
-    let call_usage = rounds
-        .last()
-        .and_then(Value::as_object)
-        .and_then(|round| round.get("usage"))
-        .cloned();
-    let token_delta = llm_usage_token_delta(call_usage.as_ref(), usage);
     let Some(tool_results) = rounds
         .last_mut()
         .and_then(Value::as_object_mut)
@@ -2712,28 +2706,7 @@ fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: 
             continue;
         };
         tool_result.insert("result_context_usage".to_string(), usage.clone());
-        if let Some(token_delta) = token_delta {
-            tool_result.insert("token_delta".to_string(), json!(token_delta));
-        }
     }
-}
-
-fn llm_usage_total_tokens(usage: &Value) -> Option<i64> {
-    let total_tokens = usage.get("total_tokens")?;
-    if let Some(value) = total_tokens.as_i64() {
-        return Some(value);
-    }
-
-    total_tokens
-        .as_u64()
-        .and_then(|value| i64::try_from(value).ok())
-}
-
-fn llm_usage_token_delta(call_usage: Option<&Value>, result_context_usage: &Value) -> Option<i64> {
-    let call_total = llm_usage_total_tokens(call_usage?)?;
-    let result_total = llm_usage_total_tokens(result_context_usage)?;
-
-    result_total.checked_sub(call_total)
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {
@@ -3069,7 +3042,7 @@ mod llm_round_timeline_tests {
     use super::*;
 
     #[test]
-    fn llm_round_timeline_adds_tool_result_token_delta() {
+    fn llm_round_timeline_keeps_result_context_usage_without_token_delta() {
         let invocation_messages = vec![
             json!({
                 "role": "assistant",
@@ -3105,6 +3078,10 @@ mod llm_round_timeline_tests {
         let rounds =
             build_llm_round_timeline(&invocation_messages, Some(&result), Some(&result_usage));
 
-        assert_eq!(rounds[0]["tool_results"][0]["token_delta"], json!(102));
+        assert_eq!(
+            rounds[0]["tool_results"][0]["result_context_usage"]["total_tokens"],
+            json!(8224)
+        );
+        assert!(rounds[0]["tool_results"][0].get("token_delta").is_none());
     }
 }
