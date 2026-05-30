@@ -306,7 +306,7 @@ export function StartModelSettingsPanel({
       }
     >
       <div className="agent-flow-start-input-fields__form">
-        <label className="agent-flow-start-input-fields__form-row">
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.model_id_label')}</span>
           <Input
             aria-label={i18nText('agentFlow', 'auto.model_id_input')}
@@ -315,8 +315,8 @@ export function StartModelSettingsPanel({
             value={model.id}
             onChange={(event) => onChange({ id: event.target.value })}
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.model_name_label')}</span>
           <Input
             aria-label={i18nText('agentFlow', 'auto.model_name_input')}
@@ -326,8 +326,8 @@ export function StartModelSettingsPanel({
               onChange({ name: event.target.value || undefined })
             }
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.context_window')}</span>
           <TokenAmountInput
             label={i18nText('agentFlow', 'auto.model_context_window_input')}
@@ -336,8 +336,8 @@ export function StartModelSettingsPanel({
             value={model.context_window}
             onChange={updateContextWindow}
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.max_context_window')}</span>
           <TokenAmountInput
             label={i18nText('agentFlow', 'auto.model_max_context_window_input')}
@@ -349,8 +349,8 @@ export function StartModelSettingsPanel({
             value={model.max_context_window}
             onChange={updateMaxContextWindow}
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.max_output_tokens')}</span>
           <TokenAmountInput
             label={i18nText('agentFlow', 'auto.model_max_output_tokens_input')}
@@ -362,8 +362,8 @@ export function StartModelSettingsPanel({
             value={model.max_output_tokens}
             onChange={(max_output_tokens) => onChange({ max_output_tokens })}
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.auto_compact_percent')}</span>
           <InputNumber
             aria-label={i18nText(
@@ -384,7 +384,7 @@ export function StartModelSettingsPanel({
               })
             }
           />
-        </label>
+        </div>
         <div className="agent-flow-start-input-fields__toggles">
           <Typography.Text strong>
             {i18nText('agentFlow', 'auto.model_capabilities')}
@@ -452,7 +452,7 @@ export function StartModelSettingsPanel({
             />
           </label>
         </div>
-        <label className="agent-flow-start-input-fields__form-row">
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText('agentFlow', 'auto.default_reasoning_effort')}</span>
           <Select
             allowClear
@@ -474,8 +474,8 @@ export function StartModelSettingsPanel({
               patchReasoning({ default_effort })
             }
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>
             {i18nText('agentFlow', 'auto.supported_reasoning_efforts')}
           </span>
@@ -522,7 +522,7 @@ export function StartModelSettingsPanel({
               {i18nText('agentFlow', 'auto.add_items')}
             </Button>
           </div>
-        </label>
+        </div>
       </div>
     </FloatingSettingsPanel>
   );

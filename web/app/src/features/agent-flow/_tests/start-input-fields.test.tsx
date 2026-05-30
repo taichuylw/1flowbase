@@ -139,6 +139,11 @@ describe('start input fields', () => {
       await screen.findByRole('dialog', { name: '新增输入字段' })
     ).toBeInTheDocument();
     expect(
+      screen
+        .getByRole('dialog', { name: '新增输入字段' })
+        .querySelector('label.agent-flow-start-input-fields__form-row')
+    ).toBeNull();
+    expect(
       screen.getByRole('separator', { name: '从左侧调整新增输入字段宽度' })
     ).toBeInTheDocument();
     expect(

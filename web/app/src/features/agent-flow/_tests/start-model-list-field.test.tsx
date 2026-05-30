@@ -1,3 +1,4 @@
+/* eslint-disable testing-library/no-node-access */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -211,5 +212,17 @@ describe('StartModelListField', () => {
     });
 
     expect(screen.getByLabelText('Supported reasoning effort 6')).toHaveFocus();
+  });
+
+  test('does not wrap floating model form controls in native label rows', () => {
+    render(<StartModelListField value={[]} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Add new model'));
+
+    expect(
+      screen
+        .getByRole('dialog', { name: 'Add new model' })
+        .querySelector('label.agent-flow-start-input-fields__form-row')
+    ).toBeNull();
   });
 });
