@@ -263,6 +263,11 @@
   border-bottom-width: 2px !important;
 }
 
+.app-shell-language-menu.ant-menu-horizontal > .ant-menu-submenu::after {
+  display: none !important;
+  border-bottom: none !important;
+}
+
 .app-shell-help-menu.ant-menu-horizontal > .ant-menu-submenu .ant-menu-submenu-title,
 .app-shell-language-menu.ant-menu-horizontal > .ant-menu-submenu .ant-menu-submenu-title {
   display: inline-flex;
