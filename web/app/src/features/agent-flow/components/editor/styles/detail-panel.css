@@ -599,6 +599,50 @@
   justify-self: end;
 }
 
+.agent-flow-start-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.agent-flow-start-model-list__item {
+  gap: 8px;
+  margin-bottom: 0;
+  padding: 0 8px 0 16px;
+}
+
+.agent-flow-start-model-list__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-flow-start-model-list__main:hover
+  .agent-flow-node-detail__list-item-name,
+.agent-flow-start-model-list__main:focus-visible
+  .agent-flow-node-detail__list-item-name {
+  color: #00c182;
+}
+
+.agent-flow-start-model-list__main:focus-visible {
+  outline: none;
+}
+
+.agent-flow-start-model-list__delete {
+  flex: 0 0 auto;
+}
+
 .agent-flow-start-input-fields__panel {
   z-index: 25;
 }

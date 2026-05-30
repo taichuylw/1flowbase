@@ -312,13 +312,13 @@ export function StartModelListField({
         <div className="agent-flow-start-input-fields__list">
           {rows.map((row, index) => (
             <div
-              className="agent-flow-start-input-fields__item agent-flow-node-detail__list-item"
+              className="agent-flow-start-model-list__item agent-flow-node-detail__list-item"
               data-testid={`start-model-row-${index + 1}`}
               key={`${row.id}-${index}`}
             >
               <button
                 aria-label={i18nText('agentFlow', 'auto.edit_model')}
-                className="agent-flow-start-input-fields__variable-main"
+                className="agent-flow-start-model-list__main"
                 type="button"
                 onClick={() => openEditPanel(row, index)}
               >
@@ -340,7 +340,7 @@ export function StartModelListField({
                 aria-label={i18nText('agentFlow', 'auto.delete_model', {
                   value1: index + 1
                 })}
-                className="agent-flow-start-input-fields__delete"
+                className="agent-flow-start-model-list__delete"
                 danger
                 icon={<DeleteOutlined />}
                 size="small"

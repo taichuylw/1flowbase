@@ -67,6 +67,21 @@ describe('StartModelListField', () => {
     expect(
       screen.queryByLabelText('External reasoning override switch')
     ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Supported reasoning effort 1')).toHaveValue(
+      'minimal'
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 2')).toHaveValue(
+      'low'
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 3')).toHaveValue(
+      'medium'
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 4')).toHaveValue(
+      'high'
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 5')).toHaveValue(
+      'xhigh'
+    );
     fireEvent.click(screen.getByLabelText('Save model'));
 
     expect(onChange).toHaveBeenLastCalledWith([
@@ -121,12 +136,25 @@ describe('StartModelListField', () => {
         target: { value: '85' }
       }
     );
-    fireEvent.change(
-      screen.getByLabelText('Supported reasoning efforts input'),
-      {
-        target: { value: 'low, medium, high' }
-      }
+    fireEvent.click(
+      screen.getByLabelText('Remove supported reasoning effort 1')
     );
+    fireEvent.click(
+      screen.getByLabelText('Remove supported reasoning effort 4')
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 1')).toHaveValue(
+      'low'
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 2')).toHaveValue(
+      'medium'
+    );
+    expect(screen.getByLabelText('Supported reasoning effort 3')).toHaveValue(
+      'high'
+    );
+    fireEvent.click(screen.getByLabelText('Add supported reasoning effort'));
+    fireEvent.change(screen.getByLabelText('Supported reasoning effort 4'), {
+      target: { value: 'ultra' }
+    });
     expect(
       screen.getAllByLabelText('Default reasoning effort input').length
     ).toBeGreaterThan(0);
@@ -159,7 +187,7 @@ describe('StartModelListField', () => {
         },
         reasoning: {
           default_effort: 'medium',
-          supported_efforts: ['low', 'medium', 'high']
+          supported_efforts: ['low', 'medium', 'high', 'ultra']
         }
       }
     ]);

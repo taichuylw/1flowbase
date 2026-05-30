@@ -1,3 +1,4 @@
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Input, InputNumber, Select, Switch, Typography } from 'antd';
 import { useEffect, useState, type RefObject } from 'react';
 
@@ -21,13 +22,6 @@ type StartModelSettingsPanelProps = {
 
 type TokenUnit = 'k' | 'm' | 'b';
 
-const REASONING_EFFORT_OPTIONS = [
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh'
-].map((value) => ({ value, label: value }));
 const TOKEN_UNITS: Array<{ value: TokenUnit; label: string; factor: number }> =
   [
     { value: 'k', label: 'k', factor: 1_000 },
@@ -53,8 +47,33 @@ function parseEffortList(value: unknown) {
     .filter(Boolean);
 }
 
-function effortListText(value: unknown) {
-  return parseEffortList(value).join(', ');
+function draftEffortList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return parseEffortList(value);
+  }
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim());
+}
+
+function uniqueDraftEffortList(value: unknown) {
+  const seen = new Set<string>();
+
+  return draftEffortList(value).filter((item) => {
+    if (!item) {
+      return true;
+    }
+    if (seen.has(item)) {
+      return false;
+    }
+    seen.add(item);
+    return true;
+  });
+}
+
+function effortOptions(efforts: string[]) {
+  return efforts.map((value) => ({ value, label: value }));
 }
 
 function tokenUnitFor(value: number | undefined): TokenUnit {
@@ -196,6 +215,34 @@ export function StartModelSettingsPanel({
     });
   }
 
+  function patchSupportedEfforts(supported_efforts: string[]) {
+    const efforts = uniqueDraftEffortList(supported_efforts);
+    const selectableEfforts = efforts.filter(Boolean);
+    const currentDefault = model.reasoning?.default_effort;
+
+    patchReasoning({
+      supported_efforts: efforts,
+      default_effort:
+        currentDefault && selectableEfforts.includes(currentDefault)
+          ? currentDefault
+          : selectableEfforts[0]
+    });
+  }
+
+  function updateSupportedEffort(index: number, effort: string) {
+    const efforts = uniqueDraftEffortList(model.reasoning?.supported_efforts);
+    efforts[index] = effort.trim();
+    patchSupportedEfforts(efforts);
+  }
+
+  function removeSupportedEffort(index: number) {
+    patchSupportedEfforts(
+      uniqueDraftEffortList(model.reasoning?.supported_efforts).filter(
+        (_, effortIndex) => effortIndex !== index
+      )
+    );
+  }
+
   function updateContextWindow(context_window: number | undefined) {
     const percent = autoCompactPercent(model);
     onChange({
@@ -223,6 +270,12 @@ export function StartModelSettingsPanel({
             })
     });
   }
+
+  const supportedEfforts = uniqueDraftEffortList(
+    model.reasoning?.supported_efforts
+  );
+  const selectableSupportedEfforts = supportedEfforts.filter(Boolean);
+  const defaultEffortOptions = effortOptions(selectableSupportedEfforts);
 
   return (
     <FloatingSettingsPanel
@@ -407,8 +460,15 @@ export function StartModelSettingsPanel({
               'agentFlow',
               'auto.model_default_reasoning_effort_input'
             )}
-            options={REASONING_EFFORT_OPTIONS}
-            value={model.reasoning?.default_effort}
+            options={defaultEffortOptions}
+            value={
+              model.reasoning?.default_effort &&
+              selectableSupportedEfforts.includes(
+                model.reasoning.default_effort
+              )
+                ? model.reasoning.default_effort
+                : undefined
+            }
             virtual={false}
             onChange={(default_effort?: string) =>
               patchReasoning({ default_effort })
@@ -419,19 +479,49 @@ export function StartModelSettingsPanel({
           <span>
             {i18nText('agentFlow', 'auto.supported_reasoning_efforts')}
           </span>
-          <Input
-            aria-label={i18nText(
-              'agentFlow',
-              'auto.model_supported_reasoning_efforts_input'
-            )}
-            placeholder="minimal, low, medium, high, xhigh"
-            value={effortListText(model.reasoning?.supported_efforts)}
-            onChange={(event) =>
-              patchReasoning({
-                supported_efforts: parseEffortList(event.target.value)
-              })
-            }
-          />
+          <div className="agent-flow-start-input-fields__option-list">
+            {supportedEfforts.map((effort, index) => (
+              <div
+                className="agent-flow-start-input-fields__option-row"
+                key={`${effort}-${index}`}
+              >
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.model_supported_reasoning_effort_input',
+                    { value1: index + 1 }
+                  )}
+                  placeholder="medium"
+                  value={effort}
+                  onChange={(event) =>
+                    updateSupportedEffort(index, event.target.value)
+                  }
+                />
+                <Button
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.remove_supported_reasoning_effort',
+                    { value1: index + 1 }
+                  )}
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  type="text"
+                  onClick={() => removeSupportedEffort(index)}
+                />
+              </div>
+            ))}
+            <Button
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.add_supported_reasoning_effort'
+              )}
+              icon={<PlusOutlined />}
+              size="small"
+              onClick={() => patchSupportedEfforts([...supportedEfforts, ''])}
+            >
+              {i18nText('agentFlow', 'auto.add_items')}
+            </Button>
+          </div>
         </label>
       </div>
     </FloatingSettingsPanel>
