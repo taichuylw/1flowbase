@@ -145,6 +145,46 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     assert!(list_payload["data"]["items"][0]["created_at"].is_string());
     assert!(list_payload["data"]["items"][0]["updated_at"].is_string());
 
+    let runtime_activity = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/monitoring/runtime-activity"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(runtime_activity.status(), StatusCode::OK);
+    let runtime_activity_body = to_bytes(runtime_activity.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let runtime_activity_payload: Value = serde_json::from_slice(&runtime_activity_body).unwrap();
+    assert_eq!(
+        runtime_activity_payload["data"]["meta"]["storage"].as_str(),
+        Some("memory")
+    );
+    assert_eq!(
+        runtime_activity_payload["data"]["meta"]["scope"].as_str(),
+        Some("current_instance")
+    );
+    assert!(
+        runtime_activity_payload["data"]["peaks"]["process_peak_concurrency"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert!(
+        runtime_activity_payload["data"]["rolling_minute"]["completed"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+
     let detail = app
         .clone()
         .oneshot(

@@ -17,6 +17,7 @@ pub mod openapi_docs;
 pub mod provider_runtime;
 pub mod response;
 pub mod routes;
+pub mod runtime_activity;
 pub mod runtime_data_model_docs;
 pub mod runtime_profile_client;
 pub mod runtime_registry_sync;
@@ -279,6 +280,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     let resolved_official_source = config.resolve_official_plugin_source();
     let trusted_public_keys = config.official_plugin_trusted_public_keys()?;
     let process_started_at = OffsetDateTime::now_utc();
+    let runtime_activity = Arc::new(runtime_activity::ApplicationRuntimeActivityTracker::default());
 
     let state = Arc::new(ApiState {
         store,
@@ -287,6 +289,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         runtime_engine,
         provider_runtime,
         process_started_at,
+        runtime_activity,
         api_runtime_profile: Arc::new(HostApiRuntimeProfileCollector),
         plugin_runner_system: Arc::new(HttpPluginRunnerSystemClient::new(
             config.plugin_runner_internal_base_url.clone(),

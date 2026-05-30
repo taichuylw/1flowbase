@@ -30,6 +30,7 @@ use control_plane::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tracing::error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -39,7 +40,15 @@ use crate::{
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
     routes::{application_public_api::sse, files::UploadedFileResponse},
+    runtime_activity::{scope_application_activity, ApplicationActivityKind},
 };
+
+fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
+    ApiProviderRuntime::new_with_activity(
+        state.provider_runtime.clone(),
+        state.runtime_activity.clone(),
+    )
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ResumeNativeRunBody {
@@ -299,18 +308,24 @@ pub(crate) async fn execute_blocking_native_run(
     bearer_token: String,
     run: NativeRunResult,
 ) -> Result<NativeRunResult, NativeApiError> {
+    let _execution_activity = state.runtime_activity.start(
+        run.application_id,
+        ApplicationActivityKind::ApplicationExecution,
+    );
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
-    let execution_result = runtime_service
-        .start_published_flow_run(StartPublishedFlowRunCommand {
+    let execution_result = scope_application_activity(
+        run.application_id,
+        runtime_service.start_published_flow_run(StartPublishedFlowRunCommand {
             application_id: run.application_id,
             flow_run_id: run.id,
-        })
-        .await;
+        }),
+    )
+    .await;
     match execution_result {
         Ok(detail) => Ok(native_result_from_run_detail(&detail, run.metadata.clone())),
         Err(error) => {
@@ -361,6 +376,9 @@ pub async fn create_native_run(
         })
         .await
         .map_err(native_error)?;
+    let _http_activity = state
+        .runtime_activity
+        .start(run.application_id, ApplicationActivityKind::HttpRequest);
 
     if response_mode.as_deref() == Some("streaming") {
         return start_native_run_stream(state, run, include_workflow_events).await;
@@ -419,19 +437,25 @@ async fn start_native_run_stream(
 
     let background_state = state.clone();
     tokio::spawn(async move {
+        let _execution_activity = background_state.runtime_activity.start(
+            run.application_id,
+            ApplicationActivityKind::ApplicationExecution,
+        );
         let runtime_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        if let Err(runtime_error) = runtime_service
-            .start_published_flow_run(StartPublishedFlowRunCommand {
+        if let Err(runtime_error) = scope_application_activity(
+            run.application_id,
+            runtime_service.start_published_flow_run(StartPublishedFlowRunCommand {
                 application_id: run.application_id,
                 flow_run_id: run.id,
-            })
-            .await
+            }),
+        )
+        .await
         {
             let _ = background_state
                 .runtime_event_stream
@@ -459,7 +483,15 @@ async fn start_native_run_stream(
         }
     });
 
-    Ok(Sse::new(sse::NativeRunSseStream::new(receiver))
+    let sse_activity = state
+        .runtime_activity
+        .start(run.application_id, ApplicationActivityKind::SseConnection);
+    let stream = sse::NativeRunSseStream::new(receiver).map(move |event| {
+        let _keep_alive = &sse_activity;
+        event
+    });
+
+    Ok(Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response())
 }
@@ -584,18 +616,25 @@ pub async fn resume_native_run(
                 )
                 .await;
             }
-            let detail = OrchestrationRuntimeService::new(
-                state.store.clone(),
-                ApiProviderRuntime::new(state.provider_runtime.clone()),
-                state.runtime_engine.clone(),
-                state.provider_secret_master_key.clone(),
+            let _execution_activity = state.runtime_activity.start(
+                api_actor.application_id,
+                ApplicationActivityKind::ApplicationExecution,
+            );
+            let detail = scope_application_activity(
+                api_actor.application_id,
+                OrchestrationRuntimeService::new(
+                    state.store.clone(),
+                    api_provider_runtime(&state),
+                    state.runtime_engine.clone(),
+                    state.provider_secret_master_key.clone(),
+                )
+                .complete_callback_task(CompleteCallbackTaskCommand {
+                    actor_user_id: api_actor.creator_user_id,
+                    application_id: api_actor.application_id,
+                    callback_task_id: body.callback_task_id,
+                    response_payload,
+                }),
             )
-            .complete_callback_task(CompleteCallbackTaskCommand {
-                actor_user_id: api_actor.creator_user_id,
-                application_id: api_actor.application_id,
-                callback_task_id: body.callback_task_id,
-                response_payload,
-            })
             .await
             .map_err(service_error)?;
             native_result_from_run_detail(
@@ -658,21 +697,27 @@ async fn resume_native_run_stream(
 
     let background_state = state.clone();
     tokio::spawn(async move {
+        let _execution_activity = background_state.runtime_activity.start(
+            application_id,
+            ApplicationActivityKind::ApplicationExecution,
+        );
         let runtime_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        let result = runtime_service
-            .complete_callback_task(CompleteCallbackTaskCommand {
+        let result = scope_application_activity(
+            application_id,
+            runtime_service.complete_callback_task(CompleteCallbackTaskCommand {
                 actor_user_id,
                 application_id,
                 callback_task_id,
                 response_payload,
-            })
-            .await;
+            }),
+        )
+        .await;
         match result {
             Ok(detail) => {
                 append_terminal_sse_event(&background_state, &detail.flow_run).await;
@@ -699,7 +744,15 @@ async fn resume_native_run_stream(
         }
     });
 
-    Ok(Sse::new(sse::NativeRunSseStream::new(receiver))
+    let sse_activity = state
+        .runtime_activity
+        .start(application_id, ApplicationActivityKind::SseConnection);
+    let stream = sse::NativeRunSseStream::new(receiver).map(move |event| {
+        let _keep_alive = &sse_activity;
+        event
+    });
+
+    Ok(Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response())
 }

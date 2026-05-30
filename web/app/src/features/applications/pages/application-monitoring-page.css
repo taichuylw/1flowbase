@@ -182,6 +182,79 @@
   gap: 20px;
 }
 
+.runtime-activity-panel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.runtime-activity-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.runtime-activity-metric {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--ant-color-bg-layout, #fafafa);
+}
+
+.runtime-activity-metric__label {
+  display: block;
+  color: var(--ant-color-text-secondary, #8c8c8c);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-activity-metric__value {
+  display: block;
+  margin-top: 4px;
+  color: var(--ant-color-text, #1f1f1f);
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.runtime-activity-metric--blue {
+  border-left-color: #1677ff;
+}
+
+.runtime-activity-metric--green {
+  border-left-color: #52c41a;
+}
+
+.runtime-activity-metric--gold {
+  border-left-color: #faad14;
+}
+
+.runtime-activity-metric--red {
+  border-left-color: #ff4d4f;
+}
+
+.runtime-activity-metric--purple {
+  border-left-color: #722ed1;
+}
+
+.runtime-activity-metric--cyan {
+  border-left-color: #13c2c2;
+}
+
+.runtime-activity-panel__secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--ant-color-text-secondary, #8c8c8c);
+  font-size: 13px;
+}
+
 .application-monitoring-chart {
   width: 100%;
   height: 270px;
@@ -272,6 +345,10 @@
   .application-monitoring-page__chart-grid {
     grid-template-columns: 1fr;
   }
+
+  .runtime-activity-panel__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 840px) {
@@ -300,6 +377,10 @@
   }
 
   .application-monitoring-page__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-activity-panel__grid {
     grid-template-columns: 1fr;
   }
 }
@@ -461,4 +542,3 @@
 .run-rank-item__bar--token {
   background: linear-gradient(90deg, #efdbff, #722ed1);
 }
-

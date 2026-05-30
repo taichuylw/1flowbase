@@ -470,6 +470,16 @@ impl PgControlPlaneStore {
         let tokens = self
             .application_run_monitoring_tokens(application_id, started_from, started_to)
             .await?;
+        let tokens_comparison = self
+            .application_run_monitoring_tokens_comparison(
+                application_id,
+                started_from,
+                started_to,
+                overview.total_count,
+                tokens.total_tokens_sum,
+                tokens.avg_tokens_per_run,
+            )
+            .await?;
         let tool_callbacks = self
             .application_run_monitoring_tool_callbacks(application_id, started_from, started_to)
             .await?;
@@ -534,6 +544,7 @@ impl PgControlPlaneStore {
             overview,
             duration,
             tokens,
+            tokens_comparison,
             tool_callbacks,
             nodes,
             concurrency,
@@ -671,6 +682,56 @@ impl PgControlPlaneStore {
             total_tokens_sum: row.get("total_tokens_sum"),
             avg_tokens_per_run: row.get("avg_tokens_per_run"),
             token_recorded_count: row.get("token_recorded_count"),
+        })
+    }
+
+    async fn application_run_monitoring_tokens_comparison(
+        &self,
+        application_id: Uuid,
+        started_from: Option<OffsetDateTime>,
+        started_to: Option<OffsetDateTime>,
+        current_run_count: i64,
+        current_total_tokens: i64,
+        current_avg_tokens_per_run: f64,
+    ) -> Result<control_plane::ports::ApplicationRunMonitoringTokensComparison> {
+        let Some((previous_from, previous_to)) = previous_monitoring_window(started_from, started_to)
+        else {
+            return Ok(empty_tokens_comparison());
+        };
+
+        let row = sqlx::query(&application_run_monitoring_logs_query(
+            r#"
+            select
+                coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint
+                    as previous_total_tokens_sum,
+                count(*)::bigint as previous_run_count,
+                coalesce(avg(total_tokens::double precision), 0.0)::double precision
+                    as previous_avg_tokens_per_run
+            from monitoring_logs
+            "#,
+        ))
+        .bind(application_id)
+        .bind(Some(previous_from))
+        .bind(Some(previous_to))
+        .fetch_one(self.pool())
+        .await?;
+
+        let previous_total_tokens_sum = row.get("previous_total_tokens_sum");
+        let previous_run_count = row.get("previous_run_count");
+        let previous_avg_tokens_per_run = row.get("previous_avg_tokens_per_run");
+
+        Ok(control_plane::ports::ApplicationRunMonitoringTokensComparison {
+            previous_total_tokens_sum,
+            previous_run_count,
+            previous_avg_tokens_per_run,
+            token_change_rate: change_rate_i64(current_total_tokens, previous_total_tokens_sum),
+            run_count_change_rate: change_rate_i64(current_run_count, previous_run_count),
+            avg_tokens_per_run_change_rate: change_rate_f64(
+                current_avg_tokens_per_run,
+                previous_avg_tokens_per_run,
+            ),
+            traffic_effect: ratio_i64(current_run_count, previous_run_count),
+            cost_per_run_effect: ratio_f64(current_avg_tokens_per_run, previous_avg_tokens_per_run),
         })
     }
 
@@ -1419,6 +1480,53 @@ fn application_run_monitoring_logs_query(select_sql: &str) -> String {
         {select_sql}
         "#
     )
+}
+
+fn previous_monitoring_window(
+    started_from: Option<OffsetDateTime>,
+    started_to: Option<OffsetDateTime>,
+) -> Option<(OffsetDateTime, OffsetDateTime)> {
+    let previous_to = started_from?;
+    let current_to = started_to.unwrap_or_else(OffsetDateTime::now_utc);
+    let window = current_to - previous_to;
+    (window > Duration::ZERO).then(|| (previous_to - window, previous_to))
+}
+
+fn empty_tokens_comparison() -> control_plane::ports::ApplicationRunMonitoringTokensComparison {
+    control_plane::ports::ApplicationRunMonitoringTokensComparison {
+        previous_total_tokens_sum: 0,
+        previous_run_count: 0,
+        previous_avg_tokens_per_run: 0.0,
+        token_change_rate: 0.0,
+        run_count_change_rate: 0.0,
+        avg_tokens_per_run_change_rate: 0.0,
+        traffic_effect: 0.0,
+        cost_per_run_effect: 0.0,
+    }
+}
+
+fn change_rate_i64(current: i64, previous: i64) -> f64 {
+    (current - previous) as f64 / previous.max(1) as f64
+}
+
+fn change_rate_f64(current: f64, previous: f64) -> f64 {
+    (current - previous) / previous.max(1.0)
+}
+
+fn ratio_i64(numerator: i64, denominator: i64) -> f64 {
+    if denominator == 0 {
+        0.0
+    } else {
+        numerator as f64 / denominator as f64
+    }
+}
+
+fn ratio_f64(numerator: f64, denominator: f64) -> f64 {
+    if denominator == 0.0 {
+        0.0
+    } else {
+        numerator / denominator
+    }
 }
 
 fn is_terminal_application_run_log_status(status: domain::FlowRunStatus) -> bool {

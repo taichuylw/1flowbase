@@ -863,6 +863,7 @@ pub struct ApplicationRunMonitoringReport {
     pub overview: ApplicationRunMonitoringOverview,
     pub duration: ApplicationRunMonitoringDuration,
     pub tokens: ApplicationRunMonitoringTokens,
+    pub tokens_comparison: ApplicationRunMonitoringTokensComparison,
     pub tool_callbacks: ApplicationRunMonitoringToolCallbacks,
     pub nodes: ApplicationRunMonitoringNodes,
     pub concurrency: ApplicationRunMonitoringConcurrency,
@@ -902,6 +903,18 @@ pub struct ApplicationRunMonitoringTokens {
     pub total_tokens_sum: i64,
     pub avg_tokens_per_run: f64,
     pub token_recorded_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringTokensComparison {
+    pub previous_total_tokens_sum: i64,
+    pub previous_run_count: i64,
+    pub previous_avg_tokens_per_run: f64,
+    pub token_change_rate: f64,
+    pub run_count_change_rate: f64,
+    pub avg_tokens_per_run_change_rate: f64,
+    pub traffic_effect: f64,
+    pub cost_per_run_effect: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

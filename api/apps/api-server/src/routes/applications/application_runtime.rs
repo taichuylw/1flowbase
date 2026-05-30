@@ -1,9 +1,9 @@
-use std::{collections::HashSet, future::Future, sync::Arc};
+use std::{collections::HashSet, convert::Infallible, future::Future, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    response::sse::{KeepAlive, Sse},
+    response::sse::{Event, KeepAlive, Sse},
     routing::{get, post, put},
     Json, Router,
 };
@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tracing::error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -36,6 +37,7 @@ use crate::{
     middleware::{require_csrf::require_csrf, require_session::require_session},
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
+    runtime_activity::{scope_application_activity, ApplicationActivityKind},
 };
 
 use super::debug_run_stream;
@@ -55,6 +57,13 @@ use runtime_debug_artifacts::{
     load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
     offload_application_run_detail_artifacts,
 };
+
+fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
+    ApiProviderRuntime::new_with_activity(
+        state.provider_runtime.clone(),
+        state.runtime_activity.clone(),
+    )
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartNodeDebugPreviewBody {
@@ -347,6 +356,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/monitoring/run-metrics",
             get(application_monitoring::get_application_run_monitoring_report),
+        )
+        .route(
+            "/applications/:id/monitoring/runtime-activity",
+            get(application_monitoring::get_application_runtime_activity),
         )
         .route(
             "/applications/:id/logs/conversations/:conversation_id/messages",
@@ -684,7 +697,11 @@ where
         };
 
         match role {
-            "system" if !items.iter().any(|item| item.role.as_deref() == Some("system")) => {
+            "system"
+                if !items
+                    .iter()
+                    .any(|item| item.role.as_deref() == Some("system")) =>
+            {
                 items.push(imported_context_item(run, items.len(), role, content))
             }
             "user" | "assistant" => {
@@ -1325,13 +1342,16 @@ pub async fn start_flow_debug_run(
     Path(id): Path<Uuid>,
     Json(body): Json<StartFlowDebugRunBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ApplicationRunDetailResponse>>), ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
@@ -1349,19 +1369,24 @@ pub async fn start_flow_debug_run(
     let background_state = state.clone();
 
     tokio::spawn(async move {
+        let _execution_activity = background_state
+            .runtime_activity
+            .start(id, ApplicationActivityKind::ApplicationExecution);
         let background_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         );
-        let continue_result = background_service
-            .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+        let continue_result = scope_application_activity(
+            id,
+            background_service.continue_flow_debug_run(ContinueFlowDebugRunCommand {
                 application_id: id,
                 flow_run_id,
                 workspace_id,
-            })
-            .await;
+            }),
+        )
+        .await;
         match continue_result {
             Ok(detail) => {
                 if let Err(error) = offload_application_run_detail_artifacts(
@@ -1406,14 +1431,17 @@ pub async fn start_flow_debug_run_stream(
     Path(id): Path<Uuid>,
     Query(stream_query): Query<DebugRunStreamQuery>,
     Json(body): Json<StartFlowDebugRunBody>,
-) -> Result<Sse<debug_run_stream::DebugRunSseStream>, ApiError> {
+) -> Result<Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let request_received_at = std::time::Instant::now();
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
@@ -1459,32 +1487,39 @@ pub async fn start_flow_debug_run_stream(
 
     let background_state = state.clone();
     tokio::spawn(async move {
+        let _execution_activity = background_state
+            .runtime_activity
+            .start(id, ApplicationActivityKind::ApplicationExecution);
         let background_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        let prepare_result = background_service
-            .prepare_flow_debug_run_from_shell(PrepareFlowDebugRunCommand {
+        let prepare_result = scope_application_activity(
+            id,
+            background_service.prepare_flow_debug_run_from_shell(PrepareFlowDebugRunCommand {
                 actor_user_id,
                 application_id: id,
                 flow_run_id: run_id,
                 input_payload: body.input_payload,
                 document_snapshot: body.document,
                 debug_session_id: body.debug_session_id.unwrap_or_default(),
-            })
-            .await;
+            }),
+        )
+        .await;
         let result = match prepare_result {
             Ok(_) => {
-                background_service
-                    .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+                scope_application_activity(
+                    id,
+                    background_service.continue_flow_debug_run(ContinueFlowDebugRunCommand {
                         application_id: id,
                         flow_run_id: run_id,
                         workspace_id,
-                    })
-                    .await
+                    }),
+                )
+                .await
             }
             Err(error) => Err(error),
         };
@@ -1532,8 +1567,15 @@ pub async fn start_flow_debug_run_stream(
         "flow debug stream opened"
     );
 
-    Ok(Sse::new(debug_run_stream::DebugRunSseStream::new(receiver))
-        .keep_alive(KeepAlive::default()))
+    let sse_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::SseConnection);
+    let stream = debug_run_stream::DebugRunSseStream::new(receiver).map(move |event| {
+        let _keep_alive = &sse_activity;
+        event
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 pub async fn subscribe_flow_debug_run_stream(
@@ -1592,7 +1634,7 @@ pub async fn cancel_flow_run(
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
@@ -1641,25 +1683,31 @@ pub async fn resume_flow_run(
     Path((id, run_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<ResumeFlowRunBody>,
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let checkpoint_id = Uuid::parse_str(&body.checkpoint_id)
         .map_err(|_| ControlPlaneError::InvalidInput("checkpoint_id"))?;
-    let detail = OrchestrationRuntimeService::new(
-        state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
-        state.runtime_engine.clone(),
-        state.provider_secret_master_key.clone(),
+    let detail = scope_application_activity(
+        id,
+        OrchestrationRuntimeService::new(
+            state.store.clone(),
+            api_provider_runtime(&state),
+            state.runtime_engine.clone(),
+            state.provider_secret_master_key.clone(),
+        )
+        .resume_flow_run(ResumeFlowRunCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            flow_run_id: run_id,
+            checkpoint_id,
+            input_payload: body.input_payload,
+        }),
     )
-    .resume_flow_run(ResumeFlowRunCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        flow_run_id: run_id,
-        checkpoint_id,
-        input_payload: body.input_payload,
-    })
     .await?;
     let detail = offload_application_run_detail_artifacts(
         state.clone(),
@@ -1697,22 +1745,28 @@ pub async fn complete_callback_task(
     Path((id, callback_task_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CompleteCallbackTaskBody>,
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
-    let detail = OrchestrationRuntimeService::new(
-        state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
-        state.runtime_engine.clone(),
-        state.provider_secret_master_key.clone(),
+    let detail = scope_application_activity(
+        id,
+        OrchestrationRuntimeService::new(
+            state.store.clone(),
+            api_provider_runtime(&state),
+            state.runtime_engine.clone(),
+            state.provider_secret_master_key.clone(),
+        )
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            callback_task_id,
+            response_payload: body.response_payload,
+        }),
     )
-    .complete_callback_task(CompleteCallbackTaskCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        callback_task_id,
-        response_payload: body.response_payload,
-    })
     .await?;
     let detail = offload_application_run_detail_artifacts(
         state.clone(),
@@ -1750,23 +1804,29 @@ pub async fn start_node_debug_preview(
     Path((id, node_id)): Path<(Uuid, String)>,
     Json(body): Json<StartNodeDebugPreviewBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<NodeLastRunResponse>>), ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let outcome = OrchestrationRuntimeService::new(
-        state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
-        state.runtime_engine.clone(),
-        state.provider_secret_master_key.clone(),
+    let outcome = scope_application_activity(
+        id,
+        OrchestrationRuntimeService::new(
+            state.store.clone(),
+            api_provider_runtime(&state),
+            state.runtime_engine.clone(),
+            state.provider_secret_master_key.clone(),
+        )
+        .start_node_debug_preview(StartNodeDebugPreviewCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            node_id,
+            input_payload: body.input_payload,
+            document_snapshot: body.document,
+            debug_session_id: body.debug_session_id,
+        }),
     )
-    .start_node_debug_preview(StartNodeDebugPreviewCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        node_id,
-        input_payload: body.input_payload,
-        document_snapshot: body.document,
-        debug_session_id: body.debug_session_id,
-    })
     .await?;
 
     let detail = offload_application_run_detail_artifacts(

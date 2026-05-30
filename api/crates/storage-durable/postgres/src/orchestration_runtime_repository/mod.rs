@@ -32,7 +32,7 @@ use control_plane::{
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::repositories::PgControlPlaneStore;

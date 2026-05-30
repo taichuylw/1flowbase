@@ -3,6 +3,7 @@ import {
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
+  getConsoleApplicationRuntimeActivity,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
@@ -15,6 +16,7 @@ import {
   type ConsoleApplicationRunMonitoringExternalUserUsage,
   type ConsoleApplicationRunMonitoringProtocolBreakdown,
   type ConsoleApplicationRunMonitoringReport,
+  type ConsoleApplicationRuntimeActivity,
   type ConsoleApplicationRunMonitoringRunRank,
   type ConsoleApplicationRunMonitoringSourceBreakdown,
   resumeConsoleFlowRun,
@@ -67,6 +69,7 @@ export type ApplicationRunMonitoringBucket =
   ConsoleApplicationRunMonitoringBucket;
 export type ApplicationRunMonitoringReport =
   ConsoleApplicationRunMonitoringReport;
+export type ApplicationRuntimeActivity = ConsoleApplicationRuntimeActivity;
 export type ApplicationRunMonitoringApiKeyUsage =
   ConsoleApplicationRunMonitoringApiKeyUsage;
 export type ApplicationRunMonitoringAuthorizedAccountUsage =
@@ -287,6 +290,15 @@ export const applicationRunMonitoringReportQueryKey = (
     input.bucket ?? 'day'
   ] as const;
 
+export const applicationRuntimeActivityQueryKey = (applicationId: string) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'monitoring',
+    'runtime-activity'
+  ] as const;
+
 export function fetchApplicationRuns(
   applicationId: string,
   input: FetchApplicationRunsInput = {}
@@ -324,6 +336,13 @@ export function fetchApplicationRunMonitoringReport(
       time_range_days: input.timeRangeDays ?? 7,
       bucket: input.bucket ?? 'day'
     },
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRuntimeActivity(applicationId: string) {
+  return getConsoleApplicationRuntimeActivity(
+    applicationId,
     getApplicationsApiBaseUrl()
   );
 }

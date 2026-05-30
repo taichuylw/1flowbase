@@ -260,6 +260,63 @@ async fn seed_application_api_key(store: &PgControlPlaneStore, seeded: &RuntimeS
     api_key_id
 }
 
+async fn upsert_terminal_summary_tokens(
+    store: &PgControlPlaneStore,
+    flow_run_id: Uuid,
+    total_tokens: i64,
+) {
+    sqlx::query(
+        r#"
+        insert into application_run_log_summaries (
+            flow_run_id,
+            scope_id,
+            application_id,
+            run_mode,
+            status,
+            target_node_id,
+            title,
+            input_payload,
+            total_tokens,
+            unique_node_count,
+            tool_callback_count,
+            started_at,
+            finished_at,
+            created_at,
+            updated_at
+        )
+        select
+            flow_runs.id,
+            applications.workspace_id,
+            flow_runs.application_id,
+            flow_runs.run_mode,
+            'succeeded',
+            flow_runs.target_node_id,
+            flow_runs.title,
+            '{}'::jsonb,
+            $2,
+            0,
+            0,
+            flow_runs.started_at,
+            flow_runs.started_at + interval '1 second',
+            flow_runs.created_at,
+            flow_runs.started_at + interval '1 second'
+        from flow_runs
+        join applications on applications.id = flow_runs.application_id
+        where flow_runs.id = $1
+        on conflict (flow_run_id) do update
+        set status = excluded.status,
+            total_tokens = excluded.total_tokens,
+            finished_at = excluded.finished_at,
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(flow_run_id)
+    .bind(total_tokens)
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
 async fn seed_node_run(
     store: &PgControlPlaneStore,
     flow_run: &domain::FlowRunRecord,
@@ -2100,6 +2157,59 @@ async fn application_run_logs_and_monitoring_read_static_summaries_only() {
         .await
         .unwrap();
     assert_eq!(report.overview.total_count, 0);
+}
+
+#[tokio::test]
+async fn application_run_monitoring_compares_tokens_with_previous_window() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let current_started_at = datetime!(2026-05-24 10:02:00 UTC);
+    let previous_started_at = datetime!(2026-05-24 09:55:00 UTC);
+    let current_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        current_started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    let previous_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        previous_started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+
+    upsert_terminal_summary_tokens(&store, current_run.id, 200).await;
+    upsert_terminal_summary_tokens(&store, previous_run.id, 100).await;
+
+    let report =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
+            &store,
+            seeded.application_id,
+            GetApplicationRunMonitoringReportInput {
+                started_from: Some(datetime!(2026-05-24 10:00:00 UTC)),
+                started_to: Some(datetime!(2026-05-24 10:10:00 UTC)),
+                bucket: "hour".to_string(),
+                slow_run_threshold_ms: 30_000,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(report.tokens.total_tokens_sum, 200);
+    assert_eq!(report.tokens_comparison.previous_total_tokens_sum, 100);
+    assert_eq!(report.tokens_comparison.previous_run_count, 1);
+    assert_eq!(report.tokens_comparison.token_change_rate, 1.0);
+    assert_eq!(report.tokens_comparison.traffic_effect, 1.0);
+    assert_eq!(report.tokens_comparison.cost_per_run_effect, 2.0);
 }
 
 #[tokio::test]
