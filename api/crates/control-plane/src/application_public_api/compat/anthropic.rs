@@ -57,10 +57,17 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         let content_value = message
             .get("content")
             .ok_or_else(|| AnthropicCompatError::invalid("message content is required"))?;
-        let content = anthropic_text_content(content_value)?;
         if index == last_user_index {
+            if let Some(content_blocks) = query_media_content_blocks(content_value) {
+                history.push(serde_json::json!({
+                    "role": role,
+                    "content": "",
+                    "content_blocks": content_blocks
+                }));
+            }
             continue;
         }
+        let content = anthropic_text_content(content_value)?;
         let mut history_entry = serde_json::json!({ "role": role, "content": content });
         if content_value.is_array() {
             history_entry["content_blocks"] = content_value.clone();
@@ -229,11 +236,26 @@ fn anthropic_text_content(content: &Value) -> Result<String, AnthropicCompatErro
             "computer_use" => {
                 return Err(AnthropicCompatError::unsupported("computer_use"));
             }
-            "image" | "document" => return Err(AnthropicCompatError::unsupported("messages")),
+            "image" | "document" => {}
             _ => return Err(AnthropicCompatError::unsupported("messages")),
         }
     }
     Ok(text)
+}
+
+fn query_media_content_blocks(content: &Value) -> Option<Value> {
+    let blocks = content.as_array()?;
+    let media_blocks = blocks
+        .iter()
+        .filter(|block| {
+            matches!(
+                block.get("type").and_then(Value::as_str),
+                Some("image" | "document")
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    (!media_blocks.is_empty()).then_some(Value::Array(media_blocks))
 }
 
 fn anthropic_tool_result_text(block: &Value) -> String {

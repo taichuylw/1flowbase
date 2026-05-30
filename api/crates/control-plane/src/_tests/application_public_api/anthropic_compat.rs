@@ -217,7 +217,10 @@ fn last_user_multimodal_content_maps_query_text_and_preserves_media_blocks() {
     assert_eq!(native.history.len(), 1);
     assert_eq!(native.history[0]["role"], json!("user"));
     assert_eq!(native.history[0]["content"], json!(""));
-    assert_eq!(native.history[0]["content_blocks"][0]["type"], json!("image"));
+    assert_eq!(
+        native.history[0]["content_blocks"][0]["type"],
+        json!("image")
+    );
     assert_eq!(
         native.history[0]["content_blocks"][0]["source"]["media_type"],
         json!("image/png")

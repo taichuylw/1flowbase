@@ -576,6 +576,29 @@ fn anthropic_body(stream: bool) -> Value {
     })
 }
 
+fn anthropic_multimodal_body(stream: bool) -> Value {
+    let mut body = anthropic_body(stream);
+    body["messages"] = json!([
+        {"role": "user", "content": "Earlier question"},
+        {"role": "assistant", "content": "Earlier answer"},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe this image"},
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "aW1hZ2U="
+                    }
+                }
+            ]
+        }
+    ]);
+    body
+}
+
 #[tokio::test]
 async fn compatible_routes_require_application_api_key() {
     let app = test_app().await;
@@ -1017,6 +1040,28 @@ async fn anthropic_messages_accepts_x_api_key_and_preserves_model() {
 }
 
 #[tokio::test]
+async fn anthropic_messages_accepts_last_user_multimodal_content() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "Anthropic Multimodal Compatible Route App").await;
+
+    let response = post_json(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        anthropic_multimodal_body(false),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["type"], json!("message"));
+    assert_ne!(
+        payload["error"]["message"],
+        json!("messages is not supported by this endpoint")
+    );
+}
+
+#[tokio::test]
 async fn anthropic_messages_accepts_agent_tool_definitions() {
     let app = test_app().await;
     let token = setup_published_app(&app, "Anthropic Tool Compatible Route App").await;
@@ -1128,6 +1173,11 @@ async fn compatible_streaming_routes_return_protocol_sse() {
     .expect("Anthropic compatible SSE should finish")
     .unwrap();
     let anthropic_body = String::from_utf8(anthropic_body.to_vec()).unwrap();
+    assert_eq!(
+        anthropic_body.matches("event: message_start").count(),
+        1,
+        "{anthropic_body}"
+    );
     assert!(
         anthropic_body.contains("event: message_stop") || anthropic_body.contains("event: error"),
         "{anthropic_body}"

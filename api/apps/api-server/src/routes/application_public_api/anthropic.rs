@@ -346,13 +346,20 @@ fn anthropic_tool_resume_request(
     let Some(messages) = request.get("messages").and_then(Value::as_array) else {
         return Ok(None);
     };
+    let mut trailing_tool_result_messages = messages
+        .iter()
+        .rev()
+        .take_while(|message| anthropic_message_has_tool_result(message))
+        .collect::<Vec<_>>();
+    if trailing_tool_result_messages.is_empty() {
+        return Ok(None);
+    }
+    trailing_tool_result_messages.reverse();
+
     let mut callback_task_id = None;
     let mut tool_results = Vec::new();
 
-    for message in messages {
-        if message.get("role").and_then(Value::as_str) != Some("user") {
-            continue;
-        }
+    for message in trailing_tool_result_messages {
         let Some(blocks) = message.get("content").and_then(Value::as_array) else {
             continue;
         };
@@ -396,6 +403,18 @@ fn anthropic_tool_resume_request(
             tool_results: Value::Array(tool_results),
         }),
     )
+}
+
+fn anthropic_message_has_tool_result(message: &Value) -> bool {
+    message.get("role").and_then(Value::as_str) == Some("user")
+        && message
+            .get("content")
+            .and_then(Value::as_array)
+            .is_some_and(|blocks| {
+                blocks
+                    .iter()
+                    .any(|block| block.get("type").and_then(Value::as_str) == Some("tool_result"))
+            })
 }
 
 fn anthropic_tool_result_content(block: &Value) -> String {
