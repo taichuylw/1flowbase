@@ -483,7 +483,7 @@ export function StartModelSettingsPanel({
             {supportedEfforts.map((effort, index) => (
               <div
                 className="agent-flow-start-input-fields__option-row"
-                key={`${effort}-${index}`}
+                key={`supported-effort-${index}`}
               >
                 <Input
                   aria-label={i18nText(

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { StartModelListField } from '../components/detail/fields/StartModelListField';
@@ -191,5 +191,25 @@ describe('StartModelListField', () => {
         }
       }
     ]);
+  });
+
+  test('keeps focus when editing a newly added reasoning effort', () => {
+    const onChange = vi.fn();
+
+    render(<StartModelListField value={[]} onChange={onChange} />);
+
+    fireEvent.click(screen.getByLabelText('Add new model'));
+    fireEvent.click(screen.getByLabelText('Add supported reasoning effort'));
+
+    const effortInput = screen.getByLabelText('Supported reasoning effort 6');
+    act(() => {
+      effortInput.focus();
+    });
+
+    fireEvent.change(effortInput, {
+      target: { value: 'u' }
+    });
+
+    expect(screen.getByLabelText('Supported reasoning effort 6')).toHaveFocus();
   });
 });
