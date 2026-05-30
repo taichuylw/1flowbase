@@ -179,7 +179,7 @@ async fn get_application_returns_section_hooks_with_null_runtime_targets() {
     );
     assert_eq!(
         detail.sections.api.invoke_path_template.as_deref(),
-        Some("/api/v1/agent/runs")
+        Some("/api/agent/v1/runs")
     );
     assert_eq!(detail.sections.api.api_capability_status, "not_published");
     assert_eq!(detail.sections.api.credentials_status, "missing");

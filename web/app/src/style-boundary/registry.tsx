@@ -180,7 +180,7 @@ const styleBoundaryPluginFamiliesCatalog = {
 
 const styleBoundaryOfficialPluginCatalog = {
   source_kind: 'official_registry',
-  source_label: i18nText("appShell", "auto.official_source"),
+  source_label: i18nText('appShell', 'auto.official_source'),
   registry_url:
     'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
   locale_meta: modelProviderCatalogContract.locale_meta,
@@ -777,7 +777,7 @@ function seedStyleBoundaryApplicationFetch() {
             version_sequence: 3,
             active: true,
             api_enabled: true,
-            public_url: '/api/v1/agent/runs',
+            public_url: '/api/agent/v1/runs',
             created_by: 'user-1',
             created_at: '2026-05-09T10:00:00Z',
             mapping_snapshot: {
@@ -852,7 +852,7 @@ function seedStyleBoundaryApplicationFetch() {
               {
                 id: 'applicationNativeRun',
                 method: 'POST',
-                path: '/api/v1/agent/runs',
+                path: '/api/agent/v1/runs',
                 summary: 'Run published application',
                 description: 'Run published application',
                 tags: ['application-public-api'],
@@ -882,7 +882,7 @@ function seedStyleBoundaryApplicationFetch() {
           openapi: '3.1.0',
           info: { title: 'Support Agent API', version: 'v3' },
           paths: {
-            '/api/v1/agent/runs': {
+            '/api/agent/v1/runs': {
               post: {
                 operationId: 'applicationNativeRun',
                 responses: {

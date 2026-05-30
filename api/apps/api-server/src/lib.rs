@@ -134,7 +134,7 @@ pub fn app_with_state(state: Arc<ApiState>) -> Router {
 fn console_router(state: Arc<ApiState>) -> Router {
     Router::new()
         .merge(routes::application_public_api::compatible_router())
-        .nest("/api/v1/agent", routes::application_public_api::router())
+        .nest("/api/agent/v1", routes::application_public_api::router())
         .nest("/api/console", routes::applications::router())
         .nest("/api/console", routes::application_api::router())
         .nest("/api/console", routes::application_orchestration::router())

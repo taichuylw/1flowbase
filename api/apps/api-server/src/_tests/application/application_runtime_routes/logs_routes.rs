@@ -388,7 +388,7 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/agent/runs")
+                .uri("/api/agent/v1/runs")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(

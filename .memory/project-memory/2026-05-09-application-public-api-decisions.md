@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: application-public-api-decisions
-summary: 应用公开调用 API 方向确认：Key 只调用已发布版本；统一外部路由 `/api/1flowbase/runs`、OpenAI `/v1/chat/completions`、OpenAI Responses `/v1/responses`、Anthropic `/v1/messages`；Key 绑定应用和创建人，用户仅看自己创建的 Key；Native payload 固定使用 `query/model/history`，其中 `model` 是可选字符串且不做值校验。
+summary: 应用公开调用 API 方向确认：Key 只调用已发布版本；Native canonical 路由为 `/api/agent/v1/runs` 与 `/api/agent/v1/files`，OpenAI `/v1/chat/completions`、OpenAI Responses `/v1/responses`、Anthropic `/v1/messages`；Key 绑定应用和创建人，用户仅看自己创建的 Key；Native payload 固定使用 `query/model/history`，其中 `model` 是可选字符串且不做值校验。
 keywords:
   - application api
   - application api key
@@ -12,8 +12,8 @@ keywords:
   - streaming
   - terminal answer fallback
 created_at: 2026-05-09 23
-updated_at: 2026-05-26 18
-last_verified_at: 2026-05-26 18
+updated_at: 2026-05-30 10
+last_verified_at: 2026-05-30 10
 decision_policy: verify_before_decision
 scope:
   - api
@@ -42,7 +42,8 @@ AgentFlow 已进入调试跑通阶段，下一阶段最重要业务是应用 API
 ## 决策背后动机？
 
 - 应用 API Key：不限制数量；只做创建、列表、删除；绑定创建人；每个人仅能看到自己创建的 Key。
-- 路由：Native 统一对外 `POST /api/1flowbase/runs`，所有应用类型共用；OpenAI 兼容 `/v1/chat/completions`；Anthropic 兼容 `/v1/messages`。
+- 路由：Native canonical 对外路径为 `POST /api/agent/v1/runs`、`GET /api/agent/v1/runs/{run_id}`、`POST /api/agent/v1/runs/{run_id}/cancel`、`POST /api/agent/v1/runs/{run_id}/resume`、`POST /api/agent/v1/files`，所有应用类型共用；OpenAI 兼容 `/v1/chat/completions`；Anthropic 兼容 `/v1/messages`。
+- `2026-05-30 10` 用户确认项目初期没有发布，旧 `/api/v1/agent/...` 直接下线，不保留兼容入口；#541 实现新 canonical path。
 - `2026-05-22 15` 用户确认移除冗余 OpenAI alias `/openai/v1/chat/completions`；未对用户开放且没有使用者，公开文档和后端路由都只保留 canonical `/v1/chat/completions`。
 - `2026-05-26 18` 用户确认 OpenAI Responses API 也属于应用兼容投影层；主仓 Native/runtime 是唯一真值，Responses/OpenAI Chat/Anthropic 只从 Native 事件和 durable answer 投影协议形状。若 runtime 终态是 `flow_failed` 但 durable `run.answer` 已存在，兼容 SSE 必须把可用 answer 完整输出并发送协议完成事件，不能让后续失败节点或工具回调失败吞掉前面已完成 answer。OpenAI Responses 根路径 `/responses` 与 `/v1/responses` 都应支持 plain base URL 客户端。
 - Native payload 不能只做 `inputs/response_mode/user/metadata`，必须重新设计，覆盖 query、文件图片、会话绑定、本地 agent 工具回调、流式、协议映射预留。

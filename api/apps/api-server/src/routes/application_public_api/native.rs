@@ -349,7 +349,7 @@ pub(crate) async fn execute_blocking_native_run(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/runs",
+    path = "/api/agent/v1/runs",
     request_body = Value,
     responses(
         (status = 201, body = NativeRunResponse),
@@ -498,7 +498,7 @@ async fn start_native_run_stream(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/agent/runs/{run_id}",
+    path = "/api/agent/v1/runs/{run_id}",
     params(("run_id" = String, Path, description = "Published run id")),
     responses(
         (status = 200, body = NativeRunResponse),
@@ -527,7 +527,7 @@ pub async fn get_native_run(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/runs/{run_id}/cancel",
+    path = "/api/agent/v1/runs/{run_id}/cancel",
     params(("run_id" = String, Path, description = "Published run id")),
     responses(
         (status = 200, body = NativeRunResponse),
@@ -557,7 +557,7 @@ pub async fn cancel_native_run(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/runs/{run_id}/resume",
+    path = "/api/agent/v1/runs/{run_id}/resume",
     request_body = ResumeNativeRunBody,
     params(("run_id" = String, Path, description = "Published run id")),
     responses(
@@ -822,7 +822,7 @@ async fn append_terminal_sse_event(state: &ApiState, flow_run: &domain::FlowRunR
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/files",
+    path = "/api/agent/v1/files",
     responses(
         (status = 201, body = crate::routes::files::UploadedFileResponse),
         (status = 401, body = NativeErrorBody)

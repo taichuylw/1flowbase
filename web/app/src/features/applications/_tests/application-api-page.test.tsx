@@ -99,7 +99,7 @@ const application: ApplicationDetail = {
       status: 'configured',
       credential_kind: 'application_api_key',
       invoke_routing_mode: 'api_key_bound_application',
-      invoke_path_template: '/api/v1/agent/runs',
+      invoke_path_template: '/api/agent/v1/runs',
       api_capability_status: 'enabled',
       credentials_status: 'active'
     },
@@ -155,7 +155,7 @@ describe('ApplicationApiPage', () => {
   test('renders API section shell with status, docs panel, and publish action', async () => {
     renderWithProviders(<ApplicationApiPage application={application} />);
 
-    expect(await screen.findByText('需要先发布公开 API')).toBeInTheDocument();
+    expect(await screen.findByText('请先发布公开 API')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'API 密钥' })
     ).toBeInTheDocument();
@@ -169,7 +169,9 @@ describe('ApplicationApiPage', () => {
     expect(
       screen.queryByRole('tab', { name: 'API Keys' })
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'API 文档' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'API 文档' })
+    ).not.toBeInTheDocument();
     expect(screen.getByText('docs explorer')).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: 'Native API' })
@@ -211,9 +213,11 @@ describe('ApplicationApiPage', () => {
     expect(within(statusCard).queryByText('OpenAI')).not.toBeInTheDocument();
     expect(within(statusCard).queryByText('Anthropic')).not.toBeInTheDocument();
     expect(
-      within(statusCard).queryByText('/api/v1/agent/runs')
+      within(statusCard).queryByText('/api/agent/v1/runs')
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'API 文档' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'API 文档' })
+    ).not.toBeInTheDocument();
     expect(screen.getByText('docs explorer')).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: 'Native API' })
@@ -300,18 +304,14 @@ describe('ApplicationApiPage', () => {
     expect(within(dialog).getByText('Server key')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('密钥说明')).toBeInTheDocument();
     expect(within(dialog).getByText('sk-019e1a2b48****')).toBeInTheDocument();
-    expect(
-      within(dialog).queryByText('sk-0****2b48')
-    ).not.toBeInTheDocument();
-    expect(within(dialog).getByText('2026-05-09 08:00:00')).toBeInTheDocument();
+    expect(within(dialog).queryByText('sk-0****2b48')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('2026/5/9 08:00:00')).toBeInTheDocument();
     expect(within(dialog).getByText('最后使用时间')).toBeInTheDocument();
-    expect(within(dialog).getByText('2026-05-10 09:02:03')).toBeInTheDocument();
+    expect(within(dialog).getByText('2026/05/10 09:02:03')).toBeInTheDocument();
     expect(
       within(dialog).queryByText('2026-05-09T00:00:00Z')
     ).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByText('sk-019e1a2b48')
-    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('sk-019e1a2b48')).not.toBeInTheDocument();
     expect(
       within(dialog).getByRole('button', { name: '创建 Key' })
     ).toBeInTheDocument();
@@ -324,7 +324,9 @@ describe('ApplicationApiPage', () => {
     expect(
       screen.queryByRole('tab', { name: 'API Keys' })
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'API 文档' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: 'API 文档' })
+    ).not.toBeInTheDocument();
     expect(screen.getByText('docs explorer')).toBeInTheDocument();
   });
 
@@ -387,9 +389,7 @@ describe('ApplicationApiPage', () => {
       'csrf-123'
     );
     expect(storageSpy).not.toHaveBeenCalled();
-    expect(window.location.href).not.toContain(
-      'sk-019e1a463b39'
-    );
+    expect(window.location.href).not.toContain('sk-019e1a463b39');
 
     fireEvent.click(screen.getByRole('button', { name: /关\s*闭/ }));
 

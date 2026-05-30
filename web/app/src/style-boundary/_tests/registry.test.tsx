@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { Grid } from 'antd';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 vi.mock('@scalar/api-reference-react', () => ({
@@ -8,11 +8,22 @@ vi.mock('@scalar/api-reference-react', () => ({
 }));
 
 import { AppProviders } from '../../app/AppProviders';
+import { appI18n } from '../../shared/i18n/app-i18n';
 import { renderReactFlowScene } from '../../test/renderers/render-react-flow-scene';
 import { StyleBoundaryHarness } from '../StyleBoundaryHarness';
 import { getRuntimeScene, getSceneIdsForFiles } from '../registry';
 
 describe('style boundary registry', () => {
+  beforeEach(async () => {
+    window.history.replaceState(null, '', '/?language=zh-Hans');
+    await appI18n.changeLanguage('zh_Hans');
+  });
+
+  afterEach(async () => {
+    window.history.replaceState(null, '', '/');
+    await appI18n.changeLanguage('en_US');
+  });
+
   test('renders the account popup component scene and exposes scene metadata on window', async () => {
     const scene = getRuntimeScene('component.account-popup');
 
@@ -110,7 +121,9 @@ describe('style boundary registry', () => {
     expect(
       await screen.findByRole('heading', { name: '1flowbase' })
     ).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Landing' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Landing' })
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('进入设计模式')).toBeInTheDocument();
   }, 15_000);
 

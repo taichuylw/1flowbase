@@ -6,8 +6,8 @@ import type {
 import { apiFetch, apiFetchVoid } from '../transport';
 
 export const APPLICATION_PUBLIC_RUNTIME_PATHS = {
-  nativeRuns: '/api/v1/agent/runs',
-  nativeFiles: '/api/v1/agent/files',
+  nativeRuns: '/api/agent/v1/runs',
+  nativeFiles: '/api/agent/v1/files',
   openAiChatCompletions: '/v1/chat/completions',
   anthropicMessages: '/v1/messages'
 } as const;
@@ -254,8 +254,7 @@ export function fetchConsoleApplicationApiDocsCategoryOperations(
   baseUrlOrLocale?: string | null,
   locale?: string | null
 ): Promise<ConsoleApiDocsCategoryOperations> {
-  const request =
-    typeof requestOrBaseUrl === 'string' ? {} : requestOrBaseUrl;
+  const request = typeof requestOrBaseUrl === 'string' ? {} : requestOrBaseUrl;
   const baseUrl =
     typeof requestOrBaseUrl === 'string'
       ? requestOrBaseUrl

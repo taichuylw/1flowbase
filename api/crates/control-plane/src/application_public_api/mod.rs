@@ -148,7 +148,7 @@ impl ApplicationPublicApiTestRepository {
                     status: "planned".to_string(),
                     credential_kind: "application_api_key".to_string(),
                     invoke_routing_mode: "api_key_bound_application".to_string(),
-                    invoke_path_template: Some("/api/v1/agent/runs".to_string()),
+                    invoke_path_template: Some("/api/agent/v1/runs".to_string()),
                     api_capability_status: "not_published".to_string(),
                     credentials_status: "missing".to_string(),
                 },
