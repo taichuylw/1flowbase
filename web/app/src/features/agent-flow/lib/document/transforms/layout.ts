@@ -1,10 +1,170 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { getNodeById, getOutgoingEdges } from '../selectors';
 
+const NODE_WIDTH = 196;
+const NODE_HEIGHT = 96;
+
 /**
- * 有向无环图 (DAG) 拓扑下流 BFS 推进算法 (Topological BFS Shifting)
- * 仅沿有向图的下游依赖链（Outgoers）以 BFS 方式进行遍历，
- * 若发现子节点与父节点之间的横向距离小于设定的 gapX，则顺势向右推移并递归通知其下游子节点。
+ * 2D AABB 碰撞检测与 Y 轴最小平移向量 (MTV) 垂直消解算法
+ */
+function resolveAABBCollisions(
+  positions: Record<string, { x: number; y: number }>,
+  containerNodes: Array<{ id: string; containerId: string | null }>,
+  nodeWidth = NODE_WIDTH,
+  nodeHeight = NODE_HEIGHT,
+  gapY = 40,
+  maxIterations = 8
+): Set<string> {
+  const shiftedIds = new Set<string>();
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    let anyCollisionResolved = false;
+
+    for (let i = 0; i < containerNodes.length; i++) {
+      const idA = containerNodes[i].id;
+      const posA = positions[idA];
+      if (!posA) continue;
+
+      for (let j = i + 1; j < containerNodes.length; j++) {
+        const idB = containerNodes[j].id;
+        const posB = positions[idB];
+        if (!posB) continue;
+
+        // 检测 2D 包围盒重叠量
+        const dx = nodeWidth + 30 - Math.abs(posB.x - posA.x); // X 轴安全边距
+        const dy = nodeHeight + gapY - Math.abs(posB.y - posA.y);
+
+        if (dx > 0 && dy > 0) {
+          // 发生空间碰撞，计算 Y 轴平移向量推开
+          let shiftId = idB;
+          let targetYSign = 1;
+
+          if (posB.y < posA.y) {
+            shiftId = idA;
+            targetYSign = -1;
+          } else if (posB.y === posA.y) {
+            shiftId = idB;
+            targetYSign = 1;
+          }
+
+          positions[shiftId] = {
+            x: positions[shiftId].x,
+            y: positions[shiftId].y + targetYSign * dy
+          };
+          shiftedIds.add(shiftId);
+          anyCollisionResolved = true;
+        }
+      }
+    }
+
+    if (!anyCollisionResolved) {
+      break;
+    }
+  }
+
+  return shiftedIds;
+}
+
+/**
+ * 局部受控力导向物理松弛算法 (Spring-Electrical Model)
+ */
+function applyLocalPhysicsRelaxation(
+  positions: Record<string, { x: number; y: number }>,
+  activeIds: Set<string>,
+  containerNodes: Array<{ id: string }>,
+  edges: FlowAuthoringDocument['graph']['edges'],
+  iterations = 25
+) {
+  if (activeIds.size === 0) return;
+
+  const kr = 30000;  // 库仑斥力系数
+  const ka = 0.04;   // 弹簧引力系数
+  const L0 = 280;    // 弹簧自然长度
+  const damping = 0.7;
+
+  // 仅对发生移动的活跃节点应用受控力学松弛
+  const activeNodes = containerNodes.filter((n) => activeIds.has(n.id));
+
+  const velocities: Record<string, { x: number; y: number }> = {};
+  for (const node of activeNodes) {
+    velocities[node.id] = { x: 0, y: 0 };
+  }
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const forces: Record<string, { x: number; y: number }> = {};
+    for (const node of activeNodes) {
+      forces[node.id] = { x: 0, y: 0 };
+    }
+
+    // 1. 计算库仑斥力 (来自容器内所有节点)
+    for (let i = 0; i < activeNodes.length; i++) {
+      const idA = activeNodes[i].id;
+      const posA = positions[idA];
+      if (!posA) continue;
+
+      for (let j = 0; j < containerNodes.length; j++) {
+        const idB = containerNodes[j].id;
+        if (idA === idB) continue;
+
+        const posB = positions[idB];
+        if (!posB) continue;
+
+        const dx = posA.x - posB.x;
+        const dy = posA.y - posB.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq) || 1;
+
+        if (dist < 380) {
+          const forceMag = kr / (distSq + 100);
+          forces[idA].x += (dx / dist) * forceMag;
+          forces[idA].y += (dy / dist) * forceMag;
+        }
+      }
+    }
+
+    // 2. 计算弹簧引力 (沿边双向拉拽)
+    for (const edge of edges) {
+      const posSource = positions[edge.source];
+      const posTarget = positions[edge.target];
+      if (!posSource || !posTarget) continue;
+
+      const dx = posTarget.x - posSource.x;
+      const dy = posTarget.y - posSource.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+      const forceMag = ka * (dist - L0);
+      const fx = (dx / dist) * forceMag;
+      const fy = (dy / dist) * forceMag;
+
+      if (forces[edge.source]) {
+        forces[edge.source].x += fx;
+        forces[edge.source].y += fy;
+      }
+      if (forces[edge.target]) {
+        forces[edge.target].x -= fx;
+        forces[edge.target].y -= fy;
+      }
+    }
+
+    // 3. 更新速度与位置
+    for (const node of activeNodes) {
+      const id = node.id;
+      const vel = velocities[id];
+      const force = forces[id];
+
+      vel.x = (vel.x + force.x) * damping;
+      vel.y = (vel.y + force.y) * damping;
+
+      positions[id] = {
+        x: positions[id].x + vel.x,
+        y: positions[id].y + vel.y
+      };
+    }
+  }
+}
+
+/**
+ * 有向无环图 (DAG) 拓扑下流 BFS 推进与碰撞消解管道
  */
 export function shiftDownstreamNodesBFS(
   document: FlowAuthoringDocument,
@@ -25,17 +185,19 @@ export function shiftDownstreamNodesBFS(
   // 2. 初始化队列和已访问集合
   const queue: string[] = [startNodeId];
   const visited = new Set<string>();
+  const shiftedNodeIds = new Set<string>();
 
-  // 3. 执行 BFS 传播
+  // 3. 执行阶段一：动态尺寸感知 BFS 拓扑推移
+  const netGapX = Math.max(0, gapX - NODE_WIDTH); // 保证 280 默认步长完美兼容
+
   while (queue.length > 0) {
     const currentNodeId = queue.shift()!;
-    // 如果已经处理过（为防止循环依赖，但有向无环图中本不会发生，保留作为防御性保护），可继续处理
     visited.add(currentNodeId);
 
     const currentPos = positions[currentNodeId];
     if (!currentPos) continue;
 
-    // 获取该节点的所有出边 (即直接下游)
+    // 获取当前节点的所有出边 (下游)
     const outgoingEdges = getOutgoingEdges(document, currentNodeId);
 
     for (const edge of outgoingEdges) {
@@ -49,17 +211,16 @@ export function shiftDownstreamNodesBFS(
       const targetCurrentPos = positions[targetNodeId];
       if (!targetCurrentPos) continue;
 
-      // 计算目标节点的最小 X 坐标 (父节点 X 坐标 + 间隔)
-      const targetMinX = currentPos.x + gapX;
+      // 计算目标节点的最小 X 坐标 (父节点 X 坐标 + 节点宽度 + 净间隙)
+      const targetMinX = currentPos.x + NODE_WIDTH + netGapX;
 
-      // 若当前目标节点的 X 坐标小于最小安全距离，则进行推开
       if (targetCurrentPos.x < targetMinX) {
         positions[targetNodeId] = {
           x: targetMinX,
           y: targetCurrentPos.y
         };
+        shiftedNodeIds.add(targetNodeId);
 
-        // 由于目标节点发生了位置变化，重新入队，以便继续影响它的下游节点
         if (!queue.includes(targetNodeId)) {
           queue.push(targetNodeId);
         }
@@ -67,16 +228,63 @@ export function shiftDownstreamNodesBFS(
     }
   }
 
-  // 4. 返回包含更新位置的新文档对象
+  // 获取当前容器内所有的节点
+  const containerNodes = document.graph.nodes.filter(
+    (node) => node.containerId === startNode.containerId
+  );
+
+  // 4. 执行阶段二：2D AABB 迭代消解垂直重叠
+  let shiftedAABBNodeIds = new Set<string>();
+  if (shiftedNodeIds.size > 0) {
+    shiftedAABBNodeIds = resolveAABBCollisions(
+      positions,
+      containerNodes,
+      NODE_WIDTH,
+      NODE_HEIGHT,
+      40,
+      8
+    );
+  }
+
+  // 5. 执行阶段三：局部活跃节点力导向物理松弛
+  if (shiftedAABBNodeIds.size > 0) {
+    const activeRelaxIds = new Set<string>([
+      startNodeId,
+      ...shiftedNodeIds,
+      ...shiftedAABBNodeIds
+    ]);
+    const activeEdges = document.graph.edges.filter(
+      (edge) => edge.containerId === startNode.containerId
+    );
+
+    applyLocalPhysicsRelaxation(
+      positions,
+      activeRelaxIds,
+      containerNodes,
+      activeEdges,
+      25
+    );
+  }
+
+  // 6. 对受影响节点的坐标进行舍入对齐，确保画布上没有极细微的小数偏移
+  const finalPositions: Record<string, { x: number; y: number }> = {};
+  for (const key of Object.keys(positions)) {
+    finalPositions[key] = {
+      x: Math.round(positions[key].x),
+      y: Math.round(positions[key].y)
+    };
+  }
+
+  // 7. 返回包含更新位置的新文档对象
   return {
     ...document,
     graph: {
       ...document.graph,
       nodes: document.graph.nodes.map((node) =>
-        positions[node.id]
+        finalPositions[node.id]
           ? {
               ...node,
-              position: positions[node.id]
+              position: finalPositions[node.id]
             }
           : node
       )

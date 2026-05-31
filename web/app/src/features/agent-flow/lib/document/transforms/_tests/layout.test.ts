@@ -116,4 +116,60 @@ describe('Topological BFS Downstream Shifting', () => {
     const parallelNode = updatedDoc.graph.nodes.find((n) => n.id === 'node-parallel');
     expect(parallelNode?.position.x).toBe(400);
   });
+
+  test('resolves vertical overlapping of sibling nodes using AABB MTV', () => {
+    let document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    // Connect node-start to node-llm and a new sibling node-sibling
+    document.graph.nodes.push({
+      id: 'node-sibling',
+      type: 'llm',
+      alias: 'Sibling',
+      containerId: null,
+      position: { x: 380, y: 110 }, // Overlaps in Y with node-llm (x: 380, y: 100)
+      config: {},
+      bindings: {},
+      outputs: []
+    });
+
+    document.graph.edges.push({
+      id: 'edge-start-sibling',
+      source: 'node-start',
+      target: 'node-sibling',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    // Explicitly set positions
+    document.graph.nodes = document.graph.nodes.map((node) => {
+      if (node.id === 'node-start') {
+        return { ...node, position: { x: 100, y: 100 } };
+      }
+      if (node.id === 'node-llm') {
+        return { ...node, position: { x: 380, y: 100 } };
+      }
+      return node;
+    });
+
+    // Move start node forward to trigger shifting.
+    // This will trigger BFS which shifts both node-llm and node-sibling.
+    // They are both active, and they overlap vertically at x: 480.
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-start' ? { ...node, position: { x: 200, y: 100 } } : node
+    );
+
+    const updatedDoc = shiftDownstreamNodesBFS(document, 'node-start', 280);
+
+    const llmNode = updatedDoc.graph.nodes.find((n) => n.id === 'node-llm');
+    const siblingNode = updatedDoc.graph.nodes.find((n) => n.id === 'node-sibling');
+
+    expect(llmNode).toBeDefined();
+    expect(siblingNode).toBeDefined();
+
+    // Verify they are separated vertically: difference in Y must be at least NODE_HEIGHT (96) + gapY (40) = 136px
+    const yDiff = Math.abs((llmNode?.position.y ?? 0) - (siblingNode?.position.y ?? 0));
+    expect(yDiff).toBeGreaterThanOrEqual(136);
+  });
 });

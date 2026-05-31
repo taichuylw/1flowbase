@@ -195,7 +195,7 @@ export function insertNodeOnEdge(
     }
   };
 
-  return shiftDownstreamNodesBFS(intermediateDoc, insertedNode.id, 280);
+  return shiftDownstreamNodesBFS(intermediateDoc, sourceNode.id, 280);
 }
 
 export function connectNodeFromSource(
@@ -239,7 +239,7 @@ export function connectNodeFromSource(
     }
   };
 
-  return shiftDownstreamNodesBFS(intermediateDoc, insertedNode.id, 280);
+  return shiftDownstreamNodesBFS(intermediateDoc, sourceNode.id, 280);
 }
 
 export function removeEdge(
