@@ -118,11 +118,10 @@ test('resolveTemporaryFrontendPort never selects the user frontend port', async 
 test('buildTemporaryFrontendCommand runs Vite on the isolated style-boundary port', () => {
   const command = buildTemporaryFrontendCommand('/repo', 3101, { PATH: '' });
 
-  assert.equal(command.cwd, path.join('/repo', 'web'));
+  assert.equal(command.cwd, path.join('/repo', 'web', 'app'));
   assert.deepEqual(command.args, [
-    '--filter',
-    '@1flowbase/web',
-    'dev',
+    'exec',
+    'vite',
     '--host',
     '127.0.0.1',
     '--port',

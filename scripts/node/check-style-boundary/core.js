@@ -182,16 +182,15 @@ function buildTemporaryFrontendCommand(repoRoot, port, env = process.env) {
   return {
     command: resolvePnpmBinaryFromPath(runtime.env) || 'pnpm',
     args: [
-      '--filter',
-      '@1flowbase/web',
-      'dev',
+      'exec',
+      'vite',
       '--host',
       TEMPORARY_FRONTEND_HOST,
       '--port',
       String(port),
       '--strictPort'
     ],
-    cwd: path.join(repoRoot, 'web'),
+    cwd: path.join(repoRoot, 'web', 'app'),
     env: runtime.env
   };
 }
