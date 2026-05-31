@@ -85,6 +85,23 @@ function formatInteger(value: number) {
   return formatNumber(value, { maximumFractionDigits: 0 });
 }
 
+function formatTokenAmount(value: number) {
+  const absoluteValue = Math.abs(value);
+  const unit = [
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+    { threshold: 1_000, suffix: 'K' }
+  ].find((candidate) => absoluteValue >= candidate.threshold);
+
+  if (!unit) {
+    return formatInteger(value);
+  }
+
+  return `${formatNumber(value / unit.threshold, {
+    maximumFractionDigits: 1
+  })}${unit.suffix}`;
+}
+
 function formatDecimal(value: number, digits = 1) {
   return formatNumber(value, {
     maximumFractionDigits: digits,
@@ -108,7 +125,7 @@ function tokenComparisonMetric(report: ApplicationRunMonitoringReport) {
   ) {
     return {
       label: i18nText('applications', 'auto.token_increase_from_empty'),
-      value: formatInteger(report.tokens.total_tokens_sum)
+      value: formatTokenAmount(report.tokens.total_tokens_sum)
     };
   }
 
@@ -156,10 +173,6 @@ function formatTrendBucket(
 
 function sourceLabel(source: string) {
   return source === 'public_api' ? 'Public API' : i18nText("applications", "auto.console");
-}
-
-function statisticValue(value: string | number) {
-  return value;
 }
 
 function runtimeHealthLabel(state: ApplicationRuntimeActivity['health']['state']) {
@@ -652,46 +665,6 @@ function usageColumns<
     }
   ];
 }
-
-const runRankColumns: ColumnsType<ApplicationRunMonitoringRunRank> = [
-  {
-    title: i18nText("applications", "auto.run"),
-    dataIndex: 'title',
-    key: 'title',
-    render: (value: string, run) => (
-      <Space direction="vertical" size={0}>
-        <Typography.Text>{value}</Typography.Text>
-        <Typography.Text type="secondary">{run.flow_run_id}</Typography.Text>
-      </Space>
-    )
-  },
-  {
-    title: i18nText("applications", "auto.status"),
-    dataIndex: 'status',
-    key: 'status'
-  },
-  {
-    title: i18nText("applications", "auto.duration"),
-    dataIndex: 'duration_ms',
-    key: 'duration_ms',
-    align: 'right',
-    render: (value: number | null) => formatDuration(value)
-  },
-  {
-    title: 'Tokens',
-    dataIndex: 'total_tokens',
-    key: 'total_tokens',
-    align: 'right',
-    render: (value: number | null) =>
-      value == null ? '-' : formatInteger(value)
-  },
-  {
-    title: i18nText("applications", "auto.start_time"),
-    dataIndex: 'started_at',
-    key: 'started_at',
-    render: formatTime
-  }
-];
 
 function MonitoringPanel({
   children,
@@ -1299,7 +1272,7 @@ export function ApplicationMonitoringPage({
             <div className="metric-card__content">
               <span className="metric-card__title">{i18nText("applications", "auto.total_tokens_amount")}</span>
               <span className="metric-card__value">
-                {formatInteger(report.tokens.total_tokens_sum)}
+                {formatTokenAmount(report.tokens.total_tokens_sum)}
               </span>
             </div>
           </div>
@@ -1315,7 +1288,7 @@ export function ApplicationMonitoringPage({
               <div className="metric-card__content">
                 <span className="metric-card__title">{metric.title}</span>
                 <span className="metric-card__value">
-                  {formatInteger(metric.value)}
+                  {formatTokenAmount(metric.value)}
                 </span>
               </div>
             </div>

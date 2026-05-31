@@ -376,11 +376,11 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('Slow')).toBeInTheDocument();
     expect(screen.getByText('5m failure rate')).toBeInTheDocument();
     expect(screen.getByText('New tokens')).toBeInTheDocument();
-    expect(screen.getAllByText('5,600').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('5.6K').length).toBeGreaterThan(0);
     expect(screen.getByText('Input tokens')).toBeInTheDocument();
-    expect(screen.getByText('4,200')).toBeInTheDocument();
+    expect(screen.getByText('4.2K')).toBeInTheDocument();
     expect(screen.getByText('Output tokens')).toBeInTheDocument();
-    expect(screen.getByText('1,400')).toBeInTheDocument();
+    expect(screen.getByText('1.4K')).toBeInTheDocument();
     expect(screen.getByText('Cache-hit tokens')).toBeInTheDocument();
     expect(screen.getByText('900')).toBeInTheDocument();
     expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
@@ -403,6 +403,40 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('Customer API')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
     expect(echartsMock.chart.setOption).toHaveBeenCalled();
+  });
+
+  test('formats token metric cards with K M B suffixes', async () => {
+    runtimeApi.fetchApplicationRunMonitoringReport.mockResolvedValue({
+      ...monitoringReport(),
+      tokens: {
+        ...monitoringReport().tokens,
+        total_tokens_sum: 11_739_169,
+        input_tokens_sum: 11_290_226,
+        output_tokens_sum: 366_440,
+        input_cache_hit_tokens_sum: 7_874_262
+      },
+      tokens_comparison: {
+        ...monitoringReport().tokens_comparison,
+        previous_total_tokens_sum: 0,
+        token_change_rate: 11_739_169
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ApplicationMonitoringPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('Total amount of tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('11.7M')).toHaveLength(2);
+    expect(screen.getByText('Input tokens')).toBeInTheDocument();
+    expect(screen.getByText('11.3M')).toBeInTheDocument();
+    expect(screen.getByText('Output tokens')).toBeInTheDocument();
+    expect(screen.getByText('366.4K')).toBeInTheDocument();
+    expect(screen.getByText('Cache-hit tokens')).toBeInTheDocument();
+    expect(screen.getByText('7.9M')).toBeInTheDocument();
+    expect(screen.queryByText('11,739,169')).not.toBeInTheDocument();
   });
 
   test('refreshes the report when time range changes', async () => {
