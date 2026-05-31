@@ -10,6 +10,7 @@ use super::{
     api_keys::{ApplicationApiKeyActor, ApplicationApiKeyService},
     conversations::{
         ApplicationPublicConversationRepository, BindApplicationPublicConversationInput,
+        ListApplicationPublicConversationMessagesInput,
     },
     model_catalog::{extract_agent_model_catalog_from_start_node, find_agent_model},
     native::{
@@ -27,6 +28,8 @@ use crate::{
     },
     state_transition::ensure_flow_run_transition,
 };
+
+const APPLICATION_PUBLIC_CONVERSATION_HISTORY_LIMIT: i64 = 50;
 
 pub struct ApplicationPublishedRunService<R> {
     repository: R,
@@ -355,13 +358,41 @@ where
             .bind_application_public_conversation(&BindApplicationPublicConversationInput {
                 application_id,
                 api_key_id,
-                external_user,
-                external_conversation_id,
+                external_user: external_user.clone(),
+                external_conversation_id: external_conversation_id.clone(),
             })
             .await
             .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+        if request.history.is_empty() {
+            let messages = self
+                .repository
+                .list_application_public_conversation_messages(
+                    &ListApplicationPublicConversationMessagesInput {
+                        application_id,
+                        api_key_id,
+                        external_user,
+                        external_conversation_id,
+                        limit: APPLICATION_PUBLIC_CONVERSATION_HISTORY_LIMIT,
+                    },
+                )
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+            request.history = messages
+                .into_iter()
+                .map(application_public_conversation_message_to_native_history)
+                .collect();
+        }
         Ok(request)
     }
+}
+
+fn application_public_conversation_message_to_native_history(
+    message: super::conversations::ApplicationPublicConversationMessageRecord,
+) -> Value {
+    json!({
+        "role": message.role,
+        "content": message.content,
+    })
 }
 
 #[async_trait]
