@@ -8,6 +8,7 @@ const {
   createProbeUrl,
   formatBoundaryFailure,
   formatRelationshipFailure,
+  installStyleBoundaryNetworkMocks,
   isStyleBoundaryFrontendReady,
   parseCliArgs,
   resolveStyleBoundaryBaseUrl,
@@ -198,6 +199,9 @@ test('resolveStyleBoundaryFrontendHost does not start a fallback when an explici
 test('isStyleBoundaryFrontendReady reuses an already running style-boundary host', async () => {
   const calls = [];
   const page = {
+    async route(pattern, handler) {
+      calls.push({ type: 'route', pattern, handler });
+    },
     async goto(url, options) {
       calls.push({ type: 'goto', url, options });
     },
@@ -227,12 +231,62 @@ test('isStyleBoundaryFrontendReady reuses an already running style-boundary host
   assert.equal(ready, true);
   assert.deepEqual(
     calls.map((entry) => entry.type),
-    ['newPage', 'goto', 'waitForFunction', 'close']
+    ['newPage', 'route', 'goto', 'waitForFunction', 'close']
   );
   assert.equal(
-    calls[1].url,
+    calls[2].url,
     'http://127.0.0.1:3100/style-boundary.html?scene=page.home'
   );
+});
+
+test('installStyleBoundaryNetworkMocks fulfills user preference writes without a backend', async () => {
+  const routes = [];
+  const page = {
+    async route(pattern, handler) {
+      routes.push({ pattern, handler });
+    }
+  };
+
+  await installStyleBoundaryNetworkMocks(page);
+
+  assert.equal(routes.length, 1);
+  assert.equal(routes[0].pattern, '**/api/console/me/meta');
+
+  let fulfilled = null;
+  await routes[0].handler({
+    request() {
+      return {
+        postDataJSON() {
+          return {
+            meta: {
+              ui: {
+                data_tables: {
+                  'applications.logs.runs': {
+                    visibleColumnKeys: ['title']
+                  }
+                }
+              }
+            }
+          };
+        }
+      };
+    },
+    async fulfill(payload) {
+      fulfilled = payload;
+    }
+  });
+
+  assert.equal(fulfilled.status, 200);
+  assert.equal(fulfilled.contentType, 'application/json');
+  assert.deepEqual(JSON.parse(fulfilled.body).data.meta, {
+    ui: {
+      data_tables: {
+        'applications.logs.runs': {
+          visibleColumnKeys: ['title']
+        }
+      }
+    }
+  });
 });
 
 test('formatBoundaryFailure labels style boundary regressions explicitly', () => {
