@@ -8,6 +8,7 @@ import type {
 import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgentFlowDebugSession';
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
+import { DebugMarkdownContent } from './DebugMarkdownContent';
 import { i18nText } from '../../../../../shared/i18n/text';
 
 const HISTORY_LOAD_SCROLL_THRESHOLD_PX = 96;
@@ -256,9 +257,16 @@ export function DebugConversationPane({
                         {debugMessageLabel(message.role)}
                       </Typography.Text>
                     </div>
-                    <Typography.Paragraph className="agent-flow-editor__debug-message-content">
-                      {message.content}
-                    </Typography.Paragraph>
+                    {message.role === 'system' ? (
+                      <DebugMarkdownContent
+                        className="agent-flow-editor__debug-message-content"
+                        content={message.content}
+                      />
+                    ) : (
+                      <Typography.Paragraph className="agent-flow-editor__debug-message-content">
+                        {message.content}
+                      </Typography.Paragraph>
+                    )}
                   </div>
                 </article>
               )

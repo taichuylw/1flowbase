@@ -52,7 +52,7 @@ function renderSettingsChromeLink({
         to={section.to}
         aria-current={isCurrent ? 'page' : undefined}
       >
-        {section.label}
+        {i18nText('settings', section.labelKey)}
       </Link>
     );
   }
@@ -63,7 +63,7 @@ function renderSettingsChromeLink({
       href={section.to}
       aria-current={isCurrent ? 'page' : undefined}
     >
-      {section.label}
+      {i18nText('settings', section.labelKey)}
     </a>
   );
 }
@@ -91,7 +91,10 @@ export function createSettingsChromeMenuItems({
     {
       key: 'settings',
       label: (
-        <span className="app-shell-settings-block" aria-label={i18nText("appShell", "auto.settings")}>
+        <span
+          className="app-shell-settings-block"
+          aria-label={i18nText('appShell', 'auto.settings')}
+        >
           <SettingOutlined />
         </span>
       ),

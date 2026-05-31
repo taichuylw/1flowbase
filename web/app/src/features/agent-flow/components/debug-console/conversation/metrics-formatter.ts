@@ -24,13 +24,6 @@ export function formatTokens(tokens: number): string {
   return `${sign}${absTokens}`;
 }
 
-export function formatTokenDelta(tokenDelta: number): string {
-  if (tokenDelta >= 0) {
-    return `+${formatTokens(tokenDelta)}`;
-  }
-  return formatTokens(tokenDelta);
-}
-
 export function formatDurationScaled(durationMs: number): string {
   if (durationMs < 1000) {
     return `${durationMs} ms`;

@@ -217,6 +217,7 @@ export interface ConsoleApplicationRunMonitoringReport {
   overview: ConsoleApplicationRunMonitoringOverview;
   duration: ConsoleApplicationRunMonitoringDuration;
   tokens: ConsoleApplicationRunMonitoringTokens;
+  tokens_comparison: ConsoleApplicationRunMonitoringTokensComparison;
   tool_callbacks: ConsoleApplicationRunMonitoringToolCallbacks;
   nodes: ConsoleApplicationRunMonitoringNodes;
   concurrency: ConsoleApplicationRunMonitoringConcurrency;
@@ -229,6 +230,111 @@ export interface ConsoleApplicationRunMonitoringReport {
   external_conversations: ConsoleApplicationRunMonitoringExternalConversationUsage[];
   slowest_runs: ConsoleApplicationRunMonitoringRunRank[];
   high_token_runs: ConsoleApplicationRunMonitoringRunRank[];
+}
+
+export interface ConsoleApplicationRunMonitoringTokensComparison {
+  previous_total_tokens_sum: number;
+  previous_run_count: number;
+  previous_avg_tokens_per_run: number;
+  token_change_rate: number;
+  run_count_change_rate: number;
+  avg_tokens_per_run_change_rate: number;
+  traffic_effect: number;
+  cost_per_run_effect: number;
+}
+
+export interface ConsoleApplicationRuntimeActivity {
+  meta: {
+    application_id: string;
+    scope: 'current_instance' | string;
+    storage: 'memory' | string;
+    instance_started_at: string;
+    snapshot_at: string;
+  };
+  active: {
+    total: number;
+    http_requests: number;
+    sse_connections: number;
+    websocket_connections: number;
+    application_executions: number;
+    tool_calls: number;
+    model_requests: number;
+    waiting: number | null;
+  };
+  peaks: {
+    process_peak_concurrency: number;
+    recent_peak_concurrency: number;
+  };
+  rolling_minute: {
+    completed: number;
+    failed: number;
+    cancelled: number;
+    disconnected: number;
+  };
+  windows: ConsoleApplicationRuntimeActivityWindows;
+  health: ConsoleApplicationRuntimeActivityHealth;
+  age_distribution: ConsoleApplicationRuntimeActivityAgeDistribution;
+  long_connection_age_distribution: ConsoleApplicationRuntimeActivityAgeDistribution;
+  pressure: {
+    slow_active_executions: number;
+    execution_slots_used: number | null;
+    execution_slots_limit: number | null;
+  };
+  resources: {
+    process_rss_bytes: number | null;
+  };
+}
+
+export interface ConsoleApplicationRuntimeActivityWindows {
+  one_minute: ConsoleApplicationRuntimeActivityWindow;
+  five_minutes: ConsoleApplicationRuntimeActivityWindow;
+  fifteen_minutes: ConsoleApplicationRuntimeActivityWindow;
+}
+
+export interface ConsoleApplicationRuntimeActivityWindow {
+  window_seconds: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  disconnected: number;
+  peak_concurrency: number;
+  failure_rate: number;
+  disconnect_rate: number;
+  throughput_per_minute: number;
+}
+
+export type ConsoleApplicationRuntimeHealthState =
+  | 'healthy'
+  | 'busy'
+  | 'slow'
+  | 'unstable'
+  | 'failing'
+  | 'failing_now';
+
+export type ConsoleApplicationRuntimeTrend =
+  | 'rising'
+  | 'steady'
+  | 'falling';
+
+export interface ConsoleApplicationRuntimeActivityHealth {
+  state: ConsoleApplicationRuntimeHealthState;
+  failure_rate_1m: number;
+  failure_rate_5m: number;
+  failure_rate_15m: number;
+  disconnect_rate_5m: number;
+  slow_ratio: number;
+  active_pressure: number;
+  throughput_5m_per_minute: number;
+  throughput_15m_per_minute: number;
+  throughput_trend: ConsoleApplicationRuntimeTrend;
+  failure_trend: number;
+}
+
+export interface ConsoleApplicationRuntimeActivityAgeDistribution {
+  under_5s: number;
+  from_5s_to_30s: number;
+  from_30s_to_120s: number;
+  over_120s: number;
 }
 
 export interface GetConsoleApplicationRunsInput {
@@ -1265,6 +1371,17 @@ export function getConsoleApplicationRunMonitoringReport(
     path:
       `/api/console/applications/${applicationId}/monitoring/run-metrics` +
       (query ? `?${query}` : ''),
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRuntimeActivity(
+  applicationId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRuntimeActivity>({
+    path: `/api/console/applications/${applicationId}/monitoring/runtime-activity`,
+    method: 'GET',
     baseUrl
   });
 }

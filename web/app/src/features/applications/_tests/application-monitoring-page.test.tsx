@@ -27,6 +27,15 @@ const runtimeApi = vi.hoisted(() => ({
       input?.timeRangeDays ?? 7,
       input?.bucket ?? 'day'
     ] as const,
+  applicationRuntimeActivityQueryKey: (applicationId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'monitoring',
+      'runtime-activity'
+    ] as const,
+  fetchApplicationRuntimeActivity: vi.fn(),
   fetchApplicationRunMonitoringReport: vi.fn()
 }));
 
@@ -73,14 +82,24 @@ function monitoringReport() {
     duration: {
       duration_recorded_count: 12,
       avg_duration_ms: 2400,
-      percentile_fifty_duration_ms: 1800,
-      percentile_ninety_five_duration_ms: 32000,
+      p50_duration_ms: 1800,
+      p95_duration_ms: 32000,
       slow_run_rate: 0.08
     },
     tokens: {
       total_tokens_sum: 5600,
       avg_tokens_per_run: 466.7,
       token_recorded_count: 12
+    },
+    tokens_comparison: {
+      previous_total_tokens_sum: 0,
+      previous_run_count: 0,
+      previous_avg_tokens_per_run: 0,
+      token_change_rate: 5600,
+      run_count_change_rate: 0.3333,
+      avg_tokens_per_run_change_rate: 0.1667,
+      traffic_effect: 1.3333,
+      cost_per_run_effect: 1.1667
     },
     tool_callbacks: {
       total_tool_callback_count: 7,
@@ -198,6 +217,128 @@ function monitoringReport() {
   };
 }
 
+function hourlyMonitoringReport() {
+  return {
+    ...monitoringReport(),
+    meta: {
+      ...monitoringReport().meta,
+      bucket: 'hour' as const
+    },
+    tokens_trend: [
+      {
+        bucket_start: '2026-05-01T08:00:00Z',
+        run_count: 4,
+        total_tokens: 1200
+      },
+      {
+        bucket_start: '2026-05-01T09:00:00Z',
+        run_count: 8,
+        total_tokens: 4400
+      }
+    ]
+  };
+}
+
+function runtimeActivity() {
+  return {
+    meta: {
+      application_id: 'app-1',
+      scope: 'current_instance',
+      storage: 'memory',
+      instance_started_at: '2026-05-30T00:00:00Z',
+      snapshot_at: '2026-05-30T00:01:00Z'
+    },
+    active: {
+      total: 6,
+      http_requests: 1,
+      sse_connections: 2,
+      websocket_connections: 0,
+      application_executions: 1,
+      tool_calls: 1,
+      model_requests: 1,
+      waiting: null
+    },
+    peaks: {
+      process_peak_concurrency: 9,
+      recent_peak_concurrency: 6
+    },
+    rolling_minute: {
+      completed: 20,
+      failed: 2,
+      cancelled: 1,
+      disconnected: 3
+    },
+    windows: {
+      one_minute: {
+        window_seconds: 60,
+        completed: 20,
+        failed: 2,
+        cancelled: 1,
+        disconnected: 3,
+        peak_concurrency: 6,
+        failure_rate: 0.087,
+        disconnect_rate: 0.12,
+        throughput_per_minute: 20
+      },
+      five_minutes: {
+        window_seconds: 300,
+        completed: 80,
+        failed: 3,
+        cancelled: 1,
+        disconnected: 4,
+        peak_concurrency: 6,
+        failure_rate: 0.036,
+        disconnect_rate: 0.046,
+        throughput_per_minute: 16
+      },
+      fifteen_minutes: {
+        window_seconds: 900,
+        completed: 210,
+        failed: 4,
+        cancelled: 1,
+        disconnected: 5,
+        peak_concurrency: 9,
+        failure_rate: 0.019,
+        disconnect_rate: 0.023,
+        throughput_per_minute: 14
+      }
+    },
+    health: {
+      state: 'slow',
+      failure_rate_1m: 0.087,
+      failure_rate_5m: 0.036,
+      failure_rate_15m: 0.019,
+      disconnect_rate_5m: 0.046,
+      slow_ratio: 1,
+      active_pressure: 1,
+      throughput_5m_per_minute: 16,
+      throughput_15m_per_minute: 14,
+      throughput_trend: 'rising',
+      failure_trend: 0.017
+    },
+    age_distribution: {
+      under_5s: 3,
+      from_5s_to_30s: 2,
+      from_30s_to_120s: 1,
+      over_120s: 0
+    },
+    long_connection_age_distribution: {
+      under_5s: 1,
+      from_5s_to_30s: 1,
+      from_30s_to_120s: 0,
+      over_120s: 0
+    },
+    pressure: {
+      slow_active_executions: 1,
+      execution_slots_used: null,
+      execution_slots_limit: null
+    },
+    resources: {
+      process_rss_bytes: null
+    }
+  };
+}
+
 describe('ApplicationMonitoringPage', () => {
   beforeEach(() => {
     resetAuthStore();
@@ -205,6 +346,9 @@ describe('ApplicationMonitoringPage', () => {
     echartsMock.init.mockReturnValue(echartsMock.chart);
     runtimeApi.fetchApplicationRunMonitoringReport.mockResolvedValue(
       monitoringReport()
+    );
+    runtimeApi.fetchApplicationRuntimeActivity.mockResolvedValue(
+      runtimeActivity()
     );
   });
 
@@ -219,9 +363,30 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('75.0%')).toBeInTheDocument();
     expect(screen.queryByText('运行中数未包含')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: '运行统计口径' })
+      screen.getByRole('button', { name: 'Running statistical caliber' })
     ).toBeInTheDocument();
     expect(screen.getByText('openai-responses-v1')).toBeInTheDocument();
+    expect(screen.getByText('Runtime activity')).toBeInTheDocument();
+    expect(screen.getByText('Slow')).toBeInTheDocument();
+    expect(screen.getByText('5m failure rate')).toBeInTheDocument();
+    expect(screen.getByText('New tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('5,600').length).toBeGreaterThan(0);
+    expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByText('Runtime activity')
+        .compareDocumentPosition(
+          screen.getByRole('radio', { name: 'past 7 days' })
+        ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Runtime activity' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Current service instance realtime data')
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('SSE')).toBeInTheDocument();
+    expect(screen.getByText('Model requests')).toBeInTheDocument();
     expect(screen.getByText('customer-1')).toBeInTheDocument();
     expect(screen.getByText('Customer API')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
@@ -236,7 +401,7 @@ describe('ApplicationMonitoringPage', () => {
     );
 
     expect(await screen.findByText('12')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('radio', { name: '过去 4 周' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'past 4 weeks' }));
 
     await waitFor(() => {
       expect(
@@ -245,6 +410,35 @@ describe('ApplicationMonitoringPage', () => {
         timeRangeDays: 28,
         bucket: 'day'
       });
+    });
+    expect(runtimeApi.fetchApplicationRuntimeActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test('formats token trend buckets as hours for the past 24 hours range', async () => {
+    runtimeApi.fetchApplicationRunMonitoringReport.mockResolvedValue(
+      hourlyMonitoringReport()
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationMonitoringPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('radio', { name: 'past 24 hours' })
+    );
+
+    await waitFor(() => {
+      const option = echartsMock.chart.setOption.mock.calls
+        .map((call) => call[0])
+        .find((candidate) => candidate?.xAxis?.data);
+      expect(option.xAxis.data).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/\d{1,2}:\d{2}/),
+          expect.stringMatching(/\d{1,2}:\d{2}/)
+        ])
+      );
     });
   });
 });

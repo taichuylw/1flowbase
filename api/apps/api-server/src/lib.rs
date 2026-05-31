@@ -17,6 +17,7 @@ pub mod openapi_docs;
 pub mod provider_runtime;
 pub mod response;
 pub mod routes;
+pub mod runtime_activity;
 pub mod runtime_data_model_docs;
 pub mod runtime_profile_client;
 pub mod runtime_registry_sync;
@@ -133,7 +134,7 @@ pub fn app_with_state(state: Arc<ApiState>) -> Router {
 fn console_router(state: Arc<ApiState>) -> Router {
     Router::new()
         .merge(routes::application_public_api::compatible_router())
-        .nest("/api/v1/agent", routes::application_public_api::router())
+        .nest("/api/agent/v1", routes::application_public_api::router())
         .nest("/api/console", routes::applications::router())
         .nest("/api/console", routes::application_api::router())
         .nest("/api/console", routes::application_orchestration::router())
@@ -237,8 +238,16 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             "attachments",
         )
         .await?;
-    control_plane::system_metadata::SystemMetadataBootstrapService::new(store.clone())
+    let system_metadata_bootstrap =
+        control_plane::system_metadata::SystemMetadataBootstrapService::new(store.clone());
+    system_metadata_bootstrap
         .ensure_builtin_user_and_role_models(bootstrap_result.root_user_id)
+        .await?;
+    system_metadata_bootstrap
+        .ensure_builtin_runtime_read_model_grants(
+            bootstrap_result.root_user_id,
+            bootstrap_result.workspace_id,
+        )
         .await?;
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(
@@ -271,6 +280,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     let resolved_official_source = config.resolve_official_plugin_source();
     let trusted_public_keys = config.official_plugin_trusted_public_keys()?;
     let process_started_at = OffsetDateTime::now_utc();
+    let runtime_activity = Arc::new(runtime_activity::ApplicationRuntimeActivityTracker::default());
 
     let state = Arc::new(ApiState {
         store,
@@ -279,6 +289,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         runtime_engine,
         provider_runtime,
         process_started_at,
+        runtime_activity,
         api_runtime_profile: Arc::new(HostApiRuntimeProfileCollector),
         plugin_runner_system: Arc::new(HttpPluginRunnerSystemClient::new(
             config.plugin_runner_internal_base_url.clone(),

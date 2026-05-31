@@ -1,4 +1,6 @@
 use super::*;
+use control_plane::ports::{OrchestrationRuntimeRepository, UpdateFlowRunInput};
+use storage_durable::MainDurableStore;
 
 #[tokio::test]
 async fn application_runtime_routes_start_node_preview_and_query_logs() {
@@ -142,6 +144,46 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
     );
     assert!(list_payload["data"]["items"][0]["created_at"].is_string());
     assert!(list_payload["data"]["items"][0]["updated_at"].is_string());
+
+    let runtime_activity = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/monitoring/runtime-activity"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(runtime_activity.status(), StatusCode::OK);
+    let runtime_activity_body = to_bytes(runtime_activity.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let runtime_activity_payload: Value = serde_json::from_slice(&runtime_activity_body).unwrap();
+    assert_eq!(
+        runtime_activity_payload["data"]["meta"]["storage"].as_str(),
+        Some("memory")
+    );
+    assert_eq!(
+        runtime_activity_payload["data"]["meta"]["scope"].as_str(),
+        Some("current_instance")
+    );
+    assert!(
+        runtime_activity_payload["data"]["peaks"]["process_peak_concurrency"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert!(
+        runtime_activity_payload["data"]["rolling_minute"]["completed"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
 
     let detail = app
         .clone()
@@ -346,7 +388,7 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/agent/runs")
+                .uri("/api/agent/v1/runs")
                 .header("authorization", format!("Bearer {token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -480,7 +522,8 @@ async fn application_runtime_routes_logs_include_public_run_identity_fields() {
 
 #[tokio::test]
 async fn application_runtime_routes_logs_report_run_statistics() {
-    let (app, database_url) = test_app_with_database_url().await;
+    let (state, database_url) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
     let application_id =
@@ -582,6 +625,7 @@ async fn application_runtime_routes_logs_report_run_statistics() {
             r#"
             insert into node_runs (
                 id,
+                scope_id,
                 flow_run_id,
                 node_id,
                 node_type,
@@ -593,7 +637,26 @@ async fn application_runtime_routes_logs_report_run_statistics() {
                 metrics_payload,
                 started_at,
                 finished_at
-            ) values ($1, $2, $3, $4, $5, 'succeeded', '{}'::jsonb, '{}'::jsonb, null, $6, now(), now())
+            ) values (
+                $1,
+                (
+                    select applications.workspace_id
+                    from flow_runs
+                    join applications on applications.id = flow_runs.application_id
+                    where flow_runs.id = $2
+                ),
+                $2,
+                $3,
+                $4,
+                $5,
+                'succeeded',
+                '{}'::jsonb,
+                '{}'::jsonb,
+                null,
+                $6,
+                now(),
+                now()
+            )
             "#,
         )
         .bind(node_run_id)
@@ -619,6 +682,7 @@ async fn application_runtime_routes_logs_report_run_statistics() {
         r#"
         insert into flow_run_callback_tasks (
             id,
+            scope_id,
             flow_run_id,
             node_run_id,
             callback_kind,
@@ -627,7 +691,23 @@ async fn application_runtime_routes_logs_report_run_statistics() {
             response_payload,
             external_ref_payload,
             completed_at
-        ) values ($1, $2, $3, 'llm_tool_calls', 'completed', $4, '{}'::jsonb, '{}'::jsonb, now())
+        ) values (
+            $1,
+            (
+                select applications.workspace_id
+                from flow_runs
+                join applications on applications.id = flow_runs.application_id
+                where flow_runs.id = $2
+            ),
+            $2,
+            $3,
+            'llm_tool_calls',
+            'completed',
+            $4,
+            '{}'::jsonb,
+            '{}'::jsonb,
+            now()
+        )
         "#,
     )
     .bind(Uuid::now_v7())
@@ -635,6 +715,27 @@ async fn application_runtime_routes_logs_report_run_statistics() {
     .bind(llm_run_id)
     .bind(json!({ "tool_calls": tool_calls }))
     .execute(&pool)
+    .await
+    .unwrap();
+
+    let flow_run = <MainDurableStore as OrchestrationRuntimeRepository>::get_flow_run(
+        &state.store,
+        Uuid::parse_str(&application_id).unwrap(),
+        flow_run_id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    <MainDurableStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &state.store,
+        &UpdateFlowRunInput {
+            flow_run_id,
+            status: flow_run.status,
+            output_payload: flow_run.output_payload,
+            error_payload: flow_run.error_payload,
+            finished_at: flow_run.finished_at,
+        },
+    )
     .await
     .unwrap();
 
@@ -728,6 +829,17 @@ async fn application_runtime_routes_logs_are_paginated_and_newest_first() {
                 .unwrap()
                 .to_string(),
         );
+    }
+
+    for flow_run_id in &flow_run_ids {
+        wait_for_run_detail(
+            &app,
+            &cookie,
+            &application_id,
+            flow_run_id,
+            &["succeeded", "failed", "cancelled"],
+        )
+        .await;
     }
 
     let list = app

@@ -113,7 +113,7 @@ export function StartInputFieldSettingsPanel({
       }
     >
       <div className="agent-flow-start-input-fields__form">
-        <label className="agent-flow-start-input-fields__form-row">
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText("agentFlow", "auto.field_type")}</span>
           <Select
             aria-label={i18nText("agentFlow", "auto.input_field_type")}
@@ -122,25 +122,25 @@ export function StartInputFieldSettingsPanel({
             virtual={false}
             onChange={handleTypeChange}
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText("agentFlow", "auto.variable_name")}</span>
           <Input
             aria-label={i18nText("agentFlow", "auto.input_field_variable_name")}
             value={field.key}
             onChange={(event) => onChange({ key: event.target.value })}
           />
-        </label>
-        <label className="agent-flow-start-input-fields__form-row">
+        </div>
+        <div className="agent-flow-start-input-fields__form-row">
           <span>{i18nText("agentFlow", "auto.display_name")}</span>
           <Input
             aria-label={i18nText("agentFlow", "auto.input_field_display_name")}
             value={field.label}
             onChange={(event) => onChange({ label: event.target.value })}
           />
-        </label>
+        </div>
         {shouldShowMaxLength(field.inputType) ? (
-          <label className="agent-flow-start-input-fields__form-row">
+          <div className="agent-flow-start-input-fields__form-row">
             <span>{i18nText("agentFlow", "auto.maximum_length")}</span>
             <InputNumber
               aria-label={i18nText("agentFlow", "auto.maximum_input_field_length")}
@@ -154,7 +154,7 @@ export function StartInputFieldSettingsPanel({
                 })
               }
             />
-          </label>
+          </div>
         ) : null}
 
         {field.inputType === 'select' ? (

@@ -4,8 +4,8 @@ import {
   SortAscendingOutlined,
   SortDescendingOutlined
 } from '@ant-design/icons';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Empty, Input, Tooltip } from 'antd';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Alert, App, Button, Empty, Input, Spin, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,15 +13,12 @@ import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelec
 import type { AgentFlowDebugMessage } from '../../agent-flow/api/runtime';
 import { ConversationLogPanel } from '../../agent-flow/components/debug-console/ConversationLogPanel';
 import {
-  applicationRunDetailQueryKey,
   applicationRunsQueryKey,
-  fetchApplicationRunDetail,
   fetchApplicationRuns,
   type FetchApplicationRunsInput,
   fetchRuntimeDebugArtifact,
   type ApplicationRunSortField,
   type ApplicationRunSortOrder,
-  type ApplicationRunDetail,
   type ApplicationRunSummary
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
@@ -45,14 +42,6 @@ const DEFAULT_TIME_RANGE = '7';
 const PAGE_SIZE = 20;
 
 type ApplicationLogTimeRange = '1' | '7' | '28' | '90' | '365' | 'all';
-type SearchableRunSummary = ApplicationRunSummary & {
-  answer?: unknown;
-  input_payload?: unknown;
-  input_summary?: unknown;
-  output_payload?: unknown;
-  output_summary?: unknown;
-  query?: unknown;
-};
 
 const TIME_RANGE_OPTIONS: Array<{
   labelKey: string;
@@ -129,67 +118,6 @@ function getConversationLogInitialRect() {
   };
 }
 
-function stringifySearchValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function getRunSummarySearchText(run: ApplicationRunSummary) {
-  const searchableRun = run as SearchableRunSummary;
-
-  return [
-    run.id,
-    run.title,
-    run.expand_id,
-    run.authorized_account,
-    run.run_mode,
-    run.status,
-    run.target_node_id,
-    searchableRun.query,
-    searchableRun.answer,
-    searchableRun.input_summary,
-    searchableRun.output_summary,
-    searchableRun.input_payload,
-    searchableRun.output_payload
-  ]
-    .map(stringifySearchValue)
-    .join(' ')
-    .toLowerCase();
-}
-
-function getRunDetailSearchText(detail: ApplicationRunDetail | undefined) {
-  if (!detail) {
-    return '';
-  }
-
-  return [
-    detail.flow_run.input_payload,
-    detail.flow_run.output_payload,
-    ...detail.node_runs.flatMap((nodeRun) => [
-      nodeRun.input_payload,
-      nodeRun.output_payload
-    ])
-  ]
-    .map(stringifySearchValue)
-    .join(' ')
-    .toLowerCase();
-}
-
 export function ApplicationLogsPage({
   applicationId
 }: {
@@ -238,12 +166,14 @@ export function ApplicationLogsPage({
   );
   const runsTableColumns = useMemo(() => getApplicationRunsTableColumns(t), [t]);
   const runsTableConfiguration = useApplicationRunsTableConfiguration(runsTableColumns);
+  const titleIncludes = keywordSearch.trim();
   const runsInput: FetchApplicationRunsInput = {
     page,
     pageSize: PAGE_SIZE,
     timeRangeDays: timeRange === 'all' ? null : Number(timeRange),
     sortBy,
-    sortOrder
+    sortOrder,
+    titleIncludes: titleIncludes || undefined
   };
   const runsQuery = useQuery({
     queryKey: applicationRunsQueryKey(applicationId, runsInput),
@@ -253,43 +183,10 @@ export function ApplicationLogsPage({
   const runsPage = runsQuery.data;
   const runs = useMemo(() => runsPage?.items ?? [], [runsPage?.items]);
   const total = runsPage?.total ?? 0;
-  const normalizedKeyword = keywordSearch.trim().toLowerCase();
-  const runDetailQueries = useQueries({
-    queries: runs.map((run) => ({
-      queryKey: applicationRunDetailQueryKey(applicationId, run.id),
-      queryFn: () => fetchApplicationRunDetail(applicationId, run.id),
-      enabled: normalizedKeyword.length > 0
-    }))
-  });
-  const runDetailsById = new Map<string, ApplicationRunDetail>();
-
-  runs.forEach((run, index) => {
-    const detail = runDetailQueries[index]?.data;
-
-    if (detail) {
-      runDetailsById.set(run.id, detail);
-    }
-  });
-
-  const visibleRuns = runs.filter((run) => {
-    if (!normalizedKeyword) {
-      return true;
-    }
-
-    return (
-      getRunSummarySearchText(run).includes(normalizedKeyword) ||
-      getRunDetailSearchText(runDetailsById.get(run.id)).includes(
-        normalizedKeyword
-      )
-    );
-  });
-  const searchingRunDetails =
-    Boolean(normalizedKeyword) &&
-    runDetailQueries.some((query) => query.isFetching);
 
   useEffect(() => {
     setPage(1);
-  }, [applicationId, timeRange, sortBy, sortOrder]);
+  }, [applicationId, timeRange, sortBy, sortOrder, titleIncludes]);
 
   useEffect(() => {
     if (!runs.some((run) => isActiveRunStatus(run.status))) {
@@ -303,8 +200,8 @@ export function ApplicationLogsPage({
     return () => window.clearInterval(intervalId);
   }, [runs, refetchRuns]);
 
-  function selectRun(runId: string | null) {
-    setSelectedRunId(runId);
+  function selectRun(run: ApplicationRunSummary | null) {
+    setSelectedRunId(run ? run.flow_run_id ?? run.id : null);
     setOpenConversationLogMessage(null);
     setActiveFloatingWindow('run-detail');
   }
@@ -329,14 +226,6 @@ export function ApplicationLogsPage({
     } finally {
       setRefreshingRuns(false);
     }
-  }
-
-  if (runsQuery.isPending) {
-    return null;
-  }
-
-  if (runsQuery.isError) {
-    return null;
   }
 
   const logsHeader = (
@@ -381,7 +270,7 @@ export function ApplicationLogsPage({
           allowClear
           aria-label={t('auto.keyword_search')}
           className="application-logs-page__filter-search"
-          placeholder={t('auto.search_conversations_and_answers')}
+          placeholder={t('auto.search_title')}
           prefix={<SearchOutlined />}
           value={keywordSearch}
           onChange={(event) => setKeywordSearch(event.target.value)}
@@ -410,19 +299,39 @@ export function ApplicationLogsPage({
       className="application-logs-page__list"
       data-testid="application-logs-list"
     >
-      {runs.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={null} />
-      ) : visibleRuns.length === 0 && !searchingRunDetails ? (
+      {runsQuery.isPending ? (
+        <div className="application-logs-page__state" role="status">
+          <Spin aria-hidden="true" />
+          <span>{t('auto.logs_loading')}</span>
+        </div>
+      ) : runsQuery.isError ? (
+        <Alert
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                void runsQuery.refetch();
+              }}
+            >
+              {t('auto.refresh_logs')}
+            </Button>
+          }
+          description={t('auto.logs_load_failed_description')}
+          message={t('auto.logs_load_failed')}
+          showIcon
+          type="error"
+        />
+      ) : runs.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={null} />
       ) : (
         <ApplicationRunsTable
-          loading={searchingRunDetails}
+          loading={runsQuery.isFetching}
           page={page}
           pageSize={PAGE_SIZE}
           total={total}
           configuration={runsTableConfiguration}
           columns={runsTableColumns}
-          runs={visibleRuns}
+          runs={runs}
           selectedRunId={selectedRunId}
           onPageChange={setPage}
           onSelectRun={selectRun}

@@ -169,6 +169,20 @@ pub struct OpenAiModelObject {
     pub owned_by: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_compact_token_limit: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -704,11 +718,22 @@ fn to_openai_model_list_response(
         data: models
             .into_iter()
             .map(|model| OpenAiModelObject {
-                id: model.id,
+                id: model.id.clone(),
                 object: "model",
                 created,
                 owned_by: "1flowbase",
-                name: model.name,
+                name: model.name.clone(),
+                context_window: model.context_window,
+                max_context_window: model.max_context_window.or(model.context_window),
+                max_output_tokens: model.max_output_tokens,
+                auto_compact_token_limit: model.auto_compact_token_limit,
+                capabilities: (!model.capabilities.is_empty())
+                    .then(|| serde_json::to_value(&model.capabilities).unwrap_or(Value::Null)),
+                reasoning: model
+                    .reasoning
+                    .as_ref()
+                    .map(|reasoning| serde_json::to_value(reasoning).unwrap_or(Value::Null)),
+                limit: opencode_limit_projection(&model),
             })
             .collect(),
     }
@@ -730,7 +755,7 @@ fn to_codex_model_list_response(models: Vec<OpenAiCompatibleModel>) -> Value {
 }
 
 fn codex_model_metadata(model: OpenAiCompatibleModel) -> Value {
-    let display_name = model.name.unwrap_or_else(|| model.id.clone());
+    let display_name = model.name.clone().unwrap_or_else(|| model.id.clone());
     let max_context_window = model.max_context_window.or(model.context_window);
     json!({
         "slug": model.id,
@@ -756,11 +781,27 @@ fn codex_model_metadata(model: OpenAiCompatibleModel) -> Value {
         "supports_image_detail_original": false,
         "context_window": model.context_window,
         "max_context_window": max_context_window,
+        "max_output_tokens": model.max_output_tokens,
         "auto_compact_token_limit": model.auto_compact_token_limit,
         "effective_context_window_percent": 95,
+        "limit": opencode_limit_projection(&model),
         "experimental_supported_tools": [],
         "input_modalities": ["text"]
     })
+}
+
+fn opencode_limit_projection(model: &OpenAiCompatibleModel) -> Option<Value> {
+    let context = model.max_context_window.or(model.context_window);
+    let output = model.max_output_tokens;
+    if context.is_none() && output.is_none() {
+        return None;
+    }
+
+    Some(json!({
+        "context": context,
+        "input": context,
+        "output": output,
+    }))
 }
 
 async fn create_native_run(

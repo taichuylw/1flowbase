@@ -4,6 +4,7 @@ import {
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
+  getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunNodeLastRun,
   getConsoleApplicationRuns,
   getConsoleDebugVariableSnapshot,
@@ -244,6 +245,16 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
               avg_tokens_per_run: 250,
               token_recorded_count: 2
             },
+            tokens_comparison: {
+              previous_total_tokens_sum: 300,
+              previous_run_count: 1,
+              previous_avg_tokens_per_run: 300,
+              token_change_rate: 0.6666666667,
+              run_count_change_rate: 1,
+              avg_tokens_per_run_change_rate: -0.1666666667,
+              traffic_effect: 2,
+              cost_per_run_effect: 0.8333333333
+            },
             tool_callbacks: {
               total_tool_callback_count: 2,
               avg_tool_callback_count: 1,
@@ -287,11 +298,145 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       },
       duration: {
         slow_run_rate: 0.5
+      },
+      tokens_comparison: {
+        previous_total_tokens_sum: 300
       }
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/monitoring/run-metrics?time_range_days=7&bucket=day',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  test('fetches application runtime activity without historical range query', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            meta: {
+              application_id: 'app-1',
+              scope: 'current_instance',
+              storage: 'memory',
+              instance_started_at: '2026-05-30T00:00:00Z',
+              snapshot_at: '2026-05-30T00:01:00Z'
+            },
+            active: {
+              total: 4,
+              http_requests: 1,
+              sse_connections: 1,
+              websocket_connections: 0,
+              application_executions: 1,
+              tool_calls: 0,
+              model_requests: 1,
+              waiting: null
+            },
+            peaks: {
+              process_peak_concurrency: 8,
+              recent_peak_concurrency: 5
+            },
+            rolling_minute: {
+              completed: 12,
+              failed: 1,
+              cancelled: 0,
+              disconnected: 2
+            },
+            windows: {
+              one_minute: {
+                window_seconds: 60,
+                completed: 12,
+                failed: 1,
+                cancelled: 0,
+                disconnected: 2,
+                peak_concurrency: 5,
+                failure_rate: 0.0769230769,
+                disconnect_rate: 0.1333333333,
+                throughput_per_minute: 12
+              },
+              five_minutes: {
+                window_seconds: 300,
+                completed: 40,
+                failed: 2,
+                cancelled: 0,
+                disconnected: 3,
+                peak_concurrency: 6,
+                failure_rate: 0.0476190476,
+                disconnect_rate: 0.0666666667,
+                throughput_per_minute: 8
+              },
+              fifteen_minutes: {
+                window_seconds: 900,
+                completed: 90,
+                failed: 3,
+                cancelled: 0,
+                disconnected: 5,
+                peak_concurrency: 8,
+                failure_rate: 0.0322580645,
+                disconnect_rate: 0.0510204082,
+                throughput_per_minute: 6
+              }
+            },
+            health: {
+              state: 'healthy',
+              failure_rate_1m: 0.0769230769,
+              failure_rate_5m: 0.0476190476,
+              failure_rate_15m: 0.0322580645,
+              disconnect_rate_5m: 0.0666666667,
+              slow_ratio: 0,
+              active_pressure: 0.8,
+              throughput_5m_per_minute: 8,
+              throughput_15m_per_minute: 6,
+              throughput_trend: 'rising',
+              failure_trend: 0.0153619831
+            },
+            age_distribution: {
+              under_5s: 2,
+              from_5s_to_30s: 1,
+              from_30s_to_120s: 1,
+              over_120s: 0
+            },
+            long_connection_age_distribution: {
+              under_5s: 0,
+              from_5s_to_30s: 1,
+              from_30s_to_120s: 0,
+              over_120s: 0
+            },
+            pressure: {
+              slow_active_executions: 1,
+              execution_slots_used: null,
+              execution_slots_limit: null
+            },
+            resources: {
+              process_rss_bytes: null
+            }
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRuntimeActivity('app-1', 'http://127.0.0.1:7800')
+    ).resolves.toMatchObject({
+      meta: {
+        scope: 'current_instance',
+        storage: 'memory'
+      },
+      active: {
+        total: 4,
+        sse_connections: 1
+      },
+      rolling_minute: {
+        disconnected: 2
+      },
+      health: {
+        state: 'healthy'
+      }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/monitoring/runtime-activity',
       expect.objectContaining({ method: 'GET' })
     );
   });

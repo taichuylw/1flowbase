@@ -260,7 +260,18 @@ async fn publish_application(app: &Router, cookie: &str, csrf: &str, application
             "id": "qwen3.6-35b-a3b",
             "name": "Qwen 3.6 35B",
             "context_window": 128000,
-            "auto_compact_token_limit": 110000
+            "max_output_tokens": 32000,
+            "auto_compact_token_limit": 110000,
+            "capabilities": {
+                "reasoning": true,
+                "tool_call": true,
+                "multimodal": false,
+                "structured_output": true
+            },
+            "reasoning": {
+                "default_effort": "medium",
+                "supported_efforts": ["low", "medium", "high"]
+            }
         },
         "deepseek-v4-flash"
     ]);
@@ -363,6 +374,7 @@ async fn test_app_with_runtime_event_stream(
         runtime_engine: base_state.runtime_engine.clone(),
         provider_runtime: base_state.provider_runtime.clone(),
         process_started_at: base_state.process_started_at,
+        runtime_activity: base_state.runtime_activity.clone(),
         api_runtime_profile: base_state.api_runtime_profile.clone(),
         plugin_runner_system: base_state.plugin_runner_system.clone(),
         official_plugin_source: base_state.official_plugin_source.clone(),
@@ -883,7 +895,41 @@ async fn openai_models_lists_start_node_configured_models() {
     assert_eq!(payload["data"][0]["id"], json!("qwen3.6-35b-a3b"));
     assert_eq!(payload["data"][0]["name"], json!("Qwen 3.6 35B"));
     assert_eq!(payload["data"][0]["object"], json!("model"));
+    assert_eq!(payload["data"][0]["context_window"], json!(128000));
+    assert_eq!(payload["data"][0]["max_output_tokens"], json!(32000));
+    assert_eq!(
+        payload["data"][0]["auto_compact_token_limit"],
+        json!(110000)
+    );
+    assert_eq!(
+        payload["data"][0]["limit"],
+        json!({
+            "context": 128000,
+            "input": 128000,
+            "output": 32000
+        })
+    );
     assert_eq!(payload["data"][1]["id"], json!("deepseek-v4-flash"));
+}
+
+#[tokio::test]
+async fn native_models_returns_canonical_start_node_model_capabilities() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "Native Canonical Models App").await;
+
+    let response = get_models(&app, "/api/agent/v1/models", &token).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["object"], json!("list"));
+    assert_eq!(payload["data"][0]["id"], json!("qwen3.6-35b-a3b"));
+    assert_eq!(payload["data"][0]["context_window"], json!(128000));
+    assert_eq!(payload["data"][0]["max_output_tokens"], json!(32000));
+    assert_eq!(payload["data"][0]["capabilities"]["reasoning"], json!(true));
+    assert_eq!(
+        payload["data"][0]["reasoning"]["supported_efforts"],
+        json!(["low", "medium", "high"])
+    );
 }
 
 #[tokio::test]
@@ -900,9 +946,18 @@ async fn openai_models_with_client_version_returns_codex_model_metadata() {
     assert_eq!(payload["models"][0]["display_name"], json!("Qwen 3.6 35B"));
     assert_eq!(payload["models"][0]["context_window"], json!(128000));
     assert_eq!(payload["models"][0]["max_context_window"], json!(128000));
+    assert_eq!(payload["models"][0]["max_output_tokens"], json!(32000));
     assert_eq!(
         payload["models"][0]["auto_compact_token_limit"],
         json!(110000)
+    );
+    assert_eq!(
+        payload["models"][0]["limit"],
+        json!({
+            "context": 128000,
+            "input": 128000,
+            "output": 32000
+        })
     );
     assert_eq!(payload["models"][1]["slug"], json!("deepseek-v4-flash"));
 }
@@ -939,53 +994,6 @@ async fn openai_chat_completions_accepts_tools_for_agent_framework_compatibility
     let payload = response_json(response).await;
     assert_eq!(payload["object"], json!("chat.completion"));
     assert_eq!(payload["model"], json!("provider/custom-model:latest"));
-}
-
-#[tokio::test]
-async fn anthropic_messages_accepts_x_api_key_and_preserves_model() {
-    let app = test_app().await;
-    let token = setup_published_app(&app, "Anthropic Compatible Route App").await;
-
-    let response = post_json(
-        &app,
-        "/v1/messages",
-        ("x-api-key", token),
-        anthropic_body(false),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload = response_json(response).await;
-    assert_eq!(payload["type"], json!("message"));
-    assert_eq!(payload["model"], json!("anthropic/custom-model:latest"));
-    assert_eq!(payload["content"][0]["type"], json!("text"));
-}
-
-#[tokio::test]
-async fn anthropic_messages_accepts_agent_tool_definitions() {
-    let app = test_app().await;
-    let token = setup_published_app(&app, "Anthropic Tool Compatible Route App").await;
-    let mut body = anthropic_body(false);
-    body["tools"] = json!([
-        {
-            "name": "lookup_order",
-            "description": "Find an order",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "order_id": {"type": "string"}
-                }
-            }
-        }
-    ]);
-    body["tool_choice"] = json!({"type": "auto"});
-
-    let response = post_json(&app, "/v1/messages", ("x-api-key", token), body).await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload = response_json(response).await;
-    assert_eq!(payload["type"], json!("message"));
-    assert_eq!(payload["model"], json!("anthropic/custom-model:latest"));
 }
 
 #[tokio::test]
@@ -1073,6 +1081,11 @@ async fn compatible_streaming_routes_return_protocol_sse() {
     .expect("Anthropic compatible SSE should finish")
     .unwrap();
     let anthropic_body = String::from_utf8(anthropic_body.to_vec()).unwrap();
+    assert_eq!(
+        anthropic_body.matches("event: message_start").count(),
+        1,
+        "{anthropic_body}"
+    );
     assert!(
         anthropic_body.contains("event: message_stop") || anthropic_body.contains("event: error"),
         "{anthropic_body}"

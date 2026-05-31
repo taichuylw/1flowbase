@@ -17,6 +17,7 @@ use crate::app_state::ApiState;
 
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
+        .route("/models", get(native::list_native_models))
         .route("/runs", post(native::create_native_run))
         .route("/runs/:run_id", axum::routing::get(native::get_native_run))
         .route("/runs/:run_id/cancel", post(native::cancel_native_run))
@@ -37,6 +38,10 @@ pub fn compatible_router() -> Router<Arc<ApiState>> {
         .route(
             "/v1/chat/completions/v1/chat/completions",
             post(openai::create_chat_completion),
+        )
+        .route(
+            "/v1/messages/count_tokens",
+            post(anthropic::count_message_tokens),
         )
         .route("/v1/messages", post(anthropic::create_message))
 }

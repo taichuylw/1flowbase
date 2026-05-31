@@ -48,9 +48,15 @@ const runtimeApi = vi.hoisted(() => ({
       'around',
       runId
     ] as const,
+  applicationRunConversationMessagesQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
@@ -60,6 +66,7 @@ vi.mock('../../api/runtime', () => runtimeApi);
 
 import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 import { ApplicationLogsPage } from '../../pages/ApplicationLogsPage';
 
@@ -206,8 +213,10 @@ describe('ApplicationLogsPage - table field settings', () => {
   let innerWidthSpy: { mockRestore: () => void } | undefined;
   let dateNowSpy: { mockRestore: () => void } | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     dateNowSpy = vi
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());

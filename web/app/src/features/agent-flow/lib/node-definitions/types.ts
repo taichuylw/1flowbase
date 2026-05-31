@@ -18,6 +18,7 @@ export type NodeEditorKind =
   | 'data_model_query'
   | 'llm_model'
   | 'llm_context_policy'
+  | 'llm_external_reasoning_policy'
   | 'llm_prompt_messages'
   | 'llm_response_format'
   | 'code_source'

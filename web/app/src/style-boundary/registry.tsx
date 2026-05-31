@@ -81,6 +81,34 @@ const styleBoundaryNodeContributions = [
   }
 ];
 
+const styleBoundaryApplicationRunRecord = {
+  id: 'run-1',
+  flow_run_id: 'run-1',
+  application_id: 'app-1',
+  scope_id: 'workspace-1',
+  run_mode: 'debug_flow_run',
+  status: 'succeeded',
+  target_node_id: null,
+  title: 'Boundary run',
+  expand_id: 'boundary-expand',
+  external_user: null,
+  authorized_account: 'root',
+  api_key_id: null,
+  api_key_name_snapshot: null,
+  publication_version_id: null,
+  external_conversation_id: null,
+  external_trace_id: null,
+  compatibility_mode: null,
+  idempotency_key: null,
+  total_tokens: 128,
+  unique_node_count: 3,
+  tool_callback_count: 0,
+  started_at: '2026-05-10T09:00:00Z',
+  finished_at: '2026-05-10T09:00:03Z',
+  created_at: '2026-05-10T09:00:00Z',
+  updated_at: '2026-05-10T09:00:03Z'
+};
+
 function expandDottedBundle(bundle: Record<string, string>) {
   const expanded: Record<string, unknown> = {};
 
@@ -152,7 +180,7 @@ const styleBoundaryPluginFamiliesCatalog = {
 
 const styleBoundaryOfficialPluginCatalog = {
   source_kind: 'official_registry',
-  source_label: i18nText("appShell", "auto.official_source"),
+  source_label: i18nText('appShell', 'auto.official_source'),
   registry_url:
     'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
   locale_meta: modelProviderCatalogContract.locale_meta,
@@ -749,7 +777,7 @@ function seedStyleBoundaryApplicationFetch() {
             version_sequence: 3,
             active: true,
             api_enabled: true,
-            public_url: '/api/v1/agent/runs',
+            public_url: '/api/agent/v1/runs',
             created_by: 'user-1',
             created_at: '2026-05-09T10:00:00Z',
             mapping_snapshot: {
@@ -824,7 +852,7 @@ function seedStyleBoundaryApplicationFetch() {
               {
                 id: 'applicationNativeRun',
                 method: 'POST',
-                path: '/api/v1/agent/runs',
+                path: '/api/agent/v1/runs',
                 summary: 'Run published application',
                 description: 'Run published application',
                 tags: ['application-public-api'],
@@ -854,7 +882,7 @@ function seedStyleBoundaryApplicationFetch() {
           openapi: '3.1.0',
           info: { title: 'Support Agent API', version: 'v3' },
           paths: {
-            '/api/v1/agent/runs': {
+            '/api/agent/v1/runs': {
               post: {
                 operationId: 'applicationNativeRun',
                 responses: {
@@ -874,26 +902,34 @@ function seedStyleBoundaryApplicationFetch() {
 
     if (
       method.toUpperCase() === 'GET' &&
+      requestUrl.pathname ===
+        '/api/runtime/models/application_run_log_summaries/records'
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            items: [styleBoundaryApplicationRunRecord],
+            total: 1,
+            page: 1,
+            page_size: 20
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
       requestUrl.pathname === '/api/console/applications/app-1/logs/runs'
     ) {
       return new Response(
         JSON.stringify({
           data: {
-            items: [
-              {
-                id: 'run-1',
-                run_mode: 'debug_flow_run',
-                status: 'succeeded',
-                target_node_id: null,
-                title: 'Boundary run',
-                expand_id: 'boundary-expand',
-                authorized_account: 'root',
-                started_at: '2026-05-10T09:00:00Z',
-                finished_at: '2026-05-10T09:00:03Z',
-                created_at: '2026-05-10T09:00:00Z',
-                updated_at: '2026-05-10T09:00:03Z'
-              }
-            ],
+            items: [styleBoundaryApplicationRunRecord],
             total: 1,
             page: 1,
             page_size: 20

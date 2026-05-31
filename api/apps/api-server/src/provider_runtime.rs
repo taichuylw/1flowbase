@@ -37,6 +37,11 @@ use storage_durable::MainDurableStore;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use crate::runtime_activity::{
+    current_application_id, ApplicationActivityFinish, ApplicationActivityGuard,
+    ApplicationActivityKind, ApplicationRuntimeActivityTracker,
+};
+
 #[derive(Clone)]
 pub struct ApiRuntimeServices {
     provider_host: Arc<RwLock<ProviderHost>>,
@@ -61,11 +66,25 @@ impl ApiRuntimeServices {
 #[derive(Clone)]
 pub struct ApiProviderRuntime {
     services: Arc<ApiRuntimeServices>,
+    runtime_activity: Option<Arc<ApplicationRuntimeActivityTracker>>,
 }
 
 impl ApiProviderRuntime {
     pub fn new(services: Arc<ApiRuntimeServices>) -> Self {
-        Self { services }
+        Self {
+            services,
+            runtime_activity: None,
+        }
+    }
+
+    pub fn new_with_activity(
+        services: Arc<ApiRuntimeServices>,
+        runtime_activity: Arc<ApplicationRuntimeActivityTracker>,
+    ) -> Self {
+        Self {
+            services,
+            runtime_activity: Some(runtime_activity),
+        }
     }
 
     pub async fn get_balance(
@@ -202,15 +221,19 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         installation: &domain::PluginInstallationRecord,
         input: ProviderInvocationInput,
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput> {
+        let activity = self.start_runtime_activity(ApplicationActivityKind::ModelRequest);
         self.ensure_provider_loaded(installation).await?;
         let host = self.services.provider_host.read().await;
-        host.invoke_stream(&installation.plugin_id, input)
+        let result = host
+            .invoke_stream(&installation.plugin_id, input)
             .await
             .map(|output| ProviderRuntimeInvocationOutput {
                 events: output.events,
                 result: output.result,
             })
-            .map_err(map_provider_framework_error)
+            .map_err(map_provider_framework_error);
+        finish_runtime_activity(activity, &result);
+        result
     }
 
     async fn invoke_stream_with_live_events(
@@ -223,15 +246,19 @@ impl ProviderRuntimePort for ApiProviderRuntime {
             >,
         >,
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput> {
+        let activity = self.start_runtime_activity(ApplicationActivityKind::ModelRequest);
         self.ensure_provider_loaded(installation).await?;
         let host = self.services.provider_host.read().await;
-        host.invoke_stream_with_live_events(&installation.plugin_id, input, live_events)
+        let result = host
+            .invoke_stream_with_live_events(&installation.plugin_id, input, live_events)
             .await
             .map(|output| ProviderRuntimeInvocationOutput {
                 events: output.events,
                 result: output.result,
             })
-            .map_err(map_provider_framework_error)
+            .map_err(map_provider_framework_error);
+        finish_runtime_activity(activity, &result);
+        result
     }
 }
 
@@ -542,19 +569,37 @@ impl CapabilityPluginRuntimePort for ApiProviderRuntime {
         &self,
         input: ExecuteCapabilityNodeInput,
     ) -> anyhow::Result<CapabilityExecutionOutput> {
+        let activity = self.start_runtime_activity(ApplicationActivityKind::ToolCall);
         self.ensure_capability_loaded(&input.installation).await?;
         let host = self.services.capability_host.read().await;
-        host.execute(
-            &input.installation.plugin_id,
-            &input.contribution_code,
-            input.config_payload,
-            input.input_payload,
-        )
-        .await
-        .map(|output| CapabilityExecutionOutput {
-            output_payload: output.output_payload,
-        })
-        .map_err(|error| map_framework_error(error, "capability_runtime"))
+        let result = host
+            .execute(
+                &input.installation.plugin_id,
+                &input.contribution_code,
+                input.config_payload,
+                input.input_payload,
+            )
+            .await
+            .map(|output| CapabilityExecutionOutput {
+                output_payload: output.output_payload,
+            })
+            .map_err(|error| map_framework_error(error, "capability_runtime"));
+        finish_runtime_activity(activity, &result);
+        result
+    }
+}
+
+fn finish_runtime_activity<T, E>(
+    activity: Option<ApplicationActivityGuard>,
+    result: &Result<T, E>,
+) {
+    if let Some(activity) = activity {
+        let finish = if result.is_ok() {
+            ApplicationActivityFinish::Completed
+        } else {
+            ApplicationActivityFinish::Failed
+        };
+        activity.finish(finish);
     }
 }
 
@@ -567,6 +612,16 @@ where
 }
 
 impl ApiProviderRuntime {
+    fn start_runtime_activity(
+        &self,
+        kind: ApplicationActivityKind,
+    ) -> Option<ApplicationActivityGuard> {
+        let application_id = current_application_id()?;
+        self.runtime_activity
+            .as_ref()
+            .map(|tracker| tracker.start(application_id, kind))
+    }
+
     async fn ensure_provider_loaded(
         &self,
         installation: &domain::PluginInstallationRecord,

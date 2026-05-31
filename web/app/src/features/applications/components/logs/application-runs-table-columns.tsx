@@ -57,11 +57,12 @@ export function getApplicationRunsTableColumns(
     render: (value) => (value ? `${value}` : '-')
   },
   {
-    key: 'id',
+    key: 'flow_run_id',
     title: t('auto.run_id'),
-    dataIndex: 'id',
+    dataIndex: 'flow_run_id',
     width: 180,
-    ellipsis: true
+    ellipsis: true,
+    render: (_value, run) => run.flow_run_id ?? run.id
   },
   {
     key: 'run_mode',
@@ -99,22 +100,19 @@ export function getApplicationRunsTableColumns(
     key: 'total_tokens',
     title: t('auto.total_tokens'),
     width: 130,
-    render: (_value, run) =>
-      formatRunStatisticNumber(run.statistics?.total_tokens)
+    render: (_value, run) => formatRunStatisticNumber(run.total_tokens)
   },
   {
     key: 'unique_node_count',
     title: t('auto.real_node_count'),
     width: 130,
-    render: (_value, run) =>
-      formatRunStatisticNumber(run.statistics?.unique_node_count)
+    render: (_value, run) => formatRunStatisticNumber(run.unique_node_count)
   },
   {
     key: 'tool_callback_count',
     title: t('auto.tool_callback_count'),
     width: 150,
-    render: (_value, run) =>
-      formatRunStatisticNumber(run.statistics?.tool_callback_count)
+    render: (_value, run) => formatRunStatisticNumber(run.tool_callback_count)
   },
   {
     key: 'started_at',

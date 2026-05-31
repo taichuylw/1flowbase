@@ -4,18 +4,20 @@ impl PgControlPlaneStore {
         input: &AppendRunEventInput,
     ) -> Result<domain::RunEventRecord> {
         let mut tx = self.pool().begin().await?;
+        let scope_id = flow_run_scope_id_for_update(&mut tx, input.flow_run_id).await?;
         lock_flow_run_event_sequence(&mut tx, input.flow_run_id).await?;
         let next_sequence = next_event_sequence(&mut tx, input.flow_run_id).await?;
         let row = sqlx::query(
             r#"
             insert into flow_run_events (
                 id,
+                scope_id,
                 flow_run_id,
                 node_run_id,
                 sequence,
                 event_type,
                 payload
-            ) values ($1, $2, $3, $4, $5, $6)
+            ) values ($1, $2, $3, $4, $5, $6, $7)
             returning
                 id,
                 flow_run_id,
@@ -27,6 +29,7 @@ impl PgControlPlaneStore {
             "#,
         )
         .bind(Uuid::now_v7())
+        .bind(scope_id)
         .bind(input.flow_run_id)
         .bind(input.node_run_id)
         .bind(next_sequence)
@@ -60,10 +63,12 @@ impl PgControlPlaneStore {
         let mut tx = self.pool().begin().await?;
         lock_flow_run_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
         let first_sequence = next_event_sequence(&mut tx, inputs[0].flow_run_id).await?;
+        let scope_id = flow_run_scope_id_for_update(&mut tx, inputs[0].flow_run_id).await?;
         let mut builder = QueryBuilder::<Postgres>::new(
             r#"
             insert into flow_run_events (
                 id,
+                scope_id,
                 flow_run_id,
                 node_run_id,
                 sequence,
@@ -73,6 +78,7 @@ impl PgControlPlaneStore {
         );
         builder.push_values(inputs.iter().enumerate(), |mut row, (index, input)| {
             row.push_bind(Uuid::now_v7())
+                .push_bind(scope_id)
                 .push_bind(input.flow_run_id)
                 .push_bind(input.node_run_id)
                 .push_bind(first_sequence + index as i64)

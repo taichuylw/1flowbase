@@ -41,9 +41,15 @@ const runtimeApi = vi.hoisted(() => ({
       'around',
       runId
     ] as const,
+  applicationRunConversationMessagesQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
@@ -392,7 +398,7 @@ describe('ApplicationLogsPage - layout CSS', () => {
       /contentWidth=\{[\s\S]*requestedSectionKey === 'orchestration'[\s\S]*\? 'full'[\s\S]*: 'wide'[\s\S]*\}/
     );
     expect(pageSource).toMatch(
-      /heightMode=\{requestedSectionKey === 'logs' \? 'viewport' : 'natural'\}/
+      /heightMode=\{[\s\S]*requestedSectionKey === 'logs'[\s\S]*requestedSectionKey === 'api'[\s\S]*\? 'viewport'[\s\S]*: 'natural'[\s\S]*\}/
     );
   });
 });

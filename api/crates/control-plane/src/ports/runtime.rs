@@ -171,6 +171,22 @@ pub struct UpdateRunEventPayloadInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateCheckpointPayloadsInput {
+    pub checkpoint_id: Uuid,
+    pub locator_payload: serde_json::Value,
+    pub variable_snapshot: serde_json::Value,
+    pub external_ref_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateCallbackTaskPayloadsInput {
+    pub callback_task_id: Uuid,
+    pub request_payload: serde_json::Value,
+    pub response_payload: Option<serde_json::Value>,
+    pub external_ref_payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
 pub struct DebugVariableCacheKey {
     pub node_id: String,
     pub variable_key: String,
@@ -589,6 +605,20 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = input;
         anyhow::bail!("update_run_event_payload not implemented")
     }
+    async fn update_checkpoint_payloads(
+        &self,
+        input: &UpdateCheckpointPayloadsInput,
+    ) -> anyhow::Result<domain::CheckpointRecord> {
+        let _ = input;
+        anyhow::bail!("update_checkpoint_payloads not implemented")
+    }
+    async fn update_callback_task_payloads(
+        &self,
+        input: &UpdateCallbackTaskPayloadsInput,
+    ) -> anyhow::Result<domain::CallbackTaskRecord> {
+        let _ = input;
+        anyhow::bail!("update_callback_task_payloads not implemented")
+    }
     async fn upsert_debug_variable_cache_entry(
         &self,
         input: &UpsertDebugVariableCacheEntryInput,
@@ -833,6 +863,7 @@ pub struct ApplicationRunMonitoringReport {
     pub overview: ApplicationRunMonitoringOverview,
     pub duration: ApplicationRunMonitoringDuration,
     pub tokens: ApplicationRunMonitoringTokens,
+    pub tokens_comparison: ApplicationRunMonitoringTokensComparison,
     pub tool_callbacks: ApplicationRunMonitoringToolCallbacks,
     pub nodes: ApplicationRunMonitoringNodes,
     pub concurrency: ApplicationRunMonitoringConcurrency,
@@ -872,6 +903,18 @@ pub struct ApplicationRunMonitoringTokens {
     pub total_tokens_sum: i64,
     pub avg_tokens_per_run: f64,
     pub token_recorded_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplicationRunMonitoringTokensComparison {
+    pub previous_total_tokens_sum: i64,
+    pub previous_run_count: i64,
+    pub previous_avg_tokens_per_run: f64,
+    pub token_change_rate: f64,
+    pub run_count_change_rate: f64,
+    pub avg_tokens_per_run_change_rate: f64,
+    pub traffic_effect: f64,
+    pub cost_per_run_effect: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

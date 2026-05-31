@@ -24,14 +24,15 @@ use control_plane::{
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
         LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
-        ListApplicationRunsPageInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+        ListApplicationRunsPageInput, OrchestrationRuntimeRepository,
+        UpdateCallbackTaskPayloadsInput, UpdateCheckpointPayloadsInput, UpdateFlowRunInput,
         UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
         UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
         UpsertDebugVariableCacheEntryInput,
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::repositories::PgControlPlaneStore;
@@ -205,6 +206,20 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: &UpdateRunEventPayloadInput,
     ) -> Result<domain::RunEventRecord> {
         PgControlPlaneStore::update_run_event_payload(self, input).await
+    }
+
+    async fn update_checkpoint_payloads(
+        &self,
+        input: &UpdateCheckpointPayloadsInput,
+    ) -> Result<domain::CheckpointRecord> {
+        PgControlPlaneStore::update_checkpoint_payloads(self, input).await
+    }
+
+    async fn update_callback_task_payloads(
+        &self,
+        input: &UpdateCallbackTaskPayloadsInput,
+    ) -> Result<domain::CallbackTaskRecord> {
+        PgControlPlaneStore::update_callback_task_payloads(self, input).await
     }
 
     async fn upsert_debug_variable_cache_entry(
@@ -616,6 +631,37 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
         &self,
         input: &BindApplicationPublicConversationInput,
     ) -> Result<ApplicationPublicConversationRecord> {
+        sqlx::query(
+            r#"
+            insert into application_conversations (
+                id,
+                scope_id,
+                application_id,
+                api_key_id,
+                external_user,
+                external_conversation_id
+            )
+            select
+                $1,
+                applications.workspace_id,
+                applications.id,
+                $2,
+                $3,
+                $4
+            from applications
+            where applications.id = $5
+            on conflict (application_id, api_key_id, external_user, external_conversation_id)
+            do update set updated_at = now()
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.api_key_id)
+        .bind(&input.external_user)
+        .bind(&input.external_conversation_id)
+        .bind(input.application_id)
+        .execute(self.pool())
+        .await?;
+
         let row = sqlx::query(
             r#"
             insert into application_public_conversations (

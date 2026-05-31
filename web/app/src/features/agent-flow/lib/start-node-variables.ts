@@ -13,13 +13,41 @@ import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 import { i18nText } from '../../../shared/i18n/text';
 
 export const startInputTypeOptions = [
-  { value: 'text', label: i18nText("agentFlow", "auto.text"), valueType: 'string' },
-  { value: 'paragraph', label: i18nText("agentFlow", "auto.paragraph"), valueType: 'string' },
-  { value: 'select', label: i18nText("agentFlow", "auto.drop_down_options"), valueType: 'string' },
-  { value: 'number', label: i18nText("agentFlow", "auto.numbers"), valueType: 'number' },
-  { value: 'checkbox', label: i18nText("agentFlow", "auto.checkbox"), valueType: 'boolean' },
-  { value: 'file', label: i18nText("agentFlow", "auto.file"), valueType: 'json' },
-  { value: 'file_list', label: i18nText("agentFlow", "auto.file_list"), valueType: 'array[object]' },
+  {
+    value: 'text',
+    label: i18nText('agentFlow', 'auto.text'),
+    valueType: 'string'
+  },
+  {
+    value: 'paragraph',
+    label: i18nText('agentFlow', 'auto.paragraph'),
+    valueType: 'string'
+  },
+  {
+    value: 'select',
+    label: i18nText('agentFlow', 'auto.drop_down_options'),
+    valueType: 'string'
+  },
+  {
+    value: 'number',
+    label: i18nText('agentFlow', 'auto.numbers'),
+    valueType: 'number'
+  },
+  {
+    value: 'checkbox',
+    label: i18nText('agentFlow', 'auto.checkbox'),
+    valueType: 'boolean'
+  },
+  {
+    value: 'file',
+    label: i18nText('agentFlow', 'auto.file'),
+    valueType: 'json'
+  },
+  {
+    value: 'file_list',
+    label: i18nText('agentFlow', 'auto.file_list'),
+    valueType: 'array[object]'
+  },
   { value: 'url', label: 'URL', valueType: 'string' }
 ] satisfies Array<{
   value: FlowStartInputType;
@@ -41,6 +69,11 @@ export const startSystemVariables = [
   {
     key: 'model',
     title: 'userinput.model',
+    valueType: 'string'
+  },
+  {
+    key: 'reasoning_effort',
+    title: 'userinput.reasoning_effort',
     valueType: 'string'
   },
   {

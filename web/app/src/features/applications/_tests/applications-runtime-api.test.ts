@@ -28,14 +28,24 @@ vi.mock('@1flowbase/api-client', () => ({
     duration: {
       duration_recorded_count: 0,
       avg_duration_ms: 0,
-      percentile_fifty_duration_ms: 0,
-      percentile_ninety_five_duration_ms: 0,
+      p50_duration_ms: 0,
+      p95_duration_ms: 0,
       slow_run_rate: 0
     },
     tokens: {
       total_tokens_sum: 0,
       avg_tokens_per_run: 0,
       token_recorded_count: 0
+    },
+    tokens_comparison: {
+      previous_total_tokens_sum: 0,
+      previous_run_count: 0,
+      previous_avg_tokens_per_run: 0,
+      token_change_rate: 0,
+      run_count_change_rate: 0,
+      avg_tokens_per_run_change_rate: 0,
+      traffic_effect: 0,
+      cost_per_run_effect: 0
     },
     tool_callbacks: {
       total_tool_callback_count: 0,
@@ -59,6 +69,103 @@ vi.mock('@1flowbase/api-client', () => ({
     slowest_runs: [],
     high_token_runs: []
   }),
+  getConsoleApplicationRuntimeActivity: vi.fn().mockResolvedValue({
+    meta: {
+      application_id: 'app-1',
+      scope: 'current_instance',
+      storage: 'memory',
+      instance_started_at: '2026-05-30T00:00:00Z',
+      snapshot_at: '2026-05-30T00:01:00Z'
+    },
+    active: {
+      total: 0,
+      http_requests: 0,
+      sse_connections: 0,
+      websocket_connections: 0,
+      application_executions: 0,
+      tool_calls: 0,
+      model_requests: 0,
+      waiting: null
+    },
+    peaks: {
+      process_peak_concurrency: 0,
+      recent_peak_concurrency: 0
+    },
+    rolling_minute: {
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      disconnected: 0
+    },
+    windows: {
+      one_minute: {
+        window_seconds: 60,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        disconnected: 0,
+        peak_concurrency: 0,
+        failure_rate: 0,
+        disconnect_rate: 0,
+        throughput_per_minute: 0
+      },
+      five_minutes: {
+        window_seconds: 300,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        disconnected: 0,
+        peak_concurrency: 0,
+        failure_rate: 0,
+        disconnect_rate: 0,
+        throughput_per_minute: 0
+      },
+      fifteen_minutes: {
+        window_seconds: 900,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        disconnected: 0,
+        peak_concurrency: 0,
+        failure_rate: 0,
+        disconnect_rate: 0,
+        throughput_per_minute: 0
+      }
+    },
+    health: {
+      state: 'healthy',
+      failure_rate_1m: 0,
+      failure_rate_5m: 0,
+      failure_rate_15m: 0,
+      disconnect_rate_5m: 0,
+      slow_ratio: 0,
+      active_pressure: 0,
+      throughput_5m_per_minute: 0,
+      throughput_15m_per_minute: 0,
+      throughput_trend: 'steady',
+      failure_trend: 0
+    },
+    age_distribution: {
+      under_5s: 0,
+      from_5s_to_30s: 0,
+      from_30s_to_120s: 0,
+      over_120s: 0
+    },
+    long_connection_age_distribution: {
+      under_5s: 0,
+      from_5s_to_30s: 0,
+      from_30s_to_120s: 0,
+      over_120s: 0
+    },
+    pressure: {
+      slow_active_executions: 0,
+      execution_slots_used: null,
+      execution_slots_limit: null
+    },
+    resources: {
+      process_rss_bytes: null
+    }
+  }),
   getConsoleApplicationRuns: vi.fn().mockResolvedValue([]),
   fetchConsoleRuntimeModelRecords: vi.fn().mockResolvedValue({
     items: [],
@@ -74,6 +181,7 @@ import {
   fetchConsoleRuntimeModelRecords,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
+  getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugStream,
   resumeConsoleFlowRun
@@ -82,12 +190,14 @@ import {
 import {
   applicationRunDetailQueryKey,
   applicationRunMonitoringReportQueryKey,
+  applicationRuntimeActivityQueryKey,
   applicationRunsQueryKey,
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
   fetchApplicationConversationMessages,
   fetchApplicationRunDetail,
   fetchApplicationRunMonitoringReport,
+  fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
   fetchRuntimeDebugStream,
   resumeFlowRun
@@ -149,6 +259,13 @@ describe('applications runtime api', () => {
       7,
       'day'
     ]);
+    expect(applicationRuntimeActivityQueryKey('app-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'monitoring',
+      'runtime-activity'
+    ]);
   });
 
   test('passes the resolved base url to runtime read requests', async () => {
@@ -158,19 +275,22 @@ describe('applications runtime api', () => {
       timeRangeDays: 28,
       bucket: 'week'
     });
+    await fetchApplicationRuntimeActivity('app-1');
     await fetchRuntimeDebugStream('app-1', 'run-1');
 
-    expect(getConsoleApplicationRuns).toHaveBeenCalledWith(
-      'app-1',
+    expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
+      'application_run_log_summaries',
       expect.objectContaining({
         page: 1,
         page_size: 20,
-        cache_mode: 'refresh',
-        sort_by: 'started_at',
-        sort_order: 'desc'
+        sort: {
+          field: 'started_at',
+          direction: 'desc'
+        }
       }),
       'http://127.0.0.1:7800'
     );
+    expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
     expect(getConsoleApplicationRunDetail).toHaveBeenCalledWith(
       'app-1',
       'run-1',
@@ -182,6 +302,10 @@ describe('applications runtime api', () => {
         time_range_days: 28,
         bucket: 'week'
       },
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRuntimeActivity).toHaveBeenCalledWith(
+      'app-1',
       'http://127.0.0.1:7800'
     );
     expect(getConsoleRuntimeDebugStream).toHaveBeenCalledWith(

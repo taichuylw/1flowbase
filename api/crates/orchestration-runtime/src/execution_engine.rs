@@ -1149,7 +1149,7 @@ fn build_provider_invocation(
         ),
         mcp_bindings: Vec::new(),
         response_format: build_response_format(&node.config),
-        model_parameters: build_model_parameters(&node.config),
+        model_parameters: build_model_parameters(node, runtime, variable_pool),
         trace_context,
         run_context: BTreeMap::from([(
             "resolved_inputs".to_string(),
@@ -2187,7 +2187,19 @@ fn value_to_text(value: &Value) -> Option<String> {
     }
 }
 
-fn build_model_parameters(config: &Value) -> BTreeMap<String, Value> {
+fn build_model_parameters(
+    node: &CompiledNode,
+    runtime: &CompiledLlmRuntime,
+    variable_pool: &Map<String, Value>,
+) -> BTreeMap<String, Value> {
+    let mut parameters = build_configured_model_parameters(&node.config);
+    if llm_follows_external_reasoning(&node.config) {
+        apply_external_reasoning_parameters(&mut parameters, runtime, variable_pool);
+    }
+    parameters
+}
+
+fn build_configured_model_parameters(config: &Value) -> BTreeMap<String, Value> {
     if let Some(items) = config
         .get("llm_parameters")
         .and_then(Value::as_object)
@@ -2223,6 +2235,96 @@ fn build_model_parameters(config: &Value) -> BTreeMap<String, Value> {
             .map(|value| (key.to_string(), value))
     })
     .collect()
+}
+
+fn llm_follows_external_reasoning(config: &Value) -> bool {
+    config
+        .get("external_reasoning_policy")
+        .and_then(|value| value.get("follow_external_reasoning"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn apply_external_reasoning_parameters(
+    parameters: &mut BTreeMap<String, Value>,
+    runtime: &CompiledLlmRuntime,
+    variable_pool: &Map<String, Value>,
+) {
+    let Some(reasoning) = variable_pool
+        .get("sys")
+        .and_then(|value| value.get("model_parameters"))
+        .and_then(|value| value.get("reasoning"))
+        .and_then(Value::as_object)
+    else {
+        return;
+    };
+    let enabled = reasoning
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let effort = reasoning
+        .get("effort")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let budget_tokens = reasoning.get("budget_tokens").and_then(Value::as_u64);
+
+    if is_anthropic_reasoning_runtime(runtime) {
+        insert_model_parameter_if_absent(
+            parameters,
+            "thinking_type",
+            json!(if enabled { "enabled" } else { "disabled" }),
+        );
+        if enabled {
+            if let Some(budget_tokens) = budget_tokens {
+                insert_model_parameter_if_absent(
+                    parameters,
+                    "thinking_budget_tokens",
+                    json!(budget_tokens),
+                );
+            }
+        }
+        return;
+    }
+
+    if is_bailian_reasoning_runtime(runtime) {
+        insert_model_parameter_if_absent(parameters, "enable_thinking", json!(enabled));
+        if enabled {
+            if let Some(effort) = effort {
+                insert_model_parameter_if_absent(parameters, "reasoning_effort", json!(effort));
+            }
+        }
+        return;
+    }
+
+    if is_openai_reasoning_runtime(runtime) && enabled {
+        if let Some(effort) = effort {
+            insert_model_parameter_if_absent(parameters, "reasoning_effort", json!(effort));
+        }
+    }
+}
+
+fn insert_model_parameter_if_absent(
+    parameters: &mut BTreeMap<String, Value>,
+    key: &'static str,
+    value: Value,
+) {
+    parameters.entry(key.to_string()).or_insert(value);
+}
+
+fn is_openai_reasoning_runtime(runtime: &CompiledLlmRuntime) -> bool {
+    runtime.provider_code == "openai"
+        || runtime.provider_code == "openai_compatible"
+        || runtime.protocol == "openai_responses"
+        || runtime.protocol == "openai_compatible"
+}
+
+fn is_anthropic_reasoning_runtime(runtime: &CompiledLlmRuntime) -> bool {
+    runtime.provider_code == "anthropic" || runtime.protocol == "anthropic_messages"
+}
+
+fn is_bailian_reasoning_runtime(runtime: &CompiledLlmRuntime) -> bool {
+    runtime.provider_code == "aliyun_bailian" || runtime.provider_code == "bailian"
 }
 
 fn first_output_key(node: &CompiledNode) -> String {
@@ -2590,12 +2692,6 @@ fn tool_calls_with_call_usage(tool_calls: &[ProviderToolCall], usage: Option<&Va
 }
 
 fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: &Value) {
-    let call_usage = rounds
-        .last()
-        .and_then(Value::as_object)
-        .and_then(|round| round.get("usage"))
-        .cloned();
-    let token_delta = llm_usage_token_delta(call_usage.as_ref(), usage);
     let Some(tool_results) = rounds
         .last_mut()
         .and_then(Value::as_object_mut)
@@ -2610,28 +2706,7 @@ fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: 
             continue;
         };
         tool_result.insert("result_context_usage".to_string(), usage.clone());
-        if let Some(token_delta) = token_delta {
-            tool_result.insert("token_delta".to_string(), json!(token_delta));
-        }
     }
-}
-
-fn llm_usage_total_tokens(usage: &Value) -> Option<i64> {
-    let total_tokens = usage.get("total_tokens")?;
-    if let Some(value) = total_tokens.as_i64() {
-        return Some(value);
-    }
-
-    total_tokens
-        .as_u64()
-        .and_then(|value| i64::try_from(value).ok())
-}
-
-fn llm_usage_token_delta(call_usage: Option<&Value>, result_context_usage: &Value) -> Option<i64> {
-    let call_total = llm_usage_total_tokens(call_usage?)?;
-    let result_total = llm_usage_total_tokens(result_context_usage)?;
-
-    result_total.checked_sub(call_total)
 }
 
 fn declares_public_output(node: &CompiledNode, key: &str) -> bool {
@@ -2967,7 +3042,7 @@ mod llm_round_timeline_tests {
     use super::*;
 
     #[test]
-    fn llm_round_timeline_adds_tool_result_token_delta() {
+    fn llm_round_timeline_keeps_result_context_usage_without_token_delta() {
         let invocation_messages = vec![
             json!({
                 "role": "assistant",
@@ -3003,6 +3078,10 @@ mod llm_round_timeline_tests {
         let rounds =
             build_llm_round_timeline(&invocation_messages, Some(&result), Some(&result_usage));
 
-        assert_eq!(rounds[0]["tool_results"][0]["token_delta"], json!(102));
+        assert_eq!(
+            rounds[0]["tool_results"][0]["result_context_usage"]["total_tokens"],
+            json!(8224)
+        );
+        assert!(rounds[0]["tool_results"][0].get("token_delta").is_none());
     }
 }

@@ -16,18 +16,18 @@ export const llmNodeDefinition: NodeDefinition = {
       fields: [
         {
           key: 'config.model_provider',
-          label: i18nText("agentFlow", "auto.model"),
+          label: i18nText('agentFlow', 'auto.model'),
           editor: 'llm_model',
           required: true
         },
         {
           key: 'config.context_policy',
-          label: '集成上下文',
+          label: '继承上下文',
           editor: 'llm_context_policy'
         },
         {
           key: 'bindings.prompt_messages',
-          label: i18nText("agentFlow", "auto.context_alt"),
+          label: i18nText('agentFlow', 'auto.context_alt'),
           editor: 'llm_prompt_messages'
         }
       ]
@@ -35,12 +35,25 @@ export const llmNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.text', label: i18nText("agentFlow", "auto.model_output"), editor: 'text', required: true }]
+      fields: [
+        {
+          key: 'outputs.text',
+          label: i18nText('agentFlow', 'auto.model_output'),
+          editor: 'text',
+          required: true
+        }
+      ]
     },
     {
       key: 'advanced',
       title: 'Advanced',
-      fields: [{ key: 'config.response_format', label: i18nText("agentFlow", "auto.return_format"), editor: 'llm_response_format' }]
+      fields: [
+        {
+          key: 'config.response_format',
+          label: i18nText('agentFlow', 'auto.return_format'),
+          editor: 'llm_response_format'
+        }
+      ]
     }
   ]
 };

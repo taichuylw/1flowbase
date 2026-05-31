@@ -137,7 +137,7 @@ async fn post_streaming_run(app: &Router, token: &str, stream_options: Value) ->
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/agent/runs")
+                .uri("/api/agent/v1/runs")
                 .header("authorization", format!("Bearer {token}"))
                 .header("accept", "text/event-stream")
                 .header("content-type", "application/json")

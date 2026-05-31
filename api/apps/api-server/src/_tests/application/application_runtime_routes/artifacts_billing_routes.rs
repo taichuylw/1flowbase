@@ -567,6 +567,7 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         r#"
         insert into flow_run_callback_tasks (
             id,
+            scope_id,
             flow_run_id,
             node_run_id,
             callback_kind,
@@ -575,7 +576,23 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
             response_payload,
             external_ref_payload,
             completed_at
-        ) values ($1, $2, $3, 'llm_tool_calls', 'completed', $4, $5, $4, now())
+        ) values (
+            $1,
+            (
+                select applications.workspace_id
+                from flow_runs
+                join applications on applications.id = flow_runs.application_id
+                where flow_runs.id = $2
+            ),
+            $2,
+            $3,
+            'llm_tool_calls',
+            'completed',
+            $4,
+            $5,
+            $4,
+            now()
+        )
         "#,
     )
     .bind(Uuid::now_v7())
@@ -639,6 +656,7 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         tool_callbacks[0]["result_context_usage"]["total_tokens"],
         24
     );
+    assert!(tool_callbacks[0].get("token_delta").is_none());
     assert!(tool_callbacks[0].get("result_input_tokens").is_none());
     assert!(tool_callbacks[0].get("token_count_method").is_none());
     let tool_callback_artifact_ref = tool_callbacks[0]["artifact_ref"].as_str().unwrap();
@@ -688,6 +706,7 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         tool_callback_detail["result_context_usage"]["total_tokens"],
         24
     );
+    assert!(tool_callback_detail.get("token_delta").is_none());
     assert!(tool_callback_detail.get("result_input_tokens").is_none());
     assert!(tool_callback_detail.get("token_count_method").is_none());
 }

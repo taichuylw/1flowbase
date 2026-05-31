@@ -13,6 +13,7 @@ use runtime_core::{
 };
 use serde_json::Value;
 use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::repositories::PgControlPlaneStore;
@@ -269,7 +270,8 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
             .await?;
 
         let mut list_builder = QueryBuilder::<Postgres>::new(format!(
-            "select row_to_json(t) from (select * from {table_name} where true"
+            "select row_to_json(t) from (select {} from {table_name} where true",
+            projected_select_list(metadata)?
         ));
         append_scope_clause(&mut list_builder, &scope_column_name, query.scope_id);
         append_owner_scope_clause(&mut list_builder, query.owner_user_id);
@@ -318,7 +320,8 @@ impl RuntimeRecordRepository for PgControlPlaneStore {
         let scope_column_name = quote_identifier(&metadata.scope_column_name)?;
         let record_id = parse_record_id(record_id)?;
         let mut builder = QueryBuilder::<Postgres>::new(format!(
-            "select row_to_json(t) from (select * from {table_name} where true"
+            "select row_to_json(t) from (select {} from {table_name} where true",
+            projected_select_list(metadata)?
         ));
         append_scope_clause(&mut builder, &scope_column_name, scope_id);
         append_owner_scope_clause(&mut builder, owner_user_id);
@@ -716,8 +719,7 @@ fn append_sort_clause(
     sorts: &[RuntimeSortInput],
 ) -> Result<()> {
     if sorts.is_empty() {
-        builder.push(" order by created_at desc");
-        return Ok(());
+        return append_default_sort_clause(builder, metadata);
     }
 
     builder.push(" order by ");
@@ -734,6 +736,55 @@ fn append_sort_clause(
     }
 
     Ok(())
+}
+
+fn append_default_sort_clause(
+    builder: &mut QueryBuilder<Postgres>,
+    metadata: &ModelMetadata,
+) -> Result<()> {
+    let Some(created_at) = metadata.field_by_code("created_at") else {
+        builder.push(" order by ");
+        if let Some(id) = metadata.field_by_code("id") {
+            builder.push(quote_identifier(&id.physical_column_name)?);
+            builder.push(" desc");
+        } else {
+            builder.push("1 asc");
+        }
+        return Ok(());
+    };
+
+    builder.push(" order by ");
+    builder.push(quote_identifier(&created_at.physical_column_name)?);
+    builder.push(" desc");
+    if let Some(id) = metadata.field_by_code("id") {
+        builder.push(", ");
+        builder.push(quote_identifier(&id.physical_column_name)?);
+        builder.push(" desc");
+    }
+    Ok(())
+}
+
+fn projected_select_list(metadata: &ModelMetadata) -> Result<String> {
+    if metadata.fields.is_empty() {
+        return Ok("*".to_string());
+    }
+
+    let mut seen = HashSet::new();
+    let mut columns = Vec::new();
+    for field in &metadata.fields {
+        if !field_requires_physical_column(field) {
+            continue;
+        }
+        if seen.insert(field.physical_column_name.clone()) {
+            columns.push(quote_identifier(&field.physical_column_name)?);
+        }
+    }
+
+    if columns.is_empty() {
+        return Ok("*".to_string());
+    }
+
+    Ok(columns.join(", "))
 }
 
 fn ensure_writable_runtime_field(field: &domain::ModelFieldRecord) -> Result<()> {
@@ -757,8 +808,8 @@ fn push_field_value(
     match field.field_kind {
         domain::ModelFieldKind::String
         | domain::ModelFieldKind::Enum
-        | domain::ModelFieldKind::Text
-        | domain::ModelFieldKind::Datetime => builder.push_bind(json_string(value)?),
+        | domain::ModelFieldKind::Text => builder.push_bind(json_string(value)?),
+        domain::ModelFieldKind::Datetime => builder.push_bind(json_datetime(value)?),
         domain::ModelFieldKind::Number => builder.push_bind(json_number(value)?),
         domain::ModelFieldKind::Boolean => builder.push_bind(json_bool(value)?),
         domain::ModelFieldKind::Json => builder.push_bind(value.clone()),
@@ -796,7 +847,13 @@ fn normalize_record(metadata: &ModelMetadata, value: Value) -> Value {
     let Value::Object(mut object) = value else {
         return value;
     };
-    object.remove(&metadata.scope_column_name);
+    let exposes_scope_column = metadata
+        .fields
+        .iter()
+        .any(|field| field.code == metadata.scope_column_name);
+    if !exposes_scope_column {
+        object.remove(&metadata.scope_column_name);
+    }
     for field in &metadata.fields {
         if field.code != field.physical_column_name {
             if let Some(field_value) = object.remove(&field.physical_column_name) {
@@ -871,6 +928,10 @@ fn json_bool(value: &Value) -> Result<bool> {
         .ok_or_else(|| anyhow!("expected boolean value"))
 }
 
+fn json_datetime(value: &Value) -> Result<OffsetDateTime> {
+    OffsetDateTime::parse(&json_string(value)?, &Rfc3339).map_err(Into::into)
+}
+
 fn json_uuid(value: &Value) -> Result<Uuid> {
     parse_record_id(
         value
@@ -884,7 +945,10 @@ fn nullable_actor_user_id(actor_user_id: Uuid) -> Option<Uuid> {
 }
 
 fn field_requires_physical_column(field: &domain::ModelFieldRecord) -> bool {
-    !matches!(field.field_kind, domain::ModelFieldKind::OneToMany)
+    !matches!(
+        field.field_kind,
+        domain::ModelFieldKind::OneToMany | domain::ModelFieldKind::ManyToMany
+    )
 }
 
 fn field_requires_external_mapping(field: &domain::ModelFieldRecord) -> bool {

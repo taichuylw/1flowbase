@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 import { describe, expect, test } from 'vitest';
 
 import { settingsSectionDefinitions } from '../../features/settings/lib/settings-sections';
+import { appI18n } from '../../shared/i18n/app-i18n';
 import { createSettingsChromeMenuItems } from '../settings-chrome-menu-items';
 
 function isReactElementWithProps(
@@ -32,6 +33,34 @@ function getSettingsItem() {
 }
 
 describe('createSettingsChromeMenuItems', () => {
+  test('renders visible labels for settings submenu links', async () => {
+    await appI18n.changeLanguage('zh_Hans');
+    const settingsItem = getSettingsItem();
+    const children =
+      settingsItem &&
+      typeof settingsItem === 'object' &&
+      'children' in settingsItem &&
+      Array.isArray(settingsItem.children)
+        ? settingsItem.children
+        : [];
+
+    const labels = children.flatMap((item) => {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        !('label' in item) ||
+        !isReactElementWithProps(item.label)
+      ) {
+        return [];
+      }
+
+      return [item.label.props.children];
+    });
+
+    expect(labels).toContain('数据源');
+    expect(labels).not.toContain(undefined);
+  });
+
   test('renders settings sections as the secondary chrome submenu', () => {
     const settingsItem = getSettingsItem();
     const children =

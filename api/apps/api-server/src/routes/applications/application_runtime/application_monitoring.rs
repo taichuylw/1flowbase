@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
-    response::ApiSuccess,
+    response::ApiSuccess, runtime_activity::ApplicationRuntimeActivitySnapshot,
 };
 
 use super::application_logs::{format_optional_time, format_time};
@@ -49,6 +49,7 @@ pub struct ApplicationRunMonitoringReportResponse {
     pub overview: ApplicationRunMonitoringOverviewResponse,
     pub duration: ApplicationRunMonitoringDurationResponse,
     pub tokens: ApplicationRunMonitoringTokensResponse,
+    pub tokens_comparison: ApplicationRunMonitoringTokensComparisonResponse,
     pub tool_callbacks: ApplicationRunMonitoringToolCallbacksResponse,
     pub nodes: ApplicationRunMonitoringNodesResponse,
     pub concurrency: ApplicationRunMonitoringConcurrencyResponse,
@@ -88,6 +89,18 @@ pub struct ApplicationRunMonitoringTokensResponse {
     pub total_tokens_sum: i64,
     pub avg_tokens_per_run: f64,
     pub token_recorded_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunMonitoringTokensComparisonResponse {
+    pub previous_total_tokens_sum: i64,
+    pub previous_run_count: i64,
+    pub previous_avg_tokens_per_run: f64,
+    pub token_change_rate: f64,
+    pub run_count_change_rate: f64,
+    pub avg_tokens_per_run_change_rate: f64,
+    pub traffic_effect: f64,
+    pub cost_per_run_effect: f64,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -178,6 +191,34 @@ pub struct ApplicationRunMonitoringRunRankResponse {
     pub finished_at: Option<String>,
     pub duration_ms: Option<f64>,
     pub total_tokens: Option<i64>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/monitoring/runtime-activity",
+    params(("id" = String, Path, description = "Application id")),
+    responses(
+        (status = 200, body = ApplicationRuntimeActivitySnapshot),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_runtime_activity(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiSuccess<ApplicationRuntimeActivitySnapshot>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ApplicationService::new(state.store.clone())
+        .get_application(context.user.id, id)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        state
+            .runtime_activity
+            .snapshot(id, state.process_started_at),
+    )))
 }
 
 #[utoipa::path(
@@ -296,6 +337,16 @@ fn to_report_response(
             total_tokens_sum: report.tokens.total_tokens_sum,
             avg_tokens_per_run: report.tokens.avg_tokens_per_run,
             token_recorded_count: report.tokens.token_recorded_count,
+        },
+        tokens_comparison: ApplicationRunMonitoringTokensComparisonResponse {
+            previous_total_tokens_sum: report.tokens_comparison.previous_total_tokens_sum,
+            previous_run_count: report.tokens_comparison.previous_run_count,
+            previous_avg_tokens_per_run: report.tokens_comparison.previous_avg_tokens_per_run,
+            token_change_rate: report.tokens_comparison.token_change_rate,
+            run_count_change_rate: report.tokens_comparison.run_count_change_rate,
+            avg_tokens_per_run_change_rate: report.tokens_comparison.avg_tokens_per_run_change_rate,
+            traffic_effect: report.tokens_comparison.traffic_effect,
+            cost_per_run_effect: report.tokens_comparison.cost_per_run_effect,
         },
         tool_callbacks: ApplicationRunMonitoringToolCallbacksResponse {
             total_tool_callback_count: report.tool_callbacks.total_tool_callback_count,

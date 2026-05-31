@@ -772,6 +772,7 @@ async fn debug_variable_snapshot_uses_durable_cache_instead_of_recomputing_node_
         r#"
         insert into node_runs (
             id,
+            scope_id,
             flow_run_id,
             node_id,
             node_type,
@@ -785,6 +786,12 @@ async fn debug_variable_snapshot_uses_durable_cache_instead_of_recomputing_node_
             finished_at
         ) values (
             $1,
+            (
+                select applications.workspace_id
+                from flow_runs
+                join applications on applications.id = flow_runs.application_id
+                where flow_runs.id = $2
+            ),
             $2,
             'node-llm',
             'llm',
@@ -892,6 +899,7 @@ async fn debug_variable_snapshot_ignores_waiting_and_non_output_payload_buckets(
         r#"
         insert into node_runs (
             id,
+            scope_id,
             flow_run_id,
             node_id,
             node_type,
@@ -906,6 +914,12 @@ async fn debug_variable_snapshot_ignores_waiting_and_non_output_payload_buckets(
             finished_at
         ) values (
             $1,
+            (
+                select applications.workspace_id
+                from flow_runs
+                join applications on applications.id = flow_runs.application_id
+                where flow_runs.id = $2
+            ),
             $2,
             'node-llm',
             'llm',

@@ -1,6 +1,11 @@
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
-import { BookOutlined, HomeOutlined, PlusOutlined } from '@ant-design/icons';
-import { Card, Empty, Select, Space, Switch, Typography } from 'antd';
+import {
+  BookOutlined,
+  HomeOutlined,
+  PlusOutlined,
+  QuestionCircleOutlined
+} from '@ant-design/icons';
+import { Card, Empty, Select, Space, Switch, Tooltip, Typography } from 'antd';
 
 import type {
   SchemaViewRenderer,
@@ -14,6 +19,7 @@ import { LlmCardModelBadge } from '../components/nodes/LlmCardModelBadge';
 import type { NodeLastRun } from '../api/runtime';
 import { getAgentFlowNodeTypeIcon } from '../lib/node-type-icons';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
+import { getLlmExternalReasoningPolicy } from '../lib/llm-node-config';
 import { i18nText } from '../../../shared/i18n/text';
 
 function getNode(adapter: SchemaViewRendererProps['adapter']) {
@@ -157,9 +163,15 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
 }
 
 function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
+  const node = getNode(adapter);
   const retryEnabled = Boolean(adapter.getValue('config.retry_enabled'));
   const errorPolicy =
     (adapter.getValue('config.error_policy') as string | undefined) ?? 'none';
+  const externalReasoningPolicy = getLlmExternalReasoningPolicy({
+    external_reasoning_policy: adapter.getValue(
+      'config.external_reasoning_policy'
+    )
+  });
 
   const errorPolicyOptions = [
     {
@@ -181,6 +193,32 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
 
   return (
     <div className="agent-flow-node-detail__policies">
+      {node?.type === 'llm' ? (
+        <div
+          className="agent-flow-node-detail__policy-row"
+          data-testid="node-policy-row"
+        >
+          <Typography.Text className="agent-flow-node-detail__policy-label">
+            {i18nText("agentFlow", "auto.follow_external_reasoning")}
+            <Tooltip title="使用外部传入推理强度">
+              <QuestionCircleOutlined
+                aria-label="使用外部传入推理强度"
+                className="agent-flow-node-detail__policy-help"
+              />
+            </Tooltip>
+          </Typography.Text>
+          <Switch
+            aria-label={i18nText("agentFlow", "auto.follow_external_reasoning")}
+            checked={externalReasoningPolicy.follow_external_reasoning}
+            className="agent-flow-node-detail__policy-control"
+            onChange={(checked) =>
+              adapter.setValue('config.external_reasoning_policy', {
+                follow_external_reasoning: checked
+              })
+            }
+          />
+        </div>
+      ) : null}
       <div
         className="agent-flow-node-detail__policy-row"
         data-testid="node-policy-row"

@@ -1,15 +1,21 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import type { UIEvent } from 'react';
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState
+} from 'react';
+import type { MouseEvent, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { ApiReferenceReact } from '@scalar/api-reference-react';
 import '@scalar/api-reference-react/style.css';
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
-import { Result, Select, Spin, Typography } from 'antd';
+import { message, Result, Select, Spin, Typography } from 'antd';
 
 import './api-docs-explorer.css';
 import { ApiDocsOperationListPane } from './ApiDocsOperationListPane';
 import { i18nText } from '../../i18n/text';
+import { copyTextToClipboard } from '../clipboard/copy-text';
 
 type ScalarReferenceConfiguration = Exclude<
   Parameters<typeof ApiReferenceReact>[0]['configuration'],
@@ -21,6 +27,12 @@ type ScalarDocumentContent = ScalarReferenceConfiguration['content'];
 
 const emptyCategories: ApiDocsCatalogCategory[] = [];
 const apiDocsOperationsPageSize = 20;
+const scalarOperationHashPattern =
+  /(?:^|\/)(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)\/(.+)$/i;
+const scalarOperationMethodPattern =
+  /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)$/i;
+const scalarOperationTextPattern =
+  /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)\s+(\/\S.*)$/i;
 
 export interface ApiDocsCatalogOperation {
   id: string;
@@ -127,6 +139,46 @@ function buildOperationSearchText(operation: ApiDocsCatalogOperation): string {
   return normalizeSearchText(
     `${operation.method} ${operation.path} ${operation.summary ?? ''} ${operation.description ?? ''} ${operation.group} ${operation.id}`
   );
+}
+
+function buildScalarOperationCopyText(anchor: HTMLAnchorElement): string | null {
+  const endpointMethod = anchor
+    .querySelector('.endpoint-method')
+    ?.textContent?.trim();
+  const endpointPath = anchor
+    .querySelector('.endpoint-path')
+    ?.textContent?.trim();
+
+  if (
+    endpointMethod &&
+    endpointPath &&
+    scalarOperationMethodPattern.test(endpointMethod) &&
+    endpointPath.startsWith('/')
+  ) {
+    return `${endpointMethod.toUpperCase()} ${endpointPath}`;
+  }
+
+  const hashContent = anchor.hash
+    ? decodeURIComponent(anchor.hash.slice(1))
+    : '';
+  const hashMatch = hashContent.match(scalarOperationHashPattern);
+
+  if (hashMatch) {
+    const path = hashMatch[2].startsWith('/')
+      ? hashMatch[2]
+      : `/${hashMatch[2]}`;
+
+    return `${hashMatch[1].toUpperCase()} ${path}`;
+  }
+
+  const text = anchor.textContent?.trim().replace(/\s+/g, ' ') ?? '';
+  const textMatch = text.match(scalarOperationTextPattern);
+
+  if (!textMatch) {
+    return null;
+  }
+
+  return `${textMatch[1].toUpperCase()} ${textMatch[2]}`;
 }
 
 export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
@@ -405,6 +457,47 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     }
   }
 
+  function handleScalarOperationLinkClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest<HTMLAnchorElement>(
+      'a[href*="#"], a.endpoint'
+    );
+
+    if (!anchor || !event.currentTarget.contains(anchor)) {
+      return;
+    }
+
+    const copyText = buildScalarOperationCopyText(anchor);
+
+    if (!copyText) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    void copyTextToClipboard(copyText)
+      .then(() => {
+        message.success(
+          i18nText("sharedUi", "auto.copied", {
+            defaultValue: 'Copied'
+          })
+        );
+      })
+      .catch(() => {
+        message.error(
+          i18nText("sharedUi", "auto.copy_failed", {
+            defaultValue: 'Copy failed'
+          })
+        );
+      });
+  }
+
   function renderCategorySelector() {
     return (
       <section className="api-docs-panel__toolbar" aria-label={i18nText("sharedUi", "auto.document_filter")}>
@@ -541,7 +634,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     }
 
     return (
-      <div className="api-docs-panel__detail-viewer">
+      <div
+        className="api-docs-panel__detail-viewer"
+        onClickCapture={handleScalarOperationLinkClick}
+      >
         <ApiReferenceReact
           configuration={{
             authentication: authentication?.buildConfig(

@@ -10,6 +10,9 @@ const NATIVE_CATEGORY_ID: &str = "application-native-api";
 const OPENAI_CATEGORY_ID: &str = "openai-compatible-api";
 const ANTHROPIC_CATEGORY_ID: &str = "anthropic-compatible-api";
 
+type RequestBodyBuilder = fn(&DocTextResolver) -> Value;
+type ResponseBuilder = fn(&DocTextResolver) -> Value;
+
 #[derive(Debug, Clone)]
 pub struct ApplicationPublicDocsContext {
     pub application: ApplicationRecord,
@@ -17,13 +20,25 @@ pub struct ApplicationPublicDocsContext {
     pub locale: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct PublicOperation {
     id: &'static str,
     method: &'static str,
     path: &'static str,
     category_id: &'static str,
     doc_key: &'static str,
+    request_body: Option<RequestBodyBuilder>,
+    responses: ResponseBuilder,
+    notes: OperationNotes,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum OperationNotes {
+    CategoryLimitations,
+    Text {
+        zh_hans: &'static str,
+        en_us: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,7 +100,7 @@ pub fn build_application_public_docs_category_operations(
 ) -> Option<DocsCatalogCategoryOperations> {
     let locale = docs_locale(context);
     let operations = public_operations()
-        .into_iter()
+        .iter()
         .filter(|operation| operation.category_id == category_id)
         .map(|operation| to_catalog_operation(operation, locale))
         .collect::<Vec<_>>();
@@ -105,7 +120,7 @@ pub fn build_application_public_docs_category_spec(
     category_id: &str,
 ) -> Option<Value> {
     let operations = public_operations()
-        .into_iter()
+        .iter()
         .filter(|operation| operation.category_id == category_id)
         .collect::<Vec<_>>();
     if operations.is_empty() {
@@ -119,7 +134,7 @@ pub fn build_application_public_docs_operation_spec(
     operation_id: &str,
 ) -> Option<Value> {
     public_operations()
-        .into_iter()
+        .iter()
         .find(|operation| operation.id == operation_id)
         .map(|operation| openapi_spec(context, vec![operation]))
 }
@@ -141,6 +156,9 @@ impl DocTextResolver {
             ("application_public_api.native.cancel_run", DocsLocale::ZhHans) => "取消原生公开运行",
             ("application_public_api.native.resume_run", DocsLocale::ZhHans) => "恢复原生公开运行",
             ("application_public_api.native.upload_file", DocsLocale::ZhHans) => "上传原生公开文件",
+            ("application_public_api.native.list_models", DocsLocale::ZhHans) => {
+                "拉取原生模型能力列表"
+            }
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "创建 OpenAI 兼容聊天补全"
             }
@@ -152,6 +170,9 @@ impl DocTextResolver {
             }
             ("application_public_api.anthropic.message", DocsLocale::ZhHans) => {
                 "创建 Anthropic 兼容消息"
+            }
+            ("application_public_api.anthropic.count_message_tokens", DocsLocale::ZhHans) => {
+                "统计 Anthropic 兼容消息输入 tokens"
             }
             ("application_public_api.native.create_run", DocsLocale::EnUs) => {
                 "Create Native public run"
@@ -166,6 +187,9 @@ impl DocTextResolver {
             ("application_public_api.native.upload_file", DocsLocale::EnUs) => {
                 "Upload Native public file"
             }
+            ("application_public_api.native.list_models", DocsLocale::EnUs) => {
+                "List Native model capabilities"
+            }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Create OpenAI-compatible chat completion"
             }
@@ -177,6 +201,9 @@ impl DocTextResolver {
             }
             ("application_public_api.anthropic.message", DocsLocale::EnUs) => {
                 "Create Anthropic-compatible message"
+            }
+            ("application_public_api.anthropic.count_message_tokens", DocsLocale::EnUs) => {
+                "Count Anthropic-compatible message input tokens"
             }
             _ => "Public API operation",
         }
@@ -199,6 +226,9 @@ impl DocTextResolver {
             ("application_public_api.native.upload_file", DocsLocale::ZhHans) => {
                 "上传可供原生公开运行使用的文件。"
             }
+            ("application_public_api.native.list_models", DocsLocale::ZhHans) => {
+                "读取当前应用活跃发布版本中起始节点声明的模型能力目录。"
+            }
             ("application_public_api.openai.chat_completion", DocsLocale::ZhHans) => {
                 "将 OpenAI Chat Completions 请求适配为原生公开运行。"
             }
@@ -210,6 +240,9 @@ impl DocTextResolver {
             }
             ("application_public_api.anthropic.message", DocsLocale::ZhHans) => {
                 "将 Anthropic Messages 请求适配为原生公开运行。"
+            }
+            ("application_public_api.anthropic.count_message_tokens", DocsLocale::ZhHans) => {
+                "校验应用 API 密钥并返回 Anthropic Messages 请求的输入 token 估算值，不创建原生公开运行。"
             }
             ("application_public_api.native.create_run", DocsLocale::EnUs) => {
                 "Creates a run against the active published application version."
@@ -226,6 +259,9 @@ impl DocTextResolver {
             ("application_public_api.native.upload_file", DocsLocale::EnUs) => {
                 "Uploads a file for use by Native public runs."
             }
+            ("application_public_api.native.list_models", DocsLocale::EnUs) => {
+                "Lists model capabilities declared by the active published application's start node."
+            }
             ("application_public_api.openai.chat_completion", DocsLocale::EnUs) => {
                 "Adapts an OpenAI Chat Completions request to a Native public run."
             }
@@ -237,6 +273,9 @@ impl DocTextResolver {
             }
             ("application_public_api.anthropic.message", DocsLocale::EnUs) => {
                 "Adapts an Anthropic Messages request to a Native public run."
+            }
+            ("application_public_api.anthropic.count_message_tokens", DocsLocale::EnUs) => {
+                "Authenticates the application API key and returns an input token estimate for an Anthropic Messages request without creating a Native public run."
             }
             _ => "Public API operation.",
         }
@@ -282,7 +321,7 @@ impl DocTextResolver {
                 DocsLocale::ZhHans,
             ) => "流式返回选项，include_workflow_events=public 会启用公开工作流事件。",
             ("application_public_api.native.create_run.request.execution", DocsLocale::ZhHans) => {
-                "发布运行的执行选项。"
+                "发布运行的执行选项。支持 model_parameters.reasoning 作为运行时 reasoning 偏好。"
             }
             ("application_public_api.native.create_run.request.metadata", DocsLocale::ZhHans) => {
                 "调用方元数据，会随公开运行持久化。"
@@ -351,7 +390,7 @@ impl DocTextResolver {
                 "Streaming options. include_workflow_events=public enables public workflow events."
             }
             ("application_public_api.native.create_run.request.execution", DocsLocale::EnUs) => {
-                "Execution options for the published run."
+                "Execution options for the published run. Supports model_parameters.reasoning as runtime reasoning preference."
             }
             ("application_public_api.native.create_run.request.metadata", DocsLocale::EnUs) => {
                 "Caller metadata persisted with the public run."
@@ -383,7 +422,9 @@ impl DocTextResolver {
     fn response_description(&self, key: &str) -> &'static str {
         match (key, self.locale) {
             ("compatible_response", DocsLocale::ZhHans) => "兼容响应",
+            ("compatible_token_count", DocsLocale::ZhHans) => "兼容输入 token 统计",
             ("compatible_model_list", DocsLocale::ZhHans) => "OpenAI 兼容模型列表",
+            ("native_model_list", DocsLocale::ZhHans) => "原生模型能力列表",
             ("native_run", DocsLocale::ZhHans) => "原生运行",
             ("native_run_created", DocsLocale::ZhHans) => "原生运行已创建",
             ("file_uploaded", DocsLocale::ZhHans) => "文件已上传",
@@ -395,7 +436,9 @@ impl DocTextResolver {
                 "应用未发布，或运行状态不支持当前操作"
             }
             ("compatible_response", DocsLocale::EnUs) => "Compatible response",
+            ("compatible_token_count", DocsLocale::EnUs) => "Compatible input token count",
             ("compatible_model_list", DocsLocale::EnUs) => "OpenAI-compatible model list",
+            ("native_model_list", DocsLocale::EnUs) => "Native model capability list",
             ("native_run", DocsLocale::EnUs) => "Native run",
             ("native_run_created", DocsLocale::EnUs) => "Native run created",
             ("file_uploaded", DocsLocale::EnUs) => "File uploaded",
@@ -407,6 +450,16 @@ impl DocTextResolver {
                 "Application is not published or run state is not supported"
             }
             _ => "Response",
+        }
+    }
+
+    fn operation_notes(&self, operation: &PublicOperation) -> &'static str {
+        match operation.notes {
+            OperationNotes::CategoryLimitations => self.unsupported_notes(operation.category_id),
+            OperationNotes::Text { zh_hans, en_us } => match self.locale {
+                DocsLocale::ZhHans => zh_hans,
+                DocsLocale::EnUs => en_us,
+            },
         }
     }
 
@@ -446,7 +499,7 @@ fn category_label(category_id: &str, locale: DocsLocale) -> Option<&'static str>
     }
 }
 
-fn to_catalog_operation(operation: PublicOperation, locale: DocsLocale) -> DocsCatalogOperation {
+fn to_catalog_operation(operation: &PublicOperation, locale: DocsLocale) -> DocsCatalogOperation {
     let docs = DocTextResolver::new(locale);
     let category_label =
         category_label(operation.category_id, locale).unwrap_or(operation.category_id);
@@ -462,7 +515,10 @@ fn to_catalog_operation(operation: PublicOperation, locale: DocsLocale) -> DocsC
     }
 }
 
-fn openapi_spec(context: &ApplicationPublicDocsContext, operations: Vec<PublicOperation>) -> Value {
+fn openapi_spec(
+    context: &ApplicationPublicDocsContext,
+    operations: Vec<&PublicOperation>,
+) -> Value {
     let locale = docs_locale(context);
     let mut paths = serde_json::Map::new();
     for operation in operations {
@@ -527,7 +583,7 @@ fn operation_openapi_spec(operation: &PublicOperation, locale: DocsLocale) -> Va
     let mut spec = json!({
         "operationId": operation.id,
         "summary": docs.operation_summary(operation.doc_key),
-        "description": format!("{}\n\n{}", docs.operation_description(operation.doc_key), docs.unsupported_notes(operation.category_id)),
+        "description": format!("{}\n\n{}", docs.operation_description(operation.doc_key), docs.operation_notes(operation)),
         "tags": [category_label(operation.category_id, locale).unwrap_or(operation.category_id)],
         "responses": operation_responses(operation, &docs),
         "security": operation_security(operation.category_id)
@@ -561,80 +617,134 @@ fn operation_parameters(operation: &PublicOperation) -> Vec<Value> {
 }
 
 fn operation_request_body(operation: &PublicOperation, docs: &DocTextResolver) -> Option<Value> {
-    match operation.id {
-        "applicationNativeCreateRun" => Some(json_request_body(
-            native_create_run_schema(docs),
-            json!({
-                "query": "Summarize the incident",
-                "expand_id": "external-user-1",
-                "title": "Customer incident summary",
-                "response_mode": "blocking",
-                "inputs": {"priority": "high"},
-                "conversation": {"user": "external-user-1"},
-                "attachments": [{"source": "upload_file_id", "value": "00000000-0000-0000-0000-000000000000"}]
-            }),
-        )),
-        "applicationNativeResumeRun" => Some(json_request_body(
-            native_resume_run_schema(docs),
-            json!({
-                "callback_task_id": "00000000-0000-0000-0000-000000000000",
-                "response_payload": {},
-                "response_mode": "blocking"
-            }),
-        )),
-        "applicationNativeUploadFile" => Some(json!({
-            "required": true,
-            "content": {
-                "multipart/form-data": {
-                    "schema": native_file_upload_schema(docs)
-                }
-            }
-        })),
-        "applicationOpenAiCreateChatCompletion" => Some(json_request_body(
-            openai_chat_completion_schema(docs),
-            json!({
-                "model": "provider/model",
-                "messages": [{"role": "user", "content": "Hello"}],
-                "stream": false
-            }),
-        )),
-        "applicationOpenAiCreateResponse" => Some(json_request_body(
-            openai_response_create_schema(docs),
-            json!({
-                "model": "provider/model",
-                "input": "Hello",
-                "previous_response_id": "resp_00000000-0000-0000-0000-000000000000",
-                "stream": false
-            }),
-        )),
-        "applicationAnthropicCreateMessage" => Some(json_request_body(
-            anthropic_message_schema(docs),
-            json!({
-                "model": "provider/model",
-                "max_tokens": 512,
-                "messages": [{"role": "user", "content": "Hello"}],
-                "metadata": {"expand_id": "external-user-1"},
-                "stream": false
-            }),
-        )),
-        _ => None,
-    }
+    operation.request_body.map(|builder| builder(docs))
 }
 
 fn operation_responses(operation: &PublicOperation, docs: &DocTextResolver) -> Value {
-    match operation.id {
-        "applicationNativeCreateRun" => native_responses(docs, "201", true),
-        "applicationNativeGetRun" | "applicationNativeCancelRun" => {
-            native_responses(docs, "200", false)
+    (operation.responses)(docs)
+}
+
+fn native_create_run_request_body(docs: &DocTextResolver) -> Value {
+    json_request_body(
+        native_create_run_schema(docs),
+        json!({
+            "query": "Summarize the incident",
+            "expand_id": "external-user-1",
+            "title": "Customer incident summary",
+            "response_mode": "blocking",
+            "inputs": {"priority": "high"},
+            "execution": {
+                "model_parameters": {
+                    "reasoning": {
+                        "enabled": true,
+                        "effort": "high"
+                    }
+                }
+            },
+            "conversation": {"user": "external-user-1"},
+            "attachments": [{"source": "upload_file_id", "value": "00000000-0000-0000-0000-000000000000"}]
+        }),
+    )
+}
+
+fn native_resume_run_request_body(docs: &DocTextResolver) -> Value {
+    json_request_body(
+        native_resume_run_schema(docs),
+        json!({
+            "callback_task_id": "00000000-0000-0000-0000-000000000000",
+            "response_payload": {},
+            "response_mode": "blocking"
+        }),
+    )
+}
+
+fn native_upload_file_request_body(docs: &DocTextResolver) -> Value {
+    json!({
+        "required": true,
+        "content": {
+            "multipart/form-data": {
+                "schema": native_file_upload_schema(docs)
+            }
         }
-        "applicationNativeResumeRun" => native_responses(docs, "200", true),
-        "applicationNativeUploadFile" => native_upload_responses(docs),
-        "applicationOpenAiCreateChatCompletion" => openai_responses(docs),
-        "applicationOpenAiCreateResponse" => openai_response_responses(docs),
-        "applicationOpenAiListModels" => openai_model_list_responses(docs),
-        "applicationAnthropicCreateMessage" => anthropic_responses(docs),
-        _ => json!({}),
-    }
+    })
+}
+
+fn openai_chat_completion_request_body(docs: &DocTextResolver) -> Value {
+    json_request_body(
+        openai_chat_completion_schema(docs),
+        json!({
+            "model": "provider/model",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": false
+        }),
+    )
+}
+
+fn openai_response_create_request_body(docs: &DocTextResolver) -> Value {
+    json_request_body(
+        openai_response_create_schema(docs),
+        json!({
+            "model": "provider/model",
+            "input": "Hello",
+            "previous_response_id": "resp_00000000-0000-0000-0000-000000000000",
+            "stream": false
+        }),
+    )
+}
+
+fn anthropic_message_request_body(docs: &DocTextResolver) -> Value {
+    json_request_body(
+        anthropic_message_schema(docs),
+        json!({
+            "model": "provider/model",
+            "max_tokens": 512,
+            "messages": [{"role": "user", "content": "Hello"}],
+            "metadata": {"expand_id": "external-user-1"},
+            "stream": false
+        }),
+    )
+}
+
+fn anthropic_count_message_tokens_request_body(_docs: &DocTextResolver) -> Value {
+    json_request_body(
+        anthropic_count_tokens_schema(),
+        json!({
+            "model": "provider/model",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "tools": [{
+                "name": "lookup_order",
+                "description": "Find an order",
+                "input_schema": {"type": "object"}
+            }]
+        }),
+    )
+}
+
+fn native_create_run_responses(docs: &DocTextResolver) -> Value {
+    native_responses(docs, "201", true)
+}
+
+fn native_get_run_responses(docs: &DocTextResolver) -> Value {
+    native_responses(docs, "200", false)
+}
+
+fn native_resume_run_responses(docs: &DocTextResolver) -> Value {
+    native_responses(docs, "200", true)
+}
+
+fn native_model_list_responses(docs: &DocTextResolver) -> Value {
+    json!({
+        "200": json_response(
+            docs.response_description("native_model_list"),
+            native_model_list_response_schema()
+        ),
+        "401": json_response(docs.response_description("invalid_application_api_key"), native_error_body_schema()),
+        "403": json_response(docs.response_description("forbidden"), native_error_body_schema()),
+        "409": json_response(
+            docs.response_description("application_not_published_or_run_state_not_supported"),
+            native_error_body_schema()
+        )
+    })
 }
 
 fn native_responses(
@@ -780,6 +890,17 @@ fn anthropic_responses(docs: &DocTextResolver) -> Value {
     })
 }
 
+fn anthropic_count_tokens_responses(docs: &DocTextResolver) -> Value {
+    json!({
+        "200": json_response(
+            docs.response_description("compatible_token_count"),
+            anthropic_count_tokens_response_schema()
+        ),
+        "400": json_response(docs.response_description("invalid_request"), anthropic_error_body_schema()),
+        "401": json_response(docs.response_description("invalid_application_api_key"), anthropic_error_body_schema())
+    })
+}
+
 fn json_response(description: &'static str, schema: Value) -> Value {
     json!({
         "description": description,
@@ -855,6 +976,62 @@ fn native_run_response_schema() -> Value {
             "usage": {"oneOf": [{"type": "object", "additionalProperties": true}, {"type": "null"}]},
             "error": {"oneOf": [{"type": "object", "additionalProperties": true}, {"type": "null"}]},
             "created_at": {"type": "string", "format": "date-time"}
+        }
+    })
+}
+
+fn native_model_list_response_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["object", "data"],
+        "properties": {
+            "object": {"type": "string", "enum": ["list"]},
+            "data": {
+                "type": "array",
+                "items": native_model_object_schema()
+            }
+        }
+    })
+}
+
+fn native_model_object_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["id", "capabilities"],
+        "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "context_window": {"type": "integer"},
+            "max_context_window": {"type": "integer"},
+            "max_output_tokens": {"type": "integer"},
+            "auto_compact_token_limit": {"type": "integer"},
+            "capabilities": model_capabilities_schema(),
+            "reasoning": model_reasoning_schema()
+        }
+    })
+}
+
+fn model_capabilities_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "reasoning": {"type": "boolean"},
+            "tool_call": {"type": "boolean"},
+            "multimodal": {"type": "boolean"},
+            "structured_output": {"type": "boolean"}
+        }
+    })
+}
+
+fn model_reasoning_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "default_effort": {"type": "string"},
+            "supported_efforts": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
         }
     })
 }
@@ -1015,6 +1192,20 @@ fn openai_model_list_response_schema() -> Value {
                         "object": {"type": "string", "enum": ["model"]},
                         "created": {"type": "integer"},
                         "owned_by": {"type": "string"},
+                        "context_window": {"type": "integer"},
+                        "max_context_window": {"type": "integer"},
+                        "max_output_tokens": {"type": "integer"},
+                        "auto_compact_token_limit": {"type": "integer"},
+                        "capabilities": model_capabilities_schema(),
+                        "reasoning": model_reasoning_schema(),
+                        "limit": {
+                            "type": "object",
+                            "properties": {
+                                "context": {"type": "integer"},
+                                "input": {"type": "integer"},
+                                "output": {"type": "integer"}
+                            }
+                        },
                         "name": {
                             "oneOf": [
                                 {"type": "string"},
@@ -1150,6 +1341,16 @@ fn anthropic_error_body_schema() -> Value {
                     "message": {"type": "string"}
                 }
             }
+        }
+    })
+}
+
+fn anthropic_count_tokens_response_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["input_tokens"],
+        "properties": {
+            "input_tokens": {"type": "integer", "minimum": 1}
         }
     })
 }
@@ -1294,7 +1495,23 @@ fn native_create_run_schema(docs: &DocTextResolver) -> Value {
             "execution": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": docs.field_description("application_public_api.native.create_run.request.execution")
+                "description": docs.field_description("application_public_api.native.create_run.request.execution"),
+                "properties": {
+                    "idempotency_key": {"type": "string"},
+                    "model_parameters": {
+                        "type": "object",
+                        "properties": {
+                            "reasoning": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": {"type": "boolean"},
+                                    "effort": {"type": "string", "enum": ["minimal", "low", "medium", "high", "xhigh"]},
+                                    "budget_tokens": {"type": "integer", "minimum": 1}
+                                }
+                            }
+                        }
+                    }
+                }
             },
             "metadata": {
                 "type": "object",
@@ -1561,6 +1778,104 @@ fn anthropic_message_schema(docs: &DocTextResolver) -> Value {
     })
 }
 
+fn anthropic_count_tokens_schema() -> Value {
+    let content_block_schema = anthropic_count_tokens_content_block_schema();
+    let message_content_schema = json!({
+        "oneOf": [
+            {"type": "string"},
+            {
+                "type": "array",
+                "items": content_block_schema
+            }
+        ]
+    });
+    let message_schema = json!({
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+            "role": {"type": "string", "enum": ["user", "assistant"]},
+            "content": message_content_schema
+        },
+        "additionalProperties": true
+    });
+    json!({
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+            "model": {"type": "string"},
+            "system": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {"type": "object", "additionalProperties": true}
+                    }
+                ]
+            },
+            "messages": {
+                "type": "array",
+                "minItems": 1,
+                "items": message_schema
+            },
+            "tools": {
+                "type": "array",
+                "items": anthropic_tool_schema()
+            },
+            "tool_choice": {
+                "oneOf": [
+                    {"type": "string", "enum": ["auto", "any", "none"]},
+                    {"type": "object", "additionalProperties": true}
+                ]
+            },
+            "thinking": {"type": "object", "additionalProperties": true},
+            "container": {"type": "object", "additionalProperties": true},
+            "context_management": {"type": "object", "additionalProperties": true},
+            "metadata": {"type": "object", "additionalProperties": true}
+        },
+        "additionalProperties": true
+    })
+}
+
+fn anthropic_count_tokens_content_block_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "type": {
+                "type": "string",
+                "enum": [
+                    "text",
+                    "tool_use",
+                    "tool_result",
+                    "thinking",
+                    "redacted_thinking",
+                    "image",
+                    "document"
+                ]
+            },
+            "text": {"type": "string"},
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "input": {"type": "object", "additionalProperties": true},
+            "tool_use_id": {"type": "string"},
+            "is_error": {"type": "boolean"},
+            "thinking": {"type": "string"},
+            "signature": {"type": "string"},
+            "source": {"type": "object", "additionalProperties": true},
+            "content": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {"type": "object", "additionalProperties": true}
+                    },
+                    {"type": "object", "additionalProperties": true}
+                ]
+            }
+        },
+        "additionalProperties": true
+    })
+}
+
 fn operation_security(category_id: &str) -> Value {
     if category_id == ANTHROPIC_CATEGORY_ID {
         return json!([
@@ -1649,70 +1964,187 @@ fn security_scheme_description(locale: DocsLocale) -> &'static str {
     }
 }
 
-fn public_operations() -> Vec<PublicOperation> {
-    vec![
-        PublicOperation {
-            id: "applicationNativeCreateRun",
-            method: "POST",
-            path: "/api/v1/agent/runs",
-            category_id: NATIVE_CATEGORY_ID,
-            doc_key: "application_public_api.native.create_run",
+fn public_operations() -> &'static [PublicOperation] {
+    PUBLIC_OPERATION_REGISTRY
+}
+
+static PUBLIC_OPERATION_REGISTRY: &[PublicOperation] = &[
+    PublicOperation {
+        id: "applicationNativeCreateRun",
+        method: "POST",
+        path: "/api/agent/v1/runs",
+        category_id: NATIVE_CATEGORY_ID,
+        doc_key: "application_public_api.native.create_run",
+        request_body: Some(native_create_run_request_body),
+        responses: native_create_run_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationNativeGetRun",
+        method: "GET",
+        path: "/api/agent/v1/runs/{run_id}",
+        category_id: NATIVE_CATEGORY_ID,
+        doc_key: "application_public_api.native.get_run",
+        request_body: None,
+        responses: native_get_run_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationNativeCancelRun",
+        method: "POST",
+        path: "/api/agent/v1/runs/{run_id}/cancel",
+        category_id: NATIVE_CATEGORY_ID,
+        doc_key: "application_public_api.native.cancel_run",
+        request_body: None,
+        responses: native_get_run_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationNativeResumeRun",
+        method: "POST",
+        path: "/api/agent/v1/runs/{run_id}/resume",
+        category_id: NATIVE_CATEGORY_ID,
+        doc_key: "application_public_api.native.resume_run",
+        request_body: Some(native_resume_run_request_body),
+        responses: native_resume_run_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationNativeUploadFile",
+        method: "POST",
+        path: "/api/agent/v1/files",
+        category_id: NATIVE_CATEGORY_ID,
+        doc_key: "application_public_api.native.upload_file",
+        request_body: Some(native_upload_file_request_body),
+        responses: native_upload_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationNativeListModels",
+        method: "GET",
+        path: "/api/agent/v1/models",
+        category_id: NATIVE_CATEGORY_ID,
+        doc_key: "application_public_api.native.list_models",
+        request_body: None,
+        responses: native_model_list_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationOpenAiCreateChatCompletion",
+        method: "POST",
+        path: "/v1/chat/completions",
+        category_id: OPENAI_CATEGORY_ID,
+        doc_key: "application_public_api.openai.chat_completion",
+        request_body: Some(openai_chat_completion_request_body),
+        responses: openai_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationOpenAiCreateResponse",
+        method: "POST",
+        path: "/v1/responses",
+        category_id: OPENAI_CATEGORY_ID,
+        doc_key: "application_public_api.openai.response",
+        request_body: Some(openai_response_create_request_body),
+        responses: openai_response_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationOpenAiListModels",
+        method: "GET",
+        path: "/v1/models",
+        category_id: OPENAI_CATEGORY_ID,
+        doc_key: "application_public_api.openai.list_models",
+        request_body: None,
+        responses: openai_model_list_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationAnthropicCreateMessage",
+        method: "POST",
+        path: "/v1/messages",
+        category_id: ANTHROPIC_CATEGORY_ID,
+        doc_key: "application_public_api.anthropic.message",
+        request_body: Some(anthropic_message_request_body),
+        responses: anthropic_responses,
+        notes: OperationNotes::CategoryLimitations,
+    },
+    PublicOperation {
+        id: "applicationAnthropicCountMessageTokens",
+        method: "POST",
+        path: "/v1/messages/count_tokens",
+        category_id: ANTHROPIC_CATEGORY_ID,
+        doc_key: "application_public_api.anthropic.count_message_tokens",
+        request_body: Some(anthropic_count_message_tokens_request_body),
+        responses: anthropic_count_tokens_responses,
+        notes: OperationNotes::Text {
+            zh_hans: "该端点用于 Claude Code 等客户端的输入预估请求；只返回兼容形状的 token 估算结果，不写入运行记录。",
+            en_us: "This endpoint supports input estimation requests from clients such as Claude Code; it returns a compatible token estimate and does not persist a run.",
         },
-        PublicOperation {
-            id: "applicationNativeGetRun",
-            method: "GET",
-            path: "/api/v1/agent/runs/{run_id}",
-            category_id: NATIVE_CATEGORY_ID,
-            doc_key: "application_public_api.native.get_run",
-        },
-        PublicOperation {
-            id: "applicationNativeCancelRun",
-            method: "POST",
-            path: "/api/v1/agent/runs/{run_id}/cancel",
-            category_id: NATIVE_CATEGORY_ID,
-            doc_key: "application_public_api.native.cancel_run",
-        },
-        PublicOperation {
-            id: "applicationNativeResumeRun",
-            method: "POST",
-            path: "/api/v1/agent/runs/{run_id}/resume",
-            category_id: NATIVE_CATEGORY_ID,
-            doc_key: "application_public_api.native.resume_run",
-        },
-        PublicOperation {
-            id: "applicationNativeUploadFile",
-            method: "POST",
-            path: "/api/v1/agent/files",
-            category_id: NATIVE_CATEGORY_ID,
-            doc_key: "application_public_api.native.upload_file",
-        },
-        PublicOperation {
-            id: "applicationOpenAiCreateChatCompletion",
-            method: "POST",
-            path: "/v1/chat/completions",
-            category_id: OPENAI_CATEGORY_ID,
-            doc_key: "application_public_api.openai.chat_completion",
-        },
-        PublicOperation {
-            id: "applicationOpenAiCreateResponse",
-            method: "POST",
-            path: "/v1/responses",
-            category_id: OPENAI_CATEGORY_ID,
-            doc_key: "application_public_api.openai.response",
-        },
-        PublicOperation {
-            id: "applicationOpenAiListModels",
-            method: "GET",
-            path: "/v1/models",
-            category_id: OPENAI_CATEGORY_ID,
-            doc_key: "application_public_api.openai.list_models",
-        },
-        PublicOperation {
-            id: "applicationAnthropicCreateMessage",
-            method: "POST",
-            path: "/v1/messages",
-            category_id: ANTHROPIC_CATEGORY_ID,
-            doc_key: "application_public_api.anthropic.message",
-        },
-    ]
+    },
+];
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+    use utoipa::OpenApi;
+
+    #[test]
+    fn public_operation_registry_declares_unique_documented_operations() {
+        let docs = DocTextResolver::new(DocsLocale::EnUs);
+        let mut ids = HashSet::new();
+        let mut routes = HashSet::new();
+
+        for operation in public_operations() {
+            assert!(ids.insert(operation.id), "duplicate operation id");
+            assert!(
+                routes.insert((operation.method, operation.path)),
+                "duplicate public route"
+            );
+            assert!(
+                category_label(operation.category_id, DocsLocale::EnUs).is_some(),
+                "unknown category {}",
+                operation.category_id
+            );
+            assert!(
+                !operation_responses(operation, &docs)
+                    .as_object()
+                    .expect("operation responses should be an object")
+                    .is_empty(),
+                "operation {} must declare responses",
+                operation.id
+            );
+            if let Some(request_body) = operation_request_body(operation, &docs) {
+                assert!(
+                    request_body.as_object().is_some(),
+                    "operation {} request body should be an object",
+                    operation.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn public_operation_registry_matches_global_openapi_paths() {
+        let spec = serde_json::to_value(crate::openapi::ApiDoc::openapi())
+            .expect("global openapi should serialize");
+        let paths = spec["paths"]
+            .as_object()
+            .expect("global openapi paths should be an object");
+
+        for operation in public_operations() {
+            let Some(path_item) = paths.get(operation.path) else {
+                panic!("global openapi missing path {}", operation.path);
+            };
+            let method = operation.method.to_ascii_lowercase();
+            assert!(
+                path_item.get(&method).is_some(),
+                "global openapi missing {} {}",
+                operation.method,
+                operation.path
+            );
+        }
+    }
 }

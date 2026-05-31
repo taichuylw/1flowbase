@@ -125,6 +125,19 @@ describe('AppShellFrame', () => {
     });
   });
 
+  test('does not mark the language switcher as a selected navigation item', async () => {
+    const { container } = renderShell('/settings/data-models');
+
+    expect(await screen.findByLabelText('Switch language')).toBeInTheDocument();
+    expect(
+      // Ant Design exposes submenu selected state only through its own classes.
+      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+      container.querySelector(
+        '.app-shell-language-menu .ant-menu-submenu-selected'
+      )
+    ).not.toBeInTheDocument();
+  });
+
   test('updates the current session locale from the language switcher', async () => {
     renderShell('/settings/data-models');
 

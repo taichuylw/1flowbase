@@ -1,9 +1,9 @@
-use std::{collections::HashSet, future::Future, sync::Arc};
+use std::{collections::HashSet, convert::Infallible, future::Future, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    response::sse::{KeepAlive, Sse},
+    response::sse::{Event, KeepAlive, Sse},
     routing::{get, post, put},
     Json, Router,
 };
@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use storage_durable::MainDurableStore;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tracing::error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -36,6 +37,7 @@ use crate::{
     middleware::{require_csrf::require_csrf, require_session::require_session},
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
+    runtime_activity::{scope_application_activity, ApplicationActivityKind},
 };
 
 use super::debug_run_stream;
@@ -55,6 +57,13 @@ use runtime_debug_artifacts::{
     load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
     offload_application_run_detail_artifacts,
 };
+
+fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
+    ApiProviderRuntime::new_with_activity(
+        state.provider_runtime.clone(),
+        state.runtime_activity.clone(),
+    )
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartNodeDebugPreviewBody {
@@ -349,6 +358,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(application_monitoring::get_application_run_monitoring_report),
         )
         .route(
+            "/applications/:id/monitoring/runtime-activity",
+            get(application_monitoring::get_application_runtime_activity),
+        )
+        .route(
             "/applications/:id/logs/conversations/:conversation_id/messages",
             get(list_application_conversation_messages),
         )
@@ -474,6 +487,12 @@ fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
         .get("tool_calls")
         .and_then(serde_json::Value::as_array)
         .map(|tool_calls| tool_calls.len() as i64)
+        .or_else(|| {
+            task.request_payload
+                .get("tool_calls")
+                .and_then(|value| value.get("tool_call_count"))
+                .and_then(serde_json::Value::as_i64)
+        })
         .unwrap_or(0)
 }
 
@@ -598,6 +617,16 @@ where
 {
     let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
     let mut items = imported_context_messages_from_run(run, load_debug_artifact).await;
+    let system_items = if query.before.is_none() && query.after.is_none() {
+        items
+            .iter()
+            .filter(|item| item.role.as_deref() == Some("system"))
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    items.retain(|item| item.role.as_deref() != Some("system"));
     items.push(to_application_conversation_message_response(
         run.clone(),
         Some(run.id),
@@ -607,10 +636,14 @@ where
     let (start, end) = imported_context_window(run.id, total, limit, query);
 
     ApplicationConversationMessagesPageResponse {
-        items: items
+        items: system_items
             .into_iter()
-            .skip(start)
-            .take(end.saturating_sub(start))
+            .chain(
+                items
+                    .into_iter()
+                    .skip(start)
+                    .take(end.saturating_sub(start)),
+            )
             .collect(),
         page: ApplicationConversationMessagesPageInfoResponse {
             has_before: start > 0,
@@ -633,11 +666,17 @@ where
         .await
         .unwrap_or_else(|| run.input_payload.clone());
     let start_payload = start_input_payload(&source);
+    let mut items = Vec::new();
+
+    if let Some(system) = run_level_system_content(&source, &load_debug_artifact).await {
+        items.push(imported_context_item(run, items.len(), "system", system));
+    }
+
     let Some(history_value) = start_payload
         .get("history")
         .or_else(|| start_payload.get("messages"))
     else {
-        return Vec::new();
+        return items;
     };
     let history_source =
         match resolve_runtime_debug_artifact_value(history_value, &load_debug_artifact).await {
@@ -645,10 +684,8 @@ where
             None => history_value.clone(),
         };
     let Some(history) = history_source.as_array() else {
-        return Vec::new();
+        return items;
     };
-
-    let mut items = Vec::new();
 
     for message in history {
         let role = message
@@ -660,7 +697,14 @@ where
         };
 
         match role {
-            "system" | "user" | "assistant" => {
+            "system"
+                if !items
+                    .iter()
+                    .any(|item| item.role.as_deref() == Some("system")) =>
+            {
+                items.push(imported_context_item(run, items.len(), role, content))
+            }
+            "user" | "assistant" => {
                 items.push(imported_context_item(run, items.len(), role, content))
             }
             _ => {}
@@ -764,6 +808,62 @@ fn imported_context_item(
         answer: None,
         is_current: false,
     }
+}
+
+async fn run_level_system_content<F, Fut>(
+    payload: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<String>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let start_payload = start_input_payload(payload);
+    let system_value = start_payload
+        .get("system")
+        .or_else(|| payload.get("system"))?;
+    let resolved_system =
+        resolve_runtime_debug_artifact_value(system_value, load_debug_artifact).await;
+
+    resolved_system
+        .as_ref()
+        .and_then(conversation_prompt_text)
+        .or_else(|| conversation_prompt_text(system_value))
+}
+
+fn conversation_prompt_text(value: &serde_json::Value) -> Option<String> {
+    if let Some(text) = value
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(array) = value.as_array() {
+        let text = array
+            .iter()
+            .filter_map(conversation_content_part_text)
+            .collect::<Vec<_>>()
+            .join("");
+        return (!text.is_empty()).then_some(text);
+    }
+
+    conversation_content_part_text(value).or_else(|| conversation_preview_text(value))
+}
+
+fn conversation_preview_text(value: &serde_json::Value) -> Option<String> {
+    let preview = value
+        .get("preview")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    serde_json::from_str::<serde_json::Value>(preview)
+        .ok()
+        .as_ref()
+        .and_then(conversation_prompt_text)
+        .or_else(|| Some(preview.to_string()))
 }
 
 fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
@@ -1242,13 +1342,16 @@ pub async fn start_flow_debug_run(
     Path(id): Path<Uuid>,
     Json(body): Json<StartFlowDebugRunBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ApplicationRunDetailResponse>>), ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
@@ -1266,19 +1369,24 @@ pub async fn start_flow_debug_run(
     let background_state = state.clone();
 
     tokio::spawn(async move {
+        let _execution_activity = background_state
+            .runtime_activity
+            .start(id, ApplicationActivityKind::ApplicationExecution);
         let background_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         );
-        let continue_result = background_service
-            .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+        let continue_result = scope_application_activity(
+            id,
+            background_service.continue_flow_debug_run(ContinueFlowDebugRunCommand {
                 application_id: id,
                 flow_run_id,
                 workspace_id,
-            })
-            .await;
+            }),
+        )
+        .await;
         match continue_result {
             Ok(detail) => {
                 if let Err(error) = offload_application_run_detail_artifacts(
@@ -1323,14 +1431,17 @@ pub async fn start_flow_debug_run_stream(
     Path(id): Path<Uuid>,
     Query(stream_query): Query<DebugRunStreamQuery>,
     Json(body): Json<StartFlowDebugRunBody>,
-) -> Result<Sse<debug_run_stream::DebugRunSseStream>, ApiError> {
+) -> Result<Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let request_received_at = std::time::Instant::now();
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
@@ -1376,32 +1487,39 @@ pub async fn start_flow_debug_run_stream(
 
     let background_state = state.clone();
     tokio::spawn(async move {
+        let _execution_activity = background_state
+            .runtime_activity
+            .start(id, ApplicationActivityKind::ApplicationExecution);
         let background_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        let prepare_result = background_service
-            .prepare_flow_debug_run_from_shell(PrepareFlowDebugRunCommand {
+        let prepare_result = scope_application_activity(
+            id,
+            background_service.prepare_flow_debug_run_from_shell(PrepareFlowDebugRunCommand {
                 actor_user_id,
                 application_id: id,
                 flow_run_id: run_id,
                 input_payload: body.input_payload,
                 document_snapshot: body.document,
                 debug_session_id: body.debug_session_id.unwrap_or_default(),
-            })
-            .await;
+            }),
+        )
+        .await;
         let result = match prepare_result {
             Ok(_) => {
-                background_service
-                    .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+                scope_application_activity(
+                    id,
+                    background_service.continue_flow_debug_run(ContinueFlowDebugRunCommand {
                         application_id: id,
                         flow_run_id: run_id,
                         workspace_id,
-                    })
-                    .await
+                    }),
+                )
+                .await
             }
             Err(error) => Err(error),
         };
@@ -1449,8 +1567,15 @@ pub async fn start_flow_debug_run_stream(
         "flow debug stream opened"
     );
 
-    Ok(Sse::new(debug_run_stream::DebugRunSseStream::new(receiver))
-        .keep_alive(KeepAlive::default()))
+    let sse_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::SseConnection);
+    let stream = debug_run_stream::DebugRunSseStream::new(receiver).map(move |event| {
+        let _keep_alive = &sse_activity;
+        event
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 pub async fn subscribe_flow_debug_run_stream(
@@ -1509,7 +1634,7 @@ pub async fn cancel_flow_run(
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
@@ -1558,25 +1683,31 @@ pub async fn resume_flow_run(
     Path((id, run_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<ResumeFlowRunBody>,
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let checkpoint_id = Uuid::parse_str(&body.checkpoint_id)
         .map_err(|_| ControlPlaneError::InvalidInput("checkpoint_id"))?;
-    let detail = OrchestrationRuntimeService::new(
-        state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
-        state.runtime_engine.clone(),
-        state.provider_secret_master_key.clone(),
+    let detail = scope_application_activity(
+        id,
+        OrchestrationRuntimeService::new(
+            state.store.clone(),
+            api_provider_runtime(&state),
+            state.runtime_engine.clone(),
+            state.provider_secret_master_key.clone(),
+        )
+        .resume_flow_run(ResumeFlowRunCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            flow_run_id: run_id,
+            checkpoint_id,
+            input_payload: body.input_payload,
+        }),
     )
-    .resume_flow_run(ResumeFlowRunCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        flow_run_id: run_id,
-        checkpoint_id,
-        input_payload: body.input_payload,
-    })
     .await?;
     let detail = offload_application_run_detail_artifacts(
         state.clone(),
@@ -1614,22 +1745,28 @@ pub async fn complete_callback_task(
     Path((id, callback_task_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CompleteCallbackTaskBody>,
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
-    let detail = OrchestrationRuntimeService::new(
-        state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
-        state.runtime_engine.clone(),
-        state.provider_secret_master_key.clone(),
+    let detail = scope_application_activity(
+        id,
+        OrchestrationRuntimeService::new(
+            state.store.clone(),
+            api_provider_runtime(&state),
+            state.runtime_engine.clone(),
+            state.provider_secret_master_key.clone(),
+        )
+        .complete_callback_task(CompleteCallbackTaskCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            callback_task_id,
+            response_payload: body.response_payload,
+        }),
     )
-    .complete_callback_task(CompleteCallbackTaskCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        callback_task_id,
-        response_payload: body.response_payload,
-    })
     .await?;
     let detail = offload_application_run_detail_artifacts(
         state.clone(),
@@ -1667,23 +1804,29 @@ pub async fn start_node_debug_preview(
     Path((id, node_id)): Path<(Uuid, String)>,
     Json(body): Json<StartNodeDebugPreviewBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<NodeLastRunResponse>>), ApiError> {
+    let _http_activity = state
+        .runtime_activity
+        .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let outcome = OrchestrationRuntimeService::new(
-        state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
-        state.runtime_engine.clone(),
-        state.provider_secret_master_key.clone(),
+    let outcome = scope_application_activity(
+        id,
+        OrchestrationRuntimeService::new(
+            state.store.clone(),
+            api_provider_runtime(&state),
+            state.runtime_engine.clone(),
+            state.provider_secret_master_key.clone(),
+        )
+        .start_node_debug_preview(StartNodeDebugPreviewCommand {
+            actor_user_id: context.user.id,
+            application_id: id,
+            node_id,
+            input_payload: body.input_payload,
+            document_snapshot: body.document,
+            debug_session_id: body.debug_session_id,
+        }),
     )
-    .start_node_debug_preview(StartNodeDebugPreviewCommand {
-        actor_user_id: context.user.id,
-        application_id: id,
-        node_id,
-        input_payload: body.input_payload,
-        document_snapshot: body.document,
-        debug_session_id: body.debug_session_id,
-    })
     .await?;
 
     let detail = offload_application_run_detail_artifacts(
@@ -2299,6 +2442,40 @@ mod tests {
     }
 
     #[test]
+    fn callback_task_tool_callback_count_reads_offloaded_tool_call_count() {
+        let base_task = domain::CallbackTaskRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: Uuid::now_v7(),
+            node_run_id: Uuid::now_v7(),
+            callback_kind: "llm_tool_calls".to_string(),
+            status: domain::CallbackTaskStatus::Completed,
+            request_payload: serde_json::json!({
+                "tool_calls": [
+                    { "id": "call-1" },
+                    { "id": "call-2" }
+                ]
+            }),
+            response_payload: None,
+            external_ref_payload: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            completed_at: Some(OffsetDateTime::UNIX_EPOCH),
+        };
+        assert_eq!(callback_task_tool_callback_count(&base_task), 2);
+
+        let offloaded_task = domain::CallbackTaskRecord {
+            request_payload: serde_json::json!({
+                "tool_calls": {
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": Uuid::now_v7().to_string(),
+                    "tool_call_count": 3
+                }
+            }),
+            ..base_task
+        };
+        assert_eq!(callback_task_tool_callback_count(&offloaded_task), 3);
+    }
+
+    #[test]
     fn start_node_response_moves_legacy_output_payload_into_input() {
         let run = domain::NodeRunRecord {
             id: Uuid::now_v7(),
@@ -2793,24 +2970,30 @@ mod tests {
         )
         .await;
 
-        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items.len(), 3);
         assert!(page.page.has_before);
         assert!(!page.page.has_after);
-        assert_eq!(page.items[0].role.as_deref(), Some("assistant"));
-        assert_eq!(page.items[0].content.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[0].role.as_deref(), Some("system"));
+        assert_eq!(page.items[0].content.as_deref(), Some("hidden"));
         assert_eq!(page.items[0].query, None);
         assert_eq!(page.items[0].answer, None);
         assert!(!page.items[0].can_open_detail);
         assert_eq!(page.items[0].detail_run_id, None);
-        assert_eq!(page.items[1].run_id, run_id.to_string());
-        assert_eq!(page.items[1].role, None);
-        assert_eq!(page.items[1].content, None);
-        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
-        assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
-        assert!(page.items[1].can_open_detail);
+        assert_eq!(page.items[1].role.as_deref(), Some("assistant"));
+        assert_eq!(page.items[1].content.as_deref(), Some("old answer 2"));
+        assert_eq!(page.items[1].query, None);
+        assert_eq!(page.items[1].answer, None);
+        assert!(!page.items[1].can_open_detail);
+        assert_eq!(page.items[1].detail_run_id, None);
+        assert_eq!(page.items[2].run_id, run_id.to_string());
+        assert_eq!(page.items[2].role, None);
+        assert_eq!(page.items[2].content, None);
+        assert_eq!(page.items[2].query.as_deref(), Some("current question"));
+        assert_eq!(page.items[2].answer.as_deref(), Some("current answer"));
+        assert!(page.items[2].can_open_detail);
         let run_id_string = run_id.to_string();
         assert_eq!(
-            page.items[1].detail_run_id.as_deref(),
+            page.items[2].detail_run_id.as_deref(),
             Some(run_id_string.as_str())
         );
     }

@@ -282,6 +282,9 @@ function createLlmContract(): NodeRuntimeUiContract {
       context_policy: {
         integration_context: 'enabled'
       },
+      external_reasoning_policy: {
+        follow_external_reasoning: false
+      },
       response_format: {
         mode: 'text'
       }
@@ -312,7 +315,7 @@ function createLlmContract(): NodeRuntimeUiContract {
         }),
         panelField({
           key: 'config.context_policy',
-          title: '集成上下文',
+          title: '继承上下文',
           renderer: 'llm_context_policy',
           valueType: 'json'
         }),

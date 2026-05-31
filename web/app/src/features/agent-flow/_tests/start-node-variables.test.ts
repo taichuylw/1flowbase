@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
@@ -6,8 +6,13 @@ import { buildFlowDebugRunInput } from '../api/runtime';
 import { createNodeDocument } from '../lib/document/node-factory';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getStartInputFields } from '../lib/start-node-variables';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 
 describe('start node variables', () => {
+  beforeEach(async () => {
+    await appI18n.changeLanguage('zh_Hans');
+  });
+
   test('does not expose if else branch decisions as downstream selector values', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const ifElseNode = createNodeDocument('if_else', 'node-if-else-1');
@@ -90,12 +95,40 @@ describe('start node variables', () => {
         { value: ['node-start', 'query'], label: 'Start/query' },
         { value: ['node-start', 'system'], label: 'Start/system' },
         { value: ['node-start', 'model'], label: 'Start/model' },
+        {
+          value: ['node-start', 'reasoning_effort'],
+          label: 'Start/reasoning_effort'
+        },
         { value: ['node-start', 'history'], label: 'Start/history' },
         { value: ['node-start', 'files'], label: 'Start/files' },
         { value: ['node-start', 'tools'], label: 'Start/tools' },
         { value: ['node-start', 'tool_choice'], label: 'Start/tool_choice' }
       ])
     );
+  });
+
+  test('exposes external model parameters without exposing context window as a runtime variable', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const options = listVisibleSelectorOptions(document, 'node-llm');
+
+    expect(options.map((option) => option.value)).toEqual(
+      expect.arrayContaining([
+        ['sys', 'model_parameters'],
+        ['node-start', 'reasoning_effort']
+      ])
+    );
+    expect(options.map((option) => option.value)).not.toContainEqual([
+      'sys',
+      'reasoning_effort'
+    ]);
+    expect(options.map((option) => option.value)).not.toContainEqual([
+      'sys',
+      'context_window'
+    ]);
+    expect(options.map((option) => option.value)).not.toContainEqual([
+      'node-start',
+      'context_window'
+    ]);
   });
 
   test('exposes system variables to any node without upstream edges', () => {
@@ -276,6 +309,7 @@ describe('start node variables', () => {
           tool_choice: {},
           system: '',
           model: '',
+          reasoning_effort: '',
           history: [],
           query: ''
         }
@@ -320,6 +354,7 @@ describe('start node variables', () => {
           confirmed: false,
           system: '',
           model: '',
+          reasoning_effort: '',
           history: [],
           files: [],
           tools: [],

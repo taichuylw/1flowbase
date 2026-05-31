@@ -47,9 +47,15 @@ const runtimeApi = vi.hoisted(() => ({
       'around',
       runId
     ] as const,
+  applicationRunConversationMessagesQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
@@ -59,6 +65,7 @@ vi.mock('../../api/runtime', () => runtimeApi);
 
 import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
 import { ApplicationLogsPage } from '../../pages/ApplicationLogsPage';
 
@@ -75,6 +82,33 @@ function applicationRunsPage<T>(
     total: overrides?.total ?? items.length,
     page: overrides?.page ?? 1,
     page_size: overrides?.page_size ?? 20
+  };
+}
+
+function conversationMessagesPage(
+  items: Array<{
+    id: string;
+    flow_run_id: string | null;
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+    sequence: number;
+    status?: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+  }>
+) {
+  return {
+    items: items.map((item) => ({
+      application_id: 'app-1',
+      scope_id: 'workspace-1',
+      conversation_id: 'conversation-1',
+      status: 'succeeded',
+      created_at: item.started_at ?? '2026-04-17T09:00:00Z',
+      ...item
+    })),
+    total: items.length,
+    page: 1,
+    page_size: 20
   };
 }
 
@@ -218,8 +252,10 @@ describe('ApplicationLogsPage - floating windows', () => {
   let innerWidthSpy: { mockRestore: () => void } | undefined;
   let dateNowSpy: { mockRestore: () => void } | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     dateNowSpy = vi
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
@@ -239,11 +275,9 @@ describe('ApplicationLogsPage - floating windows', () => {
           expand_id: 'customer-42',
           authorized_account: 'root',
           compatibility_mode: 'openai-responses-v1',
-          statistics: {
-            total_tokens: 50,
-            unique_node_count: 3,
-            tool_callback_count: 20
-          },
+          total_tokens: 50,
+          unique_node_count: 3,
+          tool_callback_count: 20,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z',
@@ -252,40 +286,46 @@ describe('ApplicationLogsPage - floating windows', () => {
       ])
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
-      items: [
+    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
+      conversationMessagesPage([
         {
-          run_id: 'run-0',
-          detail_run_id: 'run-0',
-          can_open_detail: true,
+          id: 'msg-run-0-user',
+          flow_run_id: 'run-0',
+          role: 'user',
+          content: '上一轮问题',
+          sequence: 1,
           started_at: '2026-04-17T08:59:00Z',
-          finished_at: '2026-04-17T08:59:01Z',
-          status: 'succeeded',
-          query: '上一轮问题',
-          model: 'deepseek-chat',
-          answer: '上一轮回答',
-          is_current: false
+          finished_at: '2026-04-17T08:59:01Z'
         },
         {
-          run_id: 'run-1',
-          detail_run_id: 'run-1',
-          can_open_detail: true,
+          id: 'msg-run-0-assistant',
+          flow_run_id: 'run-0',
+          role: 'assistant',
+          content: '上一轮回答',
+          sequence: 2,
+          started_at: '2026-04-17T08:59:00Z',
+          finished_at: '2026-04-17T08:59:01Z'
+        },
+        {
+          id: 'msg-run-1-user',
+          flow_run_id: 'run-1',
+          role: 'user',
+          content: '总结退款政策',
+          sequence: 3,
           started_at: '2026-04-17T09:00:00Z',
-          finished_at: '2026-04-17T09:00:01Z',
-          status: 'succeeded',
-          query: '总结退款政策',
-          model: 'deepseek-chat',
-          answer: '退款政策摘要',
-          is_current: true
+          finished_at: '2026-04-17T09:00:01Z'
+        },
+        {
+          id: 'msg-run-1-assistant',
+          flow_run_id: 'run-1',
+          role: 'assistant',
+          content: '退款政策摘要',
+          sequence: 4,
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z'
         }
-      ],
-      page: {
-        has_before: false,
-        has_after: false,
-        before_cursor: 'run-0',
-        after_cursor: 'run-1'
-      }
-    });
+      ])
+    );
   });
 
   afterEach(() => {
@@ -365,8 +405,10 @@ describe('ApplicationLogsPage - floating windows', () => {
     await waitFor(() => {
       expect(
         runtimeApi.fetchApplicationConversationMessages
-      ).toHaveBeenCalledWith('app-1', 'run-1', {
-        limit: 5
+      ).toHaveBeenCalledWith('app-1', {
+        flowRunId: 'run-1',
+        page: 1,
+        pageSize: 5
       });
     });
     expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
@@ -455,17 +497,11 @@ describe('ApplicationLogsPage - floating windows', () => {
     );
     fireEvent.click(openLogButton);
 
-    await waitFor(() => {
-      expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
-        'app-1',
-        'run-1'
-      );
-    });
-
-    const logPanel = screen.getByRole('complementary', {
+    const logPanel = await screen.findByRole('complementary', {
       name: '对话日志'
     });
     expect(logPanel).toBeInTheDocument();
+    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
     expect(
       screen.getByRole('dialog', { name: '对话日志' })
     ).toBeInTheDocument();
@@ -478,29 +514,17 @@ describe('ApplicationLogsPage - floating windows', () => {
       'aria-selected',
       'true'
     );
-    expect(within(logPanel).getByLabelText('输入 JSON')).toHaveTextContent(
-      'user_prompt'
-    );
     expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
       '退款政策摘要'
     );
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
-    expect(within(logPanel).getByText('OpenAI Responses')).toBeInTheDocument();
-    expect(within(logPanel).getByText('总 tokens')).toBeInTheDocument();
-    expect(within(logPanel).getByText('50')).toBeInTheDocument();
-    expect(within(logPanel).getByText('真实节点数')).toBeInTheDocument();
-    expect(within(logPanel).getByText('3')).toBeInTheDocument();
-    expect(within(logPanel).getByText('工具回调次数')).toBeInTheDocument();
-    expect(within(logPanel).getByText('20')).toBeInTheDocument();
+    expect(within(logPanel).getAllByText('—').length).toBeGreaterThan(0);
     expect(within(logPanel).queryByText('节点数')).not.toBeInTheDocument();
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
-    const logTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
-    fireEvent.click(logTraceNode);
-    expect(logTraceNode).toHaveAttribute('aria-expanded', 'true');
     expect(
-      within(logPanel).getByRole('region', { name: 'LLM 节点详情' })
-    ).toBeInTheDocument();
+      within(logPanel).queryByRole('region', { name: 'LLM 节点详情' })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '关闭运行详情' }));
 
@@ -531,50 +555,54 @@ describe('ApplicationLogsPage - floating windows', () => {
       ])
     );
     runtimeApi.fetchApplicationConversationMessages
-      .mockResolvedValueOnce({
-        items: [
+      .mockResolvedValueOnce(
+        conversationMessagesPage([
           {
-            run_id: 'run-active',
-            detail_run_id: 'run-active',
-            can_open_detail: true,
+            id: 'msg-run-active-user',
+            flow_run_id: 'run-active',
+            role: 'user',
+            content: '读取 README',
+            sequence: 1,
             started_at: '2026-04-17T09:00:00Z',
             finished_at: null,
-            status: 'waiting_callback',
-            query: '读取 README',
-            model: 'deepseek-chat',
-            answer: '等待工具结果',
-            is_current: true
-          }
-        ],
-        page: {
-          has_before: false,
-          has_after: false,
-          before_cursor: null,
-          after_cursor: 'run-active'
-        }
-      })
-      .mockResolvedValue({
-        items: [
+            status: 'waiting_callback'
+          },
           {
-            run_id: 'run-active',
-            detail_run_id: 'run-active',
-            can_open_detail: true,
+            id: 'msg-run-active-assistant',
+            flow_run_id: 'run-active',
+            role: 'assistant',
+            content: '等待工具结果',
+            sequence: 2,
+            started_at: '2026-04-17T09:00:00Z',
+            finished_at: null,
+            status: 'waiting_callback'
+          }
+        ])
+      )
+      .mockResolvedValue(
+        conversationMessagesPage([
+          {
+            id: 'msg-run-active-user',
+            flow_run_id: 'run-active',
+            role: 'user',
+            content: '读取 README',
+            sequence: 1,
             started_at: '2026-04-17T09:00:00Z',
             finished_at: '2026-04-17T09:00:05Z',
-            status: 'succeeded',
-            query: '读取 README',
-            model: 'deepseek-chat',
-            answer: '最终回答',
-            is_current: true
+            status: 'succeeded'
+          },
+          {
+            id: 'msg-run-active-assistant',
+            flow_run_id: 'run-active',
+            role: 'assistant',
+            content: '最终回答',
+            sequence: 2,
+            started_at: '2026-04-17T09:00:00Z',
+            finished_at: '2026-04-17T09:00:05Z',
+            status: 'succeeded'
           }
-        ],
-        page: {
-          has_before: false,
-          has_after: false,
-          before_cursor: null,
-          after_cursor: 'run-active'
-        }
-      });
+        ])
+      );
 
     render(
       <AppProviders>

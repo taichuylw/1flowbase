@@ -310,11 +310,25 @@
 }
 
 .agent-flow-node-detail__policy-label.ant-typography {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   color: #1f3326;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.agent-flow-node-detail__policy-help {
+  flex: none;
+  color: #7b8982;
+  font-size: 13px;
+  cursor: help;
+}
+
+.agent-flow-node-detail__policy-help:hover {
+  color: #1677ff;
 }
 
 .agent-flow-node-detail__policy-control {
@@ -599,6 +613,50 @@
   justify-self: end;
 }
 
+.agent-flow-start-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.agent-flow-start-model-list__item {
+  gap: 8px;
+  margin-bottom: 0;
+  padding: 0 8px 0 16px;
+}
+
+.agent-flow-start-model-list__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-flow-start-model-list__main:hover
+  .agent-flow-node-detail__list-item-name,
+.agent-flow-start-model-list__main:focus-visible
+  .agent-flow-node-detail__list-item-name {
+  color: #00c182;
+}
+
+.agent-flow-start-model-list__main:focus-visible {
+  outline: none;
+}
+
+.agent-flow-start-model-list__delete {
+  flex: 0 0 auto;
+}
+
 .agent-flow-start-input-fields__panel {
   z-index: 25;
 }
@@ -621,6 +679,12 @@
 .agent-flow-start-input-fields__form-row .ant-select,
 .agent-flow-start-input-fields__form-row .ant-input-number {
   width: 100%;
+}
+
+.agent-flow-start-model-settings__token-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
 }
 
 .agent-flow-start-input-fields__name-stack {

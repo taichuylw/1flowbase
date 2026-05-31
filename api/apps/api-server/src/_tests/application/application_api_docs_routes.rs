@@ -259,7 +259,7 @@ async fn application_api_docs_list_models_and_streaming_contracts() {
         .unwrap();
     assert_eq!(native_spec.status(), StatusCode::OK);
     let native_payload = response_json(native_spec).await;
-    let native_streaming_schema = &native_payload["paths"]["/api/v1/agent/runs"]["post"]
+    let native_streaming_schema = &native_payload["paths"]["/api/agent/v1/runs"]["post"]
         ["responses"]["201"]["content"]["text/event-stream"]["schema"];
     assert_eq!(
         native_streaming_schema["x-1flowbase-heartbeat"],
@@ -369,6 +369,77 @@ async fn application_api_docs_anthropic_operation_advertises_x_api_key_auth() {
 }
 
 #[tokio::test]
+async fn application_api_docs_registers_anthropic_count_tokens_operation() {
+    let app = test_app().await;
+    let (cookie, application_id) = setup_published_app(&app).await;
+
+    let operations = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/categories/anthropic-compatible-api/operations"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(operations.status(), StatusCode::OK);
+    let operations_payload = response_json(operations).await;
+    let operation_paths = operations_payload["data"]["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|operation| {
+            (
+                operation["id"].as_str().unwrap(),
+                operation["method"].as_str().unwrap(),
+                operation["path"].as_str().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(operation_paths.contains(&(
+        "applicationAnthropicCountMessageTokens",
+        "POST",
+        "/v1/messages/count_tokens"
+    )));
+
+    let spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationAnthropicCountMessageTokens/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(spec.status(), StatusCode::OK);
+    let spec_payload = response_json(spec).await;
+    let operation = &spec_payload["paths"]["/v1/messages/count_tokens"]["post"];
+    assert_eq!(
+        operation["requestBody"]["content"]["application/json"]["schema"]["required"],
+        json!(["model", "messages"])
+    );
+    assert_eq!(
+        operation["responses"]["200"]["content"]["application/json"]["schema"]["required"],
+        json!(["input_tokens"])
+    );
+    assert_eq!(
+        operation["security"],
+        json!([
+            {"applicationApiKey": []},
+            {"anthropicApplicationApiKey": []}
+        ])
+    );
+}
+
+#[tokio::test]
 async fn application_api_docs_operation_specs_include_request_parameters() {
     let app = test_app().await;
     let (cookie, application_id) = setup_published_app(&app).await;
@@ -388,7 +459,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         .unwrap();
     assert_eq!(create_run_spec.status(), StatusCode::OK);
     let create_run_payload = response_json(create_run_spec).await;
-    let create_run_body = &create_run_payload["paths"]["/api/v1/agent/runs"]["post"]["requestBody"]
+    let create_run_body = &create_run_payload["paths"]["/api/agent/v1/runs"]["post"]["requestBody"]
         ["content"]["application/json"]["schema"];
     assert_eq!(create_run_body["required"], json!(["query"]));
     assert_eq!(
@@ -501,7 +572,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         .unwrap();
     assert_eq!(get_run_spec.status(), StatusCode::OK);
     let get_run_payload = response_json(get_run_spec).await;
-    let get_run_operation = &get_run_payload["paths"]["/api/v1/agent/runs/{run_id}"]["get"];
+    let get_run_operation = &get_run_payload["paths"]["/api/agent/v1/runs/{run_id}"]["get"];
     assert_eq!(get_run_operation["requestBody"], Value::Null);
     assert_eq!(get_run_operation["parameters"][0]["name"], json!("run_id"));
     assert_eq!(get_run_operation["parameters"][0]["in"], json!("path"));
@@ -525,7 +596,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
         .unwrap();
     assert_eq!(upload_file_spec.status(), StatusCode::OK);
     let upload_file_payload = response_json(upload_file_spec).await;
-    let upload_body = &upload_file_payload["paths"]["/api/v1/agent/files"]["post"]["requestBody"]
+    let upload_body = &upload_file_payload["paths"]["/api/agent/v1/files"]["post"]["requestBody"]
         ["content"]["multipart/form-data"]["schema"];
     assert_eq!(upload_body["required"], json!(["file_table_id", "file"]));
     assert_eq!(
@@ -534,7 +605,7 @@ async fn application_api_docs_operation_specs_include_request_parameters() {
     );
     assert_eq!(upload_body["properties"]["file"]["format"], json!("binary"));
 
-    let create_run_post = &create_run_payload["paths"]["/api/v1/agent/runs"]["post"];
+    let create_run_post = &create_run_payload["paths"]["/api/agent/v1/runs"]["post"];
     assert_eq!(
         create_run_post["responses"]["201"]["content"]["application/json"]["schema"]["properties"]
             ["data"]["properties"]["status"]["type"],
@@ -636,21 +707,21 @@ async fn application_api_docs_specs_follow_requested_locale() {
         json!("Application API Docs App 的应用级公开 API 文档。当前启用的是发布版本 v1。公开路径由应用 API 密钥选择，不通过 application_id 选择。")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["summary"],
+        spec_payload["paths"]["/api/agent/v1/runs"]["post"]["summary"],
         json!("创建原生公开运行")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["requestBody"]["content"]
+        spec_payload["paths"]["/api/agent/v1/runs"]["post"]["requestBody"]["content"]
             ["application/json"]["schema"]["properties"]["query"]["description"],
         json!("用户输入，会映射到当前应用发布配置中的 query target。")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["requestBody"]["content"]
+        spec_payload["paths"]["/api/agent/v1/runs"]["post"]["requestBody"]["content"]
             ["application/json"]["schema"]["properties"]["title"]["description"],
         json!("运行标题。未传时默认使用用户输入，并截断到 255 个字符。")
     );
     assert_eq!(
-        spec_payload["paths"]["/api/v1/agent/runs"]["post"]["responses"]["201"]["description"],
+        spec_payload["paths"]["/api/agent/v1/runs"]["post"]["responses"]["201"]["description"],
         json!("原生运行已创建")
     );
     assert_eq!(

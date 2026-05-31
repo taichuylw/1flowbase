@@ -16,12 +16,13 @@ import {
 import type { AgentFlowDebugSessionStatus } from '../../../agent-flow/hooks/runtime/useAgentFlowDebugSession';
 import { useClipboardCopy } from '../../../../shared/ui/clipboard/use-clipboard-copy';
 import {
-  applicationConversationMessagesQueryKey,
   applicationRunDetailQueryKey,
-  fetchApplicationConversationMessages,
+  applicationRunConversationMessagesQueryKey,
   fetchApplicationRunDetail,
-  type ApplicationConversationMessagesPage,
-  type ApplicationRunDetail
+  fetchApplicationRunConversationMessages,
+  type ApplicationRunDetail,
+  type ApplicationRunConversationMessage,
+  type ApplicationRunConversationMessagesPage
 } from '../../api/runtime';
 import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 import { isActiveRunStatus } from '../../lib/run-status';
@@ -29,9 +30,21 @@ import './application-run-detail-panel.css';
 import { i18nText } from '../../../../shared/i18n/text';
 
 const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
+const RUN_CONVERSATION_PAGE_LIMIT = 5;
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function markdownDisplayText(value: string): string {
+  const hasEscapedNewline = value.includes('\\n');
+  const hasRealNewline = value.includes('\n');
+
+  if (!hasEscapedNewline || hasRealNewline) {
+    return value;
+  }
+
+  return value.replaceAll('\\r\\n', '\n').replaceAll('\\n', '\n');
 }
 
 function mapRunStatusToMessageStatus(
@@ -121,7 +134,9 @@ function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
 function buildConversationLogMessage(
   detail: ApplicationRunDetail
 ): AgentFlowDebugMessage {
-  const assistantContent = extractAssistantOutputText(detail) || i18nText("applications", "auto.no_output_yet");
+  const assistantContent =
+    extractAssistantOutputText(detail) ||
+    i18nText("applications", "auto.no_output_yet");
   const rawOutput =
     Object.keys(detail.flow_run.output_payload).length > 0
       ? detail.flow_run.output_payload
@@ -146,17 +161,13 @@ function buildConversationLogMessage(
 }
 
 function conversationItemDetailRunId(
-  item: ApplicationConversationMessagesPage['items'][number]
+  item: ApplicationRunConversationMessage
 ): string | null {
-  if (item.can_open_detail === false) {
-    return null;
-  }
-
-  return nonEmptyString(item.detail_run_id) ?? nonEmptyString(item.run_id);
+  return nonEmptyString(item.detail_run_id);
 }
 
 function conversationMessageRole(
-  item: ApplicationConversationMessagesPage['items'][number]
+  item: ApplicationRunConversationMessage
 ): AgentFlowDebugMessage['role'] | null {
   switch (item.role) {
     case 'system':
@@ -169,21 +180,25 @@ function conversationMessageRole(
 }
 
 function mapConversationItemToMessages(
-  item: ApplicationConversationMessagesPage['items'][number]
+  item: ApplicationRunConversationMessage
 ): AgentFlowDebugMessage[] {
   const detailRunId = conversationItemDetailRunId(item);
-  const canOpenDetail = Boolean(detailRunId) && item.can_open_detail !== false;
+  const canOpenDetail = item.can_open_detail !== false && Boolean(detailRunId);
   const messageRole = conversationMessageRole(item);
   const messageContent = nonEmptyString(item.content);
+  const flowRunId = nonEmptyString(item.run_id);
 
   if (messageRole && messageContent) {
     return [
       {
         id: `conversation-${messageRole}-${item.run_id}`,
         role: messageRole,
-        content: messageContent,
+        content:
+          messageRole === 'system' || messageRole === 'assistant'
+            ? markdownDisplayText(messageContent)
+            : messageContent,
         status: mapRunStatusToMessageStatus(item.status),
-        runId: item.run_id,
+        runId: flowRunId,
         detailRunId,
         canOpenDetail,
         rawOutput: null,
@@ -192,37 +207,43 @@ function mapConversationItemToMessages(
     ];
   }
 
-  const userContent = nonEmptyString(item.query) ?? i18nText("applications", "auto.none");
-  const assistantContent = nonEmptyString(item.answer) ?? i18nText("applications", "auto.no_output_yet");
+  const messages: AgentFlowDebugMessage[] = [];
+  const queryContent = nonEmptyString(item.query);
+  const answerContent = nonEmptyString(item.answer);
 
-  return [
-    {
+  if (queryContent) {
+    messages.push({
       id: `conversation-user-${item.run_id}`,
       role: 'user',
-      content: userContent,
-      status: 'completed',
-      runId: item.run_id,
+      content: queryContent,
+      status: mapRunStatusToMessageStatus(item.status),
+      runId: flowRunId,
       detailRunId,
       canOpenDetail,
       rawOutput: null,
       traceSummary: []
-    },
-    {
+    });
+  }
+
+  if (answerContent) {
+    messages.push({
       id: `conversation-assistant-${item.run_id}`,
       role: 'assistant',
-      content: assistantContent,
+      content: markdownDisplayText(answerContent),
       status: mapRunStatusToMessageStatus(item.status),
-      runId: item.run_id,
+      runId: flowRunId,
       detailRunId,
       canOpenDetail,
       rawOutput: null,
       traceSummary: []
-    }
-  ];
+    });
+  }
+
+  return messages;
 }
 
 function buildConversationPageMessages(
-  page: ApplicationConversationMessagesPage | null
+  page: ApplicationRunConversationMessagesPage | null
 ): AgentFlowDebugMessage[] {
   if (!page || page.items.length === 0) {
     return [];
@@ -232,18 +253,31 @@ function buildConversationPageMessages(
 }
 
 function conversationSessionStatus(
-  page: ApplicationConversationMessagesPage | null
+  page: ApplicationRunConversationMessagesPage | null
 ): AgentFlowDebugSessionStatus {
   const currentItem =
-    page?.items.find((item) => item.is_current) ?? page?.items.at(-1) ?? null;
+    [...(page?.items ?? [])].reverse().find((item) => item.is_current) ??
+    page?.items.at(-1) ??
+    null;
 
   return mapRunStatusToSessionStatus(currentItem?.status ?? 'succeeded');
 }
 
 function hasActiveConversationItem(
-  page: ApplicationConversationMessagesPage | null
+  page: ApplicationRunConversationMessagesPage | null
 ) {
   return Boolean(page?.items.some((item) => isActiveRunStatus(item.status)));
+}
+
+function conversationItemKey(item: ApplicationRunConversationMessage) {
+  return [
+    item.run_id,
+    item.detail_run_id ?? '',
+    item.role ?? '',
+    item.content ?? '',
+    item.query ?? '',
+    item.answer ?? ''
+  ].join('::');
 }
 
 function RunConversation({
@@ -259,24 +293,28 @@ function RunConversation({
 }) {
   const queryClient = useQueryClient();
   const [conversationPage, setConversationPage] =
-    useState<ApplicationConversationMessagesPage | null>(null);
+    useState<ApplicationRunConversationMessagesPage | null>(null);
   const initialConversationQuery = useQuery({
-    queryKey: applicationConversationMessagesQueryKey(applicationId, runId),
+    queryKey: applicationRunConversationMessagesQueryKey(applicationId, runId, {
+      limit: RUN_CONVERSATION_PAGE_LIMIT
+    }),
     queryFn: () =>
-      fetchApplicationConversationMessages(applicationId, runId, {
-        limit: 5
+      fetchApplicationRunConversationMessages(applicationId, runId, {
+        limit: RUN_CONVERSATION_PAGE_LIMIT
       })
   });
   const refetchInitialConversation = initialConversationQuery.refetch;
   const loadPreviousConversationMutation = useMutation({
     mutationFn: async () => {
-      if (!conversationPage?.page.before_cursor) {
+      const before = conversationPage?.page.before_cursor;
+
+      if (!conversationPage || !conversationPage.page.has_before || !before) {
         throw new Error('missing previous conversation cursor');
       }
 
-      return fetchApplicationConversationMessages(applicationId, runId, {
-        before: conversationPage.page.before_cursor,
-        limit: 5
+      return fetchApplicationRunConversationMessages(applicationId, runId, {
+        before,
+        limit: RUN_CONVERSATION_PAGE_LIMIT
       });
     },
     onSuccess: (page) => {
@@ -285,18 +323,16 @@ function RunConversation({
           return page;
         }
 
-        const existingRunIds = new Set(
-          current.items.map((item) => item.run_id)
-        );
+        const existingIds = new Set(current.items.map(conversationItemKey));
         const newItems = page.items.filter(
-          (item) => !existingRunIds.has(item.run_id)
+          (item) => !existingIds.has(conversationItemKey(item))
         );
 
         return {
           items: [...newItems, ...current.items],
           page: {
             has_before: page.page.has_before,
-            has_after: current.page.has_after,
+            has_after: current.page.has_after || page.page.has_after,
             before_cursor: page.page.before_cursor,
             after_cursor: current.page.after_cursor
           }
@@ -370,7 +406,8 @@ function RunConversation({
         }}
         onReachConversationTop={() => {
           if (
-            conversationPage?.page.has_before &&
+            conversationPage &&
+            conversationPage.page.has_before &&
             !loadPreviousConversationMutation.isPending
           ) {
             loadPreviousConversationMutation.mutate();

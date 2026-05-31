@@ -122,9 +122,20 @@ pub struct AnthropicUsage {
     pub output_tokens: u64,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AnthropicCountTokensResponse {
+    pub input_tokens: u64,
+}
+
 struct AnthropicToolResumeRequest {
     callback_task_id: Uuid,
     tool_results: Value,
+}
+
+struct AnthropicDecodedToolResult {
+    callback_task_id: Uuid,
+    original_tool_use_id: String,
+    content: String,
 }
 
 #[utoipa::path(
@@ -145,12 +156,17 @@ pub async fn create_message(
     body: Bytes,
 ) -> Result<Response, AnthropicRouteError> {
     let bearer_token = anthropic_token(&headers)?;
-    let value = parse_anthropic_json_body(body)?;
+    let mut value = parse_anthropic_json_body(body)?;
+    merge_claude_code_session_header(&mut value, &headers);
     let model = value
         .get("model")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
+    if let Some(response) = anthropic_probe_response(&value, &model) {
+        authenticate_anthropic_token(state.as_ref(), &bearer_token).await?;
+        return Ok(Json(response).into_response());
+    }
     let response_mode = value
         .get("stream")
         .and_then(Value::as_bool)
@@ -189,6 +205,28 @@ pub async fn create_message(
     Ok(Json(to_anthropic_response(run, model)).into_response())
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/messages/count_tokens",
+    request_body = Value,
+    responses(
+        (status = 200, body = AnthropicCountTokensResponse),
+        (status = 400, body = AnthropicErrorBody),
+        (status = 401, body = AnthropicErrorBody)
+    )
+)]
+pub async fn count_message_tokens(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<AnthropicCountTokensResponse>, AnthropicRouteError> {
+    let bearer_token = anthropic_token(&headers)?;
+    let mut value = parse_anthropic_json_body(body)?;
+    merge_claude_code_session_header(&mut value, &headers);
+    authenticate_anthropic_token(state.as_ref(), &bearer_token).await?;
+    Ok(Json(to_anthropic_count_tokens_response(&value)))
+}
+
 fn anthropic_token(headers: &HeaderMap) -> Result<String, native::NativeApiError> {
     if let Ok(token) = native::bearer_token(headers) {
         return Ok(token);
@@ -216,6 +254,39 @@ fn parse_anthropic_json_body(body: Bytes) -> Result<Value, AnthropicRouteError> 
         }
         .into()
     })
+}
+
+fn merge_claude_code_session_header(value: &mut Value, headers: &HeaderMap) {
+    let Some(session_id) = headers
+        .get("x-claude-code-session-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return;
+    };
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    let metadata = object.entry("metadata").or_insert_with(|| json!({}));
+    let Some(metadata) = metadata.as_object_mut() else {
+        return;
+    };
+    metadata
+        .entry("session_id".to_string())
+        .or_insert_with(|| Value::String(session_id.to_string()));
+}
+
+async fn authenticate_anthropic_token(
+    state: &ApiState,
+    bearer_token: &str,
+) -> Result<(), native::NativeApiError> {
+    ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .authenticate_bearer_token(bearer_token)
+        .await
+        .map(|_| ())
+        .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))
 }
 
 async fn create_native_run(
@@ -346,13 +417,19 @@ fn anthropic_tool_resume_request(
     let Some(messages) = request.get("messages").and_then(Value::as_array) else {
         return Ok(None);
     };
-    let mut callback_task_id = None;
-    let mut tool_results = Vec::new();
+    let mut trailing_tool_result_messages = messages
+        .iter()
+        .rev()
+        .take_while(|message| anthropic_message_has_tool_result(message))
+        .collect::<Vec<_>>();
+    if trailing_tool_result_messages.is_empty() {
+        return Ok(None);
+    }
+    trailing_tool_result_messages.reverse();
 
-    for message in messages {
-        if message.get("role").and_then(Value::as_str) != Some("user") {
-            continue;
-        }
+    let mut decoded_results = Vec::new();
+
+    for message in trailing_tool_result_messages {
         let Some(blocks) = message.get("content").and_then(Value::as_array) else {
             continue;
         };
@@ -372,30 +449,47 @@ fn anthropic_tool_resume_request(
             else {
                 continue;
             };
-            if let Some(existing_callback_task_id) = callback_task_id {
-                if existing_callback_task_id != decoded_callback_task_id {
-                    return Err(AnthropicCompatError {
-                        message: "tool_result blocks must belong to one callback task".to_string(),
-                        error_type: "invalid_request".to_string(),
-                    }
-                    .into());
-                }
-            } else {
-                callback_task_id = Some(decoded_callback_task_id);
-            }
-            tool_results.push(json!({
-                "tool_call_id": original_tool_use_id,
-                "content": anthropic_tool_result_content(block),
-            }));
+            decoded_results.push(AnthropicDecodedToolResult {
+                callback_task_id: decoded_callback_task_id,
+                original_tool_use_id,
+                content: anthropic_tool_result_content(block),
+            });
         }
     }
 
-    Ok(
-        callback_task_id.map(|callback_task_id| AnthropicToolResumeRequest {
-            callback_task_id,
-            tool_results: Value::Array(tool_results),
-        }),
-    )
+    let Some(callback_task_id) = decoded_results.last().map(|result| result.callback_task_id)
+    else {
+        return Ok(None);
+    };
+    let mut tool_results = decoded_results
+        .into_iter()
+        .rev()
+        .take_while(|result| result.callback_task_id == callback_task_id)
+        .map(|result| {
+            json!({
+                "tool_call_id": result.original_tool_use_id,
+                "content": result.content,
+            })
+        })
+        .collect::<Vec<_>>();
+    tool_results.reverse();
+
+    Ok(Some(AnthropicToolResumeRequest {
+        callback_task_id,
+        tool_results: Value::Array(tool_results),
+    }))
+}
+
+fn anthropic_message_has_tool_result(message: &Value) -> bool {
+    message.get("role").and_then(Value::as_str) == Some("user")
+        && message
+            .get("content")
+            .and_then(Value::as_array)
+            .is_some_and(|blocks| {
+                blocks
+                    .iter()
+                    .any(|block| block.get("type").and_then(Value::as_str) == Some("tool_result"))
+            })
 }
 
 fn anthropic_tool_result_content(block: &Value) -> String {
@@ -445,6 +539,105 @@ fn anthropic_usage(
     }
 }
 
+fn to_anthropic_count_tokens_response(request: &Value) -> AnthropicCountTokensResponse {
+    AnthropicCountTokensResponse {
+        input_tokens: anthropic_count_input_tokens(request),
+    }
+}
+
+fn anthropic_probe_response(request: &Value, model: &str) -> Option<AnthropicMessageResponse> {
+    if request.get("stream").and_then(Value::as_bool) == Some(true)
+        || !request
+            .get("max_tokens")
+            .and_then(Value::as_u64)
+            .is_some_and(|max_tokens| max_tokens <= 1)
+    {
+        return None;
+    }
+    let probe_text = anthropic_single_user_text(request)?;
+    if !matches!(probe_text.trim(), "test" | "foo" | "count") {
+        return None;
+    }
+
+    Some(AnthropicMessageResponse {
+        id: format!("msg_{}", Uuid::now_v7()),
+        response_type: "message",
+        role: "assistant",
+        model: model.to_string(),
+        content: vec![json!({"type": "text", "text": ""})],
+        stop_reason: "end_turn",
+        usage: AnthropicUsage {
+            input_tokens: anthropic_count_input_tokens(request),
+            output_tokens: 0,
+        },
+    })
+}
+
+fn anthropic_single_user_text(request: &Value) -> Option<&str> {
+    let messages = request.get("messages").and_then(Value::as_array)?;
+    if messages.len() != 1 {
+        return None;
+    }
+    let message = messages.first()?;
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    match message.get("content")? {
+        Value::String(text) => Some(text.as_str()),
+        Value::Array(blocks) if blocks.len() == 1 => blocks
+            .first()
+            .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+            .and_then(|block| block.get("text"))
+            .and_then(Value::as_str),
+        _ => None,
+    }
+}
+
+fn anthropic_count_input_tokens(request: &Value) -> u64 {
+    let mut tokens = 0_u64;
+    for key in [
+        "system",
+        "messages",
+        "tools",
+        "tool_choice",
+        "thinking",
+        "container",
+        "context_management",
+    ] {
+        tokens = tokens.saturating_add(anthropic_value_token_estimate(request.get(key)));
+    }
+    if request
+        .get("tools")
+        .and_then(Value::as_array)
+        .is_some_and(|tools| !tools.is_empty())
+    {
+        tokens = tokens.saturating_add(500);
+    }
+    tokens.max(1)
+}
+
+fn anthropic_value_token_estimate(value: Option<&Value>) -> u64 {
+    let Some(value) = value else {
+        return 0;
+    };
+    let chars = anthropic_value_char_count(value) as u64;
+    ((chars.saturating_add(3)) / 4).max(1)
+}
+
+fn anthropic_value_char_count(value: &Value) -> usize {
+    match value {
+        Value::Null => 0,
+        Value::Bool(value) => value.to_string().chars().count(),
+        Value::Number(value) => value.to_string().chars().count(),
+        Value::String(value) => value.chars().count(),
+        Value::Array(values) => values.iter().map(anthropic_value_char_count).sum(),
+        Value::Object(map) => map
+            .iter()
+            .map(|(key, value)| key.chars().count() + anthropic_value_char_count(value))
+            .sum(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -485,6 +678,68 @@ mod tests {
         assert_eq!(
             payload["content"][0]["input"]["order_id"],
             json!("order_123")
+        );
+    }
+
+    #[test]
+    fn anthropic_count_tokens_estimates_messages_and_tools() {
+        let without_tools = anthropic_count_input_tokens(&json!({
+            "model": "1flowbase",
+            "messages": [{"role": "user", "content": "hello"}]
+        }));
+        let with_tools = anthropic_count_input_tokens(&json!({
+            "model": "1flowbase",
+            "messages": [{"role": "user", "content": "hello"}],
+            "tools": [{
+                "name": "lookup_order",
+                "description": "Find an order",
+                "input_schema": {"type": "object"}
+            }]
+        }));
+
+        assert!(without_tools > 0);
+        assert!(with_tools > without_tools);
+    }
+
+    #[test]
+    fn anthropic_probe_response_only_handles_known_lightweight_probes() {
+        assert!(anthropic_probe_response(
+            &json!({
+                "model": "1flowbase",
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "test"}]
+            }),
+            "1flowbase",
+        )
+        .is_some());
+        assert!(anthropic_probe_response(
+            &json!({
+                "model": "1flowbase",
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "hi ?"}]
+            }),
+            "1flowbase",
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn claude_code_session_header_fills_missing_metadata_session_id() {
+        let mut request = json!({
+            "model": "1flowbase",
+            "messages": [{"role": "user", "content": "hi"}]
+        });
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-claude-code-session-id",
+            "header-session-123".parse().unwrap(),
+        );
+
+        merge_claude_code_session_header(&mut request, &headers);
+
+        assert_eq!(
+            request["metadata"]["session_id"],
+            json!("header-session-123")
         );
     }
 
@@ -557,5 +812,172 @@ mod tests {
             resume.tool_results[0]["content"],
             json!("{\"order\":\"ready\"}")
         );
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_uses_latest_trailing_tool_result_message() {
+        let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+        let previous_tool_use_id =
+            encode_anthropic_callback_tool_use_id(previous_callback_task_id, "toolu_previous");
+        let current_tool_use_id =
+            encode_anthropic_callback_tool_use_id(current_callback_task_id, "toolu_current");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": previous_tool_use_id,
+                        "name": "lookup_previous",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": previous_tool_use_id,
+                        "content": "old result"
+                    }]
+                },
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": current_tool_use_id,
+                        "name": "lookup_current",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": current_tool_use_id,
+                        "content": "new result"
+                    }]
+                }
+            ]
+        }))
+        .expect("resume request should parse")
+        .expect("trailing tool_result should resume callback");
+
+        assert_eq!(resume.callback_task_id, current_callback_task_id);
+        assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
+        assert_eq!(
+            resume.tool_results[0]["tool_call_id"],
+            json!("toolu_current")
+        );
+        assert_eq!(resume.tool_results[0]["content"], json!("new result"));
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_ignores_historical_tool_results_before_latest_user_text() {
+        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_previous");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": tool_use_id,
+                        "name": "lookup_previous",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": "old result"
+                    }]
+                },
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "next question"}
+            ]
+        }))
+        .expect("historical tool_result should parse");
+
+        assert!(resume.is_none());
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_uses_latest_callback_from_contiguous_tool_results() {
+        let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+        let previous_tool_use_id =
+            encode_anthropic_callback_tool_use_id(previous_callback_task_id, "toolu_previous");
+        let current_tool_use_id =
+            encode_anthropic_callback_tool_use_id(current_callback_task_id, "toolu_current");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "first"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": previous_tool_use_id,
+                        "name": "lookup_previous",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": previous_tool_use_id,
+                        "content": "old result"
+                    }]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": current_tool_use_id,
+                        "name": "lookup_current",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": previous_tool_use_id,
+                        "content": "old result replayed"
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": current_tool_use_id,
+                        "content": "new result"
+                    }]
+                }
+            ]
+        }))
+        .expect("mixed trailing tool_result history should parse")
+        .expect("latest callback should be resumed");
+
+        assert_eq!(resume.callback_task_id, current_callback_task_id);
+        assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
+        assert_eq!(
+            resume.tool_results[0]["tool_call_id"],
+            json!("toolu_current")
+        );
+        assert_eq!(resume.tool_results[0]["content"], json!("new result"));
     }
 }

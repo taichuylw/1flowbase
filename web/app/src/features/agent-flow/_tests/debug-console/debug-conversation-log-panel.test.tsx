@@ -583,11 +583,11 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
 
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*\+10 tokens.*1\.23 s/
+      name: /lookup_weather.*14 tokens.*1\.23 s/
     });
     expect(toolCallback).toHaveTextContent('lookup_weather');
-    expect(toolCallback).toHaveTextContent('+10 tokens · 1.23 s');
-    expect(toolCallback).not.toHaveTextContent('14 tokens');
+    expect(toolCallback).toHaveTextContent('14 tokens · 1.23 s');
+    expect(toolCallback).not.toHaveTextContent('+10 tokens');
     expect(toolCallback).toHaveAttribute('aria-expanded', 'false');
     expect(
       within(nodeDetail).queryByText('call_weather')
@@ -767,8 +767,10 @@ describe('debug conversation log panel', () => {
     ).not.toBeInTheDocument();
     expect(onLoadArtifact).not.toHaveBeenCalled();
     const toolCallback = within(nodeDetail).getByRole('button', {
-      name: /lookup_weather.*\+10 tokens.*1\.23 s/
+      name: /lookup_weather.*14 tokens.*1\.23 s/
     });
+    expect(toolCallback).toHaveTextContent('14 tokens · 1.23 s');
+    expect(toolCallback).not.toHaveTextContent('+10 tokens');
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
     ).not.toBeInTheDocument();

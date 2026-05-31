@@ -3,27 +3,35 @@ impl PgControlPlaneStore {
         &self,
         flow_run: &domain::FlowRunRecord,
     ) -> Result<()> {
-        if !is_terminal_application_run_log_status(flow_run.status) {
-            return Ok(());
-        }
-
-        let Some(detail) = self
-            .get_application_run_detail(flow_run.application_id, flow_run.id)
-            .await?
-        else {
-            return Ok(());
-        };
-        let statistics = application_run_log_statistics(&detail);
-        let flow_run = detail.flow_run;
+        let is_terminal = is_terminal_application_run_log_status(flow_run.status);
         let display_title = control_plane::flow_run_title::display_flow_run_title(
             &flow_run.title,
             &flow_run.input_payload,
         );
+        let mut tx = self.pool().begin().await?;
 
+        Self::upsert_application_run_log_summary_projection(&mut tx, flow_run, &display_title)
+            .await?;
+        tx.commit().await?;
+
+        if is_terminal {
+            self.upsert_application_conversation_messages_for_flow_run(flow_run)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn upsert_application_run_log_summary_projection(
+        tx: &mut sqlx::Transaction<'_, Postgres>,
+        flow_run: &domain::FlowRunRecord,
+        display_title: &str,
+    ) -> Result<()> {
         sqlx::query(
             r#"
             insert into application_run_log_summaries (
                 flow_run_id,
+                scope_id,
                 application_id,
                 run_mode,
                 status,
@@ -47,20 +55,81 @@ impl PgControlPlaneStore {
                 created_at,
                 updated_at
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                (select name from api_keys where id = $10), $11, $12, $13, $14, $15,
+                $1, (select workspace_id from applications where id = $2), $2, $3, $4,
+                $5, $6, $7, $8,
+                coalesce($9, (select users.account from users where users.id = $20)),
+                $10, (select name from api_keys where id = $10),
+                $11, $12, $13, $14, $15,
                 coalesce(
                     (
                         select sum(runtime_usage_ledger.total_tokens)::bigint
                         from runtime_usage_ledger
                         where runtime_usage_ledger.flow_run_id = $1
                     ),
-                    $16
+                    (
+                        select sum(
+                            case
+                                when node_runs.metrics_payload #>> '{usage,total_tokens}' ~ '^-?[0-9]+$'
+                                then (node_runs.metrics_payload #>> '{usage,total_tokens}')::bigint
+                                when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                                  or node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                                  or node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
+                                then
+                                    coalesce(
+                                        case
+                                            when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                                            then (node_runs.metrics_payload #>> '{usage,input_tokens}')::bigint
+                                        end,
+                                        0
+                                    )
+                                    + coalesce(
+                                        case
+                                            when node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                                            then (node_runs.metrics_payload #>> '{usage,output_tokens}')::bigint
+                                        end,
+                                        0
+                                    )
+                                    + coalesce(
+                                        case
+                                            when node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
+                                            then (node_runs.metrics_payload #>> '{usage,reasoning_tokens}')::bigint
+                                        end,
+                                        0
+                                    )
+                            end
+                        )::bigint
+                        from node_runs
+                        where node_runs.flow_run_id = $1
+                    )
                 ),
-                $17, $18, $19, $20, $21, $22
+                coalesce(
+                    (
+                        select count(distinct node_runs.node_id)::bigint
+                        from node_runs
+                        where node_runs.flow_run_id = $1
+                    ),
+                    0
+                ),
+                coalesce(
+                    (
+                        select sum(
+                            case
+                                when jsonb_typeof(flow_run_callback_tasks.request_payload -> 'tool_calls') = 'array'
+                                then jsonb_array_length(flow_run_callback_tasks.request_payload -> 'tool_calls')::bigint
+                                else 0
+                            end
+                        )::bigint
+                        from flow_run_callback_tasks
+                        where flow_run_callback_tasks.flow_run_id = $1
+                          and flow_run_callback_tasks.callback_kind = 'llm_tool_calls'
+                    ),
+                    0
+                ),
+                $16, $17, $18, $19
             )
             on conflict (flow_run_id) do update
             set application_id = excluded.application_id,
+                scope_id = excluded.scope_id,
                 run_mode = excluded.run_mode,
                 status = excluded.status,
                 target_node_id = excluded.target_node_id,
@@ -103,15 +172,174 @@ impl PgControlPlaneStore {
         .bind(&flow_run.external_trace_id)
         .bind(&flow_run.compatibility_mode)
         .bind(&flow_run.idempotency_key)
-        .bind(statistics.total_tokens)
-        .bind(statistics.unique_node_count)
-        .bind(statistics.tool_callback_count)
         .bind(flow_run.started_at)
         .bind(flow_run.finished_at)
         .bind(flow_run.created_at)
         .bind(flow_run.updated_at)
-        .execute(self.pool())
+        .bind(flow_run.created_by)
+        .execute(&mut **tx)
         .await?;
+
+        Ok(())
+    }
+
+    async fn upsert_application_conversation_messages_for_flow_run(
+        &self,
+        flow_run: &domain::FlowRunRecord,
+    ) -> Result<()> {
+        let messages = application_conversation_messages_from_flow_run(flow_run);
+        if messages.is_empty() {
+            return Ok(());
+        }
+        let conversation_key = application_conversation_key(flow_run);
+
+        let Some(conversation) = sqlx::query(
+            r#"
+            with existing as (
+                select id, scope_id, 0 as source_order
+                from application_conversations
+                where application_id = $1
+                  and external_conversation_id = $2
+                  and api_key_id is not distinct from (select id from api_keys where id = $3)
+                  and external_user is not distinct from $4
+                order by updated_at desc, id desc
+                limit 1
+            ),
+            inserted as (
+                insert into application_conversations (
+                    id,
+                    scope_id,
+                    application_id,
+                    api_key_id,
+                    external_user,
+                    external_conversation_id,
+                    created_at,
+                    updated_at
+                )
+                select
+                    $5,
+                    applications.workspace_id,
+                    applications.id,
+                    (select id from api_keys where id = $3),
+                    $4,
+                    $2,
+                    $6,
+                    $7
+                from applications
+                where applications.id = $1
+                  and not exists (select 1 from existing)
+                returning id, scope_id, 1 as source_order
+            )
+            select id, scope_id, source_order from existing
+            union all
+            select id, scope_id, source_order from inserted
+            order by source_order asc
+            limit 1
+            "#,
+        )
+        .bind(flow_run.application_id)
+        .bind(&conversation_key)
+        .bind(flow_run.api_key_id)
+        .bind(&flow_run.external_user)
+        .bind(Uuid::now_v7())
+        .bind(flow_run.started_at)
+        .bind(flow_run.updated_at)
+        .fetch_optional(self.pool())
+        .await?
+        else {
+            return Ok(());
+        };
+
+        let conversation_id: Uuid = conversation.get("id");
+        let scope_id: Uuid = conversation.get("scope_id");
+        let sequences = messages
+            .iter()
+            .map(|message| message.sequence)
+            .collect::<Vec<_>>();
+        let mut tx = self.pool().begin().await?;
+
+        sqlx::query(
+            r#"
+            delete from application_conversation_messages
+            where conversation_id = $1
+              and flow_run_id = $2
+              and not (sequence = any($3))
+            "#,
+        )
+        .bind(conversation_id)
+        .bind(flow_run.id)
+        .bind(&sequences)
+        .execute(&mut *tx)
+        .await?;
+
+        if let Some(title) = messages
+            .iter()
+            .find(|message| message.role == "user")
+            .map(|message| message.content.as_str())
+        {
+            sqlx::query(
+                r#"
+                update application_conversations
+                set title = coalesce(nullif(title, ''), $2),
+                    updated_at = greatest(updated_at, $3)
+                where id = $1
+                "#,
+            )
+            .bind(conversation_id)
+            .bind(title)
+            .bind(flow_run.updated_at)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        for message in messages {
+            sqlx::query(
+                r#"
+                insert into application_conversation_messages (
+                    id,
+                    scope_id,
+                    conversation_id,
+                    application_id,
+                    flow_run_id,
+                    node_run_id,
+                    role,
+                    content,
+                    sequence,
+                    status,
+                    started_at,
+                    finished_at,
+                    created_at,
+                    updated_at
+                ) values (
+                    $1, $2, $3, $4, $5, null, $6, $7, $8, $9, $10, $11, $12, $13
+                )
+                on conflict (conversation_id, flow_run_id, sequence) do update
+                set role = excluded.role,
+                    content = excluded.content,
+                    status = excluded.status,
+                    started_at = excluded.started_at,
+                    finished_at = excluded.finished_at,
+                    updated_at = excluded.updated_at
+                "#,
+            )
+            .bind(Uuid::now_v7())
+            .bind(scope_id)
+            .bind(conversation_id)
+            .bind(flow_run.application_id)
+            .bind(flow_run.id)
+            .bind(message.role)
+            .bind(&message.content)
+            .bind(message.sequence)
+            .bind(flow_run.status.as_str())
+            .bind(flow_run.started_at)
+            .bind(flow_run.finished_at)
+            .bind(flow_run.started_at)
+            .bind(flow_run.updated_at)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -242,6 +470,16 @@ impl PgControlPlaneStore {
         let tokens = self
             .application_run_monitoring_tokens(application_id, started_from, started_to)
             .await?;
+        let tokens_comparison = self
+            .application_run_monitoring_tokens_comparison(
+                application_id,
+                started_from,
+                started_to,
+                overview.total_count,
+                tokens.total_tokens_sum,
+                tokens.avg_tokens_per_run,
+            )
+            .await?;
         let tool_callbacks = self
             .application_run_monitoring_tool_callbacks(application_id, started_from, started_to)
             .await?;
@@ -306,6 +544,7 @@ impl PgControlPlaneStore {
             overview,
             duration,
             tokens,
+            tokens_comparison,
             tool_callbacks,
             nodes,
             concurrency,
@@ -443,6 +682,56 @@ impl PgControlPlaneStore {
             total_tokens_sum: row.get("total_tokens_sum"),
             avg_tokens_per_run: row.get("avg_tokens_per_run"),
             token_recorded_count: row.get("token_recorded_count"),
+        })
+    }
+
+    async fn application_run_monitoring_tokens_comparison(
+        &self,
+        application_id: Uuid,
+        started_from: Option<OffsetDateTime>,
+        started_to: Option<OffsetDateTime>,
+        current_run_count: i64,
+        current_total_tokens: i64,
+        current_avg_tokens_per_run: f64,
+    ) -> Result<control_plane::ports::ApplicationRunMonitoringTokensComparison> {
+        let Some((previous_from, previous_to)) = previous_monitoring_window(started_from, started_to)
+        else {
+            return Ok(empty_tokens_comparison());
+        };
+
+        let row = sqlx::query(&application_run_monitoring_logs_query(
+            r#"
+            select
+                coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint
+                    as previous_total_tokens_sum,
+                count(*)::bigint as previous_run_count,
+                coalesce(avg(total_tokens::double precision), 0.0)::double precision
+                    as previous_avg_tokens_per_run
+            from monitoring_logs
+            "#,
+        ))
+        .bind(application_id)
+        .bind(Some(previous_from))
+        .bind(Some(previous_to))
+        .fetch_one(self.pool())
+        .await?;
+
+        let previous_total_tokens_sum = row.get("previous_total_tokens_sum");
+        let previous_run_count = row.get("previous_run_count");
+        let previous_avg_tokens_per_run = row.get("previous_avg_tokens_per_run");
+
+        Ok(control_plane::ports::ApplicationRunMonitoringTokensComparison {
+            previous_total_tokens_sum,
+            previous_run_count,
+            previous_avg_tokens_per_run,
+            token_change_rate: change_rate_i64(current_total_tokens, previous_total_tokens_sum),
+            run_count_change_rate: change_rate_i64(current_run_count, previous_run_count),
+            avg_tokens_per_run_change_rate: change_rate_f64(
+                current_avg_tokens_per_run,
+                previous_avg_tokens_per_run,
+            ),
+            traffic_effect: ratio_i64(current_run_count, previous_run_count),
+            cost_per_run_effect: ratio_f64(current_avg_tokens_per_run, previous_avg_tokens_per_run),
         })
     }
 
@@ -913,13 +1202,6 @@ impl PgControlPlaneStore {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ApplicationRunLogStatistics {
-    total_tokens: Option<i64>,
-    unique_node_count: i64,
-    tool_callback_count: i64,
-}
-
-#[derive(Debug, Clone, Copy)]
 enum ApplicationRunMonitoringRankKind {
     Slowest,
     HighToken,
@@ -932,6 +1214,247 @@ struct ApplicationRunMonitoringTextUsageRow {
     total_tokens: i64,
     avg_duration_ms: f64,
     failed_count: i64,
+}
+
+#[derive(Debug)]
+struct ApplicationConversationMessageProjection {
+    role: &'static str,
+    content: String,
+    sequence: i64,
+}
+
+const APPLICATION_CONVERSATION_INPUT_KEYS: &[&str] =
+    &["query", "question", "prompt", "message", "input", "input_text"];
+
+fn application_conversation_key(flow_run: &domain::FlowRunRecord) -> String {
+    flow_run
+        .external_conversation_id
+        .clone()
+        .unwrap_or_else(|| format!("flow-run:{}", flow_run.id))
+}
+
+fn application_conversation_messages_from_flow_run(
+    flow_run: &domain::FlowRunRecord,
+) -> Vec<ApplicationConversationMessageProjection> {
+    let mut messages = Vec::new();
+    let mut ordinal = 1_i64;
+
+    if let Some(system) = application_conversation_system_text(&flow_run.input_payload) {
+        push_application_conversation_message(
+            &mut messages,
+            flow_run.started_at,
+            &mut ordinal,
+            "system",
+            system,
+        );
+    }
+
+    for (role, content) in application_conversation_history_messages(&flow_run.input_payload) {
+        push_application_conversation_message(
+            &mut messages,
+            flow_run.started_at,
+            &mut ordinal,
+            role,
+            content,
+        );
+    }
+
+    if let Some(query) = application_conversation_user_text(&flow_run.input_payload) {
+        push_application_conversation_message(
+            &mut messages,
+            flow_run.started_at,
+            &mut ordinal,
+            "user",
+            query,
+        );
+    }
+
+    let answer = application_conversation_answer_text(&flow_run.output_payload).or_else(|| {
+        flow_run
+            .error_payload
+            .as_ref()
+            .and_then(application_conversation_answer_text)
+    });
+    if let Some(answer) = answer {
+        push_application_conversation_message(
+            &mut messages,
+            flow_run.started_at,
+            &mut ordinal,
+            "assistant",
+            answer,
+        );
+    }
+
+    messages
+}
+
+fn push_application_conversation_message(
+    messages: &mut Vec<ApplicationConversationMessageProjection>,
+    started_at: OffsetDateTime,
+    ordinal: &mut i64,
+    role: &'static str,
+    content: String,
+) {
+    messages.push(ApplicationConversationMessageProjection {
+        role,
+        content,
+        sequence: application_conversation_message_sequence(started_at, *ordinal),
+    });
+    *ordinal += 1;
+}
+
+fn application_conversation_message_sequence(started_at: OffsetDateTime, ordinal: i64) -> i64 {
+    started_at
+        .unix_timestamp()
+        .saturating_mul(1_000_000)
+        .saturating_add(ordinal)
+}
+
+fn application_conversation_system_text(payload: &serde_json::Value) -> Option<String> {
+    let start = application_conversation_start_payload(payload);
+    string_field_value(start, "system").or_else(|| string_field_value(payload, "system"))
+}
+
+fn application_conversation_user_text(payload: &serde_json::Value) -> Option<String> {
+    for source in [payload, application_conversation_start_payload(payload)] {
+        for key in APPLICATION_CONVERSATION_INPUT_KEYS {
+            if let Some(value) = string_field_value(source, key) {
+                return Some(value);
+            }
+        }
+    }
+
+    None
+}
+
+fn application_conversation_answer_text(payload: &serde_json::Value) -> Option<String> {
+    for key in ["answer", "text", "output", "content", "message"] {
+        if let Some(value) = string_field_value(payload, key) {
+            return Some(value);
+        }
+    }
+
+    payload
+        .get("error")
+        .and_then(|value| value.get("message"))
+        .and_then(trimmed_string)
+}
+
+fn application_conversation_history_messages(
+    payload: &serde_json::Value,
+) -> Vec<(&'static str, String)> {
+    let start = application_conversation_start_payload(payload);
+    let Some(history) = start
+        .get("history")
+        .or_else(|| start.get("messages"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Vec::new();
+    };
+
+    history
+        .iter()
+        .filter_map(|message| {
+            let role = match message.get("role").and_then(serde_json::Value::as_str) {
+                Some("system") => "system",
+                Some("user") => "user",
+                Some("assistant") => "assistant",
+                _ => return None,
+            };
+            let content = conversation_message_content(message)?;
+            Some((role, content))
+        })
+        .collect()
+}
+
+fn application_conversation_start_payload(payload: &serde_json::Value) -> &serde_json::Value {
+    payload
+        .get("node-start")
+        .or_else(|| payload.get("start"))
+        .unwrap_or(payload)
+}
+
+fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
+    let content = message.get("content")?;
+    if let Some(text) = trimmed_string(content) {
+        return Some(text);
+    }
+
+    if let Some(parts) = content.as_array() {
+        let text = parts
+            .iter()
+            .filter_map(conversation_content_part_text)
+            .collect::<Vec<_>>()
+            .join("");
+        return (!text.is_empty()).then_some(text);
+    }
+
+    conversation_content_part_text(content)
+}
+
+fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
+    conversation_text_value(part)
+}
+
+fn string_field_value(value: &serde_json::Value, field: &str) -> Option<String> {
+    value.get(field).and_then(conversation_text_value)
+}
+
+fn conversation_text_value(value: &serde_json::Value) -> Option<String> {
+    trimmed_string(value).or_else(|| {
+        value.as_object()?;
+
+        artifact_preview_text(value).or_else(|| {
+            value
+                .get("text")
+                .or_else(|| value.get("content"))
+                .and_then(trimmed_string)
+        })
+    })
+}
+
+fn artifact_preview_text(value: &serde_json::Value) -> Option<String> {
+    let preview = value.get("preview").and_then(trimmed_string)?;
+    decode_artifact_preview_text(&preview).or(Some(preview))
+}
+
+fn decode_artifact_preview_text(preview: &str) -> Option<String> {
+    if let Ok(decoded) = serde_json::from_str::<String>(preview) {
+        return trimmed_text(&decoded);
+    }
+
+    let Some(stripped) = preview.strip_prefix('"') else {
+        return None;
+    };
+    let completed = if stripped.ends_with('"') {
+        preview.to_owned()
+    } else {
+        format!("{preview}\"")
+    };
+    if let Ok(decoded) = serde_json::from_str::<String>(&completed) {
+        return trimmed_text(&decoded);
+    }
+
+    trimmed_text(stripped.trim_end_matches('"'))
+        .map(|value| {
+            value
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"")
+        })
+        .and_then(|value| trimmed_text(&value))
+}
+
+fn trimmed_string(value: &serde_json::Value) -> Option<String> {
+    value
+        .as_str()
+        .and_then(trimmed_text)
+}
+
+fn trimmed_text(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
 fn normalize_application_run_monitoring_bucket(input: &str) -> &'static str {
@@ -952,10 +1475,58 @@ fn application_run_monitoring_logs_query(select_sql: &str) -> String {
             where application_id = $1
               and ($2::timestamptz is null or started_at >= $2)
               and ($3::timestamptz is null or started_at < $3)
+              and status in ('succeeded', 'failed', 'cancelled')
         )
         {select_sql}
         "#
     )
+}
+
+fn previous_monitoring_window(
+    started_from: Option<OffsetDateTime>,
+    started_to: Option<OffsetDateTime>,
+) -> Option<(OffsetDateTime, OffsetDateTime)> {
+    let previous_to = started_from?;
+    let current_to = started_to.unwrap_or_else(OffsetDateTime::now_utc);
+    let window = current_to - previous_to;
+    (window > Duration::ZERO).then(|| (previous_to - window, previous_to))
+}
+
+fn empty_tokens_comparison() -> control_plane::ports::ApplicationRunMonitoringTokensComparison {
+    control_plane::ports::ApplicationRunMonitoringTokensComparison {
+        previous_total_tokens_sum: 0,
+        previous_run_count: 0,
+        previous_avg_tokens_per_run: 0.0,
+        token_change_rate: 0.0,
+        run_count_change_rate: 0.0,
+        avg_tokens_per_run_change_rate: 0.0,
+        traffic_effect: 0.0,
+        cost_per_run_effect: 0.0,
+    }
+}
+
+fn change_rate_i64(current: i64, previous: i64) -> f64 {
+    (current - previous) as f64 / previous.max(1) as f64
+}
+
+fn change_rate_f64(current: f64, previous: f64) -> f64 {
+    (current - previous) / previous.max(1.0)
+}
+
+fn ratio_i64(numerator: i64, denominator: i64) -> f64 {
+    if denominator == 0 {
+        0.0
+    } else {
+        numerator as f64 / denominator as f64
+    }
+}
+
+fn ratio_f64(numerator: f64, denominator: f64) -> f64 {
+    if denominator == 0.0 {
+        0.0
+    } else {
+        numerator / denominator
+    }
 }
 
 fn is_terminal_application_run_log_status(status: domain::FlowRunStatus) -> bool {
@@ -965,70 +1536,4 @@ fn is_terminal_application_run_log_status(status: domain::FlowRunStatus) -> bool
             | domain::FlowRunStatus::Failed
             | domain::FlowRunStatus::Cancelled
     )
-}
-
-fn application_run_log_statistics(
-    detail: &domain::ApplicationRunDetail,
-) -> ApplicationRunLogStatistics {
-    let mut unique_node_ids = std::collections::HashSet::new();
-    let mut total_tokens = None;
-
-    for node_run in &detail.node_runs {
-        unique_node_ids.insert(node_run.node_id.as_str());
-
-        if let Some(node_tokens) = metrics_payload_total_tokens(&node_run.metrics_payload) {
-            total_tokens = Some(total_tokens.unwrap_or(0) + node_tokens);
-        }
-    }
-
-    ApplicationRunLogStatistics {
-        total_tokens,
-        unique_node_count: unique_node_ids.len() as i64,
-        tool_callback_count: detail
-            .callback_tasks
-            .iter()
-            .map(callback_task_tool_callback_count)
-            .sum(),
-    }
-}
-
-fn metrics_payload_total_tokens(metrics_payload: &serde_json::Value) -> Option<i64> {
-    metrics_payload.get("usage").and_then(usage_total_tokens)
-}
-
-fn usage_total_tokens(usage: &serde_json::Value) -> Option<i64> {
-    if let Some(total_tokens) = usage.get("total_tokens").and_then(usage_token_value) {
-        return Some(total_tokens);
-    }
-
-    let segments = ["input_tokens", "output_tokens", "reasoning_tokens"];
-    let mut total = 0_i64;
-    let mut has_segment = false;
-
-    for segment in segments {
-        if let Some(tokens) = usage.get(segment).and_then(usage_token_value) {
-            total += tokens;
-            has_segment = true;
-        }
-    }
-
-    has_segment.then_some(total)
-}
-
-fn usage_token_value(value: &serde_json::Value) -> Option<i64> {
-    value
-        .as_i64()
-        .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
-}
-
-fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
-    if task.callback_kind != "llm_tool_calls" {
-        return 0;
-    }
-
-    task.request_payload
-        .get("tool_calls")
-        .and_then(serde_json::Value::as_array)
-        .map(|tool_calls| tool_calls.len() as i64)
-        .unwrap_or(0)
 }

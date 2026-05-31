@@ -213,6 +213,12 @@
 }
 
 .application-run-detail__conversation-pane
+  .agent-flow-editor__debug-message--system {
+  justify-content: flex-start;
+  margin-right: auto;
+}
+
+.application-run-detail__conversation-pane
   .agent-flow-editor__debug-message--user {
   justify-content: flex-end;
   margin-left: auto;
@@ -244,6 +250,13 @@
 }
 
 .application-run-detail__conversation-pane
+  .agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-main {
+  width: 100%;
+  max-width: 100%;
+}
+
+.application-run-detail__conversation-pane
   .agent-flow-editor__debug-message-header {
   display: flex;
   align-items: center;
@@ -255,6 +268,35 @@
   .agent-flow-editor__debug-message--user
   .agent-flow-editor__debug-message-header {
   justify-content: flex-end;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-header {
+  margin-bottom: 6px;
+  color: #111827;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-content {
+  margin: 0;
+  color: #1f2937;
+  line-height: 1.7;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-content
+  > :first-child {
+  margin-top: 0;
+}
+
+.application-run-detail__conversation-pane
+  .agent-flow-editor__debug-message--system
+  .agent-flow-editor__debug-message-content
+  > :last-child {
+  margin-bottom: 0;
 }
 
 .application-run-detail__conversation-pane

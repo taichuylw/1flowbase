@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 
@@ -46,13 +46,13 @@ export function DebugWorkflowProcess({
   const [expandedNodeKeys, setExpandedNodeKeys] = useState<Set<string>>(
     () => new Set()
   );
+  const traceGroups = useMemo(() => groupTraceItemsForDisplay(items), [items]);
 
   if (items.length === 0) {
     return null;
   }
 
   const status = workflowStatus(items);
-  const traceGroups = groupTraceItemsForDisplay(items);
 
   return (
     <div

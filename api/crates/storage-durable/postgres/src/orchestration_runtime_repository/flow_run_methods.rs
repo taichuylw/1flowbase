@@ -159,7 +159,12 @@ impl PgControlPlaneStore {
         .fetch_one(self.pool())
         .await?;
 
-        map_flow_run_record(row)
+        let flow_run = map_flow_run_record(row)?;
+        if flow_run.run_mode == domain::FlowRunMode::PublishedApiRun {
+            self.upsert_application_run_log_summary_for_flow_run(&flow_run)
+                .await?;
+        }
+        Ok(flow_run)
     }
 
     async fn create_flow_run_shell(
@@ -253,7 +258,8 @@ impl PgControlPlaneStore {
         .fetch_one(self.pool())
         .await?;
 
-        map_flow_run_record(row)
+        let flow_run = map_flow_run_record(row)?;
+        Ok(flow_run)
     }
 
     async fn attach_compiled_plan_to_flow_run(
@@ -317,7 +323,8 @@ impl PgControlPlaneStore {
         .await?
         .ok_or_else(|| anyhow!("flow run compiled plan cannot be attached"))?;
 
-        map_flow_run_record(row)
+        let flow_run = map_flow_run_record(row)?;
+        Ok(flow_run)
     }
 
     async fn fail_queued_flow_run_shell(
@@ -449,6 +456,7 @@ impl PgControlPlaneStore {
             r#"
             insert into node_runs (
                 id,
+                scope_id,
                 flow_run_id,
                 node_id,
                 node_type,
@@ -457,7 +465,16 @@ impl PgControlPlaneStore {
                 input_payload,
                 debug_payload,
                 started_at
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ) values (
+                $1,
+                (
+                    select applications.workspace_id
+                    from flow_runs
+                    join applications on applications.id = flow_runs.application_id
+                    where flow_runs.id = $2
+                ),
+                $2, $3, $4, $5, $6, $7, $8, $9
+            )
             returning
                 id,
                 flow_run_id,
@@ -546,6 +563,7 @@ impl PgControlPlaneStore {
     }
 
     async fn update_flow_run(&self, input: &UpdateFlowRunInput) -> Result<domain::FlowRunRecord> {
+        let mut tx = self.pool().begin().await?;
         let row = sqlx::query(
             r#"
             update flow_runs
@@ -591,12 +609,27 @@ impl PgControlPlaneStore {
         .bind(&input.output_payload)
         .bind(&input.error_payload)
         .bind(input.finished_at)
-        .fetch_one(self.pool())
+        .fetch_one(&mut *tx)
         .await?;
 
         let flow_run = map_flow_run_record(row)?;
-        self.upsert_application_run_log_summary_for_flow_run(&flow_run)
-            .await?;
+        let display_title = control_plane::flow_run_title::display_flow_run_title(
+            &flow_run.title,
+            &flow_run.input_payload,
+        );
+        Self::upsert_application_run_log_summary_projection(
+            &mut tx,
+            &flow_run,
+            &display_title,
+        )
+        .await?;
+        tx.commit().await?;
+
+        if is_terminal_application_run_log_status(flow_run.status) {
+            self.upsert_application_conversation_messages_for_flow_run(&flow_run)
+                .await?;
+        }
+
         Ok(flow_run)
     }
 
@@ -605,6 +638,7 @@ impl PgControlPlaneStore {
         input: &UpdateFlowRunInput,
         expected_status: domain::FlowRunStatus,
     ) -> Result<Option<domain::FlowRunRecord>> {
+        let mut tx = self.pool().begin().await?;
         let row = sqlx::query(
             r#"
             update flow_runs
@@ -652,16 +686,30 @@ impl PgControlPlaneStore {
         .bind(&input.error_payload)
         .bind(input.finished_at)
         .bind(expected_status.as_str())
-        .fetch_optional(self.pool())
+        .fetch_optional(&mut *tx)
         .await?;
 
         if let Some(row) = row {
             let flow_run = map_flow_run_record(row)?;
-            self.upsert_application_run_log_summary_for_flow_run(&flow_run)
-                .await?;
+            let display_title = control_plane::flow_run_title::display_flow_run_title(
+                &flow_run.title,
+                &flow_run.input_payload,
+            );
+            Self::upsert_application_run_log_summary_projection(
+                &mut tx,
+                &flow_run,
+                &display_title,
+            )
+            .await?;
+            tx.commit().await?;
+            if is_terminal_application_run_log_status(flow_run.status) {
+                self.upsert_application_conversation_messages_for_flow_run(&flow_run)
+                    .await?;
+            }
             return Ok(Some(flow_run));
         }
 
+        tx.rollback().await?;
         let exists = sqlx::query_scalar::<_, bool>(
             r#"
             select exists(select 1 from flow_runs where id = $1)
@@ -729,6 +777,7 @@ impl PgControlPlaneStore {
             r#"
             insert into flow_run_checkpoints (
                 id,
+                scope_id,
                 flow_run_id,
                 node_run_id,
                 status,
@@ -736,7 +785,16 @@ impl PgControlPlaneStore {
                 locator_payload,
                 variable_snapshot,
                 external_ref_payload
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            ) values (
+                $1,
+                (
+                    select applications.workspace_id
+                    from flow_runs
+                    join applications on applications.id = flow_runs.application_id
+                    where flow_runs.id = $2
+                ),
+                $2, $3, $4, $5, $6, $7, $8
+            )
             returning
                 id,
                 flow_run_id,
@@ -771,13 +829,23 @@ impl PgControlPlaneStore {
             r#"
             insert into flow_run_callback_tasks (
                 id,
+                scope_id,
                 flow_run_id,
                 node_run_id,
                 callback_kind,
                 status,
                 request_payload,
                 external_ref_payload
-            ) values ($1, $2, $3, $4, 'pending', $5, $6)
+            ) values (
+                $1,
+                (
+                    select applications.workspace_id
+                    from flow_runs
+                    join applications on applications.id = flow_runs.application_id
+                    where flow_runs.id = $2
+                ),
+                $2, $3, $4, 'pending', $5, $6
+            )
             returning
                 id,
                 flow_run_id,

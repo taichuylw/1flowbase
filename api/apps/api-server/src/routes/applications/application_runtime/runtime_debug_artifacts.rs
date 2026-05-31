@@ -13,7 +13,8 @@ use control_plane::{
     },
     ports::{
         CreateRuntimeDebugArtifactInput, FileManagementRepository, GetRuntimeDebugArtifactInput,
-        OrchestrationRuntimeRepository, UpdateFlowRunPayloadsInput, UpdateNodeRunPayloadsInput,
+        OrchestrationRuntimeRepository, UpdateCallbackTaskPayloadsInput,
+        UpdateCheckpointPayloadsInput, UpdateFlowRunPayloadsInput, UpdateNodeRunPayloadsInput,
         UpdateRunEventPayloadInput,
     },
 };
@@ -71,10 +72,6 @@ impl LlmToolCallbackArtifact {
         }
     }
 
-    fn token_delta(&self) -> Option<i64> {
-        llm_usage_token_delta(self.call_usage.as_ref(), self.result_context_usage.as_ref())
-    }
-
     fn detail_payload(&self) -> Value {
         json!({
             "id": self.id,
@@ -88,7 +85,6 @@ impl LlmToolCallbackArtifact {
             "result_round_index": self.result_round_index,
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
-            "token_delta": self.token_delta(),
             "duration_ms": self.duration_ms,
         })
     }
@@ -104,7 +100,6 @@ impl LlmToolCallbackArtifact {
             "artifact_ref": artifact_id.to_string(),
             "call_usage": self.call_usage,
             "result_context_usage": self.result_context_usage,
-            "token_delta": self.token_delta(),
             "duration_ms": self.duration_ms,
         })
     }
@@ -112,6 +107,21 @@ impl LlmToolCallbackArtifact {
 
 fn is_llm_rounds_field_path(field_path: &[String]) -> bool {
     field_path.len() == 1 && field_path[0] == "llm_rounds"
+}
+
+fn is_tool_calls_field_path(field_path: &[String]) -> bool {
+    field_path.last().is_some_and(|key| key == "tool_calls")
+}
+
+fn with_array_item_count(mut payload: Value, full_value: &Value, field_name: &str) -> Value {
+    let Some(count) = full_value.as_array().map(|items| items.len() as i64) else {
+        return payload;
+    };
+    let Some(object) = payload.as_object_mut() else {
+        return payload;
+    };
+    object.insert(field_name.to_string(), json!(count));
+    payload
 }
 
 fn is_llm_rounds_debug_artifact_missing_tool_index(value: &Value) -> bool {
@@ -150,27 +160,6 @@ fn record_i64_field(record: &Map<String, Value>, keys: &[&str]) -> Option<i64> {
 
         value.as_u64().and_then(|value| i64::try_from(value).ok())
     })
-}
-
-fn llm_usage_total_tokens(usage: Option<&Value>) -> Option<i64> {
-    let total_tokens = usage?.get("total_tokens")?;
-    if let Some(value) = total_tokens.as_i64() {
-        return Some(value);
-    }
-
-    total_tokens
-        .as_u64()
-        .and_then(|value| i64::try_from(value).ok())
-}
-
-fn llm_usage_token_delta(
-    call_usage: Option<&Value>,
-    result_context_usage: Option<&Value>,
-) -> Option<i64> {
-    let call_total = llm_usage_total_tokens(call_usage)?;
-    let result_total = llm_usage_total_tokens(result_context_usage)?;
-
-    result_total.checked_sub(call_total)
 }
 
 fn round_index(round: &Map<String, Value>, fallback_index: usize) -> i64 {
@@ -808,6 +797,11 @@ impl RuntimeDebugArtifactWriter {
                     } else {
                         payload
                     };
+                    let payload = if changed && is_tool_calls_field_path(&field_path) {
+                        with_array_item_count(payload, &full_value, "tool_call_count")
+                    } else {
+                        payload
+                    };
                     let payload = if changed && is_llm_rounds_field_path(&field_path) {
                         self.with_llm_tool_callback_index(scope, payload, &full_value)
                             .await?
@@ -964,6 +958,122 @@ pub async fn offload_application_run_detail_artifacts(
                         error_payload,
                         metrics_payload,
                         debug_payload,
+                    },
+                )
+                .await?;
+        }
+    }
+
+    for checkpoint in &mut detail.checkpoints {
+        let checkpoint_scope = RuntimeDebugArtifactScope {
+            workspace_id,
+            application_id,
+            flow_run_id: Some(detail.flow_run.id),
+            node_run_id: checkpoint.node_run_id,
+            run_event_id: None,
+        };
+        let (locator_payload, locator_changed) = writer
+            .offload_payload_fields(
+                &checkpoint_scope,
+                "checkpoint_locator_payload",
+                checkpoint.locator_payload.clone(),
+                Vec::new(),
+            )
+            .await?;
+        let (variable_snapshot, variable_changed) = writer
+            .offload_payload_fields(
+                &checkpoint_scope,
+                "checkpoint_variable_snapshot",
+                checkpoint.variable_snapshot.clone(),
+                Vec::new(),
+            )
+            .await?;
+        let (external_ref_payload, external_changed) = match checkpoint.external_ref_payload.clone()
+        {
+            Some(external_ref_payload) => {
+                let (payload, changed) = writer
+                    .offload_payload_fields(
+                        &checkpoint_scope,
+                        "checkpoint_external_ref_payload",
+                        external_ref_payload,
+                        Vec::new(),
+                    )
+                    .await?;
+                (Some(payload), changed)
+            }
+            None => (None, false),
+        };
+
+        if locator_changed || variable_changed || external_changed {
+            *checkpoint =
+                <MainDurableStore as OrchestrationRuntimeRepository>::update_checkpoint_payloads(
+                    &state.store,
+                    &UpdateCheckpointPayloadsInput {
+                        checkpoint_id: checkpoint.id,
+                        locator_payload,
+                        variable_snapshot,
+                        external_ref_payload,
+                    },
+                )
+                .await?;
+        }
+    }
+
+    for callback_task in &mut detail.callback_tasks {
+        let callback_scope = RuntimeDebugArtifactScope {
+            workspace_id,
+            application_id,
+            flow_run_id: Some(detail.flow_run.id),
+            node_run_id: Some(callback_task.node_run_id),
+            run_event_id: None,
+        };
+        let (request_payload, request_changed) = writer
+            .offload_payload_fields(
+                &callback_scope,
+                "callback_task_request_payload",
+                callback_task.request_payload.clone(),
+                Vec::new(),
+            )
+            .await?;
+        let (response_payload, response_changed) = match callback_task.response_payload.clone() {
+            Some(response_payload) => {
+                let (payload, changed) = writer
+                    .offload_payload_fields(
+                        &callback_scope,
+                        "callback_task_response_payload",
+                        response_payload,
+                        Vec::new(),
+                    )
+                    .await?;
+                (Some(payload), changed)
+            }
+            None => (None, false),
+        };
+        let (external_ref_payload, external_changed) =
+            match callback_task.external_ref_payload.clone() {
+                Some(external_ref_payload) => {
+                    let (payload, changed) = writer
+                        .offload_payload_fields(
+                            &callback_scope,
+                            "callback_task_external_ref_payload",
+                            external_ref_payload,
+                            Vec::new(),
+                        )
+                        .await?;
+                    (Some(payload), changed)
+                }
+                None => (None, false),
+            };
+
+        if request_changed || response_changed || external_changed {
+            *callback_task =
+                <MainDurableStore as OrchestrationRuntimeRepository>::update_callback_task_payloads(
+                    &state.store,
+                    &UpdateCallbackTaskPayloadsInput {
+                        callback_task_id: callback_task.id,
+                        request_payload,
+                        response_payload,
+                        external_ref_payload,
                     },
                 )
                 .await?;
@@ -1448,7 +1558,7 @@ mod tests {
     }
 
     #[test]
-    fn llm_tool_callback_payloads_include_context_token_delta() {
+    fn llm_tool_callback_payloads_keep_context_usage_without_token_delta() {
         let rounds = json!([
             {
                 "round_index": 0,
@@ -1491,11 +1601,19 @@ mod tests {
         let callbacks = collect_llm_tool_callbacks(&rounds, &std::collections::HashMap::new());
 
         assert_eq!(callbacks.len(), 1);
-        assert_eq!(callbacks[0].detail_payload()["token_delta"], json!(102));
         assert_eq!(
-            callbacks[0].summary_payload(Uuid::now_v7())["token_delta"],
-            json!(102)
+            callbacks[0].detail_payload()["call_usage"]["total_tokens"],
+            json!(8122)
         );
+        assert_eq!(
+            callbacks[0].detail_payload()["result_context_usage"]["total_tokens"],
+            json!(8224)
+        );
+        assert!(callbacks[0].detail_payload().get("token_delta").is_none());
+        assert!(callbacks[0]
+            .summary_payload(Uuid::now_v7())
+            .get("token_delta")
+            .is_none());
     }
 
     #[test]

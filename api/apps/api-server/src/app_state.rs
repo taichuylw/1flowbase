@@ -9,6 +9,7 @@ use crate::host_infrastructure::HostInfrastructureRegistry;
 use crate::openapi_docs::ApiDocsRegistry;
 use crate::{
     provider_runtime::ApiRuntimeServices,
+    runtime_activity::ApplicationRuntimeActivityTracker,
     runtime_profile_client::{ApiRuntimeProfilePort, PluginRunnerSystemPort},
 };
 
@@ -20,6 +21,7 @@ pub struct ApiState {
     pub runtime_engine: Arc<RuntimeEngine>,
     pub provider_runtime: Arc<ApiRuntimeServices>,
     pub process_started_at: OffsetDateTime,
+    pub runtime_activity: Arc<ApplicationRuntimeActivityTracker>,
     pub api_runtime_profile: Arc<dyn ApiRuntimeProfilePort>,
     pub plugin_runner_system: Arc<dyn PluginRunnerSystemPort>,
     pub official_plugin_source: Arc<dyn OfficialPluginSourcePort>,

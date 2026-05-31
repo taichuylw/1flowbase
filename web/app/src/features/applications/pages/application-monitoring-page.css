@@ -27,7 +27,25 @@
 
 .application-monitoring-page__metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.application-monitoring-metric-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.application-monitoring-metric-group__title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.application-monitoring-metric-group__items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
@@ -182,6 +200,94 @@
   gap: 20px;
 }
 
+.runtime-activity-panel__groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.runtime-activity-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.runtime-activity-panel__help {
+  color: var(--ant-color-text-tertiary, #8c8c8c);
+  flex: 0 0 auto;
+}
+
+.runtime-activity-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.runtime-activity-group__title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.runtime-activity-group__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.runtime-activity-metric {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--ant-color-bg-layout, #fafafa);
+}
+
+.runtime-activity-metric__label {
+  display: block;
+  color: var(--ant-color-text-secondary, #8c8c8c);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-activity-metric__value {
+  display: block;
+  margin-top: 4px;
+  color: var(--ant-color-text, #1f1f1f);
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.runtime-activity-metric--blue {
+  border-left-color: #1677ff;
+}
+
+.runtime-activity-metric--green {
+  border-left-color: #52c41a;
+}
+
+.runtime-activity-metric--gold {
+  border-left-color: #faad14;
+}
+
+.runtime-activity-metric--red {
+  border-left-color: #ff4d4f;
+}
+
+.runtime-activity-metric--purple {
+  border-left-color: #722ed1;
+}
+
+.runtime-activity-metric--cyan {
+  border-left-color: #13c2c2;
+}
+
 .application-monitoring-chart {
   width: 100%;
   height: 270px;
@@ -265,12 +371,12 @@
 }
 
 @media (max-width: 1280px) {
-  .application-monitoring-page__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .application-monitoring-page__chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .runtime-activity-panel__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -299,7 +405,7 @@
     justify-content: space-between;
   }
 
-  .application-monitoring-page__metrics {
+  .runtime-activity-panel__grid {
     grid-template-columns: 1fr;
   }
 }
@@ -461,4 +567,3 @@
 .run-rank-item__bar--token {
   background: linear-gradient(90deg, #efdbff, #722ed1);
 }
-

@@ -13,11 +13,16 @@ use axum::{
 use control_plane::{
     application_public_api::{
         api_keys::ApplicationApiKeyService,
+        model_catalog::{
+            extract_agent_model_catalog_from_start_node, AgentModelCapabilities,
+            AgentModelDescriptor, AgentModelReasoning,
+        },
         native::{
             ApplicationNativeRunService, CancelNativeRunCommand, CreateNativeRunCommand,
             GetNativeRunCommand, NativeRunRequest, NativeRunResult, NativeRunValidationError,
             ResumeNativeRunCommand,
         },
+        publications::{ApplicationPublicationService, LoadActiveApplicationPublicationCommand},
         run_service::native_result_from_run_detail,
     },
     file_management::{FileUploadService, UploadFileCommand},
@@ -30,6 +35,7 @@ use control_plane::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tracing::error;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -39,7 +45,15 @@ use crate::{
     provider_runtime::ApiProviderRuntime,
     response::ApiSuccess,
     routes::{application_public_api::sse, files::UploadedFileResponse},
+    runtime_activity::{scope_application_activity, ApplicationActivityKind},
 };
+
+fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
+    ApiProviderRuntime::new_with_activity(
+        state.provider_runtime.clone(),
+        state.runtime_activity.clone(),
+    )
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ResumeNativeRunBody {
@@ -65,6 +79,45 @@ pub struct NativeRunResponse {
     pub usage: Option<Value>,
     pub error: Option<Value>,
     pub created_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelListResponse {
+    pub object: &'static str,
+    pub data: Vec<NativeModelObject>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelObject {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_context_window: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_compact_token_limit: Option<u64>,
+    pub capabilities: NativeModelCapabilities,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<NativeModelReasoning>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelCapabilities {
+    pub reasoning: bool,
+    pub tool_call: bool,
+    pub multimodal: bool,
+    pub structured_output: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeModelReasoning {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_effort: Option<String>,
+    pub supported_efforts: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -127,6 +180,44 @@ pub(crate) fn bearer_token(headers: &HeaderMap) -> Result<String, NativeApiError
         })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/agent/v1/models",
+    operation_id = "list_native_agent_models",
+    responses(
+        (status = 200, body = NativeModelListResponse),
+        (status = 401, body = NativeErrorBody),
+        (status = 403, body = NativeErrorBody),
+        (status = 409, body = NativeErrorBody)
+    )
+)]
+pub async fn list_native_models(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<NativeModelListResponse>, NativeApiError> {
+    let bearer_token = bearer_token(&headers)?;
+    let actor = ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .authenticate_bearer_token(&bearer_token)
+        .await
+        .map_err(|_| native_error(NativeRunValidationError::NotAuthenticated))?;
+    let publication = ApplicationPublicationService::new(state.store.clone())
+        .load_active_publication(LoadActiveApplicationPublicationCommand {
+            application_id: actor.application_id,
+        })
+        .await
+        .map_err(|_| native_error(NativeRunValidationError::ApplicationNotPublished))?;
+    let models = extract_agent_model_catalog_from_start_node(&publication.document_snapshot)
+        .into_iter()
+        .map(NativeModelObject::from)
+        .collect();
+
+    Ok(Json(NativeModelListResponse {
+        object: "list",
+        data: models,
+    }))
+}
+
 pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
     match error {
         NativeRunValidationError::NotAuthenticated => NativeApiError::new(
@@ -154,6 +245,11 @@ pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
             "invalid_mapping",
             "application public API mapping is invalid",
         ),
+        NativeRunValidationError::InvalidModelParameters(field) => NativeApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_model_parameters",
+            format!("invalid native request model parameter field: {field}"),
+        ),
         NativeRunValidationError::InvalidState => NativeApiError::new(
             StatusCode::CONFLICT,
             "invalid_state",
@@ -164,6 +260,41 @@ pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
             "resume_not_implemented",
             "public callback resume continuation is not implemented",
         ),
+    }
+}
+
+impl From<AgentModelDescriptor> for NativeModelObject {
+    fn from(model: AgentModelDescriptor) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            context_window: model.context_window,
+            max_context_window: model.max_context_window.or(model.context_window),
+            max_output_tokens: model.max_output_tokens,
+            auto_compact_token_limit: model.auto_compact_token_limit,
+            capabilities: NativeModelCapabilities::from(model.capabilities),
+            reasoning: model.reasoning.map(NativeModelReasoning::from),
+        }
+    }
+}
+
+impl From<AgentModelCapabilities> for NativeModelCapabilities {
+    fn from(capabilities: AgentModelCapabilities) -> Self {
+        Self {
+            reasoning: capabilities.reasoning,
+            tool_call: capabilities.tool_call,
+            multimodal: capabilities.multimodal,
+            structured_output: capabilities.structured_output,
+        }
+    }
+}
+
+impl From<AgentModelReasoning> for NativeModelReasoning {
+    fn from(reasoning: AgentModelReasoning) -> Self {
+        Self {
+            default_effort: reasoning.default_effort,
+            supported_efforts: reasoning.supported_efforts,
+        }
     }
 }
 
@@ -299,18 +430,24 @@ pub(crate) async fn execute_blocking_native_run(
     bearer_token: String,
     run: NativeRunResult,
 ) -> Result<NativeRunResult, NativeApiError> {
+    let _execution_activity = state.runtime_activity.start(
+        run.application_id,
+        ApplicationActivityKind::ApplicationExecution,
+    );
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
-        ApiProviderRuntime::new(state.provider_runtime.clone()),
+        api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     );
-    let execution_result = runtime_service
-        .start_published_flow_run(StartPublishedFlowRunCommand {
+    let execution_result = scope_application_activity(
+        run.application_id,
+        runtime_service.start_published_flow_run(StartPublishedFlowRunCommand {
             application_id: run.application_id,
             flow_run_id: run.id,
-        })
-        .await;
+        }),
+    )
+    .await;
     match execution_result {
         Ok(detail) => Ok(native_result_from_run_detail(&detail, run.metadata.clone())),
         Err(error) => {
@@ -334,7 +471,7 @@ pub(crate) async fn execute_blocking_native_run(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/runs",
+    path = "/api/agent/v1/runs",
     request_body = Value,
     responses(
         (status = 201, body = NativeRunResponse),
@@ -361,6 +498,9 @@ pub async fn create_native_run(
         })
         .await
         .map_err(native_error)?;
+    let _http_activity = state
+        .runtime_activity
+        .start(run.application_id, ApplicationActivityKind::HttpRequest);
 
     if response_mode.as_deref() == Some("streaming") {
         return start_native_run_stream(state, run, include_workflow_events).await;
@@ -419,19 +559,25 @@ async fn start_native_run_stream(
 
     let background_state = state.clone();
     tokio::spawn(async move {
+        let _execution_activity = background_state.runtime_activity.start(
+            run.application_id,
+            ApplicationActivityKind::ApplicationExecution,
+        );
         let runtime_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        if let Err(runtime_error) = runtime_service
-            .start_published_flow_run(StartPublishedFlowRunCommand {
+        if let Err(runtime_error) = scope_application_activity(
+            run.application_id,
+            runtime_service.start_published_flow_run(StartPublishedFlowRunCommand {
                 application_id: run.application_id,
                 flow_run_id: run.id,
-            })
-            .await
+            }),
+        )
+        .await
         {
             let _ = background_state
                 .runtime_event_stream
@@ -459,14 +605,22 @@ async fn start_native_run_stream(
         }
     });
 
-    Ok(Sse::new(sse::NativeRunSseStream::new(receiver))
+    let sse_activity = state
+        .runtime_activity
+        .start(run.application_id, ApplicationActivityKind::SseConnection);
+    let stream = sse::NativeRunSseStream::new(receiver).map(move |event| {
+        let _keep_alive = &sse_activity;
+        event
+    });
+
+    Ok(Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response())
 }
 
 #[utoipa::path(
     get,
-    path = "/api/v1/agent/runs/{run_id}",
+    path = "/api/agent/v1/runs/{run_id}",
     params(("run_id" = String, Path, description = "Published run id")),
     responses(
         (status = 200, body = NativeRunResponse),
@@ -495,7 +649,7 @@ pub async fn get_native_run(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/runs/{run_id}/cancel",
+    path = "/api/agent/v1/runs/{run_id}/cancel",
     params(("run_id" = String, Path, description = "Published run id")),
     responses(
         (status = 200, body = NativeRunResponse),
@@ -525,7 +679,7 @@ pub async fn cancel_native_run(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/runs/{run_id}/resume",
+    path = "/api/agent/v1/runs/{run_id}/resume",
     request_body = ResumeNativeRunBody,
     params(("run_id" = String, Path, description = "Published run id")),
     responses(
@@ -584,18 +738,25 @@ pub async fn resume_native_run(
                 )
                 .await;
             }
-            let detail = OrchestrationRuntimeService::new(
-                state.store.clone(),
-                ApiProviderRuntime::new(state.provider_runtime.clone()),
-                state.runtime_engine.clone(),
-                state.provider_secret_master_key.clone(),
+            let _execution_activity = state.runtime_activity.start(
+                api_actor.application_id,
+                ApplicationActivityKind::ApplicationExecution,
+            );
+            let detail = scope_application_activity(
+                api_actor.application_id,
+                OrchestrationRuntimeService::new(
+                    state.store.clone(),
+                    api_provider_runtime(&state),
+                    state.runtime_engine.clone(),
+                    state.provider_secret_master_key.clone(),
+                )
+                .complete_callback_task(CompleteCallbackTaskCommand {
+                    actor_user_id: api_actor.creator_user_id,
+                    application_id: api_actor.application_id,
+                    callback_task_id: body.callback_task_id,
+                    response_payload,
+                }),
             )
-            .complete_callback_task(CompleteCallbackTaskCommand {
-                actor_user_id: api_actor.creator_user_id,
-                application_id: api_actor.application_id,
-                callback_task_id: body.callback_task_id,
-                response_payload,
-            })
             .await
             .map_err(service_error)?;
             native_result_from_run_detail(
@@ -658,21 +819,27 @@ async fn resume_native_run_stream(
 
     let background_state = state.clone();
     tokio::spawn(async move {
+        let _execution_activity = background_state.runtime_activity.start(
+            application_id,
+            ApplicationActivityKind::ApplicationExecution,
+        );
         let runtime_service = OrchestrationRuntimeService::new(
             background_state.store.clone(),
-            ApiProviderRuntime::new(background_state.provider_runtime.clone()),
+            api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        let result = runtime_service
-            .complete_callback_task(CompleteCallbackTaskCommand {
+        let result = scope_application_activity(
+            application_id,
+            runtime_service.complete_callback_task(CompleteCallbackTaskCommand {
                 actor_user_id,
                 application_id,
                 callback_task_id,
                 response_payload,
-            })
-            .await;
+            }),
+        )
+        .await;
         match result {
             Ok(detail) => {
                 append_terminal_sse_event(&background_state, &detail.flow_run).await;
@@ -699,7 +866,15 @@ async fn resume_native_run_stream(
         }
     });
 
-    Ok(Sse::new(sse::NativeRunSseStream::new(receiver))
+    let sse_activity = state
+        .runtime_activity
+        .start(application_id, ApplicationActivityKind::SseConnection);
+    let stream = sse::NativeRunSseStream::new(receiver).map(move |event| {
+        let _keep_alive = &sse_activity;
+        event
+    });
+
+    Ok(Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response())
 }
@@ -769,7 +944,7 @@ async fn append_terminal_sse_event(state: &ApiState, flow_run: &domain::FlowRunR
 
 #[utoipa::path(
     post,
-    path = "/api/v1/agent/files",
+    path = "/api/agent/v1/files",
     responses(
         (status = 201, body = crate::routes::files::UploadedFileResponse),
         (status = 401, body = NativeErrorBody)

@@ -931,7 +931,7 @@ where
         if let Some(last_forwarded_durable_sequence) =
             resume_durable_sequence_before_terminal.as_deref_mut()
         {
-            advance_durable_cursor_for_forwarded_answer_delta(
+            advance_durable_cursor_for_forwarded_event(
                 state,
                 initial_run.id,
                 &event,
@@ -962,13 +962,13 @@ where
     CompatibleForwardOutcome::Open { saw_event }
 }
 
-async fn advance_durable_cursor_for_forwarded_answer_delta(
+async fn advance_durable_cursor_for_forwarded_event(
     state: &ApiState,
     run_id: uuid::Uuid,
     event: &RuntimeEventEnvelope,
     last_forwarded_durable_sequence: &mut i64,
 ) {
-    if !is_answer_presentation_delta(event) {
+    if !event_can_match_durable_cursor(event) {
         return;
     }
     let Ok(records) = state
@@ -980,12 +980,33 @@ async fn advance_durable_cursor_for_forwarded_answer_delta(
     };
     let Some(record) = records.into_iter().find(|record| {
         record.sequence > *last_forwarded_durable_sequence
-            && durable_record_matches_answer_delta(record, event)
+            && durable_record_matches_forwarded_event(record, event)
     }) else {
         return;
     };
 
     *last_forwarded_durable_sequence = record.sequence;
+}
+
+fn event_can_match_durable_cursor(event: &RuntimeEventEnvelope) -> bool {
+    event.event_type == "flow_started" || is_answer_presentation_delta(event)
+}
+
+fn durable_record_matches_forwarded_event(
+    record: &domain::RuntimeEventRecord,
+    event: &RuntimeEventEnvelope,
+) -> bool {
+    if record.event_type != event.event_type {
+        return false;
+    }
+    if is_answer_presentation_delta(event) {
+        return durable_record_matches_answer_delta(record, event);
+    }
+    if event.event_type == "flow_started" {
+        return record.payload.get("type").and_then(Value::as_str) == Some("flow_started")
+            && event.payload.get("type").and_then(Value::as_str) == Some("flow_started");
+    }
+    false
 }
 
 fn durable_record_matches_answer_delta(
@@ -2238,6 +2259,8 @@ struct AnthropicStreamMapper {
     model: String,
     next_content_index: u32,
     active_content: Option<AnthropicContentBlockKind>,
+    emitted_reasoning_delta: bool,
+    emitted_text_delta: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2252,6 +2275,8 @@ impl AnthropicStreamMapper {
             model,
             next_content_index: 0,
             active_content: None,
+            emitted_reasoning_delta: false,
+            emitted_text_delta: false,
         }
     }
 
@@ -2260,6 +2285,7 @@ impl AnthropicStreamMapper {
         initial_run: &NativeRunResult,
         envelope: RuntimeEventEnvelope,
     ) -> Vec<Result<Event, Infallible>> {
+        let is_answer_presentation_delta = is_answer_presentation_delta(&envelope);
         match envelope.event_type.as_str() {
             "flow_started" => vec![event_json_sse(
                 "message_start",
@@ -2276,7 +2302,14 @@ impl AnthropicStreamMapper {
                     }
                 }),
             )],
-            "reasoning_delta" => {
+            "reasoning_delta"
+                if is_answer_presentation_delta
+                    && envelope
+                        .text
+                        .as_deref()
+                        .is_some_and(|text| !text.is_empty()) =>
+            {
+                self.emitted_reasoning_delta = true;
                 let mut events =
                     self.ensure_anthropic_content_block(AnthropicContentBlockKind::Thinking);
                 let (event_name, payload) = anthropic_delta_payload(
@@ -2288,7 +2321,14 @@ impl AnthropicStreamMapper {
                 events.push(event_json_sse(event_name, payload));
                 events
             }
-            "text_delta" => {
+            "text_delta"
+                if is_answer_presentation_delta
+                    && envelope
+                        .text
+                        .as_deref()
+                        .is_some_and(|text| !text.is_empty()) =>
+            {
+                self.emitted_text_delta = true;
                 let mut events =
                     self.ensure_anthropic_content_block(AnthropicContentBlockKind::Text);
                 let (event_name, payload) = anthropic_delta_payload(
@@ -2300,24 +2340,78 @@ impl AnthropicStreamMapper {
                 events.push(event_json_sse(event_name, payload));
                 events
             }
-            "flow_finished" => self.anthropic_stop_events(),
+            "text_delta" | "reasoning_delta" => Vec::new(),
+            "flow_finished" => self.anthropic_terminal_events(initial_run, &envelope.payload),
             "waiting_callback" => self
                 .anthropic_tool_use_events(&envelope.payload)
                 .unwrap_or_else(required_action_not_supported_anthropic_sse),
             "waiting_human" => required_action_not_supported_anthropic_sse(),
-            "flow_failed" => vec![event_json_sse(
-                "error",
-                json!({
-                    "type": "error",
-                    "error": {
-                        "type": "api_error",
-                        "message": runtime_error_message(&envelope.payload)
-                    }
-                }),
-            )],
+            "flow_failed" => {
+                if terminal_answer_text(initial_run, &envelope.payload).is_some() {
+                    self.anthropic_terminal_events(initial_run, &envelope.payload)
+                } else {
+                    vec![event_json_sse(
+                        "error",
+                        json!({
+                            "type": "error",
+                            "error": {
+                                "type": "api_error",
+                                "message": runtime_error_message(&envelope.payload)
+                            }
+                        }),
+                    )]
+                }
+            }
             "flow_cancelled" => self.anthropic_stop_events(),
             _ => Vec::new(),
         }
+    }
+
+    fn anthropic_terminal_events(
+        &mut self,
+        initial_run: &NativeRunResult,
+        payload: &Value,
+    ) -> Vec<Result<Event, Infallible>> {
+        let mut events = Vec::new();
+        let had_reasoning_delta = self.emitted_reasoning_delta;
+        let had_text_delta = self.emitted_text_delta;
+        for delta in terminal_answer_deltas_from_run_or_payload(initial_run, payload) {
+            match delta.kind {
+                TerminalAnswerDeltaKind::Reasoning if !had_reasoning_delta => {
+                    events.extend(self.anthropic_delta_events(
+                        AnthropicContentBlockKind::Thinking,
+                        "reasoning_delta",
+                        delta.text,
+                    ));
+                    self.emitted_reasoning_delta = true;
+                }
+                TerminalAnswerDeltaKind::Text if !had_text_delta => {
+                    events.extend(self.anthropic_delta_events(
+                        AnthropicContentBlockKind::Text,
+                        "text_delta",
+                        delta.text,
+                    ));
+                    self.emitted_text_delta = true;
+                }
+                _ => {}
+            }
+        }
+        events.extend(self.anthropic_stop_events());
+        events
+    }
+
+    fn anthropic_delta_events(
+        &mut self,
+        kind: AnthropicContentBlockKind,
+        event_type: &str,
+        text: String,
+    ) -> Vec<Result<Event, Infallible>> {
+        let mut events = self.ensure_anthropic_content_block(kind);
+        let (event_name, payload) =
+            anthropic_delta_payload(self.active_content_index(), event_type, text)
+                .expect("known Anthropic delta event type should map");
+        events.push(event_json_sse(event_name, payload));
+        events
     }
 
     fn anthropic_stop_events(&mut self) -> Vec<Result<Event, Infallible>> {
@@ -2760,7 +2854,7 @@ mod tests {
         );
         let mut durable_sequence = 0;
 
-        advance_durable_cursor_for_forwarded_answer_delta(
+        advance_durable_cursor_for_forwarded_event(
             &base_state,
             run.id,
             &event,
@@ -2772,6 +2866,145 @@ mod tests {
             durable_sequence > 0,
             "forwarded answer delta should mark matching durable record as consumed"
         );
+    }
+
+    #[tokio::test]
+    async fn anthropic_live_flow_started_is_not_duplicated_by_durable_drain() {
+        let mut run = native_run();
+        let node_run_id = Uuid::from_u128(0x77777777777777777777777777777777);
+        let callback_task_id = Uuid::from_u128(0x99999999999999999999999999999999);
+        run.status = NativeRunStatus::Waiting;
+        run.tool_calls = Some(json!([
+            {
+                "id": "toolu_next",
+                "name": "lookup_next",
+                "arguments": { "query": "next" }
+            }
+        ]));
+        run.required_action = Some(NativeRequiredAction {
+            action_type: "submit_tool_outputs".to_string(),
+            payload: json!({
+                "callback_task_id": callback_task_id,
+                "callback_kind": "llm_tool_calls",
+                "node_run_id": node_run_id,
+                "tool_calls": run.tool_calls.clone().unwrap()
+            }),
+        });
+
+        let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
+        seed_flow_run_for_compat_sse_test(&base_state, &run).await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "flow_started",
+            json!({
+                "type": "flow_started",
+                "run_id": run.id,
+                "status": "running"
+            }),
+        )
+        .await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "text_delta",
+            json!({
+                "type": "text_delta",
+                "event_type": "text_delta",
+                "node_id": "node-answer",
+                "text": "prior node answer",
+                "presentation": {
+                    "kind": "answer",
+                    "answer_node_id": "node-answer",
+                    "source_node_id": "node-llm",
+                    "source_node_run_id": node_run_id,
+                    "source_output_key": "text",
+                    "segment_index": 0
+                }
+            }),
+        )
+        .await;
+        append_compat_sse_runtime_event(
+            &base_state,
+            run.id,
+            "waiting_callback",
+            json!({
+                "type": "waiting_callback",
+                "run_id": run.id,
+                "status": "waiting_callback",
+                "callback_task_id": callback_task_id,
+                "callback_kind": "llm_tool_calls",
+                "node_run_id": node_run_id,
+                "tool_calls": run.tool_calls.clone().unwrap()
+            }),
+        )
+        .await;
+
+        let runtime_event_stream = Arc::new(
+            ReplayBeforeFallbackRuntimeEventStream::with_subscription_replay(
+                vec![RuntimeEventEnvelope::new(
+                    run.id,
+                    1,
+                    debug_stream_events::flow_started(run.id),
+                )],
+                Vec::new(),
+            ),
+        );
+        let state = Arc::new(ApiState {
+            store: base_state.store.clone(),
+            infrastructure: base_state.infrastructure.clone(),
+            file_storage_registry: base_state.file_storage_registry.clone(),
+            runtime_engine: base_state.runtime_engine.clone(),
+            provider_runtime: base_state.provider_runtime.clone(),
+            process_started_at: base_state.process_started_at,
+            runtime_activity: base_state.runtime_activity.clone(),
+            api_runtime_profile: base_state.api_runtime_profile.clone(),
+            plugin_runner_system: base_state.plugin_runner_system.clone(),
+            official_plugin_source: base_state.official_plugin_source.clone(),
+            provider_install_root: base_state.provider_install_root.clone(),
+            provider_secret_master_key: base_state.provider_secret_master_key.clone(),
+            host_extension_dropin_root: base_state.host_extension_dropin_root.clone(),
+            allow_unverified_filesystem_dropins: base_state.allow_unverified_filesystem_dropins,
+            allow_uploaded_host_extensions: base_state.allow_uploaded_host_extensions,
+            session_store: base_state.session_store.clone(),
+            runtime_event_stream,
+            api_docs: base_state.api_docs.clone(),
+            cookie_name: base_state.cookie_name.clone(),
+            session_ttl_days: base_state.session_ttl_days,
+            bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
+        });
+        let (sender, mut receiver) = mpsc::channel(32);
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            send_compatible_runtime_event_stream(
+                state,
+                run.clone(),
+                ANTHROPIC_SSE_PROJECTION,
+                Some(0),
+                None,
+                sender,
+                move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+            ),
+        )
+        .await
+        .expect("compatible stream should stop at durable waiting callback");
+
+        let mut events = Vec::new();
+        while let Some(event) = receiver.recv().await {
+            events.push(event);
+        }
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert_eq!(body.matches("event: message_start").count(), 1, "{body}");
+        assert!(body.contains("prior node answer"), "{body}");
+        assert!(body.contains("lookup_next"), "{body}");
+        assert!(body.contains("\"stop_reason\":\"tool_use\""), "{body}");
     }
 
     #[test]
@@ -2822,6 +3055,95 @@ mod tests {
         assert!(body.contains("\"type\":\"text_delta\""), "{body}");
         assert!(body.contains("\"text\":\"\\n最终回答\""), "{body}");
         assert!(!body.contains("<think>"), "{body}");
+    }
+
+    #[test]
+    fn anthropic_projects_answer_presentation_delta_not_provider_raw_delta() {
+        let run = native_run();
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let provider_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::text_delta(
+                    "node-llm",
+                    Uuid::from_u128(0x55555555555555555555555555555555),
+                    "provider raw".to_string(),
+                ),
+            ),
+        );
+        let presentation_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                2,
+                debug_stream_events::answer_text_delta(
+                    "node-answer",
+                    "answer presentation".to_string(),
+                    0,
+                    Some("node-llm"),
+                    None,
+                    Some("text"),
+                ),
+            ),
+        );
+
+        assert!(provider_events.is_empty());
+        assert_eq!(presentation_events.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn anthropic_terminal_answer_fallback_emits_text_before_stop() {
+        let run = native_run();
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_finished(run.id, json!({ "answer": "最终回答" })),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("\"type\":\"text_delta\""), "{body}");
+        assert!(body.contains("\"text\":\"最终回答\""), "{body}");
+        assert!(body.contains("event: message_stop"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn anthropic_failed_terminal_with_answer_finishes_without_error_event() {
+        let mut run = native_run();
+        run.status = NativeRunStatus::Failed;
+        run.answer = Some("工具失败后的回答".to_string());
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::flow_failed(
+                    run.id,
+                    json!({ "message": "tool callback failed" }),
+                ),
+            ),
+        );
+
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("工具失败后的回答"), "{body}");
+        assert!(body.contains("event: message_stop"), "{body}");
+        assert!(!body.contains("event: error"), "{body}");
     }
 
     #[test]
@@ -3221,6 +3543,7 @@ mod tests {
             runtime_engine: base_state.runtime_engine.clone(),
             provider_runtime: base_state.provider_runtime.clone(),
             process_started_at: base_state.process_started_at,
+            runtime_activity: base_state.runtime_activity.clone(),
             api_runtime_profile: base_state.api_runtime_profile.clone(),
             plugin_runner_system: base_state.plugin_runner_system.clone(),
             official_plugin_source: base_state.official_plugin_source.clone(),
@@ -3438,6 +3761,7 @@ mod tests {
             runtime_engine: base_state.runtime_engine.clone(),
             provider_runtime: base_state.provider_runtime.clone(),
             process_started_at: base_state.process_started_at,
+            runtime_activity: base_state.runtime_activity.clone(),
             api_runtime_profile: base_state.api_runtime_profile.clone(),
             plugin_runner_system: base_state.plugin_runner_system.clone(),
             official_plugin_source: base_state.official_plugin_source.clone(),
@@ -3605,6 +3929,7 @@ mod tests {
             runtime_engine: base_state.runtime_engine.clone(),
             provider_runtime: base_state.provider_runtime.clone(),
             process_started_at: base_state.process_started_at,
+            runtime_activity: base_state.runtime_activity.clone(),
             api_runtime_profile: base_state.api_runtime_profile.clone(),
             plugin_runner_system: base_state.plugin_runner_system.clone(),
             official_plugin_source: base_state.official_plugin_source.clone(),
