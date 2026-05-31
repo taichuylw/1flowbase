@@ -369,6 +369,77 @@ async fn application_api_docs_anthropic_operation_advertises_x_api_key_auth() {
 }
 
 #[tokio::test]
+async fn application_api_docs_registers_anthropic_count_tokens_operation() {
+    let app = test_app().await;
+    let (cookie, application_id) = setup_published_app(&app).await;
+
+    let operations = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/categories/anthropic-compatible-api/operations"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(operations.status(), StatusCode::OK);
+    let operations_payload = response_json(operations).await;
+    let operation_paths = operations_payload["data"]["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|operation| {
+            (
+                operation["id"].as_str().unwrap(),
+                operation["method"].as_str().unwrap(),
+                operation["path"].as_str().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(operation_paths.contains(&(
+        "applicationAnthropicCountMessageTokens",
+        "POST",
+        "/v1/messages/count_tokens"
+    )));
+
+    let spec = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/api-docs/operations/applicationAnthropicCountMessageTokens/openapi.json"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(spec.status(), StatusCode::OK);
+    let spec_payload = response_json(spec).await;
+    let operation = &spec_payload["paths"]["/v1/messages/count_tokens"]["post"];
+    assert_eq!(
+        operation["requestBody"]["content"]["application/json"]["schema"]["required"],
+        json!(["model", "messages"])
+    );
+    assert_eq!(
+        operation["responses"]["200"]["content"]["application/json"]["schema"]["required"],
+        json!(["input_tokens"])
+    );
+    assert_eq!(
+        operation["security"],
+        json!([
+            {"applicationApiKey": []},
+            {"anthropicApplicationApiKey": []}
+        ])
+    );
+}
+
+#[tokio::test]
 async fn application_api_docs_operation_specs_include_request_parameters() {
     let app = test_app().await;
     let (cookie, application_id) = setup_published_app(&app).await;

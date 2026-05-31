@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::application_public_api::native::NativeRunRequest;
 
@@ -68,9 +68,13 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
             continue;
         }
         let content = anthropic_text_content(content_value)?;
+        let content_blocks = history_content_blocks(content_value);
+        if content.trim().is_empty() && content_blocks.is_none() {
+            continue;
+        }
         let mut history_entry = serde_json::json!({ "role": role, "content": content });
-        if content_value.is_array() {
-            history_entry["content_blocks"] = content_value.clone();
+        if let Some(content_blocks) = content_blocks {
+            history_entry["content_blocks"] = content_blocks;
         }
         history.push(history_entry);
     }
@@ -85,12 +89,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .and_then(Value::as_bool)
         .filter(|stream| *stream)
         .map(|_| "streaming".to_string());
-    let conversation = object
-        .get("metadata")
-        .and_then(|metadata| metadata.get("expand_id"))
-        .and_then(Value::as_str)
-        .map(|user| serde_json::json!({ "user": user }))
-        .unwrap_or_else(|| serde_json::json!({}));
+    let conversation = metadata_conversation(object.get("metadata"));
     let metadata = object
         .get("metadata")
         .filter(|value| value.is_object())
@@ -162,6 +161,60 @@ fn compatibility_inputs(compatibility: Value) -> Value {
         inputs.insert("tool_choice".to_string(), tool_choice.clone());
     }
     Value::Object(inputs)
+}
+
+fn metadata_conversation(metadata: Option<&Value>) -> Value {
+    let mut conversation = Map::new();
+    let Some(metadata) = metadata.and_then(Value::as_object) else {
+        return Value::Object(conversation);
+    };
+    let user_id = metadata
+        .get("user_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let user_id_payload = user_id.and_then(|value| serde_json::from_str::<Value>(value).ok());
+    if let Some(user) = metadata
+        .get("expand_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| metadata_user_from_user_id(user_id, user_id_payload.as_ref()))
+    {
+        conversation.insert("user".to_string(), Value::String(user));
+    }
+    if let Some(session_id) = user_id_payload
+        .as_ref()
+        .and_then(|payload| payload.get("session_id"))
+        .and_then(Value::as_str)
+        .or_else(|| metadata.get("session_id").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        conversation.insert("id".to_string(), Value::String(session_id.to_string()));
+    }
+    Value::Object(conversation)
+}
+
+fn metadata_user_from_user_id(user_id: Option<&str>, payload: Option<&Value>) -> Option<String> {
+    payload
+        .and_then(|payload| {
+            payload
+                .get("account_uuid")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    payload
+                        .get("device_id")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                })
+        })
+        .or(user_id)
+        .map(ToOwned::to_owned)
 }
 
 fn normalize_anthropic_tool(tool: &Value) -> Option<Value> {
@@ -236,11 +289,27 @@ fn anthropic_text_content(content: &Value) -> Result<String, AnthropicCompatErro
             "computer_use" => {
                 return Err(AnthropicCompatError::unsupported("computer_use"));
             }
+            "thinking" | "redacted_thinking" => {}
             "image" | "document" => {}
             _ => return Err(AnthropicCompatError::unsupported("messages")),
         }
     }
     Ok(text)
+}
+
+fn history_content_blocks(content: &Value) -> Option<Value> {
+    let blocks = content.as_array()?;
+    let blocks = blocks
+        .iter()
+        .filter(|block| {
+            !matches!(
+                block.get("type").and_then(Value::as_str),
+                Some("thinking" | "redacted_thinking")
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    (!blocks.is_empty()).then_some(Value::Array(blocks))
 }
 
 fn query_media_content_blocks(content: &Value) -> Option<Value> {

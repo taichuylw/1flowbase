@@ -89,6 +89,39 @@ fn metadata_expand_id_maps_to_native_conversation_user() {
 }
 
 #[test]
+fn metadata_user_id_json_maps_session_to_native_conversation() {
+    let mut request = base_request();
+    request["metadata"] = json!({
+        "user_id": "{\"device_id\":\"device-123\",\"account_uuid\":\"\",\"session_id\":\"session-456\"}"
+    });
+
+    let native = map_messages_request(request).unwrap();
+
+    assert_eq!(native.conversation.get("user"), Some(&json!("device-123")));
+    assert_eq!(native.conversation.get("id"), Some(&json!("session-456")));
+}
+
+#[test]
+fn metadata_session_id_maps_to_native_conversation_id() {
+    let mut request = base_request();
+    request["metadata"] = json!({
+        "expand_id": "external-user-123",
+        "session_id": "header-session-789"
+    });
+
+    let native = map_messages_request(request).unwrap();
+
+    assert_eq!(
+        native.conversation.get("user"),
+        Some(&json!("external-user-123"))
+    );
+    assert_eq!(
+        native.conversation.get("id"),
+        Some(&json!("header-session-789"))
+    );
+}
+
+#[test]
 fn model_maps_exactly_without_validation() {
     let mut request = base_request();
     request["model"] = json!("unregistered/anthropic:model.with/slashes");
@@ -224,6 +257,43 @@ fn last_user_multimodal_content_maps_query_text_and_preserves_media_blocks() {
     assert_eq!(
         native.history[0]["content_blocks"][0]["source"]["media_type"],
         json!("image/png")
+    );
+}
+
+#[test]
+fn assistant_thinking_history_is_ignored_for_claude_code_replay() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "messages": [
+            {"role": "user", "content": "hi ?"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "internal reasoning", "signature": ""}
+                ]
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Hello!"}
+                ]
+            },
+            {"role": "user", "content": "next question"}
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(native.query, "next question");
+    assert_eq!(
+        native.history,
+        vec![
+            json!({"role": "user", "content": "hi ?"}),
+            json!({
+                "role": "assistant",
+                "content": "Hello!",
+                "content_blocks": [{"type": "text", "text": "Hello!"}]
+            })
+        ]
     );
 }
 
