@@ -14,7 +14,7 @@ use control_plane::application_public_api::{
         ApplicationNativeRunService, CreateNativeRunCommand, NativeRunRequest, NativeRunResult,
         NativeRunValidationError,
     },
-    run_service::native_result_from_run_detail,
+    run_service::{native_result_from_run_detail, ApplicationPublishedRunControlRepository},
 };
 use control_plane::orchestration_runtime::{
     CompleteCallbackTaskCommand, OrchestrationRuntimeService,
@@ -309,12 +309,25 @@ async fn resume_anthropic_tool_call(
     callback_task_id: Uuid,
     tool_results: Value,
 ) -> Result<NativeRunResult, AnthropicRouteError> {
+    let response_payload = anthropic_tool_resume_response_payload(tool_results);
     let api_actor = ApplicationApiKeyService::new(state.store.clone())
         .with_last_used_cache(state.infrastructure.cache_store())
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let detail = OrchestrationRuntimeService::new(
+
+    if let Some(run) = completed_anthropic_tool_resume_result(
+        state.as_ref(),
+        api_actor.application_id,
+        callback_task_id,
+        &response_payload,
+    )
+    .await?
+    {
+        return Ok(run);
+    }
+
+    let result = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
         state.runtime_engine.clone(),
@@ -324,27 +337,120 @@ async fn resume_anthropic_tool_call(
         actor_user_id: api_actor.creator_user_id,
         application_id: api_actor.application_id,
         callback_task_id,
-        response_payload: json!({ "tool_results": tool_results }),
+        response_payload: response_payload.clone(),
     })
-    .await
-    .map_err(native::service_error)?;
+    .await;
+    let detail = match result {
+        Ok(detail) => detail,
+        Err(error) => {
+            if let Ok(Some(run)) = completed_anthropic_tool_resume_result(
+                state.as_ref(),
+                api_actor.application_id,
+                callback_task_id,
+                &response_payload,
+            )
+            .await
+            {
+                return Ok(run);
+            }
+            return Err(native::service_error(error).into());
+        }
+    };
 
     Ok(native_result_from_run_detail(
         &detail,
-        json!({
-            "external_user": detail.flow_run.external_user,
-            "external_conversation_id": detail.flow_run.external_conversation_id,
-            "external_trace_id": detail.flow_run.external_trace_id,
-            "compatibility_mode": detail.flow_run.compatibility_mode,
-            "idempotency_key": detail.flow_run.idempotency_key,
-            "request": {
-                "conversation": {
-                    "id": detail.flow_run.external_conversation_id,
-                    "user": detail.flow_run.external_user,
-                }
-            }
-        }),
+        anthropic_resume_metadata_from_detail(&detail),
     ))
+}
+
+fn anthropic_tool_resume_response_payload(tool_results: Value) -> Value {
+    json!({ "tool_results": tool_results })
+}
+
+async fn completed_anthropic_tool_resume_result(
+    state: &ApiState,
+    application_id: Uuid,
+    callback_task_id: Uuid,
+    response_payload: &Value,
+) -> Result<Option<NativeRunResult>, native::NativeApiError> {
+    let Some(callback_task) = state
+        .store
+        .get_published_callback_task(callback_task_id)
+        .await
+        .map_err(native::service_error)?
+    else {
+        return Ok(None);
+    };
+    match callback_task.status {
+        domain::CallbackTaskStatus::Pending => return Ok(None),
+        domain::CallbackTaskStatus::Completed => {}
+        domain::CallbackTaskStatus::Cancelled => return Err(callback_task_not_pending_error()),
+    }
+    if callback_task.response_payload.as_ref() != Some(response_payload) {
+        return Err(callback_task_not_pending_error());
+    }
+    let detail = state
+        .store
+        .get_published_run_detail(application_id, callback_task.flow_run_id)
+        .await
+        .map_err(native::service_error)?
+        .ok_or_else(|| {
+            native::NativeApiError::new(
+                StatusCode::NOT_FOUND,
+                "flow_run",
+                "flow run was not found for callback task",
+            )
+        })?;
+
+    Ok(completed_anthropic_tool_resume_result_from_detail(
+        &detail,
+        callback_task_id,
+        response_payload,
+    ))
+}
+
+fn completed_anthropic_tool_resume_result_from_detail(
+    detail: &domain::ApplicationRunDetail,
+    callback_task_id: Uuid,
+    response_payload: &Value,
+) -> Option<NativeRunResult> {
+    let callback_task = detail
+        .callback_tasks
+        .iter()
+        .find(|task| task.id == callback_task_id)?;
+    if callback_task.status != domain::CallbackTaskStatus::Completed
+        || callback_task.response_payload.as_ref()? != response_payload
+    {
+        return None;
+    }
+    Some(native_result_from_run_detail(
+        detail,
+        anthropic_resume_metadata_from_detail(detail),
+    ))
+}
+
+fn anthropic_resume_metadata_from_detail(detail: &domain::ApplicationRunDetail) -> Value {
+    json!({
+        "external_user": detail.flow_run.external_user,
+        "external_conversation_id": detail.flow_run.external_conversation_id,
+        "external_trace_id": detail.flow_run.external_trace_id,
+        "compatibility_mode": detail.flow_run.compatibility_mode,
+        "idempotency_key": detail.flow_run.idempotency_key,
+        "request": {
+            "conversation": {
+                "id": detail.flow_run.external_conversation_id,
+                "user": detail.flow_run.external_user,
+            }
+        }
+    })
+}
+
+fn callback_task_not_pending_error() -> native::NativeApiError {
+    native::NativeApiError::new(
+        StatusCode::CONFLICT,
+        "callback_task_not_pending",
+        "callback task is not pending",
+    )
 }
 
 fn to_anthropic_response(run: NativeRunResult, model: String) -> AnthropicMessageResponse {
@@ -979,5 +1085,112 @@ mod tests {
             json!("toolu_current")
         );
         assert_eq!(resume.tool_results[0]["content"], json!("new result"));
+    }
+
+    #[test]
+    fn completed_anthropic_tool_resume_result_replays_matching_callback() {
+        let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
+        let response_payload = json!({
+            "tool_results": [{
+                "tool_call_id": "toolu_read",
+                "content": "memory loaded"
+            }]
+        });
+        let detail = completed_callback_detail(callback_task_id, response_payload.clone());
+
+        let replayed = completed_anthropic_tool_resume_result_from_detail(
+            &detail,
+            callback_task_id,
+            &response_payload,
+        )
+        .expect("matching completed callback should replay stored run");
+
+        assert_eq!(replayed.answer.as_deref(), Some("stored answer"));
+        assert!(replayed.required_action.is_none());
+    }
+
+    #[test]
+    fn completed_anthropic_tool_resume_result_rejects_mismatched_payload() {
+        let callback_task_id = Uuid::from_u128(0xdddddddddddddddddddddddddddddddd);
+        let detail = completed_callback_detail(
+            callback_task_id,
+            json!({
+                "tool_results": [{
+                    "tool_call_id": "toolu_read",
+                    "content": "first result"
+                }]
+            }),
+        );
+
+        let replayed = completed_anthropic_tool_resume_result_from_detail(
+            &detail,
+            callback_task_id,
+            &json!({
+                "tool_results": [{
+                    "tool_call_id": "toolu_read",
+                    "content": "different result"
+                }]
+            }),
+        );
+
+        assert!(replayed.is_none());
+    }
+
+    fn completed_callback_detail(
+        callback_task_id: Uuid,
+        response_payload: Value,
+    ) -> domain::ApplicationRunDetail {
+        let run_id = Uuid::from_u128(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee);
+        let application_id = Uuid::from_u128(0xffffffffffffffffffffffffffffffff);
+        let node_run_id = Uuid::from_u128(0x11111111111111111111111111111111);
+        let created_at = OffsetDateTime::UNIX_EPOCH;
+
+        domain::ApplicationRunDetail {
+            flow_run: domain::FlowRunRecord {
+                id: run_id,
+                application_id,
+                flow_id: Uuid::from_u128(0x22222222222222222222222222222222),
+                draft_id: Uuid::from_u128(0x33333333333333333333333333333333),
+                compiled_plan_id: Some(Uuid::from_u128(0x44444444444444444444444444444444)),
+                debug_session_id: String::new(),
+                flow_schema_version: "1flowbase.flow/v2".to_string(),
+                document_hash: "hash".to_string(),
+                run_mode: domain::FlowRunMode::PublishedApiRun,
+                target_node_id: None,
+                title: "completed callback".to_string(),
+                status: domain::FlowRunStatus::Succeeded,
+                input_payload: json!({}),
+                output_payload: json!({ "answer": "stored answer" }),
+                error_payload: None,
+                created_by: Uuid::from_u128(0x55555555555555555555555555555555),
+                authorized_account: None,
+                api_key_id: Some(Uuid::from_u128(0x66666666666666666666666666666666)),
+                publication_version_id: Some(Uuid::from_u128(0x77777777777777777777777777777777)),
+                external_user: Some("external-user".to_string()),
+                external_conversation_id: Some("external-session".to_string()),
+                external_trace_id: None,
+                compatibility_mode: Some("anthropic-messages-v1".to_string()),
+                idempotency_key: None,
+                started_at: created_at,
+                finished_at: Some(created_at),
+                created_at,
+                updated_at: created_at,
+            },
+            node_runs: Vec::new(),
+            checkpoints: Vec::new(),
+            callback_tasks: vec![domain::CallbackTaskRecord {
+                id: callback_task_id,
+                flow_run_id: run_id,
+                node_run_id,
+                callback_kind: "llm_tool_calls".to_string(),
+                status: domain::CallbackTaskStatus::Completed,
+                request_payload: json!({}),
+                response_payload: Some(response_payload),
+                external_ref_payload: None,
+                created_at,
+                completed_at: Some(created_at),
+            }],
+            events: Vec::new(),
+        }
     }
 }
