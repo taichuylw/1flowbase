@@ -797,6 +797,70 @@ describe('ApplicationLogsPage - floating windows', () => {
     });
   }, 20_000);
 
+  test('lets opened floating windows move independently after initial placement', async () => {
+    innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    innerHeightSpy = vi
+      .spyOn(window, 'innerHeight', 'get')
+      .mockReturnValue(900);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const runDetailWindow = await screen.findByTestId(
+      'application-logs-floating-run-detail'
+    );
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const conversationLogWindow = await screen.findByTestId(
+      'application-logs-floating-conversation-log'
+    );
+
+    expect(runDetailWindow).toHaveStyle({
+      left: '888px',
+      top: '112px',
+      width: '360px'
+    });
+    expect(conversationLogWindow).toHaveStyle({
+      left: '512px',
+      top: '112px',
+      width: '360px'
+    });
+
+    fireEvent.mouseDown(within(conversationLogWindow).getByText('对话日志'), {
+      button: 0,
+      clientX: 560,
+      clientY: 130
+    });
+    fireEvent.mouseMove(window, {
+      clientX: 740,
+      clientY: 170
+    });
+    fireEvent.mouseUp(window);
+
+    expect(conversationLogWindow).toHaveStyle({
+      left: '692px',
+      top: '152px'
+    });
+    expect(runDetailWindow).toHaveStyle({
+      left: '888px',
+      top: '112px'
+    });
+  }, 20_000);
+
   test('keeps the runs table layout unchanged while floating windows are open', async () => {
     innerHeightSpy = vi
       .spyOn(window, 'innerHeight', 'get')
