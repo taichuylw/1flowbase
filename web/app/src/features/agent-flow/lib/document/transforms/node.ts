@@ -9,6 +9,7 @@ import { createEdgeDocument } from '../edge-factory';
 import { createNodeDocument } from '../node-factory';
 import type { NodePickerOption } from '../../plugin-node-definitions';
 import { getOutgoingEdges, getNodeById } from '../selectors';
+import { shiftDownstreamNodesBFS } from './layout';
 
 const NODE_GAP_X = 280;
 
@@ -275,20 +276,6 @@ export function insertNodeAfter(
   const outgoingEdges = getOutgoingEdges(document, anchorNodeId);
   const nextPositionX = anchorNode.position.x + NODE_GAP_X;
 
-  const shiftedNodes = document.graph.nodes.map((candidate) =>
-    candidate.id !== anchorNodeId &&
-    candidate.containerId === anchorNode.containerId &&
-    candidate.position.x >= nextPositionX
-      ? {
-          ...candidate,
-          position: {
-            ...candidate.position,
-            x: candidate.position.x + NODE_GAP_X
-          }
-        }
-      : candidate
-  );
-
   const insertedNode = {
     ...node,
     containerId: anchorNode.containerId,
@@ -298,10 +285,10 @@ export function insertNodeAfter(
     }
   };
 
-  return {
+  const intermediateDoc = {
     ...document,
     graph: {
-      nodes: [...shiftedNodes, insertedNode],
+      nodes: [...document.graph.nodes, insertedNode],
       edges: [
         ...document.graph.edges.filter((edge) => edge.source !== anchorNodeId),
         createEdgeDocument({
@@ -324,4 +311,6 @@ export function insertNodeAfter(
       ]
     }
   };
+
+  return shiftDownstreamNodesBFS(intermediateDoc, insertedNode.id, NODE_GAP_X);
 }
