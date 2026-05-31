@@ -363,30 +363,28 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('75.0%')).toBeInTheDocument();
     expect(screen.queryByText('运行中数未包含')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Running statistical caliber' })
+      screen.getByRole('button', { name: '运行统计口径' })
     ).toBeInTheDocument();
     expect(screen.getByText('openai-responses-v1')).toBeInTheDocument();
-    expect(screen.getByText('Runtime activity')).toBeInTheDocument();
-    expect(screen.getByText('Slow')).toBeInTheDocument();
-    expect(screen.getByText('5m failure rate')).toBeInTheDocument();
-    expect(screen.getByText('New tokens')).toBeInTheDocument();
+    expect(screen.getByText('实时活动')).toBeInTheDocument();
+    expect(screen.getByText('偏慢')).toBeInTheDocument();
+    expect(screen.getByText('5 分钟失败率')).toBeInTheDocument();
+    expect(screen.getByText('较上周期新增')).toBeInTheDocument();
     expect(screen.getAllByText('5,600').length).toBeGreaterThan(0);
     expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
     expect(
       screen
-        .getByText('Runtime activity')
+        .getByText('实时活动')
         .compareDocumentPosition(
-          screen.getByRole('radio', { name: 'past 7 days' })
+          screen.getByRole('radio', { name: '过去 7 天' })
         ) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
-      screen.getByRole('button', { name: 'Runtime activity' })
+      screen.getByRole('button', { name: '实时活动' })
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText('Current service instance realtime data')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('当前服务实例实时数据')).not.toBeInTheDocument();
     expect(screen.getByText('SSE')).toBeInTheDocument();
-    expect(screen.getByText('Model requests')).toBeInTheDocument();
+    expect(screen.getByText('模型请求中')).toBeInTheDocument();
     expect(screen.getByText('customer-1')).toBeInTheDocument();
     expect(screen.getByText('Customer API')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
@@ -401,7 +399,7 @@ describe('ApplicationMonitoringPage', () => {
     );
 
     expect(await screen.findByText('12')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('radio', { name: 'past 4 weeks' }));
+    fireEvent.click(screen.getByRole('radio', { name: '过去 4 周' }));
 
     await waitFor(() => {
       expect(
@@ -425,9 +423,7 @@ describe('ApplicationMonitoringPage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(
-      await screen.findByRole('radio', { name: 'past 24 hours' })
-    );
+    fireEvent.click(await screen.findByRole('radio', { name: '过去 24 小时' }));
 
     await waitFor(() => {
       const option = echartsMock.chart.setOption.mock.calls

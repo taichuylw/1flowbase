@@ -155,7 +155,7 @@ describe('ApiDocsExplorer', () => {
       }
     );
 
-    const { container } = render(
+    render(
       <AppProviders>
         <ApiDocsExplorer
           queryState={{
@@ -193,23 +193,22 @@ describe('ApiDocsExplorer', () => {
       { offset: 0, limit: 20, q: null }
     );
 
-    const scrollArea = container.querySelector(
-      '.api-docs-panel__pane-body'
-    ) as HTMLElement | null;
-    expect(scrollArea).not.toBeNull();
-    Object.defineProperty(scrollArea!, 'scrollHeight', {
+    const scrollArea = screen.getByTestId(
+      'api-docs-operation-list-scroll-area'
+    );
+    Object.defineProperty(scrollArea, 'scrollHeight', {
       value: 1200,
       configurable: true
     });
-    Object.defineProperty(scrollArea!, 'clientHeight', {
+    Object.defineProperty(scrollArea, 'clientHeight', {
       value: 400,
       configurable: true
     });
-    Object.defineProperty(scrollArea!, 'scrollTop', {
+    Object.defineProperty(scrollArea, 'scrollTop', {
       value: 700,
       configurable: true
     });
-    fireEvent.scroll(scrollArea!);
+    fireEvent.scroll(scrollArea);
 
     expect(
       await screen.findByRole('button', { name: /get \/api\/v1\/items\/24/i })

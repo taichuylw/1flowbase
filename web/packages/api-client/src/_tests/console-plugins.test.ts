@@ -17,13 +17,9 @@ import {
 } from '../console-plugins';
 
 describe('console-plugins host infrastructure cache client', () => {
-  const apiFetchSpy = vi
-    .spyOn(transport, 'apiFetch')
-    .mockImplementation(async (input) => input as never);
-
-  test('transport spy is active', () => {
-    expect(apiFetchSpy).toHaveBeenCalledTimes(0);
-  });
+  vi.spyOn(transport, 'apiFetch').mockImplementation(
+    async (input) => input as never
+  );
 
   test('points cache overview at the host infrastructure cache route', async () => {
     await expect(

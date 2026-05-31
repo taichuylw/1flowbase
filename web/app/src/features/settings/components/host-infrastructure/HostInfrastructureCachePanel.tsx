@@ -33,7 +33,6 @@ import {
   revealSettingsHostInfrastructureCacheEntry,
   settingsHostInfrastructureCacheEntriesQueryKey,
   settingsHostInfrastructureCacheOverviewQueryKey,
-  type SettingsHostInfrastructureCacheDomain,
   type SettingsHostInfrastructureCacheEntry,
   type SettingsHostInfrastructureCacheEntryValue
 } from '../../api/host-infrastructure';
@@ -51,7 +50,7 @@ function formatBytes(value: number) {
 
 function formatTtl(value: number | null) {
   if (value == null) {
-    return i18nText("settings", "auto.no_expiry");
+    return i18nText('settings', 'auto.no_expiry');
   }
   if (value < 60) {
     return `${value}s`;
@@ -64,14 +63,14 @@ function formatTtl(value: number | null) {
 
 function formatUnixTimestamp(value: number | null) {
   if (value == null) {
-    return i18nText("settings", "auto.unknown");
+    return i18nText('settings', 'auto.unknown');
   }
   return formatDateTime(new Date(value * 1000));
 }
 
 function formatUpdatedAt(value: number) {
   if (!value) {
-    return i18nText("settings", "auto.not_refreshed_yet");
+    return i18nText('settings', 'auto.not_refreshed_yet');
   }
   return formatTime(new Date(value));
 }
@@ -92,7 +91,10 @@ export function HostInfrastructureCachePanel({
     queryKey: settingsHostInfrastructureCacheOverviewQueryKey,
     queryFn: fetchSettingsHostInfrastructureCacheOverview
   });
-  const domains = overviewQuery.data?.domains ?? [];
+  const domains = useMemo(
+    () => overviewQuery.data?.domains ?? [],
+    [overviewQuery.data?.domains]
+  );
   const capabilities = overviewQuery.data?.capabilities;
   const entriesQuery = useQuery({
     queryKey: settingsHostInfrastructureCacheEntriesQueryKey(activeDomain),
@@ -153,7 +155,7 @@ export function HostInfrastructureCachePanel({
     },
     onSuccess: async (_, entry) => {
       await refreshCacheQueries(entry.domain_code);
-      messageApi.success(i18nText("settings", "auto.cache_entry_cleared"));
+      messageApi.success(i18nText('settings', 'auto.cache_entry_cleared'));
     }
   });
   const clearDomainMutation = useMutation({
@@ -165,7 +167,7 @@ export function HostInfrastructureCachePanel({
     },
     onSuccess: async (_, domainCode) => {
       await refreshCacheQueries(domainCode);
-      messageApi.success(i18nText("settings", "auto.cache_domain_cleared"));
+      messageApi.success(i18nText('settings', 'auto.cache_domain_cleared'));
     }
   });
 
@@ -213,37 +215,47 @@ export function HostInfrastructureCachePanel({
                 disabled={!canReveal || revealMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: i18nText("settings", "auto.view_cache_value"),
-                    content:
-                      i18nText("settings", "auto.operation_may_display_user_input_run_logs_model_output_business"),
-                    okText: i18nText("settings", "auto.view_record_audits"),
-                    cancelText: i18nText("settings", "auto.cancel"),
+                    title: i18nText('settings', 'auto.view_cache_value'),
+                    content: i18nText(
+                      'settings',
+                      'auto.operation_may_display_user_input_run_logs_model_output_business'
+                    ),
+                    okText: i18nText('settings', 'auto.view_record_audits'),
+                    cancelText: i18nText('settings', 'auto.cancel'),
                     onOk: () => revealMutation.mutateAsync(entry)
                   });
                 }}
                 size="small"
               >
-                {i18nText("settings", "auto.view_value")}</Button>
+                {i18nText('settings', 'auto.view_value')}
+              </Button>
               <Button
                 danger
                 icon={<DeleteOutlined />}
                 disabled={!canClearEntry || clearEntryMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: i18nText("settings", "auto.clear_cache_entry"),
-                    content: i18nText("settings", "auto.cleaning_cache_regenerated_next_visit", { value1: entry.key }),
-                    okText: i18nText("settings", "auto.clean_log_audits"),
+                    title: i18nText('settings', 'auto.clear_cache_entry'),
+                    content: i18nText(
+                      'settings',
+                      'auto.cleaning_cache_regenerated_next_visit',
+                      { value1: entry.key }
+                    ),
+                    okText: i18nText('settings', 'auto.clean_log_audits'),
                     okButtonProps: { danger: true },
-                    cancelText: i18nText("settings", "auto.cancel"),
+                    cancelText: i18nText('settings', 'auto.cancel'),
                     onOk: () => clearEntryMutation.mutateAsync(entry)
                   });
                 }}
                 size="small"
               >
-                {i18nText("settings", "auto.clean_up")}</Button>
+                {i18nText('settings', 'auto.clean_up')}
+              </Button>
             </Space>
           ) : (
-            <Typography.Text type="secondary">{i18nText("settings", "auto.metadata_only")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {i18nText('settings', 'auto.metadata_only')}
+            </Typography.Text>
           )
       }
     ],
@@ -269,15 +281,22 @@ export function HostInfrastructureCachePanel({
         <Alert
           type="warning"
           showIcon
-          message={i18nText("settings", "auto.cache_provider_support_entry_inspection")}
-          description={i18nText("settings", "auto.available_capabilities_exposed_provider_cache_domains_entries_values_currently_listed")}
+          message={i18nText(
+            'settings',
+            'auto.cache_provider_support_entry_inspection'
+          )}
+          description={i18nText(
+            'settings',
+            'auto.available_capabilities_exposed_provider_cache_domains_entries_values_currently_listed'
+          )}
         />
         <Button
           icon={<ReloadOutlined />}
           onClick={() => overviewQuery.refetch()}
           loading={overviewQuery.isFetching}
         >
-          {i18nText("settings", "auto.refresh_provider_status")}</Button>
+          {i18nText('settings', 'auto.refresh_provider_status')}
+        </Button>
       </Space>
     );
   }
@@ -297,7 +316,8 @@ export function HostInfrastructureCachePanel({
             Value inspection {capabilities?.reveal_value ? 'on' : 'off'}
           </Tag>
           <Typography.Text type="secondary">
-            {i18nText("settings", "auto.recently_refreshed_alt")}{formatUpdatedAt(overviewQuery.dataUpdatedAt)}
+            {i18nText('settings', 'auto.recently_refreshed_alt')}
+            {formatUpdatedAt(overviewQuery.dataUpdatedAt)}
           </Typography.Text>
         </Space>
         <Button
@@ -310,30 +330,44 @@ export function HostInfrastructureCachePanel({
           }}
           loading={overviewQuery.isFetching || entriesQuery.isFetching}
         >
-          {i18nText("settings", "auto.refresh")}</Button>
+          {i18nText('settings', 'auto.refresh')}
+        </Button>
       </div>
 
       {!canManage ? (
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.permissions_view_cache_metadata")}
-          description={i18nText("settings", "auto.viewing_value_copying_json_clearing_cache_require_infrastructure_manage_permissions")}
+          message={i18nText('settings', 'auto.permissions_view_cache_metadata')}
+          description={i18nText(
+            'settings',
+            'auto.viewing_value_copying_json_clearing_cache_require_infrastructure_manage_permissions'
+          )}
         />
       ) : null}
 
-      {overviewQuery.isSuccess && capabilities?.list_domains && !domains.length ? (
+      {overviewQuery.isSuccess &&
+      capabilities?.list_domains &&
+      !domains.length ? (
         <Alert
           type="info"
           showIcon
-          message={i18nText("settings", "auto.currently_observable_entries_cache_store")}
-          description={i18nText("settings", "auto.api_connected_local_moka_cache_store_api_server_process_cache")}
+          message={i18nText(
+            'settings',
+            'auto.currently_observable_entries_cache_store'
+          )}
+          description={i18nText(
+            'settings',
+            'auto.api_connected_local_moka_cache_store_api_server_process_cache'
+          )}
         />
       ) : null}
 
       <div className="host-cache-panel__layout">
         <aside className="host-cache-panel__domains">
-          <div className="host-cache-panel__section-title">{i18nText("settings", "auto.cache_domain")}</div>
+          <div className="host-cache-panel__section-title">
+            {i18nText('settings', 'auto.cache_domain')}
+          </div>
           {domains.length ? (
             <Space
               direction="vertical"
@@ -365,7 +399,7 @@ export function HostInfrastructureCachePanel({
           ) : (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={i18nText("settings", "auto.cache_domain_yet")}
+              description={i18nText('settings', 'auto.cache_domain_yet')}
             />
           )}
         </aside>
@@ -374,7 +408,8 @@ export function HostInfrastructureCachePanel({
           <div className="host-cache-panel__entries-header">
             <Space direction="vertical" size={2}>
               <Typography.Text strong>
-                {activeDomain ?? i18nText("settings", "auto.select_cache_domain")}
+                {activeDomain ??
+                  i18nText('settings', 'auto.select_cache_domain')}
               </Typography.Text>
               {activeDomainSummary ? (
                 <Typography.Text type="secondary">
@@ -390,16 +425,21 @@ export function HostInfrastructureCachePanel({
                 disabled={!canClearDomain || clearDomainMutation.isPending}
                 onClick={() => {
                   modal.confirm({
-                    title: i18nText("settings", "auto.clean_cache_domain"),
-                    content: i18nText("settings", "auto.cleaning_next_access_regenerate_cache_database_runtime_operation_delete_business", { value1: activeDomain }),
-                    okText: i18nText("settings", "auto.clean_log_audits"),
+                    title: i18nText('settings', 'auto.clean_cache_domain'),
+                    content: i18nText(
+                      'settings',
+                      'auto.cleaning_next_access_regenerate_cache_database_runtime_operation_delete_business',
+                      { value1: activeDomain }
+                    ),
+                    okText: i18nText('settings', 'auto.clean_log_audits'),
                     okButtonProps: { danger: true },
-                    cancelText: i18nText("settings", "auto.cancel"),
+                    cancelText: i18nText('settings', 'auto.cancel'),
                     onOk: () => clearDomainMutation.mutateAsync(activeDomain)
                   });
                 }}
               >
-                {i18nText("settings", "auto.clean_cache_domain")}</Button>
+                {i18nText('settings', 'auto.clean_cache_domain')}
+              </Button>
             ) : null}
           </div>
           <Table
@@ -451,7 +491,10 @@ export function HostInfrastructureCachePanel({
               value={revealedEntry.value}
               collapsible={false}
               height="360px"
-              copySuccessMessage={i18nText("settings", "auto.cache_json_copied")}
+              copySuccessMessage={i18nText(
+                'settings',
+                'auto.cache_json_copied'
+              )}
             />
           </Space>
         ) : null}

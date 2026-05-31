@@ -57,11 +57,11 @@ const TIME_RANGE_OPTIONS: Array<{
   label: string;
   value: MonitoringTimeRange;
 }> = [
-  { label: i18nText("applications", "auto.past_twenty_four_hours"), value: 1 },
-  { label: i18nText("applications", "auto.past_seven_days"), value: 7 },
-  { label: i18nText("applications", "auto.past_four_weeks"), value: 28 },
-  { label: i18nText("applications", "auto.past_three_months"), value: 90 },
-  { label: i18nText("applications", "auto.past_twelve_months"), value: 365 }
+  { label: i18nText('applications', 'auto.past_twenty_four_hours'), value: 1 },
+  { label: i18nText('applications', 'auto.past_seven_days'), value: 7 },
+  { label: i18nText('applications', 'auto.past_four_weeks'), value: 28 },
+  { label: i18nText('applications', 'auto.past_three_months'), value: 90 },
+  { label: i18nText('applications', 'auto.past_twelve_months'), value: 365 }
 ];
 
 function getMonitoringBucket(
@@ -153,14 +153,14 @@ function formatTrendBucket(
 }
 
 function sourceLabel(source: string) {
-  return source === 'public_api' ? 'Public API' : i18nText("applications", "auto.console");
+  return source === 'public_api'
+    ? 'Public API'
+    : i18nText('applications', 'auto.console');
 }
 
-function statisticValue(value: string | number) {
-  return value;
-}
-
-function runtimeHealthLabel(state: ApplicationRuntimeActivity['health']['state']) {
+function runtimeHealthLabel(
+  state: ApplicationRuntimeActivity['health']['state']
+) {
   switch (state) {
     case 'busy':
       return i18nText('applications', 'auto.runtime_health_busy');
@@ -238,7 +238,10 @@ function RuntimeActivityGroup({
 }) {
   return (
     <section className="runtime-activity-group">
-      <Typography.Text className="runtime-activity-group__title" type="secondary">
+      <Typography.Text
+        className="runtime-activity-group__title"
+        type="secondary"
+      >
         {title}
       </Typography.Text>
       <div className="runtime-activity-group__metrics">{children}</div>
@@ -307,7 +310,9 @@ function RuntimeActivityPanel({
   return (
     <MonitoringPanel title={<RuntimeActivityTitle />}>
       <div className="runtime-activity-panel__groups">
-        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_overview')}>
+        <RuntimeActivityGroup
+          title={i18nText('applications', 'auto.runtime_group_overview')}
+        >
           <RuntimeActivityMetric
             label={i18nText('applications', 'auto.runtime_health')}
             value={runtimeHealthLabel(health.state)}
@@ -325,7 +330,9 @@ function RuntimeActivityPanel({
           />
         </RuntimeActivityGroup>
 
-        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_protocol')}>
+        <RuntimeActivityGroup
+          title={i18nText('applications', 'auto.runtime_group_protocol')}
+        >
           <RuntimeActivityMetric
             label="HTTP"
             value={formatInteger(active.http_requests)}
@@ -343,9 +350,14 @@ function RuntimeActivityPanel({
           />
         </RuntimeActivityGroup>
 
-        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_execution')}>
+        <RuntimeActivityGroup
+          title={i18nText('applications', 'auto.runtime_group_execution')}
+        >
           <RuntimeActivityMetric
-            label={i18nText('applications', 'auto.application_executions_active')}
+            label={i18nText(
+              'applications',
+              'auto.application_executions_active'
+            )}
             value={formatInteger(active.application_executions)}
             tone="gold"
           />
@@ -371,7 +383,9 @@ function RuntimeActivityPanel({
           />
         </RuntimeActivityGroup>
 
-        <RuntimeActivityGroup title={i18nText('applications', 'auto.runtime_group_five_minutes')}>
+        <RuntimeActivityGroup
+          title={i18nText('applications', 'auto.runtime_group_five_minutes')}
+        >
           <RuntimeActivityMetric
             label={i18nText('applications', 'auto.five_minute_failure_rate')}
             value={formatPercent(health.failure_rate_5m)}
@@ -406,19 +420,19 @@ function RuntimeActivityPanel({
 const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
   [
     {
-      title: i18nText("applications", "auto.protocol"),
+      title: i18nText('applications', 'auto.protocol'),
       dataIndex: 'protocol',
       key: 'protocol'
     },
     {
-      title: i18nText("applications", "auto.request_count"),
+      title: i18nText('applications', 'auto.request_count'),
       dataIndex: 'request_count',
       key: 'request_count',
       align: 'right',
       render: (value: number) => formatInteger(value)
     },
     {
-      title: i18nText("applications", "auto.success_rate"),
+      title: i18nText('applications', 'auto.success_rate'),
       dataIndex: 'success_rate',
       key: 'success_rate',
       align: 'right',
@@ -454,7 +468,7 @@ const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
       }
     },
     {
-      title: i18nText("applications", "auto.average_duration"),
+      title: i18nText('applications', 'auto.average_duration'),
       dataIndex: 'avg_duration_ms',
       key: 'avg_duration_ms',
       align: 'right',
@@ -480,20 +494,20 @@ const protocolColumns: ColumnsType<ApplicationRunMonitoringProtocolBreakdown> =
 
 const sourceColumns: ColumnsType<ApplicationRunMonitoringSourceBreakdown> = [
   {
-    title: i18nText("applications", "auto.source"),
+    title: i18nText('applications', 'auto.source'),
     dataIndex: 'source',
     key: 'source',
     render: sourceLabel
   },
   {
-    title: i18nText("applications", "auto.request_count"),
+    title: i18nText('applications', 'auto.request_count'),
     dataIndex: 'request_count',
     key: 'request_count',
     align: 'right',
     render: (value: number) => formatInteger(value)
   },
   {
-    title: i18nText("applications", "auto.success_rate"),
+    title: i18nText('applications', 'auto.success_rate'),
     dataIndex: 'success_rate',
     key: 'success_rate',
     align: 'right',
@@ -560,7 +574,7 @@ function usageColumns<
         renderDimension?.(value, record) ?? value ?? '-'
     },
     {
-      title: i18nText("applications", "auto.request_count"),
+      title: i18nText('applications', 'auto.request_count'),
       dataIndex: 'request_count',
       key: 'request_count',
       align: 'right',
@@ -586,7 +600,7 @@ function usageColumns<
       }
     },
     {
-      title: i18nText("applications", "auto.failure_count"),
+      title: i18nText('applications', 'auto.failure_count'),
       dataIndex: 'failed_count',
       key: 'failed_count',
       align: 'right',
@@ -607,7 +621,7 @@ function usageColumns<
       }
     },
     {
-      title: i18nText("applications", "auto.average_duration"),
+      title: i18nText('applications', 'auto.average_duration'),
       dataIndex: 'avg_duration_ms',
       key: 'avg_duration_ms',
       align: 'right',
@@ -650,46 +664,6 @@ function usageColumns<
     }
   ];
 }
-
-const runRankColumns: ColumnsType<ApplicationRunMonitoringRunRank> = [
-  {
-    title: i18nText("applications", "auto.run"),
-    dataIndex: 'title',
-    key: 'title',
-    render: (value: string, run) => (
-      <Space direction="vertical" size={0}>
-        <Typography.Text>{value}</Typography.Text>
-        <Typography.Text type="secondary">{run.flow_run_id}</Typography.Text>
-      </Space>
-    )
-  },
-  {
-    title: i18nText("applications", "auto.status"),
-    dataIndex: 'status',
-    key: 'status'
-  },
-  {
-    title: i18nText("applications", "auto.duration"),
-    dataIndex: 'duration_ms',
-    key: 'duration_ms',
-    align: 'right',
-    render: (value: number | null) => formatDuration(value)
-  },
-  {
-    title: 'Tokens',
-    dataIndex: 'total_tokens',
-    key: 'total_tokens',
-    align: 'right',
-    render: (value: number | null) =>
-      value == null ? '-' : formatInteger(value)
-  },
-  {
-    title: i18nText("applications", "auto.start_time"),
-    dataIndex: 'started_at',
-    key: 'started_at',
-    render: formatTime
-  }
-];
 
 function MonitoringPanel({
   children,
@@ -817,7 +791,7 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
         data: report.tokens_trend.map((point) => point.total_tokens)
       },
       {
-        name: i18nText("applications", "auto.run_count"),
+        name: i18nText('applications', 'auto.run_count'),
         type: 'bar',
         barMaxWidth: 16,
         itemStyle: {
@@ -880,7 +854,7 @@ function buildProtocolOption(report: ApplicationRunMonitoringReport) {
     },
     series: [
       {
-        name: i18nText("applications", "auto.request_count"),
+        name: i18nText('applications', 'auto.request_count'),
         type: 'bar',
         barMaxWidth: 24,
         itemStyle: {
@@ -923,7 +897,7 @@ function buildSourceOption(report: ApplicationRunMonitoringReport) {
     },
     title: {
       text: formatInteger(totalRequests),
-      subtext: i18nText("applications", "auto.total_requests"),
+      subtext: i18nText('applications', 'auto.total_requests'),
       left: 'center',
       top: '38%',
       textStyle: {
@@ -939,7 +913,7 @@ function buildSourceOption(report: ApplicationRunMonitoringReport) {
     },
     series: [
       {
-        name: i18nText("applications", "auto.source"),
+        name: i18nText('applications', 'auto.source'),
         type: 'pie',
         radius: ['55%', '75%'],
         center: ['50%', '46%'],
@@ -1065,7 +1039,7 @@ export function ApplicationMonitoringPage({
             ...report.authorized_accounts.map((item) => item.request_count)
           )
         : 1,
-    [report?.authorized_accounts]
+    [report]
   );
   const maxAuthTokens = useMemo(
     () =>
@@ -1075,7 +1049,7 @@ export function ApplicationMonitoringPage({
             ...report.authorized_accounts.map((item) => item.total_tokens)
           )
         : 1,
-    [report?.authorized_accounts]
+    [report]
   );
 
   const maxExtUserRequests = useMemo(
@@ -1086,14 +1060,14 @@ export function ApplicationMonitoringPage({
             ...report.external_users.map((item) => item.request_count)
           )
         : 1,
-    [report?.external_users]
+    [report]
   );
   const maxExtUserTokens = useMemo(
     () =>
       report
         ? Math.max(1, ...report.external_users.map((item) => item.total_tokens))
         : 1,
-    [report?.external_users]
+    [report]
   );
 
   const maxApiKeyRequests = useMemo(
@@ -1101,14 +1075,14 @@ export function ApplicationMonitoringPage({
       report
         ? Math.max(1, ...report.api_keys.map((item) => item.request_count))
         : 1,
-    [report?.api_keys]
+    [report]
   );
   const maxApiKeyTokens = useMemo(
     () =>
       report
         ? Math.max(1, ...report.api_keys.map((item) => item.total_tokens))
         : 1,
-    [report?.api_keys]
+    [report]
   );
 
   const maxExtConvRequests = useMemo(
@@ -1119,7 +1093,7 @@ export function ApplicationMonitoringPage({
             ...report.external_conversations.map((item) => item.request_count)
           )
         : 1,
-    [report?.external_conversations]
+    [report]
   );
   const maxExtConvTokens = useMemo(
     () =>
@@ -1129,12 +1103,12 @@ export function ApplicationMonitoringPage({
             ...report.external_conversations.map((item) => item.total_tokens)
           )
         : 1,
-    [report?.external_conversations]
+    [report]
   );
 
   const activeRangeLabel =
     TIME_RANGE_OPTIONS.find((option) => option.value === timeRangeDays)
-      ?.label ?? i18nText("applications", "auto.past_seven_days");
+      ?.label ?? i18nText('applications', 'auto.past_seven_days');
   const tokenTrendOption = useMemo(
     () => (report ? buildTokenTrendOption(report) : null),
     [report]
@@ -1154,7 +1128,12 @@ export function ApplicationMonitoringPage({
   }
 
   if (reportQuery.isError || !report) {
-    return <Result status="error" title={i18nText("applications", "auto.monitoring_report_load_failed")} />;
+    return (
+      <Result
+        status="error"
+        title={i18nText('applications', 'auto.monitoring_report_load_failed')}
+      />
+    );
   }
 
   return (
@@ -1181,13 +1160,23 @@ export function ApplicationMonitoringPage({
         >
           <Typography.Text type="secondary">
             {reportQuery.isFetching
-              ? i18nText("applications", "auto.refreshing")
-              : i18nText("applications", "auto.current_scope", { value1: activeRangeLabel })}
+              ? i18nText('applications', 'auto.refreshing')
+              : i18nText('applications', 'auto.current_scope', {
+                  value1: activeRangeLabel
+                })}
           </Typography.Text>
           {!report.overview.running_count_included ? (
-            <Tooltip title={i18nText("applications", "auto.only_finished_runs_counted")}>
+            <Tooltip
+              title={i18nText(
+                'applications',
+                'auto.only_finished_runs_counted'
+              )}
+            >
               <Button
-                aria-label={i18nText("applications", "auto.run_statistics_caliber")}
+                aria-label={i18nText(
+                  'applications',
+                  'auto.run_statistics_caliber'
+                )}
                 className="application-monitoring-page__scope-help"
                 icon={<QuestionCircleOutlined aria-hidden="true" />}
                 size="small"
@@ -1196,7 +1185,10 @@ export function ApplicationMonitoringPage({
             </Tooltip>
           ) : null}
           <Button
-            aria-label={i18nText("applications", "auto.refresh_monitoring_report")}
+            aria-label={i18nText(
+              'applications',
+              'auto.refresh_monitoring_report'
+            )}
             icon={<ReloadOutlined aria-hidden="true" />}
             loading={reportQuery.isFetching}
             onClick={() => {
@@ -1207,13 +1199,17 @@ export function ApplicationMonitoringPage({
       </div>
 
       <section className="application-monitoring-page__metrics">
-        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_outcome")}>
+        <MonitoringMetricGroup
+          title={i18nText('applications', 'auto.monitoring_group_outcome')}
+        >
           <div className="application-monitoring-metric application-monitoring-metric--blue">
             <div className="metric-card__icon-wrapper">
               <DashboardOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.total_runs")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.total_runs')}
+              </span>
               <span className="metric-card__value">
                 {formatInteger(report.overview.total_count)}
               </span>
@@ -1225,7 +1221,9 @@ export function ApplicationMonitoringPage({
               <SafetyCertificateOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.success_rate")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.success_rate')}
+              </span>
               <span className="metric-card__value">
                 {formatPercent(report.overview.success_rate)}
               </span>
@@ -1237,7 +1235,9 @@ export function ApplicationMonitoringPage({
               <CloseCircleOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.failure_count")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.failure_count')}
+              </span>
               <span className="metric-card__value">
                 {formatInteger(report.overview.failed_count)}
               </span>
@@ -1245,13 +1245,17 @@ export function ApplicationMonitoringPage({
           </div>
         </MonitoringMetricGroup>
 
-        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_performance")}>
+        <MonitoringMetricGroup
+          title={i18nText('applications', 'auto.monitoring_group_performance')}
+        >
           <div className="application-monitoring-metric application-monitoring-metric--gold">
             <div className="metric-card__icon-wrapper">
               <ClockCircleOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.slow_request_rate")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.slow_request_rate')}
+              </span>
               <span className="metric-card__value">
                 {formatPercent(report.duration.slow_run_rate)}
               </span>
@@ -1263,7 +1267,12 @@ export function ApplicationMonitoringPage({
               <HourglassOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.percentile_ninety_five_duration")}</span>
+              <span className="metric-card__title">
+                {i18nText(
+                  'applications',
+                  'auto.percentile_ninety_five_duration'
+                )}
+              </span>
               <span className="metric-card__value">
                 {formatDuration(report.duration.p95_duration_ms)}
               </span>
@@ -1271,13 +1280,17 @@ export function ApplicationMonitoringPage({
           </div>
         </MonitoringMetricGroup>
 
-        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_tokens")}>
+        <MonitoringMetricGroup
+          title={i18nText('applications', 'auto.monitoring_group_tokens')}
+        >
           <div className="application-monitoring-metric application-monitoring-metric--purple">
             <div className="metric-card__icon-wrapper">
               <DatabaseOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.total_tokens_amount")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.total_tokens_amount')}
+              </span>
               <span className="metric-card__value">
                 {formatInteger(report.tokens.total_tokens_sum)}
               </span>
@@ -1289,7 +1302,9 @@ export function ApplicationMonitoringPage({
               <DatabaseOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{tokenComparison?.label}</span>
+              <span className="metric-card__title">
+                {tokenComparison?.label}
+              </span>
               <span className="metric-card__value">
                 {tokenComparison?.value}
               </span>
@@ -1297,13 +1312,17 @@ export function ApplicationMonitoringPage({
           </div>
         </MonitoringMetricGroup>
 
-        <MonitoringMetricGroup title={i18nText("applications", "auto.monitoring_group_execution")}>
+        <MonitoringMetricGroup
+          title={i18nText('applications', 'auto.monitoring_group_execution')}
+        >
           <div className="application-monitoring-metric application-monitoring-metric--orange">
             <div className="metric-card__icon-wrapper">
               <ApiOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.tool_callback")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.tool_callback')}
+              </span>
               <span className="metric-card__value">
                 {formatInteger(report.tool_callbacks.total_tool_callback_count)}
               </span>
@@ -1315,7 +1334,9 @@ export function ApplicationMonitoringPage({
               <NodeIndexOutlined />
             </div>
             <div className="metric-card__content">
-              <span className="metric-card__title">{i18nText("applications", "auto.peak_concurrency")}</span>
+              <span className="metric-card__title">
+                {i18nText('applications', 'auto.peak_concurrency')}
+              </span>
               <span className="metric-card__value">
                 {formatInteger(report.concurrency.peak_concurrency)}
               </span>
@@ -1325,7 +1346,7 @@ export function ApplicationMonitoringPage({
       </section>
 
       <div className="application-monitoring-page__chart-grid">
-        <MonitoringPanel title={i18nText("applications", "auto.token_trend")}>
+        <MonitoringPanel title={i18nText('applications', 'auto.token_trend')}>
           {tokenTrendOption ? (
             <ApplicationMonitoringChart
               ariaLabel="Token trend chart"
@@ -1333,7 +1354,9 @@ export function ApplicationMonitoringPage({
             />
           ) : null}
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.protocol_distribution")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.protocol_distribution')}
+        >
           {protocolOption ? (
             <ApplicationMonitoringChart
               ariaLabel="Protocol distribution chart"
@@ -1341,7 +1364,9 @@ export function ApplicationMonitoringPage({
             />
           ) : null}
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.source_distribution")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.source_distribution')}
+        >
           {sourceOption ? (
             <ApplicationMonitoringChart
               ariaLabel="Source distribution chart"
@@ -1352,32 +1377,42 @@ export function ApplicationMonitoringPage({
       </div>
 
       <div className="application-monitoring-page__table-grid">
-        <MonitoringPanel title={i18nText("applications", "auto.duration_quality")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.duration_quality')}
+        >
           <div className="application-monitoring-page__quality-grid">
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <ClockCircleOutlined /> {i18nText("applications", "auto.average_duration")}</span>
+                <ClockCircleOutlined />{' '}
+                {i18nText('applications', 'auto.average_duration')}
+              </span>
               <span className="quality-metric-item__value">
                 {formatDuration(report.duration.avg_duration_ms)}
               </span>
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <DashboardOutlined /> {i18nText("applications", "auto.percentile_fifty_duration")}</span>
+                <DashboardOutlined />{' '}
+                {i18nText('applications', 'auto.percentile_fifty_duration')}
+              </span>
               <span className="quality-metric-item__value">
                 {formatDuration(report.duration.p50_duration_ms)}
               </span>
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <NodeIndexOutlined /> {i18nText("applications", "auto.average_real_node_count")}</span>
+                <NodeIndexOutlined />{' '}
+                {i18nText('applications', 'auto.average_real_node_count')}
+              </span>
               <span className="quality-metric-item__value">
                 {formatDecimal(report.nodes.avg_unique_node_count, 1)}
               </span>
             </div>
             <div className="quality-metric-item">
               <span className="quality-metric-item__label">
-                <ApiOutlined /> {i18nText("applications", "auto.average_tool_callback")}</span>
+                <ApiOutlined />{' '}
+                {i18nText('applications', 'auto.average_tool_callback')}
+              </span>
               <span className="quality-metric-item__value">
                 {formatDecimal(
                   report.tool_callbacks.avg_tool_callback_count,
@@ -1387,24 +1422,30 @@ export function ApplicationMonitoringPage({
             </div>
           </div>
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.protocol_details")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.protocol_details')}
+        >
           <MonitoringTable
             columns={protocolColumns}
             dataSource={report.protocols}
             rowKey="protocol"
           />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.source_details")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.source_details')}
+        >
           <MonitoringTable
             columns={sourceColumns}
             dataSource={report.sources}
             rowKey="source"
           />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.authorized_account")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.authorized_account')}
+        >
           <MonitoringTable<ApplicationRunMonitoringAuthorizedAccountUsage>
             columns={usageColumns(
-              i18nText("applications", "auto.account"),
+              i18nText('applications', 'auto.account'),
               'authorized_account',
               maxAuthRequests,
               maxAuthTokens
@@ -1413,10 +1454,12 @@ export function ApplicationMonitoringPage({
             rowKey={(record) => record.authorized_account ?? 'unknown'}
           />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.external_users")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.external_users')}
+        >
           <MonitoringTable<ApplicationRunMonitoringExternalUserUsage>
             columns={usageColumns(
-              i18nText("applications", "auto.external_users"),
+              i18nText('applications', 'auto.external_users'),
               'external_user',
               maxExtUserRequests,
               maxExtUserTokens
@@ -1439,10 +1482,12 @@ export function ApplicationMonitoringPage({
             rowKey="api_key_id"
           />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.external_sessions")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.external_sessions')}
+        >
           <MonitoringTable<ApplicationRunMonitoringExternalConversationUsage>
             columns={usageColumns(
-              i18nText("applications", "auto.session"),
+              i18nText('applications', 'auto.session'),
               'external_conversation_id',
               maxExtConvRequests,
               maxExtConvTokens
@@ -1451,10 +1496,14 @@ export function ApplicationMonitoringPage({
             rowKey={(record) => record.external_conversation_id ?? 'unknown'}
           />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.slowest_runs_top_ten")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.slowest_runs_top_ten')}
+        >
           <RunRankList runs={report.slowest_runs} metricType="duration" />
         </MonitoringPanel>
-        <MonitoringPanel title={i18nText("applications", "auto.high_token_runs_top_ten")}>
+        <MonitoringPanel
+          title={i18nText('applications', 'auto.high_token_runs_top_ten')}
+        >
           <RunRankList runs={report.high_token_runs} metricType="token" />
         </MonitoringPanel>
       </div>

@@ -91,7 +91,9 @@ function getNodeTitle(node: FrontStageTreeNode) {
     return node.title;
   }
 
-  return node.kind === 'group' ? i18nText("frontstage", "auto.unnamed_group") : i18nText("frontstage", "auto.unnamed_page");
+  return node.kind === 'group'
+    ? i18nText('frontstage', 'auto.unnamed_group')
+    : i18nText('frontstage', 'auto.unnamed_page');
 }
 
 function findParentId(
@@ -204,11 +206,6 @@ function renderTreeNode({
   const childNodes = node.children ?? [];
   const title = getNodeTitle(node);
   const isDragging = draggedNodeId === node.id;
-  const draggedNode = draggedNodeId
-    ? findNodeById(pageTree, draggedNodeId)
-    : null;
-  const canDropInsideGroup =
-    node.kind === 'group' && level === 0 && draggedNode?.kind === 'page';
   const isInsideDropTarget =
     dropIndicator?.targetNodeId === node.id &&
     dropIndicator.position === 'inside';
@@ -220,9 +217,12 @@ function renderTreeNode({
     isPageNode && isSelected && onMovePageToGroup && topLevelGroups.length > 0
   );
   const pageGroupOptions = [
-    { label: i18nText("frontstage", "auto.not_grouped"), value: ROOT_PAGE_GROUP_VALUE },
+    {
+      label: i18nText('frontstage', 'auto.not_grouped'),
+      value: ROOT_PAGE_GROUP_VALUE
+    },
     ...topLevelGroups.map((groupNode) => ({
-      label: groupNode.title || i18nText("frontstage", "auto.unnamed_group"),
+      label: groupNode.title || i18nText('frontstage', 'auto.unnamed_group'),
       value: groupNode.id
     }))
   ];
@@ -331,7 +331,7 @@ function renderTreeNode({
   const menuItems: MenuProps['items'] = [
     {
       key: 'rename',
-      label: i18nText("frontstage", "auto.edit"),
+      label: i18nText('frontstage', 'auto.edit'),
       icon: <EditOutlined />,
       onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
@@ -340,7 +340,7 @@ function renderTreeNode({
     },
     {
       key: 'tooltip',
-      label: i18nText("frontstage", "auto.edit_description"),
+      label: i18nText('frontstage', 'auto.edit_description'),
       icon: <InfoCircleOutlined />,
       onClick: ({ domEvent }: MenuClickInfo) => {
         domEvent.stopPropagation();
@@ -359,7 +359,7 @@ function renderTreeNode({
             minWidth: '110px'
           }}
         >
-          <span>{i18nText("frontstage", "auto.hide")}</span>
+          <span>{i18nText('frontstage', 'auto.hide')}</span>
           <Switch
             size="small"
             checked={isHidden}
@@ -374,12 +374,12 @@ function renderTreeNode({
     },
     {
       key: 'move-to',
-      label: i18nText("frontstage", "auto.move_to"),
+      label: i18nText('frontstage', 'auto.move_to'),
       icon: <DragOutlined />,
       children: [
         {
           key: 'move-up',
-          label: i18nText("frontstage", "auto.move_up"),
+          label: i18nText('frontstage', 'auto.move_up'),
           icon: <ArrowUpOutlined />,
           disabled: !canMoveUp,
           onClick: ({ domEvent }: MenuClickInfo) => {
@@ -389,7 +389,7 @@ function renderTreeNode({
         },
         {
           key: 'move-down',
-          label: i18nText("frontstage", "auto.move_down"),
+          label: i18nText('frontstage', 'auto.move_down'),
           icon: <ArrowDownOutlined />,
           disabled: !canMoveDown,
           onClick: ({ domEvent }: MenuClickInfo) => {
@@ -402,12 +402,12 @@ function renderTreeNode({
     },
     {
       key: 'insert-before',
-      label: i18nText("frontstage", "auto.insert_before"),
+      label: i18nText('frontstage', 'auto.insert_before'),
       icon: <PlusOutlined />,
       children: [
         {
           key: 'insert-before-page',
-          label: i18nText("frontstage", "auto.page"),
+          label: i18nText('frontstage', 'auto.page'),
           icon: <FileTextOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -416,7 +416,7 @@ function renderTreeNode({
         },
         {
           key: 'insert-before-group',
-          label: i18nText("frontstage", "auto.group"),
+          label: i18nText('frontstage', 'auto.group'),
           icon: <FolderOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -429,7 +429,7 @@ function renderTreeNode({
       ? [
           {
             key: 'insert-inside',
-            label: i18nText("frontstage", "auto.insert_inside"),
+            label: i18nText('frontstage', 'auto.insert_inside'),
             icon: <FileAddOutlined />,
             disabled: isOperationPending,
             onClick: ({ domEvent }: MenuClickInfo) => {
@@ -441,12 +441,12 @@ function renderTreeNode({
       : []),
     {
       key: 'insert-after',
-      label: i18nText("frontstage", "auto.insert_after"),
+      label: i18nText('frontstage', 'auto.insert_after'),
       icon: <PlusOutlined />,
       children: [
         {
           key: 'insert-after-page',
-          label: i18nText("frontstage", "auto.page"),
+          label: i18nText('frontstage', 'auto.page'),
           icon: <FileTextOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -455,7 +455,7 @@ function renderTreeNode({
         },
         {
           key: 'insert-after-group',
-          label: i18nText("frontstage", "auto.group"),
+          label: i18nText('frontstage', 'auto.group'),
           icon: <FolderOutlined />,
           onClick: ({ domEvent }: MenuClickInfo) => {
             domEvent.stopPropagation();
@@ -469,7 +469,7 @@ function renderTreeNode({
     },
     {
       key: 'delete',
-      label: i18nText("frontstage", "auto.delete"),
+      label: i18nText('frontstage', 'auto.delete'),
       icon: <DeleteOutlined />,
       danger: true,
       onClick: ({ domEvent }: MenuClickInfo) => {
@@ -504,7 +504,9 @@ function renderTreeNode({
           className="frontstage-page-tree-sidebar__node-kind"
           type="secondary"
         >
-          {node.kind === 'group' ? i18nText("frontstage", "auto.group_node") : i18nText("frontstage", "auto.page_node")}
+          {node.kind === 'group'
+            ? i18nText('frontstage', 'auto.group_node')
+            : i18nText('frontstage', 'auto.page_node')}
         </Typography.Text>
       </span>
       {isHidden && (
@@ -588,9 +590,9 @@ function renderTreeNode({
               className="frontstage-page-tree-sidebar__node-actions-visible"
               onClick={(e) => e.stopPropagation()}
             >
-              <Tooltip title={i18nText("frontstage", "auto.drag_sort_hint")}>
+              <Tooltip title={i18nText('frontstage', 'auto.drag_sort_hint')}>
                 <Button
-                  aria-label={i18nText("frontstage", "auto.drag_move_node")}
+                  aria-label={i18nText('frontstage', 'auto.drag_move_node')}
                   className="frontstage-page-tree-sidebar__drag-handle"
                   disabled={isOperationPending}
                   draggable={!isOperationPending}
@@ -621,7 +623,7 @@ function renderTreeNode({
                 placement="bottomRight"
               >
                 <Button
-                  aria-label={i18nText("frontstage", "auto.page_action_menu")}
+                  aria-label={i18nText('frontstage', 'auto.page_action_menu')}
                   className="frontstage-page-tree-sidebar__more-trigger"
                   disabled={isOperationPending}
                   icon={<MenuOutlined />}
@@ -799,7 +801,8 @@ export function FrontStagePageTreeSidebar({
           className="frontstage-page-tree-sidebar__empty"
           description={
             <Typography.Text type="secondary">
-              {i18nText("frontstage", "auto.empty_page_tree_hint")}</Typography.Text>
+              {i18nText('frontstage', 'auto.empty_page_tree_hint')}
+            </Typography.Text>
           }
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
@@ -814,7 +817,7 @@ export function FrontStagePageTreeSidebar({
           <Button
             aria-expanded={isAddMenuOpen}
             aria-haspopup="menu"
-            aria-label={i18nText("frontstage", "auto.add_menu")}
+            aria-label={i18nText('frontstage', 'auto.add_menu')}
             className="frontstage-page-tree-sidebar__add-item-btn"
             disabled={isOperationPending}
             icon={<PlusOutlined />}
@@ -822,7 +825,8 @@ export function FrontStagePageTreeSidebar({
             onFocus={() => setIsAddMenuOpen(true)}
             size="small"
           >
-            {i18nText("frontstage", "auto.add_menu")}</Button>
+            {i18nText('frontstage', 'auto.add_menu')}
+          </Button>
           {isAddMenuOpen ? (
             <div className="frontstage-page-tree-sidebar__add-menu" role="menu">
               <button
@@ -832,7 +836,8 @@ export function FrontStagePageTreeSidebar({
                 type="button"
               >
                 <FolderAddOutlined aria-hidden />
-                {i18nText("frontstage", "auto.add_group")}</button>
+                {i18nText('frontstage', 'auto.add_group')}
+              </button>
               <button
                 className="frontstage-page-tree-sidebar__add-menu-item"
                 onClick={handleAddPage}
@@ -840,7 +845,8 @@ export function FrontStagePageTreeSidebar({
                 type="button"
               >
                 <FileAddOutlined aria-hidden />
-                {i18nText("frontstage", "auto.add_page")}</button>
+                {i18nText('frontstage', 'auto.add_page')}
+              </button>
             </div>
           ) : null}
         </div>

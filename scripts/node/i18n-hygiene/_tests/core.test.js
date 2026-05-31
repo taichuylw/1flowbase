@@ -7,7 +7,7 @@ const path = require('node:path');
 const {
   collectI18nHygieneFindings,
   main,
-  scanJsonDuplicateKeys,
+  scanJsonDuplicateKeys
 } = require('../core.js');
 
 function writeFile(repoRoot, relativePath, content) {
@@ -17,8 +17,16 @@ function writeFile(repoRoot, relativePath, content) {
 }
 
 function writeI18nPair(repoRoot, owner, zhContent, enContent) {
-  writeFile(repoRoot, `${owner}/i18n/zh_Hans.json`, `${JSON.stringify(zhContent, null, 2)}\n`);
-  writeFile(repoRoot, `${owner}/i18n/en_US.json`, `${JSON.stringify(enContent, null, 2)}\n`);
+  writeFile(
+    repoRoot,
+    `${owner}/i18n/zh_Hans.json`,
+    `${JSON.stringify(zhContent, null, 2)}\n`
+  );
+  writeFile(
+    repoRoot,
+    `${owner}/i18n/en_US.json`,
+    `${JSON.stringify(enContent, null, 2)}\n`
+  );
 }
 
 test('scanJsonDuplicateKeys reports duplicate keys with line evidence', () => {
@@ -30,8 +38,8 @@ test('scanJsonDuplicateKeys reports duplicate keys with line evidence', () => {
       '    "save": "保存",',
       '    "save": "保存资料"',
       '  }',
-      '}',
-    ].join('\n'),
+      '}'
+    ].join('\n')
   });
 
   assert.equal(findings.length, 1);
@@ -51,11 +59,13 @@ test('scanJsonDuplicateKeys reports invalid i18n key naming', () => {
       '  },',
       '  "k_1069127253": "自动 key"',
       '  "valid_key": "有效"',
-      '}',
-    ].join('\n'),
+      '}'
+    ].join('\n')
   });
 
-  const invalidKeyNames = findings.filter((finding) => finding.rule === 'invalid-key-name');
+  const invalidKeyNames = findings.filter(
+    (finding) => finding.rule === 'invalid-key-name'
+  );
 
   assert.deepEqual(
     invalidKeyNames.map((finding) => finding.key),
@@ -76,11 +86,13 @@ test('scanJsonDuplicateKeys reports generated i18n key names', () => {
       '    "key_nddjpjflog": "Version switching failed",',
       '    "version_switching_failed": "Version switching failed"',
       '  }',
-      '}',
-    ].join('\n'),
+      '}'
+    ].join('\n')
   });
 
-  const generatedKeyNames = findings.filter((finding) => finding.rule === 'generated-key-name');
+  const generatedKeyNames = findings.filter(
+    (finding) => finding.rule === 'generated-key-name'
+  );
 
   assert.equal(generatedKeyNames.length, 1);
   assert.equal(generatedKeyNames[0].severity, 'error');
@@ -89,7 +101,9 @@ test('scanJsonDuplicateKeys reports generated i18n key names', () => {
 });
 
 test('collectI18nHygieneFindings reports locale and key contract errors', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-hygiene-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-hygiene-')
+  );
   writeFile(
     repoRoot,
     'web/app/src/features/auth/i18n/zh-CN.json',
@@ -118,7 +132,9 @@ test('collectI18nHygieneFindings reports locale and key contract errors', () => 
 });
 
 test('collectI18nHygieneFindings accepts backend canonical locale names for frontend owners', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-canonical-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-canonical-')
+  );
   writeI18nPair(
     repoRoot,
     'web/app/src/features/auth',
@@ -139,26 +155,30 @@ test('collectI18nHygieneFindings accepts backend canonical locale names for fron
 });
 
 test('collectI18nHygieneFindings fails duplicated values inside one owner locale', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-value-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-value-')
+  );
   writeI18nPair(
     repoRoot,
     'web/app/src/features/me',
     {
       actions: {
         save: '保存',
-        submit: '保存',
-      },
+        submit: '保存'
+      }
     },
     {
       actions: {
         save: 'Save',
-        submit: 'Submit',
-      },
+        submit: 'Submit'
+      }
     }
   );
 
   const findings = collectI18nHygieneFindings({ repoRoot });
-  const duplicateValue = findings.find((finding) => finding.rule === 'duplicate-value-in-owner');
+  const duplicateValue = findings.find(
+    (finding) => finding.rule === 'duplicate-value-in-owner'
+  );
 
   assert.equal(duplicateValue?.severity, 'error');
   assert.equal(duplicateValue?.value, '保存');
@@ -166,7 +186,9 @@ test('collectI18nHygieneFindings fails duplicated values inside one owner locale
 });
 
 test('collectI18nHygieneFindings keeps cross-owner duplicate keys and values out of the default gate', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-cross-owner-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-cross-owner-')
+  );
   writeI18nPair(
     repoRoot,
     'web/app/src/features/auth',
@@ -187,13 +209,17 @@ test('collectI18nHygieneFindings keeps cross-owner duplicate keys and values out
     false
   );
   assert.equal(
-    findings.some((finding) => finding.rule === 'duplicate-value-across-owners'),
+    findings.some(
+      (finding) => finding.rule === 'duplicate-value-across-owners'
+    ),
     false
   );
 });
 
 test('collectI18nHygieneFindings can include cross-owner advisory findings on demand', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-cross-owner-advisory-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-cross-owner-advisory-')
+  );
   writeI18nPair(
     repoRoot,
     'web/app/src/features/auth',
@@ -209,25 +235,31 @@ test('collectI18nHygieneFindings can include cross-owner advisory findings on de
 
   const findings = collectI18nHygieneFindings({
     repoRoot,
-    includeCrossOwnerWarnings: true,
+    includeCrossOwnerWarnings: true
   });
 
   assert.equal(
     findings.some(
-      (finding) => finding.rule === 'duplicate-key-across-owners' && finding.severity === 'warning'
+      (finding) =>
+        finding.rule === 'duplicate-key-across-owners' &&
+        finding.severity === 'warning'
     ),
     true
   );
   assert.equal(
     findings.some(
-      (finding) => finding.rule === 'duplicate-value-across-owners' && finding.severity === 'warning'
+      (finding) =>
+        finding.rule === 'duplicate-value-across-owners' &&
+        finding.severity === 'warning'
     ),
     true
   );
 });
 
 test('collectI18nHygieneFindings warns on frontend i18n keys without code references', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-unused-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-unused-')
+  );
   writeFile(
     repoRoot,
     'web/app/src/shared/i18n/app-i18n.ts',
@@ -237,7 +269,7 @@ test('collectI18nHygieneFindings warns on frontend i18n keys without code refere
       "    zh_Hans: () => import('../../features/example/i18n/zh_Hans.json'),",
       "    en_US: () => import('../../features/example/i18n/en_US.json')",
       '  }',
-      '} as const;',
+      '} as const;'
     ].join('\n')
   );
   writeI18nPair(
@@ -246,14 +278,14 @@ test('collectI18nHygieneFindings warns on frontend i18n keys without code refere
     {
       actions: {
         save: '保存',
-        stale: '废弃',
-      },
+        stale: '废弃'
+      }
     },
     {
       actions: {
         save: 'Save',
-        stale: 'Stale',
-      },
+        stale: 'Stale'
+      }
     }
   );
   writeFile(
@@ -264,7 +296,7 @@ test('collectI18nHygieneFindings warns on frontend i18n keys without code refere
       '',
       'export function ExamplePage() {',
       "  return i18nText('example', 'actions.save');",
-      '}',
+      '}'
     ].join('\n')
   );
 
@@ -275,13 +307,73 @@ test('collectI18nHygieneFindings warns on frontend i18n keys without code refere
 
   assert.deepEqual(unusedKeys, ['actions.stale']);
   assert.equal(
-    findings.some((finding) => finding.rule === 'unused-i18n-key' && finding.severity === 'warning'),
+    findings.some(
+      (finding) =>
+        finding.rule === 'unused-i18n-key' && finding.severity === 'warning'
+    ),
     true
   );
 });
 
+test('collectI18nHygieneFindings resolves statically imported frontend namespaces', () => {
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-static-imports-')
+  );
+  writeFile(
+    repoRoot,
+    'web/app/src/shared/i18n/app-i18n.ts',
+    [
+      "import appShellZhHans from '../../app-shell/i18n/zh_Hans.json';",
+      "import appShellEnUS from '../../app-shell/i18n/en_US.json';",
+      '',
+      'const appTranslationResources = {',
+      '  zh_Hans: {',
+      '    appShell: appShellZhHans',
+      '  },',
+      '  en_US: {',
+      '    appShell: appShellEnUS',
+      '  }',
+      '} as const;'
+    ].join('\n')
+  );
+  writeI18nPair(
+    repoRoot,
+    'web/app/src/app-shell',
+    {
+      auto: {
+        workbench: '工作台',
+        stale: '废弃'
+      }
+    },
+    {
+      auto: {
+        workbench: 'Workbench',
+        stale: 'Stale'
+      }
+    }
+  );
+  writeFile(
+    repoRoot,
+    'web/app/src/routes/route-config.ts',
+    [
+      'export const APP_ROUTES = [',
+      "  { id: 'home', navLabelKey: 'auto.workbench' }",
+      '];'
+    ].join('\n')
+  );
+
+  const findings = collectI18nHygieneFindings({ repoRoot });
+  const unusedKeys = findings
+    .filter((finding) => finding.rule === 'unused-i18n-key')
+    .map((finding) => finding.key);
+
+  assert.deepEqual(unusedKeys, ['auto.stale']);
+});
+
 test('collectI18nHygieneFindings keeps same-owner labelKey literals as frontend i18n references', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-label-key-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-label-key-')
+  );
   writeFile(
     repoRoot,
     'web/app/src/shared/i18n/app-i18n.ts',
@@ -291,7 +383,7 @@ test('collectI18nHygieneFindings keeps same-owner labelKey literals as frontend 
       "    zh_Hans: () => import('../../features/applications/i18n/zh_Hans.json'),",
       "    en_US: () => import('../../features/applications/i18n/en_US.json')",
       '  }',
-      '} as const;',
+      '} as const;'
     ].join('\n')
   );
   writeI18nPair(
@@ -301,15 +393,15 @@ test('collectI18nHygieneFindings keeps same-owner labelKey literals as frontend 
       auto: {
         api: 'API',
         logs: '日志',
-        stale: '废弃',
-      },
+        stale: '废弃'
+      }
     },
     {
       auto: {
         api: 'API',
         logs: 'Logs',
-        stale: 'Stale',
-      },
+        stale: 'Stale'
+      }
     }
   );
   writeFile(
@@ -320,7 +412,7 @@ test('collectI18nHygieneFindings keeps same-owner labelKey literals as frontend 
       '',
       'export function getSections(t) {',
       '  return SECTION_DEFINITIONS.map((section) => t(section.labelKey));',
-      '}',
+      '}'
     ].join('\n')
   );
   writeFile(
@@ -332,7 +424,7 @@ test('collectI18nHygieneFindings keeps same-owner labelKey literals as frontend 
       'export function ApplicationLogsPage() {',
       "  const { t } = useTranslation('applications');",
       "  return t('auto.logs');",
-      '}',
+      '}'
     ].join('\n')
   );
 
@@ -345,7 +437,9 @@ test('collectI18nHygieneFindings keeps same-owner labelKey literals as frontend 
 });
 
 test('collectI18nHygieneFindings does not report provider i18n keys as unused frontend keys', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-provider-unused-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-provider-unused-')
+  );
   writeI18nPair(
     repoRoot,
     'api/plugins/templates/provider_fixture',
@@ -362,7 +456,9 @@ test('collectI18nHygieneFindings does not report provider i18n keys as unused fr
 });
 
 test('main writes i18n hygiene report and fails on blocking findings', async () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-i18n-main-'));
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-main-')
+  );
   writeI18nPair(
     repoRoot,
     'web/app/src/features/auth',
@@ -376,13 +472,15 @@ test('main writes i18n hygiene report and fails on blocking findings', async () 
     writeStdout() {},
     writeStderr(text) {
       stderr += text;
-    },
+    }
   });
 
   assert.equal(status, 1);
   assert.match(stderr, /duplicate-value-in-owner/u);
   assert.equal(
-    fs.existsSync(path.join(repoRoot, 'tmp', 'test-governance', 'i18n-hygiene.json')),
+    fs.existsSync(
+      path.join(repoRoot, 'tmp', 'test-governance', 'i18n-hygiene.json')
+    ),
     true
   );
 });

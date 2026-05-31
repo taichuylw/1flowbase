@@ -175,7 +175,7 @@ describe('DebugConversationPane workflow trace', () => {
     expect(screen.queryByText('Round #1')).not.toBeInTheDocument();
 
     const toolsNode = screen.getByRole('button', {
-      name: /Tools.*1 次工具回调/
+      name: /工具.*1 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('lookup_weather')).not.toBeInTheDocument();
@@ -284,7 +284,7 @@ describe('DebugConversationPane workflow trace', () => {
 
     fireEvent.click(llmTraceNode);
     const toolsNode = screen.getByRole('button', {
-      name: /Tools.*2 次工具回调/
+      name: /工具.*2 次工具回调/
     });
     fireEvent.click(toolsNode);
 

@@ -254,6 +254,7 @@
     "logo": "标识:",
     "driver_type_required": "请选择驱动类型",
     "memory_tree_loading_failed": "内存树加载失败。",
+    "search_memory_tree": "搜索内存树",
     "routing_page": "路由页面",
     "running": "运行中",
     "enter_model_id": "输入 model id",

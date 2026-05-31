@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { appI18n } from '../app-i18n';
 import { i18nText } from '../text';
 
+void appI18n.changeLanguage('en_US');
+
 const moduleScopeSettingsDraftLabel = i18nText('settings', 'auto.draft_alt');
 
 describe('i18nText', () => {

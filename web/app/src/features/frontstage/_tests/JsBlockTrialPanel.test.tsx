@@ -454,7 +454,7 @@ describe('JsBlockTrialPanel', () => {
       'export default { render() { return null } }'
     );
 
-    fireEvent.change(screen.getByLabelText('Context snapshot'), {
+    fireEvent.change(screen.getByLabelText('上下文快照'), {
       target: { value: '{ "pageId": "page-2", "recordId": "record-1" }' }
     });
     fireEvent.click(screen.getByRole('button', { name: '更新 context' }));
@@ -464,7 +464,7 @@ describe('JsBlockTrialPanel', () => {
     });
     expect(screen.getByText('pageId, recordId')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Runtime limits'), {
+    fireEvent.change(screen.getByLabelText('运行时限制'), {
       target: {
         value:
           '{ "timeoutMs": 2000, "maxRenderDepth": 4, "maxRenderNodes": 120, "allowedActions": ["record.archive"], "allowedEvents": [], "allowedDataModels": ["cases"], "allowedDataOperations": ["query"], "maxEventChainDepth": 2 }'
@@ -498,7 +498,7 @@ describe('JsBlockTrialPanel', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Runtime limits'), {
+    fireEvent.change(screen.getByLabelText('运行时限制'), {
       target: { value: '{ "maxRenderDepth": 4 }' }
     });
     fireEvent.click(screen.getByRole('button', { name: '更新 limits' }));

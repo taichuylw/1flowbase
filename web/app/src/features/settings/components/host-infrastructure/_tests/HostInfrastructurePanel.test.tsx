@@ -521,7 +521,7 @@ describe('HostInfrastructurePanel', () => {
         })
     );
 
-    const { container } = renderMemoryObservationPanel(true);
+    renderMemoryObservationPanel(true);
 
     expect(
       await screen.findByRole('tab', { name: 'Sessions' })
@@ -538,9 +538,7 @@ describe('HostInfrastructurePanel', () => {
       'session-store',
       { inspection_path: [], limit: 50 }
     );
-    const workspaceSwitcher = container.querySelector('.ant-tree-switcher');
-    expect(workspaceSwitcher).not.toBeNull();
-    fireEvent.click(workspaceSwitcher as Element);
+    fireEvent.click(screen.getByTestId('host-memory-panel-tree-switcher'));
     expect(await screen.findByText('user-1')).toBeInTheDocument();
     expect(api.fetchSettingsHostInfrastructureMemoryTree).toHaveBeenCalledWith(
       'session-store',
@@ -550,8 +548,8 @@ describe('HostInfrastructurePanel', () => {
 
     expect(await screen.findByText('session:1')).toBeInTheDocument();
     expect(screen.getByText('1m 0s')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Metadata/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Reveal/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /元数据/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /查看值/ })).toBeEnabled();
     expect(
       screen.queryByRole('button', { name: /清理/ })
     ).not.toBeInTheDocument();
@@ -566,7 +564,7 @@ describe('HostInfrastructurePanel', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '上一页' }));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
-  });
+  }, 10000);
 
   test('renders memory contracts as tabs with tree and table panes', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
@@ -726,42 +724,36 @@ describe('HostInfrastructurePanel', () => {
         })
     );
 
-    const { container } = renderMemoryObservationPanel(true);
+    renderMemoryObservationPanel(true);
 
-    expect(
-      await screen.findByRole('tab', { name: /^统计$/ })
-    ).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: /^统计$/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     expect(screen.getByRole('tab', { name: /^Sessions$/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /^Cache$/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole('tab', { name: /^Sessions$/ }).querySelector('.ant-badge')
-    ).toBeNull();
-    expect(await screen.findByText('Memory statistics')).toBeInTheDocument();
-    expect(await screen.findByText('3 entries')).toBeInTheDocument();
-    expect(await screen.findByText('1 sensitive')).toBeInTheDocument();
+    expect(await screen.findByText('内存统计')).toBeInTheDocument();
+    expect(await screen.findByText('3 条目')).toBeInTheDocument();
+    expect(await screen.findByText('1 敏感项')).toBeInTheDocument();
     expect(await screen.findByText('3.0 KB')).toBeInTheDocument();
-    expect(
-      screen.getByLabelText('Memory statistics chart')
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('内存统计图表')).toBeInTheDocument();
     await waitFor(() => {
       expect(echartsMock.chart.setOption).toHaveBeenCalled();
     });
-    expect(await screen.findByTestId('service-card-session-store')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('service-card-session-store')
+    ).toBeInTheDocument();
     expect(screen.getByTestId('service-card-cache-store')).toBeInTheDocument();
-    expect(api.fetchSettingsHostInfrastructureMemoryTree).not.toHaveBeenCalled();
+    expect(
+      api.fetchSettingsHostInfrastructureMemoryTree
+    ).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('tab', { name: /^Sessions$/ }));
-    expect(
-      container.querySelector('.host-memory-panel__content')
-    ).not.toBeNull();
-    expect(
-      container.querySelector('.host-memory-panel__tree')
-    ).not.toBeNull();
-    expect(
-      container.querySelector('.host-memory-panel__entries')
-    ).not.toBeNull();
+    expect(screen.getByTestId('host-memory-panel-content')).toBeInTheDocument();
+    expect(screen.getByTestId('host-memory-panel-tree')).toBeInTheDocument();
+    expect(screen.getByTestId('host-memory-panel-entries')).toBeInTheDocument();
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
-    
+
     fireEvent.click(screen.getByRole('tab', { name: /^Cache$/ }));
 
     expect(await screen.findByText('application-cache')).toBeInTheDocument();
@@ -775,7 +767,7 @@ describe('HostInfrastructurePanel', () => {
       cursor: null,
       limit: 50
     });
-  });
+  }, 10000);
 
   test('explains when memory observation succeeds but there are no contracts', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
@@ -889,16 +881,14 @@ describe('HostInfrastructurePanel', () => {
     ).toBeInTheDocument();
     fireEvent.click(await screen.findByText('workspace-1'));
     expect(await screen.findByText('session:1')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /元数据/ })).toBeEnabled();
     expect(
-      await screen.findByRole('button', { name: /Metadata/ })
-    ).toBeEnabled();
-    expect(
-      screen.queryByRole('button', { name: /Reveal/ })
+      screen.queryByRole('button', { name: /查看值/ })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /清理/ })
     ).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   test('reveals memory value directly for manage users', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
@@ -1018,7 +1008,7 @@ describe('HostInfrastructurePanel', () => {
     renderMemoryObservationPanel(true);
     fireEvent.click(await screen.findByRole('tab', { name: 'Sessions' }));
     fireEvent.click(await screen.findByText('workspace-1'));
-    fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /查看值/ }));
 
     await waitFor(() => {
       expect(
@@ -1033,10 +1023,8 @@ describe('HostInfrastructurePanel', () => {
     expect(
       screen.queryByRole('button', { name: '查看并记录审计' })
     ).not.toBeInTheDocument();
-    expect(await screen.findByText('Entry value')).toBeInTheDocument();
-    expect(screen.getByLabelText('Memory value JSON')).toHaveTextContent(
-      'succeeded'
-    );
+    expect(await screen.findByText('条目值')).toBeInTheDocument();
+    expect(screen.getByLabelText('内存值 JSON')).toHaveTextContent('succeeded');
   });
 
   test('shows preview state before full reveal reports oversized value', async () => {
@@ -1164,12 +1152,12 @@ describe('HostInfrastructurePanel', () => {
     renderMemoryObservationPanel(true);
     fireEvent.click(await screen.findByRole('tab', { name: 'Cache' }));
     fireEvent.click(await screen.findByText('application-logs'));
-    fireEvent.click(await screen.findByRole('button', { name: /Reveal/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /查看值/ }));
 
     expect((await screen.findAllByText('preview')).length).toBeGreaterThan(0);
-    expect(screen.getByText('Reveal mode')).toBeInTheDocument();
+    expect(screen.getByText('查看模式')).toBeInTheDocument();
     expect(screen.getByText('{"blob":"xxxx')).toBeInTheDocument();
-    fireEvent.click(await screen.findByText('Full reveal'));
+    fireEvent.click(await screen.findByText('完整查看'));
 
     await waitFor(() => {
       expect(

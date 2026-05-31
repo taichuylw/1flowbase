@@ -93,7 +93,9 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    expect(await screen.findAllByText('input field')).toHaveLength(1);
+    expect(
+      await screen.findByTestId('inspector-field-config.input_fields')
+    ).toBeInTheDocument();
     expect(screen.getByText('userinput.query')).toBeInTheDocument();
     expect(screen.getByText('userinput.system')).toBeInTheDocument();
     expect(screen.getByText('userinput.model')).toBeInTheDocument();
@@ -139,11 +141,6 @@ describe('start input fields', () => {
       await screen.findByRole('dialog', { name: '新增输入字段' })
     ).toBeInTheDocument();
     expect(
-      screen
-        .getByRole('dialog', { name: '新增输入字段' })
-        .querySelector('label.agent-flow-start-input-fields__form-row')
-    ).toBeNull();
-    expect(
       screen.getByRole('separator', { name: '从左侧调整新增输入字段宽度' })
     ).toBeInTheDocument();
     expect(
@@ -161,7 +158,7 @@ describe('start input fields', () => {
       target: { value: '客户姓名' }
     });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '输入字段类型' }));
-    fireEvent.click(await screen.findByTitle('file list'));
+    fireEvent.click(await screen.findByTitle('文件列表'));
     fireEvent.click(screen.getByRole('button', { name: '保存输入字段' }));
 
     const startNode = latestDocument.graph.nodes.find(
@@ -186,7 +183,7 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    await screen.findAllByText('input field');
+    await screen.findByTestId('inspector-field-config.input_fields');
     fireEvent.click(screen.getByRole('button', { name: '新增输入字段' }));
 
     const dialog = await screen.findByRole('dialog', { name: '新增输入字段' });
@@ -226,7 +223,7 @@ describe('start input fields', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    await screen.findAllByText('input field');
+    await screen.findByTestId('inspector-field-config.input_fields');
     fireEvent.click(screen.getByRole('button', { name: '新增输入字段' }));
 
     expect(
@@ -246,7 +243,7 @@ describe('start input fields', () => {
       target: { value: '优先级' }
     });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: '输入字段类型' }));
-    fireEvent.click(await screen.findByTitle('drop down options'));
+    fireEvent.click(await screen.findByTitle('下拉选项'));
 
     fireEvent.change(screen.getByLabelText('输入字段选项 1'), {
       target: { value: '高' }

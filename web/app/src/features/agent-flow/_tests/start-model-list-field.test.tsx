@@ -1,4 +1,3 @@
-/* eslint-disable testing-library/no-node-access */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -37,9 +36,7 @@ describe('StartModelListField', () => {
     expect(screen.getByText('qwen3.6-35b-a3b')).toBeInTheDocument();
     expect(screen.getByText('128K')).toBeInTheDocument();
     expect(screen.getByText('deepseek-v4-flash')).toBeInTheDocument();
-    expect(
-      screen.queryByLabelText('Model reasoning supported efforts 1')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('支持的推理强度 1')).not.toBeInTheDocument();
     expect(
       screen.queryByPlaceholderText('display name')
     ).not.toBeInTheDocument();
@@ -50,40 +47,22 @@ describe('StartModelListField', () => {
 
     render(<StartModelListField value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByLabelText('Add new model'));
-    expect(screen.getByLabelText('Model ID input')).toHaveValue('flowbase');
-    expect(screen.getByLabelText('Model display name input')).toHaveValue(
-      'flowbase'
-    );
-    expect(screen.getByLabelText('Model context window')).toHaveValue('257');
-    expect(screen.getByLabelText('Maximum context window input')).toHaveValue(
-      '128'
-    );
-    expect(screen.getByLabelText('Maximum output tokens input')).toHaveValue(
-      '32'
-    );
-    expect(
-      screen.getByLabelText('Auto compact threshold percent input')
-    ).toHaveValue('85');
+    fireEvent.click(screen.getByLabelText('新增模型'));
+    expect(screen.getByLabelText('模型 ID 输入')).toHaveValue('flowbase');
+    expect(screen.getByLabelText('模型显示名输入')).toHaveValue('flowbase');
+    expect(screen.getByLabelText('模型上下文窗口')).toHaveValue('257');
+    expect(screen.getByLabelText('最大上下文窗口输入')).toHaveValue('128');
+    expect(screen.getByLabelText('最大输出 Token 输入')).toHaveValue('32');
+    expect(screen.getByLabelText('自动压缩阈值百分比输入')).toHaveValue('85');
     expect(
       screen.queryByLabelText('External reasoning override switch')
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Supported reasoning effort 1')).toHaveValue(
-      'minimal'
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 2')).toHaveValue(
-      'low'
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 3')).toHaveValue(
-      'medium'
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 4')).toHaveValue(
-      'high'
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 5')).toHaveValue(
-      'xhigh'
-    );
-    fireEvent.click(screen.getByLabelText('Save model'));
+    expect(screen.getByLabelText('支持的推理强度 1')).toHaveValue('minimal');
+    expect(screen.getByLabelText('支持的推理强度 2')).toHaveValue('low');
+    expect(screen.getByLabelText('支持的推理强度 3')).toHaveValue('medium');
+    expect(screen.getByLabelText('支持的推理强度 4')).toHaveValue('high');
+    expect(screen.getByLabelText('支持的推理强度 5')).toHaveValue('xhigh');
+    fireEvent.click(screen.getByLabelText('保存模型'));
 
     expect(onChange).toHaveBeenLastCalledWith([
       {
@@ -112,65 +91,44 @@ describe('StartModelListField', () => {
 
     render(<StartModelListField value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByLabelText('Add new model'));
-    fireEvent.change(screen.getByLabelText('Model ID input'), {
+    fireEvent.click(screen.getByLabelText('新增模型'));
+    fireEvent.change(screen.getByLabelText('模型 ID 输入'), {
       target: { value: 'gpt-5.5' }
     });
-    fireEvent.change(screen.getByLabelText('Model display name input'), {
+    fireEvent.change(screen.getByLabelText('模型显示名输入'), {
       target: { value: 'GPT 5.5' }
     });
     expect(
-      screen.getAllByLabelText('Model context window unit').length
+      screen.getAllByLabelText('模型上下文窗口单位').length
     ).toBeGreaterThan(0);
-    fireEvent.change(screen.getByLabelText('Model context window'), {
+    fireEvent.change(screen.getByLabelText('模型上下文窗口'), {
       target: { value: '256' }
     });
-    fireEvent.change(screen.getByLabelText('Maximum context window input'), {
+    fireEvent.change(screen.getByLabelText('最大上下文窗口输入'), {
       target: { value: '300' }
     });
-    fireEvent.change(screen.getByLabelText('Maximum output tokens input'), {
+    fireEvent.change(screen.getByLabelText('最大输出 Token 输入'), {
       target: { value: '64' }
     });
-    fireEvent.change(
-      screen.getByLabelText('Auto compact threshold percent input'),
-      {
-        target: { value: '85' }
-      }
-    );
-    fireEvent.click(
-      screen.getByLabelText('Remove supported reasoning effort 1')
-    );
-    fireEvent.click(
-      screen.getByLabelText('Remove supported reasoning effort 4')
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 1')).toHaveValue(
-      'low'
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 2')).toHaveValue(
-      'medium'
-    );
-    expect(screen.getByLabelText('Supported reasoning effort 3')).toHaveValue(
-      'high'
-    );
-    fireEvent.click(screen.getByLabelText('Add supported reasoning effort'));
-    fireEvent.change(screen.getByLabelText('Supported reasoning effort 4'), {
+    fireEvent.change(screen.getByLabelText('自动压缩阈值百分比输入'), {
+      target: { value: '85' }
+    });
+    fireEvent.click(screen.getByLabelText('删除支持的推理强度 1'));
+    fireEvent.click(screen.getByLabelText('删除支持的推理强度 4'));
+    expect(screen.getByLabelText('支持的推理强度 1')).toHaveValue('low');
+    expect(screen.getByLabelText('支持的推理强度 2')).toHaveValue('medium');
+    expect(screen.getByLabelText('支持的推理强度 3')).toHaveValue('high');
+    fireEvent.click(screen.getByLabelText('新增支持的推理强度'));
+    fireEvent.change(screen.getByLabelText('支持的推理强度 4'), {
       target: { value: 'ultra' }
     });
-    expect(
-      screen.getAllByLabelText('Default reasoning effort input').length
-    ).toBeGreaterThan(0);
-    expect(screen.getByLabelText('Tool call capability')).toHaveAttribute(
-      'aria-checked',
-      'true'
+    expect(screen.getAllByLabelText('默认推理强度输入').length).toBeGreaterThan(
+      0
     );
-    expect(screen.getByLabelText('Multimodal capability')).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
-    expect(
-      screen.getByLabelText('Structured output capability')
-    ).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(screen.getByLabelText('Save model'));
+    expect(screen.getByLabelText('工具调用能力')).toBeChecked();
+    expect(screen.getByLabelText('多模态能力')).toBeChecked();
+    expect(screen.getByLabelText('结构化输出能力')).toBeChecked();
+    fireEvent.click(screen.getByLabelText('保存模型'));
 
     expect(onChange).toHaveBeenLastCalledWith([
       {
@@ -199,10 +157,10 @@ describe('StartModelListField', () => {
 
     render(<StartModelListField value={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByLabelText('Add new model'));
-    fireEvent.click(screen.getByLabelText('Add supported reasoning effort'));
+    fireEvent.click(screen.getByLabelText('新增模型'));
+    fireEvent.click(screen.getByLabelText('新增支持的推理强度'));
 
-    const effortInput = screen.getByLabelText('Supported reasoning effort 6');
+    const effortInput = screen.getByLabelText('支持的推理强度 6');
     act(() => {
       effortInput.focus();
     });
@@ -211,18 +169,16 @@ describe('StartModelListField', () => {
       target: { value: 'u' }
     });
 
-    expect(screen.getByLabelText('Supported reasoning effort 6')).toHaveFocus();
+    expect(screen.getByLabelText('支持的推理强度 6')).toHaveFocus();
   });
 
   test('does not wrap floating model form controls in native label rows', () => {
     render(<StartModelListField value={[]} onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByLabelText('Add new model'));
+    fireEvent.click(screen.getByLabelText('新增模型'));
 
     expect(
-      screen
-        .getByRole('dialog', { name: 'Add new model' })
-        .querySelector('label.agent-flow-start-input-fields__form-row')
-    ).toBeNull();
+      screen.queryByLabelText('Input placeholder')
+    ).not.toBeInTheDocument();
   });
 });

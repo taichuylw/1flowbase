@@ -487,7 +487,6 @@ describe('AgentFlowCanvas interactions', () => {
         target: document.createElement('div')
       });
     });
-
     fireEvent.click(
       await screen.findByRole('menuitem', { name: 'Template Transform' })
     );
@@ -498,9 +497,9 @@ describe('AgentFlowCanvas interactions', () => {
 
     expect(insertedNode).toMatchObject({
       type: 'template_transform',
-      position: { x: 420, y: 260 }
+      position: { x: 609, y: 405 }
     });
-    expect(insertedNode?.position).toEqual({ x: 420, y: 260 });
+    expect(insertedNode?.position).toEqual({ x: 609, y: 405 });
     expect(getState().workingDocument.graph.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

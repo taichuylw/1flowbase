@@ -466,6 +466,7 @@ describe('useAgentFlowDebugSession', () => {
             history: [],
             model: '',
             query: '请总结退款政策',
+            reasoning_effort: '',
             system: '',
             tool_choice: {},
             tools: []

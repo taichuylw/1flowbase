@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { BlockConfigurationDrawer } from '../../components/BlockConfigurationDrawer';
 import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';
 import { createFrontstageBlockConfigurationModel } from '../../lib/block-configuration';
@@ -151,36 +152,40 @@ function renderDrawer({
 }
 
 describe('BlockConfigurationDrawer', () => {
+  beforeEach(async () => {
+    await appI18n.changeLanguage('zh_Hans');
+  });
+
   test('renders the readonly basic, data, code, context, and limits sections from the configuration model', async () => {
     renderDrawer();
 
     const dialog = await screen.findByRole('dialog', { name: '区块配置' });
-    expect(within(dialog).getByRole('tab', { name: 'Basic' })).toBeVisible();
-    expect(within(dialog).getByRole('tab', { name: 'Data' })).toBeVisible();
-    expect(within(dialog).getByRole('tab', { name: 'Code' })).toBeVisible();
-    expect(within(dialog).getByRole('tab', { name: 'Context' })).toBeVisible();
-    expect(within(dialog).getByRole('tab', { name: 'Limits' })).toBeVisible();
+    expect(within(dialog).getByRole('tab', { name: '基础' })).toBeVisible();
+    expect(within(dialog).getByRole('tab', { name: '数据' })).toBeVisible();
+    expect(within(dialog).getByRole('tab', { name: '代码' })).toBeVisible();
+    expect(within(dialog).getByRole('tab', { name: '上下文' })).toBeVisible();
+    expect(within(dialog).getByRole('tab', { name: '限制' })).toBeVisible();
 
     const basicSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-basic'
     );
     expect(basicSection).toHaveTextContent('hero-block');
     expect(basicSection).toHaveTextContent('hero-code');
-    expect(basicSection).toHaveTextContent('Width6');
-    expect(basicSection).toHaveTextContent('Height4');
-    expect(basicSection).toHaveTextContent('Order7');
+    expect(basicSection).toHaveTextContent('宽度6');
+    expect(basicSection).toHaveTextContent('高度4');
+    expect(basicSection).toHaveTextContent('顺序7');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Data' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '数据' }));
     const dataSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-data'
     );
     expect(dataSection).toHaveTextContent('orders');
-    expect(dataSection).toHaveTextContent('2 fields');
-    expect(dataSection).toHaveTextContent('QueryEnabled');
-    expect(dataSection).toHaveTextContent('CreateDisabled');
-    expect(dataSection).toHaveTextContent('PaginationpageSize 20');
+    expect(dataSection).toHaveTextContent('2 个字段');
+    expect(dataSection).toHaveTextContent('查询已启用');
+    expect(dataSection).toHaveTextContent('创建已禁用');
+    expect(dataSection).toHaveTextContent('分页pageSize 20');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Code' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '代码' }));
     const codeSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-code'
     );
@@ -188,21 +193,21 @@ describe('BlockConfigurationDrawer', () => {
     expect(codeSection).toHaveTextContent('blocks/hero/index.js');
     expect(codeSection).toHaveTextContent('official:hero.banner');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Context' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '上下文' }));
     const contextSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-context'
     );
-    expect(contextSection).toHaveTextContent('CatalogMatched');
+    expect(contextSection).toHaveTextContent('目录已匹配');
     expect(contextSection).toHaveTextContent('text');
     expect(contextSection).toHaveTextContent('ctx.data');
     expect(contextSection).toHaveTextContent('orders.refresh');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Limits' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '限制' }));
     const limitsSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-limits'
     );
-    expect(limitsSection).toHaveTextContent('Timeout1000 ms');
-    expect(limitsSection).toHaveTextContent('Max render nodes250');
+    expect(limitsSection).toHaveTextContent('超时1000 ms');
+    expect(limitsSection).toHaveTextContent('最大渲染节点数250');
     expect(limitsSection).toHaveTextContent('orders');
     expect(limitsSection).toHaveTextContent('query');
     expect(limitsSection).toHaveTextContent('update');
@@ -227,20 +232,20 @@ describe('BlockConfigurationDrawer', () => {
     });
 
     const dialog = await screen.findByRole('dialog', { name: '区块配置' });
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Data' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '数据' }));
     const dataSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-data'
     );
-    expect(dataSection).toHaveTextContent('ModelNot configured');
-    expect(dataSection).toHaveTextContent('0 fields');
-    expect(dataSection).toHaveTextContent('QueryDisabled');
+    expect(dataSection).toHaveTextContent('模型未配置');
+    expect(dataSection).toHaveTextContent('0 个字段');
+    expect(dataSection).toHaveTextContent('查询已禁用');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Context' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '上下文' }));
     const contextSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-context'
     );
-    expect(contextSection).toHaveTextContent('CatalogNot matched');
-    expect(contextSection).toHaveTextContent('No allowed actions');
-    expect(contextSection).toHaveTextContent('No allowed data models');
+    expect(contextSection).toHaveTextContent('目录未匹配');
+    expect(contextSection).toHaveTextContent('无允许的动作');
+    expect(contextSection).toHaveTextContent('无允许的数据模型');
   });
 });

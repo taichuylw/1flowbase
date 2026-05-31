@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 
@@ -242,12 +242,19 @@ pub struct ApplicationActivityGuard {
 }
 
 impl ApplicationRuntimeActivityTracker {
+    fn lock_inner(&self) -> MutexGuard<'_, ApplicationRuntimeActivityInner> {
+        match self.inner.lock() {
+            Ok(inner) => inner,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
     pub fn start(
         &self,
         application_id: Uuid,
         kind: ApplicationActivityKind,
     ) -> ApplicationActivityGuard {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
         inner.cleanup_idle_allocations();
         inner.next_id += 1;
         let id = inner.next_id;
@@ -278,7 +285,7 @@ impl ApplicationRuntimeActivityTracker {
         instance_started_at: OffsetDateTime,
     ) -> ApplicationRuntimeActivitySnapshot {
         let snapshot_at = OffsetDateTime::now_utc();
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
         inner.cleanup_idle_allocations();
         let state = inner.applications.get(&application_id);
         let active = state
@@ -333,7 +340,7 @@ impl ApplicationRuntimeActivityTracker {
     }
 
     fn finish(&self, application_id: Uuid, id: u64, finish: ApplicationActivityFinish) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
         inner.cleanup_idle_allocations();
         let Some(state) = inner.applications.get_mut(&application_id) else {
             return;
@@ -510,6 +517,7 @@ impl ApplicationActivityState {
             return &mut self.buckets[index];
         }
         self.prune_expired_buckets(slot);
+        let index = self.buckets.len();
         self.buckets.push(RollingBucket {
             slot,
             completed: 0,
@@ -518,7 +526,7 @@ impl ApplicationActivityState {
             disconnected: 0,
             peak_concurrency: 0,
         });
-        self.buckets.last_mut().unwrap()
+        &mut self.buckets[index]
     }
 
     fn prune_expired_buckets(&mut self, slot: u64) {
@@ -611,7 +619,7 @@ fn trend(delta: f64) -> ApplicationRuntimeActivityTrend {
 }
 
 fn format_time(value: OffsetDateTime) -> String {
-    value.format(&Rfc3339).unwrap()
+    value.format(&Rfc3339).unwrap_or_else(|_| value.to_string())
 }
 
 fn process_rss_bytes() -> Option<u64> {
@@ -661,6 +669,35 @@ mod tests {
         assert_eq!(snapshot.active.total, 0);
         assert_eq!(snapshot.rolling_minute.completed, 1);
         assert_eq!(snapshot.rolling_minute.disconnected, 1);
+    }
+
+    #[test]
+    fn tracker_recovers_poisoned_lock_without_panicking() {
+        let tracker = ApplicationRuntimeActivityTracker::default();
+        let poisoned_tracker = tracker.clone();
+        let poison_result = std::thread::spawn(move || {
+            let _inner = poisoned_tracker
+                .inner
+                .lock()
+                .expect("activity tracker lock starts healthy");
+            panic!("poison activity tracker lock");
+        })
+        .join();
+        assert!(poison_result.is_err());
+
+        let application_id = Uuid::now_v7();
+        let started_at = OffsetDateTime::now_utc();
+        let guard = tracker.start(application_id, ApplicationActivityKind::HttpRequest);
+
+        let snapshot = tracker.snapshot(application_id, started_at);
+        assert_eq!(snapshot.active.total, 1);
+        assert_eq!(snapshot.active.http_requests, 1);
+
+        drop(guard);
+
+        let snapshot = tracker.snapshot(application_id, started_at);
+        assert_eq!(snapshot.active.total, 0);
+        assert_eq!(snapshot.rolling_minute.completed, 1);
     }
 
     #[test]

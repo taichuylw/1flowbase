@@ -1,9 +1,4 @@
-import {
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState
-} from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { MouseEvent, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -108,9 +103,7 @@ export interface ApiDocsExplorerProps<TAuthenticationSnapshot = unknown> {
     request?: ApiDocsCategoryOperationsRequest
   ) => Promise<ApiDocsCategoryOperations>;
   operationSpecQueryKey: (operationId: string) => QueryKey;
-  fetchOperationSpec: (
-    operationId: string
-  ) => Promise<ScalarDocumentContent>;
+  fetchOperationSpec: (operationId: string) => Promise<ScalarDocumentContent>;
   baseServerUrl: string | (() => string);
   showAllOperationsWhenNoCategory?: boolean;
   selectFirstCategoryWhenEmpty?: boolean;
@@ -141,7 +134,9 @@ function buildOperationSearchText(operation: ApiDocsCatalogOperation): string {
   );
 }
 
-function buildScalarOperationCopyText(anchor: HTMLAnchorElement): string | null {
+function buildScalarOperationCopyText(
+  anchor: HTMLAnchorElement
+): string | null {
   const endpointMethod = anchor
     .querySelector('.endpoint-method')
     ?.textContent?.trim();
@@ -229,7 +224,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   );
 
   useEffect(() => {
-    if (catalogQuery.isLoading || !queryState.categoryId || selectedCategoryId) {
+    if (
+      catalogQuery.isLoading ||
+      !queryState.categoryId ||
+      selectedCategoryId
+    ) {
       return;
     }
 
@@ -331,14 +330,20 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   );
   const selectedCategoryOperations = useMemo(
     () =>
-      (categoryOperationsQuery.data?.pages.flatMap((page) => page.operations) ?? []).map(
-        (operation) => ({
-          ...operation,
-          categoryId: selectedCategoryId,
-          categoryLabel: selectedCategory?.label ?? null
-        })
-      ),
-    [categoryOperationsQuery.data?.pages, selectedCategory?.label, selectedCategoryId]
+      (
+        categoryOperationsQuery.data?.pages.flatMap(
+          (page) => page.operations
+        ) ?? []
+      ).map((operation) => ({
+        ...operation,
+        categoryId: selectedCategoryId,
+        categoryLabel: selectedCategory?.label ?? null
+      })),
+    [
+      categoryOperationsQuery.data?.pages,
+      selectedCategory?.label,
+      selectedCategoryId
+    ]
   );
 
   useEffect(() => {
@@ -363,6 +368,12 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     categoryOperationsQuery.data?.pages[0]?.total ??
     selectedCategory?.operation_count ??
     selectedCategoryOperations.length;
+  const {
+    isLoading: isCategoryOperationsLoading,
+    isFetchingNextPage: isFetchingCategoryOperationsNextPage,
+    hasNextPage: hasNextCategoryOperationsPage,
+    fetchNextPage: fetchNextCategoryOperationsPage
+  } = categoryOperationsQuery;
 
   const filteredOperations = useMemo(() => {
     const normalizedQuery = normalizeSearchText(operationSearch);
@@ -379,16 +390,16 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
   useEffect(() => {
     if (
       !selectedCategoryId ||
-      categoryOperationsQuery.isLoading ||
-      categoryOperationsQuery.isFetchingNextPage ||
+      isCategoryOperationsLoading ||
+      isFetchingCategoryOperationsNextPage ||
       !queryState.operationId ||
       selectedOperationId
     ) {
       return;
     }
 
-    if (categoryOperationsQuery.hasNextPage) {
-      void categoryOperationsQuery.fetchNextPage();
+    if (hasNextCategoryOperationsPage) {
+      void fetchNextCategoryOperationsPage();
       return;
     }
 
@@ -397,10 +408,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
       'replace'
     );
   }, [
-    categoryOperationsQuery.isLoading,
-    categoryOperationsQuery.isFetchingNextPage,
-    categoryOperationsQuery.hasNextPage,
-    categoryOperationsQuery.fetchNextPage,
+    fetchNextCategoryOperationsPage,
+    hasNextCategoryOperationsPage,
+    isCategoryOperationsLoading,
+    isFetchingCategoryOperationsNextPage,
     onQueryStateChange,
     queryState.operationId,
     selectedCategoryId,
@@ -434,7 +445,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     enabled: Boolean(selectedOperationId)
   });
   const authenticationQuery = useQuery({
-    queryKey: authentication?.queryKey ?? ['api-docs', 'authentication-disabled'],
+    queryKey: authentication?.queryKey ?? [
+      'api-docs',
+      'authentication-disabled'
+    ],
     queryFn: () => authentication!.queryFn(),
     enabled: Boolean(authentication && selectedOperationId)
   });
@@ -484,14 +498,14 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     void copyTextToClipboard(copyText)
       .then(() => {
         message.success(
-          i18nText("sharedUi", "auto.copied", {
+          i18nText('sharedUi', 'auto.copied', {
             defaultValue: 'Copied'
           })
         );
       })
       .catch(() => {
         message.error(
-          i18nText("sharedUi", "auto.copy_failed", {
+          i18nText('sharedUi', 'auto.copy_failed', {
             defaultValue: 'Copy failed'
           })
         );
@@ -500,10 +514,13 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
 
   function renderCategorySelector() {
     return (
-      <section className="api-docs-panel__toolbar" aria-label={i18nText("sharedUi", "auto.document_filter")}>
+      <section
+        className="api-docs-panel__toolbar"
+        aria-label={i18nText('sharedUi', 'auto.document_filter')}
+      >
         <div className="api-docs-panel__header-control">
           <Select
-            aria-label={i18nText("sharedUi", "auto.interface_category")}
+            aria-label={i18nText('sharedUi', 'auto.interface_category')}
             className="api-docs-panel__category-select"
             showSearch
             allowClear
@@ -512,10 +529,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
             options={categoryOptions}
             placeholder={
               categories.length === 0
-                ? i18nText("sharedUi", "auto.no_interface_categories")
+                ? i18nText('sharedUi', 'auto.no_interface_categories')
                 : showAllOperationsWhenNoCategory
-                  ? i18nText("sharedUi", "auto.all_interfaces")
-                  : i18nText("sharedUi", "auto.select_interface_category")
+                  ? i18nText('sharedUi', 'auto.all_interfaces')
+                  : i18nText('sharedUi', 'auto.select_interface_category')
             }
             optionRender={(option) => {
               const category = option.data as CategorySelectOption;
@@ -537,7 +554,9 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
                     className="api-docs-panel__category-option-count"
                     aria-hidden="true"
                   >
-                    {category.operationCount} {i18nText("sharedUi", "auto.interface_count_suffix")}</span>
+                    {category.operationCount}{' '}
+                    {i18nText('sharedUi', 'auto.interface_count_suffix')}
+                  </span>
                 </div>
               );
             }}
@@ -552,11 +571,14 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
                 operationId: null
               })
             }
-            notFoundContent={i18nText("sharedUi", "auto.no_matching_category")}
+            notFoundContent={i18nText('sharedUi', 'auto.no_matching_category')}
           />
         </div>
         <Typography.Text className="api-docs-panel__count">
-          {i18nText("sharedUi", "auto.total")}{totalOperations} {i18nText("sharedUi", "auto.interface_count_suffix")}</Typography.Text>
+          {i18nText('sharedUi', 'auto.total')}
+          {totalOperations}{' '}
+          {i18nText('sharedUi', 'auto.interface_count_suffix')}
+        </Typography.Text>
       </section>
     );
   }
@@ -600,11 +622,17 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Result
             status="info"
-            title={i18nText("sharedUi", "auto.view_details_after_selecting_interface")}
+            title={i18nText(
+              'sharedUi',
+              'auto.view_details_after_selecting_interface'
+            )}
             subTitle={
               showAllOperationsWhenNoCategory
-                ? i18nText("sharedUi", "auto.open_interface_from_left")
-                : i18nText("sharedUi", "auto.select_category_then_open_interface")
+                ? i18nText('sharedUi', 'auto.open_interface_from_left')
+                : i18nText(
+                    'sharedUi',
+                    'auto.select_category_then_open_interface'
+                  )
             }
           />
         </div>
@@ -616,7 +644,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Spin size="large" />
           <Typography.Text type="secondary">
-            {i18nText("sharedUi", "auto.loading")}{selectedOperation?.path ?? i18nText("sharedUi", "auto.current_interface")} {i18nText("sharedUi", "auto.details_suffix")}</Typography.Text>
+            {i18nText('sharedUi', 'auto.loading')}
+            {selectedOperation?.path ??
+              i18nText('sharedUi', 'auto.current_interface')}{' '}
+            {i18nText('sharedUi', 'auto.details_suffix')}
+          </Typography.Text>
         </div>
       );
     }
@@ -626,8 +658,11 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         <div className="api-docs-panel__detail-state">
           <Result
             status="error"
-            title={i18nText("sharedUi", "auto.interface_details_load_failed")}
-            subTitle={i18nText("sharedUi", "auto.interface_document_return_failed")}
+            title={i18nText('sharedUi', 'auto.interface_details_load_failed')}
+            subTitle={i18nText(
+              'sharedUi',
+              'auto.interface_document_return_failed'
+            )}
           />
         </div>
       );
@@ -662,15 +697,17 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
     content = (
       <div className="api-docs-panel__detail-state">
         <Spin size="large" />
-        <Typography.Text type="secondary">{i18nText("sharedUi", "auto.loading_interface_directory")}</Typography.Text>
+        <Typography.Text type="secondary">
+          {i18nText('sharedUi', 'auto.loading_interface_directory')}
+        </Typography.Text>
       </div>
     );
   } else if (catalogQuery.isError) {
     content = (
       <Result
         status="error"
-        title={i18nText("sharedUi", "auto.interface_directory_load_failed")}
-        subTitle={i18nText("sharedUi", "auto.api_doc_permission_retry")}
+        title={i18nText('sharedUi', 'auto.interface_directory_load_failed')}
+        subTitle={i18nText('sharedUi', 'auto.api_doc_permission_retry')}
       />
     );
   } else {
@@ -679,7 +716,10 @@ export function ApiDocsExplorer<TAuthenticationSnapshot = unknown>({
         {toolbarPortalElement ? null : renderCategorySelector()}
         <div className="api-docs-panel__workspace">
           {renderOperationPane()}
-          <section className="api-docs-panel__detail" aria-label={i18nText("sharedUi", "auto.api_documentation_details")}>
+          <section
+            className="api-docs-panel__detail"
+            aria-label={i18nText('sharedUi', 'auto.api_documentation_details')}
+          >
             {renderDetailPane()}
           </section>
         </div>
