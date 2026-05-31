@@ -37,12 +37,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .and_then(Value::as_array)
         .ok_or_else(|| AnthropicCompatError::invalid("messages is required"))?;
 
-    let system = object
-        .get("system")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
+    let mut system_parts = anthropic_system_content_parts(object.get("system"));
     let last_user_index = messages
         .iter()
         .rposition(|message| message.get("role").and_then(Value::as_str) == Some("user"))
@@ -50,11 +45,9 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
     let latest_user_content = messages[last_user_index]
         .get("content")
         .ok_or_else(|| AnthropicCompatError::invalid("message content is required"))?;
-    let query = sanitize_anthropic_compat_text(
-        "user",
-        &anthropic_current_user_text_content(latest_user_content)?,
-    )
-    .unwrap_or_default();
+    let latest_user_text = anthropic_current_user_text_content(latest_user_content)?;
+    collect_system_reminder_parts(&mut system_parts, &latest_user_text);
+    let query = sanitize_anthropic_compat_text("user", &latest_user_text).unwrap_or_default();
     let latest_user_media_blocks = query_media_content_blocks(latest_user_content);
 
     let mut history = Vec::new();
@@ -69,8 +62,11 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         if index == last_user_index {
             continue;
         }
-        let content = sanitize_anthropic_compat_text(role, &anthropic_text_content(content_value)?)
-            .unwrap_or_default();
+        let raw_content = anthropic_text_content(content_value)?;
+        if role == "user" {
+            collect_system_reminder_parts(&mut system_parts, &raw_content);
+        }
+        let content = sanitize_anthropic_compat_text(role, &raw_content).unwrap_or_default();
         let content_blocks = history_content_blocks(role, content_value);
         if content.trim().is_empty() && content_blocks.is_none() {
             continue;
@@ -118,7 +114,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         "metadata": metadata,
         "compatibility_mode": "anthropic-messages-v1"
     });
-    if let Some(system) = system {
+    if let Some(system) = system_from_parts(system_parts) {
         native["system"] = Value::String(system);
     }
     if response_mode.is_none() {
@@ -130,6 +126,65 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
 
     serde_json::from_value(native)
         .map_err(|_| AnthropicCompatError::invalid("failed to build Native request"))
+}
+
+fn anthropic_system_content_parts(value: Option<&Value>) -> Vec<String> {
+    let mut parts = Vec::new();
+    match value {
+        Some(Value::String(text)) => push_system_part(&mut parts, text),
+        Some(Value::Array(blocks)) => {
+            for block in blocks {
+                match block {
+                    Value::String(text) => push_system_part(&mut parts, text),
+                    Value::Object(object) => {
+                        if let Some(text) = object.get("text").and_then(Value::as_str) {
+                            push_system_part(&mut parts, text);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+    parts
+}
+
+fn collect_system_reminder_parts(parts: &mut Vec<String>, content: &str) {
+    for reminder in xml_tag_block_contents(content, "system-reminder") {
+        push_system_part(parts, &reminder);
+    }
+}
+
+fn xml_tag_block_contents(content: &str, tag: &str) -> Vec<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut output = Vec::new();
+    let mut offset = 0;
+
+    while let Some(start) = content[offset..].find(&open) {
+        let content_start = offset + start + open.len();
+        let Some(end) = content[content_start..].find(&close) else {
+            break;
+        };
+        let content_end = content_start + end;
+        output.push(content[content_start..content_end].to_string());
+        offset = content_end + close.len();
+    }
+
+    output
+}
+
+fn push_system_part(parts: &mut Vec<String>, content: &str) {
+    let content = content.trim();
+    if content.is_empty() || parts.iter().any(|part| part == content) {
+        return;
+    }
+    parts.push(content.to_string());
+}
+
+fn system_from_parts(parts: Vec<String>) -> Option<String> {
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
 fn compatibility_payload(object: &serde_json::Map<String, Value>) -> Value {
@@ -608,7 +663,36 @@ mod tests {
         .unwrap();
 
         assert_eq!(request.query, "hi？");
+        assert_eq!(request.system.as_deref(), Some("internal tools"));
         assert!(request.history.is_empty());
+    }
+
+    #[test]
+    fn maps_top_level_system_content_blocks_into_native_system() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "system": [
+                {
+                    "type": "text",
+                    "text": "Use Claude Code project instructions.",
+                    "cache_control": { "type": "ephemeral" }
+                },
+                {
+                    "type": "text",
+                    "text": "Preserve repository safety rules."
+                }
+            ],
+            "messages": [
+                { "role": "user", "content": "hi？" }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.system.as_deref(),
+            Some("Use Claude Code project instructions.\n\nPreserve repository safety rules.")
+        );
+        assert_eq!(request.query, "hi？");
     }
 
     #[test]
@@ -651,6 +735,7 @@ mod tests {
             ]
         );
         assert_eq!(request.inputs.as_value()["tools"][0]["name"], json!("Read"));
+        assert_eq!(request.system.as_deref(), Some("available tools"));
     }
 
     #[test]

@@ -62,7 +62,14 @@ const runtimeApi = vi.hoisted(() => ({
     applicationId: string,
     runId: string
   ) =>
-    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'conversation-messages'
+    ] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
@@ -142,16 +149,25 @@ function conversationMessagesPage(
 ) {
   return {
     items: items.map((item) => ({
-      application_id: 'app-1',
-      scope_id: 'workspace-1',
-      conversation_id: 'conversation-1',
-      status: 'succeeded',
-      created_at: item.started_at ?? '2026-04-17T09:00:00Z',
-      ...item
+      run_id: item.flow_run_id ?? item.id,
+      detail_run_id: item.flow_run_id,
+      can_open_detail: Boolean(item.flow_run_id),
+      role: item.role,
+      content: item.content,
+      started_at: item.started_at ?? '2026-04-17T09:00:00Z',
+      finished_at: item.finished_at ?? '2026-04-17T09:00:01Z',
+      status: item.status ?? 'succeeded',
+      query: null,
+      model: null,
+      answer: null,
+      is_current: item.flow_run_id === 'run-1'
     })),
-    total: items.length,
-    page: 1,
-    page_size: 20
+    page: {
+      has_before: false,
+      has_after: false,
+      before_cursor: null,
+      after_cursor: null
+    }
   };
 }
 
@@ -305,6 +321,7 @@ describe('ApplicationLogsPage - floating windows', () => {
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
+    runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
 
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
@@ -328,49 +345,42 @@ describe('ApplicationLogsPage - floating windows', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockImplementation(async (appId, runId) => {
-      if (runId === 'run-0') {
-        return {
-          ...sampleRunDetail(),
-          run: {
-            ...sampleRunDetail().run,
-            id: 'run-0',
-            started_at: null,
-            finished_at: null
-          },
-          flow_run: {
-            ...sampleRunDetail().flow_run,
-            id: 'run-0',
-            started_at: null,
-            finished_at: null
-          },
-          statistics: {
-            total_tokens: null,
-            unique_node_count: 0,
-            tool_callback_count: 0
-          },
-          node_runs: []
-        };
+    runtimeApi.fetchApplicationRunDetail.mockImplementation(
+      async (appId, runId) => {
+        if (runId === 'run-0') {
+          return {
+            ...sampleRunDetail(),
+            run: {
+              ...sampleRunDetail().run,
+              id: 'run-0',
+              started_at: null,
+              finished_at: null
+            },
+            flow_run: {
+              ...sampleRunDetail().flow_run,
+              id: 'run-0',
+              started_at: null,
+              finished_at: null
+            },
+            statistics: {
+              total_tokens: null,
+              unique_node_count: 0,
+              tool_callback_count: 0
+            },
+            node_runs: []
+          };
+        }
+        return sampleRunDetail();
       }
-      return sampleRunDetail();
-    });
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
+    );
+    runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
-          id: 'msg-run-0-user',
-          flow_run_id: 'run-0',
-          role: 'user',
-          content: '上一轮问题',
+          id: 'msg-history-system',
+          flow_run_id: null,
+          role: 'system',
+          content: '你是项目助手',
           sequence: 1,
-          started_at: '2026-04-17T08:59:00Z',
-          finished_at: '2026-04-17T08:59:01Z'
-        },
-        {
-          id: 'msg-run-0-assistant',
-          flow_run_id: 'run-0',
-          role: 'assistant',
-          content: '上一轮回答',
-          sequence: 2,
           started_at: '2026-04-17T08:59:00Z',
           finished_at: '2026-04-17T08:59:01Z'
         },
@@ -379,7 +389,7 @@ describe('ApplicationLogsPage - floating windows', () => {
           flow_run_id: 'run-1',
           role: 'user',
           content: '总结退款政策',
-          sequence: 3,
+          sequence: 2,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z'
         },
@@ -388,7 +398,7 @@ describe('ApplicationLogsPage - floating windows', () => {
           flow_run_id: 'run-1',
           role: 'assistant',
           content: '退款政策摘要',
-          sequence: 4,
+          sequence: 3,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z'
         }
@@ -472,12 +482,8 @@ describe('ApplicationLogsPage - floating windows', () => {
 
     await waitFor(() => {
       expect(
-        runtimeApi.fetchApplicationConversationMessages
-      ).toHaveBeenCalledWith('app-1', {
-        flowRunId: 'run-1',
-        page: 1,
-        pageSize: 5
-      });
+        runtimeApi.fetchApplicationRunConversationMessages
+      ).toHaveBeenCalledWith('app-1', 'run-1', { limit: 5 });
     });
     expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
     const detailPane = await screen.findByRole('complementary', {
@@ -525,9 +531,15 @@ describe('ApplicationLogsPage - floating windows', () => {
     const conversation = await screen.findByTestId(
       'debug-conversation-messages'
     );
-    expect(within(conversation).getAllByText('User')).toHaveLength(2);
-    expect(within(conversation).getByText('上一轮问题')).toBeInTheDocument();
-    expect(within(conversation).getByText('上一轮回答')).toBeInTheDocument();
+    expect(within(conversation).getByText('System')).toBeInTheDocument();
+    expect(within(conversation).getByText('你是项目助手')).toBeInTheDocument();
+    expect(within(conversation).getAllByText('User')).toHaveLength(1);
+    expect(
+      within(conversation).queryByText('上一轮问题')
+    ).not.toBeInTheDocument();
+    expect(
+      within(conversation).queryByText('上一轮回答')
+    ).not.toBeInTheDocument();
     expect(within(conversation).getByText('总结退款政策')).toBeInTheDocument();
     expect(within(conversation).getByText('退款政策摘要')).toBeInTheDocument();
     const composerInput = screen.getByPlaceholderText('和 Bot 聊天');
@@ -569,7 +581,10 @@ describe('ApplicationLogsPage - floating windows', () => {
       name: '对话日志'
     });
     expect(logPanel).toBeInTheDocument();
-    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith('app-1', 'run-0');
+    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+      'app-1',
+      'run-1'
+    );
     expect(
       screen.getByRole('dialog', { name: '对话日志' })
     ).toBeInTheDocument();
@@ -586,7 +601,6 @@ describe('ApplicationLogsPage - floating windows', () => {
       '退款政策摘要'
     );
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
-    expect(within(logPanel).getAllByText('—').length).toBeGreaterThan(0);
     expect(within(logPanel).queryByText('节点数')).not.toBeInTheDocument();
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
@@ -604,6 +618,7 @@ describe('ApplicationLogsPage - floating windows', () => {
   test('opens a waiting callback conversation log without active polling', async () => {
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
+    runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
       applicationRunsPage([
         {
@@ -622,7 +637,7 @@ describe('ApplicationLogsPage - floating windows', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationConversationMessages
+    runtimeApi.fetchApplicationRunConversationMessages
       .mockResolvedValueOnce(
         conversationMessagesPage([
           {
@@ -682,7 +697,7 @@ describe('ApplicationLogsPage - floating windows', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
 
     expect(
-      runtimeApi.fetchApplicationConversationMessages.mock.calls.length
+      runtimeApi.fetchApplicationRunConversationMessages.mock.calls.length
     ).toBe(1);
     expect(await screen.findByText('等待工具结果')).toBeInTheDocument();
     await act(async () => {
@@ -690,7 +705,7 @@ describe('ApplicationLogsPage - floating windows', () => {
     });
     expect(screen.queryByText('最终回答')).not.toBeInTheDocument();
     expect(
-      runtimeApi.fetchApplicationConversationMessages.mock.calls.length
+      runtimeApi.fetchApplicationRunConversationMessages.mock.calls.length
     ).toBe(1);
   }, 8_000);
 
