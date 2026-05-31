@@ -119,6 +119,8 @@ pub struct AnthropicMessageResponse {
 #[derive(Debug, Default, Serialize, ToSchema)]
 pub struct AnthropicUsage {
     pub input_tokens: u64,
+    pub cache_creation_input_tokens: u64,
+    pub cache_read_input_tokens: u64,
     pub output_tokens: u64,
 }
 
@@ -641,6 +643,11 @@ fn anthropic_usage(
     };
     AnthropicUsage {
         input_tokens: usage.prompt_tokens.unwrap_or_default(),
+        cache_creation_input_tokens: usage.cache_write_tokens.unwrap_or_default(),
+        cache_read_input_tokens: usage
+            .cache_read_tokens
+            .or(usage.input_cache_hit_tokens)
+            .unwrap_or_default(),
         output_tokens: usage.completion_tokens.unwrap_or_default(),
     }
 }
@@ -653,10 +660,10 @@ fn to_anthropic_count_tokens_response(request: &Value) -> AnthropicCountTokensRe
 
 fn anthropic_probe_response(request: &Value, model: &str) -> Option<AnthropicMessageResponse> {
     if request.get("stream").and_then(Value::as_bool) == Some(true)
-        || !request
+        || request
             .get("max_tokens")
             .and_then(Value::as_u64)
-            .is_some_and(|max_tokens| max_tokens <= 1)
+            .is_none_or(|max_tokens| max_tokens > 1)
     {
         return None;
     }
@@ -674,6 +681,8 @@ fn anthropic_probe_response(request: &Value, model: &str) -> Option<AnthropicMes
         stop_reason: "end_turn",
         usage: AnthropicUsage {
             input_tokens: anthropic_count_input_tokens(request),
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
             output_tokens: 0,
         },
     })

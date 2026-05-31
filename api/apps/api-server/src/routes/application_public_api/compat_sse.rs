@@ -2004,6 +2004,49 @@ fn openai_chat_usage_payload(usage: Option<&NativeUsage>) -> Value {
     })
 }
 
+fn anthropic_message_start_usage_payload(usage: Option<&NativeUsage>) -> Value {
+    let Some(usage) = usage else {
+        return json!({
+            "input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 0
+        });
+    };
+
+    json!({
+        "input_tokens": usage.prompt_tokens.unwrap_or_default(),
+        "cache_creation_input_tokens": usage.cache_write_tokens.unwrap_or_default(),
+        "cache_read_input_tokens": anthropic_cache_read_input_tokens(usage),
+        "output_tokens": 0
+    })
+}
+
+fn anthropic_message_delta_usage_payload(usage: Option<&NativeUsage>) -> Value {
+    let Some(usage) = usage else {
+        return json!({
+            "input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 0
+        });
+    };
+
+    json!({
+        "input_tokens": usage.prompt_tokens.unwrap_or_default(),
+        "cache_creation_input_tokens": usage.cache_write_tokens.unwrap_or_default(),
+        "cache_read_input_tokens": anthropic_cache_read_input_tokens(usage),
+        "output_tokens": usage.completion_tokens.unwrap_or_default()
+    })
+}
+
+fn anthropic_cache_read_input_tokens(usage: &NativeUsage) -> u64 {
+    usage
+        .cache_read_tokens
+        .or(usage.input_cache_hit_tokens)
+        .unwrap_or_default()
+}
+
 fn openai_response_function_call_output_items(payload: &Value) -> Option<Vec<Value>> {
     let callback_task_id = llm_tool_callback_task_id(payload)?;
     let calls = llm_tool_calls(payload)?;
@@ -2122,7 +2165,7 @@ fn anthropic_completed_run_to_sse(
         RuntimeEventEnvelope::new(run.id, 0, debug_stream_events::flow_started(run.id)),
     );
     if let Some(payload) = waiting_payload_from_run(run) {
-        if let Some(tool_events) = mapper.anthropic_tool_use_events(&payload) {
+        if let Some(tool_events) = mapper.anthropic_tool_use_events(&payload, run.usage.as_ref()) {
             events.extend(tool_events);
             return events;
         }
@@ -2134,7 +2177,7 @@ fn anthropic_completed_run_to_sse(
             events.extend(mapper.runtime_event_to_sse(run, event));
         }
     }
-    events.extend(mapper.anthropic_stop_events());
+    events.extend(mapper.anthropic_stop_events(run.usage.as_ref()));
     events
 }
 
@@ -2298,7 +2341,7 @@ impl AnthropicStreamMapper {
                         "model": self.model,
                         "content": [],
                         "stop_reason": null,
-                        "usage": {"input_tokens": 0, "output_tokens": 0}
+                        "usage": anthropic_message_start_usage_payload(initial_run.usage.as_ref())
                     }
                 }),
             )],
@@ -2343,7 +2386,7 @@ impl AnthropicStreamMapper {
             "text_delta" | "reasoning_delta" => Vec::new(),
             "flow_finished" => self.anthropic_terminal_events(initial_run, &envelope.payload),
             "waiting_callback" => self
-                .anthropic_tool_use_events(&envelope.payload)
+                .anthropic_tool_use_events(&envelope.payload, initial_run.usage.as_ref())
                 .unwrap_or_else(required_action_not_supported_anthropic_sse),
             "waiting_human" => required_action_not_supported_anthropic_sse(),
             "flow_failed" => {
@@ -2362,7 +2405,7 @@ impl AnthropicStreamMapper {
                     )]
                 }
             }
-            "flow_cancelled" => self.anthropic_stop_events(),
+            "flow_cancelled" => self.anthropic_stop_events(initial_run.usage.as_ref()),
             _ => Vec::new(),
         }
     }
@@ -2396,7 +2439,7 @@ impl AnthropicStreamMapper {
                 _ => {}
             }
         }
-        events.extend(self.anthropic_stop_events());
+        events.extend(self.anthropic_stop_events(initial_run.usage.as_ref()));
         events
     }
 
@@ -2414,7 +2457,10 @@ impl AnthropicStreamMapper {
         events
     }
 
-    fn anthropic_stop_events(&mut self) -> Vec<Result<Event, Infallible>> {
+    fn anthropic_stop_events(
+        &mut self,
+        usage: Option<&NativeUsage>,
+    ) -> Vec<Result<Event, Infallible>> {
         let mut events = Vec::new();
         if self.active_content.is_none() && self.next_content_index == 0 {
             events.extend(self.ensure_anthropic_content_block(AnthropicContentBlockKind::Text));
@@ -2425,7 +2471,7 @@ impl AnthropicStreamMapper {
             json!({
                 "type": "message_delta",
                 "delta": {"stop_reason": "end_turn"},
-                "usage": {"output_tokens": 0}
+                "usage": anthropic_message_delta_usage_payload(usage)
             }),
         ));
         events.push(event_json_sse(
@@ -2438,6 +2484,7 @@ impl AnthropicStreamMapper {
     fn anthropic_tool_use_events(
         &mut self,
         payload: &Value,
+        usage: Option<&NativeUsage>,
     ) -> Option<Vec<Result<Event, Infallible>>> {
         let blocks = anthropic_tool_use_blocks_from_waiting_payload(payload)?;
         let mut events = self.close_active_anthropic_content_block();
@@ -2481,7 +2528,7 @@ impl AnthropicStreamMapper {
             json!({
                 "type": "message_delta",
                 "delta": {"stop_reason": "tool_use"},
-                "usage": {"output_tokens": 0}
+                "usage": anthropic_message_delta_usage_payload(usage)
             }),
         ));
         events.push(event_json_sse(
@@ -3338,6 +3385,7 @@ mod tests {
             prompt_tokens: Some(11),
             completion_tokens: Some(7),
             total_tokens: Some(18),
+            ..Default::default()
         });
         let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
         let events = mapper.runtime_event_to_sse(
@@ -3360,6 +3408,35 @@ mod tests {
         assert!(body.contains("\"input_tokens\":11"), "{body}");
         assert!(body.contains("\"output_tokens\":7"), "{body}");
         assert!(body.contains("\"total_tokens\":18"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn anthropic_completed_stream_includes_usage_for_claude_code_cost_and_context() {
+        let mut run = native_run();
+        run.status = NativeRunStatus::Succeeded;
+        run.answer = Some("Final answer".to_string());
+        run.usage = Some(NativeUsage {
+            prompt_tokens: Some(11),
+            completion_tokens: Some(7),
+            total_tokens: Some(18),
+            input_cache_hit_tokens: Some(3),
+            cache_write_tokens: Some(2),
+            ..Default::default()
+        });
+
+        let response =
+            completed_compatible_stream(anthropic_completed_run_to_sse(&run, "1flowbase"));
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("event: message_start"), "{body}");
+        assert!(body.contains("\"input_tokens\":11"), "{body}");
+        assert!(body.contains("\"cache_read_input_tokens\":3"), "{body}");
+        assert!(body.contains("\"cache_creation_input_tokens\":2"), "{body}");
+        assert!(body.contains("event: message_delta"), "{body}");
+        assert!(body.contains("\"output_tokens\":7"), "{body}");
     }
 
     #[tokio::test]
@@ -4106,20 +4183,23 @@ mod tests {
         let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
         let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
         let events = mapper
-            .anthropic_tool_use_events(&json!({
-                "callback_kind": "llm_tool_calls",
-                "callback_task_id": callback_task_id,
-                "tool_calls": [
-                    {
-                        "id": "toolu_bash",
-                        "name": "Bash",
-                        "arguments": {
-                            "command": "pwd && ls -la",
-                            "description": "List files"
+            .anthropic_tool_use_events(
+                &json!({
+                    "callback_kind": "llm_tool_calls",
+                    "callback_task_id": callback_task_id,
+                    "tool_calls": [
+                        {
+                            "id": "toolu_bash",
+                            "name": "Bash",
+                            "arguments": {
+                                "command": "pwd && ls -la",
+                                "description": "List files"
+                            }
                         }
-                    }
-                ]
-            }))
+                    ]
+                }),
+                None,
+            )
             .expect("LLM callback should map to Anthropic tool_use stream events");
         let response = completed_compatible_stream(events);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)

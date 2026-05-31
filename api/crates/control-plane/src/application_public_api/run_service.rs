@@ -460,6 +460,9 @@ pub fn native_result_from_run_detail(
     metadata: Value,
 ) -> NativeRunResult {
     let mut result = native_result_from_flow_run(&detail.flow_run, metadata);
+    if result.usage.is_none() {
+        result.usage = aggregate_node_usage(&detail.node_runs);
+    }
     if let Some(task) = latest_pending_callback_task(&detail.callback_tasks) {
         result.required_action = Some(native_required_action_from_callback_task(task));
         if task.callback_kind == "llm_tool_calls" {
@@ -525,11 +528,101 @@ fn extract_tool_calls(output_payload: &Value) -> Option<Value> {
 
 fn extract_usage(output_payload: &Value) -> Option<super::native::NativeUsage> {
     let usage = output_payload.get("usage")?;
-    Some(super::native::NativeUsage {
-        prompt_tokens: usage.get("prompt_tokens").and_then(Value::as_u64),
-        completion_tokens: usage.get("completion_tokens").and_then(Value::as_u64),
-        total_tokens: usage.get("total_tokens").and_then(Value::as_u64),
-    })
+    usage_from_payload(usage)
+}
+
+fn aggregate_node_usage(node_runs: &[domain::NodeRunRecord]) -> Option<super::native::NativeUsage> {
+    let mut aggregate = super::native::NativeUsage::default();
+    let mut saw_usage = false;
+
+    for node_run in node_runs {
+        let usage = node_run
+            .metrics_payload
+            .get("usage")
+            .and_then(usage_from_payload)
+            .or_else(|| {
+                node_run
+                    .output_payload
+                    .get("usage")
+                    .and_then(usage_from_payload)
+            });
+        let Some(usage) = usage else {
+            continue;
+        };
+        saw_usage = true;
+        merge_usage(&mut aggregate, usage_with_total(usage));
+    }
+
+    saw_usage.then_some(aggregate)
+}
+
+fn usage_from_payload(usage: &Value) -> Option<super::native::NativeUsage> {
+    let native_usage = super::native::NativeUsage {
+        prompt_tokens: usage_number(usage, &["prompt_tokens", "input_tokens"]),
+        completion_tokens: usage_number(usage, &["completion_tokens", "output_tokens"]),
+        total_tokens: usage_number(usage, &["total_tokens"]),
+        reasoning_tokens: usage_number(usage, &["reasoning_tokens"]),
+        input_cache_hit_tokens: usage_number(usage, &["input_cache_hit_tokens"]),
+        input_cache_miss_tokens: usage_number(usage, &["input_cache_miss_tokens"]),
+        cache_read_tokens: usage_number(usage, &["cache_read_tokens", "cache_read_input_tokens"]),
+        cache_write_tokens: usage_number(
+            usage,
+            &["cache_write_tokens", "cache_creation_input_tokens"],
+        ),
+    };
+
+    native_usage_has_any_tokens(&native_usage).then_some(native_usage)
+}
+
+fn usage_number(usage: &Value, keys: &[&str]) -> Option<u64> {
+    keys.iter()
+        .find_map(|key| usage.get(*key).and_then(Value::as_u64))
+}
+
+fn usage_with_total(mut usage: super::native::NativeUsage) -> super::native::NativeUsage {
+    if usage.total_tokens.is_none() {
+        usage.total_tokens = match (usage.prompt_tokens, usage.completion_tokens) {
+            (Some(prompt_tokens), Some(completion_tokens)) => {
+                Some(prompt_tokens + completion_tokens)
+            }
+            _ => None,
+        };
+    }
+    usage
+}
+
+fn native_usage_has_any_tokens(usage: &super::native::NativeUsage) -> bool {
+    usage.prompt_tokens.is_some()
+        || usage.completion_tokens.is_some()
+        || usage.total_tokens.is_some()
+        || usage.reasoning_tokens.is_some()
+        || usage.input_cache_hit_tokens.is_some()
+        || usage.input_cache_miss_tokens.is_some()
+        || usage.cache_read_tokens.is_some()
+        || usage.cache_write_tokens.is_some()
+}
+
+fn merge_usage(target: &mut super::native::NativeUsage, delta: super::native::NativeUsage) {
+    add_usage_tokens(&mut target.prompt_tokens, delta.prompt_tokens);
+    add_usage_tokens(&mut target.completion_tokens, delta.completion_tokens);
+    add_usage_tokens(&mut target.total_tokens, delta.total_tokens);
+    add_usage_tokens(&mut target.reasoning_tokens, delta.reasoning_tokens);
+    add_usage_tokens(
+        &mut target.input_cache_hit_tokens,
+        delta.input_cache_hit_tokens,
+    );
+    add_usage_tokens(
+        &mut target.input_cache_miss_tokens,
+        delta.input_cache_miss_tokens,
+    );
+    add_usage_tokens(&mut target.cache_read_tokens, delta.cache_read_tokens);
+    add_usage_tokens(&mut target.cache_write_tokens, delta.cache_write_tokens);
+}
+
+fn add_usage_tokens(target: &mut Option<u64>, delta: Option<u64>) {
+    if let Some(delta) = delta {
+        *target = Some(target.unwrap_or_default() + delta);
+    }
 }
 
 fn generate_external_conversation_id() -> String {
@@ -765,5 +858,141 @@ fn native_status(status: domain::FlowRunStatus) -> NativeRunStatus {
         domain::FlowRunStatus::Succeeded => NativeRunStatus::Succeeded,
         domain::FlowRunStatus::Failed => NativeRunStatus::Failed,
         domain::FlowRunStatus::Cancelled => NativeRunStatus::Cancelled,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use time::OffsetDateTime;
+    use uuid::Uuid;
+
+    #[test]
+    fn native_result_from_run_detail_aggregates_node_usage_when_flow_output_has_none() {
+        let detail = domain::ApplicationRunDetail {
+            flow_run: test_flow_run(json!({ "answer": "ok" })),
+            node_runs: vec![
+                test_node_run(
+                    "node-llm",
+                    json!({
+                        "input_tokens": 47,
+                        "output_tokens": 59,
+                        "total_tokens": 106,
+                        "input_cache_hit_tokens": 4,
+                        "cache_write_tokens": 2
+                    }),
+                ),
+                test_node_run(
+                    "node-llm-1",
+                    json!({
+                        "input_tokens": 196,
+                        "output_tokens": 1120,
+                        "total_tokens": 1316,
+                        "reasoning_tokens": 1063,
+                        "cache_read_tokens": 8
+                    }),
+                ),
+            ],
+            checkpoints: Vec::new(),
+            callback_tasks: Vec::new(),
+            events: Vec::new(),
+        };
+
+        let run = native_result_from_run_detail(&detail, json!({}));
+        let usage = run.usage.expect("node usage should be projected");
+
+        assert_eq!(usage.prompt_tokens, Some(243));
+        assert_eq!(usage.completion_tokens, Some(1179));
+        assert_eq!(usage.total_tokens, Some(1422));
+        assert_eq!(usage.reasoning_tokens, Some(1063));
+        assert_eq!(usage.input_cache_hit_tokens, Some(4));
+        assert_eq!(usage.cache_read_tokens, Some(8));
+        assert_eq!(usage.cache_write_tokens, Some(2));
+    }
+
+    #[test]
+    fn native_result_from_run_detail_prefers_flow_output_usage_selector() {
+        let detail = domain::ApplicationRunDetail {
+            flow_run: test_flow_run(json!({
+                "answer": "ok",
+                "usage": {
+                    "prompt_tokens": 11,
+                    "completion_tokens": 7,
+                    "total_tokens": 18
+                }
+            })),
+            node_runs: vec![test_node_run(
+                "node-llm",
+                json!({
+                    "input_tokens": 100,
+                    "output_tokens": 200,
+                    "total_tokens": 300
+                }),
+            )],
+            checkpoints: Vec::new(),
+            callback_tasks: Vec::new(),
+            events: Vec::new(),
+        };
+
+        let run = native_result_from_run_detail(&detail, json!({}));
+        let usage = run.usage.expect("flow usage should be projected");
+
+        assert_eq!(usage.prompt_tokens, Some(11));
+        assert_eq!(usage.completion_tokens, Some(7));
+        assert_eq!(usage.total_tokens, Some(18));
+    }
+
+    fn test_flow_run(output_payload: Value) -> domain::FlowRunRecord {
+        let created_at = OffsetDateTime::UNIX_EPOCH;
+        domain::FlowRunRecord {
+            id: Uuid::from_u128(0x11111111111111111111111111111111),
+            application_id: Uuid::from_u128(0x22222222222222222222222222222222),
+            flow_id: Uuid::from_u128(0x33333333333333333333333333333333),
+            draft_id: Uuid::from_u128(0x44444444444444444444444444444444),
+            compiled_plan_id: Some(Uuid::from_u128(0x55555555555555555555555555555555)),
+            debug_session_id: String::new(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "test".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: json!({}),
+            output_payload,
+            error_payload: None,
+            created_by: Uuid::from_u128(0x66666666666666666666666666666666),
+            authorized_account: None,
+            api_key_id: Some(Uuid::from_u128(0x77777777777777777777777777777777)),
+            publication_version_id: Some(Uuid::from_u128(0x88888888888888888888888888888888)),
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+            started_at: created_at,
+            finished_at: Some(created_at),
+            created_at,
+            updated_at: created_at,
+        }
+    }
+
+    fn test_node_run(node_id: &str, usage: Value) -> domain::NodeRunRecord {
+        let created_at = OffsetDateTime::UNIX_EPOCH;
+        domain::NodeRunRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: Uuid::from_u128(0x11111111111111111111111111111111),
+            node_id: node_id.to_string(),
+            node_type: "llm".to_string(),
+            node_alias: node_id.to_string(),
+            status: domain::NodeRunStatus::Succeeded,
+            input_payload: json!({}),
+            output_payload: json!({ "usage": usage.clone() }),
+            error_payload: None,
+            metrics_payload: json!({ "usage": usage }),
+            debug_payload: json!({}),
+            started_at: created_at,
+            finished_at: Some(created_at),
+        }
     }
 }

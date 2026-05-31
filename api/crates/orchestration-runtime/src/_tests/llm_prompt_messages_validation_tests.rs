@@ -208,6 +208,35 @@ fn plan_with_templated_prompt_message() -> CompiledPlan {
     plan
 }
 
+fn plan_with_system_only_prompt_message() -> CompiledPlan {
+    let mut plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
+    let node = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    node.bindings.insert(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![
+                vec!["node-start".to_string(), "query".to_string()],
+                vec!["node-start".to_string(), "previous_answer".to_string()],
+            ],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Polish the answer for this question:\n{{node-start.query}}\n\nAnswer:\n{{node-start.previous_answer}}"
+                    }
+                }
+            ]),
+        },
+    );
+    plan
+}
+
 #[tokio::test]
 async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
     let plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
@@ -248,6 +277,75 @@ async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn llm_runtime_executes_system_only_node_prompt_as_user_turn() {
+    let plan = plan_with_system_only_prompt_message();
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = CapturingProviderInvoker {
+        captured_input: captured_input.clone(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "previous_answer": "raw answer"
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+
+    assert_eq!(
+        input.messages.len(),
+        1,
+        "system-only node prompt should become an executable provider turn"
+    );
+    assert_eq!(
+        input.messages[0].role,
+        plugin_framework::provider_contract::ProviderMessageRole::User
+    );
+    assert!(
+        input
+            .system
+            .as_deref()
+            .is_some_and(|system| system.contains("raw answer")),
+        "system-only node prompt should still feed provider instructions"
+    );
+    assert!(
+        input.messages[0].content.contains("raw answer"),
+        "rendered system-only prompt should remain visible to the provider"
+    );
+
+    let trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+    assert_eq!(
+        trace.debug_payload["llm_context"]["compatibility_promotions"][0]["source_kind"],
+        json!("node_prompt_system_only")
+    );
+    assert!(
+        trace.debug_payload["llm_context"]["effective_system"]
+            .as_str()
+            .is_some_and(|system| system.contains("raw answer")),
+        "debug payload should show the preserved provider instructions"
+    );
 }
 
 #[tokio::test]

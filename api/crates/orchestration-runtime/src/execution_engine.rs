@@ -619,8 +619,10 @@ where
                 ),
                 Vec::new(),
                 true,
-                &invocation_messages,
-                Some(&invocation.debug_context),
+                LlmDebugInvocation {
+                    messages: &invocation_messages,
+                    context: Some(&invocation.debug_context),
+                },
             );
         }
         let output = match invoker.invoke_llm(attempt_runtime, invocation.input).await {
@@ -660,8 +662,10 @@ where
                     ),
                     Vec::new(),
                     true,
-                    &invocation_messages,
-                    Some(&invocation.debug_context),
+                    LlmDebugInvocation {
+                        messages: &invocation_messages,
+                        context: Some(&invocation.debug_context),
+                    },
                 );
             }
         };
@@ -734,8 +738,10 @@ where
                 ),
                 output.events,
                 true,
-                &invocation_messages,
-                Some(&invocation.debug_context),
+                LlmDebugInvocation {
+                    messages: &invocation_messages,
+                    context: Some(&invocation.debug_context),
+                },
             );
         }
 
@@ -754,8 +760,10 @@ where
                 output.time_to_first_token_ms,
             ),
             output.events,
-            &invocation_messages,
-            &invocation.debug_context,
+            LlmDebugInvocation {
+                messages: &invocation_messages,
+                context: Some(&invocation.debug_context),
+            },
         );
     }
 
@@ -779,8 +787,10 @@ where
         ),
         Vec::new(),
         true,
-        &[],
-        None,
+        LlmDebugInvocation {
+            messages: &[],
+            context: None,
+        },
     )
 }
 
@@ -1021,6 +1031,12 @@ struct LlmInvocationDebugContext {
     previous_response_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct LlmDebugInvocation<'a> {
+    messages: &'a [Value],
+    context: Option<&'a LlmInvocationDebugContext>,
+}
+
 impl LlmInvocationDebugContext {
     fn from_provider_context(
         context_policy: Value,
@@ -1075,6 +1091,12 @@ struct ProviderPromptContext {
     messages: Vec<ProviderMessage>,
     compatibility_promotions: Vec<Value>,
     system_sources: Vec<Value>,
+}
+
+#[derive(Debug, Clone)]
+struct SystemPromptPart {
+    content: String,
+    source: Value,
 }
 
 fn build_provider_invocation(
@@ -1911,8 +1933,11 @@ fn provider_context_from_prompt_messages(prompt_messages: Vec<Value>) -> Provide
             .unwrap_or(ProviderMessageRole::User);
 
         if role == ProviderMessageRole::System {
-            system_parts.push(content);
             let source = system_source_payload(message, index);
+            system_parts.push(SystemPromptPart {
+                content,
+                source: source.clone(),
+            });
             if source.get("source_kind").and_then(Value::as_str) == Some("history") {
                 compatibility_promotions.push(source.clone());
             }
@@ -1935,7 +1960,15 @@ fn provider_context_from_prompt_messages(prompt_messages: Vec<Value>) -> Provide
         }
     }
 
-    let system = (!system_parts.is_empty()).then(|| system_parts.join("\n\n"));
+    let system = if messages.is_empty() {
+        seed_user_turn_from_system_only_node_prompt(
+            &mut messages,
+            &system_parts,
+            &mut compatibility_promotions,
+        )
+    } else {
+        system_prompt_text(&system_parts)
+    };
 
     ProviderPromptContext {
         system,
@@ -1943,6 +1976,55 @@ fn provider_context_from_prompt_messages(prompt_messages: Vec<Value>) -> Provide
         compatibility_promotions,
         system_sources,
     }
+}
+
+fn seed_user_turn_from_system_only_node_prompt(
+    messages: &mut Vec<ProviderMessage>,
+    system_parts: &[SystemPromptPart],
+    compatibility_promotions: &mut Vec<Value>,
+) -> Option<String> {
+    let seeded_content = system_parts
+        .iter()
+        .filter(|part| system_prompt_part_can_seed_user_turn(&part.source))
+        .map(|part| part.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if seeded_content.trim().is_empty() {
+        return system_prompt_text(system_parts);
+    }
+
+    messages.push(ProviderMessage {
+        role: ProviderMessageRole::User,
+        content: seeded_content,
+        name: None,
+        tool_call_id: None,
+        tool_calls: None,
+        content_blocks: None,
+    });
+    compatibility_promotions.push(json!({
+        "source_kind": "node_prompt_system_only",
+        "source": "bindings.prompt_messages",
+        "target": "provider_messages",
+    }));
+
+    system_prompt_text(system_parts)
+}
+
+fn system_prompt_part_can_seed_user_turn(source: &Value) -> bool {
+    matches!(
+        source.get("source_kind").and_then(Value::as_str),
+        Some("node_prompt" | "prompt_messages")
+    )
+}
+
+fn system_prompt_text(system_parts: &[SystemPromptPart]) -> Option<String> {
+    (!system_parts.is_empty()).then(|| {
+        system_parts
+            .iter()
+            .map(|part| part.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    })
 }
 
 fn system_source_payload(message: &Value, fallback_index: usize) -> Value {
@@ -2387,8 +2469,7 @@ fn build_failed_llm_execution(
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
     include_output_payload: bool,
-    invocation_messages: &[Value],
-    invocation_debug_context: Option<&LlmInvocationDebugContext>,
+    debug_invocation: LlmDebugInvocation<'_>,
 ) -> Result<LlmNodeExecution> {
     let mut executor_output = Map::new();
     executor_output.insert(
@@ -2408,9 +2489,9 @@ fn build_failed_llm_execution(
         debug_facts: build_llm_debug_facts(
             runtime,
             None,
-            invocation_messages,
+            debug_invocation.messages,
             None,
-            invocation_debug_context,
+            debug_invocation.context,
         ),
         provider_events: provider_events.clone(),
     };
@@ -2447,8 +2528,7 @@ fn build_successful_llm_execution(
     final_content: Option<String>,
     metrics_payload: Value,
     provider_events: Vec<ProviderStreamEvent>,
-    invocation_messages: &[Value],
-    invocation_debug_context: &LlmInvocationDebugContext,
+    debug_invocation: LlmDebugInvocation<'_>,
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
     let answer_text = strip_llm_think_tags(&raw_text);
@@ -2507,9 +2587,9 @@ fn build_successful_llm_execution(
     let debug_facts = build_llm_debug_facts(
         runtime,
         Some(result),
-        invocation_messages,
+        debug_invocation.messages,
         metrics_payload.get("usage"),
-        Some(invocation_debug_context),
+        debug_invocation.context,
     );
     let raw = RawNodeExecutionResult {
         executor_output,

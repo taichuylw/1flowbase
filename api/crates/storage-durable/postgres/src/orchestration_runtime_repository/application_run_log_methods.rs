@@ -162,7 +162,7 @@ impl PgControlPlaneStore {
         .bind(flow_run.run_mode.as_str())
         .bind(flow_run.status.as_str())
         .bind(&flow_run.target_node_id)
-        .bind(&display_title)
+        .bind(display_title)
         .bind(serde_json::json!({}))
         .bind(&flow_run.external_user)
         .bind(&flow_run.authorized_account)
@@ -1423,9 +1423,7 @@ fn decode_artifact_preview_text(preview: &str) -> Option<String> {
         return trimmed_text(&decoded);
     }
 
-    let Some(stripped) = preview.strip_prefix('"') else {
-        return None;
-    };
+    let stripped = preview.strip_prefix('"')?;
     let completed = if stripped.ends_with('"') {
         preview.to_owned()
     } else {

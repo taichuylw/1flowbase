@@ -529,7 +529,7 @@ fn openapi_spec(
         path_item
             .as_object_mut()
             .expect("path item object")
-            .insert(method, operation_openapi_spec(&operation, locale));
+            .insert(method, operation_openapi_spec(operation, locale));
     }
 
     json!({
