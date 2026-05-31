@@ -2367,6 +2367,20 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     .await
     .unwrap();
 
+    sqlx::query(
+        r#"
+        update application_run_log_summaries
+        set input_tokens = case flow_run_id when $1 then 80 when $2 then 300 end,
+            output_tokens = case flow_run_id when $1 then 20 when $2 then 100 end
+        where flow_run_id in ($1, $2)
+        "#,
+    )
+    .bind(console_run.id)
+    .bind(public_run.id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
     sqlx::query("delete from api_keys where id = $1")
         .bind(api_key_id)
         .execute(store.pool())
@@ -2420,6 +2434,8 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.duration.p95_duration_ms.round() as i64, 38_250);
     assert_eq!(report.duration.slow_run_rate, 0.5);
     assert_eq!(report.tokens.total_tokens_sum, 500);
+    assert_eq!(report.tokens.input_tokens_sum, 380);
+    assert_eq!(report.tokens.output_tokens_sum, 120);
     assert_eq!(report.tokens.avg_tokens_per_run, 250.0);
     assert_eq!(report.tokens.token_recorded_count, 2);
     assert_eq!(report.tool_callbacks.total_tool_callback_count, 2);
@@ -2428,6 +2444,8 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.nodes.max_unique_node_count, 2);
     assert_eq!(report.concurrency.peak_concurrency, 2);
     assert_eq!(report.tokens_trend[0].total_tokens, 500);
+    assert_eq!(report.tokens_trend[0].input_tokens, 380);
+    assert_eq!(report.tokens_trend[0].output_tokens, 120);
     assert_eq!(report.protocols[0].protocol, "default");
     assert_eq!(report.protocols[1].protocol, "openai-responses-v1");
     assert_eq!(report.sources[0].source, "console");

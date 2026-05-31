@@ -121,12 +121,16 @@ function monitoringReport() {
       {
         bucket_start: '2026-05-01T00:00:00Z',
         run_count: 4,
-        total_tokens: 1200
+        total_tokens: 1200,
+        input_tokens: 900,
+        output_tokens: 300
       },
       {
         bucket_start: '2026-05-02T00:00:00Z',
         run_count: 8,
-        total_tokens: 4400
+        total_tokens: 4400,
+        input_tokens: 3300,
+        output_tokens: 1100
       }
     ],
     protocols: [
@@ -232,12 +236,16 @@ function hourlyMonitoringReport() {
       {
         bucket_start: '2026-05-01T08:00:00Z',
         run_count: 4,
-        total_tokens: 1200
+        total_tokens: 1200,
+        input_tokens: 900,
+        output_tokens: 300
       },
       {
         bucket_start: '2026-05-01T09:00:00Z',
         run_count: 8,
-        total_tokens: 4400
+        total_tokens: 4400,
+        input_tokens: 3300,
+        output_tokens: 1100
       }
     ]
   };
@@ -403,6 +411,20 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('Customer API')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
     expect(echartsMock.chart.setOption).toHaveBeenCalled();
+    const tokenTrendOption = echartsMock.chart.setOption.mock.calls[0]?.[0];
+    expect(tokenTrendOption.series).toHaveLength(2);
+    expect(tokenTrendOption.series[0]).toMatchObject({
+      name: 'Input tokens',
+      stack: 'Total',
+      type: 'line',
+      data: [900, 3300]
+    });
+    expect(tokenTrendOption.series[1]).toMatchObject({
+      name: 'Output tokens',
+      stack: 'Total',
+      type: 'line',
+      data: [300, 1100]
+    });
   });
 
   test('formats token metric cards with K M B suffixes', async () => {

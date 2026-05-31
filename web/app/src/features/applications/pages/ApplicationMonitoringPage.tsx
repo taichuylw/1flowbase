@@ -727,7 +727,7 @@ function MonitoringTable<T extends object>({
 
 function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
   return {
-    color: ['#1677ff'],
+    color: ['#1677ff', '#22c55e'],
     grid: {
       left: 54,
       right: 20,
@@ -770,8 +770,9 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
     ],
     series: [
       {
-        name: 'Tokens',
+        name: i18nText("applications", "auto.input_tokens"),
         type: 'line',
+        stack: 'Total',
         smooth: true,
         symbol: 'circle',
         symbolSize: 6,
@@ -789,14 +790,17 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
             ]
           }
         },
-        data: report.tokens_trend.map((point) => point.total_tokens)
+        data: report.tokens_trend.map((point) => point.input_tokens)
       },
       {
-        name: i18nText("applications", "auto.run_count"),
-        type: 'bar',
-        barMaxWidth: 16,
-        itemStyle: {
-          borderRadius: [4, 4, 0, 0],
+        name: i18nText("applications", "auto.output_tokens"),
+        type: 'line',
+        stack: 'Total',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        showSymbol: false,
+        areaStyle: {
           color: {
             type: 'linear',
             x: 0,
@@ -804,12 +808,12 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: '#34d399' },
-              { offset: 1, color: '#059669' }
+              { offset: 0, color: 'rgba(34, 197, 94, 0.24)' },
+              { offset: 1, color: 'rgba(34, 197, 94, 0.01)' }
             ]
           }
         },
-        data: report.tokens_trend.map((point) => point.run_count)
+        data: report.tokens_trend.map((point) => point.output_tokens)
       }
     ]
   };

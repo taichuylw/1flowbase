@@ -943,6 +943,8 @@ pub struct ApplicationRunMonitoringTokenTrendPoint {
     pub bucket_start: OffsetDateTime,
     pub run_count: i64,
     pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

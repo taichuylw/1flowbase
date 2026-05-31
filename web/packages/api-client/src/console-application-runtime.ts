@@ -158,6 +158,8 @@ export interface ConsoleApplicationRunMonitoringTokenTrendPoint {
   bucket_start: string;
   run_count: number;
   total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
 }
 
 export interface ConsoleApplicationRunMonitoringProtocolBreakdown {

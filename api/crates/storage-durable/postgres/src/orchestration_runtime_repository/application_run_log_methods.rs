@@ -860,8 +860,9 @@ impl PgControlPlaneStore {
             r#"
             select
                 date_trunc($4, started_at) as bucket_start,
-                count(*)::bigint as run_count,
-                coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint as total_tokens
+                count(*)::bigint as run_count, coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint as total_tokens,
+                coalesce(sum(coalesce(input_tokens, 0)), 0)::bigint as input_tokens,
+                coalesce(sum(coalesce(output_tokens, 0)), 0)::bigint as output_tokens
             from monitoring_logs
             group by bucket_start
             order by bucket_start asc
@@ -874,14 +875,13 @@ impl PgControlPlaneStore {
         .fetch_all(self.pool())
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| control_plane::ports::ApplicationRunMonitoringTokenTrendPoint {
+        Ok(rows.into_iter().map(|row| control_plane::ports::ApplicationRunMonitoringTokenTrendPoint {
                 bucket_start: row.get("bucket_start"),
                 run_count: row.get("run_count"),
                 total_tokens: row.get("total_tokens"),
-            })
-            .collect())
+                input_tokens: row.get("input_tokens"),
+                output_tokens: row.get("output_tokens"),
+            }).collect())
     }
 
     async fn application_run_monitoring_protocols(
