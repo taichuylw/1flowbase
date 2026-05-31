@@ -477,6 +477,22 @@ fn metrics_payload_total_tokens(metrics_payload: &serde_json::Value) -> Option<i
     metrics_payload.get("usage").and_then(usage_total_tokens)
 }
 
+fn metrics_payload_usage_token(
+    metrics_payload: &serde_json::Value,
+    usage_field: &str,
+) -> Option<i64> {
+    metrics_payload
+        .get("usage")
+        .and_then(|usage| usage.get(usage_field))
+        .and_then(usage_token_value)
+}
+
+fn metrics_payload_cache_hit_tokens(metrics_payload: &serde_json::Value) -> Option<i64> {
+    metrics_payload_usage_token(metrics_payload, "input_cache_hit_tokens")
+        .or_else(|| metrics_payload_usage_token(metrics_payload, "cache_read_tokens"))
+        .or_else(|| metrics_payload_usage_token(metrics_payload, "cached_input_tokens"))
+}
+
 fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
     if task.callback_kind != "llm_tool_calls" {
         return 0;
@@ -500,6 +516,9 @@ fn application_run_statistics(
 ) -> application_logs::ApplicationRunStatisticsResponse {
     let mut unique_node_ids = HashSet::new();
     let mut total_tokens = None;
+    let mut input_tokens = None;
+    let mut output_tokens = None;
+    let mut input_cache_hit_tokens = None;
 
     for node_run in &detail.node_runs {
         unique_node_ids.insert(node_run.node_id.as_str());
@@ -507,10 +526,26 @@ fn application_run_statistics(
         if let Some(node_tokens) = metrics_payload_total_tokens(&node_run.metrics_payload) {
             total_tokens = Some(total_tokens.unwrap_or(0) + node_tokens);
         }
+        if let Some(node_tokens) =
+            metrics_payload_usage_token(&node_run.metrics_payload, "input_tokens")
+        {
+            input_tokens = Some(input_tokens.unwrap_or(0) + node_tokens);
+        }
+        if let Some(node_tokens) =
+            metrics_payload_usage_token(&node_run.metrics_payload, "output_tokens")
+        {
+            output_tokens = Some(output_tokens.unwrap_or(0) + node_tokens);
+        }
+        if let Some(node_tokens) = metrics_payload_cache_hit_tokens(&node_run.metrics_payload) {
+            input_cache_hit_tokens = Some(input_cache_hit_tokens.unwrap_or(0) + node_tokens);
+        }
     }
 
     application_logs::ApplicationRunStatisticsResponse {
         total_tokens,
+        input_tokens,
+        output_tokens,
+        input_cache_hit_tokens,
         unique_node_count: unique_node_ids.len() as i64,
         tool_callback_count: detail
             .callback_tasks
@@ -713,6 +748,7 @@ fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
     value.and_then(|value| Uuid::parse_str(value).ok())
 }
 
+#[cfg(test)]
 async fn conversation_messages_from_single_run<F, Fut>(
     run: &domain::FlowRunRecord,
     query: &ApplicationConversationMessagesQuery,
@@ -722,18 +758,48 @@ where
     F: Fn(Uuid) -> Fut,
     Fut: Future<Output = Option<serde_json::Value>>,
 {
+    let items = imported_context_messages_from_run(run, load_debug_artifact).await;
+    conversation_messages_from_context_items(run, items, query, load_debug_artifact).await
+}
+
+async fn conversation_messages_from_run_detail<F, Fut>(
+    detail: &domain::ApplicationRunDetail,
+    query: &ApplicationConversationMessagesQuery,
+    load_debug_artifact: &F,
+) -> ApplicationConversationMessagesPageResponse
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let mut items = imported_context_messages_from_run(&detail.flow_run, load_debug_artifact).await;
+    if !items
+        .iter()
+        .any(|item| item.role.as_deref() == Some("system"))
+    {
+        if let Some(system) = llm_system_content_from_node_runs(detail, load_debug_artifact).await {
+            items.insert(
+                0,
+                imported_context_item(&detail.flow_run, 0, "system", system),
+            );
+        }
+    }
+
+    conversation_messages_from_context_items(&detail.flow_run, items, query, load_debug_artifact)
+        .await
+}
+
+async fn conversation_messages_from_context_items<F, Fut>(
+    run: &domain::FlowRunRecord,
+    mut items: Vec<ApplicationConversationMessageResponse>,
+    query: &ApplicationConversationMessagesQuery,
+    load_debug_artifact: &F,
+) -> ApplicationConversationMessagesPageResponse
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
     let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
-    let mut items = imported_context_messages_from_run(run, load_debug_artifact).await;
-    let system_items = if query.before.is_none() && query.after.is_none() {
-        items
-            .iter()
-            .filter(|item| item.role.as_deref() == Some("system"))
-            .cloned()
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
-    items.retain(|item| item.role.as_deref() != Some("system"));
+    renumber_imported_context_items(run.id, &mut items);
     items.push(
         to_application_conversation_message_response(
             run.clone(),
@@ -747,14 +813,10 @@ where
     let (start, end) = imported_context_window(run.id, total, limit, query);
 
     ApplicationConversationMessagesPageResponse {
-        items: system_items
+        items: items
             .into_iter()
-            .chain(
-                items
-                    .into_iter()
-                    .skip(start)
-                    .take(end.saturating_sub(start)),
-            )
+            .skip(start)
+            .take(end.saturating_sub(start))
             .collect(),
         page: ApplicationConversationMessagesPageInfoResponse {
             has_before: start > 0,
@@ -762,6 +824,15 @@ where
             before_cursor: (start > 0).then(|| imported_context_cursor(run.id, start)),
             after_cursor: (end < total).then(|| imported_context_cursor(run.id, end - 1)),
         },
+    }
+}
+
+fn renumber_imported_context_items(
+    run_id: Uuid,
+    items: &mut [ApplicationConversationMessageResponse],
+) {
+    for (index, item) in items.iter_mut().enumerate() {
+        item.run_id = imported_context_cursor(run_id, index);
     }
 }
 
@@ -823,6 +894,78 @@ where
     }
 
     items
+}
+
+async fn llm_system_content_from_node_runs<F, Fut>(
+    detail: &domain::ApplicationRunDetail,
+    load_debug_artifact: &F,
+) -> Option<String>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    for node_run in detail
+        .node_runs
+        .iter()
+        .filter(|node_run| node_run.node_type == "llm")
+    {
+        if let Some(system) =
+            llm_prompt_messages_system_content(&node_run.input_payload, load_debug_artifact).await
+        {
+            return Some(system);
+        }
+        if let Some(system) =
+            llm_effective_system_content(&node_run.debug_payload, load_debug_artifact).await
+        {
+            return Some(system);
+        }
+    }
+
+    None
+}
+
+async fn llm_prompt_messages_system_content<F, Fut>(
+    payload: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<String>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let prompt_messages_value = payload.get("prompt_messages")?;
+    let prompt_messages =
+        resolve_runtime_debug_artifact_value(prompt_messages_value, load_debug_artifact)
+            .await
+            .unwrap_or_else(|| prompt_messages_value.clone());
+    let messages = prompt_messages.as_array()?;
+    let system = messages
+        .iter()
+        .filter(|message| message.get("role").and_then(serde_json::Value::as_str) == Some("system"))
+        .filter_map(conversation_message_content)
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    (!system.trim().is_empty()).then_some(system)
+}
+
+async fn llm_effective_system_content<F, Fut>(
+    payload: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<String>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let effective_system = payload
+        .get("llm_context")
+        .and_then(|context| context.get("effective_system"))?;
+    let resolved_system =
+        resolve_runtime_debug_artifact_value(effective_system, load_debug_artifact).await;
+
+    resolved_system
+        .as_ref()
+        .and_then(conversation_prompt_text)
+        .or_else(|| conversation_prompt_text(effective_system))
 }
 
 async fn resolve_runtime_debug_artifact_value<F, Fut>(
@@ -2066,6 +2209,9 @@ pub async fn list_application_runs(
     for log_summary in runs_page.items {
         let statistics = application_logs::ApplicationRunStatisticsResponse {
             total_tokens: log_summary.total_tokens,
+            input_tokens: log_summary.input_tokens,
+            output_tokens: log_summary.output_tokens,
+            input_cache_hit_tokens: log_summary.input_cache_hit_tokens,
             unique_node_count: log_summary.unique_node_count,
             tool_callback_count: log_summary.tool_callback_count,
         };
@@ -2202,58 +2348,6 @@ pub async fn list_application_run_conversation_messages(
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
 
-    if let Some(conversation_id) = detail.flow_run.external_conversation_id.clone() {
-        let page = <MainDurableStore as OrchestrationRuntimeRepository>::list_application_conversation_runs_page(
-            &state.store,
-            id,
-            ListApplicationConversationRunsPageInput {
-                external_conversation_id: conversation_id,
-                around_run_id: query.around_run_id.or(Some(run_id)),
-                before_run_id: parse_optional_uuid_cursor(query.before.as_deref()),
-                after_run_id: parse_optional_uuid_cursor(query.after.as_deref()),
-                limit: query.limit.unwrap_or(5),
-            },
-        )
-        .await?;
-        let workspace_id = context.actor.current_workspace_id;
-        let load_debug_artifact = |artifact_id| {
-            let state = state.clone();
-
-            async move {
-                load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
-                    .await
-                    .ok()
-            }
-        };
-        let mut items = imported_context_messages_from_run(&detail.flow_run, &load_debug_artifact)
-            .await
-            .into_iter()
-            .filter(|item| item.role.as_deref() == Some("system"))
-            .collect::<Vec<_>>();
-        for run in page.items {
-            items.push(
-                to_application_conversation_message_response(
-                    run,
-                    Some(run_id),
-                    &load_debug_artifact,
-                )
-                .await,
-            );
-        }
-
-        return Ok(Json(ApiSuccess::new(
-            ApplicationConversationMessagesPageResponse {
-                items,
-                page: ApplicationConversationMessagesPageInfoResponse {
-                    has_before: page.has_before,
-                    has_after: page.has_after,
-                    before_cursor: page.before_cursor.map(|value| value.to_string()),
-                    after_cursor: page.after_cursor.map(|value| value.to_string()),
-                },
-            },
-        )));
-    }
-
     let workspace_id = context.actor.current_workspace_id;
     let load_debug_artifact = |artifact_id| {
         let state = state.clone();
@@ -2265,7 +2359,7 @@ pub async fn list_application_run_conversation_messages(
         }
     };
     let fallback_page =
-        conversation_messages_from_single_run(&detail.flow_run, &query, &load_debug_artifact).await;
+        conversation_messages_from_run_detail(&detail, &query, &load_debug_artifact).await;
 
     Ok(Json(ApiSuccess::new(fallback_page)))
 }
@@ -2503,6 +2597,28 @@ mod tests {
             None
         );
         assert_eq!(parse_runtime_event_cursor(run_id, "not-a-cursor"), None);
+    }
+
+    #[test]
+    fn metrics_payload_cache_hit_tokens_accepts_cache_read_tokens() {
+        assert_eq!(
+            metrics_payload_cache_hit_tokens(&serde_json::json!({
+                "usage": {
+                    "input_cache_hit_tokens": null,
+                    "cache_read_tokens": 29_504
+                }
+            })),
+            Some(29_504)
+        );
+        assert_eq!(
+            metrics_payload_cache_hit_tokens(&serde_json::json!({
+                "usage": {
+                    "input_cache_hit_tokens": 11,
+                    "cache_read_tokens": 29_504
+                }
+            })),
+            Some(11)
+        );
     }
 
     #[test]
@@ -3100,31 +3216,182 @@ mod tests {
         )
         .await;
 
-        assert_eq!(page.items.len(), 3);
+        assert_eq!(page.items.len(), 2);
         assert!(page.page.has_before);
         assert!(!page.page.has_after);
-        assert_eq!(page.items[0].role.as_deref(), Some("system"));
-        assert_eq!(page.items[0].content.as_deref(), Some("hidden"));
+        let before_cursor = page
+            .page
+            .before_cursor
+            .clone()
+            .expect("initial page should expose earlier context cursor");
+        assert_eq!(page.items[0].role.as_deref(), Some("assistant"));
+        assert_eq!(page.items[0].content.as_deref(), Some("old answer 2"));
         assert_eq!(page.items[0].query, None);
         assert_eq!(page.items[0].answer, None);
         assert!(!page.items[0].can_open_detail);
         assert_eq!(page.items[0].detail_run_id, None);
-        assert_eq!(page.items[1].role.as_deref(), Some("assistant"));
-        assert_eq!(page.items[1].content.as_deref(), Some("old answer 2"));
-        assert_eq!(page.items[1].query, None);
-        assert_eq!(page.items[1].answer, None);
-        assert!(!page.items[1].can_open_detail);
-        assert_eq!(page.items[1].detail_run_id, None);
-        assert_eq!(page.items[2].run_id, run_id.to_string());
-        assert_eq!(page.items[2].role, None);
-        assert_eq!(page.items[2].content, None);
-        assert_eq!(page.items[2].query.as_deref(), Some("current question"));
-        assert_eq!(page.items[2].answer.as_deref(), Some("current answer"));
-        assert!(page.items[2].can_open_detail);
+        assert_eq!(page.items[1].run_id, run_id.to_string());
+        assert_eq!(page.items[1].role, None);
+        assert_eq!(page.items[1].content, None);
+        assert_eq!(page.items[1].query.as_deref(), Some("current question"));
+        assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
+        assert!(page.items[1].can_open_detail);
         let run_id_string = run_id.to_string();
         assert_eq!(
-            page.items[2].detail_run_id.as_deref(),
+            page.items[1].detail_run_id.as_deref(),
             Some(run_id_string.as_str())
+        );
+
+        let previous_page = conversation_messages_from_single_run(
+            &run,
+            &ApplicationConversationMessagesQuery {
+                around_run_id: None,
+                before: Some(before_cursor),
+                after: None,
+                limit: Some(5),
+            },
+            &load_debug_artifact,
+        )
+        .await;
+        assert_eq!(previous_page.items.len(), 4);
+        assert!(!previous_page.page.has_before);
+        assert!(previous_page.page.has_after);
+        assert_eq!(previous_page.items[0].role.as_deref(), Some("system"));
+        assert_eq!(previous_page.items[0].content.as_deref(), Some("hidden"));
+        assert_eq!(previous_page.items[1].role.as_deref(), Some("user"));
+        assert_eq!(
+            previous_page.items[1].content.as_deref(),
+            Some("old question 1")
+        );
+    }
+
+    #[tokio::test]
+    async fn run_conversation_reads_llm_system_when_run_input_system_is_split_from_provider_messages(
+    ) {
+        let run_id = Uuid::now_v7();
+        let application_id = Uuid::now_v7();
+        let flow_run = domain::FlowRunRecord {
+            id: run_id,
+            application_id,
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: None,
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "hi ?".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "hi ?",
+                    "model": "1flowbase"
+                }
+            }),
+            output_payload: serde_json::json!({ "answer": "Hello!" }),
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: Some("conversation-1".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-compatible".to_string()),
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+        let detail = domain::ApplicationRunDetail {
+            flow_run,
+            node_runs: vec![domain::NodeRunRecord {
+                id: Uuid::now_v7(),
+                flow_run_id: run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: serde_json::json!({
+                    "prompt_messages": [
+                        {
+                            "id": "user-1",
+                            "role": "user",
+                            "content": "hi ?"
+                        }
+                    ]
+                }),
+                output_payload: serde_json::json!({ "answer": "Hello!" }),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({
+                    "llm_context": {
+                        "effective_system": "Use the image-aware system policy.",
+                        "provider_messages": [
+                            { "role": "user", "content": "hi ?" }
+                        ]
+                    }
+                }),
+                started_at: OffsetDateTime::UNIX_EPOCH,
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            }],
+            checkpoints: Vec::new(),
+            callback_tasks: Vec::new(),
+            events: Vec::new(),
+        };
+
+        let load_debug_artifact = |_| async { None::<serde_json::Value> };
+        let page = conversation_messages_from_run_detail(
+            &detail,
+            &ApplicationConversationMessagesQuery {
+                around_run_id: None,
+                before: None,
+                after: None,
+                limit: Some(5),
+            },
+            &load_debug_artifact,
+        )
+        .await;
+
+        assert_eq!(page.items.len(), 2);
+        assert!(!page.page.has_before);
+        assert!(!page.page.has_after);
+        assert_eq!(page.items[0].role.as_deref(), Some("system"));
+        assert_eq!(
+            page.items[0].content.as_deref(),
+            Some("Use the image-aware system policy.")
+        );
+        assert!(!page.items[0].can_open_detail);
+        assert_eq!(page.items[1].run_id, run_id.to_string());
+        assert_eq!(page.items[1].query.as_deref(), Some("hi ?"));
+        assert_eq!(page.items[1].answer.as_deref(), Some("Hello!"));
+    }
+
+    #[tokio::test]
+    async fn llm_prompt_messages_system_content_reads_system_prompt_message() {
+        let payload = serde_json::json!({
+            "prompt_messages": [
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": "Use the node policy."
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": "hi ?"
+                }
+            ]
+        });
+        let load_debug_artifact = |_| async { None::<serde_json::Value> };
+
+        assert_eq!(
+            llm_prompt_messages_system_content(&payload, &load_debug_artifact)
+                .await
+                .as_deref(),
+            Some("Use the node policy.")
         );
     }
 

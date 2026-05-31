@@ -129,7 +129,6 @@ function resolveCollision(
   rectA: FloatingWindowRect,
   rectB: FloatingWindowRect,
   viewportWidth: number,
-  minWidthA: number = DEFAULT_MIN_WIDTH,
   minWidthB: number = DEFAULT_MIN_WIDTH,
   gap: number = FLOATING_WINDOW_GAP,
   margin: number = 8
@@ -185,19 +184,15 @@ export function ApplicationLogsPage({
 
   useEffect(() => {
     function handleViewportResize() {
-      if (runDetailRect || conversationLogRect) {
-        const viewport = getViewportSize();
-        const nextA = runDetailRect ? clampRect(runDetailRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT) : null;
-        const nextB = conversationLogRect ? clampRect(conversationLogRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT) : null;
-
-        if (nextA && nextB) {
-          const resolved = resolveCollision(nextA, nextB, viewport.width);
-          setRunDetailRect(resolved.rectA);
-          setConversationLogRect(resolved.rectB);
-        } else {
-          if (nextA) setRunDetailRect(nextA);
-          if (nextB) setConversationLogRect(nextB);
-        }
+      if (runDetailRect) {
+        setRunDetailRect(
+          clampRect(runDetailRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT)
+        );
+      }
+      if (conversationLogRect) {
+        setConversationLogRect(
+          clampRect(conversationLogRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT)
+        );
       }
     }
 
@@ -299,31 +294,9 @@ export function ApplicationLogsPage({
     newRect: FloatingWindowRect
   ) => {
     if (type === 'run-detail') {
-      if (conversationLogRect) {
-        const viewport = getViewportSize();
-        const resolved = resolveCollision(
-          newRect,
-          conversationLogRect,
-          viewport.width
-        );
-        setRunDetailRect(resolved.rectA);
-        setConversationLogRect(resolved.rectB);
-      } else {
-        setRunDetailRect(newRect);
-      }
+      setRunDetailRect(newRect);
     } else {
-      if (runDetailRect) {
-        const viewport = getViewportSize();
-        const resolved = resolveCollision(
-          runDetailRect,
-          newRect,
-          viewport.width
-        );
-        setRunDetailRect(resolved.rectA);
-        setConversationLogRect(resolved.rectB);
-      } else {
-        setConversationLogRect(newRect);
-      }
+      setConversationLogRect(newRect);
     }
   };
 

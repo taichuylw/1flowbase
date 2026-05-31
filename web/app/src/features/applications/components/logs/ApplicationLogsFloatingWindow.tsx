@@ -32,6 +32,7 @@ export type ApplicationLogsFloatingWindowProps = {
 export const FLOATING_WINDOW_MARGIN = 8;
 export const DEFAULT_MIN_WIDTH = 360;
 export const DEFAULT_MIN_HEIGHT = 320;
+const FLOATING_WINDOW_VISIBLE_DRAG_HANDLE_HEIGHT = 48;
 const FLOATING_WINDOW_WIDTH_STORAGE_PREFIX =
   'applicationLogsFloatingWindowWidth';
 
@@ -80,6 +81,24 @@ export function clampRect(
     top: clamp(rect.top, FLOATING_WINDOW_MARGIN, maxTop),
     width,
     height
+  };
+}
+
+function clampDraggedRect(
+  rect: FloatingWindowRect,
+  minWidth: number,
+  minHeight: number
+): FloatingWindowRect {
+  const clampedRect = clampRect(rect, minWidth, minHeight);
+  const viewport = getViewportSize();
+  const maxTop = Math.max(
+    FLOATING_WINDOW_MARGIN,
+    viewport.height - FLOATING_WINDOW_VISIBLE_DRAG_HANDLE_HEIGHT
+  );
+
+  return {
+    ...clampedRect,
+    top: clamp(rect.top, FLOATING_WINDOW_MARGIN, maxTop)
   };
 }
 
@@ -236,7 +255,7 @@ export function ApplicationLogsFloatingWindow({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       setRect((current) =>
-        clampRect(
+        clampDraggedRect(
           {
             ...current,
             left: startRect.left + moveEvent.clientX - startX,

@@ -103,6 +103,25 @@ export function getApplicationRunsTableColumns(
     render: (_value, run) => formatRunStatisticNumber(run.total_tokens)
   },
   {
+    key: 'input_tokens',
+    title: t('auto.input_tokens'),
+    width: 130,
+    render: (_value, run) => formatRunStatisticNumber(run.input_tokens)
+  },
+  {
+    key: 'output_tokens',
+    title: t('auto.output_tokens'),
+    width: 130,
+    render: (_value, run) => formatRunStatisticNumber(run.output_tokens)
+  },
+  {
+    key: 'input_cache_hit_tokens',
+    title: t('auto.input_cache_hit_tokens'),
+    width: 150,
+    render: (_value, run) =>
+      formatRunStatisticNumber(run.input_cache_hit_tokens)
+  },
+  {
     key: 'unique_node_count',
     title: t('auto.real_node_count'),
     width: 130,

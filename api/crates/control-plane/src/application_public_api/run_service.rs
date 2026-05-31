@@ -9,7 +9,8 @@ use uuid::Uuid;
 use super::{
     api_keys::{ApplicationApiKeyActor, ApplicationApiKeyService},
     conversations::{
-        ApplicationPublicConversationRepository, BindApplicationPublicConversationInput,
+        ApplicationPublicConversationMessageRecord, ApplicationPublicConversationRepository,
+        BindApplicationPublicConversationInput, ListApplicationPublicConversationMessagesInput,
     },
     model_catalog::{extract_agent_model_catalog_from_start_node, find_agent_model},
     native::{
@@ -27,6 +28,8 @@ use crate::{
     },
     state_transition::ensure_flow_run_transition,
 };
+
+const APPLICATION_PUBLIC_CONVERSATION_HISTORY_LIMIT: i64 = 50;
 
 pub struct ApplicationPublishedRunService<R> {
     repository: R,
@@ -355,13 +358,145 @@ where
             .bind_application_public_conversation(&BindApplicationPublicConversationInput {
                 application_id,
                 api_key_id,
-                external_user,
-                external_conversation_id,
+                external_user: external_user.clone(),
+                external_conversation_id: external_conversation_id.clone(),
             })
             .await
             .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+        if request.history.is_empty() {
+            let messages = self
+                .repository
+                .list_application_public_conversation_messages(
+                    &ListApplicationPublicConversationMessagesInput {
+                        application_id,
+                        api_key_id,
+                        external_user,
+                        external_conversation_id,
+                        limit: APPLICATION_PUBLIC_CONVERSATION_HISTORY_LIMIT,
+                    },
+                )
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+            request.history = application_public_conversation_messages_to_native_history(messages);
+        }
         Ok(request)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ApplicationPublicConversationTurn {
+    user_content: String,
+    assistant_parts: Vec<String>,
+}
+
+fn application_public_conversation_messages_to_native_history(
+    messages: Vec<ApplicationPublicConversationMessageRecord>,
+) -> Vec<Value> {
+    let mut turns = Vec::<ApplicationPublicConversationTurn>::new();
+
+    for message in messages {
+        match message.role.as_str() {
+            "user" => {
+                if let Some(user_content) = normalize_conversation_user_content(&message.content) {
+                    turns.push(ApplicationPublicConversationTurn {
+                        user_content,
+                        assistant_parts: Vec::new(),
+                    });
+                }
+            }
+            "assistant" => {
+                let Some(turn) = turns.last_mut() else {
+                    continue;
+                };
+                if let Some(assistant_content) =
+                    normalize_conversation_assistant_content(&message.content)
+                {
+                    turn.assistant_parts.push(assistant_content);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut deduped = Vec::<ApplicationPublicConversationTurn>::new();
+    for turn in turns {
+        if deduped
+            .last()
+            .is_some_and(|last| last.user_content == turn.user_content)
+        {
+            if let Some(last) = deduped.last_mut() {
+                *last = turn;
+            }
+            continue;
+        }
+        deduped.push(turn);
+    }
+
+    let mut history = Vec::new();
+    for turn in deduped {
+        history.push(json!({
+            "role": "user",
+            "content": turn.user_content,
+        }));
+        let assistant_content = turn
+            .assistant_parts
+            .into_iter()
+            .filter_map(|content| trimmed_history_text(&content))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        if let Some(assistant_content) = trimmed_history_text(&assistant_content) {
+            history.push(json!({
+                "role": "assistant",
+                "content": assistant_content,
+            }));
+        }
+    }
+
+    history
+}
+
+fn normalize_conversation_user_content(content: &str) -> Option<String> {
+    trimmed_history_text(&strip_tag_blocks(content, "system-reminder"))
+}
+
+fn normalize_conversation_assistant_content(content: &str) -> Option<String> {
+    let without_thinking = strip_tag_blocks(content, "think");
+    let without_tool_calls = strip_tag_blocks(&without_thinking, "tool_call");
+    let visible_content =
+        content_after_beautified_marker(&without_tool_calls).unwrap_or(without_tool_calls.as_str());
+    trimmed_history_text(visible_content)
+}
+
+fn strip_tag_blocks(content: &str, tag: &str) -> String {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut output = content.to_string();
+
+    while let Some(start) = output.find(&open) {
+        let search_start = start + open.len();
+        let Some(end) = output[search_start..].find(&close) else {
+            break;
+        };
+        let end = search_start + end + close.len();
+        output.replace_range(start..end, "");
+    }
+
+    output
+}
+
+fn content_after_beautified_marker(content: &str) -> Option<&str> {
+    let marker = "下面是美化后内容";
+    let marker_start = content.find(marker)?;
+    Some(
+        content[marker_start + marker.len()..].trim_start_matches(|value: char| {
+            value.is_whitespace() || value == '-' || value == '—'
+        }),
+    )
+}
+
+fn trimmed_history_text(content: &str) -> Option<String> {
+    let trimmed = content.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 #[async_trait]
@@ -943,6 +1078,54 @@ mod tests {
         assert_eq!(usage.total_tokens, Some(18));
     }
 
+    #[test]
+    fn conversation_history_rehydration_filters_internal_claude_code_payloads() {
+        let messages = vec![
+            conversation_message(
+                "user",
+                "<system-reminder>internal skills</system-reminder>\n\nhi ?",
+                1,
+            ),
+            conversation_message(
+                "assistant",
+                "<think>private reasoning</think>嗨，有什么需要我帮忙的？",
+                2,
+            ),
+            conversation_message("user", "Describe image", 3),
+            conversation_message(
+                "assistant",
+                "<think>need file</think><tool_call>read image</tool_call>Reading image",
+                4,
+            ),
+            conversation_message("user", "Describe image", 5),
+            conversation_message(
+                "assistant",
+                "<think>done</think>The diagram is an Agent scheduler.",
+                6,
+            ),
+            conversation_message("user", "Find related code", 7),
+            conversation_message(
+                "assistant",
+                "<think>search</think>Raw preface<tool_call>grep</tool_call>\n\n---\n\n下面是美化后内容\n\nFinal visible answer",
+                8,
+            ),
+        ];
+
+        let history = application_public_conversation_messages_to_native_history(messages);
+
+        assert_eq!(
+            history,
+            vec![
+                json!({"role": "user", "content": "hi ?"}),
+                json!({"role": "assistant", "content": "嗨，有什么需要我帮忙的？"}),
+                json!({"role": "user", "content": "Describe image"}),
+                json!({"role": "assistant", "content": "The diagram is an Agent scheduler."}),
+                json!({"role": "user", "content": "Find related code"}),
+                json!({"role": "assistant", "content": "Final visible answer"}),
+            ]
+        );
+    }
+
     fn test_flow_run(output_payload: Value) -> domain::FlowRunRecord {
         let created_at = OffsetDateTime::UNIX_EPOCH;
         domain::FlowRunRecord {
@@ -993,6 +1176,18 @@ mod tests {
             debug_payload: json!({}),
             started_at: created_at,
             finished_at: Some(created_at),
+        }
+    }
+
+    fn conversation_message(
+        role: &str,
+        content: &str,
+        sequence: i64,
+    ) -> ApplicationPublicConversationMessageRecord {
+        ApplicationPublicConversationMessageRecord {
+            role: role.to_string(),
+            content: content.to_string(),
+            sequence,
         }
     }
 }

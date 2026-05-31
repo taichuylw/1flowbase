@@ -37,18 +37,20 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .and_then(Value::as_array)
         .ok_or_else(|| AnthropicCompatError::invalid("messages is required"))?;
 
-    let system = object
-        .get("system")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
-    let mut history = Vec::new();
-
+    let mut system_parts = anthropic_system_content_parts(object.get("system"));
     let last_user_index = messages
         .iter()
         .rposition(|message| message.get("role").and_then(Value::as_str) == Some("user"))
         .ok_or_else(|| AnthropicCompatError::invalid("user message is required"))?;
+    let latest_user_content = messages[last_user_index]
+        .get("content")
+        .ok_or_else(|| AnthropicCompatError::invalid("message content is required"))?;
+    let latest_user_text = anthropic_current_user_text_content(latest_user_content)?;
+    collect_system_reminder_parts(&mut system_parts, &latest_user_text);
+    let query = sanitize_anthropic_compat_text("user", &latest_user_text).unwrap_or_default();
+    let latest_user_media_blocks = query_media_content_blocks(latest_user_content);
+
+    let mut history = Vec::new();
     for (index, message) in messages.iter().enumerate() {
         let role = message
             .get("role")
@@ -58,17 +60,14 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
             .get("content")
             .ok_or_else(|| AnthropicCompatError::invalid("message content is required"))?;
         if index == last_user_index {
-            if let Some(content_blocks) = query_media_content_blocks(content_value) {
-                history.push(serde_json::json!({
-                    "role": role,
-                    "content": "",
-                    "content_blocks": content_blocks
-                }));
-            }
             continue;
         }
-        let content = anthropic_text_content(content_value)?;
-        let content_blocks = history_content_blocks(content_value);
+        let raw_content = anthropic_text_content(content_value)?;
+        if role == "user" {
+            collect_system_reminder_parts(&mut system_parts, &raw_content);
+        }
+        let content = sanitize_anthropic_compat_text(role, &raw_content).unwrap_or_default();
+        let content_blocks = history_content_blocks(role, content_value);
         if content.trim().is_empty() && content_blocks.is_none() {
             continue;
         }
@@ -78,11 +77,15 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         }
         history.push(history_entry);
     }
-    let query = anthropic_text_content(
-        messages[last_user_index]
-            .get("content")
-            .ok_or_else(|| AnthropicCompatError::invalid("message content is required"))?,
-    )?;
+    history = dedupe_anthropic_compat_history(history);
+    history = drop_replayed_current_user_turn(history, &query);
+    if let Some(content_blocks) = latest_user_media_blocks {
+        history.push(serde_json::json!({
+            "role": "user",
+            "content": "",
+            "content_blocks": content_blocks
+        }));
+    }
 
     let response_mode = object
         .get("stream")
@@ -111,7 +114,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         "metadata": metadata,
         "compatibility_mode": "anthropic-messages-v1"
     });
-    if let Some(system) = system {
+    if let Some(system) = system_from_parts(system_parts) {
         native["system"] = Value::String(system);
     }
     if response_mode.is_none() {
@@ -123,6 +126,65 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
 
     serde_json::from_value(native)
         .map_err(|_| AnthropicCompatError::invalid("failed to build Native request"))
+}
+
+fn anthropic_system_content_parts(value: Option<&Value>) -> Vec<String> {
+    let mut parts = Vec::new();
+    match value {
+        Some(Value::String(text)) => push_system_part(&mut parts, text),
+        Some(Value::Array(blocks)) => {
+            for block in blocks {
+                match block {
+                    Value::String(text) => push_system_part(&mut parts, text),
+                    Value::Object(object) => {
+                        if let Some(text) = object.get("text").and_then(Value::as_str) {
+                            push_system_part(&mut parts, text);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+    parts
+}
+
+fn collect_system_reminder_parts(parts: &mut Vec<String>, content: &str) {
+    for reminder in xml_tag_block_contents(content, "system-reminder") {
+        push_system_part(parts, &reminder);
+    }
+}
+
+fn xml_tag_block_contents(content: &str, tag: &str) -> Vec<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut output = Vec::new();
+    let mut offset = 0;
+
+    while let Some(start) = content[offset..].find(&open) {
+        let content_start = offset + start + open.len();
+        let Some(end) = content[content_start..].find(&close) else {
+            break;
+        };
+        let content_end = content_start + end;
+        output.push(content[content_start..content_end].to_string());
+        offset = content_end + close.len();
+    }
+
+    output
+}
+
+fn push_system_part(parts: &mut Vec<String>, content: &str) {
+    let content = content.trim();
+    if content.is_empty() || parts.iter().any(|part| part == content) {
+        return;
+    }
+    parts.push(content.to_string());
+}
+
+fn system_from_parts(parts: Vec<String>) -> Option<String> {
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
 fn compatibility_payload(object: &serde_json::Map<String, Value>) -> Value {
@@ -297,17 +359,94 @@ fn anthropic_text_content(content: &Value) -> Result<String, AnthropicCompatErro
     Ok(text)
 }
 
-fn history_content_blocks(content: &Value) -> Option<Value> {
+fn anthropic_current_user_text_content(content: &Value) -> Result<String, AnthropicCompatError> {
+    if let Some(text) = content.as_str() {
+        return Ok(text.to_string());
+    }
+    let blocks = content
+        .as_array()
+        .ok_or_else(|| AnthropicCompatError::invalid("content must be text"))?;
+    if !anthropic_blocks_have_visible_user_text(blocks) {
+        return anthropic_text_content(content);
+    }
+
+    let mut text = String::new();
+    for block in blocks {
+        let block_type = block
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        match block_type {
+            "text" => {
+                if let Some(value) = block.get("text").and_then(Value::as_str) {
+                    if !text.is_empty() {
+                        text.push('\n');
+                    }
+                    text.push_str(value);
+                }
+            }
+            "tool_result" => {}
+            "tool_use" | "server_tool_use" => {
+                if block
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| name == "computer")
+                {
+                    return Err(AnthropicCompatError::unsupported("computer_use"));
+                }
+            }
+            "computer_use" => {
+                return Err(AnthropicCompatError::unsupported("computer_use"));
+            }
+            "thinking" | "redacted_thinking" => {}
+            "image" | "document" => {}
+            _ => return Err(AnthropicCompatError::unsupported("messages")),
+        }
+    }
+    Ok(text)
+}
+
+fn anthropic_blocks_have_visible_user_text(blocks: &[Value]) -> bool {
+    blocks.iter().any(|block| {
+        block
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|block_type| block_type == "text")
+            && block
+                .get("text")
+                .and_then(Value::as_str)
+                .and_then(|text| sanitize_anthropic_compat_text("user", text))
+                .is_some()
+    })
+}
+
+fn history_content_blocks(role: &str, content: &Value) -> Option<Value> {
     let blocks = content.as_array()?;
+    let should_keep_text_blocks = blocks.iter().any(|block| {
+        matches!(
+            block.get("type").and_then(Value::as_str),
+            Some("image" | "document" | "tool_use" | "server_tool_use" | "tool_result")
+        )
+    });
     let blocks = blocks
         .iter()
-        .filter(|block| {
-            !matches!(
-                block.get("type").and_then(Value::as_str),
-                Some("thinking" | "redacted_thinking")
-            )
+        .filter_map(|block| match block.get("type").and_then(Value::as_str) {
+            Some("thinking" | "redacted_thinking") => None,
+            Some("text") if should_keep_text_blocks => {
+                let sanitized = sanitize_anthropic_compat_text(
+                    role,
+                    block
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                )?;
+                let mut block = block.as_object()?.clone();
+                block.insert("text".to_string(), Value::String(sanitized));
+                Some(Value::Object(block))
+            }
+            Some("text") => None,
+            _ => Some(block.clone()),
         })
-        .cloned()
         .collect::<Vec<_>>();
     (!blocks.is_empty()).then_some(Value::Array(blocks))
 }
@@ -342,6 +481,132 @@ fn anthropic_tool_result_text(block: &Value) -> String {
             .join("\n");
     }
     content.to_string()
+}
+
+pub fn sanitize_anthropic_compat_assistant_text(content: &str) -> Option<String> {
+    sanitize_anthropic_compat_text("assistant", content)
+}
+
+fn sanitize_anthropic_compat_text(role: &str, content: &str) -> Option<String> {
+    let visible_content = match role {
+        "assistant" => {
+            let without_thinking = strip_xml_tag_blocks(content, "think");
+            let without_tool_calls = strip_xml_tag_blocks(&without_thinking, "tool_call");
+            content_after_beautified_marker(&without_tool_calls)
+                .unwrap_or(without_tool_calls.as_str())
+                .to_string()
+        }
+        "user" => strip_xml_tag_blocks(content, "system-reminder"),
+        _ => content.to_string(),
+    };
+    trimmed_compat_text(&visible_content)
+}
+
+fn strip_xml_tag_blocks(content: &str, tag: &str) -> String {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut output = content.to_string();
+
+    while let Some(start) = output.find(&open) {
+        let search_start = start + open.len();
+        let Some(end) = output[search_start..].find(&close) else {
+            break;
+        };
+        let end = search_start + end + close.len();
+        output.replace_range(start..end, "");
+    }
+
+    output
+}
+
+fn content_after_beautified_marker(content: &str) -> Option<&str> {
+    let marker = "下面是美化后内容";
+    let marker_start = content.find(marker)?;
+    Some(
+        content[marker_start + marker.len()..].trim_start_matches(|value: char| {
+            value.is_whitespace() || value == '-' || value == '—'
+        }),
+    )
+}
+
+fn trimmed_compat_text(content: &str) -> Option<String> {
+    let trimmed = content.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+fn dedupe_anthropic_compat_history(history: Vec<Value>) -> Vec<Value> {
+    let mut deduped = Vec::new();
+    let mut previous_user_turn: Option<(usize, String)> = None;
+
+    for message in history {
+        if message.get("role").and_then(Value::as_str) == Some("user") {
+            if let Some(key) = dedupe_user_turn_key(&message) {
+                if previous_user_turn
+                    .as_ref()
+                    .is_some_and(|(_, previous_key)| previous_key == &key)
+                {
+                    if let Some((start, _)) = previous_user_turn.take() {
+                        deduped.truncate(start);
+                    }
+                }
+                previous_user_turn = Some((deduped.len(), key));
+            } else {
+                previous_user_turn = None;
+            }
+        }
+        deduped.push(message);
+    }
+
+    deduped
+}
+
+fn drop_replayed_current_user_turn(mut history: Vec<Value>, current_query: &str) -> Vec<Value> {
+    let current_query = current_query.trim();
+    if current_query.is_empty() {
+        return history;
+    }
+
+    for (index, message) in history.iter().enumerate().rev() {
+        if message.get("role").and_then(Value::as_str) != Some("user") {
+            continue;
+        }
+        if dedupe_user_turn_key(message).is_some_and(|key| key == current_query) {
+            history.truncate(index);
+        }
+        break;
+    }
+
+    history
+}
+
+fn dedupe_user_turn_key(message: &Value) -> Option<String> {
+    if message
+        .get("content_blocks")
+        .and_then(Value::as_array)
+        .is_some_and(|blocks| {
+            blocks.iter().any(|block| {
+                matches!(
+                    block.get("type").and_then(Value::as_str),
+                    Some("tool_result" | "tool_use" | "server_tool_use")
+                )
+            })
+        })
+    {
+        return None;
+    }
+
+    message
+        .get("content")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|content| !content.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            message
+                .get("content_blocks")
+                .filter(|content_blocks| !content_blocks.is_null())
+                .map(Value::to_string)
+        })
 }
 
 #[cfg(test)]
@@ -382,5 +647,275 @@ mod tests {
         );
         assert_eq!(inputs["tool_choice"], json!({ "type": "auto" }));
         assert!(inputs.get("compatibility").is_none());
+    }
+
+    #[test]
+    fn maps_latest_claude_code_query_without_system_reminder() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "<system-reminder>internal tools</system-reminder>\n\nhi？"
+                }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "hi？");
+        assert_eq!(request.system.as_deref(), Some("internal tools"));
+        assert!(request.history.is_empty());
+    }
+
+    #[test]
+    fn maps_top_level_system_content_blocks_into_native_system() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "system": [
+                {
+                    "type": "text",
+                    "text": "Use Claude Code project instructions.",
+                    "cache_control": { "type": "ephemeral" }
+                },
+                {
+                    "type": "text",
+                    "text": "Preserve repository safety rules."
+                }
+            ],
+            "messages": [
+                { "role": "user", "content": "hi？" }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.system.as_deref(),
+            Some("Use Claude Code project instructions.\n\nPreserve repository safety rules.")
+        );
+        assert_eq!(request.query, "hi？");
+    }
+
+    #[test]
+    fn maps_claude_code_history_without_internal_transcript_payloads() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "<system-reminder>available tools</system-reminder>\n\nhi？"
+                },
+                {
+                    "role": "assistant",
+                    "content": "<think>private reasoning</think>嗨，有什么需要我帮忙的？"
+                },
+                {
+                    "role": "user",
+                    "content": "uploads/agent-flow-preview-debug.png 描述一下这幅图说什么？"
+                }
+            ],
+            "tools": [
+                {
+                    "name": "Read",
+                    "description": "Read a file",
+                    "input_schema": { "type": "object" }
+                }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.query,
+            "uploads/agent-flow-preview-debug.png 描述一下这幅图说什么？"
+        );
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "hi？"}),
+                json!({"role": "assistant", "content": "嗨，有什么需要我帮忙的？"}),
+            ]
+        );
+        assert_eq!(request.inputs.as_value()["tools"][0]["name"], json!("Read"));
+        assert_eq!(request.system.as_deref(), Some("available tools"));
+    }
+
+    #[test]
+    fn maps_claude_code_history_keeps_last_duplicate_user_turn() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "Describe image"},
+                {"role": "assistant", "content": "old draft"},
+                {"role": "user", "content": "Describe image"},
+                {"role": "assistant", "content": "<think>retry</think>final draft"},
+                {"role": "user", "content": "Continue"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "Continue");
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "Describe image"}),
+                json!({"role": "assistant", "content": "final draft"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn maps_claude_code_history_drops_replayed_current_user_turn() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "Describe image"},
+                {"role": "assistant", "content": "old image answer"},
+                {"role": "user", "content": "Describe image"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "Describe image");
+        assert!(request.history.is_empty());
+    }
+
+    #[test]
+    fn maps_claude_code_history_preserves_latest_media_after_dropping_replay() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "Describe image"},
+                {"role": "assistant", "content": "old image answer"},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Describe image"},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": "aW1hZ2U="
+                            }
+                        }
+                    ]
+                }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "Describe image");
+        assert_eq!(request.history.len(), 1);
+        assert_eq!(request.history[0]["role"], json!("user"));
+        assert_eq!(request.history[0]["content"], json!(""));
+        assert_eq!(
+            request.history[0]["content_blocks"][0]["type"],
+            json!("image")
+        );
+    }
+
+    #[test]
+    fn maps_claude_code_history_keeps_visible_text_after_beautified_marker() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "hi？"},
+                {
+                    "role": "assistant",
+                    "content": "<think>draft</think>嗨！\n\n---\n\n下面是美化后内容\n\n你好，有需要我随时帮你。"
+                },
+                {"role": "user", "content": "继续"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "hi？"}),
+                json!({"role": "assistant", "content": "你好，有需要我随时帮你。"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn maps_claude_code_history_does_not_keep_raw_internal_content_blocks() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "<system-reminder>private Claude Code context</system-reminder>\n\nhi？"
+                        }
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "private reasoning"},
+                        {"type": "text", "text": "<think>draft</think>你好"}
+                    ]
+                },
+                {"role": "user", "content": "继续"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "hi？"}),
+                json!({"role": "assistant", "content": "你好"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn maps_claude_code_tool_result_history_preserves_image_blocks() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "describe image"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_read",
+                        "name": "Read",
+                        "input": {"file_path": "uploads/agent-flow-preview-debug.png"}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_read",
+                        "content": [{
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": "aW1hZ2U="
+                            }
+                        }]
+                    }]
+                },
+                {"role": "user", "content": "next question"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "next question");
+        assert_eq!(request.history[2]["role"], json!("user"));
+        assert_eq!(
+            request.history[2]["content_blocks"][0]["type"],
+            json!("tool_result")
+        );
+        assert_eq!(
+            request.history[2]["content_blocks"][0]["content"][0]["type"],
+            json!("image")
+        );
     }
 }

@@ -48,6 +48,7 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 total_tokens,
+                input_tokens, output_tokens, input_cache_hit_tokens,
                 unique_node_count,
                 tool_callback_count,
                 started_at,
@@ -102,6 +103,14 @@ impl PgControlPlaneStore {
                         where node_runs.flow_run_id = $1
                     )
                 ),
+                (select sum(runtime_usage_ledger.input_tokens)::bigint
+                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
+                (select sum(runtime_usage_ledger.output_tokens)::bigint
+                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
+                (select sum(coalesce(runtime_usage_ledger.input_cache_hit_tokens,
+                                      runtime_usage_ledger.cache_read_tokens,
+                                      runtime_usage_ledger.cached_input_tokens))::bigint
+                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
                 coalesce(
                     (
                         select count(distinct node_runs.node_id)::bigint
@@ -148,6 +157,9 @@ impl PgControlPlaneStore {
                 compatibility_mode = excluded.compatibility_mode,
                 idempotency_key = excluded.idempotency_key,
                 total_tokens = excluded.total_tokens,
+                input_tokens = excluded.input_tokens,
+                output_tokens = excluded.output_tokens,
+                input_cache_hit_tokens = excluded.input_cache_hit_tokens,
                 unique_node_count = excluded.unique_node_count,
                 tool_callback_count = excluded.tool_callback_count,
                 started_at = excluded.started_at,
@@ -390,6 +402,7 @@ impl PgControlPlaneStore {
                     compatibility_mode,
                     idempotency_key,
                     total_tokens,
+                    input_tokens, output_tokens, input_cache_hit_tokens,
                     unique_node_count,
                     tool_callback_count,
                     started_at,
@@ -416,6 +429,7 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 total_tokens,
+                input_tokens, output_tokens, input_cache_hit_tokens,
                 unique_node_count,
                 tool_callback_count,
                 started_at,
@@ -666,6 +680,10 @@ impl PgControlPlaneStore {
             r#"
             select
                 coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint as total_tokens_sum,
+                coalesce(sum(coalesce(input_tokens, 0)), 0)::bigint as input_tokens_sum,
+                coalesce(sum(coalesce(output_tokens, 0)), 0)::bigint as output_tokens_sum,
+                coalesce(sum(coalesce(input_cache_hit_tokens, 0)), 0)::bigint
+                    as input_cache_hit_tokens_sum,
                 coalesce(avg(total_tokens::double precision), 0.0)::double precision
                     as avg_tokens_per_run,
                 count(total_tokens)::bigint as token_recorded_count
@@ -680,6 +698,9 @@ impl PgControlPlaneStore {
 
         Ok(control_plane::ports::ApplicationRunMonitoringTokens {
             total_tokens_sum: row.get("total_tokens_sum"),
+            input_tokens_sum: row.get("input_tokens_sum"),
+            output_tokens_sum: row.get("output_tokens_sum"),
+            input_cache_hit_tokens_sum: row.get("input_cache_hit_tokens_sum"),
             avg_tokens_per_run: row.get("avg_tokens_per_run"),
             token_recorded_count: row.get("token_recorded_count"),
         })
@@ -1249,16 +1270,6 @@ fn application_conversation_messages_from_flow_run(
         );
     }
 
-    for (role, content) in application_conversation_history_messages(&flow_run.input_payload) {
-        push_application_conversation_message(
-            &mut messages,
-            flow_run.started_at,
-            &mut ordinal,
-            role,
-            content,
-        );
-    }
-
     if let Some(query) = application_conversation_user_text(&flow_run.input_payload) {
         push_application_conversation_message(
             &mut messages,
@@ -1340,60 +1351,11 @@ fn application_conversation_answer_text(payload: &serde_json::Value) -> Option<S
         .and_then(trimmed_string)
 }
 
-fn application_conversation_history_messages(
-    payload: &serde_json::Value,
-) -> Vec<(&'static str, String)> {
-    let start = application_conversation_start_payload(payload);
-    let Some(history) = start
-        .get("history")
-        .or_else(|| start.get("messages"))
-        .and_then(serde_json::Value::as_array)
-    else {
-        return Vec::new();
-    };
-
-    history
-        .iter()
-        .filter_map(|message| {
-            let role = match message.get("role").and_then(serde_json::Value::as_str) {
-                Some("system") => "system",
-                Some("user") => "user",
-                Some("assistant") => "assistant",
-                _ => return None,
-            };
-            let content = conversation_message_content(message)?;
-            Some((role, content))
-        })
-        .collect()
-}
-
 fn application_conversation_start_payload(payload: &serde_json::Value) -> &serde_json::Value {
     payload
         .get("node-start")
         .or_else(|| payload.get("start"))
         .unwrap_or(payload)
-}
-
-fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
-    let content = message.get("content")?;
-    if let Some(text) = trimmed_string(content) {
-        return Some(text);
-    }
-
-    if let Some(parts) = content.as_array() {
-        let text = parts
-            .iter()
-            .filter_map(conversation_content_part_text)
-            .collect::<Vec<_>>()
-            .join("");
-        return (!text.is_empty()).then_some(text);
-    }
-
-    conversation_content_part_text(content)
-}
-
-fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
-    conversation_text_value(part)
 }
 
 fn string_field_value(value: &serde_json::Value, field: &str) -> Option<String> {

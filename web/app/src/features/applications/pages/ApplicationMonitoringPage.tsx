@@ -53,16 +53,18 @@ import { i18nText } from '../../../shared/i18n/text';
 
 type MonitoringTimeRange = 1 | 7 | 28 | 90 | 365;
 
-const TIME_RANGE_OPTIONS: Array<{
+function monitoringTimeRangeOptions(): Array<{
   label: string;
   value: MonitoringTimeRange;
-}> = [
-  { label: i18nText("applications", "auto.past_twenty_four_hours"), value: 1 },
-  { label: i18nText("applications", "auto.past_seven_days"), value: 7 },
-  { label: i18nText("applications", "auto.past_four_weeks"), value: 28 },
-  { label: i18nText("applications", "auto.past_three_months"), value: 90 },
-  { label: i18nText("applications", "auto.past_twelve_months"), value: 365 }
-];
+}> {
+  return [
+    { label: i18nText("applications", "auto.past_twenty_four_hours"), value: 1 },
+    { label: i18nText("applications", "auto.past_seven_days"), value: 7 },
+    { label: i18nText("applications", "auto.past_four_weeks"), value: 28 },
+    { label: i18nText("applications", "auto.past_three_months"), value: 90 },
+    { label: i18nText("applications", "auto.past_twelve_months"), value: 365 }
+  ];
+}
 
 function getMonitoringBucket(
   range: MonitoringTimeRange
@@ -81,6 +83,23 @@ function getMonitoringBucket(
 
 function formatInteger(value: number) {
   return formatNumber(value, { maximumFractionDigits: 0 });
+}
+
+function formatTokenAmount(value: number) {
+  const absoluteValue = Math.abs(value);
+  const unit = [
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+    { threshold: 1_000, suffix: 'K' }
+  ].find((candidate) => absoluteValue >= candidate.threshold);
+
+  if (!unit) {
+    return formatInteger(value);
+  }
+
+  return `${formatNumber(value / unit.threshold, {
+    maximumFractionDigits: 1
+  })}${unit.suffix}`;
 }
 
 function formatDecimal(value: number, digits = 1) {
@@ -106,7 +125,7 @@ function tokenComparisonMetric(report: ApplicationRunMonitoringReport) {
   ) {
     return {
       label: i18nText('applications', 'auto.token_increase_from_empty'),
-      value: formatInteger(report.tokens.total_tokens_sum)
+      value: formatTokenAmount(report.tokens.total_tokens_sum)
     };
   }
 
@@ -154,10 +173,6 @@ function formatTrendBucket(
 
 function sourceLabel(source: string) {
   return source === 'public_api' ? 'Public API' : i18nText("applications", "auto.console");
-}
-
-function statisticValue(value: string | number) {
-  return value;
 }
 
 function runtimeHealthLabel(state: ApplicationRuntimeActivity['health']['state']) {
@@ -651,46 +666,6 @@ function usageColumns<
   ];
 }
 
-const runRankColumns: ColumnsType<ApplicationRunMonitoringRunRank> = [
-  {
-    title: i18nText("applications", "auto.run"),
-    dataIndex: 'title',
-    key: 'title',
-    render: (value: string, run) => (
-      <Space direction="vertical" size={0}>
-        <Typography.Text>{value}</Typography.Text>
-        <Typography.Text type="secondary">{run.flow_run_id}</Typography.Text>
-      </Space>
-    )
-  },
-  {
-    title: i18nText("applications", "auto.status"),
-    dataIndex: 'status',
-    key: 'status'
-  },
-  {
-    title: i18nText("applications", "auto.duration"),
-    dataIndex: 'duration_ms',
-    key: 'duration_ms',
-    align: 'right',
-    render: (value: number | null) => formatDuration(value)
-  },
-  {
-    title: 'Tokens',
-    dataIndex: 'total_tokens',
-    key: 'total_tokens',
-    align: 'right',
-    render: (value: number | null) =>
-      value == null ? '-' : formatInteger(value)
-  },
-  {
-    title: i18nText("applications", "auto.start_time"),
-    dataIndex: 'started_at',
-    key: 'started_at',
-    render: formatTime
-  }
-];
-
 function MonitoringPanel({
   children,
   title
@@ -1132,9 +1107,27 @@ export function ApplicationMonitoringPage({
     [report?.external_conversations]
   );
 
+  const timeRangeOptions = monitoringTimeRangeOptions();
   const activeRangeLabel =
-    TIME_RANGE_OPTIONS.find((option) => option.value === timeRangeDays)
+    timeRangeOptions.find((option) => option.value === timeRangeDays)
       ?.label ?? i18nText("applications", "auto.past_seven_days");
+  const tokenBreakdownMetrics = [
+    {
+      tone: 'blue',
+      title: i18nText("applications", "auto.input_tokens"),
+      value: report?.tokens.input_tokens_sum ?? 0
+    },
+    {
+      tone: 'green',
+      title: i18nText("applications", "auto.output_tokens"),
+      value: report?.tokens.output_tokens_sum ?? 0
+    },
+    {
+      tone: 'gold',
+      title: i18nText("applications", "auto.input_cache_hit_tokens"),
+      value: report?.tokens.input_cache_hit_tokens_sum ?? 0
+    }
+  ] as const;
   const tokenTrendOption = useMemo(
     () => (report ? buildTokenTrendOption(report) : null),
     [report]
@@ -1171,7 +1164,7 @@ export function ApplicationMonitoringPage({
       <div className="application-monitoring-page__toolbar">
         <Radio.Group
           optionType="button"
-          options={TIME_RANGE_OPTIONS}
+          options={timeRangeOptions}
           value={timeRangeDays}
           onChange={(event) => setTimeRangeDays(event.target.value)}
         />
@@ -1279,10 +1272,27 @@ export function ApplicationMonitoringPage({
             <div className="metric-card__content">
               <span className="metric-card__title">{i18nText("applications", "auto.total_tokens_amount")}</span>
               <span className="metric-card__value">
-                {formatInteger(report.tokens.total_tokens_sum)}
+                {formatTokenAmount(report.tokens.total_tokens_sum)}
               </span>
             </div>
           </div>
+
+          {tokenBreakdownMetrics.map((metric) => (
+            <div
+              className={`application-monitoring-metric application-monitoring-metric--${metric.tone}`}
+              key={metric.title}
+            >
+              <div className="metric-card__icon-wrapper">
+                <DatabaseOutlined />
+              </div>
+              <div className="metric-card__content">
+                <span className="metric-card__title">{metric.title}</span>
+                <span className="metric-card__value">
+                  {formatTokenAmount(metric.value)}
+                </span>
+              </div>
+            </div>
+          ))}
 
           <div className="application-monitoring-metric application-monitoring-metric--cyan">
             <div className="metric-card__icon-wrapper">

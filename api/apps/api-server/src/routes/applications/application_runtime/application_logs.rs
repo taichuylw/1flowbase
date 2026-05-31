@@ -69,6 +69,9 @@ pub struct ApplicationRunLogResponse {
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunStatisticsResponse {
     pub total_tokens: Option<i64>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub input_cache_hit_tokens: Option<i64>,
     pub unique_node_count: i64,
     pub tool_callback_count: i64,
 }

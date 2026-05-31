@@ -261,6 +261,42 @@ fn last_user_multimodal_content_maps_query_text_and_preserves_media_blocks() {
 }
 
 #[test]
+fn last_user_mixed_tool_result_and_text_uses_visible_text_as_query() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "messages": [
+            {"role": "user", "content": "uploads/agent-flow-preview-debug.png 描述一下这幅图说什么？"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_read",
+                        "name": "Read",
+                        "input": {"file_path": "uploads/agent-flow-preview-debug.png"}
+                    }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_read",
+                        "content": "<tool_use_error>old tool payload</tool_use_error>\nold image output"
+                    },
+                    {"type": "text", "text": "帮我找找这个代码位置"}
+                ]
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(native.query, "帮我找找这个代码位置");
+    assert!(!native.query.contains("old image output"));
+}
+
+#[test]
 fn assistant_thinking_history_is_ignored_for_claude_code_replay() {
     let native = map_messages_request(json!({
         "model": "claude-compatible-custom",
@@ -288,11 +324,7 @@ fn assistant_thinking_history_is_ignored_for_claude_code_replay() {
         native.history,
         vec![
             json!({"role": "user", "content": "hi ?"}),
-            json!({
-                "role": "assistant",
-                "content": "Hello!",
-                "content_blocks": [{"type": "text", "text": "Hello!"}]
-            })
+            json!({"role": "assistant", "content": "Hello!"})
         ]
     );
 }

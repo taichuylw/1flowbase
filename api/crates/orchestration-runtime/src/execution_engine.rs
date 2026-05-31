@@ -1474,14 +1474,16 @@ fn append_llm_tool_result_messages(
             "tool_call_id".to_string(),
             Value::String(tool_call_id.clone()),
         );
-        message.insert(
-            "content".to_string(),
+        let (content, content_blocks) = tool_result_prompt_content(
             result
                 .get("content")
                 .cloned()
-                .map(tool_result_content_value)
                 .unwrap_or_else(|| Value::String(String::new())),
         );
+        message.insert("content".to_string(), content);
+        if let Some(content_blocks) = content_blocks {
+            message.insert("content_blocks".to_string(), content_blocks);
+        }
         let name = result
             .get("name")
             .and_then(Value::as_str)
@@ -1524,10 +1526,18 @@ fn append_llm_tool_result_messages(
     Ok(())
 }
 
-fn tool_result_content_value(value: Value) -> Value {
+fn tool_result_prompt_content(value: Value) -> (Value, Option<Value>) {
     match value {
-        Value::String(_) => value,
-        other => Value::String(other.to_string()),
+        Value::String(_) => (value, None),
+        Value::Array(blocks) => {
+            let text = blocks
+                .iter()
+                .filter_map(|entry| entry.get("text").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join("\n");
+            (Value::String(text), Some(Value::Array(blocks)))
+        }
+        other => (Value::String(other.to_string()), None),
     }
 }
 

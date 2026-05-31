@@ -3,8 +3,9 @@ use async_trait::async_trait;
 use control_plane::{
     application_public_api::{
         conversations::{
-            ApplicationPublicConversationRecord, ApplicationPublicConversationRepository,
-            BindApplicationPublicConversationInput,
+            ApplicationPublicConversationMessageRecord, ApplicationPublicConversationRecord,
+            ApplicationPublicConversationRepository, BindApplicationPublicConversationInput,
+            ListApplicationPublicConversationMessagesInput,
         },
         run_service::{
             ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
@@ -700,5 +701,97 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
             created_at: row.get::<OffsetDateTime, _>("created_at"),
             updated_at: row.get::<OffsetDateTime, _>("updated_at"),
         })
+    }
+
+    async fn list_application_public_conversation_messages(
+        &self,
+        input: &ListApplicationPublicConversationMessagesInput,
+    ) -> Result<Vec<ApplicationPublicConversationMessageRecord>> {
+        let limit = input.limit.clamp(1, 200);
+        let rows = sqlx::query(
+            r#"
+            with conversation_messages as (
+                select
+                    messages.id,
+                    messages.flow_run_id,
+                    messages.role,
+                    messages.content,
+                    messages.sequence,
+                    messages.created_at,
+                    coalesce(messages.started_at, messages.created_at) as occurred_at
+                from application_conversations conversations
+                join application_conversation_messages messages
+                  on messages.conversation_id = conversations.id
+                where conversations.application_id = $1
+                  and conversations.api_key_id = $2
+                  and conversations.external_user = $3
+                  and conversations.external_conversation_id = $4
+                  and messages.flow_run_id is not null
+                  and messages.role in ('user', 'assistant')
+                  and btrim(messages.content) <> ''
+            ),
+            current_turn_boundaries as (
+                select
+                    flow_run_id,
+                    max(sequence) filter (where role = 'user') as current_user_sequence
+                from conversation_messages
+                group by flow_run_id
+            ),
+            turn_messages as (
+                select
+                    messages.id,
+                    messages.role,
+                    messages.content,
+                    messages.sequence,
+                    messages.created_at,
+                    messages.occurred_at
+                from conversation_messages messages
+                join current_turn_boundaries boundaries
+                  on boundaries.flow_run_id = messages.flow_run_id
+                where boundaries.current_user_sequence is not null
+                  and (
+                      (messages.role = 'user'
+                       and messages.sequence = boundaries.current_user_sequence)
+                      or
+                      (messages.role = 'assistant'
+                       and messages.sequence > boundaries.current_user_sequence)
+                  )
+            )
+            select role, content, sequence
+            from (
+                select
+                    id,
+                    role,
+                    content,
+                    sequence,
+                    created_at,
+                    occurred_at
+                from turn_messages
+                order by
+                    occurred_at desc,
+                    sequence desc,
+                    created_at desc,
+                    id desc
+                limit $5
+            ) recent
+            order by occurred_at asc, sequence asc, created_at asc, id asc
+            "#,
+        )
+        .bind(input.application_id)
+        .bind(input.api_key_id)
+        .bind(&input.external_user)
+        .bind(&input.external_conversation_id)
+        .bind(limit)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ApplicationPublicConversationMessageRecord {
+                role: row.get("role"),
+                content: row.get("content"),
+                sequence: row.get("sequence"),
+            })
+            .collect())
     }
 }

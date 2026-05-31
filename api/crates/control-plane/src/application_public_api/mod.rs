@@ -1355,6 +1355,13 @@ impl conversations::ApplicationPublicConversationRepository for ApplicationPubli
         inner.conversations.insert(key, record.clone());
         Ok(record)
     }
+
+    async fn list_application_public_conversation_messages(
+        &self,
+        _input: &conversations::ListApplicationPublicConversationMessagesInput,
+    ) -> Result<Vec<conversations::ApplicationPublicConversationMessageRecord>> {
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(test)]
