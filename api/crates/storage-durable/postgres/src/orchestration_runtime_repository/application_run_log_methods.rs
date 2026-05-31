@@ -1249,16 +1249,6 @@ fn application_conversation_messages_from_flow_run(
         );
     }
 
-    for (role, content) in application_conversation_history_messages(&flow_run.input_payload) {
-        push_application_conversation_message(
-            &mut messages,
-            flow_run.started_at,
-            &mut ordinal,
-            role,
-            content,
-        );
-    }
-
     if let Some(query) = application_conversation_user_text(&flow_run.input_payload) {
         push_application_conversation_message(
             &mut messages,
@@ -1340,60 +1330,11 @@ fn application_conversation_answer_text(payload: &serde_json::Value) -> Option<S
         .and_then(trimmed_string)
 }
 
-fn application_conversation_history_messages(
-    payload: &serde_json::Value,
-) -> Vec<(&'static str, String)> {
-    let start = application_conversation_start_payload(payload);
-    let Some(history) = start
-        .get("history")
-        .or_else(|| start.get("messages"))
-        .and_then(serde_json::Value::as_array)
-    else {
-        return Vec::new();
-    };
-
-    history
-        .iter()
-        .filter_map(|message| {
-            let role = match message.get("role").and_then(serde_json::Value::as_str) {
-                Some("system") => "system",
-                Some("user") => "user",
-                Some("assistant") => "assistant",
-                _ => return None,
-            };
-            let content = conversation_message_content(message)?;
-            Some((role, content))
-        })
-        .collect()
-}
-
 fn application_conversation_start_payload(payload: &serde_json::Value) -> &serde_json::Value {
     payload
         .get("node-start")
         .or_else(|| payload.get("start"))
         .unwrap_or(payload)
-}
-
-fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
-    let content = message.get("content")?;
-    if let Some(text) = trimmed_string(content) {
-        return Some(text);
-    }
-
-    if let Some(parts) = content.as_array() {
-        let text = parts
-            .iter()
-            .filter_map(conversation_content_part_text)
-            .collect::<Vec<_>>()
-            .join("");
-        return (!text.is_empty()).then_some(text);
-    }
-
-    conversation_content_part_text(content)
-}
-
-fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
-    conversation_text_value(part)
 }
 
 fn string_field_value(value: &serde_json::Value, field: &str) -> Option<String> {

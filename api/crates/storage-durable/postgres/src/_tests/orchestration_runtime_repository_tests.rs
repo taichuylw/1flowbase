@@ -1765,6 +1765,10 @@ async fn terminal_published_run_projects_application_conversation_messages_once(
             input_payload: json!({
                 "node-start": {
                     "system": "请使用简洁中文回答。",
+                    "history": [
+                        {"role": "user", "content": "上一轮问题"},
+                        {"role": "assistant", "content": "上一轮回答"}
+                    ],
                     "query": "退款政策是什么？"
                 }
             }),
