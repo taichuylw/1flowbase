@@ -107,7 +107,9 @@ impl PgControlPlaneStore {
                    from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
                 (select sum(runtime_usage_ledger.output_tokens)::bigint
                    from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
-                (select sum(runtime_usage_ledger.input_cache_hit_tokens)::bigint
+                (select sum(coalesce(runtime_usage_ledger.input_cache_hit_tokens,
+                                      runtime_usage_ledger.cache_read_tokens,
+                                      runtime_usage_ledger.cached_input_tokens))::bigint
                    from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
                 coalesce(
                     (

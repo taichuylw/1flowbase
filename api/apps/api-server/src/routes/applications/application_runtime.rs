@@ -487,6 +487,12 @@ fn metrics_payload_usage_token(
         .and_then(usage_token_value)
 }
 
+fn metrics_payload_cache_hit_tokens(metrics_payload: &serde_json::Value) -> Option<i64> {
+    metrics_payload_usage_token(metrics_payload, "input_cache_hit_tokens")
+        .or_else(|| metrics_payload_usage_token(metrics_payload, "cache_read_tokens"))
+        .or_else(|| metrics_payload_usage_token(metrics_payload, "cached_input_tokens"))
+}
+
 fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
     if task.callback_kind != "llm_tool_calls" {
         return 0;
@@ -530,9 +536,7 @@ fn application_run_statistics(
         {
             output_tokens = Some(output_tokens.unwrap_or(0) + node_tokens);
         }
-        if let Some(node_tokens) =
-            metrics_payload_usage_token(&node_run.metrics_payload, "input_cache_hit_tokens")
-        {
+        if let Some(node_tokens) = metrics_payload_cache_hit_tokens(&node_run.metrics_payload) {
             input_cache_hit_tokens = Some(input_cache_hit_tokens.unwrap_or(0) + node_tokens);
         }
     }
@@ -2593,6 +2597,28 @@ mod tests {
             None
         );
         assert_eq!(parse_runtime_event_cursor(run_id, "not-a-cursor"), None);
+    }
+
+    #[test]
+    fn metrics_payload_cache_hit_tokens_accepts_cache_read_tokens() {
+        assert_eq!(
+            metrics_payload_cache_hit_tokens(&serde_json::json!({
+                "usage": {
+                    "input_cache_hit_tokens": null,
+                    "cache_read_tokens": 29_504
+                }
+            })),
+            Some(29_504)
+        );
+        assert_eq!(
+            metrics_payload_cache_hit_tokens(&serde_json::json!({
+                "usage": {
+                    "input_cache_hit_tokens": 11,
+                    "cache_read_tokens": 29_504
+                }
+            })),
+            Some(11)
+        );
     }
 
     #[test]
