@@ -59,6 +59,7 @@ vi.mock('echarts/renderers', () => ({
 vi.mock('../api/runtime', () => runtimeApi);
 
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../state/auth-store';
 import { ApplicationMonitoringPage } from '../pages/ApplicationMonitoringPage';
 
@@ -88,6 +89,9 @@ function monitoringReport() {
     },
     tokens: {
       total_tokens_sum: 5600,
+      input_tokens_sum: 4200,
+      output_tokens_sum: 1400,
+      input_cache_hit_tokens_sum: 900,
       avg_tokens_per_run: 466.7,
       token_recorded_count: 12
     },
@@ -340,7 +344,9 @@ function runtimeActivity() {
 }
 
 describe('ApplicationMonitoringPage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'en_US');
+    await appI18n.changeLanguage('en_US');
     resetAuthStore();
     vi.clearAllMocks();
     echartsMock.init.mockReturnValue(echartsMock.chart);
@@ -371,6 +377,12 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('5m failure rate')).toBeInTheDocument();
     expect(screen.getByText('New tokens')).toBeInTheDocument();
     expect(screen.getAllByText('5,600').length).toBeGreaterThan(0);
+    expect(screen.getByText('Input tokens')).toBeInTheDocument();
+    expect(screen.getByText('4,200')).toBeInTheDocument();
+    expect(screen.getByText('Output tokens')).toBeInTheDocument();
+    expect(screen.getByText('1,400')).toBeInTheDocument();
+    expect(screen.getByText('Cache-hit tokens')).toBeInTheDocument();
+    expect(screen.getByText('900')).toBeInTheDocument();
     expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
     expect(
       screen

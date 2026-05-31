@@ -2031,7 +2031,7 @@ async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
             output_tokens: Some(2),
             reasoning_output_tokens: None,
             total_tokens: Some(42),
-            input_cache_hit_tokens: None,
+            input_cache_hit_tokens: Some(11),
             input_cache_miss_tokens: None,
             cache_read_tokens: None,
             cache_write_tokens: None,
@@ -2074,6 +2074,9 @@ async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
         .unwrap();
     assert_eq!(logs.items[0].run.id, run.id);
     assert_eq!(logs.items[0].total_tokens, Some(42));
+    assert_eq!(logs.items[0].input_tokens, Some(40));
+    assert_eq!(logs.items[0].output_tokens, Some(2));
+    assert_eq!(logs.items[0].input_cache_hit_tokens, Some(11));
 
     let report =
         <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
@@ -2089,6 +2092,9 @@ async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
         .await
         .unwrap();
     assert_eq!(report.tokens.total_tokens_sum, 42);
+    assert_eq!(report.tokens.input_tokens_sum, 40);
+    assert_eq!(report.tokens.output_tokens_sum, 2);
+    assert_eq!(report.tokens.input_cache_hit_tokens_sum, 11);
     assert_eq!(report.tokens.token_recorded_count, 1);
     assert_eq!(report.high_token_runs[0].flow_run_id, run.id);
 }

@@ -244,6 +244,10 @@ describe('ApplicationLogsPage - table field settings', () => {
           expand_id: 'customer-42',
           authorized_account: 'root',
           compatibility_mode: 'openai-responses-v1',
+          total_tokens: 128,
+          input_tokens: 100,
+          output_tokens: 28,
+          input_cache_hit_tokens: 64,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z',
@@ -300,6 +304,27 @@ describe('ApplicationLogsPage - table field settings', () => {
     innerWidthSpy = undefined;
     dateNowSpy?.mockRestore();
     dateNowSpy = undefined;
+  });
+
+  test('shows token breakdown columns from run summaries', async () => {
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(
+      await screen.findByRole('columnheader', { name: '输入 tokens' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: '输出 tokens' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: '命中缓存 tokens' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.getByText('28')).toBeInTheDocument();
+    expect(screen.getByText('64')).toBeInTheDocument();
   });
 
   test('persists table column visibility in user preferences meta', async () => {

@@ -48,6 +48,7 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 total_tokens,
+                input_tokens, output_tokens, input_cache_hit_tokens,
                 unique_node_count,
                 tool_callback_count,
                 started_at,
@@ -102,6 +103,12 @@ impl PgControlPlaneStore {
                         where node_runs.flow_run_id = $1
                     )
                 ),
+                (select sum(runtime_usage_ledger.input_tokens)::bigint
+                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
+                (select sum(runtime_usage_ledger.output_tokens)::bigint
+                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
+                (select sum(runtime_usage_ledger.input_cache_hit_tokens)::bigint
+                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
                 coalesce(
                     (
                         select count(distinct node_runs.node_id)::bigint
@@ -148,6 +155,9 @@ impl PgControlPlaneStore {
                 compatibility_mode = excluded.compatibility_mode,
                 idempotency_key = excluded.idempotency_key,
                 total_tokens = excluded.total_tokens,
+                input_tokens = excluded.input_tokens,
+                output_tokens = excluded.output_tokens,
+                input_cache_hit_tokens = excluded.input_cache_hit_tokens,
                 unique_node_count = excluded.unique_node_count,
                 tool_callback_count = excluded.tool_callback_count,
                 started_at = excluded.started_at,
@@ -390,6 +400,7 @@ impl PgControlPlaneStore {
                     compatibility_mode,
                     idempotency_key,
                     total_tokens,
+                    input_tokens, output_tokens, input_cache_hit_tokens,
                     unique_node_count,
                     tool_callback_count,
                     started_at,
@@ -416,6 +427,7 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 total_tokens,
+                input_tokens, output_tokens, input_cache_hit_tokens,
                 unique_node_count,
                 tool_callback_count,
                 started_at,
@@ -666,6 +678,10 @@ impl PgControlPlaneStore {
             r#"
             select
                 coalesce(sum(coalesce(total_tokens, 0)), 0)::bigint as total_tokens_sum,
+                coalesce(sum(coalesce(input_tokens, 0)), 0)::bigint as input_tokens_sum,
+                coalesce(sum(coalesce(output_tokens, 0)), 0)::bigint as output_tokens_sum,
+                coalesce(sum(coalesce(input_cache_hit_tokens, 0)), 0)::bigint
+                    as input_cache_hit_tokens_sum,
                 coalesce(avg(total_tokens::double precision), 0.0)::double precision
                     as avg_tokens_per_run,
                 count(total_tokens)::bigint as token_recorded_count
@@ -680,6 +696,9 @@ impl PgControlPlaneStore {
 
         Ok(control_plane::ports::ApplicationRunMonitoringTokens {
             total_tokens_sum: row.get("total_tokens_sum"),
+            input_tokens_sum: row.get("input_tokens_sum"),
+            output_tokens_sum: row.get("output_tokens_sum"),
+            input_cache_hit_tokens_sum: row.get("input_cache_hit_tokens_sum"),
             avg_tokens_per_run: row.get("avg_tokens_per_run"),
             token_recorded_count: row.get("token_recorded_count"),
         })

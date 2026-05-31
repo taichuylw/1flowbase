@@ -53,16 +53,18 @@ import { i18nText } from '../../../shared/i18n/text';
 
 type MonitoringTimeRange = 1 | 7 | 28 | 90 | 365;
 
-const TIME_RANGE_OPTIONS: Array<{
+function monitoringTimeRangeOptions(): Array<{
   label: string;
   value: MonitoringTimeRange;
-}> = [
-  { label: i18nText("applications", "auto.past_twenty_four_hours"), value: 1 },
-  { label: i18nText("applications", "auto.past_seven_days"), value: 7 },
-  { label: i18nText("applications", "auto.past_four_weeks"), value: 28 },
-  { label: i18nText("applications", "auto.past_three_months"), value: 90 },
-  { label: i18nText("applications", "auto.past_twelve_months"), value: 365 }
-];
+}> {
+  return [
+    { label: i18nText("applications", "auto.past_twenty_four_hours"), value: 1 },
+    { label: i18nText("applications", "auto.past_seven_days"), value: 7 },
+    { label: i18nText("applications", "auto.past_four_weeks"), value: 28 },
+    { label: i18nText("applications", "auto.past_three_months"), value: 90 },
+    { label: i18nText("applications", "auto.past_twelve_months"), value: 365 }
+  ];
+}
 
 function getMonitoringBucket(
   range: MonitoringTimeRange
@@ -1132,9 +1134,27 @@ export function ApplicationMonitoringPage({
     [report?.external_conversations]
   );
 
+  const timeRangeOptions = monitoringTimeRangeOptions();
   const activeRangeLabel =
-    TIME_RANGE_OPTIONS.find((option) => option.value === timeRangeDays)
+    timeRangeOptions.find((option) => option.value === timeRangeDays)
       ?.label ?? i18nText("applications", "auto.past_seven_days");
+  const tokenBreakdownMetrics = [
+    {
+      tone: 'blue',
+      title: i18nText("applications", "auto.input_tokens"),
+      value: report?.tokens.input_tokens_sum ?? 0
+    },
+    {
+      tone: 'green',
+      title: i18nText("applications", "auto.output_tokens"),
+      value: report?.tokens.output_tokens_sum ?? 0
+    },
+    {
+      tone: 'gold',
+      title: i18nText("applications", "auto.input_cache_hit_tokens"),
+      value: report?.tokens.input_cache_hit_tokens_sum ?? 0
+    }
+  ] as const;
   const tokenTrendOption = useMemo(
     () => (report ? buildTokenTrendOption(report) : null),
     [report]
@@ -1171,7 +1191,7 @@ export function ApplicationMonitoringPage({
       <div className="application-monitoring-page__toolbar">
         <Radio.Group
           optionType="button"
-          options={TIME_RANGE_OPTIONS}
+          options={timeRangeOptions}
           value={timeRangeDays}
           onChange={(event) => setTimeRangeDays(event.target.value)}
         />
@@ -1283,6 +1303,23 @@ export function ApplicationMonitoringPage({
               </span>
             </div>
           </div>
+
+          {tokenBreakdownMetrics.map((metric) => (
+            <div
+              className={`application-monitoring-metric application-monitoring-metric--${metric.tone}`}
+              key={metric.title}
+            >
+              <div className="metric-card__icon-wrapper">
+                <DatabaseOutlined />
+              </div>
+              <div className="metric-card__content">
+                <span className="metric-card__title">{metric.title}</span>
+                <span className="metric-card__value">
+                  {formatInteger(metric.value)}
+                </span>
+              </div>
+            </div>
+          ))}
 
           <div className="application-monitoring-metric application-monitoring-metric--cyan">
             <div className="metric-card__icon-wrapper">

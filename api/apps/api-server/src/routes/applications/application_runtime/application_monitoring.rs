@@ -87,6 +87,9 @@ pub struct ApplicationRunMonitoringDurationResponse {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunMonitoringTokensResponse {
     pub total_tokens_sum: i64,
+    pub input_tokens_sum: i64,
+    pub output_tokens_sum: i64,
+    pub input_cache_hit_tokens_sum: i64,
     pub avg_tokens_per_run: f64,
     pub token_recorded_count: i64,
 }
@@ -335,6 +338,9 @@ fn to_report_response(
         },
         tokens: ApplicationRunMonitoringTokensResponse {
             total_tokens_sum: report.tokens.total_tokens_sum,
+            input_tokens_sum: report.tokens.input_tokens_sum,
+            output_tokens_sum: report.tokens.output_tokens_sum,
+            input_cache_hit_tokens_sum: report.tokens.input_cache_hit_tokens_sum,
             avg_tokens_per_run: report.tokens.avg_tokens_per_run,
             token_recorded_count: report.tokens.token_recorded_count,
         },

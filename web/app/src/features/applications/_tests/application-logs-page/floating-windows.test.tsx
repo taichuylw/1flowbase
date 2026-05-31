@@ -169,6 +169,9 @@ function sampleRunDetail(): ApplicationRunDetail {
     },
     statistics: {
       total_tokens: 50,
+      input_tokens: 40,
+      output_tokens: 10,
+      input_cache_hit_tokens: 12,
       unique_node_count: 3,
       tool_callback_count: 20
     },
@@ -293,6 +296,9 @@ describe('ApplicationLogsPage - floating windows', () => {
           authorized_account: 'root',
           compatibility_mode: 'openai-responses-v1',
           total_tokens: 50,
+          input_tokens: 40,
+          output_tokens: 10,
+          input_cache_hit_tokens: 12,
           unique_node_count: 3,
           tool_callback_count: 20,
           started_at: '2026-04-17T09:00:00Z',
@@ -321,6 +327,9 @@ describe('ApplicationLogsPage - floating windows', () => {
             },
             statistics: {
               total_tokens: null,
+              input_tokens: null,
+              output_tokens: null,
+              input_cache_hit_tokens: null,
               unique_node_count: 0,
               tool_callback_count: 0
             },
