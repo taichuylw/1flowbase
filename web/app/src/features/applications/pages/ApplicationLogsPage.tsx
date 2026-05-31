@@ -22,7 +22,14 @@ import {
   type ApplicationRunSummary
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
-import { ApplicationLogsFloatingWindow } from '../components/logs/ApplicationLogsFloatingWindow';
+import {
+  ApplicationLogsFloatingWindow,
+  clampRect,
+  applyStoredWidth,
+  DEFAULT_MIN_WIDTH,
+  DEFAULT_MIN_HEIGHT,
+  type FloatingWindowRect
+} from '../components/logs/ApplicationLogsFloatingWindow';
 import { getApplicationRunsTableColumns } from '../components/logs/application-runs-table-columns';
 import {
   ApplicationRunsTable,
@@ -118,6 +125,50 @@ function getConversationLogInitialRect() {
   };
 }
 
+function resolveCollision(
+  rectA: FloatingWindowRect,
+  rectB: FloatingWindowRect,
+  viewportWidth: number,
+  minWidthA: number = DEFAULT_MIN_WIDTH,
+  minWidthB: number = DEFAULT_MIN_WIDTH,
+  gap: number = FLOATING_WINDOW_GAP,
+  margin: number = 8
+): { rectA: FloatingWindowRect; rectB: FloatingWindowRect } {
+  let nextLeftB = rectA.left - rectB.width - gap;
+
+  if (nextLeftB < margin) {
+    nextLeftB = margin;
+    const availableWidthB = rectA.left - margin - gap;
+    let nextWidthB = rectB.width;
+    if (availableWidthB < rectB.width) {
+      nextWidthB = Math.max(minWidthB, availableWidthB);
+    }
+
+    const overlap = (nextLeftB + nextWidthB + gap) - rectA.left;
+    let nextLeftA = rectA.left;
+    if (overlap > 0) {
+      nextLeftA = Math.min(
+        viewportWidth - rectA.width - margin,
+        rectA.left + overlap
+      );
+
+      const newAvailableWidthB = nextLeftA - margin - gap;
+      nextWidthB = Math.max(minWidthB, Math.min(rectB.width, newAvailableWidthB));
+      nextLeftB = Math.max(margin, nextLeftA - nextWidthB - gap);
+    }
+
+    return {
+      rectA: { ...rectA, left: nextLeftA },
+      rectB: { ...rectB, left: nextLeftB, width: nextWidthB }
+    };
+  } else {
+    return {
+      rectA,
+      rectB: { ...rectB, left: nextLeftB }
+    };
+  }
+}
+
 export function ApplicationLogsPage({
   applicationId
 }: {
@@ -127,8 +178,32 @@ export function ApplicationLogsPage({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
+  const [runDetailRect, setRunDetailRect] = useState<FloatingWindowRect | null>(null);
+  const [conversationLogRect, setConversationLogRect] = useState<FloatingWindowRect | null>(null);
   const [timeRange, setTimeRange] =
     useState<ApplicationLogTimeRange>(DEFAULT_TIME_RANGE);
+
+  useEffect(() => {
+    function handleViewportResize() {
+      if (runDetailRect || conversationLogRect) {
+        const viewport = getViewportSize();
+        const nextA = runDetailRect ? clampRect(runDetailRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT) : null;
+        const nextB = conversationLogRect ? clampRect(conversationLogRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT) : null;
+
+        if (nextA && nextB) {
+          const resolved = resolveCollision(nextA, nextB, viewport.width);
+          setRunDetailRect(resolved.rectA);
+          setConversationLogRect(resolved.rectB);
+        } else {
+          if (nextA) setRunDetailRect(nextA);
+          if (nextB) setConversationLogRect(nextB);
+        }
+      }
+    }
+
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, [runDetailRect, conversationLogRect]);
   const [keywordSearch, setKeywordSearch] = useState('');
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] =
@@ -201,10 +276,56 @@ export function ApplicationLogsPage({
   }, [runs, refetchRuns]);
 
   function selectRun(run: ApplicationRunSummary | null) {
-    setSelectedRunId(run ? run.flow_run_id ?? run.id : null);
+    const nextRunId = run ? run.flow_run_id ?? run.id : null;
+    setSelectedRunId(nextRunId);
     setOpenConversationLogMessage(null);
     setActiveFloatingWindow('run-detail');
+
+    if (nextRunId) {
+      const initial = clampRect(
+        applyStoredWidth(getRunDetailInitialRect(), 'application-logs-floating-run-detail'),
+        DEFAULT_MIN_WIDTH,
+        DEFAULT_MIN_HEIGHT
+      );
+      setRunDetailRect(initial);
+    } else {
+      setRunDetailRect(null);
+    }
+    setConversationLogRect(null);
   }
+
+  const handleRectChange = (
+    type: 'run-detail' | 'conversation-log',
+    newRect: FloatingWindowRect
+  ) => {
+    if (type === 'run-detail') {
+      if (conversationLogRect) {
+        const viewport = getViewportSize();
+        const resolved = resolveCollision(
+          newRect,
+          conversationLogRect,
+          viewport.width
+        );
+        setRunDetailRect(resolved.rectA);
+        setConversationLogRect(resolved.rectB);
+      } else {
+        setRunDetailRect(newRect);
+      }
+    } else {
+      if (runDetailRect) {
+        const viewport = getViewportSize();
+        const resolved = resolveCollision(
+          runDetailRect,
+          newRect,
+          viewport.width
+        );
+        setRunDetailRect(resolved.rectA);
+        setConversationLogRect(resolved.rectB);
+      } else {
+        setConversationLogRect(newRect);
+      }
+    }
+  };
 
   function toggleSortOrder() {
     setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'));
@@ -350,6 +471,8 @@ export function ApplicationLogsPage({
         <ApplicationLogsFloatingWindow
           active={activeFloatingWindow === 'conversation-log'}
           initialRect={getConversationLogInitialRect}
+          rect={conversationLogRect ?? undefined}
+          onRectChange={(rect) => handleRectChange('conversation-log', rect)}
           testId="application-logs-floating-conversation-log"
           title={t('auto.conversation_logs')}
           onActivate={() => setActiveFloatingWindow('conversation-log')}
@@ -357,7 +480,10 @@ export function ApplicationLogsPage({
           <div className="application-logs-page__conversation-log-panel">
             <ConversationLogPanel
               message={openConversationLogMessage}
-              onClose={() => setOpenConversationLogMessage(null)}
+              onClose={() => {
+                setOpenConversationLogMessage(null);
+                setConversationLogRect(null);
+              }}
               onLoadArtifact={(artifactRef) =>
                 fetchRuntimeDebugArtifact(applicationId, artifactRef)
               }
@@ -369,6 +495,8 @@ export function ApplicationLogsPage({
         <ApplicationLogsFloatingWindow
           active={activeFloatingWindow === 'run-detail'}
           initialRect={getRunDetailInitialRect}
+          rect={runDetailRect ?? undefined}
+          onRectChange={(rect) => handleRectChange('run-detail', rect)}
           testId="application-logs-floating-run-detail"
           title={t('auto.run_details')}
           onActivate={() => setActiveFloatingWindow('run-detail')}
@@ -379,6 +507,20 @@ export function ApplicationLogsPage({
             onOpenMessageLog={(message) => {
               setOpenConversationLogMessage(message);
               setActiveFloatingWindow('conversation-log');
+
+              const initial = clampRect(
+                applyStoredWidth(getConversationLogInitialRect(), 'application-logs-floating-conversation-log'),
+                DEFAULT_MIN_WIDTH,
+                DEFAULT_MIN_HEIGHT
+              );
+              if (runDetailRect) {
+                const viewport = getViewportSize();
+                const resolved = resolveCollision(runDetailRect, initial, viewport.width);
+                setRunDetailRect(resolved.rectA);
+                setConversationLogRect(resolved.rectB);
+              } else {
+                setConversationLogRect(initial);
+              }
             }}
             runId={selectedRunId}
           />

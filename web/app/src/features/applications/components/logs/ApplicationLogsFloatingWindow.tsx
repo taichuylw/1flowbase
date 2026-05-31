@@ -8,14 +8,14 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-type FloatingWindowRect = {
+export type FloatingWindowRect = {
   left: number;
   top: number;
   width: number;
   height: number;
 };
 
-type ApplicationLogsFloatingWindowProps = {
+export type ApplicationLogsFloatingWindowProps = {
   active: boolean;
   children: ReactNode;
   className?: string;
@@ -25,19 +25,21 @@ type ApplicationLogsFloatingWindowProps = {
   title: string;
   initialRect: () => FloatingWindowRect;
   onActivate: () => void;
+  rect?: FloatingWindowRect;
+  onRectChange?: (rect: FloatingWindowRect) => void;
 };
 
-const FLOATING_WINDOW_MARGIN = 8;
-const DEFAULT_MIN_WIDTH = 360;
-const DEFAULT_MIN_HEIGHT = 320;
+export const FLOATING_WINDOW_MARGIN = 8;
+export const DEFAULT_MIN_WIDTH = 360;
+export const DEFAULT_MIN_HEIGHT = 320;
 const FLOATING_WINDOW_WIDTH_STORAGE_PREFIX =
   'applicationLogsFloatingWindowWidth';
 
-function clamp(value: number, min: number, max: number) {
+export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function getViewportSize() {
+export function getViewportSize() {
   if (typeof window === 'undefined') {
     return { width: 1280, height: 720 };
   }
@@ -48,7 +50,7 @@ function getViewportSize() {
   };
 }
 
-function clampRect(
+export function clampRect(
   rect: FloatingWindowRect,
   minWidth: number,
   minHeight: number
@@ -107,7 +109,7 @@ function writeStoredWidth(testId: string, width: number) {
   );
 }
 
-function applyStoredWidth(
+export function applyStoredWidth(
   rect: FloatingWindowRect,
   testId: string
 ): FloatingWindowRect {
@@ -163,12 +165,35 @@ export function ApplicationLogsFloatingWindow({
   testId,
   title,
   initialRect,
-  onActivate
+  onActivate,
+  rect,
+  onRectChange
 }: ApplicationLogsFloatingWindowProps) {
   const { t } = useTranslation('applications');
-  const [rect, setRect] = useState(() =>
+  const [localRect, setLocalRect] = useState(() =>
     clampRect(applyStoredWidth(initialRect(), testId), minWidth, minHeight)
   );
+
+  const currentRect = rect ?? localRect;
+  const setRect = (
+    newRect: FloatingWindowRect | ((curr: FloatingWindowRect) => FloatingWindowRect)
+  ) => {
+    if (typeof newRect === 'function') {
+      const next = newRect(currentRect);
+      if (onRectChange) {
+        onRectChange(next);
+      } else {
+        setLocalRect(next);
+      }
+    } else {
+      if (onRectChange) {
+        onRectChange(newRect);
+      } else {
+        setLocalRect(newRect);
+      }
+    }
+  };
+
   const cleanupInteractionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -201,7 +226,7 @@ export function ApplicationLogsFloatingWindow({
 
     const startX = event.clientX;
     const startY = event.clientY;
-    const startRect = rect;
+    const startRect = currentRect;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
 
@@ -248,8 +273,8 @@ export function ApplicationLogsFloatingWindow({
     onActivate();
 
     const startX = event.clientX;
-    const startLeft = rect.left;
-    const startWidth = rect.width;
+    const startLeft = currentRect.left;
+    const startWidth = currentRect.width;
     const startRight = startLeft + startWidth;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
@@ -315,7 +340,7 @@ export function ApplicationLogsFloatingWindow({
     onActivate();
 
     const startY = event.clientY;
-    const startHeight = rect.height;
+    const startHeight = currentRect.height;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
 
@@ -350,10 +375,10 @@ export function ApplicationLogsFloatingWindow({
   }
 
   const style: CSSProperties = {
-    left: rect.left,
-    top: rect.top,
-    width: rect.width,
-    height: rect.height,
+    left: currentRect.left,
+    top: currentRect.top,
+    width: currentRect.width,
+    height: currentRect.height,
     zIndex: active ? 1051 : 1050
   };
 
