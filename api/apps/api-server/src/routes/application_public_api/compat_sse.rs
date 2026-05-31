@@ -2444,14 +2444,33 @@ impl AnthropicStreamMapper {
         for block in blocks {
             let index = self.next_content_index;
             self.next_content_index += 1;
+            let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
+            let mut start_block = block;
+            if let Some(object) = start_block.as_object_mut() {
+                object.insert("input".to_string(), json!({}));
+            }
             events.push(event_json_sse(
                 "content_block_start",
                 json!({
                     "type": "content_block_start",
                     "index": index,
-                    "content_block": block
+                    "content_block": start_block
                 }),
             ));
+            if input != json!({}) {
+                events.push(event_json_sse(
+                    "content_block_delta",
+                    json!({
+                        "type": "content_block_delta",
+                        "index": index,
+                        "delta": {
+                            "type": "input_json_delta",
+                            "partial_json": serde_json::to_string(&input)
+                                .expect("tool input JSON should serialize")
+                        }
+                    }),
+                ));
+            }
             events.push(event_json_sse(
                 "content_block_stop",
                 json!({"type": "content_block_stop", "index": index}),
@@ -4080,5 +4099,39 @@ mod tests {
             .as_str()
             .expect("tool_use id should be encoded")
             .contains("toolu_weather"));
+    }
+
+    #[tokio::test]
+    async fn anthropic_waiting_callback_streams_tool_input_json_delta() {
+        let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let events = mapper
+            .anthropic_tool_use_events(&json!({
+                "callback_kind": "llm_tool_calls",
+                "callback_task_id": callback_task_id,
+                "tool_calls": [
+                    {
+                        "id": "toolu_bash",
+                        "name": "Bash",
+                        "arguments": {
+                            "command": "pwd && ls -la",
+                            "description": "List files"
+                        }
+                    }
+                ]
+            }))
+            .expect("LLM callback should map to Anthropic tool_use stream events");
+        let response = completed_compatible_stream(events);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("\"input\":{}"), "{body}");
+        assert!(body.contains("\"type\":\"input_json_delta\""), "{body}");
+        assert!(
+            body.contains("\\\"command\\\":\\\"pwd && ls -la\\\""),
+            "{body}"
+        );
     }
 }
