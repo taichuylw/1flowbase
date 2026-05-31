@@ -9,7 +9,9 @@ use axum::{
 };
 use control_plane::application_public_api::{
     api_keys::ApplicationApiKeyService,
-    compat::anthropic::{map_messages_request, AnthropicCompatError},
+    compat::anthropic::{
+        map_messages_request, sanitize_anthropic_compat_assistant_text, AnthropicCompatError,
+    },
     native::{
         ApplicationNativeRunService, CreateNativeRunCommand, NativeRunRequest, NativeRunResult,
         NativeRunValidationError,
@@ -463,8 +465,10 @@ fn to_anthropic_response(run: NativeRunResult, model: String) -> AnthropicMessag
         .is_some_and(|blocks| !blocks.is_empty());
     let mut content = Vec::new();
     if let Some(answer) = run.answer {
-        if !answer.is_empty() {
-            content.push(json!({"type": "text", "text": answer}));
+        if let Some(answer) = sanitize_anthropic_compat_assistant_text(&answer) {
+            if !answer.is_empty() {
+                content.push(json!({"type": "text", "text": answer}));
+            }
         }
     }
     if let Some(blocks) = tool_blocks {
@@ -794,6 +798,33 @@ mod tests {
             payload["content"][0]["input"]["order_id"],
             json!("order_123")
         );
+    }
+
+    #[test]
+    fn anthropic_response_projects_only_visible_assistant_text() {
+        let run = NativeRunResult {
+            id: Uuid::nil(),
+            application_id: Uuid::nil(),
+            api_key_id: Uuid::nil(),
+            publication_version_id: Uuid::nil(),
+            status: NativeRunStatus::Succeeded,
+            node_input_payload: json!({}),
+            metadata: json!({}),
+            answer: Some(
+                "<think>private reasoning</think>raw draft<tool_call>{}</tool_call>\n\n---\n\n下面是美化后内容\n\nVisible answer"
+                    .to_string(),
+            ),
+            required_action: None,
+            tool_calls: None,
+            usage: None,
+            error: None,
+            created_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        let payload = serde_json::to_value(to_anthropic_response(run, "provider/model".into()))
+            .expect("anthropic response serializes");
+
+        assert_eq!(payload["content"][0]["text"], json!("Visible answer"));
     }
 
     #[test]
