@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use axum::{
     body::Bytes,
@@ -14,7 +14,7 @@ use control_plane::application_public_api::{
     },
     native::{
         ApplicationNativeRunService, CreateNativeRunCommand, NativeRunRequest, NativeRunResult,
-        NativeRunValidationError,
+        NativeRunStatus, NativeRunValidationError,
     },
     run_service::{native_result_from_run_detail, ApplicationPublishedRunControlRepository},
 };
@@ -139,7 +139,7 @@ struct AnthropicToolResumeRequest {
 struct AnthropicDecodedToolResult {
     callback_task_id: Uuid,
     original_tool_use_id: String,
-    content: String,
+    content: Value,
 }
 
 #[utoipa::path(
@@ -176,6 +176,13 @@ pub async fn create_message(
         .and_then(Value::as_bool)
         .filter(|stream| *stream)
         .map(|_| "streaming".to_string());
+    if let Some(run) = anthropic_structured_output_run(&value)? {
+        authenticate_anthropic_token(state.as_ref(), &bearer_token).await?;
+        if response_mode.as_deref() == Some("streaming") {
+            return Ok(compat_sse::completed_anthropic_stream(run, model));
+        }
+        return Ok(Json(to_anthropic_response(run, model)).into_response());
+    }
     if let Some(resume) = anthropic_tool_resume_request(&value)? {
         let run = resume_anthropic_tool_call(
             state,
@@ -532,12 +539,17 @@ fn anthropic_tool_resume_request(
     let mut trailing_tool_result_messages = messages
         .iter()
         .rev()
-        .take_while(|message| anthropic_message_has_tool_result(message))
+        .take_while(|message| anthropic_message_has_only_tool_results(message))
         .collect::<Vec<_>>();
     if trailing_tool_result_messages.is_empty() {
         return Ok(None);
     }
     trailing_tool_result_messages.reverse();
+    let trailing_start = messages.len() - trailing_tool_result_messages.len();
+    let matching_tool_use_ids = anthropic_trailing_assistant_tool_use_ids(messages, trailing_start);
+    if matching_tool_use_ids.is_empty() {
+        return Ok(None);
+    }
 
     let mut decoded_results = Vec::new();
 
@@ -556,6 +568,9 @@ fn anthropic_tool_resume_request(
                 }
                 .into());
             };
+            if !matching_tool_use_ids.contains(tool_use_id) {
+                continue;
+            }
             let Some((decoded_callback_task_id, original_tool_use_id)) =
                 decode_anthropic_callback_tool_use_id(tool_use_id)
             else {
@@ -592,33 +607,65 @@ fn anthropic_tool_resume_request(
     }))
 }
 
-fn anthropic_message_has_tool_result(message: &Value) -> bool {
+fn anthropic_trailing_assistant_tool_use_ids(
+    messages: &[Value],
+    trailing_start: usize,
+) -> HashSet<String> {
+    let mut tool_use_ids = HashSet::new();
+    for message in messages[..trailing_start].iter().rev() {
+        if message.get("role").and_then(Value::as_str) != Some("assistant") {
+            break;
+        }
+        let Some(blocks) = message.get("content").and_then(Value::as_array) else {
+            continue;
+        };
+        for block in blocks {
+            if block.get("type").and_then(Value::as_str) != Some("tool_use") {
+                continue;
+            }
+            if let Some(id) = block.get("id").and_then(Value::as_str) {
+                tool_use_ids.insert(id.to_string());
+            }
+        }
+    }
+    tool_use_ids
+}
+
+fn anthropic_message_has_only_tool_results(message: &Value) -> bool {
     message.get("role").and_then(Value::as_str) == Some("user")
         && message
             .get("content")
             .and_then(Value::as_array)
             .is_some_and(|blocks| {
-                blocks
-                    .iter()
-                    .any(|block| block.get("type").and_then(Value::as_str) == Some("tool_result"))
+                !blocks.is_empty()
+                    && blocks.iter().all(|block| {
+                        block.get("type").and_then(Value::as_str) == Some("tool_result")
+                    })
             })
 }
 
-fn anthropic_tool_result_content(block: &Value) -> String {
+fn anthropic_tool_result_content(block: &Value) -> Value {
     let Some(content) = block.get("content") else {
-        return String::new();
+        return Value::String(String::new());
     };
     if let Some(text) = content.as_str() {
-        return text.to_string();
+        return Value::String(text.to_string());
     }
     if let Some(blocks) = content.as_array() {
-        return blocks
+        let text = blocks
             .iter()
             .filter_map(|entry| entry.get("text").and_then(Value::as_str))
             .collect::<Vec<_>>()
             .join("\n");
+        if blocks
+            .iter()
+            .all(|entry| entry.get("type").and_then(Value::as_str) == Some("text"))
+        {
+            return Value::String(text);
+        }
+        return Value::Array(blocks.clone());
     }
-    content.to_string()
+    Value::String(content.to_string())
 }
 
 fn callback_task_id_from_required_action(run: &NativeRunResult) -> Option<Uuid> {
@@ -690,6 +737,98 @@ fn anthropic_probe_response(request: &Value, model: &str) -> Option<AnthropicMes
             output_tokens: 0,
         },
     })
+}
+
+fn anthropic_structured_output_run(
+    request: &Value,
+) -> Result<Option<NativeRunResult>, AnthropicCompatError> {
+    if !anthropic_title_output_requested(request) {
+        return Ok(None);
+    }
+    let native = map_messages_request(request.clone())?;
+    let content_text = json!({ "title": anthropic_title_from_query(&native.query) }).to_string();
+
+    Ok(Some(NativeRunResult {
+        id: Uuid::now_v7(),
+        application_id: Uuid::nil(),
+        api_key_id: Uuid::nil(),
+        publication_version_id: Uuid::nil(),
+        status: NativeRunStatus::Succeeded,
+        node_input_payload: json!({}),
+        metadata: json!({}),
+        answer: Some(content_text),
+        required_action: None,
+        tool_calls: None,
+        usage: None,
+        error: None,
+        created_at: time::OffsetDateTime::now_utc(),
+    }))
+}
+
+fn anthropic_title_output_requested(request: &Value) -> bool {
+    anthropic_title_json_schema_requested(request)
+        || anthropic_title_system_prompt_requested(request)
+}
+
+fn anthropic_title_json_schema_requested(request: &Value) -> bool {
+    let Some(format) = request
+        .get("output_config")
+        .and_then(|output_config| output_config.get("format"))
+        .and_then(Value::as_object)
+    else {
+        return false;
+    };
+    format.get("type").and_then(Value::as_str) == Some("json_schema")
+        && format
+            .get("schema")
+            .and_then(|schema| schema.get("properties"))
+            .and_then(|properties| properties.get("title"))
+            .and_then(|title| title.get("type"))
+            .and_then(Value::as_str)
+            == Some("string")
+}
+
+fn anthropic_title_system_prompt_requested(request: &Value) -> bool {
+    let system_text = anthropic_system_text(request);
+    system_text.contains("Generate a concise, sentence-case title")
+        && system_text.contains("Return JSON with a single \"title\" field")
+}
+
+fn anthropic_system_text(request: &Value) -> String {
+    match request.get("system") {
+        Some(Value::String(text)) => text.to_string(),
+        Some(Value::Array(blocks)) => blocks
+            .iter()
+            .filter_map(|block| match block {
+                Value::String(text) => Some(text.as_str()),
+                Value::Object(object) => object.get("text").and_then(Value::as_str),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+fn anthropic_title_from_query(query: &str) -> String {
+    let collapsed = query
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("新会话")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let title = collapsed
+        .trim_matches(|value: char| matches!(value, '"' | '\'' | '`' | ':' | '-' | '#'))
+        .trim();
+    let title = if title.is_empty() { "新会话" } else { title };
+    let max_chars = 48;
+    let mut shortened = title.chars().take(max_chars).collect::<String>();
+    if title.chars().count() > max_chars {
+        shortened.push_str("...");
+    }
+    shortened
 }
 
 fn anthropic_single_user_text(request: &Value) -> Option<&str> {
@@ -870,6 +1009,53 @@ mod tests {
     }
 
     #[test]
+    fn anthropic_structured_title_response_returns_json_title() {
+        let run = anthropic_structured_output_run(&json!({
+            "model": "1flowbase",
+            "messages": [{"role": "user", "content": "帮我找找这个代码位置"}],
+            "output_config": {
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string" }
+                        },
+                        "required": ["title"],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        }))
+        .expect("structured output request should parse")
+        .expect("title schema should be handled locally");
+        let response = to_anthropic_response(run, "1flowbase".to_string());
+
+        assert_eq!(
+            response.content[0]["text"],
+            json!("{\"title\":\"帮我找找这个代码位置\"}")
+        );
+    }
+
+    #[test]
+    fn anthropic_structured_title_response_detects_session_title_prompt() {
+        let run = anthropic_structured_output_run(&json!({
+            "model": "1flowbase",
+            "stream": true,
+            "system": "Generate a concise, sentence-case title (3-7 words) that captures the main topic or goal of this coding session.\n\nReturn JSON with a single \"title\" field.",
+            "messages": [{"role": "user", "content": "uploads/agent-flow-preview-debug.png 描述一下这幅图说什么？"}]
+        }))
+        .expect("structured output request should parse")
+        .expect("session title prompt should be handled locally");
+        let response = to_anthropic_response(run, "1flowbase".to_string());
+
+        assert_eq!(
+            response.content[0]["text"],
+            json!("{\"title\":\"uploads/agent-flow-preview-debug.png 描述一下这幅图说什么？\"}")
+        );
+    }
+
+    #[test]
     fn claude_code_session_header_fills_missing_metadata_session_id() {
         let mut request = json!({
             "model": "1flowbase",
@@ -938,6 +1124,15 @@ mod tests {
             "model": "1flowbase",
             "messages": [
                 {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": tool_use_id,
+                        "name": "lookup_order",
+                        "input": {}
+                    }]
+                },
+                {
                     "role": "user",
                     "content": [
                         {
@@ -958,6 +1153,77 @@ mod tests {
             resume.tool_results[0]["content"],
             json!("{\"order\":\"ready\"}")
         );
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_ignores_orphan_trailing_tool_result() {
+        let callback_task_id = Uuid::from_u128(0xffffffffffffffffffffffffffffffff);
+        let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_123");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": "stale result"
+                        }
+                    ]
+                }
+            ]
+        }))
+        .expect("orphan tool_result should parse");
+
+        assert!(resume.is_none());
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_preserves_media_tool_result_content() {
+        let callback_task_id = Uuid::from_u128(0x99999999999999999999999999999999);
+        let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_image");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": tool_use_id,
+                        "name": "Read",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": "aW1hZ2U="
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }))
+        .expect("tool_result should parse")
+        .expect("encoded tool_result should resume callback");
+
+        assert_eq!(resume.callback_task_id, callback_task_id);
+        assert_eq!(resume.tool_results[0]["tool_call_id"], json!("toolu_image"));
+        assert_eq!(resume.tool_results[0]["content"][0]["type"], json!("image"));
     }
 
     #[test]
@@ -1054,6 +1320,51 @@ mod tests {
             ]
         }))
         .expect("historical tool_result should parse");
+
+        assert!(resume.is_none());
+    }
+
+    #[test]
+    fn anthropic_tool_resume_request_ignores_tool_result_mixed_with_new_user_text() {
+        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+        let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_previous");
+
+        let resume = anthropic_tool_resume_request(&json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": tool_use_id,
+                        "name": "Read",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": [{
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": "aW1hZ2U="
+                                }
+                            }]
+                        },
+                        {
+                            "type": "text",
+                            "text": "帮我找找这个代码位置"
+                        }
+                    ]
+                }
+            ]
+        }))
+        .expect("mixed tool_result and text should parse");
 
         assert!(resume.is_none());
     }

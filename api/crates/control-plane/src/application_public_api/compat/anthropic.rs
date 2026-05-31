@@ -50,9 +50,11 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
     let latest_user_content = messages[last_user_index]
         .get("content")
         .ok_or_else(|| AnthropicCompatError::invalid("message content is required"))?;
-    let query =
-        sanitize_anthropic_compat_text("user", &anthropic_text_content(latest_user_content)?)
-            .unwrap_or_default();
+    let query = sanitize_anthropic_compat_text(
+        "user",
+        &anthropic_current_user_text_content(latest_user_content)?,
+    )
+    .unwrap_or_default();
     let latest_user_media_blocks = query_media_content_blocks(latest_user_content);
 
     let mut history = Vec::new();
@@ -69,7 +71,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         }
         let content = sanitize_anthropic_compat_text(role, &anthropic_text_content(content_value)?)
             .unwrap_or_default();
-        let content_blocks = history_content_blocks(content_value);
+        let content_blocks = history_content_blocks(role, content_value);
         if content.trim().is_empty() && content_blocks.is_none() {
             continue;
         }
@@ -302,17 +304,94 @@ fn anthropic_text_content(content: &Value) -> Result<String, AnthropicCompatErro
     Ok(text)
 }
 
-fn history_content_blocks(content: &Value) -> Option<Value> {
+fn anthropic_current_user_text_content(content: &Value) -> Result<String, AnthropicCompatError> {
+    if let Some(text) = content.as_str() {
+        return Ok(text.to_string());
+    }
+    let blocks = content
+        .as_array()
+        .ok_or_else(|| AnthropicCompatError::invalid("content must be text"))?;
+    if !anthropic_blocks_have_visible_user_text(blocks) {
+        return anthropic_text_content(content);
+    }
+
+    let mut text = String::new();
+    for block in blocks {
+        let block_type = block
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        match block_type {
+            "text" => {
+                if let Some(value) = block.get("text").and_then(Value::as_str) {
+                    if !text.is_empty() {
+                        text.push('\n');
+                    }
+                    text.push_str(value);
+                }
+            }
+            "tool_result" => {}
+            "tool_use" | "server_tool_use" => {
+                if block
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| name == "computer")
+                {
+                    return Err(AnthropicCompatError::unsupported("computer_use"));
+                }
+            }
+            "computer_use" => {
+                return Err(AnthropicCompatError::unsupported("computer_use"));
+            }
+            "thinking" | "redacted_thinking" => {}
+            "image" | "document" => {}
+            _ => return Err(AnthropicCompatError::unsupported("messages")),
+        }
+    }
+    Ok(text)
+}
+
+fn anthropic_blocks_have_visible_user_text(blocks: &[Value]) -> bool {
+    blocks.iter().any(|block| {
+        block
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|block_type| block_type == "text")
+            && block
+                .get("text")
+                .and_then(Value::as_str)
+                .and_then(|text| sanitize_anthropic_compat_text("user", text))
+                .is_some()
+    })
+}
+
+fn history_content_blocks(role: &str, content: &Value) -> Option<Value> {
     let blocks = content.as_array()?;
+    let should_keep_text_blocks = blocks.iter().any(|block| {
+        matches!(
+            block.get("type").and_then(Value::as_str),
+            Some("image" | "document" | "tool_use" | "server_tool_use" | "tool_result")
+        )
+    });
     let blocks = blocks
         .iter()
-        .filter(|block| {
-            !matches!(
-                block.get("type").and_then(Value::as_str),
-                Some("thinking" | "redacted_thinking")
-            )
+        .filter_map(|block| match block.get("type").and_then(Value::as_str) {
+            Some("thinking" | "redacted_thinking") => None,
+            Some("text") if should_keep_text_blocks => {
+                let sanitized = sanitize_anthropic_compat_text(
+                    role,
+                    block
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                )?;
+                let mut block = block.as_object()?.clone();
+                block.insert("text".to_string(), Value::String(sanitized));
+                Some(Value::Object(block))
+            }
+            Some("text") => None,
+            _ => Some(block.clone()),
         })
-        .cloned()
         .collect::<Vec<_>>();
     (!blocks.is_empty()).then_some(Value::Array(blocks))
 }
@@ -670,6 +749,88 @@ mod tests {
                 json!({"role": "user", "content": "hi？"}),
                 json!({"role": "assistant", "content": "你好，有需要我随时帮你。"}),
             ]
+        );
+    }
+
+    #[test]
+    fn maps_claude_code_history_does_not_keep_raw_internal_content_blocks() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "<system-reminder>private Claude Code context</system-reminder>\n\nhi？"
+                        }
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "private reasoning"},
+                        {"type": "text", "text": "<think>draft</think>你好"}
+                    ]
+                },
+                {"role": "user", "content": "继续"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "hi？"}),
+                json!({"role": "assistant", "content": "你好"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn maps_claude_code_tool_result_history_preserves_image_blocks() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {"role": "user", "content": "describe image"},
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_read",
+                        "name": "Read",
+                        "input": {"file_path": "uploads/agent-flow-preview-debug.png"}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_read",
+                        "content": [{
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": "aW1hZ2U="
+                            }
+                        }]
+                    }]
+                },
+                {"role": "user", "content": "next question"}
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(request.query, "next question");
+        assert_eq!(request.history[2]["role"], json!("user"));
+        assert_eq!(
+            request.history[2]["content_blocks"][0]["type"],
+            json!("tool_result")
+        );
+        assert_eq!(
+            request.history[2]["content_blocks"][0]["content"][0]["type"],
+            json!("image")
         );
     }
 }

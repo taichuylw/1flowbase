@@ -64,6 +64,9 @@ impl CompatibleStreamStats {
     ) {
         self.emitted_public_event |= emitted_public_event;
         if is_answer_presentation_delta(event) {
+            if !emitted_public_event {
+                return;
+            }
             let Some(text) = event.text.as_deref().filter(|text| !text.is_empty()) else {
                 return;
             };
@@ -2301,15 +2304,8 @@ fn required_action_not_supported_anthropic_sse() -> Vec<Result<Event, Infallible
 struct AnthropicStreamMapper {
     model: String,
     next_content_index: u32,
-    active_content: Option<AnthropicContentBlockKind>,
-    emitted_reasoning_delta: bool,
+    active_content: bool,
     emitted_text_delta: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AnthropicContentBlockKind {
-    Text,
-    Thinking,
 }
 
 impl AnthropicStreamMapper {
@@ -2317,8 +2313,7 @@ impl AnthropicStreamMapper {
         Self {
             model,
             next_content_index: 0,
-            active_content: None,
-            emitted_reasoning_delta: false,
+            active_content: false,
             emitted_text_delta: false,
         }
     }
@@ -2345,25 +2340,7 @@ impl AnthropicStreamMapper {
                     }
                 }),
             )],
-            "reasoning_delta"
-                if is_answer_presentation_delta
-                    && envelope
-                        .text
-                        .as_deref()
-                        .is_some_and(|text| !text.is_empty()) =>
-            {
-                self.emitted_reasoning_delta = true;
-                let mut events =
-                    self.ensure_anthropic_content_block(AnthropicContentBlockKind::Thinking);
-                let (event_name, payload) = anthropic_delta_payload(
-                    self.active_content_index(),
-                    "reasoning_delta",
-                    envelope.text.unwrap_or_default(),
-                )
-                .expect("reasoning_delta should map to Anthropic thinking_delta");
-                events.push(event_json_sse(event_name, payload));
-                events
-            }
+            "reasoning_delta" if is_answer_presentation_delta => Vec::new(),
             "text_delta"
                 if is_answer_presentation_delta
                     && envelope
@@ -2372,8 +2349,7 @@ impl AnthropicStreamMapper {
                         .is_some_and(|text| !text.is_empty()) =>
             {
                 self.emitted_text_delta = true;
-                let mut events =
-                    self.ensure_anthropic_content_block(AnthropicContentBlockKind::Text);
+                let mut events = self.ensure_anthropic_content_block();
                 let (event_name, payload) = anthropic_delta_payload(
                     self.active_content_index(),
                     "text_delta",
@@ -2416,24 +2392,11 @@ impl AnthropicStreamMapper {
         payload: &Value,
     ) -> Vec<Result<Event, Infallible>> {
         let mut events = Vec::new();
-        let had_reasoning_delta = self.emitted_reasoning_delta;
         let had_text_delta = self.emitted_text_delta;
         for delta in terminal_answer_deltas_from_run_or_payload(initial_run, payload) {
             match delta.kind {
-                TerminalAnswerDeltaKind::Reasoning if !had_reasoning_delta => {
-                    events.extend(self.anthropic_delta_events(
-                        AnthropicContentBlockKind::Thinking,
-                        "reasoning_delta",
-                        delta.text,
-                    ));
-                    self.emitted_reasoning_delta = true;
-                }
                 TerminalAnswerDeltaKind::Text if !had_text_delta => {
-                    events.extend(self.anthropic_delta_events(
-                        AnthropicContentBlockKind::Text,
-                        "text_delta",
-                        delta.text,
-                    ));
+                    events.extend(self.anthropic_delta_events("text_delta", delta.text));
                     self.emitted_text_delta = true;
                 }
                 _ => {}
@@ -2445,11 +2408,10 @@ impl AnthropicStreamMapper {
 
     fn anthropic_delta_events(
         &mut self,
-        kind: AnthropicContentBlockKind,
         event_type: &str,
         text: String,
     ) -> Vec<Result<Event, Infallible>> {
-        let mut events = self.ensure_anthropic_content_block(kind);
+        let mut events = self.ensure_anthropic_content_block();
         let (event_name, payload) =
             anthropic_delta_payload(self.active_content_index(), event_type, text)
                 .expect("known Anthropic delta event type should map");
@@ -2462,8 +2424,8 @@ impl AnthropicStreamMapper {
         usage: Option<&NativeUsage>,
     ) -> Vec<Result<Event, Infallible>> {
         let mut events = Vec::new();
-        if self.active_content.is_none() && self.next_content_index == 0 {
-            events.extend(self.ensure_anthropic_content_block(AnthropicContentBlockKind::Text));
+        if !self.active_content && self.next_content_index == 0 {
+            events.extend(self.ensure_anthropic_content_block());
         }
         events.extend(self.close_active_anthropic_content_block());
         events.push(event_json_sse(
@@ -2538,41 +2500,32 @@ impl AnthropicStreamMapper {
         Some(events)
     }
 
-    fn ensure_anthropic_content_block(
-        &mut self,
-        kind: AnthropicContentBlockKind,
-    ) -> Vec<Result<Event, Infallible>> {
-        if self.active_content == Some(kind) {
+    fn ensure_anthropic_content_block(&mut self) -> Vec<Result<Event, Infallible>> {
+        if self.active_content {
             return Vec::new();
         }
 
         let mut events = self.close_active_anthropic_content_block();
         let index = self.next_content_index;
         self.next_content_index += 1;
-        self.active_content = Some(kind);
-        let content_block = match kind {
-            AnthropicContentBlockKind::Text => json!({"type": "text", "text": ""}),
-            AnthropicContentBlockKind::Thinking => {
-                json!({"type": "thinking", "thinking": "", "signature": ""})
-            }
-        };
+        self.active_content = true;
         events.push(event_json_sse(
             "content_block_start",
             json!({
                 "type": "content_block_start",
                 "index": index,
-                "content_block": content_block
+                "content_block": {"type": "text", "text": ""}
             }),
         ));
         events
     }
 
     fn close_active_anthropic_content_block(&mut self) -> Vec<Result<Event, Infallible>> {
-        if self.active_content.is_none() {
+        if !self.active_content {
             return Vec::new();
         }
         let index = self.active_content_index();
-        self.active_content = None;
+        self.active_content = false;
         vec![event_json_sse(
             "content_block_stop",
             json!({"type": "content_block_stop", "index": index}),
@@ -2593,10 +2546,6 @@ fn anthropic_delta_payload(
         "text_delta" => json!({
             "type": "text_delta",
             "text": text
-        }),
-        "reasoning_delta" => json!({
-            "type": "thinking_delta",
-            "thinking": text
         }),
         _ => return None,
     };
@@ -3094,19 +3043,14 @@ mod tests {
     }
 
     #[test]
-    fn anthropic_delta_payload_maps_reasoning_to_thinking_delta() {
-        let (event_name, payload) =
-            anthropic_delta_payload(0, "reasoning_delta", "先分析用户问题".to_string())
-                .expect("reasoning delta should map to an Anthropic thinking delta");
+    fn anthropic_delta_payload_ignores_reasoning_delta() {
+        let payload = anthropic_delta_payload(0, "reasoning_delta", "先分析用户问题".to_string());
 
-        assert_eq!(event_name, "content_block_delta");
-        assert_eq!(payload["delta"]["type"], json!("thinking_delta"));
-        assert_eq!(payload["delta"]["thinking"], json!("先分析用户问题"));
-        assert_eq!(payload["delta"].get("text"), None);
+        assert_eq!(payload, None);
     }
 
     #[tokio::test]
-    async fn anthropic_completed_stream_projects_thinking_as_stream_reasoning() {
+    async fn anthropic_completed_stream_suppresses_thinking_and_streams_visible_text() {
         let mut run = native_run();
         run.status = NativeRunStatus::Succeeded;
         run.answer = Some("<think>先分析</think>\n最终回答".to_string());
@@ -3116,11 +3060,57 @@ mod tests {
             .unwrap();
         let body = String::from_utf8(body.to_vec()).unwrap();
 
-        assert!(body.contains("\"type\":\"thinking_delta\""), "{body}");
-        assert!(body.contains("\"thinking\":\"先分析\""), "{body}");
         assert!(body.contains("\"type\":\"text_delta\""), "{body}");
         assert!(body.contains("\"text\":\"\\n最终回答\""), "{body}");
+        assert!(!body.contains("\"type\":\"thinking\""), "{body}");
+        assert!(!body.contains("\"type\":\"thinking_delta\""), "{body}");
         assert!(!body.contains("<think>"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn anthropic_live_answer_reasoning_delta_is_not_projected() {
+        let run = native_run();
+        let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+        let reasoning_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                1,
+                debug_stream_events::answer_reasoning_delta(
+                    "node-answer",
+                    "private reasoning".to_string(),
+                    0,
+                    Some("node-llm"),
+                    None,
+                    Some("text"),
+                ),
+            ),
+        );
+        let text_events = mapper.runtime_event_to_sse(
+            &run,
+            RuntimeEventEnvelope::new(
+                run.id,
+                2,
+                debug_stream_events::answer_text_delta(
+                    "node-answer",
+                    "visible answer".to_string(),
+                    1,
+                    Some("node-llm"),
+                    None,
+                    Some("text"),
+                ),
+            ),
+        );
+
+        let response = completed_compatible_stream([reasoning_events, text_events].concat());
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(body.contains("\"text\":\"visible answer\""), "{body}");
+        assert!(!body.contains("private reasoning"), "{body}");
+        assert_eq!(body.matches("event: content_block_start").count(), 1);
     }
 
     #[test]
