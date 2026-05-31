@@ -53,9 +53,8 @@ pub use debug_variable_cache::{
 };
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
-    application_run_answer, application_run_model, application_run_query,
-    load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
-    offload_application_run_detail_artifacts,
+    application_run_model, application_run_query, load_runtime_debug_artifact_json_value,
+    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
 };
 
 fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
@@ -579,11 +578,24 @@ fn to_flow_run_response(run: domain::FlowRunRecord) -> FlowRunResponse {
     }
 }
 
-fn to_application_conversation_message_response(
+async fn to_application_conversation_message_response<F, Fut>(
     run: domain::FlowRunRecord,
     current_run_id: Option<Uuid>,
-) -> ApplicationConversationMessageResponse {
+    load_debug_artifact: &F,
+) -> ApplicationConversationMessageResponse
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
     let run_id = run.id.to_string();
+    let mut answer =
+        application_conversation_answer_text(&run.output_payload, &load_debug_artifact).await;
+    if answer.is_none() {
+        if let Some(error_payload) = run.error_payload.as_ref() {
+            answer =
+                application_conversation_answer_text(error_payload, &load_debug_artifact).await;
+        }
+    }
 
     ApplicationConversationMessageResponse {
         run_id: run_id.clone(),
@@ -596,10 +608,105 @@ fn to_application_conversation_message_response(
         status: run.status.as_str().to_string(),
         query: application_run_query(&run.input_payload),
         model: application_run_model(&run.input_payload),
-        answer: application_run_answer(&run.output_payload)
-            .or_else(|| run.error_payload.as_ref().and_then(application_run_answer)),
+        answer,
         is_current: current_run_id == Some(run.id),
     }
+}
+
+async fn application_conversation_answer_text<F, Fut>(
+    payload: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<String>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    if let Some(full_payload) =
+        load_referenced_runtime_debug_artifact(payload, load_debug_artifact).await
+    {
+        if let Some(text) = inline_conversation_value_text(&full_payload)
+            .or_else(|| inline_application_conversation_answer_text(&full_payload))
+        {
+            return Some(text);
+        }
+    }
+
+    if let Some(text) = inline_application_conversation_answer_text(payload) {
+        return Some(text);
+    }
+
+    for key in ["answer", "text", "content", "message"] {
+        let Some(value) = payload.get(key) else {
+            continue;
+        };
+        let Some(full_value) =
+            load_referenced_runtime_debug_artifact(value, load_debug_artifact).await
+        else {
+            continue;
+        };
+        if let Some(text) = inline_conversation_value_text(&full_value)
+            .or_else(|| inline_application_conversation_answer_text(&full_value))
+        {
+            return Some(text);
+        }
+    }
+
+    inline_application_conversation_error_text(payload)
+}
+
+async fn load_referenced_runtime_debug_artifact<F, Fut>(
+    value: &serde_json::Value,
+    load_debug_artifact: &F,
+) -> Option<serde_json::Value>
+where
+    F: Fn(Uuid) -> Fut,
+    Fut: Future<Output = Option<serde_json::Value>>,
+{
+    let artifact_id = runtime_debug_artifact_id(value)?;
+    load_debug_artifact(artifact_id).await
+}
+
+fn inline_application_conversation_answer_text(payload: &serde_json::Value) -> Option<String> {
+    ["answer", "text", "content", "message"]
+        .into_iter()
+        .filter_map(|key| payload.get(key))
+        .find_map(inline_conversation_value_text)
+}
+
+fn inline_application_conversation_error_text(payload: &serde_json::Value) -> Option<String> {
+    payload
+        .get("error")
+        .and_then(|value| value.get("message"))
+        .and_then(inline_conversation_value_text)
+}
+
+fn inline_conversation_value_text(value: &serde_json::Value) -> Option<String> {
+    if runtime_debug_artifact_id(value).is_some() {
+        return None;
+    }
+
+    if let Some(text) = value
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(parts) = value.as_array() {
+        let text = parts
+            .iter()
+            .filter_map(inline_conversation_value_text)
+            .collect::<Vec<_>>()
+            .join("");
+        return (!text.is_empty()).then_some(text);
+    }
+
+    let object = value.as_object()?;
+    ["text", "content", "message"]
+        .into_iter()
+        .filter_map(|key| object.get(key))
+        .find_map(inline_conversation_value_text)
 }
 
 fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
@@ -609,7 +716,7 @@ fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
 async fn conversation_messages_from_single_run<F, Fut>(
     run: &domain::FlowRunRecord,
     query: &ApplicationConversationMessagesQuery,
-    load_debug_artifact: F,
+    load_debug_artifact: &F,
 ) -> ApplicationConversationMessagesPageResponse
 where
     F: Fn(Uuid) -> Fut,
@@ -627,10 +734,14 @@ where
         Vec::new()
     };
     items.retain(|item| item.role.as_deref() != Some("system"));
-    items.push(to_application_conversation_message_response(
-        run.clone(),
-        Some(run.id),
-    ));
+    items.push(
+        to_application_conversation_message_response(
+            run.clone(),
+            Some(run.id),
+            load_debug_artifact,
+        )
+        .await,
+    );
 
     let total = items.len();
     let (start, end) = imported_context_window(run.id, total, limit, query);
@@ -656,7 +767,7 @@ where
 
 async fn imported_context_messages_from_run<F, Fut>(
     run: &domain::FlowRunRecord,
-    load_debug_artifact: F,
+    load_debug_artifact: &F,
 ) -> Vec<ApplicationConversationMessageResponse>
 where
     F: Fn(Uuid) -> Fut,
@@ -2026,14 +2137,27 @@ pub async fn list_application_conversation_messages(
         )
         .await?;
     let current_run_id = query.around_run_id;
+    let workspace_id = context.actor.current_workspace_id;
+    let load_debug_artifact = |artifact_id| {
+        let state = state.clone();
+
+        async move {
+            load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
+                .await
+                .ok()
+        }
+    };
+    let mut items = Vec::with_capacity(page.items.len());
+    for run in page.items {
+        items.push(
+            to_application_conversation_message_response(run, current_run_id, &load_debug_artifact)
+                .await,
+        );
+    }
 
     Ok(Json(ApiSuccess::new(
         ApplicationConversationMessagesPageResponse {
-            items: page
-                .items
-                .into_iter()
-                .map(|run| to_application_conversation_message_response(run, current_run_id))
-                .collect(),
+            items,
             page: ApplicationConversationMessagesPageInfoResponse {
                 has_before: page.has_before,
                 has_after: page.has_after,
@@ -2092,29 +2216,34 @@ pub async fn list_application_run_conversation_messages(
         )
         .await?;
         let workspace_id = context.actor.current_workspace_id;
-        let system_context_items =
-            imported_context_messages_from_run(&detail.flow_run, |artifact_id| {
-                let state = state.clone();
+        let load_debug_artifact = |artifact_id| {
+            let state = state.clone();
 
-                async move {
-                    load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
-                        .await
-                        .ok()
-                }
-            })
+            async move {
+                load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
+                    .await
+                    .ok()
+            }
+        };
+        let mut items = imported_context_messages_from_run(&detail.flow_run, &load_debug_artifact)
             .await
             .into_iter()
-            .filter(|item| item.role.as_deref() == Some("system"));
+            .filter(|item| item.role.as_deref() == Some("system"))
+            .collect::<Vec<_>>();
+        for run in page.items {
+            items.push(
+                to_application_conversation_message_response(
+                    run,
+                    Some(run_id),
+                    &load_debug_artifact,
+                )
+                .await,
+            );
+        }
 
         return Ok(Json(ApiSuccess::new(
             ApplicationConversationMessagesPageResponse {
-                items: system_context_items
-                    .chain(
-                        page.items.into_iter().map(|run| {
-                            to_application_conversation_message_response(run, Some(run_id))
-                        }),
-                    )
-                    .collect(),
+                items,
                 page: ApplicationConversationMessagesPageInfoResponse {
                     has_before: page.has_before,
                     has_after: page.has_after,
@@ -2126,17 +2255,17 @@ pub async fn list_application_run_conversation_messages(
     }
 
     let workspace_id = context.actor.current_workspace_id;
-    let fallback_page =
-        conversation_messages_from_single_run(&detail.flow_run, &query, |artifact_id| {
-            let state = state.clone();
+    let load_debug_artifact = |artifact_id| {
+        let state = state.clone();
 
-            async move {
-                load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
-                    .await
-                    .ok()
-            }
-        })
-        .await;
+        async move {
+            load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
+                .await
+                .ok()
+        }
+    };
+    let fallback_page =
+        conversation_messages_from_single_run(&detail.flow_run, &query, &load_debug_artifact).await;
 
     Ok(Json(ApiSuccess::new(fallback_page)))
 }
@@ -2958,6 +3087,7 @@ mod tests {
             updated_at: OffsetDateTime::UNIX_EPOCH,
         };
 
+        let load_debug_artifact = |_| async { None::<serde_json::Value> };
         let page = conversation_messages_from_single_run(
             &run,
             &ApplicationConversationMessagesQuery {
@@ -2966,7 +3096,7 @@ mod tests {
                 after: None,
                 limit: Some(2),
             },
-            |_| async { None::<serde_json::Value> },
+            &load_debug_artifact,
         )
         .await;
 
@@ -3041,6 +3171,21 @@ mod tests {
             updated_at: OffsetDateTime::UNIX_EPOCH,
         };
 
+        let load_debug_artifact = move |requested_artifact_id: Uuid| async move {
+            (requested_artifact_id == artifact_id).then(|| {
+                serde_json::json!({
+                    "node-start": {
+                        "query": "current question",
+                        "model": "deepseek-chat",
+                        "history": [
+                            { "role": "system", "content": "hidden" },
+                            { "role": "user", "content": "old question" },
+                            { "role": "assistant", "content": "old answer" }
+                        ]
+                    }
+                })
+            })
+        };
         let page = conversation_messages_from_single_run(
             &run,
             &ApplicationConversationMessagesQuery {
@@ -3049,21 +3194,7 @@ mod tests {
                 after: None,
                 limit: Some(5),
             },
-            move |requested_artifact_id: Uuid| async move {
-                (requested_artifact_id == artifact_id).then(|| {
-                    serde_json::json!({
-                        "node-start": {
-                            "query": "current question",
-                            "model": "deepseek-chat",
-                            "history": [
-                                { "role": "system", "content": "hidden" },
-                                { "role": "user", "content": "old question" },
-                                { "role": "assistant", "content": "old answer" }
-                            ]
-                        }
-                    })
-                })
-            },
+            &load_debug_artifact,
         )
         .await;
 
@@ -3078,5 +3209,73 @@ mod tests {
         assert_eq!(page.items[3].run_id, run_id.to_string());
         assert_eq!(page.items[3].query.as_deref(), Some("current question"));
         assert!(page.items[3].can_open_detail);
+    }
+
+    #[tokio::test]
+    async fn run_conversation_hydrates_artifact_backed_current_answer() {
+        let run_id = Uuid::now_v7();
+        let artifact_id = Uuid::now_v7();
+        let full_answer = "full final answer from artifact";
+        let run = domain::FlowRunRecord {
+            id: run_id,
+            application_id: Uuid::now_v7(),
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: None,
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "current question".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "current question",
+                    "model": "deepseek-chat"
+                }
+            }),
+            output_payload: serde_json::json!({
+                "answer": {
+                    "__runtime_debug_artifact": true,
+                    "artifact_ref": artifact_id.to_string(),
+                    "field_path": ["answer"],
+                    "preview": "preview final answer"
+                }
+            }),
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: None,
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        let load_debug_artifact = move |requested_artifact_id: Uuid| async move {
+            (requested_artifact_id == artifact_id)
+                .then(|| serde_json::Value::String(full_answer.to_string()))
+        };
+        let page = conversation_messages_from_single_run(
+            &run,
+            &ApplicationConversationMessagesQuery {
+                around_run_id: None,
+                before: None,
+                after: None,
+                limit: Some(5),
+            },
+            &load_debug_artifact,
+        )
+        .await;
+
+        let current = page.items.last().expect("current run message exists");
+        assert_eq!(current.answer.as_deref(), Some(full_answer));
     }
 }

@@ -5,6 +5,7 @@ import type {
 
 import { createEdgeDocument } from '../edge-factory';
 import { getEdgeById, getNodeById } from '../selectors';
+import { shiftDownstreamNodesBFS } from './layout';
 
 export interface EdgeConnection {
   source?: string | null;
@@ -168,7 +169,7 @@ export function insertNodeOnEdge(
     }
   };
 
-  return {
+  const intermediateDoc = {
     ...document,
     graph: {
       nodes: [...document.graph.nodes, insertedNode],
@@ -193,6 +194,8 @@ export function insertNodeOnEdge(
       ]
     }
   };
+
+  return shiftDownstreamNodesBFS(intermediateDoc, sourceNode.id, 280);
 }
 
 export function connectNodeFromSource(
@@ -214,7 +217,7 @@ export function connectNodeFromSource(
     containerId: sourceNode.containerId
   };
 
-  return {
+  const intermediateDoc = {
     ...document,
     graph: {
       ...document.graph,
@@ -235,6 +238,8 @@ export function connectNodeFromSource(
       ]
     }
   };
+
+  return shiftDownstreamNodesBFS(intermediateDoc, sourceNode.id, 280);
 }
 
 export function removeEdge(

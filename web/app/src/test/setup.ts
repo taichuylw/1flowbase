@@ -2,6 +2,8 @@ import '@ant-design/v5-patch-for-react-19';
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+
 const originalConsoleError = console.error.bind(console);
 const originalConsoleWarn = console.warn.bind(console);
 

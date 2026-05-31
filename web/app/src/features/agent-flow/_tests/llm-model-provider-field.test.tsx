@@ -1,4 +1,6 @@
 /* eslint-disable testing-library/no-container, testing-library/no-node-access */
+window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+
 import {
   act,
   fireEvent,
@@ -21,6 +23,7 @@ import { listLlmProviderOptions } from '../lib/model-options';
 import { AgentFlowEditorStoreProvider } from '../store/editor/AgentFlowEditorStoreProvider';
 import { useAgentFlowEditorStore } from '../store/editor/provider';
 import { selectWorkingDocument } from '../store/editor/selectors';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 
 const primaryProviderOption = modelProviderOptionsProviders[0];
 const primaryProviderFirstGroup = primaryProviderOption.model_groups[0];
@@ -133,7 +136,9 @@ async function clickModelOption(label: string) {
 }
 
 describe('LlmModelField', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     fetchModelProviderOptionsSpy.mockReset();
     fetchModelProviderOptionsSpy.mockResolvedValue(
       modelProviderOptionsContract
@@ -1041,6 +1046,55 @@ describe('LlmModelField', () => {
           name: `${secondaryProviderOption.display_name} ${secondaryProviderFirstGroup.source_instance_display_name} ${secondaryProviderFirstModel.display_name}`
         })
       ).not.toBeInTheDocument();
+    });
+  });
+
+  test('falls back to the left margin when there is insufficient space left of the node detail panel', async () => {
+    const { container } = renderWithProviders(
+      <div className="agent-flow-editor__body">
+        <div className="agent-flow-node-detail">
+          <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+            <SelectionSeed nodeId="node-llm" />
+            <NodeConfigTab />
+          </AgentFlowEditorStoreProvider>
+        </div>
+      </div>
+    );
+
+    const editorBody = container.querySelector('.agent-flow-editor__body');
+    const nodeDetail = container.querySelector('.agent-flow-node-detail');
+    const trigger = await screen.findByRole('button', { name: '模型' });
+
+    if (!editorBody || !nodeDetail) {
+      throw new Error('expected editor body and node detail container');
+    }
+
+    mockElementRect(editorBody, {
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 800
+    });
+    mockElementRect(nodeDetail, {
+      left: 300,
+      top: 40,
+      width: 500,
+      height: 720
+    });
+    mockElementRect(trigger, {
+      left: 600,
+      top: 180,
+      width: 180,
+      height: 40
+    });
+
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: '模型设置' });
+
+    expect(dialog).toHaveStyle({
+      left: '16px',
+      top: '180px'
     });
   });
 });

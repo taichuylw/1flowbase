@@ -177,11 +177,14 @@ function resolveInitialPosition({
   const preferredLeft = detailRect
     ? detailRect.left - bounds.left - panelWidth - gap
     : triggerRect.left - bounds.left - panelWidth - gap;
-  const fallbackLeft = triggerRect.right - bounds.left + gap;
+
+  // 如果左侧有足够的空间容纳浮窗，则悬浮于抽屉左侧
+  // 否则靠最左侧边界（margin）显示，以最大程度减少对详情抽屉的遮挡
+  const targetLeft = preferredLeft >= margin ? preferredLeft : margin;
 
   return clampPosition(
     {
-      left: preferredLeft >= margin ? preferredLeft : fallbackLeft,
+      left: targetLeft,
       top: triggerRect.top - bounds.top
     },
     bounds,

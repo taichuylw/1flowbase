@@ -1176,33 +1176,6 @@ pub(super) fn application_run_model(payload: &Value) -> Option<String> {
     None
 }
 
-pub(super) fn application_run_answer(payload: &Value) -> Option<String> {
-    for key in ["answer", "text", "content", "message"] {
-        if let Some(value) = string_field(payload, key) {
-            return Some(value);
-        }
-        if let Some(value) = payload
-            .get(key)
-            .and_then(runtime_debug_artifact_preview_text)
-        {
-            return Some(value);
-        }
-    }
-
-    let object = payload.as_object()?;
-    if let Some(error) = object.get("error").and_then(|value| value.get("message")) {
-        if let Some(error) = error
-            .as_str()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return Some(error.to_string());
-        }
-    }
-
-    None
-}
-
 fn immediate_input_text(value: &Value) -> Option<String> {
     let object = value.as_object()?;
     for key in APPLICATION_INPUT_QUERY_KEYS {
@@ -1233,25 +1206,6 @@ fn is_runtime_debug_artifact_payload(value: &Value) -> bool {
         .get("__runtime_debug_artifact")
         .and_then(Value::as_bool)
         .unwrap_or(false)
-}
-
-fn runtime_debug_artifact_preview_text(value: &Value) -> Option<String> {
-    if !is_runtime_debug_artifact_payload(value) {
-        return None;
-    }
-
-    let preview = string_field(value, "preview")?;
-    if let Ok(decoded) = serde_json::from_str::<Value>(&preview) {
-        if let Some(text) = decoded
-            .as_str()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return Some(text.to_string());
-        }
-    }
-
-    Some(preview.trim_start_matches('"').to_string())
 }
 
 fn with_debug_artifact_field_path(mut payload: Value, field_path: &[String]) -> Value {
@@ -1678,49 +1632,5 @@ mod tests {
             enriched_rounds[1]["tool_results"][0]["duration_ms"],
             json!(1234)
         );
-    }
-
-    #[test]
-    fn application_answer_reads_preferred_output_fields() {
-        let payload = json!({
-            "answer": "退款政策摘要"
-        });
-
-        assert_eq!(
-            application_run_answer(&payload),
-            Some("退款政策摘要".into())
-        );
-    }
-
-    #[test]
-    fn application_answer_reads_field_level_artifact_preview() {
-        let payload = json!({
-            "answer": {
-                "__runtime_debug_artifact": true,
-                "artifact_ref": Uuid::now_v7().to_string(),
-                "field_path": ["answer"],
-                "preview": "退款政策摘要..."
-            },
-            "sys": {
-                "workflow_run_id": "run-1"
-            },
-            "env": {}
-        });
-
-        assert_eq!(
-            application_run_answer(&payload),
-            Some("退款政策摘要...".into())
-        );
-    }
-
-    #[test]
-    fn application_answer_ignores_root_artifact_preview_json() {
-        let payload = json!({
-            "__runtime_debug_artifact": true,
-            "artifact_ref": Uuid::now_v7().to_string(),
-            "preview": "{\"env\":{},\"sys\":{\"workflow_run_id\":\"run-1\"},\"answer\":\"退款政策摘要\"}"
-        });
-
-        assert_eq!(application_run_answer(&payload), None);
     }
 }

@@ -55,7 +55,7 @@ const runtimeApi = vi.hoisted(() => ({
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
-  fetchApplicationRunConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn().mockImplementation(async (appId, runId, options) => { const rawPage = await runtimeApi.fetchApplicationConversationMessages(appId, { flowRunId: runId, page: 1, pageSize: options?.limit ?? 5 }); return { items: rawPage.items.map((item) => ({ ...item, run_id: item.flow_run_id ?? item.id, detail_run_id: item.flow_run_id ?? item.id, can_open_detail: item.flow_run_id === 'run-0', status: item.status ?? 'succeeded' })), page: { has_before: false, has_after: false, before_cursor: null, after_cursor: null } }; }),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
@@ -285,7 +285,32 @@ describe('ApplicationLogsPage - floating windows', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
+    runtimeApi.fetchApplicationRunDetail.mockImplementation(async (appId, runId) => {
+      if (runId === 'run-0') {
+        return {
+          ...sampleRunDetail(),
+          run: {
+            ...sampleRunDetail().run,
+            id: 'run-0',
+            started_at: null,
+            finished_at: null
+          },
+          flow_run: {
+            ...sampleRunDetail().flow_run,
+            id: 'run-0',
+            started_at: null,
+            finished_at: null
+          },
+          statistics: {
+            total_tokens: null,
+            unique_node_count: 0,
+            tool_callback_count: 0
+          },
+          node_runs: []
+        };
+      }
+      return sampleRunDetail();
+    });
     runtimeApi.fetchApplicationConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
@@ -501,7 +526,7 @@ describe('ApplicationLogsPage - floating windows', () => {
       name: '对话日志'
     });
     expect(logPanel).toBeInTheDocument();
-    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
+    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith('app-1', 'run-0');
     expect(
       screen.getByRole('dialog', { name: '对话日志' })
     ).toBeInTheDocument();
