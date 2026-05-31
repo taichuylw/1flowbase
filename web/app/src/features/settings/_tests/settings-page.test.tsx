@@ -259,11 +259,17 @@ vi.mock('echarts/core', () => ({
   use: vi.fn()
 }));
 vi.mock('echarts/charts', () => ({
-  BarChart: {}
+  BarChart: {},
+  FunnelChart: {},
+  GaugeChart: {},
+  LineChart: {},
+  PieChart: {},
+  RadarChart: {}
 }));
 vi.mock('echarts/components', () => ({
   GridComponent: {},
   LegendComponent: {},
+  TitleComponent: {},
   TooltipComponent: {}
 }));
 vi.mock('echarts/renderers', () => ({

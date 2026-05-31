@@ -592,7 +592,7 @@ function ModelProviderInstanceDrawerContent({
                   }));
                 }}
               >
-                {i18nText("settings", "auto.hide")}{label}
+                {i18nText("settings", "auto.hide")} {label}
               </Button>
             </Space.Compact>
           ) : (
@@ -604,7 +604,7 @@ function ModelProviderInstanceDrawerContent({
                   void handleRevealSecret(field.key).catch(() => undefined);
                 }}
               >
-                {i18nText("settings", "auto.show")}{label}
+                {i18nText("settings", "auto.show")} {label}
               </Button>
             </Space.Compact>
           )}

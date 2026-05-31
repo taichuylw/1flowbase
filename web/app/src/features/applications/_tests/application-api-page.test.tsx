@@ -305,7 +305,7 @@ describe('ApplicationApiPage', () => {
     expect(within(dialog).getByLabelText('密钥说明')).toBeInTheDocument();
     expect(within(dialog).getByText('sk-019e1a2b48****')).toBeInTheDocument();
     expect(within(dialog).queryByText('sk-0****2b48')).not.toBeInTheDocument();
-    expect(within(dialog).getByText('2026/5/9 08:00:00')).toBeInTheDocument();
+    expect(within(dialog).getByText('2026/05/09 08:00:00')).toBeInTheDocument();
     expect(within(dialog).getByText('最后使用时间')).toBeInTheDocument();
     expect(within(dialog).getByText('2026/05/10 09:02:03')).toBeInTheDocument();
     expect(

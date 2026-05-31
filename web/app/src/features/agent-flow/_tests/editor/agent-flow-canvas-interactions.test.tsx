@@ -325,7 +325,7 @@ describe('AgentFlowCanvas interactions', () => {
     renderCanvas();
 
     expect(latestReactFlowProps?.defaultViewport).toEqual({ x: 0, y: 0, zoom: 1 });
-    expect(latestReactFlowProps?.viewport).not.toBeDefined();
+    expect(latestReactFlowProps?.viewport).toBeUndefined();
     expect(screen.getByLabelText('当前缩放')).toHaveTextContent('100%');
   });
 
@@ -555,6 +555,6 @@ describe('AgentFlowCanvas interactions', () => {
       llmNode?.data?.onSelectNode?.('node-llm');
     });
 
-    expect(latestReactFlowProps?.onPaneClick).not.toBeDefined();
+    expect(latestReactFlowProps?.onPaneClick).toBeUndefined();
   });
 });

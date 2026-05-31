@@ -132,7 +132,7 @@ export function ApplicationApiKeysPanel({
           title: t('auto.created_at'),
           dataIndex: 'created_at',
           width: 200,
-          render: (value: string) => formatDateTime(value)
+          render: (value: string) => formatShanghaiDateTime(value)
         },
         {
           title: t('auto.last_used_at'),

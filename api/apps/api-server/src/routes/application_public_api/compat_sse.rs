@@ -17,7 +17,7 @@ use control_plane::{
     ports::{OrchestrationRuntimeRepository, RuntimeEventEnvelope, RuntimeEventPayload},
 };
 use serde_json::{json, Value};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -328,6 +328,12 @@ where
         .map_err(service_error)?;
 
     let (sender, receiver) = mpsc::channel(32);
+    let (resume_done_sender, resume_done_receiver) = oneshot::channel::<()>();
+    let resume_done_guard_sender = sender.clone();
+    tokio::spawn(async move {
+        let _ = resume_done_receiver.await;
+        drop(resume_done_guard_sender);
+    });
     tokio::spawn(send_compatible_runtime_event_stream(
         state.clone(),
         run.clone(),
@@ -371,6 +377,7 @@ where
                     .await;
             }
         }
+        let _ = resume_done_sender.send(());
     });
 
     Ok(Sse::new(CompatRunSseStream::new(receiver))

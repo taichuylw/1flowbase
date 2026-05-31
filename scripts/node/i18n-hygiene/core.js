@@ -16,6 +16,7 @@ const I18N_ROOTS = ['web/app/src', 'api/plugins'];
 const I18N_LOCALES = ['en_US', 'zh_Hans'];
 const I18N_KEY_SEGMENT_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 const GENERATED_I18N_KEY_SEGMENT_PATTERN = /^(?:key|k)_[a-z]{6,}$/u;
+const GENERATED_PLUGIN_ARTIFACT_PATTERN = /^api\/plugins\/(?:installed|packages)\//u;
 const FRONTEND_SOURCE_ROOT = 'web/app/src';
 const FRONTEND_I18N_BOOTSTRAP = 'web/app/src/shared/i18n/app-i18n.ts';
 const FRONTEND_SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
@@ -113,6 +114,7 @@ function collectI18nJsonFiles(repoRoot) {
       relativePath: normalizePath(path.relative(repoRoot, absolutePath))
     }))
     .filter(({ relativePath }) => /\/i18n\/[^/]+\.json$/u.test(relativePath))
+    .filter(({ relativePath }) => !GENERATED_PLUGIN_ARTIFACT_PATTERN.test(relativePath))
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 

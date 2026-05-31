@@ -20,6 +20,11 @@ const TURBO_TELEMETRY_LINES = new Set([
 const CARGO_PROGRESS_LINE_PATTERN = /^\s*(Updating|Downloading|Downloaded|Compiling|Checking|Finished|Fresh|Running|Doc-tests|Blocking|Waiting)\b/u;
 const CARGO_LLVM_COV_INFO_LINE_PATTERN = /^info: (cargo-llvm-cov currently setting cfg\(coverage\)|running `rustup component add llvm-tools-preview\b|downloading component llvm-tools\b)/u;
 const TURBO_VERSION_LINE_PATTERN = /^[•·]\s+turbo\s+\d+\.\d+\.\d+\s*$/u;
+const VITEST_STDERR_HEADER_PATTERN = /^stderr\s+\|/u;
+const REACT_ACT_WARNING_HEADER_PATTERN =
+  /^An update to .+ inside a test was not wrapped in act\(\.\.\.\)\.?$/u;
+const REACT_ACT_WARNING_END_PATTERN =
+  /^This ensures that you're testing the behavior the user would see in the browser\. Learn more at https:\/\/react\.dev\/link\/wrap-tests-with-act$/u;
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -106,11 +111,42 @@ function filterSuccessfulWarningStderr(stderr) {
     return '';
   }
 
-  return stderr
-    .split(/\r?\n/u)
-    .filter((line) => !isKnownSuccessfulToolNoiseLine(line))
-    .join('\n')
-    .trimEnd();
+  const retained = [];
+  let skippingReactActWarning = false;
+  let pendingVitestHeader = null;
+
+  for (const line of stderr.split(/\r?\n/u)) {
+    const normalized = stripAnsiControlSequences(line).trim();
+
+    if (skippingReactActWarning) {
+      if (REACT_ACT_WARNING_END_PATTERN.test(normalized)) {
+        skippingReactActWarning = false;
+      }
+      continue;
+    }
+
+    if (isKnownSuccessfulToolNoiseLine(line)) {
+      continue;
+    }
+
+    if (VITEST_STDERR_HEADER_PATTERN.test(normalized)) {
+      pendingVitestHeader = line;
+      continue;
+    }
+
+    if (REACT_ACT_WARNING_HEADER_PATTERN.test(normalized)) {
+      skippingReactActWarning = true;
+      continue;
+    }
+
+    if (pendingVitestHeader) {
+      retained.push(pendingVitestHeader);
+      pendingVitestHeader = null;
+    }
+    retained.push(line);
+  }
+
+  return retained.join('\n').trimEnd();
 }
 
 function resolveCwd(repoRoot, cwd) {

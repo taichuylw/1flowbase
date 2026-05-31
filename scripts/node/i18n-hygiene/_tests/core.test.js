@@ -154,6 +154,21 @@ test('collectI18nHygieneFindings accepts backend canonical locale names for fron
   );
 });
 
+test('collectI18nHygieneFindings ignores generated plugin install artifacts', () => {
+  const repoRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'oneflowbase-i18n-plugin-install-artifact-')
+  );
+  writeFile(
+    repoRoot,
+    'api/plugins/installed/fixture_provider/0.1.0/i18n/en_US.json',
+    '{"plugin":{"label":"Fixture Provider"}}\n'
+  );
+
+  const findings = collectI18nHygieneFindings({ repoRoot });
+
+  assert.deepEqual(findings, []);
+});
+
 test('collectI18nHygieneFindings fails duplicated values inside one owner locale', () => {
   const repoRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'oneflowbase-i18n-value-')

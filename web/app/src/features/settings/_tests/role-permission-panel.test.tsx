@@ -116,7 +116,7 @@ describe('RolePermissionPanel', () => {
       fireEvent.click(
         within(createDialog).getByRole('checkbox', { name: '自动接收后续新增权限' })
       );
-      fireEvent.click(within(createDialog).getByRole('button', { name: 'OK' }));
+      fireEvent.click(within(createDialog).getByRole('button', { name: /确\s*定/u }));
 
       await waitFor(() => {
         expect(rolesApi.createSettingsRole).toHaveBeenCalledWith(
@@ -150,7 +150,7 @@ describe('RolePermissionPanel', () => {
       fireEvent.click(
         within(editDialog).getByRole('checkbox', { name: '默认新用户角色' })
       );
-      fireEvent.click(within(editDialog).getByRole('button', { name: 'OK' }));
+      fireEvent.click(within(editDialog).getByRole('button', { name: /确\s*定/u }));
 
       await waitFor(() => {
         expect(rolesApi.updateSettingsRole).toHaveBeenCalledWith(
