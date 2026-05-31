@@ -52,7 +52,14 @@ const runtimeApi = vi.hoisted(() => ({
     applicationId: string,
     runId: string
   ) =>
-    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'conversation-messages'
+    ] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
@@ -223,6 +230,7 @@ describe('ApplicationLogsPage - table field settings', () => {
     runtimeApi.fetchApplicationRuns.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
+    runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
 
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
@@ -244,18 +252,20 @@ describe('ApplicationLogsPage - table field settings', () => {
       ])
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
-    runtimeApi.fetchApplicationConversationMessages.mockResolvedValue({
+    runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue({
       items: [
         {
-          run_id: 'run-0',
-          detail_run_id: 'run-0',
-          can_open_detail: true,
+          run_id: 'run-1:context:0',
+          detail_run_id: null,
+          can_open_detail: false,
+          role: 'system',
+          content: '你是项目助手',
           started_at: '2026-04-17T08:59:00Z',
           finished_at: '2026-04-17T08:59:01Z',
           status: 'succeeded',
-          query: '上一轮问题',
+          query: null,
           model: 'deepseek-chat',
-          answer: '上一轮回答',
+          answer: null,
           is_current: false
         },
         {
@@ -274,8 +284,8 @@ describe('ApplicationLogsPage - table field settings', () => {
       page: {
         has_before: false,
         has_after: false,
-        before_cursor: 'run-0',
-        after_cursor: 'run-1'
+        before_cursor: null,
+        after_cursor: null
       }
     });
   });

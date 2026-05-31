@@ -50,7 +50,14 @@ const runtimeApi = vi.hoisted(() => ({
     applicationId: string,
     runId: string
   ) =>
-    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'conversation-messages'
+    ] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
@@ -290,20 +297,11 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
-          id: 'msg-run-0-user',
-          flow_run_id: 'run-0',
-          role: 'user',
-          content: '上一轮问题',
+          id: 'msg-history-system',
+          flow_run_id: null,
+          role: 'system',
+          content: '你是项目助手',
           sequence: 1,
-          started_at: '2026-04-17T08:59:00Z',
-          finished_at: '2026-04-17T08:59:01Z'
-        },
-        {
-          id: 'msg-run-0-assistant',
-          flow_run_id: 'run-0',
-          role: 'assistant',
-          content: '上一轮回答',
-          sequence: 2,
           started_at: '2026-04-17T08:59:00Z',
           finished_at: '2026-04-17T08:59:01Z'
         },
@@ -312,7 +310,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
           flow_run_id: 'run-1',
           role: 'user',
           content: '总结退款政策',
-          sequence: 3,
+          sequence: 2,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z'
         },
@@ -321,7 +319,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
           flow_run_id: 'run-1',
           role: 'assistant',
           content: '退款政策摘要',
-          sequence: 4,
+          sequence: 3,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z'
         }
