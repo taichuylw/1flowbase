@@ -7,6 +7,7 @@ keywords:
   - official-plugins
   - dify
   - litellm
+  - ClaudeCode
   - xyflow
   - architecture
 match_when:
@@ -39,6 +40,7 @@ scope:
   - ../dify-official-plugins
   - ../dify-plugin-daemon
   - ../litellm
+  - ../ClaudeCode
   - ../dify
   - ../ds2api
   - ../hermes-agent
@@ -95,6 +97,8 @@ scope:
   - OpenAI Responses API / Codex 风格请求、SSE 解析、工具调用返回和流式错误处理参考入口；优先看 `codex-rs/codex-api/src/endpoint/responses.rs`、`codex-rs/codex-api/src/sse/responses.rs`、`codex-rs/codex-api/src/common.rs`、`codex-rs/core/src/client.rs`。
 - `../litellm`
   - OpenAI-compatible gateway / proxy 协议转换、SSE 映射和多上游适配参考入口；只作为实现参考，不作为 1flowbase Native 真值来源。
+- `../ClaudeCode`
+  - Claude Code 客户端源码参考入口。排查 Anthropic-compatible `/v1/messages`、`tool_result` replay、session metadata、thinking/redacted_thinking 历史和重试行为时可读，但不在这里改 Claude Code 源码。
 - `../scalar`
   - API 文档和接口浏览体验参考入口。
 - `../supabase`
