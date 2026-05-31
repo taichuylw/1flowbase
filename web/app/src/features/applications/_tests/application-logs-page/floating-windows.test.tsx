@@ -797,6 +797,47 @@ describe('ApplicationLogsPage - floating windows', () => {
     });
   }, 20_000);
 
+  test('lets a floating window move past the viewport bottom while keeping its header reachable', async () => {
+    innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    innerHeightSpy = vi
+      .spyOn(window, 'innerHeight', 'get')
+      .mockReturnValue(900);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const detailWindow = await screen.findByTestId(
+      'application-logs-floating-run-detail'
+    );
+    expect(detailWindow).toHaveStyle({
+      top: '112px',
+      height: '720px'
+    });
+
+    fireEvent.mouseDown(within(detailWindow).getByText('运行详情'), {
+      button: 0,
+      clientX: 980,
+      clientY: 130
+    });
+    fireEvent.mouseMove(window, {
+      clientX: 980,
+      clientY: 1100
+    });
+    fireEvent.mouseUp(window);
+
+    expect(detailWindow).toHaveStyle({
+      left: '888px',
+      top: '852px',
+      height: '720px'
+    });
+  }, 20_000);
+
   test('lets opened floating windows move independently after initial placement', async () => {
     innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
     innerHeightSpy = vi
