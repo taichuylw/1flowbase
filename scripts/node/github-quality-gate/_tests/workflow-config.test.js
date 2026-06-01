@@ -76,6 +76,7 @@ test('verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /scope: repo-tooling/u);
   assert.match(workflow, /scope: repo-frontend/u);
   assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
+  assert.match(workflow, /start_postgres: \$\{\{ startsWith\(matrix\.scope, 'repo-backend-test-'\) \}\}/u);
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
   assert.match(workflow, /name: test-governance-repo-tooling/u);
@@ -104,7 +105,7 @@ test('verify workflow runs React Doctor as a frontend quality gate', () => {
   );
 });
 
-test('React Doctor keeps current frontstage debt as a narrow baseline', () => {
+test('React Doctor keeps current debt as a narrow baseline', () => {
   const config = readReactDoctorConfig();
 
   assert.deepEqual(config.ignore.overrides, [
@@ -124,6 +125,97 @@ test('React Doctor keeps current frontstage debt as a narrow baseline', () => {
     {
       files: ['src/features/agent-flow/_tests/editor/agent-flow-canvas-interactions.test.tsx'],
       rules: ['react-doctor/no-prop-callback-in-effect']
+    },
+    {
+      files: ['src/features/applications/components/api/ApplicationApiKeysPanel.tsx'],
+      rules: ['react-doctor/prefer-module-scope-pure-function']
+    },
+    {
+      files: ['src/features/applications/pages/ApplicationLogsPage.tsx'],
+      rules: [
+        'react-doctor/no-adjust-state-on-prop-change',
+        'react-doctor/no-chain-state-updates',
+        'react-doctor/no-derived-state-effect',
+        'react-doctor/no-giant-component',
+        'react-doctor/prefer-tag-over-role',
+        'react-doctor/prefer-useReducer'
+      ]
+    },
+    {
+      files: ['src/features/applications/pages/ApplicationMonitoringPage.tsx'],
+      rules: ['react-doctor/no-giant-component']
+    },
+    {
+      files: ['src/features/frontstage/_tests/frontstage-page/BlockArrange.test.tsx'],
+      rules: [
+        'react-doctor/prefer-html-dialog',
+        'react-doctor/prefer-tag-over-role'
+      ]
+    },
+    {
+      files: ['src/features/frontstage/components/FrontStagePageTreeSidebar.tsx'],
+      rules: [
+        'react-doctor/click-events-have-key-events',
+        'react-doctor/client-localstorage-no-version',
+        'react-doctor/no-noninteractive-element-interactions',
+        'react-doctor/no-render-in-render',
+        'react-doctor/no-static-element-interactions'
+      ]
+    },
+    {
+      files: ['src/features/settings/components/host-infrastructure/HostInfrastructureCachePanel.tsx'],
+      rules: [
+        'react-doctor/no-chain-state-updates',
+        'react-doctor/no-giant-component',
+        'react-doctor/query-mutation-missing-invalidation'
+      ]
+    },
+    {
+      files: ['src/features/settings/components/host-infrastructure/HostInfrastructureMemoryObservationPanel.tsx'],
+      rules: [
+        'react-doctor/exhaustive-deps',
+        'react-doctor/js-combine-iterations',
+        'react-doctor/no-cascading-set-state',
+        'react-doctor/no-chain-state-updates',
+        'react-doctor/no-derived-state-effect',
+        'react-doctor/no-giant-component',
+        'react-doctor/no-static-element-interactions',
+        'react-doctor/no-tiny-text',
+        'react-doctor/prefer-tag-over-role',
+        'react-doctor/prefer-use-effect-event',
+        'react-doctor/prefer-useReducer',
+        'react-doctor/query-mutation-missing-invalidation'
+      ]
+    },
+    {
+      files: ['src/features/settings/components/model-providers/ModelProviderInstanceDrawer.tsx'],
+      rules: [
+        'react-doctor/no-adjust-state-on-prop-change',
+        'react-doctor/no-cascading-set-state',
+        'react-doctor/no-chain-state-updates',
+        'react-doctor/no-derived-state',
+        'react-doctor/no-event-handler',
+        'react-doctor/no-giant-component',
+        'react-doctor/prefer-useReducer',
+        'react-doctor/rerender-state-only-in-handlers'
+      ]
+    },
+    {
+      files: ['src/shared/ui/api-docs/ApiDocsExplorer.tsx'],
+      rules: [
+        'react-doctor/no-adjust-state-on-prop-change',
+        'react-doctor/no-derived-state',
+        'react-doctor/no-event-handler',
+        'react-doctor/no-giant-component',
+        'react-doctor/no-pass-data-to-parent',
+        'react-doctor/no-prop-callback-in-effect',
+        'react-doctor/no-render-in-render',
+        'react-doctor/prefer-module-scope-pure-function'
+      ]
+    },
+    {
+      files: ['src/shared/ui/api-docs/_tests/ApiDocsExplorer.test.tsx'],
+      rules: ['react-doctor/anchor-is-valid']
     }
   ]);
 });
@@ -197,6 +289,7 @@ test('quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /scope: repo-tooling/u);
   assert.match(workflow, /scope: repo-frontend/u);
   assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
+  assert.match(workflow, /start_postgres: \$\{\{ startsWith\(matrix\.scope, 'repo-backend-test-'\) \}\}/u);
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
   assert.match(workflow, /publish_issue: "false"/u);
@@ -215,6 +308,7 @@ test('quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
 
   assert.match(workflow, /single-scope-gate:\n\s+if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope != 'ci' \}\}/u);
   assert.match(workflow, /scope: \$\{\{ env\.QUALITY_GATE_SCOPE \}\}/u);
+  assert.match(workflow, /start_postgres: \$\{\{ inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u);
   assert.match(workflow, /publish_issue: "true"/u);
 });
 

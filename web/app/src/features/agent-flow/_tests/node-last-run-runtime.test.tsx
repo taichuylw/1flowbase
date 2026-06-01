@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import * as runtimeApi from '../api/runtime';
 import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
@@ -146,16 +147,25 @@ function authenticate() {
       name: 'Root',
       avatar_url: null,
       introduction: '',
+      preferred_locale: 'zh_Hans',
       effective_display_role: 'root',
-      permissions: ['application.view.all', 'application.edit.own']
+      permissions: ['application.view.all', 'application.edit.own'],
+      meta: {
+        ui: {
+          locale: {
+            preferred_locale: 'zh_Hans'
+          }
+        }
+      }
     }
   });
 }
 
 describe('node last run runtime', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     window.localStorage.clear();
+    await appI18n.changeLanguage('zh_Hans');
     resetAuthStore();
     authenticate();
 

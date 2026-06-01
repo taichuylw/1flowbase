@@ -43,7 +43,7 @@ It also runs React Doctor as a frontend quality gate against `web/app` changed f
 run: npx react-doctor@latest web/app --diff main --offline --fail-on warning --verbose
 ```
 
-Current FrontStage structural debt is kept in `web/app/react-doctor.config.json`
+Current React Doctor structural debt is kept in `web/app/react-doctor.config.json`
 as narrow per-file rule overrides, so React Doctor still blocks new warnings
 outside that explicit baseline.
 

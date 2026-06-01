@@ -147,11 +147,11 @@ describe('RestrictedBlockRuntimePreview', () => {
       payload: { id: 'record-1' }
     });
 
-    expect(screen.getByText('Logs')).toBeInTheDocument();
+    expect(screen.getByText('日志')).toBeInTheDocument();
     expect(screen.getByText('1 条')).toBeInTheDocument();
-    expect(screen.getByText('Effects')).toBeInTheDocument();
-    expect(screen.getByText('action: record.save')).toBeInTheDocument();
-    expect(screen.getByText('Rejections')).toBeInTheDocument();
+    expect(screen.getByText('效果')).toBeInTheDocument();
+    expect(screen.getByText('动作 effect: record.save')).toBeInTheDocument();
+    expect(screen.getByText('拒绝项')).toBeInTheDocument();
     expect(screen.getByText('invalid_message')).toBeInTheDocument();
     expect(screen.queryByText(/raw-log-value/)).not.toBeInTheDocument();
     expect(screen.queryByText(/raw-effect-value/)).not.toBeInTheDocument();

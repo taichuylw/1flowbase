@@ -1,10 +1,15 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 
 import { Navigation } from '../Navigation';
+import { appI18n } from '../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 
 describe('Navigation', () => {
+  beforeEach(async () => {
+    await appI18n.changeLanguage('zh_Hans');
+  });
+
   test('links 前台 to base frontstage path when workspace is available', async () => {
     resetAuthStore();
     useAuthStore.getState().setAuthenticated({

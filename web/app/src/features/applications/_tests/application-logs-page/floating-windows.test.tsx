@@ -8,6 +8,17 @@ import {
 } from '@testing-library/react';
 import { vi } from 'vitest';
 
+type ConversationMessagePageItem = {
+  id: string;
+  flow_run_id: string | null;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  sequence: number;
+  status?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+};
+
 const runtimeApi = vi.hoisted(() => ({
   applicationRunsQueryKey: (
     applicationId: string,
@@ -62,7 +73,39 @@ const runtimeApi = vi.hoisted(() => ({
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
-  fetchApplicationRunConversationMessages: vi.fn(),
+  fetchApplicationRunConversationMessages: vi.fn().mockImplementation(
+    async (
+      appId: string,
+      runId: string,
+      options?: {
+        limit?: number;
+      }
+    ) => {
+      const rawPage = await runtimeApi.fetchApplicationConversationMessages(
+        appId,
+        {
+          flowRunId: runId,
+          page: 1,
+          pageSize: options?.limit ?? 5
+        }
+      );
+      return {
+        items: rawPage.items.map((item: ConversationMessagePageItem) => ({
+          ...item,
+          run_id: item.flow_run_id ?? item.id,
+          detail_run_id: item.flow_run_id ?? item.id,
+          can_open_detail: item.flow_run_id === 'run-0',
+          status: item.status ?? 'succeeded'
+        })),
+        page: {
+          has_before: false,
+          has_after: false,
+          before_cursor: null,
+          after_cursor: null
+        }
+      };
+    }
+  ),
   fetchRuntimeDebugArtifact: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()

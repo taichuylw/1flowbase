@@ -185,9 +185,9 @@ async fn native_get_run_exposes_pending_callback_required_action() {
 }
 
 #[tokio::test]
-async fn native_resume_owned_callback_stops_at_explicit_continuation_todo_boundary() {
+async fn native_resume_owned_callback_records_stable_resume_request_event() {
     let harness = ApplicationPublicApiTestHarness::new();
-    let application = harness.seed_application(actor_user_id(), "Resume TODO App");
+    let application = harness.seed_application(actor_user_id(), "Resume App");
     let token = issue_key(&harness, application.id, actor_user_id()).await;
     publish_application(&harness, application.id, actor_user_id()).await;
     let repository = harness.repository();
@@ -216,7 +216,23 @@ async fn native_resume_owned_callback_stops_at_explicit_continuation_todo_bounda
         error,
         NativeRunValidationError::ResumeContinuationNotImplemented
     );
-    assert!(repository
-        .run_event_types(run.id)
-        .contains(&"public_run_resume_requested".to_string()));
+    let resume_events: Vec<_> = repository
+        .run_events(run.id)
+        .into_iter()
+        .filter(|event| event.event_type == "public_run_resume_requested")
+        .collect();
+    assert_eq!(resume_events.len(), 1);
+    assert_eq!(
+        resume_events[0].payload["callback_task_id"],
+        json!(callback_task.id)
+    );
+    assert_eq!(
+        resume_events[0].payload["response_payload"],
+        json!({ "answer": "approved" })
+    );
+    assert!(!resume_events[0]
+        .payload
+        .as_object()
+        .unwrap()
+        .contains_key("todo"));
 }

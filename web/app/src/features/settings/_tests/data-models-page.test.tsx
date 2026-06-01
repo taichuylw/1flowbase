@@ -187,6 +187,7 @@ vi.mock('@scalar/api-reference-react', () => ({
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
+import { i18nText } from '../../../shared/i18n/text';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import { DataModelFormDrawer } from '../components/data-models/DataModelFormDrawer';
 
@@ -811,9 +812,13 @@ describe('Settings data models page', () => {
     expect(
       await screen.findByText('published_not_exposed')
     ).toBeInTheDocument();
-    expect(screen.getByText('api_exposed_ready')).toBeInTheDocument();
     expect(
-      screen.queryByRole('combobox', { name: 'api_exposed_ready' })
+      screen.getByText(i18nText('settings', 'auto.api_exposed_ready'))
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', {
+        name: i18nText('settings', 'auto.api_exposed_ready')
+      })
     ).not.toBeInTheDocument();
   }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
 

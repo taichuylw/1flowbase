@@ -11,17 +11,6 @@ pub enum RuntimeDataAction {
     Delete,
 }
 
-impl RuntimeDataAction {
-    fn as_permission_action(self) -> &'static str {
-        match self {
-            Self::View => "view",
-            Self::Create => "create",
-            Self::Edit => "edit",
-            Self::Delete => "delete",
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeAccessScope {
     pub scope_id: Option<Uuid>,
@@ -109,48 +98,4 @@ fn ensure_actor_in_granted_scope(
             "data_model_scope_not_granted",
         ))
     }
-}
-
-pub fn resolve_legacy_access_scope(
-    actor: &ActorContext,
-    action: RuntimeDataAction,
-    scope_id: Uuid,
-) -> Result<RuntimeAccessScope, RuntimeAclError> {
-    if actor.is_root {
-        return Ok(RuntimeAccessScope {
-            scope_id: Some(scope_id),
-            owner_user_id: None,
-        });
-    }
-
-    if matches!(action, RuntimeDataAction::Create) {
-        return if actor.has_permission("state_data.create.all") {
-            Ok(RuntimeAccessScope {
-                scope_id: Some(scope_id),
-                owner_user_id: None,
-            })
-        } else {
-            Err(RuntimeAclError::PermissionDenied("permission_denied"))
-        };
-    }
-
-    let action_code = action.as_permission_action();
-    let all_code = format!("state_data.{action_code}.all");
-    let own_code = format!("state_data.{action_code}.own");
-
-    if actor.has_permission("state_data.manage.all") || actor.has_permission(&all_code) {
-        return Ok(RuntimeAccessScope {
-            scope_id: Some(scope_id),
-            owner_user_id: None,
-        });
-    }
-
-    if actor.has_permission("state_data.manage.own") || actor.has_permission(&own_code) {
-        return Ok(RuntimeAccessScope {
-            scope_id: Some(scope_id),
-            owner_user_id: Some(actor.user_id),
-        });
-    }
-
-    Err(RuntimeAclError::PermissionDenied("permission_denied"))
 }

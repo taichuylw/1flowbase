@@ -254,6 +254,7 @@
     "logo": "Logo:",
     "driver_type_required": "Please select driver type",
     "memory_tree_loading_failed": "Memory tree loading failed.",
+    "search_memory_tree": "Search memory tree",
     "routing_page": "routing page",
     "running": "Running",
     "enter_model_id": "Enter model id",

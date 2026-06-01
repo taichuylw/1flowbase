@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use domain::{
-    ApplicationApiSection, ApplicationLogsSection, ApplicationMonitoringSection, ApplicationRecord,
-    ApplicationSections, ApplicationTag, ApplicationType,
+    ApplicationApiSection, ApplicationRecord, ApplicationSections, ApplicationTag, ApplicationType,
 };
 use serde_json::Value;
 use time::OffsetDateTime;
@@ -133,30 +132,4 @@ pub fn application_sections(
         .to_string(),
     };
     sections
-}
-
-pub fn legacy_planned_sections(application_type: ApplicationType) -> ApplicationSections {
-    ApplicationSections {
-        orchestration: flow_sections(application_type, None, None).orchestration,
-        api: ApplicationApiSection {
-            status: "planned".to_string(),
-            credential_kind: "application_api_key".to_string(),
-            invoke_routing_mode: "api_key_bound_application".to_string(),
-            invoke_path_template: None,
-            api_capability_status: "planned".to_string(),
-            credentials_status: "planned".to_string(),
-        },
-        logs: ApplicationLogsSection {
-            status: "planned".to_string(),
-            runs_capability_status: "planned".to_string(),
-            run_object_kind: "application_run".to_string(),
-            log_retention_status: "planned".to_string(),
-        },
-        monitoring: ApplicationMonitoringSection {
-            status: "planned".to_string(),
-            metrics_capability_status: "planned".to_string(),
-            metrics_object_kind: "application_metrics".to_string(),
-            tracing_config_status: "planned".to_string(),
-        },
-    }
 }

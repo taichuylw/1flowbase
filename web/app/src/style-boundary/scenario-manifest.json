@@ -423,7 +423,7 @@
         "propertyAssertions": [
           {
             "property": "display",
-            "expected": "grid"
+            "expected": "flex"
           }
         ]
       },
@@ -433,7 +433,7 @@
         "propertyAssertions": [
           {
             "property": "display",
-            "expected": "flex"
+            "expected": "grid"
           }
         ]
       }

@@ -9,6 +9,7 @@ import {
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../../app/AppProviders';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
 import {
   resetFrontstageDesignModeStore,
@@ -417,7 +418,8 @@ function exitDesignMode() {
 }
 
 describe('FrontStagePage block arrange actions', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await appI18n.changeLanguage('zh_Hans');
     resetAuthStore();
     resetFrontstageDesignModeStore();
     vi.clearAllMocks();
@@ -671,37 +673,37 @@ describe('FrontStagePage block arrange actions', () => {
     );
     expect(basicSection).toHaveTextContent('hero');
     expect(basicSection).toHaveTextContent('hero-code');
-    expect(basicSection).toHaveTextContent('Width12');
-    expect(basicSection).toHaveTextContent('Height5');
-    expect(basicSection).toHaveTextContent('Order0');
+    expect(basicSection).toHaveTextContent('宽度12');
+    expect(basicSection).toHaveTextContent('高度5');
+    expect(basicSection).toHaveTextContent('顺序0');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Data' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '数据' }));
     const dataSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-data'
     );
     expect(dataSection).toHaveTextContent('orders');
-    expect(dataSection).toHaveTextContent('2 fields');
+    expect(dataSection).toHaveTextContent('2 个字段');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Code' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '代码' }));
     const codeSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-code'
     );
     expect(codeSection).toHaveTextContent('js-ui');
     expect(codeSection).toHaveTextContent('blocks/hero/index.js');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Context' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '上下文' }));
     const contextSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-context'
     );
-    expect(contextSection).toHaveTextContent('CatalogMatched');
+    expect(contextSection).toHaveTextContent('目录已匹配');
     expect(contextSection).toHaveTextContent('text');
 
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Limits' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: '限制' }));
     const limitsSection = within(dialog).getByTestId(
       'frontstage-block-configuration-section-limits'
     );
-    expect(limitsSection).toHaveTextContent('Timeout1000 ms');
-    expect(limitsSection).toHaveTextContent('Max render depth8');
+    expect(limitsSection).toHaveTextContent('超时1000 ms');
+    expect(limitsSection).toHaveTextContent('最大渲染深度8');
   });
 
   test('closes block configuration drawer when exiting design mode, switching pages, or clearing selection', async () => {

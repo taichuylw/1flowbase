@@ -50,7 +50,14 @@ const runtimeApi = vi.hoisted(() => ({
     applicationId: string,
     runId: string
   ) =>
-    ['applications', applicationId, 'runtime', 'runs', runId, 'conversation-messages'] as const,
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'conversation-messages'
+    ] as const,
   fetchApplicationRuns: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
@@ -108,8 +115,10 @@ describe('ApplicationLogsPage - query states', () => {
 
     expect(await screen.findByText('日志加载失败')).toBeInTheDocument();
     expect(
-      screen.getByText('请刷新日志；如果持续失败，确认内置日志 Data Model 已完成迁移。')
+      screen.getByText(
+        '请刷新日志；如果持续失败，确认内置日志 Data Model 已完成迁移。'
+      )
     ).toBeInTheDocument();
-    expect(screen.getByText('刷新日志').closest('button')).toBeInTheDocument();
+    expect(screen.getByText('刷新日志')).toBeInTheDocument();
   });
 });

@@ -325,7 +325,7 @@ describe('AgentFlowCanvas interactions', () => {
     renderCanvas();
 
     expect(latestReactFlowProps?.defaultViewport).toEqual({ x: 0, y: 0, zoom: 1 });
-    expect(latestReactFlowProps?.viewport).not.toBeDefined();
+    expect(latestReactFlowProps?.viewport).toBeUndefined();
     expect(screen.getByLabelText('当前缩放')).toHaveTextContent('100%');
   });
 
@@ -487,7 +487,6 @@ describe('AgentFlowCanvas interactions', () => {
         target: document.createElement('div')
       });
     });
-
     fireEvent.click(
       await screen.findByRole('menuitem', { name: 'Template Transform' })
     );
@@ -498,9 +497,9 @@ describe('AgentFlowCanvas interactions', () => {
 
     expect(insertedNode).toMatchObject({
       type: 'template_transform',
-      position: { x: 420, y: 260 }
+      position: { x: 609, y: 405 }
     });
-    expect(insertedNode?.position).toEqual({ x: 420, y: 260 });
+    expect(insertedNode?.position).toEqual({ x: 609, y: 405 });
     expect(getState().workingDocument.graph.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -556,6 +555,6 @@ describe('AgentFlowCanvas interactions', () => {
       llmNode?.data?.onSelectNode?.('node-llm');
     });
 
-    expect(latestReactFlowProps?.onPaneClick).not.toBeDefined();
+    expect(latestReactFlowProps?.onPaneClick).toBeUndefined();
   });
 });

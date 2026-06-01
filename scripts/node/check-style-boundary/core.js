@@ -16,6 +16,25 @@ const TEMPORARY_FRONTEND_HOST = '127.0.0.1';
 const TEMPORARY_FRONTEND_STARTUP_TIMEOUT_MS = 30_000;
 const TEMPORARY_FRONTEND_POLL_INTERVAL_MS = 500;
 const TEMPORARY_FRONTEND_STOP_TIMEOUT_MS = 5_000;
+const STYLE_BOUNDARY_USER_PERMISSIONS = [
+  'route_page.view.all',
+  'application.view.all',
+  'application.edit.own',
+  'application.create.all',
+  'embedded_app.view.all',
+  'api_reference.view.all',
+  'system_runtime.view.all',
+  'state_model.view.all',
+  'state_model.manage.all',
+  'file_table.view.all',
+  'file_object.view.all',
+  'file_storage.view.all',
+  'frontstage.page.design',
+  'user.view.all',
+  'user.manage.all',
+  'role_permission.view.all',
+  'role_permission.manage.all'
+];
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -182,16 +201,15 @@ function buildTemporaryFrontendCommand(repoRoot, port, env = process.env) {
   return {
     command: resolvePnpmBinaryFromPath(runtime.env) || 'pnpm',
     args: [
-      '--filter',
-      '@1flowbase/web',
-      'dev',
+      'exec',
+      'vite',
       '--host',
       TEMPORARY_FRONTEND_HOST,
       '--port',
       String(port),
       '--strictPort'
     ],
-    cwd: path.join(repoRoot, 'web'),
+    cwd: path.join(repoRoot, 'web', 'app'),
     env: runtime.env
   };
 }
@@ -355,6 +373,7 @@ async function isStyleBoundaryFrontendReady(browser, baseUrl, sceneId) {
   const page = await browser.newPage();
 
   try {
+    await installStyleBoundaryNetworkMocks(page);
     await page.goto(createProbeUrl(baseUrl, sceneId), {
       waitUntil: 'domcontentloaded',
       timeout: 5000,
@@ -368,6 +387,58 @@ async function isStyleBoundaryFrontendReady(browser, baseUrl, sceneId) {
   } finally {
     await page.close();
   }
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function createStyleBoundaryMeResponse(meta = {}) {
+  return {
+    data: {
+      id: 'user-1',
+      account: 'root',
+      email: 'root@example.com',
+      phone: null,
+      nickname: 'Captain Root',
+      name: 'Root',
+      avatar_url: null,
+      introduction: 'Boundary user',
+      preferred_locale: null,
+      meta,
+      effective_display_role: 'root',
+      permissions: STYLE_BOUNDARY_USER_PERMISSIONS
+    },
+    meta: null
+  };
+}
+
+function readStyleBoundaryMetaPatch(request) {
+  try {
+    const body = typeof request.postDataJSON === 'function'
+      ? request.postDataJSON()
+      : null;
+
+    if (isRecord(body) && isRecord(body.meta)) {
+      return body.meta;
+    }
+  } catch (_error) {
+    return {};
+  }
+
+  return {};
+}
+
+async function installStyleBoundaryNetworkMocks(page) {
+  await page.route('**/api/console/me/meta', async (route) => {
+    const meta = readStyleBoundaryMetaPatch(route.request());
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(createStyleBoundaryMeResponse(meta))
+    });
+  });
 }
 
 function loadPlaywright(repoRoot) {
@@ -817,6 +888,7 @@ async function openApplicationDetailDock(page) {
 
 async function runScene(browser, baseUrl, scene) {
   const page = await browser.newPage();
+  await installStyleBoundaryNetworkMocks(page);
   const cdp = await page.context().newCDPSession(page);
   const styleSheets = new Map();
 
@@ -935,6 +1007,7 @@ module.exports = {
   createProbeUrl,
   formatBoundaryFailure,
   formatRelationshipFailure,
+  installStyleBoundaryNetworkMocks,
   isStyleBoundaryFrontendReady,
   main,
   parseCliArgs,

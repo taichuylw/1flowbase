@@ -262,7 +262,7 @@ async fn flow_debug_run_resolves_system_variables_from_run_context() {
     let mut document = editor_state.draft.document.clone();
 
     document["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]["value"] =
-        json!("{{sys.user_id}}/{{sys.app_id}}/{{sys.workflow_id}}/{{sys.workflow_run_id}}");
+        json!("{{sys.user_id}}/{{sys.application_id}}/{{sys.app_id}}/{{sys.workflow_id}}/{{sys.workflow_run_id}}");
 
     let detail = service
         .start_flow_debug_run(StartFlowDebugRunCommand {
@@ -292,10 +292,17 @@ async fn flow_debug_run_resolves_system_variables_from_run_context() {
         .as_str()
         .expect("rendered prompt content");
 
-    assert!(content.contains(&seeded.actor_user_id.to_string()));
-    assert!(content.contains(&seeded.application_id.to_string()));
-    assert!(content.contains(&seeded.flow_id.to_string()));
-    assert!(content.contains(&detail.flow_run.id.to_string()));
+    assert_eq!(
+        content,
+        format!(
+            "{}/{}/{}/{}/{}",
+            seeded.actor_user_id,
+            seeded.application_id,
+            seeded.application_id,
+            seeded.flow_id,
+            detail.flow_run.id
+        )
+    );
 }
 
 #[tokio::test]

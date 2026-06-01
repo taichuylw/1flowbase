@@ -7,7 +7,7 @@
     "footer": "power by taichuy",
     "identifier": {
       "label": "Account",
-      "placeholder": "root / root@example.com",
+      "placeholder": "Enter account or email",
       "required": "Enter an account or email."
     },
     "password": {

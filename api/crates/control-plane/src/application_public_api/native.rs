@@ -495,7 +495,6 @@ where
                     "callback_task_id": callback_task.id,
                     "response_mode": command.response_mode,
                     "response_payload": command.response_payload,
-                    "todo": "wire published_api_run callback continuation through OrchestrationRuntimeService",
                 }),
             })
             .await

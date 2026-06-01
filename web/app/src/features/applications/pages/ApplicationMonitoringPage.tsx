@@ -726,20 +726,72 @@ function MonitoringTable<T extends object>({
 }
 
 function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
+  const gradientColor = (colors: [string, string]) => ({
+    type: 'linear',
+    x: 0,
+    y: 0,
+    x2: 0,
+    y2: 1,
+    colorStops: [
+      { offset: 0, color: colors[0] },
+      { offset: 1, color: colors[1] }
+    ]
+  });
+  const tokenTrendSeries = [
+    {
+      name: i18nText("applications", "auto.total_tokens"),
+      color: '#2f54eb',
+      areaColor: undefined,
+      lineWidth: 2.4,
+      z: 4,
+      data: report.tokens_trend.map((point) => point.total_tokens)
+    },
+    {
+      name: i18nText("applications", "auto.input_tokens"),
+      color: '#1677ff',
+      areaColor: ['rgba(22, 119, 255, 0.18)', 'rgba(22, 119, 255, 0.02)'] as [string, string],
+      lineWidth: 2,
+      z: 3,
+      data: report.tokens_trend.map((point) => point.input_tokens)
+    },
+    {
+      name: i18nText("applications", "auto.output_tokens"),
+      color: '#22c55e',
+      areaColor: ['rgba(34, 197, 94, 0.18)', 'rgba(34, 197, 94, 0.02)'] as [string, string],
+      lineWidth: 2,
+      z: 2,
+      data: report.tokens_trend.map((point) => point.output_tokens)
+    },
+    {
+      name: i18nText("applications", "auto.input_cache_hit_tokens"),
+      color: '#f59e0b',
+      areaColor: ['rgba(245, 158, 11, 0.2)', 'rgba(245, 158, 11, 0.02)'] as [string, string],
+      lineWidth: 2,
+      z: 2,
+      data: report.tokens_trend.map((point) => point.input_cache_hit_tokens)
+    }
+  ];
+
   return {
-    color: ['#1677ff', '#22c55e'],
+    color: tokenTrendSeries.map((series) => series.color),
     grid: {
       left: 54,
       right: 20,
       top: 28,
-      bottom: 34
+      bottom: 58
     },
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
       borderColor: '#f0f0f0',
       borderWidth: 1,
-      textStyle: { color: '#1f1f1f', fontSize: 12 }
+      textStyle: { color: '#1f1f1f', fontSize: 12 },
+      valueFormatter: (value: unknown) =>
+        typeof value === 'number' ? formatTokenAmount(value) : String(value)
+    },
+    legend: {
+      bottom: 0,
+      itemGap: 16
     },
     xAxis: {
       type: 'category',
@@ -759,7 +811,10 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
       {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#8c8c8c' },
+        axisLabel: {
+          color: '#8c8c8c',
+          formatter: (value: number) => formatTokenAmount(value)
+        },
         splitLine: {
           lineStyle: {
             color: 'rgba(0, 0, 0, 0.05)',
@@ -768,54 +823,22 @@ function buildTokenTrendOption(report: ApplicationRunMonitoringReport) {
         }
       }
     ],
-    series: [
-      {
-        name: i18nText("applications", "auto.input_tokens"),
-        type: 'line',
-        stack: 'Total',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        showSymbol: false,
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(22, 119, 255, 0.25)' },
-              { offset: 1, color: 'rgba(22, 119, 255, 0.01)' }
-            ]
-          }
-        },
-        data: report.tokens_trend.map((point) => point.input_tokens)
-      },
-      {
-        name: i18nText("applications", "auto.output_tokens"),
-        type: 'line',
-        stack: 'Total',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        showSymbol: false,
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(34, 197, 94, 0.24)' },
-              { offset: 1, color: 'rgba(34, 197, 94, 0.01)' }
-            ]
-          }
-        },
-        data: report.tokens_trend.map((point) => point.output_tokens)
-      }
-    ]
+    series: tokenTrendSeries.map((series) => ({
+      name: series.name,
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      showSymbol: false,
+      z: series.z,
+      emphasis: { focus: 'series' },
+      lineStyle: { width: series.lineWidth, color: series.color },
+      itemStyle: { color: series.color },
+      ...(series.areaColor
+        ? { areaStyle: { color: gradientColor(series.areaColor) } }
+        : {}),
+      data: series.data
+    }))
   };
 }
 

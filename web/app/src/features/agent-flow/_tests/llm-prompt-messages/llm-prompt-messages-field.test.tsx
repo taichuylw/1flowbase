@@ -111,8 +111,7 @@ describe('LLM prompt messages field', () => {
         '  color: #101828;'
     );
     expect(cssSource).toContain(
-      '.agent-flow-llm-prompt-messages__role-icon {\n' +
-        '  color: #101828;'
+      '.agent-flow-llm-prompt-messages__role-icon {\n' + '  color: #101828;'
     );
   });
 
@@ -178,9 +177,7 @@ describe('LLM prompt messages field', () => {
     expect(
       screen.queryByRole('menuitem', { name: 'SYSTEM' })
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('menuitem', { name: 'USER' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'USER' })).toBeInTheDocument();
     const assistantOption = screen.getByRole('menuitem', {
       name: 'ASSISTANT'
     });
@@ -284,7 +281,9 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '展开本地 SYSTEM' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '展开本地 SYSTEM' })
+    );
     expect(screen.getByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
     expect(screen.getByText('You are helpful.')).toBeInTheDocument();
     expect(screen.getByLabelText('USER 消息内容')).toBeInTheDocument();
@@ -309,12 +308,18 @@ describe('LLM prompt messages field', () => {
                   {
                     id: 'system-1',
                     role: 'system',
-                    content: { kind: 'templated_text', value: 'Keep answers short.' }
+                    content: {
+                      kind: 'templated_text',
+                      value: 'Keep answers short.'
+                    }
                   },
                   {
                     id: 'user-1',
                     role: 'user',
-                    content: { kind: 'templated_text', value: '{{node-start.query}}' }
+                    content: {
+                      kind: 'templated_text',
+                      value: '{{node-start.query}}'
+                    }
                   }
                 ]
               }
@@ -354,7 +359,9 @@ describe('LLM prompt messages field', () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState(latestDocument)}>
+      <AgentFlowEditorStoreProvider
+        initialState={createInitialState(latestDocument)}
+      >
         <SelectionSeed nodeId="node-llm" />
         <DocumentObserver
           onChange={(document) => {
@@ -385,26 +392,19 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    const contextSwitch = await screen.findByRole('switch', {
+    await screen.findByRole('switch', {
       name: '继承上下文'
     });
 
-    const contextRow = contextSwitch.closest(
-      '.agent-flow-editor__inspector-field'
+    const contextRow = screen.getByTestId(
+      'inspector-field-config.context_policy'
     );
 
     expect(contextRow).toHaveClass(
       'agent-flow-editor__inspector-field--policy'
     );
-    expect(
-      contextRow?.querySelector('.agent-flow-editor__inspector-field-label')
-        ?.textContent
-    ).toContain('继承上下文');
-    expect(
-      contextRow?.querySelector(
-        '.agent-flow-editor__inspector-field-label-tag'
-      )
-    ).toHaveTextContent('history');
+    expect(within(contextRow).getByText('继承上下文')).toBeInTheDocument();
+    expect(within(contextRow).getByText('history')).toBeInTheDocument();
     expect(
       screen.getByLabelText('将传入上下文注入当前LLM节点中')
     ).toBeInTheDocument();
@@ -449,7 +449,9 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '展开本地 SYSTEM' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '展开本地 SYSTEM' })
+    );
     expect(screen.getByText('Rules')).toBeInTheDocument();
     const rows = screen.getAllByTestId(/llm-prompt-message-row-/);
     expect(rows[0]).toHaveAttribute(

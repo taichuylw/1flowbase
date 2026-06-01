@@ -1103,6 +1103,16 @@ impl ApplicationPublicApiTestRepository {
             .collect()
     }
 
+    pub fn run_events(&self, flow_run_id: Uuid) -> Vec<domain::RunEventRecord> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .run_events
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub fn flow_run_count(&self) -> usize {
         self.inner
             .lock()
