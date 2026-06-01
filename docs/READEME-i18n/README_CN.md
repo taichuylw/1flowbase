@@ -80,7 +80,7 @@ MODEL=deepseek-with-vision
 |---|---|---|
 | **OpenAI Responses API** | `/v1/responses` | 新一代 OpenAI primitives 客户端 |
 | **OpenAI Chat Completions** | `/v1/chat/completions` | Cline, Roo Code, 各种传统 SDK 及开发框架 |
-| **Claude-compatible Messages** | `/anthropic/v1/messages` | 兼容 Claude SDK / 原生 Claude 客户端 |
+| **Claude-compatible Messages** | `/v1/messages` | 兼容 Claude SDK / 原生 Claude 客户端 |
 
 ---
 

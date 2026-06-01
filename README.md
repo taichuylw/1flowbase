@@ -79,7 +79,7 @@ MODEL=deepseek-with-vision
 |---|---|---|
 | **OpenAI Responses API** | `/v1/responses` | Next-generation OpenAI primitives clients |
 | **OpenAI Chat Completions** | `/v1/chat/completions` | Cline, Roo Code, traditional SDKs, and development frameworks |
-| **Claude-compatible Messages** | `/anthropic/v1/messages` | Claude SDK / Native Claude clients |
+| **Claude-compatible Messages** | `/v1/messages` | Claude SDK / Native Claude clients |
 
 ---
 
