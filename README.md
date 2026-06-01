@@ -58,141 +58,18 @@ cargo run -p plugin-runner --bin plugin-runner
 
 ### Docker 一键部署
 
-下面的命令不会安装 Docker。它只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`，拉取镜像并启动 1flowbase。命令输出保持英文，避免终端编码问题。
+下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`，拉取镜像并启动 1flowbase。脚本输出保持英文，避免终端编码问题。
 
 #### Shell
 
 ```bash
-set -euo pipefail
-
-fail() {
-  printf '%s\n' "$1" >&2
-  exit 1
-}
-
-command -v docker >/dev/null 2>&1 || fail "Docker is required. Install Docker Engine or Docker Desktop first."
-docker info >/dev/null 2>&1 || fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
-
-if docker compose version >/dev/null 2>&1; then
-  compose() { docker compose "$@"; }
-elif command -v docker-compose >/dev/null 2>&1; then
-  compose() { docker-compose "$@"; }
-else
-  fail "Docker Compose is required. Install the Docker Compose plugin or docker-compose first."
-fi
-
-if [ -d ./docker ]; then
-  echo "Using existing ./docker directory."
-else
-  command -v tar >/dev/null 2>&1 || fail "tar is required to unpack the 1flowbase archive."
-  if command -v curl >/dev/null 2>&1; then
-    download() { curl -fsSL "$1" -o "$2"; }
-  elif command -v wget >/dev/null 2>&1; then
-    download() { wget -qO "$2" "$1"; }
-  else
-    fail "curl or wget is required to download the 1flowbase docker files."
-  fi
-
-  tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' EXIT
-  archive="$tmpdir/1flowbase.tar.gz"
-  download "https://codeload.github.com/taichuy/1flowbase/tar.gz/refs/heads/main" "$archive"
-  tar -xzf "$archive" -C "$tmpdir" "1flowbase-main/docker"
-  mv "$tmpdir/1flowbase-main/docker" ./docker
-  echo "Downloaded ./docker."
-fi
-
-if [ ! -f ./docker/.env ]; then
-  cp ./docker/.env.example ./docker/.env
-  echo "Created docker/.env from docker/.env.example."
-else
-  echo "Using existing docker/.env."
-fi
-
-cd docker
-compose pull
-compose up -d
-web_port="$(grep -E '^WEB_PORT=' .env | cut -d= -f2- || true)"
-root_account="$(grep -E '^BOOTSTRAP_ROOT_ACCOUNT=' .env | cut -d= -f2- || true)"
-root_password="$(grep -E '^BOOTSTRAP_ROOT_PASSWORD=' .env | cut -d= -f2- || true)"
-echo "1flowbase is starting. Web: http://127.0.0.1:${web_port:-3100}"
-echo "Initial root account: ${root_account:-root}"
-echo "Initial root password: ${root_password:-1flowbase}"
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/docker/deploy.sh | sh
 ```
 
 #### PowerShell
 
 ```powershell
-$ErrorActionPreference = "Stop"
-$ProgressPreference = "SilentlyContinue"
-
-function Fail([string]$Message) {
-  Write-Host $Message
-  exit 1
-}
-
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  Fail "Docker is required. Install Docker Desktop or Docker Engine first."
-}
-
-docker info *> $null
-if ($LASTEXITCODE -ne 0) {
-  Fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
-}
-
-$UseDockerComposePlugin = $false
-docker compose version *> $null
-if ($LASTEXITCODE -eq 0) {
-  $UseDockerComposePlugin = $true
-} elseif (-not (Get-Command docker-compose -ErrorAction SilentlyContinue)) {
-  Fail "Docker Compose is required. Install the Docker Compose plugin or docker-compose first."
-}
-
-if (Test-Path ".\docker") {
-  Write-Host "Using existing ./docker directory."
-} else {
-  if (-not (Get-Command tar -ErrorAction SilentlyContinue)) {
-    Fail "tar is required to unpack the 1flowbase archive."
-  }
-
-  $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("1flowbase-" + [System.Guid]::NewGuid().ToString("N"))
-  New-Item -ItemType Directory -Path $TempDir | Out-Null
-  $Archive = Join-Path $TempDir "1flowbase.tar.gz"
-  Invoke-WebRequest -Uri "https://codeload.github.com/taichuy/1flowbase/tar.gz/refs/heads/main" -OutFile $Archive
-  tar -xzf $Archive -C $TempDir "1flowbase-main/docker"
-  $ExtractedDockerDir = Join-Path (Join-Path $TempDir "1flowbase-main") "docker"
-  Move-Item -Path $ExtractedDockerDir -Destination ".\docker"
-  Remove-Item -Recurse -Force $TempDir
-  Write-Host "Downloaded ./docker."
-}
-
-if (-not (Test-Path ".\docker\.env")) {
-  Copy-Item ".\docker\.env.example" ".\docker\.env"
-  Write-Host "Created docker/.env from docker/.env.example."
-} else {
-  Write-Host "Using existing docker/.env."
-}
-
-Set-Location ".\docker"
-if ($UseDockerComposePlugin) {
-  docker compose pull
-  docker compose up -d
-} else {
-  docker-compose pull
-  docker-compose up -d
-}
-$EnvValues = @{}
-Get-Content ".\.env" | ForEach-Object {
-  if ($_ -match "^([^#=]+)=(.*)$") {
-    $EnvValues[$matches[1]] = $matches[2]
-  }
-}
-$WebPort = if ($EnvValues.ContainsKey("WEB_PORT") -and $EnvValues["WEB_PORT"]) { $EnvValues["WEB_PORT"] } else { "3100" }
-$RootAccount = if ($EnvValues.ContainsKey("BOOTSTRAP_ROOT_ACCOUNT") -and $EnvValues["BOOTSTRAP_ROOT_ACCOUNT"]) { $EnvValues["BOOTSTRAP_ROOT_ACCOUNT"] } else { "root" }
-$RootPassword = if ($EnvValues.ContainsKey("BOOTSTRAP_ROOT_PASSWORD") -and $EnvValues["BOOTSTRAP_ROOT_PASSWORD"]) { $EnvValues["BOOTSTRAP_ROOT_PASSWORD"] } else { "1flowbase" }
-Write-Host "1flowbase is starting. Web: http://127.0.0.1:$WebPort"
-Write-Host "Initial root account: $RootAccount"
-Write-Host "Initial root password: $RootPassword"
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/docker/deploy.ps1 | iex
 ```
 
 整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。访问地址和初始 root 账号以 `docker/.env` 中的 `WEB_PORT`、`BOOTSTRAP_ROOT_ACCOUNT` 和 `BOOTSTRAP_ROOT_PASSWORD` 为准。
