@@ -4,8 +4,12 @@ param(
   [string]$RootPassword = $env:FLOWBASE_ROOT_PASSWORD,
   [string]$ProviderSecret = $env:FLOWBASE_PROVIDER_SECRET,
   [string]$WebPort = $env:FLOWBASE_WEB_PORT,
+  [switch]$Pull,
+  [switch]$NoPull,
+  [switch]$Start,
   [switch]$NoStart,
-  [switch]$PrepareOnly
+  [switch]$PrepareOnly,
+  [switch]$NonInteractive
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,7 +23,22 @@ $FlowbaseArchiveUrl = if ($env:FLOWBASE_ARCHIVE_URL) {
   "https://codeload.github.com/$FlowbaseRepo/tar.gz/refs/heads/$FlowbaseRef"
 }
 $FlowbaseArchiveDockerDir = "1flowbase-$FlowbaseRef/docker"
-$ShouldStart = -not ($NoStart -or $PrepareOnly -or $env:FLOWBASE_NO_START -eq "1" -or $env:FLOWBASE_NO_START -eq "true")
+$ShouldPrompt = -not ($NonInteractive -or $env:FLOWBASE_NON_INTERACTIVE -eq "1" -or $env:FLOWBASE_NON_INTERACTIVE -eq "true")
+$PullImages = $null
+$StartContainers = $null
+
+if ($Pull -or $env:FLOWBASE_PULL_IMAGES -eq "1" -or $env:FLOWBASE_PULL_IMAGES -eq "true") {
+  $PullImages = $true
+}
+if ($NoPull -or $env:FLOWBASE_PULL_IMAGES -eq "0" -or $env:FLOWBASE_PULL_IMAGES -eq "false") {
+  $PullImages = $false
+}
+if ($Start -or $env:FLOWBASE_START_CONTAINERS -eq "1" -or $env:FLOWBASE_START_CONTAINERS -eq "true") {
+  $StartContainers = $true
+}
+if ($NoStart -or $PrepareOnly -or $env:FLOWBASE_START_CONTAINERS -eq "0" -or $env:FLOWBASE_START_CONTAINERS -eq "false") {
+  $StartContainers = $false
+}
 
 function Fail([string]$Message) {
   Write-Host $Message
@@ -61,6 +80,42 @@ function Set-EnvValue([string]$Key, [string]$Value, [string]$Path) {
   }
 
   Set-Content -Path $Path -Value $Lines -Encoding UTF8
+}
+
+function Prompt-EnvValue([string]$Key, [string]$Label) {
+  $CurrentValue = Read-EnvValue $Key ".\docker\.env"
+  if ($CurrentValue) {
+    $InputValue = Read-Host "$Label [$CurrentValue]"
+  } else {
+    $InputValue = Read-Host "$Label"
+  }
+
+  if ($InputValue) {
+    Set-EnvValue $Key $InputValue ".\docker\.env"
+    Write-Host "Updated $Key in docker/.env."
+  } else {
+    if ($CurrentValue) {
+      Write-Host "Keeping ${Key}: $CurrentValue"
+    } else {
+      Write-Host "Keeping ${Key}: empty"
+    }
+  }
+}
+
+function Convert-ToYesNo([string]$Value) {
+  if ($Value -match "^(y|yes|true|1)$") {
+    return $true
+  }
+  return $false
+}
+
+function Prompt-YesNo([string]$Question, [bool]$Default) {
+  $Suffix = if ($Default) { "[Y/n]" } else { "[y/N]" }
+  $InputValue = Read-Host "$Question $Suffix"
+  if (-not $InputValue) {
+    return $Default
+  }
+  return Convert-ToYesNo $InputValue
 }
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -122,9 +177,34 @@ if ($WebPort) {
   Write-Host "Updated WEB_PORT in docker/.env."
 }
 
-if (-not $ShouldStart) {
+if ($ShouldPrompt) {
+  Write-Host "Configure docker/.env. Press Enter to keep the value shown in brackets."
+  Prompt-EnvValue "POSTGRES_PASSWORD" "Database password"
+  Prompt-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" "Root account"
+  Prompt-EnvValue "BOOTSTRAP_ROOT_PASSWORD" "Root password"
+  Prompt-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" "API provider secret master key"
+  Prompt-EnvValue "WEB_PORT" "Web port"
+}
+
+if ($null -eq $PullImages) {
+  if ($ShouldPrompt) {
+    $PullImages = Prompt-YesNo "Pull Docker images?" $false
+  } else {
+    $PullImages = $false
+  }
+}
+
+if ($null -eq $StartContainers) {
+  if ($ShouldPrompt) {
+    $StartContainers = Prompt-YesNo "Start 1flowbase now?" $false
+  } else {
+    $StartContainers = $false
+  }
+}
+
+if (-not $PullImages -and -not $StartContainers) {
   Write-Host "Docker files are ready in ./docker."
-  Write-Host "No containers were started because -NoStart was used."
+  Write-Host "No images were pulled and no containers were started."
   Write-Host "To start later, run: cd docker && docker compose pull && docker compose up -d"
   exit 0
 }
@@ -135,12 +215,26 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Set-Location ".\docker"
-if ($UseDockerComposePlugin) {
-  docker compose pull
-  docker compose up -d
+if ($PullImages) {
+  if ($UseDockerComposePlugin) {
+    docker compose pull
+  } else {
+    docker-compose pull
+  }
 } else {
-  docker-compose pull
-  docker-compose up -d
+  Write-Host "Skipping image pull."
+}
+
+if ($StartContainers) {
+  if ($UseDockerComposePlugin) {
+    docker compose up -d
+  } else {
+    docker-compose up -d
+  }
+} else {
+  Write-Host "Skipping container startup."
+  Write-Host "To start later, run: cd docker && docker compose up -d"
+  exit 0
 }
 
 $WebPort = Read-EnvValue "WEB_PORT" ".\.env"

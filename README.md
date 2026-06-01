@@ -58,7 +58,7 @@ cargo run -p plugin-runner --bin plugin-runner
 
 ### Docker 一键部署
 
-下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`；默认会拉取镜像并启动 1flowbase，也可以通过参数只准备文件不启动。脚本输出保持英文，避免终端编码问题。
+下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`。随后脚本会进入交互配置，空输入保留提示中的当前值，再让你选择是否拉取镜像、是否启动容器。脚本输出保持英文，避免终端编码问题。
 
 #### Shell
 
@@ -78,43 +78,28 @@ irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
 ```
 
-默认会直接启动整套容器，包括 `web`、`api`、`plugin-runner` 和 `db`。访问地址和初始 root 账号以 `docker/.env` 中的 `WEB_PORT`、`BOOTSTRAP_ROOT_ACCOUNT` 和 `BOOTSTRAP_ROOT_PASSWORD` 为准。
+交互配置项包括：
 
-需要指定生产密码时，可以在启动时传入参数：
+- `POSTGRES_PASSWORD`
+- `BOOTSTRAP_ROOT_ACCOUNT`
+- `BOOTSTRAP_ROOT_PASSWORD`
+- `API_PROVIDER_SECRET_MASTER_KEY`
+- `WEB_PORT`
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --db-password "change-me-db-password" --root-password "change-me-root-password" --provider-secret "change-me-provider-secret"
-```
+之后脚本会继续询问：
 
-```powershell
-iex "& { $(irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1) } -DbPassword 'change-me-db-password' -RootPassword 'change-me-root-password' -ProviderSecret 'change-me-provider-secret'"
-```
+- `Pull Docker images? [y/N]`
+- `Start 1flowbase now? [y/N]`
 
-```bat
-set "FLOWBASE_DB_PASSWORD=change-me-db-password" && set "FLOWBASE_ROOT_PASSWORD=change-me-root-password" && set "FLOWBASE_PROVIDER_SECRET=change-me-provider-secret" && powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
-```
-
-如果只想拉取 `docker/` 和生成 `docker/.env`，暂时不启动容器：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --no-start
-```
-
-```powershell
-iex "& { $(irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1) } -NoStart"
-```
-
-```bat
-set "FLOWBASE_NO_START=1" && powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
-```
-
-之后手动启动：
+如果选择暂时不启动，之后可以手动执行：
 
 ```bash
 cd docker
 docker compose pull
 docker compose up -d
 ```
+
+非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。
 
 ---
 
