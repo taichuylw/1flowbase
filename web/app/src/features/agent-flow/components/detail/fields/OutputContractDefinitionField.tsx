@@ -7,6 +7,7 @@ import {
   outputTypeSupportsJsonSchema,
   parseJsonSchemaInput
 } from '../../../lib/output-contract/schema';
+import { isOutputVariableKeyAllowed } from '../../../lib/output-contract/variable-key';
 import { i18nText } from '../../../../../shared/i18n/text';
 
 const valueTypeOptions = [
@@ -34,10 +35,12 @@ function createNextOutput(index: number): FlowNodeDocument['outputs'][number] {
 
 export function OutputContractDefinitionField({
   value,
-  onChange
+  onChange,
+  syncTitleWithKey = false
 }: {
   value: FlowNodeDocument['outputs'];
   onChange: (value: FlowNodeDocument['outputs']) => void;
+  syncTitleWithKey?: boolean;
 }) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [schemaText, setSchemaText] = useState('');
@@ -58,6 +61,14 @@ export function OutputContractDefinitionField({
     setSchemaError(null);
   }
 
+  function emitChange(nextValue: FlowNodeDocument['outputs']) {
+    onChange(
+      syncTitleWithKey
+        ? nextValue.map((output) => ({ ...output, title: output.key }))
+        : nextValue
+    );
+  }
+
   function saveSchema() {
     if (editingIndex === null) {
       return;
@@ -70,7 +81,7 @@ export function OutputContractDefinitionField({
     }
 
     const nextType = parsed.schema.type;
-    onChange(
+    emitChange(
       value.map((candidate, candidateIndex) => {
         if (candidateIndex !== editingIndex) {
           return candidate;
@@ -99,97 +110,121 @@ export function OutputContractDefinitionField({
           icon={<PlusOutlined />}
           size="small"
           type="text"
-          onClick={() => onChange([...value, createNextOutput(value.length)])}
+          onClick={() => emitChange([...value, createNextOutput(value.length)])}
         />
       </div>
       {value.length > 0 ? (
         <div className="agent-flow-output-contract-editor__list">
-          {value.map((output, index) => (
-            <div
-              key={`${output.key}-${index}`}
-              className="agent-flow-output-contract-editor__row"
-            >
-              <label className="agent-flow-output-contract-editor__cell">
-                <span>{i18nText("agentFlow", "auto.variable_name")}</span>
-                <Input
-                  aria-label={i18nText("agentFlow", "auto.output_variable_name", { value1: index + 1 })}
-                  value={output.key}
-                  onChange={(event) =>
-                    onChange(
-                      value.map((candidate, candidateIndex) =>
-                        candidateIndex === index
-                          ? { ...candidate, key: event.target.value }
-                          : candidate
+          {value.map((output, index) => {
+            const outputKeyIsValid =
+              output.key.length === 0 ||
+              isOutputVariableKeyAllowed(output.key);
+
+            return (
+              <div
+                key={`${output.key}-${index}`}
+                className={`agent-flow-output-contract-editor__row${
+                  syncTitleWithKey
+                    ? ' agent-flow-output-contract-editor__row--synced-title'
+                    : ''
+                }`}
+              >
+                <label className="agent-flow-output-contract-editor__cell">
+                  <span>{i18nText("agentFlow", "auto.variable_name")}</span>
+                  <Input
+                    aria-label={i18nText("agentFlow", "auto.output_variable_name", { value1: index + 1 })}
+                    status={outputKeyIsValid ? undefined : 'error'}
+                    value={output.key}
+                    onChange={(event) =>
+                      emitChange(
+                        value.map((candidate, candidateIndex) =>
+                          candidateIndex === index
+                            ? {
+                                ...candidate,
+                                key: event.target.value,
+                                title: syncTitleWithKey
+                                  ? event.target.value
+                                  : candidate.title
+                              }
+                            : candidate
+                        )
                       )
-                    )
-                  }
-                />
-              </label>
-              <label className="agent-flow-output-contract-editor__cell">
-                <span>{i18nText("agentFlow", "auto.display_name")}</span>
-                <Input
-                  aria-label={i18nText("agentFlow", "auto.output_display_name", { value1: index + 1 })}
-                  value={output.title}
-                  onChange={(event) =>
-                    onChange(
-                      value.map((candidate, candidateIndex) =>
-                        candidateIndex === index
-                          ? { ...candidate, title: event.target.value }
-                          : candidate
+                    }
+                  />
+                  {!outputKeyIsValid ? (
+                    <Typography.Text type="danger">
+                      {i18nText("agentFlow", "auto.output_variable_name_format_hint")}
+                    </Typography.Text>
+                  ) : null}
+                </label>
+                {!syncTitleWithKey ? (
+                  <label className="agent-flow-output-contract-editor__cell">
+                    <span>{i18nText("agentFlow", "auto.display_name")}</span>
+                    <Input
+                      aria-label={i18nText("agentFlow", "auto.output_display_name", { value1: index + 1 })}
+                      value={output.title}
+                      onChange={(event) =>
+                        emitChange(
+                          value.map((candidate, candidateIndex) =>
+                            candidateIndex === index
+                              ? { ...candidate, title: event.target.value }
+                              : candidate
+                          )
+                        )
+                      }
+                    />
+                  </label>
+                ) : null}
+                <label className="agent-flow-output-contract-editor__cell">
+                  <span>{i18nText("agentFlow", "auto.type")}</span>
+                  <Select
+                    aria-label={i18nText("agentFlow", "auto.output_type", { value1: index + 1 })}
+                    options={valueTypeOptions}
+                    value={output.valueType}
+                    onChange={(valueType) =>
+                      emitChange(
+                        value.map((candidate, candidateIndex) =>
+                          candidateIndex === index
+                            ? {
+                                ...candidate,
+                                valueType,
+                                jsonSchema: outputTypeSupportsJsonSchema(valueType)
+                                  ? candidate.jsonSchema
+                                  : undefined
+                              }
+                            : candidate
+                        )
                       )
-                    )
-                  }
-                />
-              </label>
-              <label className="agent-flow-output-contract-editor__cell">
-                <span>{i18nText("agentFlow", "auto.type")}</span>
-                <Select
-                  aria-label={i18nText("agentFlow", "auto.output_type", { value1: index + 1 })}
-                  options={valueTypeOptions}
-                  value={output.valueType}
-                  onChange={(valueType) =>
-                    onChange(
-                      value.map((candidate, candidateIndex) =>
-                        candidateIndex === index
-                          ? {
-                              ...candidate,
-                              valueType,
-                              jsonSchema: outputTypeSupportsJsonSchema(valueType)
-                                ? candidate.jsonSchema
-                                : undefined
-                            }
-                          : candidate
-                      )
-                    )
-                  }
-                />
-              </label>
-              {outputTypeSupportsJsonSchema(output.valueType) ? (
+                    }
+                  />
+                </label>
+                {outputTypeSupportsJsonSchema(output.valueType) ? (
+                  <Button
+                    aria-label="编辑 JSON Schema"
+                    className="agent-flow-output-contract-editor__schema"
+                    size="small"
+                    type={output.jsonSchema ? 'primary' : 'default'}
+                    onClick={() => openSchemaEditor(index)}
+                  >
+                    Schema
+                  </Button>
+                ) : null}
                 <Button
-                  aria-label="编辑 JSON Schema"
-                  className="agent-flow-output-contract-editor__schema"
+                  aria-label={i18nText("agentFlow", "auto.delete_output_variable", { value1: output.key || index + 1 })}
+                  className="agent-flow-output-contract-editor__delete"
+                  danger
+                  icon={<DeleteOutlined />}
                   size="small"
-                  type={output.jsonSchema ? 'primary' : 'default'}
-                  onClick={() => openSchemaEditor(index)}
-                >
-                  Schema
-                </Button>
-              ) : null}
-              <Button
-                aria-label={i18nText("agentFlow", "auto.delete_output_variable", { value1: output.key || index + 1 })}
-                className="agent-flow-output-contract-editor__delete"
-                danger
-                icon={<DeleteOutlined />}
-                size="small"
-                type="text"
-                onClick={() =>
-                  onChange(
-                    value.filter((_, outputIndex) => outputIndex !== index)
-                  )
-                }
-              />
-            </div>
-          ))}
+                  type="text"
+                  onClick={() =>
+                    emitChange(
+                      value.filter((_, outputIndex) => outputIndex !== index)
+                    )
+                  }
+                />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <Empty

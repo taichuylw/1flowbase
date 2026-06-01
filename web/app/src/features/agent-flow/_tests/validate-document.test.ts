@@ -233,6 +233,50 @@ describe('validateDocument', () => {
     );
   });
 
+  test('flags Code output names with unsupported characters', () => {
+    const document = createCodeDocumentWithOutputs([
+      {
+        key: 'risk-score',
+        title: 'risk-score',
+        valueType: 'number'
+      }
+    ]);
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'config.output_contract',
+          title: '输出变量名格式错误'
+        })
+      ])
+    );
+  });
+
+  test('flags Code output display name drift', () => {
+    const document = createCodeDocumentWithOutputs([
+      {
+        key: 'riskScore',
+        title: 'Risk Score',
+        valueType: 'number'
+      }
+    ]);
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'config.output_contract',
+          title: '输出变量名与显示名不一致'
+        })
+      ])
+    );
+  });
+
   test('accepts runtime fields when the node contract declares them as output selectors', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');

@@ -19,6 +19,7 @@ import type {
 } from './node-definitions';
 import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { outputTypeSupportsJsonSchema } from './output-contract/schema';
+import { isOutputVariableKeyAllowed } from './output-contract/variable-key';
 import { hasPluginContributionRef } from './plugin-node-definitions';
 import { isSelectorVisible } from './selector-options';
 import { parseTemplateSelectorTokens } from './template-binding';
@@ -681,6 +682,29 @@ export function validateDocument(
           i18nText("agentFlow", "auto.variable_names_output_contract_system_reserved_fields_use_business_field")
         );
         continue;
+      }
+
+      if (
+        node.type === 'code' &&
+        !isOutputVariableKeyAllowed(outputKey)
+      ) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          i18nText("agentFlow", "auto.output_variable_name_format_invalid"),
+          i18nText("agentFlow", "auto.output_variable_name_format_message")
+        );
+      }
+
+      if (node.type === 'code' && output.title.trim() !== outputKey) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          i18nText("agentFlow", "auto.output_variable_title_mismatch"),
+          i18nText("agentFlow", "auto.code_output_variable_title_must_match_name")
+        );
       }
 
       if (allowedPublicOutputKeys && !allowedPublicOutputKeys.has(outputKey)) {

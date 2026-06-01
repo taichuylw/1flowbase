@@ -432,9 +432,11 @@ function renderOutputContractDefinitionField({
   const outputs = Array.isArray(value)
     ? (value as FlowNodeDocument['outputs'])
     : [];
+  const node = adapter.getDerived('node') as FlowNodeDocument | undefined;
 
   return (
     <OutputContractDefinitionField
+      syncTitleWithKey={node?.type === 'code'}
       value={outputs}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
     />

@@ -738,24 +738,24 @@ describe('NodeInspector', () => {
 
     expect(codeEditor).toHaveValue('return { riskScore: 0.82 };');
     expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
-    expect(screen.getByLabelText('输出显示名 1')).toHaveValue('Risk Score');
+    expect(screen.queryByLabelText('输出显示名 1')).not.toBeInTheDocument();
 
     fireEvent.change(codeEditor, {
-      target: { value: 'return { riskScore: inputs.score };' }
+      target: { value: 'return { risk_score: inputs.score };' }
     });
-    fireEvent.change(screen.getByLabelText('输出显示名 1'), {
-      target: { value: 'Risk score' }
+    fireEvent.change(screen.getByLabelText('输出变量名 1'), {
+      target: { value: 'risk_score' }
     });
 
     await waitFor(() => {
       expect(getCodeNode(latestDocument).config).toMatchObject({
         language: 'javascript',
-        source: 'return { riskScore: inputs.score };'
+        source: 'return { risk_score: inputs.score };'
       });
       expect(getCodeNode(latestDocument).outputs).toEqual([
         {
-          key: 'riskScore',
-          title: 'Risk score',
+          key: 'risk_score',
+          title: 'risk_score',
           valueType: 'number'
         }
       ]);
