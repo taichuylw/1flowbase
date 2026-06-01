@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 use crate::{
     code_executor_capability::select_code_executor,
     compiled_plan::{CompiledCodeDependency, CompiledCodeRuntime, CompiledNode},
+    output_schema::validate_output_value,
     payload_builder::{
         is_reserved_payload_key, BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult,
     },
@@ -715,6 +716,28 @@ where
     {
         Ok(output) => {
             let debug_facts = code_runtime_debug_facts(&output.console_logs)?;
+            if let Err(error) = validate_code_output_contract(node, &output.output_payload) {
+                let raw = RawNodeExecutionResult {
+                    executor_output: Map::new(),
+                    metrics_facts: code_runtime_metrics(runtime, true)?,
+                    error_facts: object_from_value(json!({
+                        "error_code": "code_output_contract_error",
+                        "error_kind": "code_output_contract_error",
+                        "message": "code output contract validation failed",
+                        "runtime_message": error.to_string(),
+                    }))?,
+                    debug_facts,
+                    provider_events: Vec::new(),
+                };
+                let built = build_code_node_payloads(node, raw)?;
+
+                return Ok(CodeNodeExecution {
+                    output_payload: built.output_payload,
+                    error_payload: Some(built.error_payload),
+                    metrics_payload: built.metrics_payload,
+                    debug_payload: built.debug_payload,
+                });
+            }
             let raw = RawNodeExecutionResult {
                 executor_output: object_from_value(output.output_payload)?,
                 metrics_facts: code_runtime_metrics(runtime, false)?,
@@ -758,6 +781,39 @@ where
             })
         }
     }
+}
+
+fn validate_code_output_contract(node: &CompiledNode, output_payload: &Value) -> Result<()> {
+    let payload = output_payload
+        .as_object()
+        .ok_or_else(|| anyhow!("code node output payload must be an object"))?;
+
+    for output in &node.outputs {
+        let selector = if output.selector.is_empty() {
+            vec![output.key.clone()]
+        } else {
+            output.selector.clone()
+        };
+        if let Some(value) = read_output_selector(payload, &selector) {
+            validate_output_value(output, value)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn read_output_selector<'a>(
+    output_payload: &'a Map<String, Value>,
+    selector: &[String],
+) -> Option<&'a Value> {
+    let (first, rest) = selector.split_first()?;
+    let mut current = output_payload.get(first)?;
+
+    for segment in rest {
+        current = current.as_object()?.get(segment)?;
+    }
+
+    Some(current)
 }
 
 fn code_runtime_debug_facts(console_logs: &[ConsoleLogEntry]) -> Result<Map<String, Value>> {

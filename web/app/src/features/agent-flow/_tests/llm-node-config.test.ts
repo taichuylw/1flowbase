@@ -68,11 +68,13 @@ describe('llm-node-config', () => {
     expect(
       getLlmContextPolicy({
         context_policy: {
-          integration_context: 'disabled'
+          integration_context: 'disabled',
+          context_selector: ['node-code', 'chat_history']
         }
       })
     ).toEqual({
-      integration_context: 'disabled'
+      integration_context: 'disabled',
+      context_selector: ['node-code', 'chat_history']
     });
   });
 

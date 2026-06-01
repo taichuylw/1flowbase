@@ -37,7 +37,12 @@ import {
   getLlmContextPolicy,
   getLlmExternalReasoningPolicy
 } from '../lib/llm-node-config';
-import type { FlowSelectorOption } from '../lib/selector-options';
+import {
+  encodeSelectorValue,
+  decodeSelectorValue,
+  type FlowSelectorOption
+} from '../lib/selector-options';
+import { outputHasLlmContextSchema } from '../lib/output-contract/schema';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
@@ -219,17 +224,44 @@ function renderLlmContextPolicyField({
   const contextPolicy = getLlmContextPolicy({
     context_policy: adapter.getValue(block.path)
   });
+  const contextOptions = getSelectorOptions(adapter).filter((option) =>
+    outputHasLlmContextSchema(option)
+  );
+  const selectedSelector =
+    contextPolicy.context_selector ?? contextOptions[0]?.value ?? [];
+  const selectedValue =
+    selectedSelector.length > 0 ? encodeSelectorValue(selectedSelector) : undefined;
 
   return (
-    <Switch
-      aria-label={block.label}
-      checked={contextPolicy.integration_context === 'enabled'}
-      onChange={(checked) =>
-        adapter.setValue(block.path, {
-          integration_context: checked ? 'enabled' : 'disabled'
-        })
-      }
-    />
+    <div className="agent-flow-node-detail__context-policy">
+      <Select
+        aria-label="上下文变量"
+        className="agent-flow-node-detail__context-select"
+        disabled={contextPolicy.integration_context === 'disabled'}
+        options={contextOptions.map((option) => ({
+          label: option.displayLabel,
+          value: encodeSelectorValue(option.value)
+        }))}
+        placeholder="选择上下文变量"
+        value={selectedValue}
+        onChange={(nextValue) =>
+          adapter.setValue(block.path, {
+            integration_context: contextPolicy.integration_context,
+            context_selector: decodeSelectorValue(nextValue)
+          })
+        }
+      />
+      <Switch
+        aria-label={block.label}
+        checked={contextPolicy.integration_context === 'enabled'}
+        onChange={(checked) =>
+          adapter.setValue(block.path, {
+            integration_context: checked ? 'enabled' : 'disabled',
+            context_selector: selectedSelector
+          })
+        }
+      />
+    </div>
   );
 }
 

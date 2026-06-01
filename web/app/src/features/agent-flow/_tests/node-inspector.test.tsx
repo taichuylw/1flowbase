@@ -137,6 +137,38 @@ function createInitialStateWithCustomCodeNode() {
   return state;
 }
 
+function createInitialStateWithStructuredCodeNode() {
+  const state = createInitialStateWithCodeNode();
+  const codeNode = state.draft.document.graph.nodes.find(
+    (node) => node.id === 'node-code'
+  );
+
+  if (!codeNode) {
+    throw new Error('expected code node');
+  }
+
+  codeNode.outputs = [
+    {
+      key: 'chat_history',
+      title: 'Chat History',
+      valueType: 'array',
+      jsonSchema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['role', 'content'],
+          properties: {
+            role: { type: 'string' },
+            content: { type: 'string' }
+          }
+        }
+      }
+    }
+  ];
+
+  return state;
+}
+
 function createInitialStateWithLoopNode() {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
@@ -728,6 +760,22 @@ describe('NodeInspector', () => {
         }
       ]);
     });
+  });
+
+  test('renders JSON schema controls for structured code outputs', async () => {
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider
+        initialState={createInitialStateWithStructuredCodeNode()}
+      >
+        <SelectionSeed nodeId="node-code" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByLabelText('输出变量名 1')).toHaveValue(
+      'chat_history'
+    );
+    expect(screen.getByRole('button', { name: '编辑 JSON Schema' })).toBeInTheDocument();
   });
 
   test('renders loop number fields in compact inline rows while keeping condition groups stacked', () => {

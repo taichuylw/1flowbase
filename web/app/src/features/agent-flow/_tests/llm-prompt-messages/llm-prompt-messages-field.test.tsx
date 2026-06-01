@@ -130,7 +130,7 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    expect(await screen.findByText('上下文')).toBeInTheDocument();
+    expect(await screen.findAllByText('上下文')).not.toHaveLength(0);
     expect(screen.getByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
     expect(screen.getByLabelText('USER 消息内容')).toBeInTheDocument();
     expect(promptMessagesFrom(latestDocument)[1]?.content.value).toBe(
@@ -373,14 +373,16 @@ describe('LLM prompt messages field', () => {
     );
 
     const switchControl = await screen.findByRole('switch', {
-      name: '继承上下文'
+      name: '上下文'
     });
     expect(switchControl).toBeChecked();
+    expect(screen.getByRole('combobox', { name: '上下文变量' })).toBeInTheDocument();
 
     fireEvent.click(switchControl);
 
     expect(llmNodeFrom(latestDocument).config.context_policy).toEqual({
-      integration_context: 'disabled'
+      integration_context: 'disabled',
+      context_selector: ['node-start', 'history']
     });
   });
 
@@ -392,9 +394,7 @@ describe('LLM prompt messages field', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    await screen.findByRole('switch', {
-      name: '继承上下文'
-    });
+    await screen.findByRole('switch', { name: '上下文' });
 
     const contextRow = screen.getByTestId(
       'inspector-field-config.context_policy'
@@ -403,8 +403,10 @@ describe('LLM prompt messages field', () => {
     expect(contextRow).toHaveClass(
       'agent-flow-editor__inspector-field--policy'
     );
-    expect(within(contextRow).getByText('继承上下文')).toBeInTheDocument();
-    expect(within(contextRow).getByText('history')).toBeInTheDocument();
+    expect(within(contextRow).getByText('上下文')).toBeInTheDocument();
+    expect(
+      within(contextRow).getByRole('combobox', { name: '上下文变量' })
+    ).toBeInTheDocument();
     expect(
       screen.getByLabelText('将传入上下文注入当前LLM节点中')
     ).toBeInTheDocument();

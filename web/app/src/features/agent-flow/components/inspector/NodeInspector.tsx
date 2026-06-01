@@ -49,8 +49,8 @@ function isPolicyFieldRenderer(renderer: string) {
   );
 }
 
-function getFieldLabelTag(renderer: string) {
-  return renderer === 'llm_context_policy' ? 'history' : null;
+function getFieldLabelTag(_renderer: string) {
+  return null;
 }
 
 function getFieldHelp(renderer: string) {

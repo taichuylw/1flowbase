@@ -16,7 +16,8 @@ describe('LLM node defaults', () => {
     const node = createNodeDocument('llm', 'node-llm-2');
 
     expect(node.config.context_policy).toEqual({
-      integration_context: 'enabled'
+      integration_context: 'enabled',
+      context_selector: ['node-start', 'history']
     });
     expect(node.bindings.prompt_messages).toEqual({
       kind: 'prompt_messages',

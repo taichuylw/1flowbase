@@ -10,6 +10,7 @@ import {
   formatEnvironmentVariableTitle,
   type AgentFlowEnvironmentVariable
 } from './application-environment-variables';
+import { outputHasLlmContextSchema } from './output-contract/schema';
 import { formatNodeVariableLabel } from './variable-labels';
 import { i18nText } from '../../../shared/i18n/text';
 
@@ -18,6 +19,8 @@ export interface FlowSelectorOption {
   nodeLabel: string;
   outputKey: string;
   outputLabel: string;
+  valueType: string;
+  jsonSchema?: Record<string, unknown>;
   value: string[];
   displayLabel: string;
 }
@@ -60,6 +63,8 @@ export function listVisibleSelectorOptions(
     nodeLabel: i18nText("agentFlow", "auto.system_variables"),
     outputKey: variable.key,
     outputLabel: variable.title,
+    valueType: variable.valueType,
+    jsonSchema: variable.jsonSchema,
     value: [systemVariableNodeId, variable.key],
     displayLabel: variable.title
   }));
@@ -68,6 +73,7 @@ export function listVisibleSelectorOptions(
     nodeLabel: i18nText("agentFlow", "auto.environment_variables"),
     outputKey: variable.name,
     outputLabel: formatEnvironmentVariableTitle(variable.name),
+    valueType: variable.value_type,
     value: [environmentVariableNodeId, variable.name],
     displayLabel: formatEnvironmentVariableTitle(variable.name)
   }));
@@ -80,12 +86,24 @@ export function listVisibleSelectorOptions(
         nodeLabel: node.alias,
         outputKey: output.key,
         outputLabel: output.key,
+        valueType: output.valueType,
+        jsonSchema: output.jsonSchema,
         value: [node.id, output.key],
         displayLabel: formatNodeVariableLabel(node.alias, output.key)
       }))
     );
 
   return [...systemOptions, ...environmentOptions, ...nodeOptions];
+}
+
+export function listLlmContextSelectorOptions(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  environmentVariables: AgentFlowEnvironmentVariable[] = []
+) {
+  return listVisibleSelectorOptions(document, nodeId, environmentVariables).filter(
+    (option) => outputHasLlmContextSchema(option)
+  );
 }
 
 export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {

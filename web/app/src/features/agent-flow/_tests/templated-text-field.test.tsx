@@ -97,6 +97,7 @@ const startQueryOption: FlowSelectorOption = {
   nodeLabel: 'Start',
   outputKey: 'query',
   outputLabel: 'query',
+  valueType: 'string',
   value: ['node-start', 'query'],
   displayLabel: 'Start/query'
 };
@@ -106,6 +107,7 @@ const answerOption: FlowSelectorOption = {
   nodeLabel: 'Answer',
   outputKey: 'answer',
   outputLabel: 'answer',
+  valueType: 'string',
   value: ['node-answer', 'answer'],
   displayLabel: 'Answer/answer'
 };

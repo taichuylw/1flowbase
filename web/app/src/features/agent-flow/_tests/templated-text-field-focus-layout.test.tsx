@@ -12,6 +12,7 @@ const startQueryOption: FlowSelectorOption = {
   nodeLabel: 'Start',
   outputKey: 'query',
   outputLabel: 'query',
+  valueType: 'string',
   value: ['node-start', 'query'],
   displayLabel: 'Start/query'
 };

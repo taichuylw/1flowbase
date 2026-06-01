@@ -1,13 +1,19 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Empty, Input, Select, Typography } from 'antd';
+import { Button, Empty, Input, Modal, Select, Space, Typography } from 'antd';
+import { useState } from 'react';
 
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
+import {
+  outputTypeSupportsJsonSchema,
+  parseJsonSchemaInput
+} from '../../../lib/output-contract/schema';
 import { i18nText } from '../../../../../shared/i18n/text';
 
 const valueTypeOptions = [
   { value: 'string', label: 'String' },
   { value: 'number', label: 'Number' },
   { value: 'boolean', label: 'Boolean' },
+  { value: 'object', label: 'Object' },
   { value: 'array', label: 'Array' },
   { value: 'json', label: 'JSON' },
   { value: 'unknown', label: 'Unknown' }
@@ -33,6 +39,56 @@ export function OutputContractDefinitionField({
   value: FlowNodeDocument['outputs'];
   onChange: (value: FlowNodeDocument['outputs']) => void;
 }) {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [schemaText, setSchemaText] = useState('');
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+  const editingOutput =
+    editingIndex === null ? null : value[editingIndex] ?? null;
+
+  function openSchemaEditor(index: number) {
+    const output = value[index];
+    setEditingIndex(index);
+    setSchemaText(JSON.stringify(output?.jsonSchema ?? {}, null, 2));
+    setSchemaError(null);
+  }
+
+  function closeSchemaEditor() {
+    setEditingIndex(null);
+    setSchemaText('');
+    setSchemaError(null);
+  }
+
+  function saveSchema() {
+    if (editingIndex === null) {
+      return;
+    }
+
+    const parsed = parseJsonSchemaInput(schemaText);
+    if (!parsed.ok) {
+      setSchemaError(parsed.message);
+      return;
+    }
+
+    const nextType = parsed.schema.type;
+    onChange(
+      value.map((candidate, candidateIndex) => {
+        if (candidateIndex !== editingIndex) {
+          return candidate;
+        }
+
+        return {
+          ...candidate,
+          valueType:
+            nextType === 'object' || nextType === 'array'
+              ? nextType
+              : candidate.valueType,
+          jsonSchema: parsed.schema
+        };
+      })
+    );
+    closeSchemaEditor();
+  }
+
   return (
     <div className="agent-flow-output-contract-editor">
       <div className="agent-flow-output-contract-editor__header">
@@ -95,13 +151,30 @@ export function OutputContractDefinitionField({
                     onChange(
                       value.map((candidate, candidateIndex) =>
                         candidateIndex === index
-                          ? { ...candidate, valueType }
+                          ? {
+                              ...candidate,
+                              valueType,
+                              jsonSchema: outputTypeSupportsJsonSchema(valueType)
+                                ? candidate.jsonSchema
+                                : undefined
+                            }
                           : candidate
                       )
                     )
                   }
                 />
               </label>
+              {outputTypeSupportsJsonSchema(output.valueType) ? (
+                <Button
+                  aria-label="编辑 JSON Schema"
+                  className="agent-flow-output-contract-editor__schema"
+                  size="small"
+                  type={output.jsonSchema ? 'primary' : 'default'}
+                  onClick={() => openSchemaEditor(index)}
+                >
+                  Schema
+                </Button>
+              ) : null}
               <Button
                 aria-label={i18nText("agentFlow", "auto.delete_output_variable", { value1: output.key || index + 1 })}
                 className="agent-flow-output-contract-editor__delete"
@@ -124,6 +197,29 @@ export function OutputContractDefinitionField({
           description={i18nText("agentFlow", "auto.output_variables_yet")}
         />
       )}
+      <Modal
+        destroyOnHidden
+        okText="保存"
+        open={editingOutput !== null}
+        title="JSON Schema"
+        onCancel={closeSchemaEditor}
+        onOk={saveSchema}
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Input.TextArea
+            aria-label="JSON Schema"
+            autoSize={{ minRows: 10, maxRows: 18 }}
+            value={schemaText}
+            onChange={(event) => {
+              setSchemaText(event.target.value);
+              setSchemaError(null);
+            }}
+          />
+          <Typography.Text type={schemaError ? 'danger' : 'secondary'}>
+            {schemaError ?? '支持识别 JSON、JSON Schema 等描述协议'}
+          </Typography.Text>
+        </Space>
+      </Modal>
     </div>
   );
 }

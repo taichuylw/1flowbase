@@ -10,6 +10,7 @@ import {
 } from '@1flowbase/flow-schema';
 
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
+import { LLM_CONTEXT_MESSAGES_JSON_SCHEMA } from './output-contract/schema';
 import { i18nText } from '../../../shared/i18n/text';
 
 export const startInputTypeOptions = [
@@ -79,7 +80,8 @@ export const startSystemVariables = [
   {
     key: 'history',
     title: 'userinput.history',
-    valueType: 'array[object]'
+    valueType: 'array',
+    jsonSchema: LLM_CONTEXT_MESSAGES_JSON_SCHEMA
   },
   {
     key: 'files',
@@ -225,6 +227,10 @@ export function getNodeVariableOutputs(
 
   if (node.type === 'llm') {
     return getLlmNodeOutputs(node.config);
+  }
+
+  if (node.type === 'code') {
+    return node.outputs.filter((output) => isValidPublicOutputKey(output.key));
   }
 
   if (node.type === 'plugin_node') {

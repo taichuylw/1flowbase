@@ -18,6 +18,7 @@ import type {
   NodeDefinitionField
 } from './node-definitions';
 import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
+import { outputTypeSupportsJsonSchema } from './output-contract/schema';
 import { hasPluginContributionRef } from './plugin-node-definitions';
 import { isSelectorVisible } from './selector-options';
 import { parseTemplateSelectorTokens } from './template-binding';
@@ -643,6 +644,7 @@ export function validateDocument(
 
     for (const output of node.outputs) {
       const outputKey = output.key.trim();
+      const outputValueType = output.valueType.trim();
 
       if (outputKey.length === 0) {
         pushFieldIssue(
@@ -688,6 +690,19 @@ export function validateDocument(
           'config.output_contract',
           i18nText("agentFlow", "auto.output_variable_name_unknown"),
           i18nText("agentFlow", "auto.variable_name_output_contract_belong_node_runtime_contract")
+        );
+      }
+
+      if (
+        output.jsonSchema !== undefined &&
+        !outputTypeSupportsJsonSchema(outputValueType)
+      ) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          'JSON Schema 类型不匹配',
+          '只有 Object 和 Array 输出变量可以启用 JSON Schema 校验。'
         );
       }
     }

@@ -7,7 +7,7 @@ export interface AgentFlowSystemVariable extends FlowNodeOutputDocument {
 
 export const systemVariableNodeId = 'sys';
 
-export const agentFlowSystemVariables = [
+export const agentFlowSystemVariables: AgentFlowSystemVariable[] = [
   {
     key: 'conversation_id',
     title: 'sys.conversation_id',
@@ -50,4 +50,4 @@ export const agentFlowSystemVariables = [
     valueType: 'json',
     description: i18nText('agentFlow', 'auto.system_variable_model_parameters')
   }
-] satisfies AgentFlowSystemVariable[];
+];

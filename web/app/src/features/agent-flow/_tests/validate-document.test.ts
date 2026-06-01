@@ -15,7 +15,15 @@ function createCodeDocumentWithOutputs(
   outputs: Array<{
     key: string;
     title: string;
-    valueType: 'string' | 'number' | 'boolean' | 'array' | 'json' | 'unknown';
+    valueType:
+      | 'string'
+      | 'number'
+      | 'boolean'
+      | 'object'
+      | 'array'
+      | 'json'
+      | 'unknown';
+    jsonSchema?: Record<string, unknown>;
   }>
 ) {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -197,6 +205,29 @@ describe('validateDocument', () => {
           nodeId: 'node-llm',
           fieldKey: 'config.output_contract',
           title: '输出变量名未知'
+        })
+      ])
+    );
+  });
+
+  test('flags JSON Schema on non structured output types', () => {
+    const document = createCodeDocumentWithOutputs([
+      {
+        key: 'summary',
+        title: 'Summary',
+        valueType: 'string',
+        jsonSchema: { type: 'string' }
+      }
+    ]);
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'config.output_contract',
+          title: 'JSON Schema 类型不匹配'
         })
       ])
     );

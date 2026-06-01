@@ -78,6 +78,7 @@ export interface FlowNodeOutputDocument {
   valueType: string;
   description?: string;
   selector?: string[];
+  jsonSchema?: Record<string, unknown>;
 }
 
 export type PublicOutputKeyValidationResult =
@@ -438,7 +439,8 @@ export function createDefaultAgentFlowDocument({
               items: {}
             },
             context_policy: {
-              integration_context: 'enabled'
+              integration_context: 'enabled',
+              context_selector: ['node-start', 'history']
             },
             external_reasoning_policy: {
               follow_external_reasoning: false

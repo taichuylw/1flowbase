@@ -61,6 +61,7 @@ fn plugin_compile_context() -> FlowCompileContext {
                 title: "回答".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             side_effect_policy: "external_read".to_string(),
             dependency_status: "ready".to_string(),
@@ -764,6 +765,47 @@ fn compile_outputs_preserve_declared_selector_paths() {
 }
 
 #[test]
+fn compile_outputs_preserve_declared_json_schema() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["outputs"] = json!([
+        {
+            "key": "chat_history",
+            "title": "Chat History",
+            "valueType": "array",
+            "jsonSchema": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["role", "content"],
+                    "properties": {
+                        "role": { "type": "string" },
+                        "content": { "type": "string" }
+                    }
+                }
+            }
+        }
+    ]);
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(
+        plan.nodes["node-llm"].outputs[0].json_schema,
+        Some(json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["role", "content"],
+                "properties": {
+                    "role": { "type": "string" },
+                    "content": { "type": "string" }
+                }
+            }
+        }))
+    );
+}
+
+#[test]
 fn compile_rejects_unsupported_flow_schema_version() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
@@ -817,7 +859,8 @@ fn compile_llm_node_carries_context_policy_into_routing() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["config"]["context_policy"] = json!({
-        "integration_context": "enabled"
+        "integration_context": "enabled",
+        "context_selector": ["node-start", "history"]
     });
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
@@ -829,8 +872,42 @@ fn compile_llm_node_carries_context_policy_into_routing() {
 
     assert_eq!(
         routing.context_policy,
-        json!({ "integration_context": "enabled" })
+        json!({ "integration_context": "enabled", "context_selector": ["node-start", "history"] })
     );
+}
+
+#[test]
+fn compile_reports_invalid_llm_context_selector() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["context_policy"] = json!({
+        "integration_context": "enabled",
+        "context_selector": ["node-start", "missing_history"]
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context())
+        .expect("document should compile with context selector issue");
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-llm" && issue.code == CompileIssueCode::InvalidLlmContextSelector
+    }));
+}
+
+#[test]
+fn compile_reports_incompatible_llm_context_schema() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["context_policy"] = json!({
+        "integration_context": "enabled",
+        "context_selector": ["node-llm", "text"]
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context())
+        .expect("document should compile with context schema issue");
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-llm" && issue.code == CompileIssueCode::IncompatibleLlmContextSchema
+    }));
 }
 
 #[test]

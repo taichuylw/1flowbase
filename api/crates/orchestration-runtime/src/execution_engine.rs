@@ -26,6 +26,7 @@ use crate::{
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
     },
     node_errors::build_node_type_not_implemented_error_payload,
+    output_schema::value_is_llm_context_messages,
     payload_builder::{
         is_reserved_payload_key, BuiltNodePayloads, PublicOutputContract, RawNodeExecutionResult,
     },
@@ -574,14 +575,38 @@ where
     let mut failed_attempts = Vec::new();
 
     for (attempt_index, attempt_runtime) in attempt_runtimes.iter().enumerate() {
-        let invocation = build_provider_invocation(
+        let invocation = match build_provider_invocation(
             node,
             attempt_runtime,
             resolved_inputs,
             rendered_templates,
             variable_pool,
             runtime_context,
-        );
+        ) {
+            Ok(invocation) => invocation,
+            Err(error_payload) => {
+                return build_failed_llm_execution(
+                    node,
+                    attempt_runtime,
+                    error_payload,
+                    build_llm_metrics_payload(
+                        attempt_runtime,
+                        ProviderUsage::default(),
+                        Some(ProviderFinishReason::Error),
+                        0,
+                        attempt_metrics,
+                        None,
+                        None,
+                    ),
+                    Vec::new(),
+                    true,
+                    LlmDebugInvocation {
+                        messages: &[],
+                        context: None,
+                    },
+                );
+            }
+        };
         let invocation_messages = build_llm_debug_invocation_messages(
             node,
             resolved_inputs,
@@ -1106,21 +1131,23 @@ fn build_provider_invocation(
     rendered_templates: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
-) -> BuiltProviderInvocation {
+) -> Result<BuiltProviderInvocation, Value> {
     let previous_response_id =
         pending_llm_tool_callback_previous_response_id(node, runtime, variable_pool);
     let context_policy = llm_context_policy(node, runtime);
     let provider_context = if previous_response_id.is_some() {
-        let prompt_messages = pending_llm_tool_callback_delta_messages(node, variable_pool)
-            .unwrap_or_else(|| {
+        let prompt_messages =
+            if let Some(messages) = pending_llm_tool_callback_delta_messages(node, variable_pool) {
+                messages
+            } else {
                 binding_prompt_messages_with_context_sources(
                     node,
                     rendered_templates,
                     resolved_inputs,
                     variable_pool,
                     &context_policy,
-                )
-            });
+                )?
+            };
         let mut context = provider_context_from_prompt_messages(prompt_messages);
         if context.system.is_none() {
             if let Some(system) = pending_llm_tool_callback_system(node, variable_pool) {
@@ -1140,7 +1167,7 @@ fn build_provider_invocation(
             resolved_inputs,
             variable_pool,
             &context_policy,
-        ))
+        )?)
     };
 
     let trace_context = BTreeMap::from([
@@ -1179,10 +1206,10 @@ fn build_provider_invocation(
         )]),
     };
 
-    BuiltProviderInvocation {
+    Ok(BuiltProviderInvocation {
         input,
         debug_context,
-    }
+    })
 }
 
 fn prompt_messages_from_provider_messages(messages: &[ProviderMessage]) -> Vec<Value> {
@@ -1750,13 +1777,13 @@ fn binding_prompt_messages_with_context_sources(
     resolved_inputs: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
     context_policy: &Value,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, Value> {
     if let Some(history) = pending_llm_tool_callback_history(node, variable_pool) {
-        return annotate_prompt_messages(
+        return Ok(annotate_prompt_messages(
             history,
             "pending_tool_callback_history",
             format!("{}.{}", node.node_id, LLM_TOOL_CALLBACK_STATE_KEY),
-        );
+        ));
     }
 
     let mut messages = Vec::new();
@@ -1766,18 +1793,106 @@ fn binding_prompt_messages_with_context_sources(
             resolved_inputs,
             variable_pool,
         ));
+        messages.extend(selected_context_messages_with_sources(
+            node,
+            variable_pool,
+            context_policy,
+        )?);
+        if !context_policy_has_selector(context_policy) {
+            messages.extend(compatible_history_messages_with_context_sources(
+                node,
+                resolved_inputs,
+                variable_pool,
+            ));
+        }
     }
-    messages.extend(compatible_history_messages_with_context_sources(
-        node,
-        resolved_inputs,
-        variable_pool,
-    ));
     messages.extend(annotate_prompt_messages(
         prompt_messages_from_bindings(Some(rendered_templates), resolved_inputs),
         "node_prompt",
         "bindings.prompt_messages".to_string(),
     ));
-    messages
+    Ok(messages)
+}
+
+fn context_policy_has_selector(context_policy: &Value) -> bool {
+    context_policy
+        .get("context_selector")
+        .and_then(Value::as_array)
+        .is_some_and(|selector| selector.len() >= 2)
+}
+
+fn selected_context_messages_with_sources(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+    context_policy: &Value,
+) -> Result<Vec<Value>, Value> {
+    let Some(selector) = context_policy
+        .get("context_selector")
+        .and_then(Value::as_array)
+        .map(|selector| {
+            selector
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter(|selector| selector.len() >= 2)
+    else {
+        return Ok(Vec::new());
+    };
+
+    let Some(value) = read_variable_pool_selector(variable_pool, &selector) else {
+        return Err(build_llm_context_selector_error_payload(
+            node,
+            &selector,
+            "selector path not found",
+        ));
+    };
+
+    if !value_is_llm_context_messages(value) {
+        return Err(build_llm_context_selector_error_payload(
+            node,
+            &selector,
+            "selector value must be an array of messages with role and content",
+        ));
+    }
+
+    Ok(annotate_prompt_messages(
+        value.as_array().cloned().unwrap_or_default(),
+        "context_selector",
+        selector.join("."),
+    ))
+}
+
+fn read_variable_pool_selector<'a>(
+    variable_pool: &'a Map<String, Value>,
+    selector: &[String],
+) -> Option<&'a Value> {
+    let (first, rest) = selector.split_first()?;
+    let mut current = variable_pool.get(first)?;
+
+    for segment in rest {
+        current = current.as_object()?.get(segment)?;
+    }
+
+    Some(current)
+}
+
+fn build_llm_context_selector_error_payload(
+    node: &CompiledNode,
+    selector: &[String],
+    message: &str,
+) -> Value {
+    json!({
+        "error_code": "llm_context_selector_error",
+        "error_kind": "llm_context_selector_error",
+        "message": "LLM context selector validation failed",
+        "runtime_message": format!(
+            "node {} context_selector {}: {message}",
+            node.node_id,
+            selector.join(".")
+        ),
+    })
 }
 
 fn run_level_system_prompt_messages(

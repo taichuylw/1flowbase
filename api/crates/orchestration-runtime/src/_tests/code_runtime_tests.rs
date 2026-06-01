@@ -130,6 +130,7 @@ fn code_runtime_plan() -> CompiledPlan {
                 title: "Query".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -159,6 +160,7 @@ fn code_runtime_plan() -> CompiledPlan {
                 title: "Result".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({
                 "language": "javascript",
@@ -202,6 +204,7 @@ fn code_runtime_plan() -> CompiledPlan {
                 title: "Answer".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -275,6 +278,7 @@ fn code_node_with_runtime(runtime: CompiledCodeRuntime) -> CompiledNode {
             title: "Result".to_string(),
             value_type: "json".to_string(),
             selector: Vec::new(),
+            json_schema: None,
         }],
         config: json!({}),
         plugin_runtime: None,
@@ -839,6 +843,54 @@ async fn code_runtime_missing_declared_output_projects_empty_variable_payload() 
         outcome.node_traces[1].output_payload,
         json!({ "unexpected": true })
     );
+}
+
+#[tokio::test]
+async fn code_runtime_rejects_declared_output_schema_mismatch() {
+    let mut plan = code_runtime_plan();
+    let code = plan
+        .nodes
+        .get_mut("node-code")
+        .expect("code node should exist");
+    code.outputs = vec![CompiledOutput {
+        key: "chat_history".to_string(),
+        title: "Chat History".to_string(),
+        value_type: "array".to_string(),
+        selector: Vec::new(),
+        json_schema: Some(json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["role", "content"],
+                "properties": {
+                    "role": { "type": "string" },
+                    "content": { "type": "string" }
+                }
+            }
+        })),
+    }];
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &CodeFixtureInvoker {
+            output_payload: json!({ "chat_history": [{ "role": "user" }] }),
+            fail_message: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(failure) => {
+            assert_eq!(failure.node_id, "node-code");
+            assert_eq!(
+                failure.error_payload["error_kind"],
+                json!("code_output_contract_error")
+            );
+        }
+        other => panic!("expected code output contract failure, got {other:?}"),
+    }
 }
 
 #[tokio::test]

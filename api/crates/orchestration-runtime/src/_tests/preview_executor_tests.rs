@@ -143,6 +143,7 @@ fn sample_compiled_plan() -> CompiledPlan {
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -255,6 +256,7 @@ async fn preview_executor_code_node_executes_runner() {
             title: "Result".to_string(),
             value_type: "string".to_string(),
             selector: Vec::new(),
+            json_schema: None,
         }];
         node.code_runtime = Some(CompiledCodeRuntime {
             language: "javascript".to_string(),

@@ -10,6 +10,7 @@ use crate::compiled_plan::{
     CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
     LlmRoutingMode,
 };
+use crate::output_schema::{history_messages_schema, output_schema_is_llm_context_messages};
 use crate::payload_builder::PublicOutputContract;
 
 const NODE_CONTRIBUTION_SCHEMA_VERSION: &str = "1flowbase.node-contribution/v2";
@@ -243,7 +244,79 @@ fn build_nodes_and_topology(
         );
     }
 
+    compile_issues.extend(validate_llm_context_policies(&nodes));
+
     Ok((nodes, topological_order, compile_issues))
+}
+
+fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<CompileIssue> {
+    nodes
+        .values()
+        .filter(|node| node.node_type == "llm")
+        .filter_map(|node| {
+            let selector = context_policy_selector(node)?;
+            let Some(output) = output_for_selector(nodes, &selector) else {
+                return Some(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidLlmContextSelector,
+                    message: format!(
+                        "node {} context_selector references unavailable output {}",
+                        node.node_id,
+                        selector.join(".")
+                    ),
+                });
+            };
+
+            (!output_schema_is_llm_context_messages(&output)).then(|| CompileIssue {
+                node_id: node.node_id.clone(),
+                code: CompileIssueCode::IncompatibleLlmContextSchema,
+                message: format!(
+                    "node {} context_selector {} must reference an output with an LLM history-compatible jsonSchema",
+                    node.node_id,
+                    selector.join(".")
+                ),
+            })
+        })
+        .collect()
+}
+
+fn context_policy_selector(node: &CompiledNode) -> Option<Vec<String>> {
+    node.config
+        .get("context_policy")
+        .and_then(|policy| policy.get("context_selector"))
+        .and_then(Value::as_array)
+        .map(|selector| {
+            selector
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter(|selector| selector.len() >= 2)
+}
+
+fn output_for_selector(
+    nodes: &BTreeMap<String, CompiledNode>,
+    selector: &[String],
+) -> Option<CompiledOutput> {
+    let node_id = selector.first()?;
+    let output_key = selector.get(1)?;
+    let node = nodes.get(node_id)?;
+
+    if node.node_type == "start" && output_key == "history" {
+        return Some(CompiledOutput {
+            key: "history".to_string(),
+            title: "userinput.history".to_string(),
+            value_type: "array".to_string(),
+            selector: Vec::new(),
+            json_schema: Some(history_messages_schema()),
+        });
+    }
+
+    node.outputs
+        .iter()
+        .find(|output| output.key == *output_key)
+        .cloned()
 }
 
 fn compile_node(
@@ -1264,6 +1337,10 @@ fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
                 key,
                 title: required_string(output, "title")?.to_string(),
                 value_type: required_string(output, "valueType")?.to_string(),
+                json_schema: output
+                    .get("jsonSchema")
+                    .filter(|value| value.is_object())
+                    .cloned(),
             })
         })
         .collect::<Result<Vec<_>>>()?;

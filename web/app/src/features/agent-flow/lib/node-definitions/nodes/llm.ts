@@ -22,7 +22,7 @@ export const llmNodeDefinition: NodeDefinition = {
         },
         {
           key: 'config.context_policy',
-          label: '继承上下文',
+          label: '上下文',
           editor: 'llm_context_policy'
         },
         {
