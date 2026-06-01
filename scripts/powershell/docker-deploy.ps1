@@ -109,6 +109,17 @@ function Convert-ToYesNo([string]$Value) {
   return $false
 }
 
+function Invoke-NativeQuiet([scriptblock]$Command) {
+  $PreviousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    & $Command *> $null
+    return $LASTEXITCODE -eq 0
+  } finally {
+    $ErrorActionPreference = $PreviousErrorActionPreference
+  }
+}
+
 function Prompt-YesNo([string]$Question, [bool]$Default) {
   $Suffix = if ($Default) { "[Y/n]" } else { "[y/N]" }
   $InputValue = Read-Host "$Question $Suffix"
@@ -123,8 +134,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 }
 
 $UseDockerComposePlugin = $false
-docker compose version *> $null
-if ($LASTEXITCODE -eq 0) {
+if (Invoke-NativeQuiet { docker compose version }) {
   $UseDockerComposePlugin = $true
 } elseif (-not (Get-Command docker-compose -ErrorAction SilentlyContinue)) {
   Fail "Docker Compose is required. Install the Docker Compose plugin or docker-compose first."
@@ -209,8 +219,7 @@ if (-not $PullImages -and -not $StartContainers) {
   exit 0
 }
 
-docker info *> $null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Invoke-NativeQuiet { docker info })) {
   Fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
 }
 
