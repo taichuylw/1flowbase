@@ -1,64 +1,142 @@
 # 1flowbase
 
-> **对话即是壁垒，AI应用原生底座**
+<p align="center">
+  <img src="docs/assets/logo_index_cn.png" alt="1flowbase Logo" width="600">
+</p>
+
+<p align="center">
+  <b>English</b> | <a href="docs/READEME-i18n/README_CN.md">简体中文</a>
+</p>
+
+> **Dialogue is the Moat, the AI-Native Application Foundation**
+
+1flowbase is designed to provide a unified foundation for future AI-native applications and AI-Native Organizations.
+
+## 💡 Core Features
+
+*   💬 **Virtual Model Endpoint**: Externally, the Virtual Model interface functions as a standard LLM API, but internally it executes full, multi-model orchestration workflows. Compatible with OpenAI/Anthropic protocols.
+*   📜 **Full Chat History & Tool Callback Logs (Chat Logs & Tool Trace)**: Features a built-in full-link trace tracking system to precisely reconstruct the workflow execution path, node inputs/outputs, and tool callback details behind every conversation.
+*   🤖 **Native Multi-Agent Client Support (Multi-Agent Clients)**: Native support and adaptation for multiple local agents and client tools (such as aionui, codex, Claude Code, etc.), offering seamless protocol integration and relay capabilities.
 
 ---
 
-## 💡 核心特征
+## 💡 What is a Virtual Model?
 
-*   💬 **AI 聊天记录提炼总结**：你可以将你的 AI 聊天记录上传到当前 1flowbase 进行提炼总结。
-*   🔄 **大模型中转与转发**：你可以将你的大模型放到 1flowbase 中做中转转发。
-*   🛠️ **应用后端与低代码**：你可以将 1flowbase 作为你应用后端，动态生成表和低代码设计页面。
+<p align="center">
+  <video src="docs/assets/claude_code_use.mp4" width="100%" controls></video>
+</p>
+
+Externally, the Virtual Model interface behaves like a standard LLM API, but internally it executes a complete, multi-model orchestration workflow.
+
+For example, an external call:
+```json
+{
+  "model": "deepseek-with-vision",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Analyze this screenshot and suggest a fix."
+    }
+  ]
+}
+```
+
+Internally, it actually runs:
+```text
+Gemini Vision (Visual Context Extraction) 
+  → DeepSeek-v4 (Reasoning & Thinking) 
+  → Dedicated Verification Model (JSON Schema Validation) 
+  → Final OpenAI-Compatible Response Generation
+```
+
+To the calling client, it is just a single model; to you, it is a fully programmable AI workflow.
 
 ---
 
-## 📂 仓库布局 (Repo Layout)
+## 🎯 Why Choose 1flowbase?
 
-*   `web/`：前端根目录，基于 `pnpm + Turbo` 运作。入口应用位于 `web/app`，共享包位于 `web/packages/*`。
-*   `api/`：后端根目录，基于 Rust workspace。服务入口位于 `api/apps/*`，共享 crate 位于 `api/crates/*`。
-*   `api/plugins/`：插件源码工作区、HostExtension 清单与模板。
-*   `docker/`：本地中间件（PostgreSQL/Redis等）容器编排。
-*   `scripts/`：仓库级开发、测试、验证与调试脚本。详细说明见 [scripts/README.md](scripts/README.md)。
+Most AI tools only allow you to choose a **single model**. However, real production-grade AI systems typically require multi-step orchestration:
+* **Multimodal Enhancement**: Use a Vision model as the "eyes" to read images or PDFs and extract context, then let a powerful reasoning model act as the "brain" to process it.
+* **Smart Cost Control**: Use lightweight, inexpensive models for upfront classification and filtering, and only invoke high-cost models when heavy reasoning is required.
+* **Reliability Assurance**: Introduce dedicated miniature models as result verifiers (`Verifier Node`) or formatters (`Formatter Node`) to ensure the output strictly adheres to a specific JSON schema.
+
+1flowbase encapsulates this complex multi-model orchestration (Workflows) into standard, out-of-the-box model endpoints (Drop-in Endpoints).
+
+You only need to configure your client just like calling any ordinary API:
+```bash
+OPENAI_BASE_URL=http://localhost:3000/v1
+OPENAI_API_KEY=your-key
+MODEL=deepseek-with-vision
+```
 
 ---
 
-## 🚀 快速开始
+## 🔌 Protocol Compatibility
 
-### 运行环境要求
-*   **Node.js**: `>= 24.0.0`
-*   **Rust**: 最新稳定版编译器 (Workspace)
-*   **Docker**: 用于启动本地开发所需中间件
+1flowbase supports exposing the same workflow through multiple mainstream protocols:
 
-### 本地分步启动
+| Protocol | API Path | Typical Clients |
+|---|---|---|
+| **OpenAI Responses API** | `/v1/responses` | Next-generation OpenAI primitives clients |
+| **OpenAI Chat Completions** | `/v1/chat/completions` | Cline, Roo Code, traditional SDKs, and development frameworks |
+| **Claude-compatible Messages** | `/anthropic/v1/messages` | Claude SDK / Native Claude clients |
 
-#### 1. 启动中间件
-```bash
-docker compose -f docker/docker-compose.middleware.yaml up -d
-```
+---
 
-#### 2. 启动前端
-```bash
-cd web
-pnpm install
-pnpm dev
-```
-*   前端默认访问地址：`http://127.0.0.1:3100`
+## ⚔️ How 1flowbase Differs from Others
 
-#### 3. 启动后端
-首次启动请确保从 `api/apps/api-server/.env.example` 复制一份并配置好 `.env`。
-```bash
-cd api
-# 启动 API 服务
-cargo run -p api-server --bin api-server
-# 启动插件运行器
-cargo run -p plugin-runner --bin plugin-runner
-```
-*   API 服务地址：`http://127.0.0.1:7800`
-*   插件运行器地址：`http://127.0.0.1:7801`
+| Tool | Core Philosophy | 1flowbase Key Differences |
+|---|---|---|
+| **LiteLLM** | Proxies and routes multiple LLM endpoints | LiteLLM routes models; 1flowbase combines models and generates new model interfaces |
+| **LangGraph** | Builds controllable Agent workflows in code | 1flowbase publishes complex orchestration graphs as standard, drop-in APIs without client modifications |
+| **Dify / Flowise** | Builds visual AI applications and workflows | 1flowbase focuses on integrating multi-model streams into the existing ecosystem just like a single model |
 
-### Docker 一键部署
+> **Key takeaway**: LiteLLM routes models, 1flowbase combines models.
 
-下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`。随后脚本会进入交互配置，空输入保留提示中的当前值，再让你选择是否拉取镜像、是否启动容器。脚本输出保持英文，避免终端编码问题。
+---
+
+## 🛠️ Typical Scenarios
+
+* **Equip Text-Only Models with Missing Capabilities**: Cascade a Gemini Vision or OCR node before invoking a powerful reasoning model that lacks native vision support.
+* **Build a Custom Brain for Coding Agents**: Package complex "code generation → Clippy verification → syntax repair" loops into a virtual model to make your agent smarter without changing the client.
+* **Control Costs via Model Cascading**: Filter standard requests with small models and only delegate complex queries to premium reasoning models.
+* **Ensure Structured and High-Quality Output**: Detect and repair corrupted JSON formats using a dedicated structure verification node before the final response is returned.
+
+---
+
+## 🗺️ Roadmap
+
+### Implemented Core Features
+- [x] **Low-code visual workflow editor**
+- [x] **Multiple built-in node types and hybrid orchestration**
+- [x] **Cost and latency trace dashboard**
+- [x] **Prompt and model configuration version history management**
+- [x] **OpenAI Responses protocol and streaming output support**
+- [x] **Claude Messages protocol and streaming output support**
+
+### Upcoming Features
+- [ ] **Native conversation collection & full-link trace logs** — The crucial first step to accumulating an organization-specific "conversation moat".
+- [ ] **End-to-end AI-native low-code application builder** — Extending from virtual endpoints to full AI applications.
+- [ ] **Enterprise-grade team workspace & multi-tenant management**
+- [ ] **Enhanced MCP (Model Context Protocol) plugin nodes support**
+
+---
+
+## 📂 Repo Layout
+
+*   `web/`: Frontend root directory, powered by `pnpm + Turbo`. The entry application is located at `web/app`, and shared packages reside under `web/packages/*`.
+*   `api/`: Backend root directory, structured as a Rust workspace. Service entry points are located at `api/apps/*`, and shared crates reside under `api/crates/*`.
+*   `api/plugins/`: Plugin source code workspace, HostExtension manifests, and templates.
+*   `docker/`: Container orchestration for local middleware (PostgreSQL, Redis, etc.).
+*   `scripts/`: Repository-level development, testing, verification, and debugging scripts. For details, see [scripts/README.md](scripts/README.md).
+
+---
+
+## 🚀 Quick Start
+
+### One-Click Docker Deployment (Recommended)
+
+The following commands will not install Docker itself. The deployment script will check if a working Docker/Compose environment is available on your machine, clone the `docker/` directory to the current path, and copy `docker/.env.example` to `docker/.env`.
 
 #### Shell
 
@@ -78,71 +156,89 @@ irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
 ```
 
-交互配置项包括：
+---
 
-- `POSTGRES_PASSWORD`
-- `BOOTSTRAP_ROOT_ACCOUNT`
-- `BOOTSTRAP_ROOT_PASSWORD`
-- `API_PROVIDER_SECRET_MASTER_KEY`
-- `WEB_PORT`
+### Run from Source (Development Mode)
 
-之后脚本会继续询问：
+#### Environment Requirements
+*   **Node.js**: `>= 24.0.0`
+*   **Rust**: Latest stable compiler (Workspace)
+*   **Docker**: For running required development middleware
 
-- `Pull Docker images? [y/N]`
-- `Start 1flowbase now? [y/N]`
-
-如果选择暂时不启动，之后可以手动执行：
+#### 1. Clone the Repository
 
 ```bash
-cd docker
-docker compose pull
-docker compose up -d
+git clone https://github.com/taichuy/1flowbase.git
 ```
 
-非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。
+#### 2. Start Middleware
+```bash
+docker compose -f docker/docker-compose.middleware.yaml up -d
+```
+
+#### 3. Start the Frontend
+```bash
+cd web
+pnpm install
+pnpm dev
+```
+*   Frontend access URL: `http://127.0.0.1:3100`
+
+#### 4. Start the Backend
+Before launching for the first time, make sure to copy `api/apps/api-server/.env.example` to `.env` and configure it.
+```bash
+cd api
+# Run the API server
+cargo run -p api-server --bin api-server
+# Run the plugin runner
+cargo run -p plugin-runner --bin plugin-runner
+```
+*   API Server: `http://127.0.0.1:7800`
+*   Plugin Runner: `http://127.0.0.1:7801`
 
 ---
 
-## ⚙️ 脚本启动
+## ⚙️ Script-Assisted Startup
 
-为了简化本地的开发流程，仓库提供了一套统一的 Node 脚本进行一键式开发启动：
+To simplify the local development process, the repository provides a unified Node utility script for one-click development startup:
 
 ```bash
-# 全量启动前端、后端、中间件与插件运行器
+# Fully spin up the frontend, backend, middleware, and plugin runner
 node scripts/node/dev-up.js
 
-# 仅启动前后端进程，跳过 Docker 中间件
+# Spin up only the frontend and backend processes, skipping Docker middleware
 node scripts/node/dev-up.js --skip-docker
 
-# 常用操作命令
-node scripts/node/dev-up.js status   # 查看各服务状态
-node scripts/node/dev-up.js stop     # 停止所有本地服务
-node scripts/node/dev-up.js restart  # 重启服务
+# Common operations
+node scripts/node/dev-up.js status   # Check the status of each service
+node scripts/node/dev-up.js stop     # Stop all running local services
+node scripts/node/dev-up.js restart  # Restart services
 ```
 
-关于页面调试、自动化测试、清理缓存等的更多高级脚本用法，请参阅 [scripts/README.md](scripts/README.md)。
+For more advanced script options such as UI debugging, automation testing, and cache cleaning, please refer to [scripts/README.md](scripts/README.md).
 
 ---
 
-## 🤝 贡献
+## 🤝 Contributing
 
-我们非常欢迎社区与团队成员的贡献！在提交 PR 前，请确保完成以下代码验证：
+We highly welcome contributions from the community and team members! Before submitting a Pull Request, please ensure you have completed the following local validations:
 
-### 本地测试与校验
+### Local Testing and Verification
 ```bash
-# 运行仓库级完整门禁 (包括后端格式化/Clippy/测试, 前端校验与契约测试)
+# Run the repository-level complete gatekeeper (includes Rust formatting/Clippy/tests, and frontend verification & contract tests)
 node scripts/node/verify.js repo
 ```
 
-### 协作规则
-*   开发与质量控制规则以根目录下的 [AGENTS.md](AGENTS.md) 为准。
-*   前端质量要求参见 [web/AGENTS.md](web/AGENTS.md)。
-*   后端质量要求参见 [api/AGENTS.md](api/AGENTS.md)。
+### Collaborative Guidelines
+*   Development and quality control guidelines are governed by [AGENTS.md](AGENTS.md) in the root directory.
+*   Frontend quality requirements can be found in [web/AGENTS.md](web/AGENTS.md).
+*   Backend quality requirements can be found in [api/AGENTS.md](api/AGENTS.md).
 
 ---
-## 鸣谢
 
-感谢 [Linux.do](https://linux.do/) 学ai 上L站
+## 🏆 Acknowledgements
+
+Thanks to [Linux.do](https://linux.do/) - Learn AI on L-Station.
 
 ---
 

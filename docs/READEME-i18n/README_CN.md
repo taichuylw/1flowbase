@@ -4,6 +4,10 @@
   <img src="../assets/logo_index_cn.png" alt="1flowbase Logo" width="600">
 </p>
 
+<p align="center">
+  <a href="../../README.md">English</a> | <b>简体中文</b>
+</p>
+
 > **对话即是壁垒，AI应用原生底座**
 
 1flowbase 旨在为面向未来的 AI 原生应用和 AI 组织（AI-Native Organizations）提供统一的底座支撑。
