@@ -995,6 +995,28 @@ describe('validateDocument', () => {
       }
     });
 
-    expect(() => validateDocument(document)).not.toThrow();
+    const issues = validateDocument(document);
+    const queryIssues = issues.filter(
+      (issue) =>
+        issue.nodeId === 'node-data-model' &&
+        issue.fieldKey === 'bindings.query'
+    );
+
+    expect(queryIssues).toHaveLength(2);
+    expect(queryIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 'error',
+          title: '绑定引用不可见'
+        })
+      ])
+    );
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        nodeId: 'node-data-model',
+        id: 'node-data-model-orphan',
+        level: 'warning'
+      })
+    );
   });
 });

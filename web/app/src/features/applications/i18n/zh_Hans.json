@@ -76,7 +76,7 @@
     "sort_ascending_toggle_to_descending": "当前升序，切换为降序",
     "sort_by_prefix": "排序：",
     "sort_field": "排序字段",
-    "monitoring_section_description": "该分区对应应用级聚合指标与 tracing / observability 配置，真实图表与配置编辑留到后续专题。",
+    "monitoring_section_description": "该分区对应应用级聚合指标与 tracing / observability 配置。",
     "not_open": "未开放",
     "full_flow": "全流",
     "create_from_application_template": "从应用模板创建",

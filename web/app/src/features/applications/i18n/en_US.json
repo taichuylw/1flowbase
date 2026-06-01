@@ -76,7 +76,7 @@
     "sort_ascending_toggle_to_descending": "Current ascending order, switch to descending order",
     "sort_by_prefix": "Sort by:",
     "sort_field": "sort field",
-    "monitoring_section_description": "This partition corresponds to application-level aggregation indicators and tracing / observability configuration. The actual chart and configuration editing are left to subsequent topics.",
+    "monitoring_section_description": "This partition corresponds to application-level aggregation metrics and tracing / observability configuration.",
     "not_open": "Not open",
     "full_flow": "full flow",
     "create_from_application_template": "Create from app template",

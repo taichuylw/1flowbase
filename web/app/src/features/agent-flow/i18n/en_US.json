@@ -350,7 +350,7 @@
     "history_update_canvas_layout": "Update canvas layout",
     "read_write_structured_data_maintain_process_variables": "Read and write structured data and maintain process variables.",
     "node_output": "node output",
-    "declarative_node_placeholders_plugins": "Declarative node placeholders from plugins.",
+    "declarative_node_placeholders_plugins": "Declarative node capabilities from plugins.",
     "source": "{{value1}} source",
     "plugin_node_meta_summary": "Declarative nodes from capability plugins that can be explicitly selected and executed by workflows.",
     "variable": "Variable {{value1}}",
