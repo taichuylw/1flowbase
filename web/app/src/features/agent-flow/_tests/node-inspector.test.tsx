@@ -763,11 +763,29 @@ describe('NodeInspector', () => {
   });
 
   test('renders JSON schema controls for structured code outputs', async () => {
+    let latestDocument = createInitialStateWithStructuredCodeNode().draft
+      .document;
+
     renderWithProviders(
       <AgentFlowEditorStoreProvider
-        initialState={createInitialStateWithStructuredCodeNode()}
+        initialState={{
+          flow_id: 'flow-1',
+          draft: {
+            id: 'draft-1',
+            flow_id: 'flow-1',
+            updated_at: '2026-04-16T10:00:00Z',
+            document: latestDocument
+          },
+          autosave_interval_seconds: 30,
+          versions: []
+        }}
       >
         <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
         <NodeConfigTab />
       </AgentFlowEditorStoreProvider>
     );
@@ -775,7 +793,177 @@ describe('NodeInspector', () => {
     expect(await screen.findByLabelText('输出变量名 1')).toHaveValue(
       'chat_history'
     );
-    expect(screen.getByRole('button', { name: '编辑 JSON Schema' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '编辑 JSON Schema' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'JSON Schema' });
+    expect(dialog).toHaveClass('agent-flow-model-settings__panel');
+    expect(screen.getByRole('tab', { name: 'Schema 字段' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'JSON 解析' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Schema 字段名 1')).toHaveValue('role');
+    expect(screen.getByLabelText('Schema 字段名 2')).toHaveValue('content');
+
+    fireEvent.click(screen.getByRole('button', { name: '添加 Schema 字段' }));
+    fireEvent.change(screen.getByLabelText('Schema 字段名 3'), {
+      target: { value: 'name' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).outputs[0].jsonSchema).toMatchObject({
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['role', 'content', 'name'],
+          properties: {
+            role: { type: 'string' },
+            content: { type: 'string' },
+            name: { type: 'string' }
+          }
+        }
+      });
+    });
+  });
+
+  test('parses JSON Schema from highlighted code mode', async () => {
+    let latestDocument = createInitialStateWithStructuredCodeNode().draft
+      .document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider
+        initialState={{
+          flow_id: 'flow-1',
+          draft: {
+            id: 'draft-1',
+            flow_id: 'flow-1',
+            updated_at: '2026-04-16T10:00:00Z',
+            document: latestDocument
+          },
+          autosave_interval_seconds: 30,
+          versions: []
+        }}
+      >
+        <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByLabelText('输出变量名 1')).toHaveValue(
+      'chat_history'
+    );
+    fireEvent.click(screen.getByRole('button', { name: '编辑 JSON Schema' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'JSON 解析' }));
+    fireEvent.change(await screen.findByLabelText('JSON Schema 内容'), {
+      target: {
+        value: JSON.stringify(
+          {
+            type: 'object',
+            properties: {
+              summary: { type: 'string' }
+            },
+            required: ['summary']
+          },
+          null,
+          2
+        )
+      }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
+        valueType: 'object',
+        jsonSchema: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string' }
+          },
+          required: ['summary']
+        }
+      });
+    });
+  });
+
+  test('keeps parsed JSON Schema root type when returning to field mode', async () => {
+    const initialState = createInitialStateWithStructuredCodeNode();
+    const codeNode = getCodeNode(initialState.draft.document);
+    codeNode.outputs = [
+      {
+        key: 'chat_history',
+        title: 'Chat History',
+        valueType: 'object',
+        jsonSchema: {
+          type: 'object',
+          required: [],
+          properties: {}
+        }
+      }
+    ];
+    let latestDocument = initialState.draft.document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 JSON Schema' })
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'JSON 解析' }));
+    fireEvent.change(await screen.findByLabelText('JSON Schema 内容'), {
+      target: {
+        value: JSON.stringify(
+          {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                role: { type: 'string' },
+                content: { type: 'string' }
+              },
+              required: ['role', 'content']
+            }
+          },
+          null,
+          2
+        )
+      }
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Schema 字段' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schema 字段名 1')).toHaveValue('role');
+      expect(screen.getByLabelText('Schema 字段名 2')).toHaveValue('content');
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
+        valueType: 'array',
+        jsonSchema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              role: { type: 'string' },
+              content: { type: 'string' }
+            },
+            required: ['role', 'content']
+          }
+        }
+      });
+    });
   });
 
   test('renders loop number fields in compact inline rows while keeping condition groups stacked', () => {
