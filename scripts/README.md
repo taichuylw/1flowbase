@@ -277,3 +277,47 @@ profile：
 
 - `scripts/node/exec-with-real-node.sh`: 从前端包脚本调用仓库 Node 脚本时，确保使用真实 Node runtime。
 - `scripts/node/testing/*`: 脚本共享的运行时配置、warning capture、coverage threshold 和 Node runtime 解析工具。
+## docker
+
+下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`。随后脚本会进入交互配置，空输入保留提示中的当前值，再让你选择是否拉取镜像、是否启动容器。脚本输出保持英文，避免终端编码问题。
+
+#### Shell
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
+```
+
+#### PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+```
+
+#### Windows CMD
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+```
+
+交互配置项包括：
+
+- `POSTGRES_PASSWORD`
+- `BOOTSTRAP_ROOT_ACCOUNT`
+- `BOOTSTRAP_ROOT_PASSWORD`
+- `API_PROVIDER_SECRET_MASTER_KEY`
+- `WEB_PORT`
+
+之后脚本会继续询问：
+
+- `Pull Docker images? [y/N]`
+- `Start 1flowbase now? [y/N]`
+
+如果选择暂时不启动，之后可以手动执行：
+
+```bash
+cd docker
+docker compose pull
+docker compose up -d
+```
+
+非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。

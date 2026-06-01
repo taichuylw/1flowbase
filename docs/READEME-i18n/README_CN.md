@@ -4,6 +4,10 @@
   <img src="../assets/logo_index_cn.png" alt="1flowbase Logo" width="600">
 </p>
 
+<p align="center">
+  <a href="../../README.md">English</a> | <b>简体中文</b>
+</p>
+
 > **对话即是壁垒，AI应用原生底座**
 
 1flowbase 旨在为面向未来的 AI 原生应用和 AI 组织（AI-Native Organizations）提供统一的底座支撑。
@@ -129,14 +133,42 @@ MODEL=deepseek-with-vision
 
 ---
 
-## 🚀 快速开始
+## 🚀 快速开启
 
-### 运行环境要求
+### Docker 一键部署（推荐）
+下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`。
+#### Shell
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
+```
+
+#### PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+```
+
+#### Windows CMD
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+```
+
+---
+
+### git源码(dev)
+
+#### 运行环境要求
 *   **Node.js**: `>= 24.0.0`
 *   **Rust**: 最新稳定版编译器 (Workspace)
 *   **Docker**: 用于启动本地开发所需中间件
 
-### 本地分步启动
+### clone
+
+```bash
+git clone https://github.com/taichuy/1flowbase.git
+```
 
 #### 1. 启动中间件
 ```bash
@@ -162,19 +194,6 @@ cargo run -p plugin-runner --bin plugin-runner
 ```
 *   API 服务地址：`http://127.0.0.1:7800`
 *   插件运行器地址：`http://127.0.0.1:7801`
-
-### Docker 一键部署
-
-```bash
-cd docker
-docker compose up -d
-```
-
-整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。默认访问地址：`http://127.0.0.1:3100`，初始 root 账号为 `root`，密码为 `1flowbase`。
-
-生产部署时再复制 `docker/.env.example` 为 `docker/.env`，修改数据库密码、`API_PROVIDER_SECRET_MASTER_KEY` 和 root 密码。
-
----
 
 ## ⚙️ 脚本启动
 
