@@ -158,7 +158,6 @@
     "api_key_prefix_notice": "The list only displays recognized Key prefixes; the complete token is only displayed once after creation and cannot be viewed again after closing.",
     "tool_callback_count": "Number of tool callbacks",
     "run_id": "Run ID",
-    "run_count": "Number of runs",
     "name_required": "Please enter name",
     "run_details_preview": "Run details preview",
     "no_applications_for_filter": "There are currently no applications under the current filter conditions.",

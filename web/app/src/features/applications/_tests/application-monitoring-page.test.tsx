@@ -396,13 +396,14 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('Cache-hit tokens')).toBeInTheDocument();
     expect(screen.getByText('900')).toBeInTheDocument();
     expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
+    const runtimeActivityPosition = screen
+      .getByText('Runtime activity')
+      .compareDocumentPosition(
+        screen.getByRole('radio', { name: 'past 7 days' })
+      );
     expect(
-      screen
-        .getByText('Runtime activity')
-        .compareDocumentPosition(
-          screen.getByRole('radio', { name: 'past 7 days' })
-        ) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+      runtimeActivityPosition & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen.getByRole('button', { name: 'Runtime activity' })
     ).toBeInTheDocument();
