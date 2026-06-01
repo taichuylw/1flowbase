@@ -129,7 +129,29 @@ MODEL=deepseek-with-vision
 
 ---
 
-## 🚀 快速开始
+### Docker 一键部署（推荐）
+下面的命令不会安装 Docker。部署脚本只会先检查本机是否已经有可用的 Docker/Compose 环境，然后把 `docker/` 目录拉到当前目录，复制 `docker/.env.example` 为 `docker/.env`。
+#### Shell
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
+```
+
+#### PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+```
+
+#### Windows CMD
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+```
+
+---
+
+## 🚀 git源码
 
 ### 运行环境要求
 *   **Node.js**: `>= 24.0.0`
