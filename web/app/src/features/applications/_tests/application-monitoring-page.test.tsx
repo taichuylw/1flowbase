@@ -123,14 +123,16 @@ function monitoringReport() {
         run_count: 4,
         total_tokens: 1200,
         input_tokens: 900,
-        output_tokens: 300
+        output_tokens: 300,
+        input_cache_hit_tokens: 120
       },
       {
         bucket_start: '2026-05-02T00:00:00Z',
         run_count: 8,
         total_tokens: 4400,
         input_tokens: 3300,
-        output_tokens: 1100
+        output_tokens: 1100,
+        input_cache_hit_tokens: 780
       }
     ],
     protocols: [
@@ -238,14 +240,16 @@ function hourlyMonitoringReport() {
         run_count: 4,
         total_tokens: 1200,
         input_tokens: 900,
-        output_tokens: 300
+        output_tokens: 300,
+        input_cache_hit_tokens: 120
       },
       {
         bucket_start: '2026-05-01T09:00:00Z',
         run_count: 8,
         total_tokens: 4400,
         input_tokens: 3300,
-        output_tokens: 1100
+        output_tokens: 1100,
+        input_cache_hit_tokens: 780
       }
     ]
   };
@@ -412,19 +416,31 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
     expect(echartsMock.chart.setOption).toHaveBeenCalled();
     const tokenTrendOption = echartsMock.chart.setOption.mock.calls[0]?.[0];
-    expect(tokenTrendOption.series).toHaveLength(2);
+    expect(tokenTrendOption.series).toHaveLength(4);
     expect(tokenTrendOption.series[0]).toMatchObject({
+      name: 'total tokens',
+      type: 'line',
+      data: [1200, 4400]
+    });
+    expect(tokenTrendOption.series[0]).not.toHaveProperty('stack');
+    expect(tokenTrendOption.series[1]).toMatchObject({
       name: 'Input tokens',
-      stack: 'Total',
       type: 'line',
       data: [900, 3300]
     });
-    expect(tokenTrendOption.series[1]).toMatchObject({
+    expect(tokenTrendOption.series[1]).not.toHaveProperty('stack');
+    expect(tokenTrendOption.series[2]).toMatchObject({
       name: 'Output tokens',
-      stack: 'Total',
       type: 'line',
       data: [300, 1100]
     });
+    expect(tokenTrendOption.series[2]).not.toHaveProperty('stack');
+    expect(tokenTrendOption.series[3]).toMatchObject({
+      name: 'Cache-hit tokens',
+      type: 'line',
+      data: [120, 780]
+    });
+    expect(tokenTrendOption.series[3]).not.toHaveProperty('stack');
   });
 
   test('formats token metric cards with K M B suffixes', async () => {

@@ -276,7 +276,8 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
                 run_count: 2,
                 total_tokens: 500,
                 input_tokens: 380,
-                output_tokens: 120
+                output_tokens: 120,
+                input_cache_hit_tokens: 60
               }
             ],
             protocols: [],
@@ -316,7 +317,8 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       tokens_trend: [
         {
           input_tokens: 380,
-          output_tokens: 120
+          output_tokens: 120,
+          input_cache_hit_tokens: 60
         }
       ],
       tokens: {

@@ -131,6 +131,7 @@ pub struct ApplicationRunMonitoringTokenTrendPointResponse {
     pub total_tokens: i64,
     pub input_tokens: i64,
     pub output_tokens: i64,
+    pub input_cache_hit_tokens: i64,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -377,6 +378,7 @@ fn to_report_response(
                 total_tokens: point.total_tokens,
                 input_tokens: point.input_tokens,
                 output_tokens: point.output_tokens,
+                input_cache_hit_tokens: point.input_cache_hit_tokens,
             })
             .collect(),
         protocols: report

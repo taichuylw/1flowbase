@@ -2371,7 +2371,8 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
         r#"
         update application_run_log_summaries
         set input_tokens = case flow_run_id when $1 then 80 when $2 then 300 end,
-            output_tokens = case flow_run_id when $1 then 20 when $2 then 100 end
+            output_tokens = case flow_run_id when $1 then 20 when $2 then 100 end,
+            input_cache_hit_tokens = case flow_run_id when $1 then 10 when $2 then 50 end
         where flow_run_id in ($1, $2)
         "#,
     )
@@ -2436,6 +2437,7 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.tokens.total_tokens_sum, 500);
     assert_eq!(report.tokens.input_tokens_sum, 380);
     assert_eq!(report.tokens.output_tokens_sum, 120);
+    assert_eq!(report.tokens.input_cache_hit_tokens_sum, 60);
     assert_eq!(report.tokens.avg_tokens_per_run, 250.0);
     assert_eq!(report.tokens.token_recorded_count, 2);
     assert_eq!(report.tool_callbacks.total_tool_callback_count, 2);
@@ -2446,6 +2448,7 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.tokens_trend[0].total_tokens, 500);
     assert_eq!(report.tokens_trend[0].input_tokens, 380);
     assert_eq!(report.tokens_trend[0].output_tokens, 120);
+    assert_eq!(report.tokens_trend[0].input_cache_hit_tokens, 60);
     assert_eq!(report.protocols[0].protocol, "default");
     assert_eq!(report.protocols[1].protocol, "openai-responses-v1");
     assert_eq!(report.sources[0].source, "console");

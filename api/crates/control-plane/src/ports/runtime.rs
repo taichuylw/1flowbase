@@ -945,6 +945,7 @@ pub struct ApplicationRunMonitoringTokenTrendPoint {
     pub total_tokens: i64,
     pub input_tokens: i64,
     pub output_tokens: i64,
+    pub input_cache_hit_tokens: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

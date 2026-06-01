@@ -160,6 +160,7 @@ export interface ConsoleApplicationRunMonitoringTokenTrendPoint {
   total_tokens: number;
   input_tokens: number;
   output_tokens: number;
+  input_cache_hit_tokens: number;
 }
 
 export interface ConsoleApplicationRunMonitoringProtocolBreakdown {
