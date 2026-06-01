@@ -153,13 +153,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 
 ---
 
+### git源码(dev)
 
-### 运行环境要求
+#### 运行环境要求
 *   **Node.js**: `>= 24.0.0`
 *   **Rust**: 最新稳定版编译器 (Workspace)
 *   **Docker**: 用于启动本地开发所需中间件
 
-### git本地分步启动
+### clone
+
+```bash
+git clone https://github.com/taichuy/1flowbase.git
+```
 
 #### 1. 启动中间件
 ```bash
@@ -185,19 +190,6 @@ cargo run -p plugin-runner --bin plugin-runner
 ```
 *   API 服务地址：`http://127.0.0.1:7800`
 *   插件运行器地址：`http://127.0.0.1:7801`
-
-### Docker 一键部署
-
-```bash
-cd docker
-docker compose up -d
-```
-
-整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。默认访问地址：`http://127.0.0.1:3100`，初始 root 账号为 `root`，密码为 `1flowbase`。
-
-生产部署时再复制 `docker/.env.example` 为 `docker/.env`，修改数据库密码、`API_PROVIDER_SECRET_MASTER_KEY` 和 root 密码。
-
----
 
 ## ⚙️ 脚本启动
 
