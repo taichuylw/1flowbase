@@ -63,13 +63,19 @@ cargo run -p plugin-runner --bin plugin-runner
 #### Shell
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/docker/deploy.sh | sh
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
 ```
 
 #### PowerShell
 
 ```powershell
-irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/docker/deploy.ps1 | iex
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+```
+
+#### Windows CMD
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
 ```
 
 整套容器会启动 `web`、`api`、`plugin-runner` 和 `db`。访问地址和初始 root 账号以 `docker/.env` 中的 `WEB_PORT`、`BOOTSTRAP_ROOT_ACCOUNT` 和 `BOOTSTRAP_ROOT_PASSWORD` 为准。
