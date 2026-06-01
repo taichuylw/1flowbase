@@ -477,6 +477,22 @@ fn metrics_payload_total_tokens(metrics_payload: &serde_json::Value) -> Option<i
     metrics_payload.get("usage").and_then(usage_total_tokens)
 }
 
+fn metrics_payload_usage_token(
+    metrics_payload: &serde_json::Value,
+    usage_field: &str,
+) -> Option<i64> {
+    metrics_payload
+        .get("usage")
+        .and_then(|usage| usage.get(usage_field))
+        .and_then(usage_token_value)
+}
+
+fn metrics_payload_cache_hit_tokens(metrics_payload: &serde_json::Value) -> Option<i64> {
+    metrics_payload_usage_token(metrics_payload, "input_cache_hit_tokens")
+        .or_else(|| metrics_payload_usage_token(metrics_payload, "cache_read_tokens"))
+        .or_else(|| metrics_payload_usage_token(metrics_payload, "cached_input_tokens"))
+}
+
 fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
     if task.callback_kind != "llm_tool_calls" {
         return 0;
@@ -500,6 +516,9 @@ fn application_run_statistics(
 ) -> application_logs::ApplicationRunStatisticsResponse {
     let mut unique_node_ids = HashSet::new();
     let mut total_tokens = None;
+    let mut input_tokens = None;
+    let mut output_tokens = None;
+    let mut input_cache_hit_tokens = None;
 
     for node_run in &detail.node_runs {
         unique_node_ids.insert(node_run.node_id.as_str());
@@ -507,10 +526,26 @@ fn application_run_statistics(
         if let Some(node_tokens) = metrics_payload_total_tokens(&node_run.metrics_payload) {
             total_tokens = Some(total_tokens.unwrap_or(0) + node_tokens);
         }
+        if let Some(node_tokens) =
+            metrics_payload_usage_token(&node_run.metrics_payload, "input_tokens")
+        {
+            input_tokens = Some(input_tokens.unwrap_or(0) + node_tokens);
+        }
+        if let Some(node_tokens) =
+            metrics_payload_usage_token(&node_run.metrics_payload, "output_tokens")
+        {
+            output_tokens = Some(output_tokens.unwrap_or(0) + node_tokens);
+        }
+        if let Some(node_tokens) = metrics_payload_cache_hit_tokens(&node_run.metrics_payload) {
+            input_cache_hit_tokens = Some(input_cache_hit_tokens.unwrap_or(0) + node_tokens);
+        }
     }
 
     application_logs::ApplicationRunStatisticsResponse {
         total_tokens,
+        input_tokens,
+        output_tokens,
+        input_cache_hit_tokens,
         unique_node_count: unique_node_ids.len() as i64,
         tool_callback_count: detail
             .callback_tasks
@@ -2174,6 +2209,9 @@ pub async fn list_application_runs(
     for log_summary in runs_page.items {
         let statistics = application_logs::ApplicationRunStatisticsResponse {
             total_tokens: log_summary.total_tokens,
+            input_tokens: log_summary.input_tokens,
+            output_tokens: log_summary.output_tokens,
+            input_cache_hit_tokens: log_summary.input_cache_hit_tokens,
             unique_node_count: log_summary.unique_node_count,
             tool_callback_count: log_summary.tool_callback_count,
         };
@@ -2559,6 +2597,28 @@ mod tests {
             None
         );
         assert_eq!(parse_runtime_event_cursor(run_id, "not-a-cursor"), None);
+    }
+
+    #[test]
+    fn metrics_payload_cache_hit_tokens_accepts_cache_read_tokens() {
+        assert_eq!(
+            metrics_payload_cache_hit_tokens(&serde_json::json!({
+                "usage": {
+                    "input_cache_hit_tokens": null,
+                    "cache_read_tokens": 29_504
+                }
+            })),
+            Some(29_504)
+        );
+        assert_eq!(
+            metrics_payload_cache_hit_tokens(&serde_json::json!({
+                "usage": {
+                    "input_cache_hit_tokens": 11,
+                    "cache_read_tokens": 29_504
+                }
+            })),
+            Some(11)
+        );
     }
 
     #[test]

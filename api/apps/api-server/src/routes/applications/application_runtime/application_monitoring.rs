@@ -87,6 +87,9 @@ pub struct ApplicationRunMonitoringDurationResponse {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunMonitoringTokensResponse {
     pub total_tokens_sum: i64,
+    pub input_tokens_sum: i64,
+    pub output_tokens_sum: i64,
+    pub input_cache_hit_tokens_sum: i64,
     pub avg_tokens_per_run: f64,
     pub token_recorded_count: i64,
 }
@@ -126,6 +129,9 @@ pub struct ApplicationRunMonitoringTokenTrendPointResponse {
     pub bucket_start: String,
     pub run_count: i64,
     pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub input_cache_hit_tokens: i64,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -335,6 +341,9 @@ fn to_report_response(
         },
         tokens: ApplicationRunMonitoringTokensResponse {
             total_tokens_sum: report.tokens.total_tokens_sum,
+            input_tokens_sum: report.tokens.input_tokens_sum,
+            output_tokens_sum: report.tokens.output_tokens_sum,
+            input_cache_hit_tokens_sum: report.tokens.input_cache_hit_tokens_sum,
             avg_tokens_per_run: report.tokens.avg_tokens_per_run,
             token_recorded_count: report.tokens.token_recorded_count,
         },
@@ -367,6 +376,9 @@ fn to_report_response(
                 bucket_start: format_time(point.bucket_start),
                 run_count: point.run_count,
                 total_tokens: point.total_tokens,
+                input_tokens: point.input_tokens,
+                output_tokens: point.output_tokens,
+                input_cache_hit_tokens: point.input_cache_hit_tokens,
             })
             .collect(),
         protocols: report

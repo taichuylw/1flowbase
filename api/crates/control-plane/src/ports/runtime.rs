@@ -901,6 +901,9 @@ pub struct ApplicationRunMonitoringDuration {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApplicationRunMonitoringTokens {
     pub total_tokens_sum: i64,
+    pub input_tokens_sum: i64,
+    pub output_tokens_sum: i64,
+    pub input_cache_hit_tokens_sum: i64,
     pub avg_tokens_per_run: f64,
     pub token_recorded_count: i64,
 }
@@ -940,6 +943,9 @@ pub struct ApplicationRunMonitoringTokenTrendPoint {
     pub bucket_start: OffsetDateTime,
     pub run_count: i64,
     pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub input_cache_hit_tokens: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]

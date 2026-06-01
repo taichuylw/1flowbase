@@ -78,6 +78,9 @@ export interface ConsoleApplicationRunSummary {
 
 export interface ConsoleApplicationRunStatistics {
   total_tokens: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  input_cache_hit_tokens: number | null;
   unique_node_count: number;
   tool_callback_count: number;
 }
@@ -129,6 +132,9 @@ export interface ConsoleApplicationRunMonitoringDuration {
 
 export interface ConsoleApplicationRunMonitoringTokens {
   total_tokens_sum: number;
+  input_tokens_sum: number;
+  output_tokens_sum: number;
+  input_cache_hit_tokens_sum: number;
   avg_tokens_per_run: number;
   token_recorded_count: number;
 }
@@ -152,6 +158,9 @@ export interface ConsoleApplicationRunMonitoringTokenTrendPoint {
   bucket_start: string;
   run_count: number;
   total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  input_cache_hit_tokens: number;
 }
 
 export interface ConsoleApplicationRunMonitoringProtocolBreakdown {

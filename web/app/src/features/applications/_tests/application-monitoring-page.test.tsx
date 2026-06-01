@@ -59,6 +59,7 @@ vi.mock('echarts/renderers', () => ({
 vi.mock('../api/runtime', () => runtimeApi);
 
 import { AppProviders } from '../../../app/AppProviders';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../state/auth-store';
 import { ApplicationMonitoringPage } from '../pages/ApplicationMonitoringPage';
 
@@ -88,6 +89,9 @@ function monitoringReport() {
     },
     tokens: {
       total_tokens_sum: 5600,
+      input_tokens_sum: 4200,
+      output_tokens_sum: 1400,
+      input_cache_hit_tokens_sum: 900,
       avg_tokens_per_run: 466.7,
       token_recorded_count: 12
     },
@@ -117,12 +121,18 @@ function monitoringReport() {
       {
         bucket_start: '2026-05-01T00:00:00Z',
         run_count: 4,
-        total_tokens: 1200
+        total_tokens: 1200,
+        input_tokens: 900,
+        output_tokens: 300,
+        input_cache_hit_tokens: 120
       },
       {
         bucket_start: '2026-05-02T00:00:00Z',
         run_count: 8,
-        total_tokens: 4400
+        total_tokens: 4400,
+        input_tokens: 3300,
+        output_tokens: 1100,
+        input_cache_hit_tokens: 780
       }
     ],
     protocols: [
@@ -228,12 +238,18 @@ function hourlyMonitoringReport() {
       {
         bucket_start: '2026-05-01T08:00:00Z',
         run_count: 4,
-        total_tokens: 1200
+        total_tokens: 1200,
+        input_tokens: 900,
+        output_tokens: 300,
+        input_cache_hit_tokens: 120
       },
       {
         bucket_start: '2026-05-01T09:00:00Z',
         run_count: 8,
-        total_tokens: 4400
+        total_tokens: 4400,
+        input_tokens: 3300,
+        output_tokens: 1100,
+        input_cache_hit_tokens: 780
       }
     ]
   };
@@ -340,7 +356,9 @@ function runtimeActivity() {
 }
 
 describe('ApplicationMonitoringPage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'en_US');
+    await appI18n.changeLanguage('en_US');
     resetAuthStore();
     vi.clearAllMocks();
     echartsMock.init.mockReturnValue(echartsMock.chart);
@@ -363,32 +381,100 @@ describe('ApplicationMonitoringPage', () => {
     expect(screen.getByText('75.0%')).toBeInTheDocument();
     expect(screen.queryByText('运行中数未包含')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: '运行统计口径' })
+      screen.getByRole('button', { name: 'Running statistical caliber' })
     ).toBeInTheDocument();
     expect(screen.getByText('openai-responses-v1')).toBeInTheDocument();
-    expect(screen.getByText('实时活动')).toBeInTheDocument();
-    expect(screen.getByText('偏慢')).toBeInTheDocument();
-    expect(screen.getByText('5 分钟失败率')).toBeInTheDocument();
-    expect(screen.getByText('较上周期新增')).toBeInTheDocument();
-    expect(screen.getAllByText('5,600').length).toBeGreaterThan(0);
+    expect(screen.getByText('Runtime activity')).toBeInTheDocument();
+    expect(screen.getByText('Slow')).toBeInTheDocument();
+    expect(screen.getByText('5m failure rate')).toBeInTheDocument();
+    expect(screen.getByText('New tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('5.6K').length).toBeGreaterThan(0);
+    expect(screen.getByText('Input tokens')).toBeInTheDocument();
+    expect(screen.getByText('4.2K')).toBeInTheDocument();
+    expect(screen.getByText('Output tokens')).toBeInTheDocument();
+    expect(screen.getByText('1.4K')).toBeInTheDocument();
+    expect(screen.getByText('Cache-hit tokens')).toBeInTheDocument();
+    expect(screen.getByText('900')).toBeInTheDocument();
     expect(screen.queryByText('+560,000.0%')).not.toBeInTheDocument();
     expect(
       screen
-        .getByText('实时活动')
+        .getByText('Runtime activity')
         .compareDocumentPosition(
-          screen.getByRole('radio', { name: '过去 7 天' })
+          screen.getByRole('radio', { name: 'past 7 days' })
         ) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    ).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: '实时活动' })
+      screen.getByRole('button', { name: 'Runtime activity' })
     ).toBeInTheDocument();
-    expect(screen.queryByText('当前服务实例实时数据')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Current service instance realtime data')
+    ).not.toBeInTheDocument();
     expect(screen.getByText('SSE')).toBeInTheDocument();
-    expect(screen.getByText('模型请求中')).toBeInTheDocument();
+    expect(screen.getByText('Model requests')).toBeInTheDocument();
     expect(screen.getByText('customer-1')).toBeInTheDocument();
     expect(screen.getByText('Customer API')).toBeInTheDocument();
     expect(screen.getAllByText('最慢运行').length).toBeGreaterThan(0);
     expect(echartsMock.chart.setOption).toHaveBeenCalled();
+    const tokenTrendOption = echartsMock.chart.setOption.mock.calls[0]?.[0];
+    expect(tokenTrendOption.series).toHaveLength(4);
+    expect(tokenTrendOption.series[0]).toMatchObject({
+      name: 'total tokens',
+      type: 'line',
+      data: [1200, 4400]
+    });
+    expect(tokenTrendOption.series[0]).not.toHaveProperty('stack');
+    expect(tokenTrendOption.series[1]).toMatchObject({
+      name: 'Input tokens',
+      type: 'line',
+      data: [900, 3300]
+    });
+    expect(tokenTrendOption.series[1]).not.toHaveProperty('stack');
+    expect(tokenTrendOption.series[2]).toMatchObject({
+      name: 'Output tokens',
+      type: 'line',
+      data: [300, 1100]
+    });
+    expect(tokenTrendOption.series[2]).not.toHaveProperty('stack');
+    expect(tokenTrendOption.series[3]).toMatchObject({
+      name: 'Cache-hit tokens',
+      type: 'line',
+      data: [120, 780]
+    });
+    expect(tokenTrendOption.series[3]).not.toHaveProperty('stack');
+  });
+
+  test('formats token metric cards with K M B suffixes', async () => {
+    runtimeApi.fetchApplicationRunMonitoringReport.mockResolvedValue({
+      ...monitoringReport(),
+      tokens: {
+        ...monitoringReport().tokens,
+        total_tokens_sum: 11_739_169,
+        input_tokens_sum: 11_290_226,
+        output_tokens_sum: 366_440,
+        input_cache_hit_tokens_sum: 7_874_262
+      },
+      tokens_comparison: {
+        ...monitoringReport().tokens_comparison,
+        previous_total_tokens_sum: 0,
+        token_change_rate: 11_739_169
+      }
+    });
+
+    render(
+      <AppProviders>
+        <ApplicationMonitoringPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('Total amount of tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('11.7M')).toHaveLength(2);
+    expect(screen.getByText('Input tokens')).toBeInTheDocument();
+    expect(screen.getByText('11.3M')).toBeInTheDocument();
+    expect(screen.getByText('Output tokens')).toBeInTheDocument();
+    expect(screen.getByText('366.4K')).toBeInTheDocument();
+    expect(screen.getByText('Cache-hit tokens')).toBeInTheDocument();
+    expect(screen.getByText('7.9M')).toBeInTheDocument();
+    expect(screen.queryByText('11,739,169')).not.toBeInTheDocument();
   });
 
   test('refreshes the report when time range changes', async () => {
@@ -399,7 +485,7 @@ describe('ApplicationMonitoringPage', () => {
     );
 
     expect(await screen.findByText('12')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('radio', { name: '过去 4 周' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'past 4 weeks' }));
 
     await waitFor(() => {
       expect(
@@ -423,7 +509,9 @@ describe('ApplicationMonitoringPage', () => {
       </AppProviders>
     );
 
-    fireEvent.click(await screen.findByRole('radio', { name: '过去 24 小时' }));
+    fireEvent.click(
+      await screen.findByRole('radio', { name: 'past 24 hours' })
+    );
 
     await waitFor(() => {
       const option = echartsMock.chart.setOption.mock.calls

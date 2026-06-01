@@ -2033,7 +2033,7 @@ async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
             total_tokens: Some(42),
             input_cache_hit_tokens: None,
             input_cache_miss_tokens: None,
-            cache_read_tokens: None,
+            cache_read_tokens: Some(11),
             cache_write_tokens: None,
             price_snapshot: None,
             cost_snapshot: None,
@@ -2074,6 +2074,9 @@ async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
         .unwrap();
     assert_eq!(logs.items[0].run.id, run.id);
     assert_eq!(logs.items[0].total_tokens, Some(42));
+    assert_eq!(logs.items[0].input_tokens, Some(40));
+    assert_eq!(logs.items[0].output_tokens, Some(2));
+    assert_eq!(logs.items[0].input_cache_hit_tokens, Some(11));
 
     let report =
         <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
@@ -2089,6 +2092,9 @@ async fn failed_flow_run_log_summary_keeps_recorded_usage_ledger_tokens() {
         .await
         .unwrap();
     assert_eq!(report.tokens.total_tokens_sum, 42);
+    assert_eq!(report.tokens.input_tokens_sum, 40);
+    assert_eq!(report.tokens.output_tokens_sum, 2);
+    assert_eq!(report.tokens.input_cache_hit_tokens_sum, 11);
     assert_eq!(report.tokens.token_recorded_count, 1);
     assert_eq!(report.high_token_runs[0].flow_run_id, run.id);
 }
@@ -2361,6 +2367,21 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     .await
     .unwrap();
 
+    sqlx::query(
+        r#"
+        update application_run_log_summaries
+        set input_tokens = case flow_run_id when $1 then 80 when $2 then 300 end,
+            output_tokens = case flow_run_id when $1 then 20 when $2 then 100 end,
+            input_cache_hit_tokens = case flow_run_id when $1 then 10 when $2 then 50 end
+        where flow_run_id in ($1, $2)
+        "#,
+    )
+    .bind(console_run.id)
+    .bind(public_run.id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
     sqlx::query("delete from api_keys where id = $1")
         .bind(api_key_id)
         .execute(store.pool())
@@ -2414,6 +2435,9 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.duration.p95_duration_ms.round() as i64, 38_250);
     assert_eq!(report.duration.slow_run_rate, 0.5);
     assert_eq!(report.tokens.total_tokens_sum, 500);
+    assert_eq!(report.tokens.input_tokens_sum, 380);
+    assert_eq!(report.tokens.output_tokens_sum, 120);
+    assert_eq!(report.tokens.input_cache_hit_tokens_sum, 60);
     assert_eq!(report.tokens.avg_tokens_per_run, 250.0);
     assert_eq!(report.tokens.token_recorded_count, 2);
     assert_eq!(report.tool_callbacks.total_tool_callback_count, 2);
@@ -2422,6 +2446,9 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     assert_eq!(report.nodes.max_unique_node_count, 2);
     assert_eq!(report.concurrency.peak_concurrency, 2);
     assert_eq!(report.tokens_trend[0].total_tokens, 500);
+    assert_eq!(report.tokens_trend[0].input_tokens, 380);
+    assert_eq!(report.tokens_trend[0].output_tokens, 120);
+    assert_eq!(report.tokens_trend[0].input_cache_hit_tokens, 60);
     assert_eq!(report.protocols[0].protocol, "default");
     assert_eq!(report.protocols[1].protocol, "openai-responses-v1");
     assert_eq!(report.sources[0].source, "console");

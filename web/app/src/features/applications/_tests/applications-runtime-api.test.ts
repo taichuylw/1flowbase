@@ -34,6 +34,9 @@ vi.mock('@1flowbase/api-client', () => ({
     },
     tokens: {
       total_tokens_sum: 0,
+      input_tokens_sum: 0,
+      output_tokens_sum: 0,
+      input_cache_hit_tokens_sum: 0,
       avg_tokens_per_run: 0,
       token_recorded_count: 0
     },
@@ -329,6 +332,9 @@ describe('applications runtime api', () => {
           title: '退款总结',
           external_conversation_id: 'conversation-1',
           total_tokens: 120,
+          input_tokens: 90,
+          output_tokens: 30,
+          input_cache_hit_tokens: 45,
           unique_node_count: 3,
           tool_callback_count: 1,
           started_at: '2026-05-08T00:00:00Z',
@@ -348,7 +354,11 @@ describe('applications runtime api', () => {
           flow_run_id: 'run-1',
           application_id: 'app-1',
           scope_id: 'workspace-1',
-          title: '退款总结'
+          title: '退款总结',
+          total_tokens: 120,
+          input_tokens: 90,
+          output_tokens: 30,
+          input_cache_hit_tokens: 45
         }
       ],
       total: 1,

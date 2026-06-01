@@ -242,6 +242,9 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
             },
             tokens: {
               total_tokens_sum: 500,
+              input_tokens_sum: 380,
+              output_tokens_sum: 120,
+              input_cache_hit_tokens_sum: 60,
               avg_tokens_per_run: 250,
               token_recorded_count: 2
             },
@@ -267,7 +270,16 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
             concurrency: {
               peak_concurrency: 2
             },
-            tokens_trend: [],
+            tokens_trend: [
+              {
+                bucket_start: '2026-05-01T00:00:00Z',
+                run_count: 2,
+                total_tokens: 500,
+                input_tokens: 380,
+                output_tokens: 120,
+                input_cache_hit_tokens: 60
+              }
+            ],
             protocols: [],
             sources: [],
             authorized_accounts: [],
@@ -301,6 +313,18 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       },
       tokens_comparison: {
         previous_total_tokens_sum: 300
+      },
+      tokens_trend: [
+        {
+          input_tokens: 380,
+          output_tokens: 120,
+          input_cache_hit_tokens: 60
+        }
+      ],
+      tokens: {
+        input_tokens_sum: 380,
+        output_tokens_sum: 120,
+        input_cache_hit_tokens_sum: 60
       }
     });
 

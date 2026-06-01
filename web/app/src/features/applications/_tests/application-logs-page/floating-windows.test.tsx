@@ -212,6 +212,9 @@ function sampleRunDetail(): ApplicationRunDetail {
     },
     statistics: {
       total_tokens: 50,
+      input_tokens: 40,
+      output_tokens: 10,
+      input_cache_hit_tokens: 12,
       unique_node_count: 3,
       tool_callback_count: 20
     },
@@ -336,6 +339,9 @@ describe('ApplicationLogsPage - floating windows', () => {
           authorized_account: 'root',
           compatibility_mode: 'openai-responses-v1',
           total_tokens: 50,
+          input_tokens: 40,
+          output_tokens: 10,
+          input_cache_hit_tokens: 12,
           unique_node_count: 3,
           tool_callback_count: 20,
           started_at: '2026-04-17T09:00:00Z',
@@ -364,6 +370,9 @@ describe('ApplicationLogsPage - floating windows', () => {
             },
             statistics: {
               total_tokens: null,
+              input_tokens: null,
+              output_tokens: null,
+              input_cache_hit_tokens: null,
               unique_node_count: 0,
               tool_callback_count: 0
             },
@@ -828,6 +837,111 @@ describe('ApplicationLogsPage - floating windows', () => {
     ).toHaveStyle({
       left: '758px',
       width: '490px'
+    });
+  }, 20_000);
+
+  test('lets a floating window move past the viewport bottom while keeping its header reachable', async () => {
+    innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    innerHeightSpy = vi
+      .spyOn(window, 'innerHeight', 'get')
+      .mockReturnValue(900);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const detailWindow = await screen.findByTestId(
+      'application-logs-floating-run-detail'
+    );
+    expect(detailWindow).toHaveStyle({
+      top: '112px',
+      height: '720px'
+    });
+
+    fireEvent.mouseDown(within(detailWindow).getByText('运行详情'), {
+      button: 0,
+      clientX: 980,
+      clientY: 130
+    });
+    fireEvent.mouseMove(window, {
+      clientX: 980,
+      clientY: 1100
+    });
+    fireEvent.mouseUp(window);
+
+    expect(detailWindow).toHaveStyle({
+      left: '888px',
+      top: '852px',
+      height: '720px'
+    });
+  }, 20_000);
+
+  test('lets opened floating windows move independently after initial placement', async () => {
+    innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    innerHeightSpy = vi
+      .spyOn(window, 'innerHeight', 'get')
+      .mockReturnValue(900);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const runDetailWindow = await screen.findByTestId(
+      'application-logs-floating-run-detail'
+    );
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const conversationLogWindow = await screen.findByTestId(
+      'application-logs-floating-conversation-log'
+    );
+
+    expect(runDetailWindow).toHaveStyle({
+      left: '888px',
+      top: '112px',
+      width: '360px'
+    });
+    expect(conversationLogWindow).toHaveStyle({
+      left: '512px',
+      top: '112px',
+      width: '360px'
+    });
+
+    fireEvent.mouseDown(within(conversationLogWindow).getByText('对话日志'), {
+      button: 0,
+      clientX: 560,
+      clientY: 130
+    });
+    fireEvent.mouseMove(window, {
+      clientX: 740,
+      clientY: 170
+    });
+    fireEvent.mouseUp(window);
+
+    expect(conversationLogWindow).toHaveStyle({
+      left: '692px',
+      top: '152px'
+    });
+    expect(runDetailWindow).toHaveStyle({
+      left: '888px',
+      top: '112px'
     });
   }, 20_000);
 

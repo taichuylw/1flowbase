@@ -51,6 +51,9 @@ export type ApplicationRunSummary = {
   compatibility_mode?: string | null;
   idempotency_key?: string | null;
   total_tokens: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  input_cache_hit_tokens: number | null;
   unique_node_count: number;
   tool_callback_count: number;
   started_at: string;
@@ -752,6 +755,9 @@ function toApplicationRunSummary(
     compatibility_mode: optionalStringField(record, 'compatibility_mode'),
     idempotency_key: optionalStringField(record, 'idempotency_key'),
     total_tokens: optionalNumberField(record, 'total_tokens'),
+    input_tokens: optionalNumberField(record, 'input_tokens'),
+    output_tokens: optionalNumberField(record, 'output_tokens'),
+    input_cache_hit_tokens: optionalNumberField(record, 'input_cache_hit_tokens'),
     unique_node_count: numberField(record, 'unique_node_count'),
     tool_callback_count: numberField(record, 'tool_callback_count'),
     started_at: stringField(record, 'started_at'),
