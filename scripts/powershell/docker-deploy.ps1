@@ -1,3 +1,13 @@
+param(
+  [string]$DbPassword = $env:FLOWBASE_DB_PASSWORD,
+  [string]$RootAccount = $env:FLOWBASE_ROOT_ACCOUNT,
+  [string]$RootPassword = $env:FLOWBASE_ROOT_PASSWORD,
+  [string]$ProviderSecret = $env:FLOWBASE_PROVIDER_SECRET,
+  [string]$WebPort = $env:FLOWBASE_WEB_PORT,
+  [switch]$NoStart,
+  [switch]$PrepareOnly
+)
+
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
@@ -9,6 +19,7 @@ $FlowbaseArchiveUrl = if ($env:FLOWBASE_ARCHIVE_URL) {
   "https://codeload.github.com/$FlowbaseRepo/tar.gz/refs/heads/$FlowbaseRef"
 }
 $FlowbaseArchiveDockerDir = "1flowbase-$FlowbaseRef/docker"
+$ShouldStart = -not ($NoStart -or $PrepareOnly -or $env:FLOWBASE_NO_START -eq "1" -or $env:FLOWBASE_NO_START -eq "true")
 
 function Fail([string]$Message) {
   Write-Host $Message
@@ -29,13 +40,31 @@ function Read-EnvValue([string]$Key, [string]$Path) {
   return $null
 }
 
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  Fail "Docker is required. Install Docker Desktop or Docker Engine first."
+function Set-EnvValue([string]$Key, [string]$Value, [string]$Path) {
+  $Lines = [System.Collections.Generic.List[string]]::new()
+  if (Test-Path $Path) {
+    foreach ($Line in Get-Content $Path) {
+      $Lines.Add($Line)
+    }
+  }
+
+  $Found = $false
+  for ($Index = 0; $Index -lt $Lines.Count; $Index++) {
+    if ($Lines[$Index] -match "^$([regex]::Escape($Key))=") {
+      $Lines[$Index] = "$Key=$Value"
+      $Found = $true
+    }
+  }
+
+  if (-not $Found) {
+    $Lines.Add("$Key=$Value")
+  }
+
+  Set-Content -Path $Path -Value $Lines -Encoding UTF8
 }
 
-docker info *> $null
-if ($LASTEXITCODE -ne 0) {
-  Fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+  Fail "Docker is required. Install Docker Desktop or Docker Engine first."
 }
 
 $UseDockerComposePlugin = $false
@@ -70,6 +99,39 @@ if (-not (Test-Path ".\docker\.env")) {
   Write-Host "Created docker/.env from docker/.env.example."
 } else {
   Write-Host "Using existing docker/.env."
+}
+
+if ($DbPassword) {
+  Set-EnvValue "POSTGRES_PASSWORD" $DbPassword ".\docker\.env"
+  Write-Host "Updated POSTGRES_PASSWORD in docker/.env."
+}
+if ($RootAccount) {
+  Set-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" $RootAccount ".\docker\.env"
+  Write-Host "Updated BOOTSTRAP_ROOT_ACCOUNT in docker/.env."
+}
+if ($RootPassword) {
+  Set-EnvValue "BOOTSTRAP_ROOT_PASSWORD" $RootPassword ".\docker\.env"
+  Write-Host "Updated BOOTSTRAP_ROOT_PASSWORD in docker/.env."
+}
+if ($ProviderSecret) {
+  Set-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" $ProviderSecret ".\docker\.env"
+  Write-Host "Updated API_PROVIDER_SECRET_MASTER_KEY in docker/.env."
+}
+if ($WebPort) {
+  Set-EnvValue "WEB_PORT" $WebPort ".\docker\.env"
+  Write-Host "Updated WEB_PORT in docker/.env."
+}
+
+if (-not $ShouldStart) {
+  Write-Host "Docker files are ready in ./docker."
+  Write-Host "No containers were started because -NoStart was used."
+  Write-Host "To start later, run: cd docker && docker compose pull && docker compose up -d"
+  exit 0
+}
+
+docker info *> $null
+if ($LASTEXITCODE -ne 0) {
+  Fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
 }
 
 Set-Location ".\docker"
