@@ -107,6 +107,14 @@ POSTGRES_DB=1flowbase
 `
   );
   writeFile(
+    path.join(repoRoot, 'docker', '.env'),
+    `FLOWBASE_WEB_VERSION=0.0.1
+FLOWBASE_API_SERVER_VERSION=0.0.1
+FLOWBASE_PLUGIN_RUNNER_VERSION=0.0.1
+POSTGRES_DB=1flowbase
+`
+  );
+  writeFile(
     path.join(repoRoot, 'api', 'plugins', 'templates', 'fixture', 'manifest.yaml'),
     `name: fixture
 version: 0.1.0
@@ -148,8 +156,10 @@ test('runVersionBump previews changes during dry-run without writing files', () 
   assert.match(output.join(''), /web\/app\/package\.json/u);
 });
 
-test('runVersionBump updates frontend, backend, lockfile, and docker component versions', () => {
+test('runVersionBump updates frontend, backend, and lockfile versions', () => {
   const repoRoot = createFixtureRepo();
+  const originalDockerExample = fs.readFileSync(path.join(repoRoot, 'docker', '.env.example'), 'utf8');
+  const originalDockerEnv = fs.readFileSync(path.join(repoRoot, 'docker', '.env'), 'utf8');
 
   const status = runVersionBump({
     repoRoot,
@@ -175,10 +185,8 @@ test('runVersionBump updates frontend, backend, lockfile, and docker component v
   assert.match(lockfile, /name = "domain"\nversion = "0\.1\.1"/u);
   assert.match(lockfile, /name = "serde"\nversion = "1\.0\.0"/u);
 
-  const dockerEnv = fs.readFileSync(path.join(repoRoot, 'docker', '.env.example'), 'utf8');
-  assert.match(dockerEnv, /FLOWBASE_WEB_VERSION=0\.1\.2/u);
-  assert.match(dockerEnv, /FLOWBASE_API_SERVER_VERSION=0\.1\.1/u);
-  assert.match(dockerEnv, /FLOWBASE_PLUGIN_RUNNER_VERSION=0\.1\.1/u);
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'docker', '.env.example'), 'utf8'), originalDockerExample);
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'docker', '.env'), 'utf8'), originalDockerEnv);
 
   assert.equal(
     fs.readFileSync(path.join(repoRoot, 'api', 'plugins', 'templates', 'fixture', 'manifest.yaml'), 'utf8'),
@@ -202,6 +210,7 @@ test('runVersionBump can pin every owned component to an explicit version', () =
   assert.match(fs.readFileSync(path.join(repoRoot, 'api', 'Cargo.toml'), 'utf8'), /version = "0\.3\.0"/u);
   assert.match(
     fs.readFileSync(path.join(repoRoot, 'docker', '.env.example'), 'utf8'),
-    /FLOWBASE_API_SERVER_VERSION=0\.3\.0/u
+    /FLOWBASE_API_SERVER_VERSION=latest/u
   );
+  assert.match(fs.readFileSync(path.join(repoRoot, 'docker', '.env'), 'utf8'), /FLOWBASE_API_SERVER_VERSION=0\.0\.1/u);
 });

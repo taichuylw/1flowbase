@@ -2,23 +2,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RELEASES = new Set(['patch', 'minor', 'major']);
-const DOCKER_VERSION_KEYS = [
-  {
-    key: 'FLOWBASE_WEB_VERSION',
-    label: 'docker web image tag',
-    target: 'frontend:@1flowbase/web',
-  },
-  {
-    key: 'FLOWBASE_API_SERVER_VERSION',
-    label: 'docker api-server image tag',
-    target: 'cargo:api-server',
-  },
-  {
-    key: 'FLOWBASE_PLUGIN_RUNNER_VERSION',
-    label: 'docker plugin-runner image tag',
-    target: 'cargo:plugin-runner',
-  },
-];
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -52,8 +35,8 @@ function usage(writeStdout = (text) => process.stdout.write(text)) {
        node scripts/node/bump-version.js --to <x.y.z> [--dry-run]
 
 Defaults to applying a patch bump.
-Targets owned frontend packages, owned Rust backend packages, Cargo.lock owned entries,
-and docker/.env* FLOWBASE_* image tags. Plugin manifests and third-party image tags are not touched.
+Targets owned frontend packages, owned Rust backend packages, and Cargo.lock owned entries.
+Plugin manifests, Docker env files, and third-party image tags are not touched.
 `);
 }
 
@@ -177,7 +160,7 @@ function discoverFrontendPackageFiles(repoRoot) {
   return packageFiles;
 }
 
-function updateFrontendVersions({ changes, frontendVersions, mutatedFiles, options, repoRoot }) {
+function updateFrontendVersions({ changes, mutatedFiles, options, repoRoot }) {
   for (const filePath of discoverFrontendPackageFiles(repoRoot)) {
     const packageJson = JSON.parse(getMutableText(mutatedFiles, filePath));
     if (!packageJson.version) {
@@ -186,7 +169,6 @@ function updateFrontendVersions({ changes, frontendVersions, mutatedFiles, optio
     const nextVersion = resolveNextVersion(packageJson.version, options);
     const label = `frontend ${packageJson.name || relativePath(repoRoot, filePath)}`;
 
-    frontendVersions.set(`frontend:${packageJson.name}`, nextVersion);
     pushChange(changes, repoRoot, filePath, label, packageJson.version, nextVersion);
 
     if (packageJson.version !== nextVersion) {
@@ -361,53 +343,6 @@ function updateCargoLockVersions({ backendVersions, changes, mutatedFiles, repoR
   }
 }
 
-function updateDockerEnvFile({ changes, dockerVersions, filePath, mutatedFiles, repoRoot }) {
-  const text = readIfExists(filePath);
-  if (!text) {
-    return;
-  }
-
-  let nextText = text;
-  for (const item of DOCKER_VERSION_KEYS) {
-    const nextVersion = dockerVersions.get(item.target);
-    if (!nextVersion) {
-      continue;
-    }
-
-    const pattern = new RegExp(`^(${item.key}=)([^\\n\\r]*)$`, 'mu');
-    const match = pattern.exec(nextText);
-    if (!match || match[2] === nextVersion) {
-      continue;
-    }
-
-    pushChange(changes, repoRoot, filePath, item.label, match[2], nextVersion);
-    nextText = nextText.replace(pattern, `$1${nextVersion}`);
-  }
-
-  if (nextText !== text) {
-    setMutableText(mutatedFiles, filePath, nextText);
-  }
-}
-
-function updateDockerVersions({ backendVersions, changes, frontendVersions, mutatedFiles, repoRoot }) {
-  const dockerVersions = new Map([...frontendVersions, ...backendVersions]);
-  const dockerDir = path.join(repoRoot, 'docker');
-  updateDockerEnvFile({
-    changes,
-    dockerVersions,
-    filePath: path.join(dockerDir, '.env.example'),
-    mutatedFiles,
-    repoRoot,
-  });
-  updateDockerEnvFile({
-    changes,
-    dockerVersions,
-    filePath: path.join(dockerDir, '.env'),
-    mutatedFiles,
-    repoRoot,
-  });
-}
-
 function writeSummary({ changes, dryRun, writeStdout }) {
   if (changes.length === 0) {
     writeStdout('[1flowbase-bump-version] no version changes needed\n');
@@ -432,12 +367,10 @@ function runVersionBump({
 
   const changes = [];
   const mutatedFiles = new Map();
-  const frontendVersions = new Map();
   const backendVersions = new Map();
 
   updateFrontendVersions({
     changes,
-    frontendVersions,
     mutatedFiles,
     options,
     repoRoot,
@@ -452,13 +385,6 @@ function runVersionBump({
   updateCargoLockVersions({
     backendVersions,
     changes,
-    mutatedFiles,
-    repoRoot,
-  });
-  updateDockerVersions({
-    backendVersions,
-    changes,
-    frontendVersions,
     mutatedFiles,
     repoRoot,
   });
