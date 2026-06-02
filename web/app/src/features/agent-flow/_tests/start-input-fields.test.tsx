@@ -70,12 +70,17 @@ function DocumentObserver({
   return null;
 }
 
-function expectSystemVariableType(title: string, valueType: string) {
-  const row = screen
-    .getByText(title)
-    .closest('.agent-flow-start-input-fields__system-variable');
+function escapedPattern(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-  expect(row?.textContent?.toLowerCase()).toContain(valueType.toLowerCase());
+function expectSystemVariableType(key: string, title: string, valueType: string) {
+  const row = screen.getByTestId(`start-system-variable-${key}`);
+
+  expect(within(row).getByText(title)).toBeInTheDocument();
+  expect(
+    within(row).getByText(new RegExp(`^${escapedPattern(valueType)}$`, 'i'))
+  ).toBeInTheDocument();
 }
 
 describe('start input fields', () => {
@@ -112,10 +117,22 @@ describe('start input fields', () => {
     expect(screen.getByText('userinput.files')).toBeInTheDocument();
     expect(screen.getByText('userinput.tools')).toBeInTheDocument();
     expect(screen.getByText('userinput.tool_choice')).toBeInTheDocument();
-    expectSystemVariableType('userinput.history', 'array');
-    expectSystemVariableType('userinput.files', 'array[object]');
-    expectSystemVariableType('userinput.tools', 'array[object]');
-    expectSystemVariableType('userinput.tool_choice', 'json');
+    expectSystemVariableType('history', 'userinput.history', 'array');
+    expectSystemVariableType(
+      'files',
+      'userinput.files',
+      'array[object]'
+    );
+    expectSystemVariableType(
+      'tools',
+      'userinput.tools',
+      'array[object]'
+    );
+    expectSystemVariableType(
+      'tool_choice',
+      'userinput.tool_choice',
+      'json'
+    );
     expect(screen.queryByText('上一轮用户消息')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /userinput\.history/ }));

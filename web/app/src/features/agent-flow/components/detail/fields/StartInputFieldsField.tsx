@@ -362,6 +362,7 @@ export function StartInputFieldsField({
             return (
               <div
                 key={variable.key}
+                data-testid={`start-system-variable-${variable.key}`}
                 className={[
                   'agent-flow-start-input-fields__system-variable',
                   expanded
