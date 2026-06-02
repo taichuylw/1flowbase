@@ -132,11 +132,11 @@ export function StartInputFieldsField({
 }) {
   const fields = normalizeList(value);
   const [editing, setEditing] = useState<EditingInputField | null>(null);
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [expandedSystemKeys, setExpandedSystemKeys] = useState<Set<string>>(
     () => new Set()
   );
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const draggingIndexRef = useRef<number | null>(null);
 
   function openAddPanel() {
     setEditing({
@@ -190,17 +190,19 @@ export function StartInputFieldsField({
   }
 
   function handleDragStart(index: number) {
-    setDraggingIndex(index);
+    draggingIndexRef.current = index;
   }
 
   function handleDrop(targetIndex: number) {
+    const draggingIndex = draggingIndexRef.current;
+
     if (draggingIndex === null || draggingIndex === targetIndex) {
-      setDraggingIndex(null);
+      draggingIndexRef.current = null;
       return;
     }
 
     onChange(moveItem(fields, draggingIndex, targetIndex));
-    setDraggingIndex(null);
+    draggingIndexRef.current = null;
   }
 
   function toggleSystemVariable(key: string) {
@@ -258,7 +260,9 @@ export function StartInputFieldsField({
                 className="agent-flow-start-input-fields__drag-handle"
                 draggable
                 onDragStart={() => handleDragStart(index)}
-                onDragEnd={() => setDraggingIndex(null)}
+                onDragEnd={() => {
+                  draggingIndexRef.current = null;
+                }}
                 type="button"
               >
                 <HolderOutlined />
