@@ -8,23 +8,19 @@
   <b>English</b> | <a href="docs/READEME-i18n/README_CN.md">简体中文</a>
 </p>
 
-> **Dialogue is the Moat, the AI-Native Application Foundation**
+> **Al app base begins from chat history.**
 
 1flowbase is designed to provide a unified foundation for future AI-native applications and AI-Native Organizations.
 
 ## 💡 Core Features
 
-*   💬 **Virtual Model Endpoint**: Externally, the Virtual Model interface functions as a standard LLM API, but internally it executes full, multi-model orchestration workflows. Compatible with OpenAI/Anthropic protocols.
+*   💬 **Virtual Model Endpoint (Virtual Model)**: Externally, the Virtual Model interface functions as a standard LLM API, but internally it executes full, multi-model orchestration workflows. Compatible with OpenAI/Anthropic protocols.
 *   📜 **Full Chat History & Tool Callback Logs (Chat Logs & Tool Trace)**: Features a built-in full-link trace tracking system to precisely reconstruct the workflow execution path, node inputs/outputs, and tool callback details behind every conversation.
 *   🤖 **Native Multi-Agent Client Support (Multi-Agent Clients)**: Native support and adaptation for multiple local agents and client tools (such as aionui, codex, Claude Code, etc.), offering seamless protocol integration and relay capabilities.
 
 ---
 
 ## 💡 What is a Virtual Model?
-
-<p align="center">
-  <video src="docs/assets/claude_code_use.mp4" width="100%" controls></video>
-</p>
 
 Externally, the Virtual Model interface behaves like a standard LLM API, but internally it executes a complete, multi-model orchestration workflow.
 
@@ -50,6 +46,34 @@ Gemini Vision (Visual Context Extraction)
 ```
 
 To the calling client, it is just a single model; to you, it is a fully programmable AI workflow.
+
+![img](docs/assets/640.jpeg)
+
+Then, publish it directly as an OpenAI/Anthropic-compatible API endpoint.
+
+![img](docs/assets/640-17803586907163.jpeg)
+
+![img](docs/assets/640-17803586998246.jpeg)
+
+You can customize the exposed model information:
+
+![img](docs/assets/640-17803587501769.jpeg)
+
+Then, you can use it directly in Claude Code:
+
+![image-20260602080606711](docs/assets/image-20260602080606711.png)
+
+Detailed execution traces can be inspected in the logs:
+
+![img](docs/assets/640-178035878311612.jpeg)
+
+For complex tasks, a detailed callback trace log is available:
+
+![image-20260602080644672](docs/assets/image-20260602080644672.png)
+
+Token consumption statistics are tracked for each application:
+
+![img](docs/assets/640-178035881698115.jpeg)
 
 ---
 
@@ -101,24 +125,6 @@ MODEL=deepseek-with-vision
 * **Build a Custom Brain for Coding Agents**: Package complex "code generation → Clippy verification → syntax repair" loops into a virtual model to make your agent smarter without changing the client.
 * **Control Costs via Model Cascading**: Filter standard requests with small models and only delegate complex queries to premium reasoning models.
 * **Ensure Structured and High-Quality Output**: Detect and repair corrupted JSON formats using a dedicated structure verification node before the final response is returned.
-
----
-
-## 🗺️ Roadmap
-
-### Implemented Core Features
-- [x] **Low-code visual workflow editor**
-- [x] **Multiple built-in node types and hybrid orchestration**
-- [x] **Cost and latency trace dashboard**
-- [x] **Prompt and model configuration version history management**
-- [x] **OpenAI Responses protocol and streaming output support**
-- [x] **Claude Messages protocol and streaming output support**
-
-### Upcoming Features
-- [ ] **Native conversation collection & full-link trace logs** — The crucial first step to accumulating an organization-specific "conversation moat".
-- [ ] **End-to-end AI-native low-code application builder** — Extending from virtual endpoints to full AI applications.
-- [ ] **Enterprise-grade team workspace & multi-tenant management**
-- [ ] **Enhanced MCP (Model Context Protocol) plugin nodes support**
 
 ---
 
@@ -216,6 +222,26 @@ node scripts/node/dev-up.js restart  # Restart services
 ```
 
 For more advanced script options such as UI debugging, automation testing, and cache cleaning, please refer to [scripts/README.md](scripts/README.md).
+
+---
+
+## 🗺️ Roadmap
+
+### Implemented Core Features
+
+- [x] **Low-code visual workflow editor**
+- [x] **Multiple built-in node types and hybrid orchestration**
+- [x] **Cost and latency trace dashboard**
+- [x] **Prompt and model configuration version history management**
+- [x] **OpenAI Responses protocol and streaming output support**
+- [x] **Claude Messages protocol and streaming output support**
+
+### Upcoming Features
+
+- [ ] **Native conversation collection & full-link trace logs** — The crucial first step to accumulating an organization-specific "conversation moat".
+- [ ] **End-to-end AI-native low-code application builder** — Extending from virtual endpoints to full AI applications.
+- [ ] **Enterprise-grade team workspace & multi-tenant management**
+- [ ] **Enhanced MCP (Model Context Protocol) plugin nodes support**
 
 ---
 
