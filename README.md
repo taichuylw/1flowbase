@@ -8,884 +8,384 @@
   <b>English</b> | <a href="docs/READEME-i18n/README_CN.md">简体中文</a>
 </p>
 
-> **The first step to harness is to see the Agent's execution path clearly**
+**Open-source virtual model gateway for local AI agent clients.**
 
-You might think you just sent a simple `hi`, but the model could have actually received 17K input tokens.
+1flowbase lets you build multi-model workflows, publish them as OpenAI / Claude-compatible model endpoints, and inspect what happened behind each request: model calls, node inputs and outputs, tool callbacks, tokens, latency, failures, and cost.
 
-1flowbase is an open-source observability platform and virtual model gateway designed for local AI Agents.
+Use it to:
 
-It helps you reconstruct what local Agents like Claude Code, Codex, and aionui do in every single run:
+- compose multiple models, tools, verifiers, routers, and formatters into one workflow
+- expose that workflow through OpenAI Responses, OpenAI Chat Completions, or Claude-compatible Messages APIs
+- call the workflow from compatible local AI clients and SDKs that support custom model endpoints
+- debug execution node by node instead of only seeing the final answer
+- optimize cost with model cascading, fallback, verification, and formatting steps
 
-- What prompt was ultimately concatenated for the model
-- What tool definitions and system rules were injected
-- What historical contexts and project memories were carried over
-- What tool calls were executed and command outputs were returned
-- How many tokens and how much time each step consumed
-- What hidden contexts caused token and cost waste
-- Which paths led to failure, loops, or erroneous outputs
-
-Once you can see the Agent's real execution path clearly, you can optimize your AI Harness based on real-world runtime data: compress prompts, split contexts, adjust tool definitions, optimize model routing, add verifiers, and further publish the optimized multi-model chains as OpenAI or Claude-compatible virtual model endpoints.
+> LiteLLM routes models.  
+> 1flowbase composes models into workflow-backed virtual model endpoints.
 
 ```text
-User Input
-  → Agent Harness concatenates Prompts / Tools / History / Memory
-  → Model Request
-  → Tool Calls
-  → Command Outputs
-  → Tokens / Cost / Trace
-  → Harness Optimization
-  → Multi-Model Orchestration
-  → Virtual Model Endpoint
+Build workflow → Publish endpoint → Call from clients → Inspect trace / tokens / cost → Optimize
 ```
 
 ---
 
-## Have You Encountered These Problems?
+## Why?
 
-### Are you curious about what the Agent actually concatenated for the model?
+Many AI tools only show the final response. A real AI request may include far more than the visible user message:
 
-Local Agents do not simply forward user inputs to the model.
+```text
+user input + system prompt + developer prompt + tool definitions + project context
++ chat history + command outputs + intermediate model calls + verifier / formatter steps
+```
 
-They usually automatically concatenate behind the scenes:
+That hidden execution path affects token cost, latency, model behavior, failure rate, output quality, and unit economics.
 
-* System Prompts
-* Developer Prompts
-* Tool definitions
-* MCP tool information
-* Chat history
-* Project context
-* File contents
-* Command outputs
-* Model switching information
-* Memory & rules injection
+A short input like `hi` can still become an expensive request once the surrounding context, tool schemas, history, and workflow steps are attached.
 
-These hidden contexts directly impact model performance, context length, response latency, and token costs.
-
-1flowbase spreads these hidden details out for you to see.
+1flowbase helps you see the workflow behind the request, then optimize it with real runtime data instead of guesswork.
 
 ---
 
-### Why did a simple `hi` burn 17K tokens?
+## What works today
 
-What the user sees might only be:
+Current focus: **workflow-backed virtual model endpoints** and **execution visibility inside 1flowbase workflows**.
 
-```text
-hi
-```
+Implemented:
 
-But what the model actually receives could be a complete context concatenated by the Agent Harness.
+- visual workflow editor
+- multi-node workflow orchestration
+- virtual model endpoint publishing
+- OpenAI Responses API support
+- OpenAI Chat Completions API support
+- Claude-compatible Messages API support
+- streaming response support
+- basic execution logs
+- tool callback traces inside 1flowbase workflows
+- application-level token statistics
+- prompt and model configuration version history
 
-For example:
+In progress:
 
-```text
-System Prompt
-Tool Definitions
-Chat History
-Project Memory
-Local Command Outputs
-File Contents
-Model Switching Information
-```
+- deeper local agent conversation collection
+- session search and playback
+- Token Bill of Materials: system prompts, tool definitions, history, command outputs, and node-level sources
+- abnormal cost detection
+- Recall Pack export
+- more Claude Code / Codex / aionui templates
+- MCP-aware plugin nodes and tool-call source attribution
 
-Many times, the real token burner is not the user's input, but the massive hidden context automatically concatenated by the Harness behind the scenes.
-
-1flowbase displays the prompt, tool definitions, command outputs, and context structure actually received by the model, tracking input/output tokens, latency, and status for every step.
-
-You no longer just see the final response—you see exactly where the money was spent.
-
----
-
-### Do you want to know how prompts for Claude Code, Codex, or aionui are concatenated?
-
-1flowbase reconstructs an Agent run into a readable Trace:
-
-```text
-User Input
-  → Hidden Prompt Injection
-  → LLM Request
-  → Tool Selection
-  → Bash / File / MCP Execution
-  → Tool Return
-  → Model Continues Generation
-  → Final Response
-```
-
-You can see the Agent's execution path just like analyzing a backend distributed tracing system.
+> Note: 1flowbase is not currently positioned as an MCP server or MCP gateway. MCP-aware capabilities are on the roadmap. The current product focuses on publishing compatible model endpoints and tracing 1flowbase workflow execution.
 
 ---
 
-### Do you want to optimize your project Harness based on real observations?
+## How it works
 
-When you know where tokens and failures come from, you can optimize further:
+### 1. Build a workflow
 
-* Which prompts should be compressed
-* Which tool definitions should be loaded on demand
-* Which historical contexts should be summarized
-* Which tasks should be delegated to cheaper small models
-* Which steps require a Verifier
-* Which outputs require a Formatter
-* Which failure paths require a fallback
-* Which sessions should be exported as a Recall Pack
+```text
+Vision Model → Small Model → Strong Reasoning Model → Verifier → Formatter
+```
 
-The goal of 1flowbase is not to let you tune prompts by gut feeling, but to enable you to optimize your AI Harness based on real execution paths.
+### 2. Publish it as a model endpoint
+
+```text
+/v1/responses
+/v1/chat/completions
+/v1/messages
+```
+
+### 3. Call it from existing clients
+
+To the client, it looks like a normal model. To you, it is an observable and tunable workflow.
+
+### 4. Inspect the execution
+
+```text
+Request
+  → workflow node inputs
+  → model calls
+  → tool callbacks
+  → node outputs
+  → token usage / latency / errors
+  → final response
+```
+
+### 5. Optimize and reuse
+
+Compress prompts, split long context, move simple steps to cheaper models, add verifiers / formatters, add fallback strategies, then publish the optimized workflow as a reusable virtual model.
 
 ---
 
-## Core Progression of 1flowbase
+## Quick Start
 
-```text
-See Path → Explain Cost → Optimize Harness → Combine Models → Publish Endpoint
-```
+### One-click Docker deployment
 
-### 1. See Path
-
-Reconstruct the real execution path of every Agent run:
-
-* User Input
-* Prompt concatenation
-* Tool definition injection
-* Historical context inclusion
-* Model requests
-* Tool calls
-* Command outputs
-* Final responses
-
-### 2. Explain Cost
-
-Explain why a request was expensive, slow, or failed:
-
-* Which contexts consumed the most tokens
-* Which tool definitions were repeatedly injected
-* Which historical messages bloated or polluted the model context
-* Which command outputs were excessively large
-* Which failed tasks caused abnormal costs
-* Which steps had the highest latency
-* Which model calls were the most expensive
-
-### 3. Optimize Harness
-
-Optimize based on real-world runtime data:
-
-* Prompts
-* Tool definitions
-* Memory injection
-* Historical context length
-* Model routing
-* Verifiers
-* Formatters
-* Fallback strategies
-
-### 4. Combine Models
-
-Combine multiple models, tools, and validation nodes into a single reusable workflow:
-
-```text
-Vision → Small Model Classification → Strong Model Reasoning → Verifier → Formatter
-```
-
-### 5. Publish Endpoint
-
-Publish the optimized workflow as a standard model interface:
-
-* OpenAI Responses API
-* OpenAI Chat Completions API
-* Claude-compatible Messages API
-
-To the client, it is just a single model.  
-To you, it is an observable, tunable, and composable AI workflow.
-
----
-
-## 🚀 Quick Start
-
-### One-Click Docker Deployment (Recommended)
-
-The following commands will not install Docker. The deployment script checks if a working Docker/Compose environment is available on your machine, pulls the `docker/` directory to the current path, and copies `docker/.env.example` to `docker/.env`.
-
-#### Shell
+The script checks whether Docker / Compose is available, pulls the `docker/` directory, and copies `docker/.env.example` to `docker/.env`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
 ```
 
-#### PowerShell
+PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
 ```
 
-#### Windows CMD
+Windows CMD:
 
 ```bat
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
 ```
 
----
+### Run from source
 
-### Run from Source (Development Mode)
-
-#### Environment Requirements
-
-* **Node.js**: `>= 24.0.0`
-* **Rust**: Latest stable compiler version
-* **Docker**: For starting middleware required for local development
-
-#### 1. Clone the Repository
+Requirements: Node.js `>= 24.0.0`, latest stable Rust, and Docker for local middleware.
 
 ```bash
 git clone https://github.com/taichuy/1flowbase.git
 cd 1flowbase
-```
 
-#### 2. Start Middleware
-
-```bash
 docker compose -f docker/docker-compose.middleware.yaml up -d
-```
 
-#### 3. Start the Frontend
-
-```bash
 cd web
 pnpm install
 pnpm dev
 ```
 
-Frontend access URL:
+Frontend:
 
 ```text
 http://127.0.0.1:3100
 ```
 
-#### 4. Start the Backend
-
-Before running for the first time, make sure to copy `api/apps/api-server/.env.example` to `.env` and configure it.
+Start backend services:
 
 ```bash
 cd api
-
-# Start the API server
+# Copy api/apps/api-server/.env.example to .env before the first run.
 cargo run -p api-server --bin api-server
-
-# Start the plugin runner
 cargo run -p plugin-runner --bin plugin-runner
 ```
 
-Default service endpoints:
+Default backend endpoints:
 
 ```text
 API Server: http://127.0.0.1:7800
 Plugin Runner: http://127.0.0.1:7801
 ```
 
----
-
-### Script-Assisted Startup
-
-To simplify the local development process, the repository provides a unified Node utility script:
+Script-assisted startup:
 
 ```bash
-# Fully spin up the frontend, backend, middleware, and plugin runner
 node scripts/node/dev-up.js
-
-# Spin up only the frontend and backend processes, skipping Docker middleware
-node scripts/node/dev-up.js --skip-docker
-
-# Check the status of each service
 node scripts/node/dev-up.js status
-
-# Stop all running local services
 node scripts/node/dev-up.js stop
-
-# Restart services
 node scripts/node/dev-up.js restart
 ```
 
-For more detailed script options, please refer to [scripts/README.md](scripts/README.md).
+See [scripts/README.md](scripts/README.md) for more options.
 
 ---
 
-## 🖼️ Feature Preview
+## Feature preview
 
-### 1. Build Multi-Model Workflows
+### Build multi-model workflows
 
-You can build workflows consisting of multiple models, tools, verifiers, and formatter nodes within 1flowbase.
+Create workflows with multiple models, tools, verifiers, and formatter nodes.
 
 ![Workflow Editor Preview](docs/assets/workflow_editor_preview.jpeg)
 
----
-
-### 2. Publish as OpenAI-Compatible API
-
-Once built, workflows can be published as OpenAI-compatible interfaces.
+### Publish as OpenAI-compatible API
 
 ![Publish OpenAI API](docs/assets/api_endpoint_publish_1.jpeg)
 
----
-
-### 3. Publish as Claude-Compatible Messages API
-
-The same workflow can also be exposed externally via the Claude-compatible Messages API.
+### Publish as Claude-compatible Messages API
 
 ![Publish Claude API](docs/assets/api_endpoint_publish_2.jpeg)
 
----
-
-### 4. Customize Exposed Model Information
-
-You can customize the model name, description, and capability details exposed to the public.
+### Customize exposed model information
 
 ![Custom Model Settings](docs/assets/custom_model_settings.jpeg)
 
----
+### Use in compatible local AI clients
 
-### 5. Use in Clients Like Claude Code
-
-Once published, it can be called in any Claude-compatible client that supports custom endpoints.
+Call a published workflow from compatible clients that support custom model endpoints.
 
 ![Claude Code Terminal Usage](docs/assets/claude_code_terminal_usage.png)
 
----
+### View execution logs
 
-### 6. View Complete Execution Logs
-
-You can inspect the model requests, node inputs/outputs, tool calls, and response content behind an execution.
+Inspect model requests, node inputs and outputs, tool callbacks, response content, latency, and errors.
 
 ![Detailed Execution Logs](docs/assets/detailed_execution_logs.jpeg)
 
----
-
-### 7. View Tool Callback Trace
-
-For complex tasks, 1flowbase displays detailed tool callbacks, command outputs, and execution paths.
+### View tool callback traces
 
 ![Tool Callback Trace Logs](docs/assets/tool_callback_trace_logs.png)
 
----
-
-### 8. Track Token Consumption
-
-Track token consumption by application, model, and session to help you understand real costs.
+### Track token consumption
 
 ![Token Consumption Dashboard](docs/assets/token_consumption_dashboard.jpeg)
 
 ---
 
-## 💡 What is the Agent Execution Path?
+## Protocol compatibility
 
-Most local Agent clients only display the final conversation results.
+| Protocol | API path | Typical usage |
+|---|---:|---|
+| OpenAI Responses API | `/v1/responses` | newer OpenAI-style clients and application code |
+| OpenAI Chat Completions API | `/v1/chat/completions` | SDKs, coding tools, chat clients, application frameworks |
+| Claude-compatible Messages API | `/v1/messages` | Claude-compatible clients that support custom endpoints |
 
-But in reality, a typical Agent request contains:
+Build one workflow, then expose it through multiple protocols.
 
-* System Prompt
-* Developer Prompt
-* Tool Definitions
-* Chat History
-* Project Memory
-* Local Command Outputs
-* File Contents
-* MCP Tool Returns
-* Intermediate Model Responses
-* Tool Execution Results
+---
 
-All of these together make up the Agent's execution path.
+## Typical use cases
 
-They directly affect:
-
-* Model performance
-* Context length
-* Response latency
-* Token consumption
-* Tool execution results
-* Final costs
-* Task success rate
-
-1flowbase records these hidden processes and displays them as a Trace:
+### Add vision or OCR before a text model
 
 ```text
-User Input
-  → Hidden Prompt Injection
-  → LLM Request
-  → Tool Selection
-  → Bash / File / MCP Execution
-  → Tool Return
-  → Model Continues Generation
-  → Final Response
+Image / screenshot / PDF → Vision or OCR node → structured text context → strong text model → verifier → final answer
 ```
 
-You can use it to answer questions like:
-
-* Why was this request so expensive?
-* Why did a simple input trigger tens of thousands of tokens?
-* Which tool execution failed?
-* Which historical context bloated or polluted the model?
-* Which node was the slowest?
-* Which model can be replaced with a cheaper alternative?
-* Which session should be compressed, exported, or reused?
-
----
-
-## 💡 What is the AI Harness?
-
-In 1flowbase, **AI Harness** refers to the entire engineering framework and orchestration outside the model itself.
-
-It includes:
-
-* Prompts
-* System Messages
-* Tool Definitions
-* Tool Calling Policies
-* Memory Injection
-* Historical Context
-* File Context
-* Model Routing
-* Verifiers
-* Formatters
-* Cost Control
-* Failure Retries
-* Fallback Strategies
-
-While the model itself is crucial, commercial AI applications cannot rely solely on the model being "powerful."
-
-For personal use, directly chatting with a premium model might suffice.  
-But for commercial projects, every single request incurs token costs.
-
-Without observation, analysis, and optimization, you might encounter:
+### Control cost with model cascading
 
 ```text
-More Users
-  → More Requests
-  → More Token Consumption
-  → Higher Model Costs
-  → If the revenue model doesn't cover costs, growth only widens the loss
+Simple classification → small model
+Formatting → small model
+Complex reasoning → strong model
+Final verification → verifier node
 ```
 
-Therefore, 1flowbase focuses not just on model capabilities, but on the **unit economics** of AI applications:
+### Guarantee output structure
 
-* Performance
-* Cost
-* Latency
-* Stability
-* Traceability
-* Reusability
+Use verifiers, JSON schema validation, and formatter nodes before returning the final result. This is useful for JSON outputs, API responses, tool call parameters, code patches, document generation, and automated task results.
 
----
-
-## 💬 What is a Virtual Model Endpoint?
-
-A virtual model endpoint acts like a standard LLM API from the outside, but internally executes a complete multi-model workflow.
-
-For example, an external client only sees:
-
-```json
-{
-  "model": "deepseek-with-vision",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Analyze this screenshot and suggest a fix."
-    }
-  ]
-}
-```
-
-But inside 1flowbase, it might actually execute:
+### Build a programmable upstream model for coding agents
 
 ```text
-Gemini Vision
-  → Extract images, OCR, UI, and chart context
-  → DeepSeek-v4 processes reasoning and generation
-  → Verifier Node checks for omissions and formatting
-  → Formatter Node constructs an OpenAI-compatible response
+Code generation → test / lint check → reviewer node → fix node → final patch
 ```
 
-To the calling client, it is just a single model.  
-To you, it is a fully programmable, traceable, and optimizable AI workflow.
+Existing clients call one model name, while 1flowbase runs the workflow behind it.
+
+### Debug workflow execution
+
+Use execution logs and traces to answer which node failed, which model call was slow, which step used the most tokens, which tool callback returned unexpected output, and which verifier or formatter changed the final response.
 
 ---
 
-## ✨ Core Features
+## How 1flowbase differs
 
-### 🧭 Agent Execution Path Reconstruct
+1flowbase is not just a model proxy and not just a generic workflow canvas.
 
-Collect and reconstruct the complete execution process of local Agents:
+It focuses on one gap:
 
-* User Inputs
-* Hidden Prompts
-* System / Tool / Memory Contexts
-* Model Requests and Responses
-* Tool Calls and Command Outputs
-* File Reads/Writes and Callback Results
-* Failure Paths and Exception States
+> Build a multi-model workflow, publish it as a standard model endpoint, and inspect the execution behind it.
 
-It goes beyond simply saving chats to record exactly what the Agent did at every single step.
-
----
-
-### 📊 Token & Cost Ledger
-
-Track tokens and costs by application, session, model, and node:
-
-* Total Tokens
-* Input Tokens
-* Output Tokens
-* Tool Call Tokens
-* Node Latency
-* Failed Run Costs
-* Sources of High-Consumption Context
-
-Helping you answer a critical question:
-
-> Why did a user send a very short message, but the model received tens of thousands of tokens of context?
-
----
-
-### 🔍 End-to-End Trace
-
-A built-in full-link trace tracking system precisely reconstructs the execution path behind every conversation:
-
-* Node Inputs
-* Node Outputs
-* LLM Requests
-* Tool Calls
-* Tool Returns
-* Command Outputs
-* Error Messages
-* Latency Statistics
-
-You can debug your AI Agent just like debugging backend distributed tracing systems.
-
----
-
-### 💬 Virtual Model Endpoint
-
-The virtual model endpoint appears as a standard LLM API externally, but runs a full multi-model workflow internally.
-
-You can package:
-
-```text
-Vision Model → Cheap Small Model → Strong Reasoning Model → Verifier → Formatter
-```
-
-Into a single model name, such as:
-
-```text
-deepseek-with-vision
-```
-
-And call it directly using OpenAI / Claude-compatible protocols.
-
----
-
-### 🤖 Local Agent Client Support
-
-Supports integration with local Agents and compatible clients like Claude Code, Codex, and aionui, allowing them to use the observability, tracing, cost metrics, and virtual model endpoints provided by 1flowbase.
-
-1flowbase is not about black-box proxying or stealthy model replacement.
-
-It emphasizes:
-
-* User-configured model chains
-* Observability of every model invocation step
-* Calculation of token costs at every turn
-* Traceability of every tool call
-* Auditability of every response path
-
----
-
-## 🎯 Why Choose 1flowbase?
-
-### 1. Because you need to see the Agent's path first
-
-If you don't know what the Agent is concatenating for the model, it is very difficult to judge:
-
-* Whether the prompt is too long
-* Whether tool definitions have bloated
-* Whether the historical context is polluted
-* Whether command outputs are repeatedly injected
-* Whether lightweight tasks are routed to expensive models
-* Whether failed tasks burned massive amounts of tokens
-
-1flowbase helps you see these hidden processes first.
-
----
-
-### 2. Because AI applications must calculate unit economics
-
-In the traditional software era, once code is deployed, marginal costs are typically extremely low.
-
-But in AI applications, every single user request consumes tokens. The stronger the model, the longer the context, and the more tools used, the higher the cost of a single request.
-
-For individual developers, small-to-medium teams, and AI startups, you cannot only look at model performance—you must calculate unit economics.
-
-1flowbase spreads out every model invocation, tool call, token consumption, and cost for you.
-
----
-
-### 3. Because large and small models should divide labor
-
-Most AI tools only allow you to choose a single model.
-
-But real-world production-grade AI systems typically require multi-step collaboration:
-
-* Use a Vision model as the "eyes" to read images or PDFs
-* Use small models for classification, summarization, and formatting
-* Use strong reasoning models to handle truly difficult problems
-* Use a Verifier Node to double-check results
-* Use a Formatter Node to guarantee output structure
-* Use a Router Node to control cost and fallbacks
-
-1flowbase encapsulates this complex process into an out-of-the-box standard model interface.
-
----
-
-### 4. Because optimizing Harness should be based on real data
-
-Don't guess.
-
-First observe real execution:
-
-```text
-What exactly was concatenated in this round?
-Which part consumed the most tokens?
-Which node was the slowest?
-Which tool call failed?
-Which model output was unstable?
-Which context should be compressed?
-```
-
-Then optimize:
-
-```text
-Compress prompts
-Split tasks
-Adjust model routing
-Add verifiers
-Reduce redundant context
-Load tool definitions dynamically instead of statically
-```
-
-Finally, publish the optimized chain as a virtual model endpoint.
-
----
-
-## 🔌 Protocol Compatibility
-
-1flowbase supports exposing the same workflow through multiple mainstream protocols:
-
-| Protocol | API Path | Typical Clients |
-| ---------------------------------- | ---------------------- | ---------------------------------------------- |
-| **OpenAI Responses API** | `/v1/responses` | Next-generation OpenAI primitives clients |
-| **OpenAI Chat Completions API** | `/v1/chat/completions` | Cline, Roo Code, traditional SDKs, and development frameworks |
-| **Claude-compatible Messages API** | `/v1/messages` | Claude SDK / Native Claude clients supporting custom Claude API endpoints |
-
-Build one workflow, then invoke it using multiple protocols.
-
----
-
-## 🛠️ Typical Scenarios
-
-### 1. See what local Agents are actually doing
-
-When local Agents like Claude Code, Codex, or aionui execute tasks, 1flowbase records the complete conversation, hidden prompts, tool calls, command outputs, token consumption, and trace paths.
-
-You no longer only see the final answer, but can see how the Agent moves at every step, where it fails, and where it burns money.
-
----
-
-### 2. Analyze Token Waste and Unit Economics
-
-Sometimes a user enters a very short message, but the model receives a context that includes system prompts, tool definitions, chat history, command outputs, and project memories.
-
-1flowbase helps you locate:
-
-* Which hidden contexts consume the most tokens
-* Which tool definitions are repeatedly injected in every turn
-* Which failed tasks caused abnormal costs
-* Which steps should be delegated to cheaper small models
-
----
-
-### 3. Equip Text-Only Models with Missing Capabilities
-
-Before invoking a strong text model that lacks vision capabilities, cascade a Gemini Vision, OCR, or screenshot understanding node to convert images into structured text context, then hand it over to the text model for reasoning.
-
-```text
-Image / Screenshot / PDF
-  → Vision / OCR Node
-  → Text Context
-  → Strong Text Model Reasoning
-  → Verifier Check
-  → Final Response
-```
-
----
-
-### 4. Build a Composable Upstream Brain for Coding Agents
-
-Package complex coding task loops:
-
-```text
-Code Generation → Test / Lint Check → Reviewer Node → Fix Node
-```
-
-Into a virtual model endpoint, allowing existing Agents to use more complex upstream workflows without modifying the client.
-
----
-
-### 5. Control Costs via Model Cascading
-
-Filter routine queries with small models, and only drill down to strong reasoning models for difficult tasks.
-
-```text
-Simple Classification → Small Model
-Formatting → Small Model
-Complex Reasoning → Strong Model
-Final Verification → Verifier
-```
-
----
-
-### 6. Guarantee Output Structure and Quality
-
-Before returning the final response, use Verifiers, JSON Schema validation, and Formatter nodes to detect and fix output formatting.
-
-This is highly suitable for:
-
-* JSON outputs
-* Tool call parameters
-* API responses
-* Code patches
-* Document generation
-* Automated task results
-
----
-
-## ⚔️ How 1flowbase Differs from Others
-
-1flowbase is neither a simple model proxy nor a generic workflow canvas.
-
-It focuses on two specific gaps:
-
-1. Seeing the complete execution process of local Agents.
-2. Publishing multi-model workflows as standard model endpoints.
-
-| Tool | Core Philosophy | 1flowbase Difference |
+| Tool category | What it usually does | How 1flowbase is different |
 |---|---|---|
-| **LiteLLM** | Proxies and routes multiple LLM endpoints | LiteLLM routes models; 1flowbase records Agent execution processes and combines multiple models to generate new virtual model endpoints |
-| **LangGraph** | Builds controllable Agent workflows in code | LangGraph is for building Agent graphs; 1flowbase focuses more on observation, publishing, protocol compatibility, and visual runtimes |
-| **Dify / Flowise** | Builds visual AI applications and workflows | Dify / Flowise are application builders; 1flowbase emphasizes turning workflows into standard model endpoints callable by existing Agents/SDKs |
-| **ccusage-like tools** | Track local Agent tokens and costs | 1flowbase does not just look at consumption; it reconstructs conversations, hidden prompts, tool calls, traces, and virtual model chains |
+| Model router / LLM gateway | routes one request to one provider or model | composes multiple model and tool nodes into one workflow-backed virtual model |
+| AI workflow builder | builds an AI app or workflow | exposes the workflow as OpenAI / Claude-compatible model APIs |
+| Agent framework | helps developers code agent graphs | provides a visual runtime, protocol publishing, and execution logs |
+| Cost tracker | shows token or spend totals | connects cost to workflow nodes, model calls, and execution traces |
 
-> **Key Takeaway**: LiteLLM routes models, 1flowbase combines models. ccusage shows the bill, 1flowbase shows the full Agent execution scene.
-
----
-
-## 🧩 Recipes
-
-We will continue to add ready-to-use workflow templates:
-
-| Recipe | Description |
-|---|---|
-| `agent-workpath-recorder` | Collect local Agent conversations, tool calls, tokens, and traces |
-| `deepseek-with-vision` | Cascade a Vision node before a text model |
-| `json-verifier` | Verify and repair JSON before the final output |
-| `cheap-code-reviewer` | Small model processes front-end analysis, strong model reviews critical parts |
-| `screenshot-to-coding-task` | Convert screenshots to structured coding tasks |
-| `cost-aware-router` | Route models by task type, cost, and context length |
-| `claude-compatible-agent` | Publish workflow as a Claude-compatible Messages API |
-| `openai-responses-agent` | Publish workflow as an OpenAI Responses API |
+```text
+Model routers choose a model.
+1flowbase builds a new virtual model from a workflow.
+```
 
 ---
 
-## 🔐 Transparency and Security
+## Transparency and security
 
-The value of 1flowbase comes from observability, but observability also means taking privacy and security seriously.
+1flowbase is designed for transparent, self-hosted AI workflow execution.
 
-We recommend self-hosted deployment for sensitive projects and configuring the log collection scope carefully.
+Recommended principles:
 
-The design principles of 1flowbase are:
+- self-hosted first
+- transparent model chains
+- auditable node calls
+- traceable token usage
+- configurable log retention
+- sensitive data masking
+- explicit model and workflow configuration
 
-* Local-first
-* Self-hosted first
-* Transparent model chains
-* Auditable node calls
-* Traceable token costs
-* Sensitive data masking
-* Configurable log retention
-
-1flowbase does not advocate for black-box model replacement.  
-We focus on completely spreading out every model combination, tool call, and cost consumption, giving developers full control over their AI Harness.
+1flowbase does not advocate stealthy model replacement. Published endpoints should be configured intentionally, observed clearly, and governed by the project owner.
 
 ---
 
-## 📂 Repo Layout
+## Roadmap
 
-* `web/`: Frontend root directory, powered by `pnpm + Turbo`. The entry application is located at `web/app`, and shared packages reside under `web/packages/*`.
-* `api/`: Backend root directory, structured as a Rust workspace. Service entry points are located at `api/apps/*`, and shared crates reside under `api/crates/*`.
-* `api/plugins/`: Plugin source code workspace, HostExtension manifests, and templates.
-* `docker/`: Container orchestration for local middleware (PostgreSQL, Redis, etc.).
-* `scripts/`: Repository-level development, testing, verification, and debugging scripts. For details, see [scripts/README.md](scripts/README.md).
+### Implemented
 
----
+- [x] visual workflow editor
+- [x] multiple built-in node types
+- [x] virtual model endpoint publishing
+- [x] OpenAI Responses protocol support
+- [x] OpenAI Chat Completions protocol support
+- [x] Claude-compatible Messages protocol support
+- [x] streaming response support
+- [x] basic execution logs
+- [x] tool callback traces inside 1flowbase workflows
+- [x] application-level token consumption statistics
+- [x] prompt and model configuration version history
 
-## 🗺️ Roadmap
+### Enhancing
 
-### Implemented Core Features
+- [ ] enhanced local agent conversation collection
+- [ ] Token Bill of Materials by prompt, history, tool definitions, command outputs, and nodes
+- [ ] agent session search and playback
+- [ ] session export and Recall Pack generation
+- [ ] abnormal cost detection and optimization suggestions
+- [ ] more Claude Code / Codex / aionui usage templates
+- [ ] MCP-aware plugin nodes and tool-call source attribution
 
-* [x] **Low-code visual workflow editor**
-* [x] **Multiple built-in node types and hybrid orchestration**
-* [x] **Virtual model endpoint publishing**
-* [x] **OpenAI Responses protocol and streaming output support**
-* [x] **OpenAI Chat Completions protocol support**
-* [x] **Claude-compatible Messages protocol and streaming output support**
-* [x] **Basic execution logs and tool callback Trace**
-* [x] **Application-level Token consumption statistics**
-* [x] **Prompt and model configuration version history management**
+### Planned
 
-### Currently Enhancing
-
-* [ ] **Enhanced local Agent conversation collection**: Support more Agent clients and log formats
-* [ ] **Token Bill of Materials (BOM)**: Break down token sources like System Prompts, tool definitions, historical context, and command outputs
-* [ ] **Agent Session search and playback**
-* [ ] **Session export and Recall Pack generation**
-* [ ] **Abnormal cost detection and optimization suggestions**
-* [ ] **More Claude Code / Codex / aionui usage templates**
-* [ ] **Enhanced MCP plugin nodes**
-
-### Planned Features
-
-* [ ] **Low-code application building platform for AI organizations**
-* [ ] **Enterprise-grade team collaboration space and multi-tenant management**
-* [ ] **Permissions, auditing, approval, and cost governance**
-* [ ] **Adaptation for more local Agent clients**
-* [ ] **Template market and workflow Recipes ecosystem**
+- [ ] low-code application building platform for AI organizations
+- [ ] team workspace and multi-tenant management
+- [ ] permissions, approval, audit, and cost governance
+- [ ] support for more local AI agent clients
+- [ ] template market and workflow recipe ecosystem
 
 ---
 
-## 🤝 Contributing
+## Repo layout
 
-We highly welcome contributions from the community and team members!
+```text
+web/          Frontend root, powered by pnpm + Turbo
+api/          Rust backend workspace
+api/apps/     Backend service entry points
+api/crates/   Shared backend crates
+api/plugins/  Plugin workspace, HostExtension manifests, and templates
+docker/       Local middleware orchestration
+scripts/      Development, testing, verification, and debugging scripts
+```
 
-Before submitting a Pull Request, please ensure you have completed the following local validations:
+---
+
+## Contributing
+
+Contributions are welcome. Before submitting a pull request, run:
 
 ```bash
-# Run the repository-level complete gatekeeper
-# Includes Rust formatting/Clippy/tests, and frontend verification & contract tests
 node scripts/node/verify.js repo
 ```
 
-### Collaborative Guidelines
+Project guidelines:
 
-* Development and quality control guidelines are governed by [AGENTS.md](AGENTS.md) in the root directory.
-* Frontend quality requirements can be found in [web/AGENTS.md](web/AGENTS.md).
-* Backend quality requirements can be found in [api/AGENTS.md](api/AGENTS.md).
+- [AGENTS.md](AGENTS.md)
+- [web/AGENTS.md](web/AGENTS.md)
+- [api/AGENTS.md](api/AGENTS.md)
 
 ---
 
 ## Acknowledgements
 
-Thanks to [Linux.do](https://linux.do/) - Learn AI on L-Station.
+Thanks to [Linux.do](https://linux.do/) — Learn AI on L-Station.
 
 ---
 
@@ -917,7 +417,7 @@ This project is licensed under [Apache-2.0](LICENSE).
 
 <div align="center">
 
-**If you also want to see clearly what your Agent sent, how much it spent, and what it did, give 1flowbase a Star.**
+**If you want to build workflow-backed virtual models and see what happened behind each request, give 1flowbase a star.**
 
 [Report Bug](https://github.com/taichuy/1flowbase/issues) · [Request Feature](https://github.com/taichuy/1flowbase/issues)
 
