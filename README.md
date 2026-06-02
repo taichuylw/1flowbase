@@ -7,8 +7,10 @@
 <p align="center">
   <b>English</b> | <a href="docs/READEME-i18n/README_CN.md">简体中文</a>
 </p>
-**Open-source virtual model gateway for local AI agent clients.**
-**The first step to harness is to see the Agent's execution path clearly**
+
+
+> **Open-source virtual model gateway for local AI agent clients.**
+> **The first step to harness is to see the Agent's execution path clearly**
 
 1flowbase lets you build multi-model workflows, publish them as OpenAI / Claude-compatible model endpoints, and inspect what happened behind each request: model calls, node inputs and outputs, tool callbacks, tokens, latency, failures, and cost.
 

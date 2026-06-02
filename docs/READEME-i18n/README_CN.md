@@ -8,8 +8,9 @@
   <a href="../../README.md">English</a> | <b>简体中文</b>
 </p>
 
-**面向本地 AI Agent 客户端的开源虚拟模型网关。**
-**Harness 优化的第一步是清晰看清 Agent 的执行路径。**
+
+> **Open-source virtual model gateway for local AI agent clients.**
+> **The first step to harness is to see the Agent's execution path clearly**
 
 1flowbase 允许你构建多模型工作流，将其发布为 OpenAI / Claude 兼容的虚拟模型接口，并能够观测每次请求背后的真实执行细节：模型调用、节点输入与输出、工具回调、Token 消耗、延迟、失败原因和成本。
 
