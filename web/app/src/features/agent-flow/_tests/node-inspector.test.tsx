@@ -24,6 +24,7 @@ import {
 import { createNodeDocument } from '../lib/document/node-factory';
 import * as dataModelOptionsApi from '../api/data-model-options';
 import * as modelProviderOptionsApi from '../api/model-provider-options';
+import { TemplatedNamedBindingsField } from '../components/bindings/TemplatedNamedBindingsField';
 import { NodeDetailPanel } from '../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../components/inspector/NodeInspector';
@@ -670,6 +671,63 @@ describe('NodeInspector', () => {
     expect(screen.queryByLabelText('代码结果')).not.toBeInTheDocument();
   });
 
+  test('keeps Code boolean input selector values visible in the single value column', () => {
+    renderWithProviders(
+      <TemplatedNamedBindingsField
+        ariaLabel="inputs"
+        options={[
+          {
+            nodeId: 'node-start',
+            nodeLabel: 'Start',
+            outputKey: 'approved',
+            outputLabel: 'approved',
+            valueType: 'boolean',
+            value: ['node-start', 'approved'],
+            displayLabel: 'Start.approved'
+          }
+        ]}
+        value={[
+          {
+            name: 'approved',
+            valueType: 'boolean',
+            value: {
+              kind: 'selector',
+              selector: ['node-start', 'approved']
+            }
+          }
+        ]}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Start.approved')).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('inputs-0-value-mode')
+    ).not.toBeInTheDocument();
+  });
+
+  test('adds Code input rows without preselecting a parameter type', () => {
+    const handleChange = vi.fn();
+
+    renderWithProviders(
+      <TemplatedNamedBindingsField
+        ariaLabel="inputs"
+        options={[]}
+        value={[]}
+        onChange={handleChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '新增变量' }));
+
+    expect(handleChange).toHaveBeenCalledWith([
+      {
+        name: '',
+        value: { kind: 'constant', value: '' }
+      }
+    ]);
+  });
+
   test('renders Code as input variables, JavaScript editor, then output variables and persists edits', async () => {
     const inspectorStyles = readFileSync(
       'src/features/agent-flow/components/editor/styles/inspector.css',
@@ -718,7 +776,9 @@ describe('NodeInspector', () => {
     );
     expect(screen.getByLabelText(/输入变量-0-name|input variables-0-name/)).toHaveValue('arg1');
     expect(screen.getAllByLabelText(/输入变量-0-type|input variables-0-type/).length).toBeGreaterThan(0);
-    expect(screen.getByLabelText(/输入变量-0-value-mode|input variables-0-value-mode/)).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/输入变量-0-value-mode|input variables-0-value-mode/)
+    ).not.toBeInTheDocument();
     expect(screen.getAllByLabelText(/输入变量-0-value|input variables-0-value/).length).toBeGreaterThan(0);
     expect(
       screen.queryByLabelText(/输入变量-0-selector|input variables-0-selector/)
@@ -760,8 +820,8 @@ describe('NodeInspector', () => {
             name: 'score_1',
             valueType: 'string',
             value: {
-              kind: 'selector',
-              selector: ['sys', 'conversation_id']
+              kind: 'templated_text',
+              value: '{{sys.conversation_id}}'
             }
           }
         ]

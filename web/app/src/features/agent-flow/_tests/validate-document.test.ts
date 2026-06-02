@@ -1086,6 +1086,76 @@ describe('validateDocument', () => {
     );
   });
 
+  test('allows Code numeric input formulas with numeric selector tokens', () => {
+    const document = createCodeDocumentWithOutputs([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
+    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+    if (!codeNode) {
+      throw new Error('expected code node');
+    }
+
+    codeNode.bindings.named_bindings = {
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'score',
+          valueType: 'number',
+          value: {
+            kind: 'templated_text',
+            value: '{{sys.dialog_count}} + 1'
+          }
+        }
+      ]
+    };
+
+    expect(validateDocument(document)).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '变量值与类型不匹配'
+        })
+      ])
+    );
+  });
+
+  test('flags Code numeric input formulas with non numeric selector tokens', () => {
+    const document = createCodeDocumentWithOutputs([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
+    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+    if (!codeNode) {
+      throw new Error('expected code node');
+    }
+
+    codeNode.bindings.named_bindings = {
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'score',
+          valueType: 'number',
+          value: {
+            kind: 'templated_text',
+            value: '{{sys.conversation_id}} + 1'
+          }
+        }
+      ]
+    };
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '变量值与类型不匹配'
+        })
+      ])
+    );
+  });
+
   test('does not crash on malformed saved Data Model query binding', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes.push({

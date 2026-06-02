@@ -619,15 +619,6 @@
   width: 100%;
 }
 
-.agent-flow-templated-binding-row__value {
-  display: grid;
-  gap: 6px;
-}
-
-.agent-flow-templated-binding-row__value-mode .ant-segmented {
-  max-width: 100%;
-}
-
 .agent-flow-templated-binding-row__delete {
   justify-self: end;
 }

@@ -346,28 +346,27 @@ function findSelectorOption(options: FlowSelectorOption[], selector: string[]) {
   );
 }
 
-function inferConstantValueType(value: unknown) {
-  if (typeof value === 'string') {
-    return 'string';
+function normalizeBindingValueType(valueType: string | undefined) {
+  return valueType?.startsWith('array') ? 'array' : valueType;
+}
+
+function normalizeCodeInputExpression(
+  expression: NonNullable<ReturnType<typeof getNamedBindingExpression>>,
+  valueType: string | undefined
+) {
+  const normalizedValueType = normalizeBindingValueType(valueType);
+
+  if (
+    expression.kind === 'selector' &&
+    (normalizedValueType === 'string' || normalizedValueType === 'number')
+  ) {
+    return {
+      kind: 'templated_text' as const,
+      value: createTemplateSelectorToken(expression.selector)
+    };
   }
 
-  if (typeof value === 'number') {
-    return 'number';
-  }
-
-  if (typeof value === 'boolean') {
-    return 'boolean';
-  }
-
-  if (Array.isArray(value)) {
-    return 'array';
-  }
-
-  if (typeof value === 'object' && value !== null) {
-    return 'object';
-  }
-
-  return 'unknown';
+  return expression;
 }
 
 function normalizeTemplatedNamedBindingEntries(
@@ -387,14 +386,12 @@ function normalizeTemplatedNamedBindingEntries(
       entry.valueType ??
       (expression.kind === 'selector'
         ? findSelectorOption(options, expression.selector)?.valueType
-        : expression.kind === 'templated_text'
-          ? 'string'
-          : inferConstantValueType(expression.value));
+        : undefined);
 
     return {
       name: entry.name,
       valueType,
-      value: expression
+      value: normalizeCodeInputExpression(expression, valueType)
     };
   });
 }

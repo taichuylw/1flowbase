@@ -2,10 +2,7 @@ import { DeleteOutlined } from '@ant-design/icons';
 import {
   Button,
   Input,
-  InputNumber,
-  Segmented,
-  Select,
-  Switch
+  Select
 } from 'antd';
 import type {
   NamedBindingEntry,
@@ -17,7 +14,10 @@ import {
   getNamedBindingExpression,
   isNamedBindingNameAllowed
 } from '../../lib/named-binding-expressions';
-import { parseTemplateSelectorTokens } from '../../lib/template-binding';
+import {
+  createTemplateSelectorToken,
+  parseTemplateSelectorTokens
+} from '../../lib/template-binding';
 import { SelectorField } from './SelectorField';
 import { TemplatedTextField } from './TemplatedTextField';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -103,32 +103,6 @@ function inferValueTypeFromExpression(
     );
   }
 
-  if (expression.kind === 'templated_text') {
-    return 'string' as const;
-  }
-
-  const constantValue = expression.value;
-
-  if (typeof constantValue === 'string') {
-    return 'string' as const;
-  }
-
-  if (typeof constantValue === 'number') {
-    return 'number' as const;
-  }
-
-  if (typeof constantValue === 'boolean') {
-    return 'boolean' as const;
-  }
-
-  if (Array.isArray(constantValue)) {
-    return 'array' as const;
-  }
-
-  if (typeof constantValue === 'object' && constantValue !== null) {
-    return 'object' as const;
-  }
-
   return undefined;
 }
 
@@ -138,11 +112,6 @@ function defaultConstantValue(valueType: ParameterValueType | undefined) {
       return 0;
     case 'boolean':
       return false;
-    case 'array':
-      return [];
-    case 'object':
-    case 'json':
-      return {};
     case 'string':
     case 'unknown':
     default:
@@ -159,10 +128,21 @@ function createConstantExpression(
   };
 }
 
-function expressionToText(
-  expression: NamedBindingExpression | null,
-  valueType: ParameterValueType | undefined
+function isSelectorOnlyValueType(valueType: ParameterValueType | undefined) {
+  return (
+    valueType === 'array' ||
+    valueType === 'object' ||
+    valueType === 'json'
+  );
+}
+
+function expressionToSingleLineText(
+  expression: NamedBindingExpression | null
 ) {
+  if (expression?.kind === 'selector') {
+    return createTemplateSelectorToken(expression.selector);
+  }
+
   if (expression?.kind === 'templated_text') {
     return expression.value;
   }
@@ -175,50 +155,43 @@ function expressionToText(
     return expression.value;
   }
 
-  if (valueType === 'object' || valueType === 'array' || valueType === 'json') {
-    return JSON.stringify(expression.value, null, 2);
-  }
-
   return String(expression.value ?? '');
 }
 
-function parseJsonConstant(
+function singleLineTextToExpression(
   nextValue: string,
   valueType: ParameterValueType | undefined
-) {
-  try {
-    const parsed = JSON.parse(nextValue);
+): NamedBindingExpression {
+  const hasSelectorToken = parseTemplateSelectorTokens(nextValue).length > 0;
 
-    if (valueType === 'array' && !Array.isArray(parsed)) {
-      return nextValue;
-    }
+  if (valueType === 'number') {
+    const parsed = Number(nextValue);
 
-    if (
-      valueType === 'object' &&
-      (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
-    ) {
-      return nextValue;
-    }
-
-    return parsed;
-  } catch {
-    return nextValue;
+    return !hasSelectorToken &&
+      nextValue.trim().length > 0 &&
+      Number.isFinite(parsed)
+      ? { kind: 'constant', value: parsed }
+      : { kind: 'templated_text', value: nextValue };
   }
+
+  return hasSelectorToken
+    ? { kind: 'templated_text', value: nextValue }
+    : { kind: 'constant', value: nextValue };
 }
 
-function isJsonConstantInvalid(
-  expression: NamedBindingExpression | null,
-  valueType: ParameterValueType | undefined
-) {
-  if (
-    expression?.kind !== 'constant' ||
-    (valueType !== 'object' && valueType !== 'array' && valueType !== 'json') ||
-    typeof expression.value !== 'string'
-  ) {
-    return false;
+function exactSelectorFromSingleLineText(nextValue: string) {
+  const trimmedValue = nextValue.trim();
+  const selectors = parseTemplateSelectorTokens(trimmedValue);
+
+  if (selectors.length !== 1) {
+    return null;
   }
 
-  return parseJsonConstant(expression.value, valueType) === expression.value;
+  const [selector] = selectors;
+
+  return createTemplateSelectorToken(selector) === trimmedValue
+    ? selector
+    : null;
 }
 
 function optionMatchesValueType(
@@ -246,6 +219,118 @@ function optionMatchesValueType(
   return optionValueType === valueType;
 }
 
+function selectorOptionsForValueType(
+  options: FlowSelectorOption[],
+  valueType: ParameterValueType | undefined
+) {
+  if (valueType === 'string' || !valueType) {
+    return options;
+  }
+
+  if (valueType === 'number') {
+    return options.filter((option) => optionMatchesValueType(option, 'number'));
+  }
+
+  return options.filter((option) => optionMatchesValueType(option, valueType));
+}
+
+function coerceExpressionForValueType(
+  expression: NamedBindingExpression | null,
+  valueType: ParameterValueType | undefined,
+  options: FlowSelectorOption[]
+): NamedBindingExpression {
+  if (isSelectorOnlyValueType(valueType)) {
+    if (expression?.kind === 'selector') {
+      const matchedOption = findSelectorOption(options, expression.selector);
+
+      if (matchedOption && optionMatchesValueType(matchedOption, valueType)) {
+        return expression;
+      }
+    }
+
+    return { kind: 'selector', selector: [] };
+  }
+
+  if (valueType === 'boolean') {
+    if (expression?.kind === 'selector') {
+      const matchedOption = findSelectorOption(options, expression.selector);
+
+      if (matchedOption && optionMatchesValueType(matchedOption, 'boolean')) {
+        return expression;
+      }
+    }
+
+    if (
+      expression?.kind === 'constant' &&
+      typeof expression.value === 'boolean'
+    ) {
+      return expression;
+    }
+
+    return createConstantExpression(valueType);
+  }
+
+  if (expression?.kind === 'selector') {
+    return {
+      kind: 'templated_text',
+      value: createTemplateSelectorToken(expression.selector)
+    };
+  }
+
+  if (valueType === 'number' && expression) {
+    return singleLineTextToExpression(
+      expressionToSingleLineText(expression),
+      valueType
+    );
+  }
+
+  if (valueType === 'string' && expression?.kind === 'constant') {
+    return {
+      kind: 'constant',
+      value:
+        typeof expression.value === 'string'
+          ? expression.value
+          : expressionToSingleLineText(expression)
+    };
+  }
+
+  if (expression) {
+    return expression;
+  }
+
+  return createConstantExpression(valueType);
+}
+
+function singleLineTextToTypedEntryValue(
+  nextValue: string,
+  valueType: ParameterValueType | undefined,
+  options: FlowSelectorOption[]
+): Pick<TemplatedNamedBindingValue, 'valueType' | 'value'> {
+  const exactSelector = exactSelectorFromSingleLineText(nextValue);
+  const matchedOption = exactSelector
+    ? findSelectorOption(options, exactSelector)
+    : undefined;
+  const nextValueType =
+    valueType ??
+    normalizeParameterValueType(matchedOption?.valueType) ??
+    'string';
+
+  if (
+    exactSelector &&
+    (isSelectorOnlyValueType(nextValueType) || nextValueType === 'boolean')
+  ) {
+    return {
+      valueType: nextValueType,
+      value: { kind: 'selector', selector: exactSelector }
+    };
+  }
+
+  return {
+    valueType: nextValueType,
+    value: singleLineTextToExpression(nextValue, nextValueType)
+  };
+}
+
 export function TemplatedNamedBindingsField({
   ariaLabel,
   value,
@@ -260,81 +345,79 @@ export function TemplatedNamedBindingsField({
     );
   }
 
-  function renderLiteralEditor(
+  function renderValueEditor(
     entry: TemplatedNamedBindingValue,
     index: number,
     expression: NamedBindingExpression | null,
     valueType: ParameterValueType | undefined,
-    entryLabel: string
+    entryLabel: string,
+    selectorOptions: FlowSelectorOption[]
   ) {
-    if (valueType === 'number') {
-      return (
-        <InputNumber
-          aria-label={`${ariaLabel}-${index}-value`}
-          value={
-            expression?.kind === 'constant' &&
-            typeof expression.value === 'number'
-              ? expression.value
-              : null
-          }
-          onChange={(nextValue) =>
-            updateEntry(index, {
-              ...entry,
-              valueType,
-              value: {
-                kind: 'constant',
-                value: typeof nextValue === 'number' ? nextValue : null
-              }
-            })
-          }
-        />
-      );
-    }
-
     if (valueType === 'boolean') {
+      const booleanOptions = [
+        { label: 'true', value: 'constant:true' },
+        { label: 'false', value: 'constant:false' },
+        ...selectorOptions.map((option) => ({
+          label: option.displayLabel,
+          value: `selector:${JSON.stringify(option.value)}`
+        }))
+      ];
+      const booleanValue =
+        expression?.kind === 'selector'
+          ? `selector:${JSON.stringify(expression.selector)}`
+          : expression?.kind === 'constant' && expression.value === true
+            ? 'constant:true'
+            : 'constant:false';
+
       return (
-        <Switch
+        <Select
           aria-label={`${ariaLabel}-${index}-value`}
-          checked={
-            expression?.kind === 'constant' &&
-            typeof expression.value === 'boolean'
-              ? expression.value
-              : false
-          }
-          onChange={(checked) =>
+          options={booleanOptions}
+          value={booleanValue}
+          onChange={(nextValue) => {
+            if (nextValue.startsWith('selector:')) {
+              const selector = JSON.parse(
+                nextValue.slice('selector:'.length)
+              ) as string[];
+
+              updateEntry(index, {
+                ...entry,
+                valueType,
+                value: { kind: 'selector', selector }
+              });
+              return;
+            }
+
             updateEntry(index, {
               ...entry,
               valueType,
-              value: { kind: 'constant', value: checked }
-            })
-          }
+              value: { kind: 'constant', value: nextValue === 'constant:true' }
+            });
+          }}
         />
       );
     }
 
-    if (
-      valueType === 'object' ||
-      valueType === 'array' ||
-      valueType === 'json'
-    ) {
+    if (isSelectorOnlyValueType(valueType)) {
       return (
-        <Input.TextArea
-          aria-label={`${ariaLabel}-${index}-value`}
-          autoSize={{ minRows: 2, maxRows: 6 }}
-          status={
-            isJsonConstantInvalid(expression, valueType) ? 'error' : undefined
-          }
-          value={expressionToText(expression, valueType)}
-          onChange={(event) =>
+        <SelectorField
+          ariaLabel={`${ariaLabel}-${index}-value`}
+          options={selectorOptions}
+          value={expression?.kind === 'selector' ? expression.selector : []}
+          onChange={(nextSelector) => {
+            const selector = Array.isArray(nextSelector[0])
+              ? []
+              : (nextSelector as string[]);
+            const matchedOption = findSelectorOption(options, selector);
+
             updateEntry(index, {
               ...entry,
-              valueType,
-              value: {
-                kind: 'constant',
-                value: parseJsonConstant(event.target.value, valueType)
-              }
-            })
-          }
+              valueType:
+                valueType ??
+                normalizeParameterValueType(matchedOption?.valueType),
+              value: { kind: 'selector', selector }
+            });
+          }}
         />
       );
     }
@@ -344,22 +427,24 @@ export function TemplatedNamedBindingsField({
         ariaLabel={`${ariaLabel}-${index}-value`}
         displayMode="input"
         label={entryLabel}
-        options={options}
+        options={selectorOptions}
         placeholder={i18nText(
           "agentFlow",
           "auto.enter_text_enter_reference_variable"
         )}
-        value={expressionToText(expression, valueType)}
-        onChange={(nextValue) =>
+        value={expressionToSingleLineText(expression)}
+        onChange={(nextValue) => {
+          const typedEntryValue = singleLineTextToTypedEntryValue(
+            nextValue,
+            valueType,
+            selectorOptions
+          );
+
           updateEntry(index, {
             ...entry,
-            valueType: valueType ?? 'string',
-            value:
-              parseTemplateSelectorTokens(nextValue).length > 0
-                ? { kind: 'templated_text', value: nextValue }
-                : { kind: 'constant', value: nextValue }
-          })
-        }
+            ...typedEntryValue
+          });
+        }}
       />
     );
   }
@@ -374,11 +459,12 @@ export function TemplatedNamedBindingsField({
         const valueType =
           normalizeParameterValueType(entry.valueType) ??
           inferValueTypeFromExpression(expression, options);
-        const valueMode =
-          expression?.kind === 'selector' ? 'selector' : 'constant';
-        const selectorOptions = options.filter((option) =>
-          optionMatchesValueType(option, valueType)
+        const normalizedExpression = coerceExpressionForValueType(
+          expression,
+          valueType,
+          options
         );
+        const selectorOptions = selectorOptionsForValueType(options, valueType);
 
         return (
           <div
@@ -407,84 +493,27 @@ export function TemplatedNamedBindingsField({
                 value={valueType}
                 onChange={(nextValue) => {
                   const nextValueType = normalizeParameterValueType(nextValue);
-                  const matchedOption =
-                    expression?.kind === 'selector'
-                      ? findSelectorOption(options, expression.selector)
-                      : undefined;
 
                   updateEntry(index, {
                     ...entry,
                     valueType: nextValueType,
-                    value:
-                      expression?.kind === 'selector' &&
-                      matchedOption &&
-                      optionMatchesValueType(matchedOption, nextValueType)
-                        ? expression
-                        : createConstantExpression(nextValueType)
+                    value: coerceExpressionForValueType(
+                      expression,
+                      nextValueType,
+                      options
+                    )
                   });
                 }}
               />
             </div>
             <div className="agent-flow-templated-binding-row__value">
-              <div className="agent-flow-templated-binding-row__value-mode">
-                <Segmented
-                  aria-label={`${ariaLabel}-${index}-value-mode`}
-                  options={[
-                    {
-                      label: i18nText("agentFlow", "auto.value"),
-                      value: 'constant'
-                    },
-                    {
-                      label: i18nText("agentFlow", "auto.variable_alt"),
-                      value: 'selector'
-                    }
-                  ]}
-                  size="small"
-                  value={valueMode}
-                  onChange={(nextMode) =>
-                    updateEntry(index, {
-                      ...entry,
-                      value:
-                        nextMode === 'selector'
-                          ? { kind: 'selector', selector: [] }
-                          : createConstantExpression(valueType)
-                    })
-                  }
-                />
-              </div>
-              {valueMode === 'selector' ? (
-                <SelectorField
-                  ariaLabel={`${ariaLabel}-${index}-value`}
-                  options={selectorOptions}
-                  value={
-                    expression?.kind === 'selector' ? expression.selector : []
-                  }
-                  onChange={(nextSelector) => {
-                    const selector = Array.isArray(nextSelector[0])
-                      ? []
-                      : (nextSelector as string[]);
-                    const matchedOption = findSelectorOption(
-                      options,
-                      selector
-                    );
-
-                    updateEntry(index, {
-                      ...entry,
-                      valueType:
-                        valueType ??
-                        normalizeParameterValueType(matchedOption?.valueType),
-                      value: { kind: 'selector', selector }
-                    });
-                  }}
-                />
-              ) : (
-                renderLiteralEditor(
-                  entry,
-                  index,
-                  expression,
-                  valueType,
-                  entryLabel
-                )
+              {renderValueEditor(
+                entry,
+                index,
+                normalizedExpression,
+                valueType,
+                entryLabel,
+                selectorOptions
               )}
             </div>
             <Button
@@ -510,7 +539,6 @@ export function TemplatedNamedBindingsField({
             ...value,
             {
               name: '',
-              valueType: 'string',
               value: { kind: 'constant', value: '' }
             }
           ])

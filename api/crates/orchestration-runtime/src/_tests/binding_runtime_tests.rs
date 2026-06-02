@@ -58,7 +58,15 @@ fn resolve_named_bindings_preserves_selector_and_constant_json_types() {
                 "valueType": "string",
                 "value": {
                     "kind": "templated_text",
-                    "value": "User: {{ node-start.query }}"
+                    "value": "User: {{ node-start.query }} / {{ node-start.score }}"
+                }
+            },
+            {
+                "name": "score",
+                "valueType": "number",
+                "value": {
+                    "kind": "templated_text",
+                    "value": "({{ node-start.score }} + 5) / 2"
                 }
             }
         ]),
@@ -66,7 +74,7 @@ fn resolve_named_bindings_preserves_selector_and_constant_json_types() {
     });
     let variable_pool = Map::from_iter([(
         "node-start".to_string(),
-        json!({ "query": "hello", "history": [{ "role": "user", "content": "hi" }] }),
+        json!({ "query": "hello", "score": 20, "history": [{ "role": "user", "content": "hi" }] }),
     )]);
 
     let resolved = resolve_node_inputs(&node, &variable_pool).unwrap();
@@ -76,8 +84,39 @@ fn resolve_named_bindings_preserves_selector_and_constant_json_types() {
         json!({
             "history": [{ "role": "user", "content": "hi" }],
             "limit": 10,
-            "prompt": "User: hello"
+            "prompt": "User: hello / 20",
+            "score": 12.5
         })
+    );
+}
+
+#[test]
+fn reject_named_bindings_numeric_formula_with_non_numeric_selector() {
+    let node = compiled_code_node(CompiledBinding {
+        kind: "named_bindings".to_string(),
+        raw_value: json!([
+            {
+                "name": "score",
+                "valueType": "number",
+                "value": {
+                    "kind": "templated_text",
+                    "value": "{{ node-start.query }} + 1"
+                }
+            }
+        ]),
+        selector_paths: vec![],
+    });
+    let variable_pool = Map::from_iter([(
+        "node-start".to_string(),
+        json!({ "query": "hello" }),
+    )]);
+
+    let error = resolve_node_inputs(&node, &variable_pool).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("numeric expression selector node-start.query is not a number")
     );
 }
 

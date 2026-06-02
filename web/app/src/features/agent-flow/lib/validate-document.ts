@@ -26,7 +26,11 @@ import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { outputTypeSupportsJsonSchema } from './output-contract/schema';
 import { isOutputVariableKeyAllowed } from './output-contract/variable-key';
 import { hasPluginContributionRef } from './plugin-node-definitions';
-import { isSelectorVisible } from './selector-options';
+import {
+  isSelectorVisible,
+  listVisibleSelectorOptions,
+  type FlowSelectorOption
+} from './selector-options';
 import { parseTemplateSelectorTokens } from './template-binding';
 import {
   environmentVariableNodeId,
@@ -407,7 +411,7 @@ function isCodeNamedBindingValueCompatible(
   valueType: string | undefined,
   value: unknown
 ) {
-  if (!valueType || valueType === 'unknown' || valueType === 'json') {
+  if (!valueType || valueType === 'unknown') {
     return true;
   }
 
@@ -423,20 +427,69 @@ function isCodeNamedBindingValueCompatible(
     return typeof value === 'boolean';
   }
 
-  if (valueType.startsWith('array')) {
-    return Array.isArray(value);
+  return false;
+}
+
+function normalizeCodeBindingValueType(valueType: string | undefined) {
+  return valueType?.startsWith('array') ? 'array' : valueType;
+}
+
+function isCodeSelectorCompatible(
+  selectorOptions: FlowSelectorOption[],
+  selector: string[],
+  valueType: string | undefined
+) {
+  const normalizedValueType = normalizeCodeBindingValueType(valueType);
+
+  if (
+    !normalizedValueType ||
+    normalizedValueType === 'string' ||
+    normalizedValueType === 'unknown'
+  ) {
+    return true;
   }
 
-  if (valueType === 'object') {
-    return isRecord(value) && !Array.isArray(value);
+  const option = selectorOptions.find(
+    (candidate) =>
+      candidate.value.length === selector.length &&
+      candidate.value.every((segment, index) => selector[index] === segment)
+  );
+
+  if (!option) {
+    return true;
   }
 
-  return true;
+  const optionValueType = normalizeCodeBindingValueType(option.valueType);
+
+  if (optionValueType === 'json') {
+    return (
+      normalizedValueType === 'json' ||
+      normalizedValueType === 'object' ||
+      normalizedValueType === 'array'
+    );
+  }
+
+  return optionValueType === normalizedValueType;
+}
+
+function pushCodeNamedBindingValueTypeIssue(
+  issues: AgentFlowIssue[],
+  node: FlowNodeDocument
+) {
+  pushFieldIssue(
+    issues,
+    node,
+    'bindings.named_bindings',
+    i18nText("agentFlow", "auto.variable_value_match_type"),
+    i18nText("agentFlow", "auto.variable_value_match_type")
+  );
 }
 
 function validateCodeNamedBindings(
   issues: AgentFlowIssue[],
-  node: FlowNodeDocument
+  node: FlowNodeDocument,
+  document: FlowAuthoringDocument,
+  environmentVariables: AgentFlowEnvironmentVariable[]
 ) {
   const binding = node.bindings.named_bindings;
 
@@ -445,6 +498,11 @@ function validateCodeNamedBindings(
   }
 
   const seenNames = new Set<string>();
+  const selectorOptions = listVisibleSelectorOptions(
+    document,
+    node.id,
+    environmentVariables
+  );
 
   for (const entry of binding.value) {
     const parameterName = entry.name.trim();
@@ -487,30 +545,39 @@ function validateCodeNamedBindings(
     const expression = getNamedBindingExpression(entry);
 
     if (
+      expression?.kind === 'selector' &&
+      !isCodeSelectorCompatible(
+        selectorOptions,
+        expression.selector,
+        entry.valueType
+      )
+    ) {
+      pushCodeNamedBindingValueTypeIssue(issues, node);
+    }
+
+    if (
       expression?.kind === 'templated_text' &&
       entry.valueType !== undefined &&
-      entry.valueType !== 'string'
+      entry.valueType !== 'string' &&
+      entry.valueType !== 'number'
     ) {
-      pushFieldIssue(
-        issues,
-        node,
-        'bindings.named_bindings',
-        i18nText("agentFlow", "auto.variable_value_match_type"),
-        i18nText("agentFlow", "auto.variable_value_match_type")
-      );
+      pushCodeNamedBindingValueTypeIssue(issues, node);
+    }
+
+    if (expression?.kind === 'templated_text' && entry.valueType === 'number') {
+      for (const selector of parseTemplateSelectorTokens(expression.value)) {
+        if (!isCodeSelectorCompatible(selectorOptions, selector, 'number')) {
+          pushCodeNamedBindingValueTypeIssue(issues, node);
+          break;
+        }
+      }
     }
 
     if (
       expression?.kind === 'constant' &&
       !isCodeNamedBindingValueCompatible(entry.valueType, expression.value)
     ) {
-      pushFieldIssue(
-        issues,
-        node,
-        'bindings.named_bindings',
-        i18nText("agentFlow", "auto.variable_value_match_type"),
-        i18nText("agentFlow", "auto.variable_value_match_type")
-      );
+      pushCodeNamedBindingValueTypeIssue(issues, node);
     }
   }
 }
@@ -743,7 +810,7 @@ export function validateDocument(
         );
       }
 
-      validateCodeNamedBindings(issues, node);
+      validateCodeNamedBindings(issues, node, document, environmentVariables);
     }
 
     if (node.type === 'code' && node.outputs.length === 0) {
