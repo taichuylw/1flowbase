@@ -741,8 +741,8 @@ async fn application_runtime_routes_logs_report_run_statistics() {
 
     let expected_statistics = json!({
         "total_tokens": 50,
-        "input_tokens": null,
-        "output_tokens": null,
+        "input_tokens": 10,
+        "output_tokens": 20,
         "input_cache_hit_tokens": null,
         "unique_node_count": 3,
         "tool_callback_count": 20

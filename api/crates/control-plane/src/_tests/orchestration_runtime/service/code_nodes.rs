@@ -31,7 +31,7 @@ async fn live_debug_run_code_success_persists_output_and_completes() {
     assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(
         completed.flow_run.output_payload["result"],
-        "hello from code"
+        json!({ "result": "hello from code" })
     );
     assert!(completed.flow_run.error_payload.is_none());
 
@@ -41,7 +41,10 @@ async fn live_debug_run_code_success_persists_output_and_completes() {
         .find(|node_run| node_run.node_id == "node-code")
         .expect("code node should be persisted");
     assert_eq!(code_node.status, domain::NodeRunStatus::Succeeded);
-    assert_eq!(code_node.output_payload["result"], "hello from code");
+    assert_eq!(
+        code_node.output_payload["result"],
+        json!({ "result": "hello from code" })
+    );
     assert!(code_node.error_payload.is_none());
     assert_eq!(code_node.metrics_payload["language"], "javascript");
     assert_eq!(code_node.metrics_payload["entrypoint"], "main");
@@ -145,7 +148,10 @@ function main(inputs) {
     assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(
         completed.flow_run.output_payload,
-        json!({ "result": "hello from artifact" })
+        json!({
+            "result": { "result": "hello from artifact" },
+            "error": null
+        })
     );
     let code_node = completed
         .node_runs

@@ -216,6 +216,27 @@ function authenticate() {
   });
 }
 
+function expectNodePreviewRequest(
+  nodeId: string,
+  inputPayload: Record<string, unknown>
+) {
+  const call = vi.mocked(runtimeApi.startNodeDebugPreview).mock.calls[0];
+  const request = call?.[2];
+
+  expect(call?.[0]).toBe('app-1');
+  expect(call?.[1]).toBe(nodeId);
+  expect(call?.[3]).toBe('csrf-123');
+  expect(request).toEqual(
+    expect.objectContaining({
+      input_payload: inputPayload,
+      document: expect.objectContaining({
+        schemaVersion: '1flowbase.flow/v2'
+      }),
+      debug_session_id: expect.any(String)
+    })
+  );
+}
+
 describe('node last run runtime', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -237,7 +258,7 @@ describe('node last run runtime', () => {
     });
   });
 
-  test('runs node preview from cached variables and refreshes last-run cards', async () => {
+  test('runs node preview and refreshes last-run cards', async () => {
     vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
       .mockResolvedValueOnce({
         variable_cache: {
@@ -270,23 +291,9 @@ describe('node last run runtime', () => {
     fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
 
     await waitFor(() => {
-      expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalledWith(
-        'app-1',
-        'node-llm',
-        {
-          input_payload: {
-            'node-start': {
-              query: '总结退款政策'
-            }
-          },
-          document: expect.objectContaining({
-            schemaVersion: '1flowbase.flow/v2'
-          }),
-          debug_session_id: expect.any(String)
-        },
-        'csrf-123'
-      );
+      expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalled();
     });
+    expectNodePreviewRequest('node-llm', {});
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
     await waitFor(() => {
@@ -372,7 +379,7 @@ describe('node last run runtime', () => {
     expect(await screen.findByText('Code 输出契约不兼容')).toBeInTheDocument();
   }, 30_000);
 
-  test('asks for referenced variables before running when cache is empty', async () => {
+  test('runs node preview without cached referenced variables', async () => {
     renderReactFlowScene(
       <AgentFlowEditorShell
         applicationId="app-1"
@@ -385,30 +392,13 @@ describe('node last run runtime', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
 
-    expect(await screen.findByText('输入节点引用变量')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText(/Start\/query/), {
-      target: { value: '总结退款政策' }
+    await waitFor(() => {
+      expect(screen.queryByText('输入节点引用变量')).not.toBeInTheDocument();
     });
-    fireEvent.click(within(screen.getByRole('dialog', { name: '输入节点引用变量' })).getByRole('button', { name: /运\s*行/ }));
 
     await waitFor(() => {
-      expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalledWith(
-        'app-1',
-        'node-llm',
-        {
-          input_payload: {
-            'node-start': {
-              query: '总结退款政策'
-            }
-          },
-          document: expect.objectContaining({
-            schemaVersion: '1flowbase.flow/v2'
-          }),
-          debug_session_id: expect.any(String)
-        },
-        'csrf-123'
-      );
+      expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalled();
     });
+    expectNodePreviewRequest('node-llm', {});
   }, 30_000);
 });

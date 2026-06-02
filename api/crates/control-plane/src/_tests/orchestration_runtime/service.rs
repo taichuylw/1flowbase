@@ -372,7 +372,7 @@ fn code_to_answer_flow_document(flow_id: Uuid, source: &str) -> Value {
         "bindings": {
             "answer": {
                 "kind": "templated_text",
-                "value": "Code said: {{node-code.result}}"
+                "value": "Code said: {{node-code.result.result}}"
             }
         },
         "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]

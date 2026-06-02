@@ -106,18 +106,13 @@ fn reject_named_bindings_numeric_formula_with_non_numeric_selector() {
         ]),
         selector_paths: vec![],
     });
-    let variable_pool = Map::from_iter([(
-        "node-start".to_string(),
-        json!({ "query": "hello" }),
-    )]);
+    let variable_pool = Map::from_iter([("node-start".to_string(), json!({ "query": "hello" }))]);
 
     let error = resolve_node_inputs(&node, &variable_pool).unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("numeric expression selector node-start.query is not a number")
-    );
+    assert!(error
+        .to_string()
+        .contains("numeric expression selector node-start.query is not a number"));
 }
 
 #[test]

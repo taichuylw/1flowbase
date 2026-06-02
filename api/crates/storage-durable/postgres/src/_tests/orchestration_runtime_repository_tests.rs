@@ -1665,7 +1665,13 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
             status: NodeRunStatus::Succeeded,
             output_payload: json!({ "answer": "ok" }),
             error_payload: None,
-            metrics_payload: json!({ "usage": { "input_tokens": 3, "output_tokens": 4 } }),
+            metrics_payload: json!({
+                "usage": {
+                    "input_tokens": 3,
+                    "output_tokens": 4,
+                    "cache_read_tokens": 2
+                }
+            }),
             debug_payload: json!({}),
             finished_at: Some(started_at + Duration::seconds(3)),
         },
@@ -1733,6 +1739,9 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
     assert_eq!(logs.total, 1);
     assert_eq!(logs.items[0].run.id, run.id);
     assert_eq!(logs.items[0].total_tokens, Some(7));
+    assert_eq!(logs.items[0].input_tokens, Some(3));
+    assert_eq!(logs.items[0].output_tokens, Some(4));
+    assert_eq!(logs.items[0].input_cache_hit_tokens, Some(2));
     assert_eq!(logs.items[0].unique_node_count, 2);
     assert_eq!(logs.items[0].tool_callback_count, 2);
 }

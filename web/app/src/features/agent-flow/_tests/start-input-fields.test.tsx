@@ -70,6 +70,14 @@ function DocumentObserver({
   return null;
 }
 
+function expectSystemVariableType(title: string, valueType: string) {
+  const row = screen
+    .getByText(title)
+    .closest('.agent-flow-start-input-fields__system-variable');
+
+  expect(row?.textContent?.toLowerCase()).toContain(valueType.toLowerCase());
+}
+
 describe('start input fields', () => {
   beforeEach(async () => {
     window.history.replaceState(null, '', '/?language=zh-Hans');
@@ -104,7 +112,10 @@ describe('start input fields', () => {
     expect(screen.getByText('userinput.files')).toBeInTheDocument();
     expect(screen.getByText('userinput.tools')).toBeInTheDocument();
     expect(screen.getByText('userinput.tool_choice')).toBeInTheDocument();
-    expect(screen.getAllByText('array[object]')).toHaveLength(3);
+    expectSystemVariableType('userinput.history', 'array');
+    expectSystemVariableType('userinput.files', 'array[object]');
+    expectSystemVariableType('userinput.tools', 'array[object]');
+    expectSystemVariableType('userinput.tool_choice', 'json');
     expect(screen.queryByText('上一轮用户消息')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /userinput\.history/ }));

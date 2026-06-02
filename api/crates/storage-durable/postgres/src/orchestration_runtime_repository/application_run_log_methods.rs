@@ -103,14 +103,63 @@ impl PgControlPlaneStore {
                         where node_runs.flow_run_id = $1
                     )
                 ),
-                (select sum(runtime_usage_ledger.input_tokens)::bigint
-                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
-                (select sum(runtime_usage_ledger.output_tokens)::bigint
-                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
-                (select sum(coalesce(runtime_usage_ledger.input_cache_hit_tokens,
-                                      runtime_usage_ledger.cache_read_tokens,
-                                      runtime_usage_ledger.cached_input_tokens))::bigint
-                   from runtime_usage_ledger where runtime_usage_ledger.flow_run_id = $1),
+                coalesce(
+                    (
+                        select sum(runtime_usage_ledger.input_tokens)::bigint
+                        from runtime_usage_ledger
+                        where runtime_usage_ledger.flow_run_id = $1
+                    ),
+                    (
+                        select sum((node_runs.metrics_payload #>> '{usage,input_tokens}')::bigint)::bigint
+                        from node_runs
+                        where node_runs.flow_run_id = $1
+                          and node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                    )
+                ),
+                coalesce(
+                    (
+                        select sum(runtime_usage_ledger.output_tokens)::bigint
+                        from runtime_usage_ledger
+                        where runtime_usage_ledger.flow_run_id = $1
+                    ),
+                    (
+                        select sum((node_runs.metrics_payload #>> '{usage,output_tokens}')::bigint)::bigint
+                        from node_runs
+                        where node_runs.flow_run_id = $1
+                          and node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                    )
+                ),
+                coalesce(
+                    (
+                        select sum(coalesce(
+                            runtime_usage_ledger.input_cache_hit_tokens,
+                            runtime_usage_ledger.cache_read_tokens,
+                            runtime_usage_ledger.cached_input_tokens
+                        ))::bigint
+                        from runtime_usage_ledger
+                        where runtime_usage_ledger.flow_run_id = $1
+                    ),
+                    (
+                        select sum(
+                            coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,input_cache_hit_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,input_cache_hit_tokens}')::bigint
+                                end,
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,cache_read_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,cache_read_tokens}')::bigint
+                                end,
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,cached_input_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,cached_input_tokens}')::bigint
+                                end
+                            )
+                        )::bigint
+                        from node_runs
+                        where node_runs.flow_run_id = $1
+                    )
+                ),
                 coalesce(
                     (
                         select count(distinct node_runs.node_id)::bigint

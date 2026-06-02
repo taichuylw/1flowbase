@@ -308,7 +308,7 @@
     "retry_on_failure": "失败重试",
     "current_draft_defaults": "当前草稿默认值",
     "no_fields_yet": "暂无字段",
-    "numbers": "数字",
+    "numbers": "数字输入",
     "status_alt": "{{value1}} 状态",
     "master_instance_aggregation": "主实例聚合 ·",
     "page_number": "页码",
