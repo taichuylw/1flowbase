@@ -306,6 +306,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 - `BOOTSTRAP_ROOT_PASSWORD`
 - `API_PROVIDER_SECRET_MASTER_KEY`
 - `WEB_PORT`
+- 官方插件 GitHub raw 下载加速：提示 `Use CN GitHub plugin download accelerator? [y/N]` 时默认不启用；输入 `y` 后继续填写 `API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL`，地址提示中直接回车会使用默认 `https://gh-proxy.com/`。
 
 之后脚本会继续询问：
 
@@ -320,4 +321,4 @@ docker compose pull
 docker compose up -d
 ```
 
-非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。
+非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--plugin-github-proxy-url`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。也可以用 `FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL` 预填官方插件 GitHub raw 下载代理。
