@@ -879,7 +879,13 @@ describe('NodeInspector', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '添加 Schema 字段' }));
     fireEvent.change(screen.getByLabelText('Schema 字段名 3'), {
-      target: { value: 'name' }
+      target: { value: 'metadata' }
+    });
+    await openSelect('Schema 字段类型 3');
+    await selectOption('Object');
+    fireEvent.click(screen.getByRole('button', { name: '添加 metadata 子字段' }));
+    fireEvent.change(screen.getByLabelText('Schema 字段名 3.1'), {
+      target: { value: 'source' }
     });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
@@ -888,11 +894,17 @@ describe('NodeInspector', () => {
         type: 'array',
         items: {
           type: 'object',
-          required: ['role', 'content', 'name'],
+          required: ['role', 'content', 'metadata'],
           properties: {
             role: { type: 'string' },
             content: { type: 'string' },
-            name: { type: 'string' }
+            metadata: {
+              type: 'object',
+              required: ['source'],
+              properties: {
+                source: { type: 'string' }
+              }
+            }
           }
         }
       });

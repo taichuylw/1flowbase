@@ -181,6 +181,7 @@
     "schema_field_required": "Schema 字段必填 {{value1}}",
     "delete_schema_field": "删除 Schema 字段 {{value1}}",
     "add_schema_field": "添加 Schema 字段",
+    "add_child_schema_field": "添加 {{value1}} 子字段",
     "json_schema_parse_hint": "支持识别 JSON、JSON Schema 等描述协议",
     "adjust_preview_width": "调整预览宽度",
     "save_failed": "保存失败",

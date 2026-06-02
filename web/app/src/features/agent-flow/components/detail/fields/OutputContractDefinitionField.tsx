@@ -52,6 +52,7 @@ interface SchemaFieldRow {
   key: string;
   type: SchemaFieldType;
   required: boolean;
+  children?: SchemaFieldRow[];
 }
 
 const JSON_SCHEMA_EDITOR_OPTIONS = {
@@ -155,6 +156,51 @@ function propertySchemaForType(type: SchemaFieldType): Record<string, unknown> {
   return { type };
 }
 
+function schemaRowsFromObjectSchema(schema: unknown): SchemaFieldRow[] {
+  if (!isRecord(schema)) {
+    return [];
+  }
+
+  const properties = isRecord(schema.properties) ? schema.properties : {};
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+
+  return Object.entries(properties).map(([key, property]) =>
+    schemaRowFromProperty(key, property, required.includes(key))
+  );
+}
+
+function schemaRowFromProperty(
+  key: string,
+  property: unknown,
+  required: boolean
+): SchemaFieldRow {
+  const type = schemaFieldType(isRecord(property) ? property.type : undefined);
+
+  if (type === 'object') {
+    return {
+      key,
+      type,
+      required,
+      children: schemaRowsFromObjectSchema(property)
+    };
+  }
+
+  if (type === 'array') {
+    const items = isRecord(property) ? property.items : undefined;
+
+    return {
+      key,
+      type,
+      required,
+      children: schemaRowsFromObjectSchema(items)
+    };
+  }
+
+  return { key, type, required };
+}
+
 function schemaRowsFromSchema(schema: unknown): SchemaFieldRow[] {
   if (!isRecord(schema)) {
     return [];
@@ -166,22 +212,25 @@ function schemaRowsFromSchema(schema: unknown): SchemaFieldRow[] {
     return [];
   }
 
-  const properties = isRecord(root.properties) ? root.properties : {};
-  const required = Array.isArray(root.required)
-    ? root.required.filter((entry): entry is string => typeof entry === 'string')
-    : [];
-
-  return Object.entries(properties).map(([key, property]) => ({
-    key,
-    type: schemaFieldType(isRecord(property) ? property.type : undefined),
-    required: required.includes(key)
-  }));
+  return schemaRowsFromObjectSchema(root);
 }
 
-function schemaFromRows(
-  rootType: SchemaRootType,
-  rows: SchemaFieldRow[]
-): Record<string, unknown> {
+function propertySchemaFromRow(row: SchemaFieldRow): Record<string, unknown> {
+  if (row.type === 'object') {
+    return objectSchemaFromRows(row.children ?? []);
+  }
+
+  if (row.type === 'array') {
+    return {
+      type: 'array',
+      items: objectSchemaFromRows(row.children ?? [])
+    };
+  }
+
+  return propertySchemaForType(row.type);
+}
+
+function objectSchemaFromRows(rows: SchemaFieldRow[]) {
   const visibleRows = rows
     .map((row) => ({
       ...row,
@@ -189,16 +238,24 @@ function schemaFromRows(
     }))
     .filter((row) => row.key.length > 0);
   const properties = Object.fromEntries(
-    visibleRows.map((row) => [row.key, propertySchemaForType(row.type)])
+    visibleRows.map((row) => [row.key, propertySchemaFromRow(row)])
   );
   const required = visibleRows
     .filter((row) => row.required)
     .map((row) => row.key);
-  const objectSchema = {
+
+  return {
     type: 'object',
     required,
     properties
   };
+}
+
+function schemaFromRows(
+  rootType: SchemaRootType,
+  rows: SchemaFieldRow[]
+): Record<string, unknown> {
+  const objectSchema = objectSchemaFromRows(rows);
 
   if (rootType === 'array') {
     return {
@@ -303,25 +360,99 @@ export function OutputContractDefinitionField({
     );
   }
 
-  function updateSchemaRow(index: number, patch: Partial<SchemaFieldRow>) {
+  function updateSchemaRowsAtPath(
+    rows: SchemaFieldRow[],
+    path: number[],
+    updater: (row: SchemaFieldRow) => SchemaFieldRow
+  ): SchemaFieldRow[] {
+    const [head, ...tail] = path;
+
+    if (head === undefined) {
+      return rows;
+    }
+
+    return rows.map((row, rowIndex) => {
+      if (rowIndex !== head) {
+        return row;
+      }
+
+      if (tail.length === 0) {
+        return updater(row);
+      }
+
+      return {
+        ...row,
+        children: updateSchemaRowsAtPath(row.children ?? [], tail, updater)
+      };
+    });
+  }
+
+  function updateSchemaRow(path: number[], patch: Partial<SchemaFieldRow>) {
     setSchemaRows((current) =>
-      current.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, ...patch } : row
-      )
+      updateSchemaRowsAtPath(current, path, (row) => {
+        const nextType = patch.type ?? row.type;
+
+        return {
+          ...row,
+          ...patch,
+          children:
+            nextType === 'object' || nextType === 'array'
+              ? patch.children ?? row.children ?? []
+              : undefined
+        };
+      })
     );
   }
 
-  function addSchemaRow() {
-    setSchemaRows((current) => [
-      ...current,
-      { key: `field_${current.length + 1}`, type: 'string', required: true }
-    ]);
+  function createSchemaRow(index: number): SchemaFieldRow {
+    return {
+      key: `field_${index + 1}`,
+      type: 'string',
+      required: true
+    };
   }
 
-  function removeSchemaRow(index: number) {
+  function addSchemaRow(parentPath?: number[]) {
+    if (!parentPath) {
+      setSchemaRows((current) => [...current, createSchemaRow(current.length)]);
+      return;
+    }
+
     setSchemaRows((current) =>
-      current.filter((_, rowIndex) => rowIndex !== index)
+      updateSchemaRowsAtPath(current, parentPath, (row) => {
+        const children = row.children ?? [];
+
+        return {
+          ...row,
+          children: [...children, createSchemaRow(children.length)]
+        };
+      })
     );
+  }
+
+  function removeSchemaRow(path: number[]) {
+    const removeAtPath = (
+      rows: SchemaFieldRow[],
+      targetPath: number[]
+    ): SchemaFieldRow[] => {
+      const [head, ...tail] = targetPath;
+
+      if (head === undefined) {
+        return rows;
+      }
+
+      if (tail.length === 0) {
+        return rows.filter((_, rowIndex) => rowIndex !== head);
+      }
+
+      return rows.map((row, rowIndex) =>
+        rowIndex === head
+          ? { ...row, children: removeAtPath(row.children ?? [], tail) }
+          : row
+      );
+    };
+
+    setSchemaRows((current) => removeAtPath(current, path));
   }
 
   function switchSchemaTab(nextTab: string) {
@@ -401,6 +532,101 @@ export function OutputContractDefinitionField({
       </Button>
     </div>
   );
+
+  function renderSchemaRows(rows: SchemaFieldRow[], parentPath: number[] = []) {
+    return rows.map((row, index) => {
+      const path = [...parentPath, index];
+      const pathLabel = path.map((item) => item + 1).join('.');
+      const hasChildren = row.type === 'object' || row.type === 'array';
+
+      return (
+        <div
+          className="agent-flow-json-schema-settings__field-node"
+          key={`${pathLabel}-${row.key}`}
+        >
+          <div
+            className="agent-flow-json-schema-settings__field-row"
+            style={{ paddingLeft: parentPath.length * 18 }}
+          >
+            <Input
+              aria-label={i18nText(
+                "agentFlow",
+                "auto.schema_field_name",
+                { value1: pathLabel }
+              )}
+              value={row.key}
+              onChange={(event) =>
+                updateSchemaRow(path, {
+                  key: event.target.value
+                })
+              }
+            />
+            <Select
+              aria-label={i18nText(
+                "agentFlow",
+                "auto.schema_field_type",
+                { value1: pathLabel }
+              )}
+              options={schemaFieldTypeOptions}
+              value={row.type}
+              onChange={(type) => updateSchemaRow(path, { type })}
+            />
+            <Checkbox
+              aria-label={i18nText(
+                "agentFlow",
+                "auto.schema_field_required",
+                { value1: pathLabel }
+              )}
+              checked={row.required}
+              onChange={(event) =>
+                updateSchemaRow(path, {
+                  required: event.target.checked
+                })
+              }
+            />
+            <Button
+              aria-label={i18nText(
+                "agentFlow",
+                "auto.delete_schema_field",
+                { value1: row.key || pathLabel }
+              )}
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              type="text"
+              onClick={() => removeSchemaRow(path)}
+            />
+          </div>
+          {hasChildren ? (
+            <div
+              className="agent-flow-json-schema-settings__field-children"
+              style={{ paddingLeft: (parentPath.length + 1) * 18 }}
+            >
+              {row.children && row.children.length > 0
+                ? renderSchemaRows(row.children, path)
+                : null}
+              <Button
+                aria-label={i18nText(
+                  "agentFlow",
+                  "auto.add_child_schema_field",
+                  { value1: row.key || pathLabel }
+                )}
+                className="agent-flow-json-schema-settings__add-child-field"
+                icon={<PlusOutlined />}
+                size="small"
+                type="dashed"
+                onClick={() => addSchemaRow(path)}
+              >
+                {i18nText("agentFlow", "auto.add_child_schema_field", {
+                  value1: row.key || pathLabel
+                })}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      );
+    });
+  }
 
   return (
     <div className="agent-flow-output-contract-editor">
@@ -577,70 +803,14 @@ export function OutputContractDefinitionField({
                       <span>{i18nText("agentFlow", "auto.operation")}</span>
                     </div>
                     <div className="agent-flow-json-schema-settings__field-rows">
-                      {schemaRows.map((row, index) => (
-                        <div
-                          className="agent-flow-json-schema-settings__field-row"
-                          key={`${row.key}-${index}`}
-                        >
-                          <Input
-                            aria-label={i18nText(
-                              "agentFlow",
-                              "auto.schema_field_name",
-                              { value1: index + 1 }
-                            )}
-                            value={row.key}
-                            onChange={(event) =>
-                              updateSchemaRow(index, {
-                                key: event.target.value
-                              })
-                            }
-                          />
-                          <Select
-                            aria-label={i18nText(
-                              "agentFlow",
-                              "auto.schema_field_type",
-                              { value1: index + 1 }
-                            )}
-                            options={schemaFieldTypeOptions}
-                            value={row.type}
-                            onChange={(type) =>
-                              updateSchemaRow(index, { type })
-                            }
-                          />
-                          <Checkbox
-                            aria-label={i18nText(
-                              "agentFlow",
-                              "auto.schema_field_required",
-                              { value1: index + 1 }
-                            )}
-                            checked={row.required}
-                            onChange={(event) =>
-                              updateSchemaRow(index, {
-                                required: event.target.checked
-                              })
-                            }
-                          />
-                          <Button
-                            aria-label={i18nText(
-                              "agentFlow",
-                              "auto.delete_schema_field",
-                              { value1: row.key || index + 1 }
-                            )}
-                            danger
-                            icon={<DeleteOutlined />}
-                            size="small"
-                            type="text"
-                            onClick={() => removeSchemaRow(index)}
-                          />
-                        </div>
-                      ))}
+                      {renderSchemaRows(schemaRows)}
                     </div>
                     <Button
                       aria-label={i18nText("agentFlow", "auto.add_schema_field")}
                       className="agent-flow-json-schema-settings__add-field"
                       icon={<PlusOutlined />}
                       type="dashed"
-                      onClick={addSchemaRow}
+                      onClick={() => addSchemaRow()}
                     >
                       {i18nText("agentFlow", "auto.add_schema_field")}
                     </Button>

@@ -732,11 +732,28 @@
   overflow: auto;
 }
 
+.agent-flow-json-schema-settings__field-node {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .agent-flow-json-schema-settings__field-row .ant-select {
   width: 100%;
 }
 
+.agent-flow-json-schema-settings__field-children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 1px solid #d9e3dc;
+}
+
 .agent-flow-json-schema-settings__add-field {
+  width: fit-content;
+}
+
+.agent-flow-json-schema-settings__add-child-field {
   width: fit-content;
 }
 

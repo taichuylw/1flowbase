@@ -181,6 +181,7 @@
     "schema_field_required": "Schema field required {{value1}}",
     "delete_schema_field": "Delete Schema field {{value1}}",
     "add_schema_field": "Add schema field",
+    "add_child_schema_field": "Add {{value1}} child field",
     "json_schema_parse_hint": "Supports JSON, JSON Schema, and similar descriptions",
     "adjust_preview_width": "Adjust preview width",
     "save_failed": "Save failed",
