@@ -33,7 +33,9 @@
 }
 
 .application-run-detail__content {
+  display: flex;
   flex: 1 1 auto;
+  gap: 12px;
   min-height: 0;
 }
 
@@ -70,6 +72,7 @@
 .application-run-detail__conversation-pane {
   position: relative;
   display: flex;
+  flex: 1 1 auto;
   height: 100%;
   min-height: 0;
   flex-direction: column;
@@ -77,6 +80,73 @@
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
   background: #f8fafd;
+}
+
+.application-run-detail__timeline {
+  display: flex;
+  flex: 0 0 320px;
+  min-width: 260px;
+  max-width: 360px;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  background: var(--ant-color-bg-container);
+}
+
+.application-run-detail__timeline-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.application-run-detail__timeline-list {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.application-run-detail__timeline-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--ant-color-fill-quaternary);
+}
+
+.application-run-detail__timeline-item .ant-typography {
+  overflow-wrap: anywhere;
+}
+
+.application-run-detail__timeline-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .application-run-detail__content {
+    flex-direction: column;
+  }
+
+  .application-run-detail__timeline {
+    flex: 0 0 220px;
+    max-width: none;
+  }
 }
 
 .application-run-detail__conversation-pane .agent-flow-editor__dock-panel {

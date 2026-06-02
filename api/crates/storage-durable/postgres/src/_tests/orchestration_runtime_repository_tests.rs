@@ -3,17 +3,21 @@ use control_plane::{
     ports::{
         AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
         AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
-        ApplicationRepository, AttachCompiledPlanToFlowRunInput, CreateApplicationInput,
-        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        ApplicationRepository, AttachCompiledPlanToFlowRunInput, ClaimFlowRunResumeRequestInput,
+        CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
-        FlowRepository, GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
-        LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationRunsPageInput,
-        OrchestrationRuntimeRepository, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
-        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        FinishFlowRunResumeRequestInput, FlowRepository, GetApplicationRunMonitoringReportInput,
+        GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
+        ListApplicationRunsPageInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+        UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
+        UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        UpsertFlowRunResumeRequestInput,
     },
 };
-use domain::{ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunStatus, NodeRunStatus};
+use domain::{
+    ApplicationType, CallbackTaskStatus, FlowRunMode, FlowRunResumeRequestStatus, FlowRunStatus,
+    NodeRunStatus,
+};
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -1618,6 +1622,161 @@ async fn orchestration_runtime_repository_returns_callback_tasks_with_run_detail
         duplicate.downcast_ref::<ControlPlaneError>(),
         Some(ControlPlaneError::Conflict("callback_task_not_pending"))
     ));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_repository_claims_resume_requests_with_lease_recovery() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-06-02 10:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::WaitingCallback,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: None,
+        },
+    )
+    .await
+    .unwrap();
+    let node_run = seed_node_run_for(
+        &store,
+        &run,
+        "node-tool",
+        "tool",
+        "Tool",
+        json!({ "tool_name": "lookup_order" }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+    let callback_task =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_callback_task(
+            &store,
+            &CreateCallbackTaskInput {
+                flow_run_id: run.id,
+                node_run_id: node_run.id,
+                callback_kind: "external_callback".to_string(),
+                request_payload: json!({ "prompt": "approve" }),
+                external_ref_payload: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let first_upsert =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_flow_run_resume_request(
+            &store,
+            &UpsertFlowRunResumeRequestInput {
+                flow_run_id: run.id,
+                callback_task_id: callback_task.id,
+                response_payload: json!({ "answer": "approved" }),
+                idempotency_key: format!("callback_task:{}", callback_task.id),
+            },
+        )
+        .await
+        .unwrap();
+    let duplicate_upsert =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::upsert_flow_run_resume_request(
+            &store,
+            &UpsertFlowRunResumeRequestInput {
+                flow_run_id: run.id,
+                callback_task_id: callback_task.id,
+                response_payload: json!({ "answer": "ignored" }),
+                idempotency_key: format!("callback_task:{}", callback_task.id),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(first_upsert.inserted);
+    assert!(!duplicate_upsert.inserted);
+    assert_eq!(first_upsert.request.id, duplicate_upsert.request.id);
+    assert_eq!(
+        duplicate_upsert.request.response_payload,
+        json!({ "answer": "approved" })
+    );
+
+    let first_claim_expires_at = OffsetDateTime::now_utc() + Duration::seconds(60);
+    let claim =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::claim_next_flow_run_resume_request(
+            &store,
+            &ClaimFlowRunResumeRequestInput {
+                worker_id: "api-worker-a".into(),
+                claim_expires_at: first_claim_expires_at,
+            },
+        )
+        .await
+        .unwrap()
+        .expect("pending resume request should be claimed");
+    assert_eq!(claim.request.id, first_upsert.request.id);
+    assert_eq!(claim.application_id, seeded.application_id);
+    assert_eq!(claim.actor_user_id, seeded.actor_user_id);
+    assert_eq!(claim.request.status, FlowRunResumeRequestStatus::Claimed);
+    assert_eq!(claim.request.claimed_by.as_deref(), Some("api-worker-a"));
+
+    let blocked =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::claim_next_flow_run_resume_request(
+            &store,
+            &ClaimFlowRunResumeRequestInput {
+                worker_id: "api-worker-b".into(),
+                claim_expires_at: OffsetDateTime::now_utc() + Duration::seconds(120),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(blocked.is_none());
+
+    sqlx::query("update flow_run_resume_requests set claim_expires_at = now() - interval '1 second' where id = $1")
+        .bind(claim.request.id)
+        .execute(store.pool())
+        .await
+        .unwrap();
+    let recovered =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::claim_next_flow_run_resume_request(
+            &store,
+            &ClaimFlowRunResumeRequestInput {
+                worker_id: "api-worker-b".into(),
+                claim_expires_at: OffsetDateTime::now_utc() + Duration::seconds(180),
+            },
+        )
+        .await
+        .unwrap()
+        .expect("expired claim should be recovered");
+    assert_eq!(recovered.request.id, first_upsert.request.id);
+    assert_eq!(
+        recovered.request.claimed_by.as_deref(),
+        Some("api-worker-b")
+    );
+
+    let finished =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::finish_flow_run_resume_request(
+            &store,
+            &FinishFlowRunResumeRequestInput {
+                request_id: recovered.request.id,
+                status: FlowRunResumeRequestStatus::Succeeded,
+                error_payload: None,
+                completed_at: started_at + Duration::seconds(5),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(finished.status, FlowRunResumeRequestStatus::Succeeded);
+    assert!(finished.claim_expires_at.is_none());
+    assert!(finished.completed_at.is_some());
 }
 
 #[tokio::test]

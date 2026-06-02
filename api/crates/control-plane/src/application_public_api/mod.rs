@@ -65,7 +65,8 @@ use crate::ports::{
     CreateFlowRunInput, DeleteApplicationInput, FlowRepository, ReplaceApplicationApiMappingInput,
     ReplaceApplicationEnvironmentVariablesInput, ReplaceApplicationJsDependencySelectionInput,
     SetApplicationApiEnabledInput, UpdateApplicationInput, UpdateProfileInput,
-    UpsertApiKeyDataModelPermissionInput, UpsertCompiledPlanInput,
+    UpsertApiKeyDataModelPermissionInput, UpsertCompiledPlanInput, UpsertFlowRunResumeRequestInput,
+    UpsertFlowRunResumeRequestOutput,
 };
 
 #[cfg(test)]
@@ -95,6 +96,7 @@ struct ApplicationPublicApiTestRepositoryInner {
     native_runs: HashMap<Uuid, native::NativeRunResult>,
     flow_runs: HashMap<Uuid, domain::FlowRunRecord>,
     callback_tasks: HashMap<Uuid, domain::CallbackTaskRecord>,
+    resume_requests: HashMap<String, domain::FlowRunResumeRequestRecord>,
     run_events: HashMap<Uuid, Vec<domain::RunEventRecord>>,
     application_environment_variables: HashMap<Uuid, Vec<domain::ApplicationEnvironmentVariable>>,
     editor_state_read_count: usize,
@@ -1113,6 +1115,16 @@ impl ApplicationPublicApiTestRepository {
             .unwrap_or_default()
     }
 
+    pub fn resume_requests(&self) -> Vec<domain::FlowRunResumeRequestRecord> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .resume_requests
+            .values()
+            .cloned()
+            .collect()
+    }
+
     pub fn flow_run_count(&self) -> usize {
         self.inner
             .lock()
@@ -1572,6 +1584,78 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
                 .cloned()
                 .unwrap_or_default(),
         }))
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl run_service::ApplicationPublishedResumeRequestRepository
+    for ApplicationPublicApiTestRepository
+{
+    async fn upsert_published_resume_request(
+        &self,
+        input: &UpsertFlowRunResumeRequestInput,
+    ) -> Result<UpsertFlowRunResumeRequestOutput> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        if let Some(existing) = inner.resume_requests.get(&input.idempotency_key).cloned() {
+            return Ok(UpsertFlowRunResumeRequestOutput {
+                request: existing,
+                inserted: false,
+            });
+        }
+        let now = OffsetDateTime::now_utc();
+        let request = domain::FlowRunResumeRequestRecord {
+            id: Uuid::now_v7(),
+            flow_run_id: input.flow_run_id,
+            callback_task_id: input.callback_task_id,
+            status: domain::FlowRunResumeRequestStatus::Pending,
+            response_payload: input.response_payload.clone(),
+            idempotency_key: input.idempotency_key.clone(),
+            claimed_by: None,
+            claim_expires_at: None,
+            error_payload: None,
+            created_at: now,
+            updated_at: now,
+            completed_at: None,
+        };
+        inner
+            .resume_requests
+            .insert(request.idempotency_key.clone(), request.clone());
+        Ok(UpsertFlowRunResumeRequestOutput {
+            request,
+            inserted: true,
+        })
+    }
+
+    async fn cancel_published_resume_requests_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::FlowRunResumeRequestRecord>> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let mut cancelled = Vec::new();
+        for request in inner.resume_requests.values_mut() {
+            if request.flow_run_id == flow_run_id
+                && matches!(
+                    request.status,
+                    domain::FlowRunResumeRequestStatus::Pending
+                        | domain::FlowRunResumeRequestStatus::Claimed
+                )
+            {
+                request.status = domain::FlowRunResumeRequestStatus::Cancelled;
+                request.claim_expires_at = None;
+                request.completed_at = Some(completed_at);
+                request.updated_at = OffsetDateTime::now_utc();
+                cancelled.push(request.clone());
+            }
+        }
+        Ok(cancelled)
     }
 }
 

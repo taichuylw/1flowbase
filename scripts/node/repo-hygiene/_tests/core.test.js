@@ -34,6 +34,39 @@ test('scanSourceFile reports debt markers and weak assertions without failing th
   assert.equal(findings.every((finding) => finding.severity === 'warning'), true);
 });
 
+test('scanSourceFile ignores debt words in protocol fields, module paths, and fixture strings', () => {
+  const findings = scanSourceFile({
+    relativePath: 'scripts/node/repo-hygiene/_tests/protocol-fixture.test.ts',
+    content: [
+      "import legacyFixture from './fixtures/legacy/compatibility-sample.json';",
+      '',
+      'const protocol = {',
+      "  deprecated: 'protocol flag name, not source debt',",
+      "  compatibility: 'v2',",
+      "  compat: 'wire-format field',",
+      '};',
+      '',
+      "const fixture = 'legacy compatibility deprecated compat text from imported payload';",
+      '',
+      "test('keeps legacy compatibility fixture text', () => {",
+      '  expect(protocol).toEqual({',
+      "    deprecated: 'protocol flag name, not source debt',",
+      "    compatibility: 'v2',",
+      "    compat: 'wire-format field',",
+      '  });',
+      '});',
+      '',
+      '// TODO: remove deprecated compatibility shim after source migration',
+    ].join('\n'),
+  });
+
+  assert.deepEqual(
+    findings.map((finding) => finding.rule),
+    ['source-debt-marker']
+  );
+  assert.equal(findings[0].line, 19);
+});
+
 test('scanSourceFile reports low-value test smells as advisory findings', () => {
   const findings = scanSourceFile({
     relativePath: 'web/packages/api-client/src/_tests/console-frontstage.test.ts',

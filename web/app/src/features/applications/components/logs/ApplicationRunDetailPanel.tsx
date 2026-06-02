@@ -1,6 +1,6 @@
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Tooltip } from 'antd';
+import { App, Button, Empty, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
@@ -31,6 +31,14 @@ import { i18nText } from '../../../../shared/i18n/text';
 
 const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
 const RUN_CONVERSATION_PAGE_LIMIT = 5;
+const RESUME_EVENT_TYPES = new Set([
+  'public_run_resume_requested',
+  'public_run_resume_claimed',
+  'public_run_resume_succeeded',
+  'public_run_resume_failed',
+  'public_run_resume_cancelled',
+  'flow_run_resumed'
+]);
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
@@ -280,6 +288,161 @@ function conversationItemKey(item: ApplicationRunConversationMessage) {
   ].join('::');
 }
 
+interface ResumeTimelineItem {
+  key: string;
+  occurredAt: string;
+  title: string;
+  status: string;
+  color: string;
+  description: string | null;
+}
+
+function eventStatusColor(eventType: string) {
+  if (eventType.endsWith('_failed')) {
+    return 'red';
+  }
+  if (eventType.endsWith('_claimed')) {
+    return 'blue';
+  }
+  if (eventType.endsWith('_succeeded') || eventType === 'flow_run_resumed') {
+    return 'green';
+  }
+  return 'default';
+}
+
+function resumeEventLabel(eventType: string) {
+  switch (eventType) {
+    case 'public_run_resume_requested':
+      return i18nText("applications", "auto.resume_event_requested");
+    case 'public_run_resume_claimed':
+      return i18nText("applications", "auto.resume_event_claimed");
+    case 'public_run_resume_succeeded':
+      return i18nText("applications", "auto.resume_event_succeeded");
+    case 'public_run_resume_failed':
+      return i18nText("applications", "auto.resume_event_failed");
+    case 'public_run_resume_cancelled':
+      return i18nText("applications", "auto.resume_event_cancelled");
+    case 'flow_run_resumed':
+      return i18nText("applications", "auto.resume_event_resumed");
+    default:
+      return eventType;
+  }
+}
+
+function callbackStatusColor(status: string) {
+  switch (status) {
+    case 'pending':
+      return 'gold';
+    case 'completed':
+      return 'green';
+    case 'cancelled':
+      return 'default';
+    default:
+      return 'blue';
+  }
+}
+
+function callbackStatusLabel(status: string) {
+  switch (status) {
+    case 'pending':
+      return i18nText("applications", "auto.callback_status_pending");
+    case 'completed':
+      return i18nText("applications", "auto.callback_status_completed");
+    case 'cancelled':
+      return i18nText("applications", "auto.callback_status_cancelled");
+    default:
+      return status;
+  }
+}
+
+function callbackKindLabel(callbackKind: string) {
+  switch (callbackKind) {
+    case 'llm_tool_calls':
+      return i18nText("applications", "auto.callback_kind_llm_tool_calls");
+    case 'external_callback':
+      return i18nText("applications", "auto.callback_kind_external_callback");
+    case 'data_model_side_effect_confirmation':
+      return i18nText("applications", "auto.callback_kind_data_model_side_effect_confirmation");
+    default:
+      return callbackKind;
+  }
+}
+
+function payloadString(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function buildResumeTimeline(detail: ApplicationRunDetail): ResumeTimelineItem[] {
+  const eventItems = detail.events
+    .filter((event) => RESUME_EVENT_TYPES.has(event.event_type))
+    .map((event) => ({
+      key: `event-${event.id}`,
+      occurredAt: event.created_at,
+      title: resumeEventLabel(event.event_type),
+      status: i18nText("applications", "auto.resume_timeline_event"),
+      color: eventStatusColor(event.event_type),
+      description:
+        payloadString(event.payload, 'resume_request_id') ??
+        payloadString(event.payload, 'callback_task_id')
+    }));
+  const callbackItems = detail.callback_tasks.map((task) => ({
+    key: `callback-${task.id}-${task.status}`,
+    occurredAt: task.completed_at ?? task.created_at,
+    title: callbackKindLabel(task.callback_kind),
+    status: callbackStatusLabel(task.status),
+    color: callbackStatusColor(task.status),
+    description: task.id
+  }));
+
+  return [...eventItems, ...callbackItems].sort((left, right) =>
+    left.occurredAt.localeCompare(right.occurredAt)
+  );
+}
+
+function ResumeTimeline({ detail }: { detail: ApplicationRunDetail | null }) {
+  const items = detail ? buildResumeTimeline(detail) : [];
+
+  return (
+    <section className="application-run-detail__timeline">
+      <div className="application-run-detail__timeline-header">
+        <Typography.Text strong style={{ fontSize: 13 }}>
+          {i18nText("applications", "auto.resume_timeline")}</Typography.Text>
+        {detail ? <Tag>{detail.flow_run.status}</Tag> : null}
+      </div>
+      {items.length > 0 ? (
+        <div className="application-run-detail__timeline-list">
+          {items.map((item) => (
+            <div className="application-run-detail__timeline-item" key={item.key}>
+              <div className="application-run-detail__timeline-main">
+                <Typography.Text style={{ fontSize: 12 }}>
+                  {item.title}
+                </Typography.Text>
+                <Tag color={item.color} style={{ marginInlineEnd: 0 }}>
+                  {item.status}
+                </Tag>
+              </div>
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                {new Date(item.occurredAt).toLocaleString()}
+              </Typography.Text>
+              {item.description ? (
+                <Typography.Text code style={{ fontSize: 11 }}>
+                  {item.description.slice(0, 32)}
+                </Typography.Text>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty
+          description={i18nText("applications", "auto.no_resume_events")}
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      )}
+    </section>
+  );
+}
+
 function RunConversation({
   applicationId,
   onClose,
@@ -422,11 +585,13 @@ function RunConversation({
 
 function renderDetail({
   applicationId,
+  detail,
   onClose,
   onOpenMessageLog,
   runId
 }: {
   applicationId: string;
+  detail: ApplicationRunDetail | null;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   runId: string;
@@ -439,6 +604,7 @@ function renderDetail({
         onOpenMessageLog={onOpenMessageLog}
         runId={runId}
       />
+      <ResumeTimeline detail={detail} />
     </div>
   );
 }
@@ -454,6 +620,13 @@ export function ApplicationRunDetailPanel({
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   runId: string | null;
 }) {
+  const detailQuery = useQuery({
+    queryKey: applicationRunDetailQueryKey(applicationId, runId ?? ''),
+    queryFn: () => fetchApplicationRunDetail(applicationId, runId ?? ''),
+    enabled: Boolean(runId),
+    refetchInterval: 1000
+  });
+
   if (!runId) {
     return null;
   }
@@ -466,6 +639,7 @@ export function ApplicationRunDetailPanel({
       <div className="application-run-detail__body">
         {renderDetail({
           applicationId,
+          detail: detailQuery.data ?? null,
           onClose,
           onOpenMessageLog,
           runId

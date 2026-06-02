@@ -8,8 +8,8 @@ use control_plane::{
             ListApplicationPublicConversationMessagesInput,
         },
         run_service::{
-            ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
-            CancelPublishedFlowRunInput,
+            ApplicationPublishedFlowRunRepository, ApplicationPublishedResumeRequestRepository,
+            ApplicationPublishedRunControlRepository, CancelPublishedFlowRunInput,
         },
     },
     errors::ControlPlaneError,
@@ -18,18 +18,20 @@ use control_plane::{
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
         AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput,
         AppendRuntimeSpanInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
-        CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
-        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        ClaimFlowRunResumeRequestInput, CompleteCallbackTaskInput, CompleteFlowRunInput,
+        CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
+        FinishFlowRunResumeRequestInput, FlowRunResumeRequestClaim, FlowRunResumeRequestQueueStats,
         GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
         LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
         ListApplicationRunsPageInput, OrchestrationRuntimeRepository,
         UpdateCallbackTaskPayloadsInput, UpdateCheckpointPayloadsInput, UpdateFlowRunInput,
         UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
         UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
-        UpsertDebugVariableCacheEntryInput,
+        UpsertDebugVariableCacheEntryInput, UpsertFlowRunResumeRequestInput,
+        UpsertFlowRunResumeRequestOutput,
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -51,6 +53,7 @@ include!("artifact_methods.rs");
 include!("application_run_log_methods.rs");
 include!("debug_variable_cache_methods.rs");
 include!("flow_run_methods.rs");
+include!("flow_run_resume_request_methods.rs");
 include!("ledger_methods.rs");
 include!("read_methods.rs");
 include!("side_effect_receipt_methods.rs");
@@ -221,6 +224,31 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         input: &UpdateCallbackTaskPayloadsInput,
     ) -> Result<domain::CallbackTaskRecord> {
         PgControlPlaneStore::update_callback_task_payloads(self, input).await
+    }
+
+    async fn upsert_flow_run_resume_request(
+        &self,
+        input: &UpsertFlowRunResumeRequestInput,
+    ) -> Result<UpsertFlowRunResumeRequestOutput> {
+        PgControlPlaneStore::upsert_flow_run_resume_request(self, input).await
+    }
+
+    async fn claim_next_flow_run_resume_request(
+        &self,
+        input: &ClaimFlowRunResumeRequestInput,
+    ) -> Result<Option<FlowRunResumeRequestClaim>> {
+        PgControlPlaneStore::claim_next_flow_run_resume_request(self, input).await
+    }
+
+    async fn finish_flow_run_resume_request(
+        &self,
+        input: &FinishFlowRunResumeRequestInput,
+    ) -> Result<domain::FlowRunResumeRequestRecord> {
+        PgControlPlaneStore::finish_flow_run_resume_request(self, input).await
+    }
+
+    async fn summarize_flow_run_resume_requests(&self) -> Result<FlowRunResumeRequestQueueStats> {
+        PgControlPlaneStore::summarize_flow_run_resume_requests(self).await
     }
 
     async fn upsert_debug_variable_cache_entry(
@@ -623,6 +651,29 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
             detail
                 .filter(|detail| detail.flow_run.run_mode == domain::FlowRunMode::PublishedApiRun),
         )
+    }
+}
+
+#[async_trait]
+impl ApplicationPublishedResumeRequestRepository for PgControlPlaneStore {
+    async fn upsert_published_resume_request(
+        &self,
+        input: &UpsertFlowRunResumeRequestInput,
+    ) -> Result<UpsertFlowRunResumeRequestOutput> {
+        PgControlPlaneStore::upsert_flow_run_resume_request(self, input).await
+    }
+
+    async fn cancel_published_resume_requests_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::FlowRunResumeRequestRecord>> {
+        PgControlPlaneStore::cancel_flow_run_resume_requests_for_run(
+            self,
+            flow_run_id,
+            completed_at,
+        )
+        .await
     }
 }
 

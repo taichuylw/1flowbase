@@ -771,6 +771,19 @@ pub fn parse_callback_task_status(value: &str) -> Result<domain::CallbackTaskSta
     }
 }
 
+pub fn parse_flow_run_resume_request_status(
+    value: &str,
+) -> Result<domain::FlowRunResumeRequestStatus> {
+    match value {
+        "pending" => Ok(domain::FlowRunResumeRequestStatus::Pending),
+        "claimed" => Ok(domain::FlowRunResumeRequestStatus::Claimed),
+        "succeeded" => Ok(domain::FlowRunResumeRequestStatus::Succeeded),
+        "failed" => Ok(domain::FlowRunResumeRequestStatus::Failed),
+        "cancelled" => Ok(domain::FlowRunResumeRequestStatus::Cancelled),
+        _ => Err(anyhow!("unknown flow run resume request status: {value}")),
+    }
+}
+
 pub fn parse_flow_run_status(value: &str) -> Result<domain::FlowRunStatus> {
     match value {
         "queued" => Ok(domain::FlowRunStatus::Queued),

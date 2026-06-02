@@ -40,6 +40,28 @@ impl CallbackTaskStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum FlowRunResumeRequestStatus {
+    Pending,
+    Claimed,
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
+impl FlowRunResumeRequestStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Claimed => "claimed",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FlowRunStatus {
     Queued,
     Running,
@@ -187,6 +209,22 @@ pub struct CallbackTaskRecord {
     pub response_payload: Option<serde_json::Value>,
     pub external_ref_payload: Option<serde_json::Value>,
     pub created_at: OffsetDateTime,
+    pub completed_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlowRunResumeRequestRecord {
+    pub id: Uuid,
+    pub flow_run_id: Uuid,
+    pub callback_task_id: Uuid,
+    pub status: FlowRunResumeRequestStatus,
+    pub response_payload: serde_json::Value,
+    pub idempotency_key: String,
+    pub claimed_by: Option<String>,
+    pub claim_expires_at: Option<OffsetDateTime>,
+    pub error_payload: Option<serde_json::Value>,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
     pub completed_at: Option<OffsetDateTime>,
 }
 

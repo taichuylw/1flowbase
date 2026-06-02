@@ -3,12 +3,13 @@ use sqlx::{postgres::PgRow, Row};
 use uuid::Uuid;
 
 use crate::mappers::orchestration_runtime_mapper::{
-    PgOrchestrationRuntimeMapper, StoredApplicationRunLogSummaryRow,
-    StoredApplicationRunSummaryRow, StoredAuditHashRow, StoredBillingSessionRow,
-    StoredCallbackTaskRow, StoredCapabilityInvocationRow, StoredCheckpointRow,
-    StoredCompiledPlanRow, StoredContextProjectionRow, StoredCostLedgerRow, StoredCreditLedgerRow,
-    StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow, StoredRunEventRow,
-    StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow, StoredUsageLedgerRow,
+    parse_flow_run_resume_request_status, PgOrchestrationRuntimeMapper,
+    StoredApplicationRunLogSummaryRow, StoredApplicationRunSummaryRow, StoredAuditHashRow,
+    StoredBillingSessionRow, StoredCallbackTaskRow, StoredCapabilityInvocationRow,
+    StoredCheckpointRow, StoredCompiledPlanRow, StoredContextProjectionRow, StoredCostLedgerRow,
+    StoredCreditLedgerRow, StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow,
+    StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow,
+    StoredUsageLedgerRow,
 };
 
 pub(super) fn map_compiled_plan_record(row: PgRow) -> Result<domain::CompiledPlanRecord> {
@@ -118,6 +119,25 @@ pub(super) fn map_callback_task_record(row: PgRow) -> Result<domain::CallbackTas
         response_payload: row.get("response_payload"),
         external_ref_payload: row.get("external_ref_payload"),
         created_at: row.get("created_at"),
+        completed_at: row.get("completed_at"),
+    })
+}
+
+pub(super) fn map_flow_run_resume_request_record(
+    row: &PgRow,
+) -> Result<domain::FlowRunResumeRequestRecord> {
+    Ok(domain::FlowRunResumeRequestRecord {
+        id: row.get("id"),
+        flow_run_id: row.get("flow_run_id"),
+        callback_task_id: row.get("callback_task_id"),
+        status: parse_flow_run_resume_request_status(row.get::<String, _>("status").as_str())?,
+        response_payload: row.get("response_payload"),
+        idempotency_key: row.get("idempotency_key"),
+        claimed_by: row.get("claimed_by"),
+        claim_expires_at: row.get("claim_expires_at"),
+        error_payload: row.get("error_payload"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
         completed_at: row.get("completed_at"),
     })
 }

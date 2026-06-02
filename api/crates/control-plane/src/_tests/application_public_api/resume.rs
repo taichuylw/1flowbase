@@ -4,8 +4,8 @@ use control_plane::application_public_api::{
         ApplicationApiMappingConfig, ApplicationApiMappingInput, ApplicationApiMappingOutput,
     },
     native::{
-        ApplicationNativeRunService, CreateNativeRunCommand, NativeRunValidationError,
-        ResumeNativeRunCommand,
+        ApplicationNativeRunService, CancelNativeRunCommand, CreateNativeRunCommand,
+        NativeRunValidationError, ResumeNativeRunCommand,
     },
     publications::{ApplicationPublicationService, PublishApplicationCommand},
     ApplicationPublicApiTestHarness,
@@ -185,7 +185,7 @@ async fn native_get_run_exposes_pending_callback_required_action() {
 }
 
 #[tokio::test]
-async fn native_resume_owned_callback_records_stable_resume_request_event() {
+async fn native_resume_owned_callback_accepts_durable_resume_request() {
     let harness = ApplicationPublicApiTestHarness::new();
     let application = harness.seed_application(actor_user_id(), "Resume App");
     let token = issue_key(&harness, application.id, actor_user_id()).await;
@@ -201,7 +201,7 @@ async fn native_resume_owned_callback_records_stable_resume_request_event() {
         .unwrap();
     let callback_task = repository.seed_pending_callback_task(run.id);
 
-    let error = service
+    let result = service
         .resume_native_run(ResumeNativeRunCommand {
             bearer_token: token,
             run_id: run.id,
@@ -210,11 +210,23 @@ async fn native_resume_owned_callback_records_stable_resume_request_event() {
             response_mode: Some("blocking".into()),
         })
         .await
-        .unwrap_err();
+        .unwrap();
 
     assert_eq!(
-        error,
-        NativeRunValidationError::ResumeContinuationNotImplemented
+        result.status,
+        control_plane::application_public_api::native::NativeRunStatus::Waiting
+    );
+    let resume_requests = repository.resume_requests();
+    assert_eq!(resume_requests.len(), 1);
+    assert_eq!(resume_requests[0].flow_run_id, run.id);
+    assert_eq!(resume_requests[0].callback_task_id, callback_task.id);
+    assert_eq!(
+        resume_requests[0].status,
+        domain::FlowRunResumeRequestStatus::Pending
+    );
+    assert_eq!(
+        resume_requests[0].response_payload,
+        json!({ "answer": "approved" })
     );
     let resume_events: Vec<_> = repository
         .run_events(run.id)
@@ -227,6 +239,10 @@ async fn native_resume_owned_callback_records_stable_resume_request_event() {
         json!(callback_task.id)
     );
     assert_eq!(
+        resume_events[0].payload["resume_request_id"],
+        json!(resume_requests[0].id)
+    );
+    assert_eq!(
         resume_events[0].payload["response_payload"],
         json!({ "answer": "approved" })
     );
@@ -235,4 +251,105 @@ async fn native_resume_owned_callback_records_stable_resume_request_event() {
         .as_object()
         .unwrap()
         .contains_key("todo"));
+}
+
+#[tokio::test]
+async fn native_resume_reuses_existing_pending_resume_request_for_duplicate_callback() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Resume App");
+    let token = issue_key(&harness, application.id, actor_user_id()).await;
+    publish_application(&harness, application.id, actor_user_id()).await;
+    let repository = harness.repository();
+    let service = ApplicationNativeRunService::new(repository.clone());
+    let run = service
+        .create_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(run.id);
+
+    for answer in ["approved", "ignored-second-payload"] {
+        service
+            .resume_native_run(ResumeNativeRunCommand {
+                bearer_token: token.clone(),
+                run_id: run.id,
+                callback_task_id: callback_task.id,
+                response_payload: json!({ "answer": answer }),
+                response_mode: Some("blocking".into()),
+            })
+            .await
+            .unwrap();
+    }
+
+    let resume_requests = repository.resume_requests();
+    assert_eq!(resume_requests.len(), 1);
+    assert_eq!(
+        resume_requests[0].response_payload,
+        json!({ "answer": "approved" })
+    );
+    let resume_events: Vec<_> = repository
+        .run_events(run.id)
+        .into_iter()
+        .filter(|event| event.event_type == "public_run_resume_requested")
+        .collect();
+    assert_eq!(resume_events.len(), 1);
+}
+
+#[tokio::test]
+async fn native_cancel_marks_pending_resume_request_cancelled() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Resume Cancel App");
+    let token = issue_key(&harness, application.id, actor_user_id()).await;
+    publish_application(&harness, application.id, actor_user_id()).await;
+    let repository = harness.repository();
+    let service = ApplicationNativeRunService::new(repository.clone());
+    let run = service
+        .create_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(run.id);
+    service
+        .resume_native_run(ResumeNativeRunCommand {
+            bearer_token: token.clone(),
+            run_id: run.id,
+            callback_task_id: callback_task.id,
+            response_payload: json!({ "answer": "approved" }),
+            response_mode: Some("blocking".into()),
+        })
+        .await
+        .unwrap();
+
+    let cancelled = service
+        .cancel_native_run(CancelNativeRunCommand {
+            bearer_token: token,
+            run_id: run.id,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        cancelled.status,
+        control_plane::application_public_api::native::NativeRunStatus::Cancelled
+    );
+    let resume_requests = repository.resume_requests();
+    assert_eq!(
+        resume_requests[0].status,
+        domain::FlowRunResumeRequestStatus::Cancelled
+    );
+    assert!(resume_requests[0].completed_at.is_some());
+    let resume_events: Vec<_> = repository
+        .run_events(run.id)
+        .into_iter()
+        .filter(|event| event.event_type == "public_run_resume_cancelled")
+        .collect();
+    assert_eq!(resume_events.len(), 1);
+    assert_eq!(
+        resume_events[0].payload["resume_request_id"],
+        json!(resume_requests[0].id)
+    );
 }

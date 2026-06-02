@@ -6,7 +6,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use control_plane::system_runtime::SystemRuntimeService;
+use control_plane::{ports::OrchestrationRuntimeRepository, system_runtime::SystemRuntimeService};
 use runtime_profile::{LocaleResolution, LocaleResolutionInput, LocaleSource, RuntimeProfile};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -101,6 +101,43 @@ pub struct SystemRuntimeHostResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct NativeResumeWorkerRuntimeResponse {
+    pub worker_id: Option<String>,
+    pub status: String,
+    pub started_at: Option<String>,
+    pub last_heartbeat_at: Option<String>,
+    pub last_poll_at: Option<String>,
+    pub last_claimed_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error_at: Option<String>,
+    pub last_error: Option<String>,
+    pub current_request_id: Option<String>,
+    pub current_flow_run_id: Option<String>,
+    pub processed_count: u64,
+    pub succeeded_count: u64,
+    pub failed_count: u64,
+    pub last_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeResumeWorkerQueueResponse {
+    pub pending_count: i64,
+    pub claimed_count: i64,
+    pub succeeded_count: i64,
+    pub failed_count: i64,
+    pub cancelled_count: i64,
+    pub expired_claim_count: i64,
+    pub oldest_pending_created_at: Option<String>,
+    pub oldest_pending_age_seconds: Option<i64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct NativeResumeWorkerObservationResponse {
+    pub runtime: NativeResumeWorkerRuntimeResponse,
+    pub queue: NativeResumeWorkerQueueResponse,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SystemRuntimeProfileResponse {
     pub provider_install_root: String,
     pub host_extension_dropin_root: String,
@@ -108,6 +145,7 @@ pub struct SystemRuntimeProfileResponse {
     pub topology: SystemRuntimeTopologyResponse,
     pub services: SystemRuntimeServicesResponse,
     pub hosts: Vec<SystemRuntimeHostResponse>,
+    pub native_resume_worker: NativeResumeWorkerObservationResponse,
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
@@ -155,6 +193,7 @@ pub async fn get_runtime_profile(
         .fetch_runtime_profile()
         .await
         .ok();
+    let native_resume_worker = native_resume_worker_observation(&state).await?;
 
     Ok(Json(ApiSuccess::new(merge_runtime_profiles(
         locale,
@@ -162,6 +201,7 @@ pub async fn get_runtime_profile(
         runner_profile,
         state.provider_install_root.clone(),
         state.host_extension_dropin_root.clone(),
+        native_resume_worker,
     ))))
 }
 
@@ -185,6 +225,7 @@ fn merge_runtime_profiles(
     runner_profile: Option<RuntimeProfile>,
     provider_install_root: String,
     host_extension_dropin_root: String,
+    native_resume_worker: NativeResumeWorkerObservationResponse,
 ) -> SystemRuntimeProfileResponse {
     let relationship = match runner_profile.as_ref() {
         Some(profile) if profile.host_fingerprint == api_profile.host_fingerprint => {
@@ -221,7 +262,53 @@ fn merge_runtime_profiles(
                 .unwrap_or_else(unreachable_runner_service),
         },
         hosts,
+        native_resume_worker,
     }
+}
+
+async fn native_resume_worker_observation(
+    state: &ApiState,
+) -> Result<NativeResumeWorkerObservationResponse, ApiError> {
+    let runtime = state.native_resume_worker.snapshot();
+    let queue =
+        <storage_durable::MainDurableStore as OrchestrationRuntimeRepository>::summarize_flow_run_resume_requests(
+            &state.store,
+        )
+        .await?;
+    let now = time::OffsetDateTime::now_utc();
+    Ok(NativeResumeWorkerObservationResponse {
+        runtime: NativeResumeWorkerRuntimeResponse {
+            worker_id: runtime.worker_id,
+            status: runtime.status,
+            started_at: runtime.started_at.map(|value| value.to_string()),
+            last_heartbeat_at: runtime.last_heartbeat_at.map(|value| value.to_string()),
+            last_poll_at: runtime.last_poll_at.map(|value| value.to_string()),
+            last_claimed_at: runtime.last_claimed_at.map(|value| value.to_string()),
+            last_success_at: runtime.last_success_at.map(|value| value.to_string()),
+            last_error_at: runtime.last_error_at.map(|value| value.to_string()),
+            last_error: runtime.last_error,
+            current_request_id: runtime.current_request_id.map(|value| value.to_string()),
+            current_flow_run_id: runtime.current_flow_run_id.map(|value| value.to_string()),
+            processed_count: runtime.processed_count,
+            succeeded_count: runtime.succeeded_count,
+            failed_count: runtime.failed_count,
+            last_duration_ms: runtime.last_duration_ms,
+        },
+        queue: NativeResumeWorkerQueueResponse {
+            pending_count: queue.pending_count,
+            claimed_count: queue.claimed_count,
+            succeeded_count: queue.succeeded_count,
+            failed_count: queue.failed_count,
+            cancelled_count: queue.cancelled_count,
+            expired_claim_count: queue.expired_claim_count,
+            oldest_pending_created_at: queue
+                .oldest_pending_created_at
+                .map(|value| value.to_string()),
+            oldest_pending_age_seconds: queue
+                .oldest_pending_created_at
+                .map(|created_at| (now - created_at).whole_seconds().max(0)),
+        },
+    })
 }
 
 fn host_from_profile(profile: &RuntimeProfile, services: Vec<&str>) -> SystemRuntimeHostResponse {

@@ -18,7 +18,8 @@ import {
   GlobalOutlined,
   CloudServerOutlined,
   ClusterOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 
 import {
@@ -66,8 +67,48 @@ function getReachabilityMeta(reachable: boolean) {
     : { color: '#ff4d4f' as const, label: i18nText("settings", "auto.not_reachable"), icon: CloseCircleFilled };
 }
 
+function getWorkerStatusMeta(status: string) {
+  switch (status) {
+    case 'idle':
+      return { color: '#00ab73' as const, label: i18nText("settings", "auto.worker_status_idle") };
+    case 'polling':
+      return { color: '#00ab73' as const, label: i18nText("settings", "auto.worker_status_polling") };
+    case 'processing':
+      return { color: '#1677ff' as const, label: i18nText("settings", "auto.worker_status_processing") };
+    case 'error':
+      return { color: '#ff4d4f' as const, label: i18nText("settings", "auto.worker_status_error") };
+    case 'stopped':
+      return { color: '#86909c' as const, label: i18nText("settings", "auto.worker_status_stopped") };
+    case 'not_started':
+      return { color: '#86909c' as const, label: i18nText("settings", "auto.worker_status_not_started") };
+    default:
+      return { color: '#faad14' as const, label: status };
+  }
+}
+
+function getResumeQueueLabel(queueStatus: string) {
+  switch (queueStatus) {
+    case 'pending':
+      return i18nText("settings", "auto.resume_queue_pending");
+    case 'claimed':
+      return i18nText("settings", "auto.resume_queue_claimed");
+    case 'succeeded':
+      return i18nText("settings", "auto.resume_queue_succeeded");
+    case 'failed':
+      return i18nText("settings", "auto.resume_queue_failed");
+    case 'expired':
+      return i18nText("settings", "auto.resume_queue_expired");
+    default:
+      return queueStatus;
+  }
+}
+
 function formatMemory(value: number) {
   return `${value.toFixed(1)} GB`;
+}
+
+function formatOptionalTime(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : '—';
 }
 
 /* ── data shapes for the host table ──────────────── */
@@ -250,6 +291,7 @@ export function SystemRuntimePanel() {
   ];
 
   const hostRows = buildHostRows(profile);
+  const nativeResumeWorker = profile.native_resume_worker;
 
   /* ── render ── */
   return (
@@ -477,6 +519,117 @@ export function SystemRuntimePanel() {
           })}
         </Flex>
       </div>
+
+      {nativeResumeWorker ? (
+        <div style={{ marginBottom: 32 }}>
+          <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
+            <SyncOutlined style={{ color: '#1677ff', fontSize: 15 }} />
+            <Typography.Text strong style={{ fontSize: 14 }}>
+              {i18nText("settings", "auto.native_resume_worker")}</Typography.Text>
+          </Flex>
+
+          <Flex gap={16} wrap="wrap">
+            <div
+              style={{
+                flex: '1 1 320px',
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+                padding: '18px 20px',
+                background: '#fff'
+              }}
+            >
+              <Flex
+                align="center"
+                justify="space-between"
+                style={{ marginBottom: 12 }}
+              >
+                <Typography.Text strong style={{ fontSize: 14 }}>
+                  {i18nText("settings", "auto.worker_runtime")}</Typography.Text>
+                <Tag color={getWorkerStatusMeta(nativeResumeWorker.runtime.status).color}>
+                  {getWorkerStatusMeta(nativeResumeWorker.runtime.status).label}
+                </Tag>
+              </Flex>
+              <Flex gap={24} wrap="wrap">
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                    {i18nText("settings", "auto.worker_id")}</Typography.Text>
+                  <Typography.Text code style={{ fontSize: 12 }}>
+                    {nativeResumeWorker.runtime.worker_id?.slice(0, 24) ?? '—'}
+                  </Typography.Text>
+                </div>
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                    {i18nText("settings", "auto.last_heartbeat")}</Typography.Text>
+                  <Typography.Text style={{ fontSize: 12 }}>
+                    {formatOptionalTime(nativeResumeWorker.runtime.last_heartbeat_at)}
+                  </Typography.Text>
+                </div>
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                    {i18nText("settings", "auto.processed")}</Typography.Text>
+                  <Typography.Text style={{ fontSize: 12 }}>
+                    {nativeResumeWorker.runtime.processed_count}
+                  </Typography.Text>
+                </div>
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                    {i18nText("settings", "auto.last_duration")}</Typography.Text>
+                  <Typography.Text style={{ fontSize: 12 }}>
+                    {nativeResumeWorker.runtime.last_duration_ms ?? '—'}
+                    {nativeResumeWorker.runtime.last_duration_ms == null ? '' : ' ms'}
+                  </Typography.Text>
+                </div>
+              </Flex>
+              {nativeResumeWorker.runtime.last_error ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  style={{ marginTop: 14 }}
+                  message={i18nText("settings", "auto.worker_last_error")}
+                  description={nativeResumeWorker.runtime.last_error}
+                />
+              ) : null}
+            </div>
+
+            <div
+              style={{
+                flex: '1 1 320px',
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+                padding: '18px 20px',
+                background: '#fff'
+              }}
+            >
+              <Typography.Text strong style={{ display: 'block', fontSize: 14, marginBottom: 12 }}>
+                {i18nText("settings", "auto.resume_queue")}</Typography.Text>
+              <Flex gap={16} wrap="wrap">
+                {[
+                  ['pending', nativeResumeWorker.queue.pending_count],
+                  ['claimed', nativeResumeWorker.queue.claimed_count],
+                  ['succeeded', nativeResumeWorker.queue.succeeded_count],
+                  ['failed', nativeResumeWorker.queue.failed_count],
+                  ['expired', nativeResumeWorker.queue.expired_claim_count]
+                ].map(([queueStatus, count]) => (
+                  <div key={queueStatus}>
+                    <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                      {getResumeQueueLabel(String(queueStatus))}
+                    </Typography.Text>
+                    <Typography.Text style={{ fontSize: 16 }}>
+                      {count}
+                    </Typography.Text>
+                  </div>
+                ))}
+              </Flex>
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 14, fontSize: 12 }}>
+                {i18nText("settings", "auto.oldest_pending_age")}:
+                {' '}
+                {nativeResumeWorker.queue.oldest_pending_age_seconds ?? '—'}
+                {nativeResumeWorker.queue.oldest_pending_age_seconds == null ? '' : ' s'}
+              </Typography.Text>
+            </div>
+          </Flex>
+        </div>
+      ) : null}
 
       {/* ════════════════════════════════════════════════
          宿主机

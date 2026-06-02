@@ -21,6 +21,7 @@ pub mod runtime_activity;
 pub mod runtime_data_model_docs;
 pub mod runtime_profile_client;
 pub mod runtime_registry_sync;
+pub mod workers;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -290,6 +291,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         provider_runtime,
         process_started_at,
         runtime_activity,
+        native_resume_worker: Arc::new(workers::native_resume::NativeResumeWorkerRuntime::new()),
         api_runtime_profile: Arc::new(HostApiRuntimeProfileCollector),
         plugin_runner_system: Arc::new(HttpPluginRunnerSystemClient::new(
             config.plugin_runner_internal_base_url.clone(),
@@ -320,6 +322,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     .reconcile_all_installations()
     .await?;
     load_host_extensions_at_startup(&state).await?;
+    workers::native_resume::spawn_native_resume_worker(state.clone());
 
     Ok(app_with_state_and_config(state, config))
 }

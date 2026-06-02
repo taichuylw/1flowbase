@@ -177,7 +177,7 @@ fn ensure_data_model_side_effect_confirmation_metadata(
     Ok(())
 }
 
-fn ensure_llm_tool_callback_results_complete(
+pub(crate) fn ensure_llm_tool_callback_results_complete(
     request_payload: &Value,
     response_payload: &Value,
 ) -> Result<()> {

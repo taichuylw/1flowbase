@@ -53,6 +53,40 @@ export interface ConsoleSystemRuntimeHost {
   services: string[];
 }
 
+export interface ConsoleNativeResumeWorkerRuntime {
+  worker_id: string | null;
+  status: string;
+  started_at: string | null;
+  last_heartbeat_at: string | null;
+  last_poll_at: string | null;
+  last_claimed_at: string | null;
+  last_success_at: string | null;
+  last_error_at: string | null;
+  last_error: string | null;
+  current_request_id: string | null;
+  current_flow_run_id: string | null;
+  processed_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  last_duration_ms: number | null;
+}
+
+export interface ConsoleNativeResumeWorkerQueue {
+  pending_count: number;
+  claimed_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  cancelled_count: number;
+  expired_claim_count: number;
+  oldest_pending_created_at: string | null;
+  oldest_pending_age_seconds: number | null;
+}
+
+export interface ConsoleNativeResumeWorkerObservation {
+  runtime: ConsoleNativeResumeWorkerRuntime;
+  queue: ConsoleNativeResumeWorkerQueue;
+}
+
 export interface ConsoleSystemRuntimeProfile {
   provider_install_root: string;
   host_extension_dropin_root: string;
@@ -60,6 +94,7 @@ export interface ConsoleSystemRuntimeProfile {
   topology: ConsoleSystemRuntimeTopology;
   services: ConsoleSystemRuntimeServices;
   hosts: ConsoleSystemRuntimeHost[];
+  native_resume_worker: ConsoleNativeResumeWorkerObservation;
 }
 
 export function fetchConsoleSystemRuntimeProfile(baseUrl?: string) {

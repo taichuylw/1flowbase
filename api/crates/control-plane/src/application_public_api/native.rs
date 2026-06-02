@@ -12,11 +12,12 @@ use super::{
     conversations::ApplicationPublicConversationRepository,
     mapping::ApplicationApiMappingConfig,
     run_service::{
-        ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
-        ApplicationPublishedRunService,
+        ApplicationPublishedFlowRunRepository, ApplicationPublishedResumeRequestRepository,
+        ApplicationPublishedRunControlRepository, ApplicationPublishedRunService,
     },
 };
 use crate::flow_run_title::build_flow_run_title;
+use crate::orchestration_runtime::ensure_llm_tool_callback_results_complete;
 use crate::ports::{
     ApiKeyRepository, ApplicationCompiledPlanRepository, ApplicationPublicationRepository,
     ApplicationRepository, AuthRepository, CacheStore,
@@ -341,8 +342,8 @@ pub enum NativeRunValidationError {
     NotFound,
     InvalidMapping,
     InvalidModelParameters(&'static str),
+    InvalidToolResults(String),
     InvalidState,
-    ResumeContinuationNotImplemented,
 }
 
 pub struct ApplicationNativeRunService<R> {
@@ -359,6 +360,7 @@ where
         + ApplicationCompiledPlanRepository
         + ApplicationPublishedFlowRunRepository
         + ApplicationPublishedRunControlRepository
+        + ApplicationPublishedResumeRequestRepository
         + ApplicationPublicConversationRepository
         + Clone,
 {
@@ -447,6 +449,30 @@ where
             .published_run_service()
             .cancel_published_run(&actor, &flow_run)
             .await?;
+        if cancelled.status == domain::FlowRunStatus::Cancelled {
+            let completed_at = cancelled
+                .finished_at
+                .unwrap_or_else(OffsetDateTime::now_utc);
+            let cancelled_requests = self
+                .repository
+                .cancel_published_resume_requests_for_run(cancelled.id, completed_at)
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidState)?;
+            for request in cancelled_requests {
+                self.repository
+                    .append_published_run_event(&crate::ports::AppendRunEventInput {
+                        flow_run_id: cancelled.id,
+                        node_run_id: None,
+                        event_type: "public_run_resume_cancelled".to_string(),
+                        payload: json!({
+                            "callback_task_id": request.callback_task_id,
+                            "resume_request_id": request.id,
+                        }),
+                    })
+                    .await
+                    .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+            }
+        }
 
         Ok(super::run_service::native_result_from_flow_run(
             &cancelled,
@@ -482,25 +508,64 @@ where
         if callback_task.flow_run_id != flow_run.id {
             return Err(NativeRunValidationError::Forbidden);
         }
+        if flow_run.status != domain::FlowRunStatus::WaitingCallback {
+            return Err(NativeRunValidationError::InvalidState);
+        }
         if callback_task.status != domain::CallbackTaskStatus::Pending {
             return Err(NativeRunValidationError::InvalidState);
         }
+        if callback_task.callback_kind == "llm_tool_calls" {
+            ensure_llm_tool_callback_results_complete(
+                &callback_task.request_payload,
+                &command.response_payload,
+            )
+            .map_err(|error| NativeRunValidationError::InvalidToolResults(error.to_string()))?;
+        }
 
-        self.repository
-            .append_published_run_event(&crate::ports::AppendRunEventInput {
+        let request = self
+            .repository
+            .upsert_published_resume_request(&crate::ports::UpsertFlowRunResumeRequestInput {
                 flow_run_id: flow_run.id,
-                node_run_id: Some(callback_task.node_run_id),
-                event_type: "public_run_resume_requested".to_string(),
-                payload: json!({
-                    "callback_task_id": callback_task.id,
-                    "response_mode": command.response_mode,
-                    "response_payload": command.response_payload,
-                }),
+                callback_task_id: callback_task.id,
+                response_payload: command.response_payload.clone(),
+                idempotency_key: format!("callback_task:{}", callback_task.id),
             })
             .await
-            .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+            .map_err(|_| NativeRunValidationError::InvalidState)?;
 
-        Err(NativeRunValidationError::ResumeContinuationNotImplemented)
+        if request.inserted {
+            self.repository
+                .append_published_run_event(&crate::ports::AppendRunEventInput {
+                    flow_run_id: flow_run.id,
+                    node_run_id: Some(callback_task.node_run_id),
+                    event_type: "public_run_resume_requested".to_string(),
+                    payload: json!({
+                        "callback_task_id": callback_task.id,
+                        "resume_request_id": request.request.id,
+                        "response_mode": command.response_mode,
+                        "response_payload": command.response_payload,
+                    }),
+                })
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+        }
+
+        if let Some(detail) = self
+            .repository
+            .get_published_run_detail(actor.application_id, flow_run.id)
+            .await
+            .map_err(|_| NativeRunValidationError::NotFound)?
+        {
+            return Ok(super::run_service::native_result_from_run_detail(
+                &detail,
+                durable_metadata_from_flow_run(&flow_run),
+            ));
+        }
+
+        Ok(super::run_service::native_result_from_flow_run(
+            &flow_run,
+            durable_metadata_from_flow_run(&flow_run),
+        ))
     }
 
     fn api_key_service(&self) -> ApplicationApiKeyService<R> {

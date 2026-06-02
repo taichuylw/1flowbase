@@ -136,6 +136,92 @@ function stripStringLiterals(line) {
     .replace(/`([^`\\]|\\.)*`/gu, '``');
 }
 
+function getLineCommentMarkers(relativePath) {
+  const extension = path.extname(relativePath);
+  if (extension === '.yml' || extension === '.yaml') {
+    return ['#'];
+  }
+
+  if (CODE_EXTENSIONS.has(extension)) {
+    return ['//'];
+  }
+
+  return [];
+}
+
+function findFirstCommentMarker(strippedLine, markers) {
+  return markers
+    .map((marker) => ({ marker, index: strippedLine.indexOf(marker) }))
+    .filter(({ index }) => index >= 0)
+    .sort((left, right) => left.index - right.index)[0] ?? null;
+}
+
+function extractDebtMarkerScanText({ line, strippedLine, relativePath, commentState }) {
+  const extension = path.extname(relativePath);
+  if (extension === '.md') {
+    return { text: line, commentState };
+  }
+
+  if (extension === '.json') {
+    return { text: '', commentState };
+  }
+
+  const pieces = [];
+  let nextCommentState = commentState;
+  let cursor = 0;
+
+  while (cursor < line.length) {
+    if (nextCommentState.inBlockComment) {
+      const blockEnd = strippedLine.indexOf('*/', cursor);
+      if (blockEnd < 0) {
+        pieces.push(line.slice(cursor));
+        return { text: pieces.join(' '), commentState: nextCommentState };
+      }
+
+      pieces.push(line.slice(cursor, blockEnd));
+      cursor = blockEnd + 2;
+      nextCommentState = { inBlockComment: false };
+      continue;
+    }
+
+    const blockStart = CODE_EXTENSIONS.has(extension)
+      ? strippedLine.indexOf('/*', cursor)
+      : -1;
+    const lineCommentMatch = findFirstCommentMarker(
+      strippedLine.slice(cursor),
+      getLineCommentMarkers(relativePath)
+    );
+    const absoluteLineCommentStart = lineCommentMatch ? cursor + lineCommentMatch.index : -1;
+
+    if (
+      absoluteLineCommentStart >= 0
+      && (blockStart < 0 || absoluteLineCommentStart < blockStart)
+    ) {
+      pieces.push(line.slice(absoluteLineCommentStart + lineCommentMatch.marker.length));
+      break;
+    }
+
+    if (blockStart < 0) {
+      break;
+    }
+
+    const blockEnd = strippedLine.indexOf('*/', blockStart + 2);
+    if (blockEnd < 0) {
+      pieces.push(line.slice(blockStart + 2));
+      nextCommentState = { inBlockComment: true };
+      break;
+    }
+
+    pieces.push(line.slice(blockStart + 2, blockEnd));
+    cursor = blockEnd + 2;
+  }
+
+  return {
+    text: pieces.join(' '),
+    commentState: nextCommentState,
+  };
+}
+
 function collectWeakAssertionFindings({ relativePath, lines, structuralLines }) {
   const findings = [];
   const reportedLines = new Set();
@@ -232,9 +318,18 @@ function scanSourceFile({ relativePath, content }) {
   const findings = [];
   const testPath = isTestPath(relativePath);
   const structuralLines = testPath ? lines.map((line) => stripStringLiterals(line)) : [];
+  let debtMarkerCommentState = { inBlockComment: false };
 
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
+    const strippedLine = stripStringLiterals(line);
+    const debtScanText = extractDebtMarkerScanText({
+      line,
+      strippedLine,
+      relativePath,
+      commentState: debtMarkerCommentState,
+    });
+    debtMarkerCommentState = debtScanText.commentState;
 
     if (
       !testPath
@@ -249,7 +344,10 @@ function scanSourceFile({ relativePath, content }) {
         message: 'front-back field compatibility alias must stay visible in QA reports until removed',
         snippet: line,
       }));
-    } else if (DEBT_MARKER_PATTERN.test(line) && !isBenignMarkerLine(line)) {
+    } else if (
+      DEBT_MARKER_PATTERN.test(debtScanText.text)
+      && !isBenignMarkerLine(line)
+    ) {
       findings.push(createFinding({
         rule: 'source-debt-marker',
         file: relativePath,

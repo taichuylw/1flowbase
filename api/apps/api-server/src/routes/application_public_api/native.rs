@@ -27,8 +27,7 @@ use control_plane::{
     },
     file_management::{FileUploadService, UploadFileCommand},
     orchestration_runtime::{
-        debug_stream_events, CompleteCallbackTaskCommand, OrchestrationRuntimeService,
-        StartPublishedFlowRunCommand,
+        debug_stream_events, OrchestrationRuntimeService, StartPublishedFlowRunCommand,
     },
     ports::AuthRepository,
 };
@@ -250,15 +249,13 @@ pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
             "invalid_model_parameters",
             format!("invalid native request model parameter field: {field}"),
         ),
+        NativeRunValidationError::InvalidToolResults(message) => {
+            NativeApiError::new(StatusCode::BAD_REQUEST, "tool_results", message)
+        }
         NativeRunValidationError::InvalidState => NativeApiError::new(
             StatusCode::CONFLICT,
             "invalid_state",
             "run is not in a valid state for this operation",
-        ),
-        NativeRunValidationError::ResumeContinuationNotImplemented => NativeApiError::new(
-            StatusCode::NOT_IMPLEMENTED,
-            "resume_not_implemented",
-            "public callback resume continuation is not implemented",
         ),
     }
 }
@@ -687,8 +684,7 @@ pub async fn cancel_native_run(
         (status = 401, body = NativeErrorBody),
         (status = 403, body = NativeErrorBody),
         (status = 404, body = NativeErrorBody),
-        (status = 409, body = NativeErrorBody),
-        (status = 501, body = NativeErrorBody)
+        (status = 409, body = NativeErrorBody)
     )
 )]
 pub async fn resume_native_run(
@@ -698,248 +694,20 @@ pub async fn resume_native_run(
     Json(body): Json<ResumeNativeRunBody>,
 ) -> Result<Response, NativeApiError> {
     let bearer_token = bearer_token(&headers)?;
-    let response_payload = body.response_payload.clone();
-    let response_mode = body.response_mode.clone();
     let native_service = ApplicationNativeRunService::new(state.store.clone())
         .with_last_used_cache(state.infrastructure.cache_store());
-    let run_result = native_service
+    let run = native_service
         .resume_native_run(ResumeNativeRunCommand {
-            bearer_token: bearer_token.clone(),
+            bearer_token,
             run_id,
             callback_task_id: body.callback_task_id,
-            response_payload: response_payload.clone(),
-            response_mode,
+            response_payload: body.response_payload,
+            response_mode: body.response_mode,
         })
-        .await;
-    let run = match run_result {
-        Ok(run) => run,
-        Err(NativeRunValidationError::ResumeContinuationNotImplemented) => {
-            let api_actor = ApplicationApiKeyService::new(state.store.clone())
-                .with_last_used_cache(state.infrastructure.cache_store())
-                .authenticate_bearer_token(&bearer_token)
-                .await
-                .map_err(|_| NativeRunValidationError::NotAuthenticated)
-                .map_err(native_error)?;
-            if body.response_mode.as_deref() == Some("streaming") {
-                let initial_run = native_service
-                    .get_native_run(GetNativeRunCommand {
-                        bearer_token: bearer_token.clone(),
-                        run_id,
-                    })
-                    .await
-                    .map_err(native_error)?;
-                return resume_native_run_stream(
-                    state,
-                    initial_run,
-                    api_actor.creator_user_id,
-                    api_actor.application_id,
-                    body.callback_task_id,
-                    response_payload,
-                )
-                .await;
-            }
-            let _execution_activity = state.runtime_activity.start(
-                api_actor.application_id,
-                ApplicationActivityKind::ApplicationExecution,
-            );
-            let detail = scope_application_activity(
-                api_actor.application_id,
-                OrchestrationRuntimeService::new(
-                    state.store.clone(),
-                    api_provider_runtime(&state),
-                    state.runtime_engine.clone(),
-                    state.provider_secret_master_key.clone(),
-                )
-                .complete_callback_task(CompleteCallbackTaskCommand {
-                    actor_user_id: api_actor.creator_user_id,
-                    application_id: api_actor.application_id,
-                    callback_task_id: body.callback_task_id,
-                    response_payload,
-                }),
-            )
-            .await
-            .map_err(service_error)?;
-            native_result_from_run_detail(
-                &detail,
-                serde_json::json!({
-                    "external_user": detail.flow_run.external_user,
-                    "external_conversation_id": detail.flow_run.external_conversation_id,
-                    "external_trace_id": detail.flow_run.external_trace_id,
-                    "compatibility_mode": detail.flow_run.compatibility_mode,
-                    "idempotency_key": detail.flow_run.idempotency_key,
-                    "request": {
-                        "conversation": {
-                            "id": detail.flow_run.external_conversation_id,
-                            "user": detail.flow_run.external_user,
-                        }
-                    }
-                }),
-            )
-        }
-        Err(error) => return Err(native_error(error)),
-    };
+        .await
+        .map_err(native_error)?;
 
     Ok(Json(ApiSuccess::new(to_native_run_response(run))).into_response())
-}
-
-async fn resume_native_run_stream(
-    state: Arc<ApiState>,
-    initial_run: NativeRunResult,
-    actor_user_id: Uuid,
-    application_id: Uuid,
-    callback_task_id: Uuid,
-    response_payload: Value,
-) -> Result<Response, NativeApiError> {
-    state
-        .runtime_event_stream
-        .open_run(
-            initial_run.id,
-            control_plane::ports::RuntimeEventStreamPolicy::debug_default(),
-        )
-        .await
-        .map_err(service_error)?;
-    let resume_started = state
-        .runtime_event_stream
-        .append(
-            initial_run.id,
-            debug_stream_events::flow_started(initial_run.id),
-        )
-        .await
-        .map_err(service_error)?;
-
-    let (sender, receiver) = mpsc::channel(32);
-    tokio::spawn(sse::send_native_runtime_event_stream(
-        state.clone(),
-        initial_run.clone(),
-        sse::IncludeWorkflowEvents::None,
-        Some(resume_started.sequence - 1),
-        Some(callback_task_id),
-        sender,
-    ));
-
-    let background_state = state.clone();
-    tokio::spawn(async move {
-        let _execution_activity = background_state.runtime_activity.start(
-            application_id,
-            ApplicationActivityKind::ApplicationExecution,
-        );
-        let runtime_service = OrchestrationRuntimeService::new(
-            background_state.store.clone(),
-            api_provider_runtime(&background_state),
-            background_state.runtime_engine.clone(),
-            background_state.provider_secret_master_key.clone(),
-        )
-        .with_runtime_event_stream(background_state.runtime_event_stream.clone());
-        let result = scope_application_activity(
-            application_id,
-            runtime_service.complete_callback_task(CompleteCallbackTaskCommand {
-                actor_user_id,
-                application_id,
-                callback_task_id,
-                response_payload,
-            }),
-        )
-        .await;
-        match result {
-            Ok(detail) => {
-                append_terminal_sse_event(&background_state, &detail.flow_run).await;
-            }
-            Err(error) => {
-                let _ = background_state
-                    .runtime_event_stream
-                    .append(
-                        initial_run.id,
-                        debug_stream_events::flow_failed(
-                            initial_run.id,
-                            serde_json::json!({ "message": error.to_string() }),
-                        ),
-                    )
-                    .await;
-                let _ = background_state
-                    .runtime_event_stream
-                    .close_run(
-                        initial_run.id,
-                        control_plane::ports::RuntimeEventCloseReason::Failed,
-                    )
-                    .await;
-            }
-        }
-    });
-
-    let sse_activity = state
-        .runtime_activity
-        .start(application_id, ApplicationActivityKind::SseConnection);
-    let stream = sse::NativeRunSseStream::new(receiver).map(move |event| {
-        let _keep_alive = &sse_activity;
-        event
-    });
-
-    Ok(Sse::new(stream)
-        .keep_alive(KeepAlive::default())
-        .into_response())
-}
-
-async fn append_terminal_sse_event(state: &ApiState, flow_run: &domain::FlowRunRecord) {
-    match flow_run.status {
-        domain::FlowRunStatus::Succeeded => {
-            let _ = state
-                .runtime_event_stream
-                .append(
-                    flow_run.id,
-                    debug_stream_events::flow_finished(
-                        flow_run.id,
-                        flow_run.output_payload.clone(),
-                    ),
-                )
-                .await;
-            let _ = state
-                .runtime_event_stream
-                .close_run(
-                    flow_run.id,
-                    control_plane::ports::RuntimeEventCloseReason::Finished,
-                )
-                .await;
-        }
-        domain::FlowRunStatus::Failed => {
-            let _ = state
-                .runtime_event_stream
-                .append(
-                    flow_run.id,
-                    debug_stream_events::flow_failed(
-                        flow_run.id,
-                        flow_run
-                            .error_payload
-                            .clone()
-                            .unwrap_or_else(|| serde_json::json!({ "message": "run failed" })),
-                    ),
-                )
-                .await;
-            let _ = state
-                .runtime_event_stream
-                .close_run(
-                    flow_run.id,
-                    control_plane::ports::RuntimeEventCloseReason::Failed,
-                )
-                .await;
-        }
-        domain::FlowRunStatus::Cancelled => {
-            let _ = state
-                .runtime_event_stream
-                .append(
-                    flow_run.id,
-                    debug_stream_events::flow_cancelled(flow_run.id),
-                )
-                .await;
-            let _ = state
-                .runtime_event_stream
-                .close_run(
-                    flow_run.id,
-                    control_plane::ports::RuntimeEventCloseReason::Cancelled,
-                )
-                .await;
-        }
-        _ => {}
-    }
 }
 
 #[utoipa::path(
