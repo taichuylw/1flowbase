@@ -270,7 +270,7 @@ function collectAnswerPresentationReferences(
     .filter((selector) => selector.length >= 2)
     .map((selector) => ({
       nodeId: selector[0],
-      outputKey: selector[1]
+      outputKey: selector.slice(1).join('.')
     }));
 }
 

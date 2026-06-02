@@ -1395,7 +1395,7 @@ async fn llm_runtime_fails_when_selected_context_value_is_not_messages() {
         ExecutionStopReason::Failed(failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("llm_context_selector_error")
             );
         }
@@ -1690,7 +1690,7 @@ async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved()
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-answer");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("prompt_template_unresolved")
             );
         }
@@ -1707,7 +1707,7 @@ async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved()
         json!("Answer: visible answer\nMissing: ")
     );
     assert_eq!(
-        answer_trace.output_payload["error"]["error_kind"],
+        answer_trace.output_payload["error"]["error_code"],
         json!("prompt_template_unresolved")
     );
     assert_eq!(
@@ -1718,7 +1718,7 @@ async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved()
         answer_trace
             .error_payload
             .as_ref()
-            .expect("answer trace should keep structured error")["error_kind"],
+            .expect("answer trace should keep structured error")["error_code"],
         json!("prompt_template_unresolved")
     );
     assert_eq!(
@@ -1858,7 +1858,7 @@ async fn failover_queue_stops_when_primary_fails_after_finish_error_with_first_t
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("provider_invalid_response")
             );
             assert_eq!(
@@ -2283,7 +2283,7 @@ async fn llm_tool_call_finish_without_tool_calls_exposes_error_text_to_answer() 
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("provider_invalid_response")
             );
             assert!(failure.error_payload["message"]
@@ -2859,9 +2859,9 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
-            assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert_eq!(failure.error_payload["error_code"], json!("auth_failed"));
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("auth_failed")
             );
             assert_eq!(
@@ -2894,7 +2894,7 @@ async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
-            assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert_eq!(failure.error_payload["error_code"], json!("auth_failed"));
             assert_eq!(
                 failure.error_payload["message"],
                 json!("401 401 Unauthorized: Incorrect API key provided")
@@ -2930,11 +2930,11 @@ async fn llm_failure_after_first_token_writes_error_text_to_public_output() {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("provider_invalid_response")
             );
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("provider_invalid_response")
             );
             assert_eq!(

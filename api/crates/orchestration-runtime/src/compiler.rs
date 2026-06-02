@@ -300,7 +300,8 @@ fn output_for_selector(
     selector: &[String],
 ) -> Option<CompiledOutput> {
     let node_id = selector.first()?;
-    let output_key = selector.get(1)?;
+    let selector_tail = selector.get(1..)?;
+    let output_key = selector_tail.first()?;
     let node = nodes.get(node_id)?;
 
     if node.node_type == "start" && output_key == "history" {
@@ -315,7 +316,10 @@ fn output_for_selector(
 
     node.outputs
         .iter()
-        .find(|output| output.key == *output_key)
+        .find(|output| {
+            output.selector == selector_tail
+                || (selector_tail.len() == 1 && output.key == *output_key)
+        })
         .cloned()
 }
 
@@ -339,12 +343,19 @@ fn compile_node(
     let active_bindings = active_binding_values(&node_type, raw_bindings);
     let bindings = compile_bindings(&active_bindings)
         .with_context(|| format!("failed to compile bindings for node {node_id}"))?;
-    let outputs = compile_outputs(
+    let mut outputs = compile_outputs(
         node.get("outputs")
             .and_then(Value::as_array)
             .ok_or_else(|| anyhow!("node {node_id} missing outputs"))?,
     )
     .with_context(|| format!("failed to compile outputs for node {node_id}"))?;
+    if node_type == "code" {
+        for output in &mut outputs {
+            if output.selector.len() == 1 && output.selector[0] == output.key {
+                output.selector = vec!["result".to_string(), output.key.clone()];
+            }
+        }
+    }
     if node_type == "start" && !outputs.is_empty() {
         bail!("start node {node_id} outputs must be empty");
     }
@@ -1530,13 +1541,14 @@ fn parse_template_selector_tokens(value: &str) -> Vec<Vec<String>> {
         let end = start + end_offset;
         let token = value[start..end].trim();
 
-        if let Some((left, right)) = token.split_once('.') {
-            let left = left.trim();
-            let right = right.trim();
+        let selector = token
+            .split('.')
+            .map(str::trim)
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
 
-            if !left.is_empty() && !right.is_empty() {
-                selectors.push(vec![left.to_string(), right.to_string()]);
-            }
+        if selector.len() >= 2 && selector.iter().all(|segment| !segment.is_empty()) {
+            selectors.push(selector);
         }
 
         cursor = end + 2;

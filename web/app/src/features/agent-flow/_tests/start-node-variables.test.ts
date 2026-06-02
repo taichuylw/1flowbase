@@ -6,7 +6,8 @@ import { buildFlowDebugRunInput } from '../api/runtime';
 import { createNodeDocument } from '../lib/document/node-factory';
 import {
   listLlmContextSelectorOptions,
-  listVisibleSelectorOptions
+  listVisibleSelectorOptions,
+  toCascaderSelectorOptions
 } from '../lib/selector-options';
 import { getStartInputFields } from '../lib/start-node-variables';
 import { appI18n } from '../../../shared/i18n/app-i18n';
@@ -151,7 +152,7 @@ describe('start node variables', () => {
           jsonSchema: expect.objectContaining({ type: 'array' })
         }),
         expect.objectContaining({
-          value: ['node-code', 'chat_history'],
+          value: ['node-code', 'result', 'chat_history'],
           valueType: 'array',
           jsonSchema: expect.objectContaining({ type: 'array' })
         })
@@ -215,14 +216,46 @@ describe('start node variables', () => {
     ).toEqual(
       expect.arrayContaining([
         ['node-start', 'history'],
-        ['node-code', 'chat_history']
+        ['node-code', 'result', 'chat_history']
       ])
     );
     expect(
       listLlmContextSelectorOptions(document, 'node-llm').map(
         (option) => option.value
       )
-    ).not.toContainEqual(['node-code', 'raw_payload']);
+    ).not.toContainEqual(['node-code', 'result', 'raw_payload']);
+  });
+
+  test('builds nested cascader paths for code result output selectors', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const codeNode = createNodeDocument('code', 'node-code');
+
+    document.graph.nodes.push(codeNode);
+    document.graph.edges.push({
+      id: 'edge-code-llm',
+      source: 'node-code',
+      target: 'node-llm',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(toCascaderSelectorOptions(listVisibleSelectorOptions(document, 'node-llm'))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: 'node-code',
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              value: 'result',
+              children: expect.arrayContaining([
+                expect.objectContaining({ value: 'result', label: 'result' })
+              ])
+            })
+          ])
+        })
+      ])
+    );
   });
 
   test('exposes external model parameters without exposing context window as a runtime variable', () => {

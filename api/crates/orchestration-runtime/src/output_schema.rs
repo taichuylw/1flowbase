@@ -10,13 +10,13 @@ pub fn validate_output_value(output: &CompiledOutput, value: &Value) -> Result<(
         let validator = jsonschema::validator_for(schema).map_err(|error| {
             anyhow!(
                 "output `{}` declares invalid jsonSchema: {error}",
-                output.key
+                output_display_path(output)
             )
         })?;
         validator.validate(value).map_err(|error| {
             anyhow!(
                 "output `{}` does not match declared jsonSchema: {error}",
-                output.key
+                output_display_path(output)
             )
         })?;
     }
@@ -122,8 +122,16 @@ fn validate_output_value_type(output: &CompiledOutput, value: &Value) -> Result<
     } else {
         Err(anyhow!(
             "output `{}` expected valueType `{}`",
-            output.key,
+            output_display_path(output),
             output.value_type
         ))
+    }
+}
+
+fn output_display_path(output: &CompiledOutput) -> String {
+    if output.selector.is_empty() {
+        output.key.clone()
+    } else {
+        output.selector.join(".")
     }
 }

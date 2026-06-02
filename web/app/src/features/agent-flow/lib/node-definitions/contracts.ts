@@ -16,6 +16,7 @@ import {
   getDataModelNodeOutputs,
   getDataModelActionForNodeType
 } from './nodes/data-model';
+import { normalizeCodeOutput } from '../output-contract/code-output';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type BuiltinNodeRuntimeContractType = FlowNodeType;
@@ -448,7 +449,9 @@ function createIfElseContract(): NodeRuntimeUiContract {
 }
 
 function createCodeContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: 'result', valueType: 'string' }];
+  const outputs = [
+    normalizeCodeOutput({ key: 'result', title: 'result', valueType: 'string' })
+  ];
 
   return createNodeRuntimeContract({
     type: 'code',

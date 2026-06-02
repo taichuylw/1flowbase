@@ -25,6 +25,21 @@ export interface FlowSelectorOption {
   displayLabel: string;
 }
 
+interface CascaderSelectorOption {
+  label: string;
+  value: string;
+  children?: CascaderSelectorOption[];
+}
+
+function outputSelectorValue(nodeId: string, output: { key: string; selector?: string[] }) {
+  return [
+    nodeId,
+    ...(output.selector && output.selector.length > 0
+      ? output.selector
+      : [output.key])
+  ];
+}
+
 function collectUpstreamNodeIds(
   document: FlowAuthoringDocument,
   nodeId: string
@@ -88,7 +103,7 @@ export function listVisibleSelectorOptions(
         outputLabel: output.key,
         valueType: output.valueType,
         jsonSchema: output.jsonSchema,
-        value: [node.id, output.key],
+        value: outputSelectorValue(node.id, output),
         displayLabel: formatNodeVariableLabel(node.alias, output.key)
       }))
     );
@@ -112,7 +127,7 @@ export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {
     {
       label: string;
       value: string;
-      children: Array<{ label: string; value: string }>;
+      children: CascaderSelectorOption[];
     }
   >();
 
@@ -125,13 +140,46 @@ export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {
       });
     }
 
-    groups.get(option.nodeId)?.children.push({
-      label: option.outputLabel,
-      value: option.outputKey
-    });
+    const group = groups.get(option.nodeId);
+    if (!group) {
+      continue;
+    }
+
+    appendCascaderSelectorPath(
+      group.children,
+      option.value.slice(1),
+      option.outputLabel
+    );
   }
 
   return [...groups.values()];
+}
+
+function appendCascaderSelectorPath(
+  children: CascaderSelectorOption[],
+  path: string[],
+  outputLabel: string
+) {
+  const [segment, ...rest] = path;
+
+  if (!segment) {
+    return;
+  }
+
+  const label = rest.length === 0 ? outputLabel : segment;
+  let child = children.find((candidate) => candidate.value === segment);
+
+  if (!child) {
+    child = { label, value: segment };
+    children.push(child);
+  } else if (rest.length === 0) {
+    child.label = label;
+  }
+
+  if (rest.length > 0) {
+    child.children ??= [];
+    appendCascaderSelectorPath(child.children, rest, outputLabel);
+  }
 }
 
 export function isSelectorVisible(

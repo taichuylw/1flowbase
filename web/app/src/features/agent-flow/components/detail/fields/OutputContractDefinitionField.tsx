@@ -64,13 +64,17 @@ const JSON_SCHEMA_EDITOR_OPTIONS = {
   }
 } satisfies editor.IStandaloneEditorConstructionOptions;
 
-function createNextOutput(index: number): FlowNodeDocument['outputs'][number] {
+function createNextOutput(
+  index: number,
+  selectorForKey?: (key: string) => string[] | undefined
+): FlowNodeDocument['outputs'][number] {
   const key = `output_${index + 1}`;
 
   return {
     key,
     title: key,
-    valueType: 'string'
+    valueType: 'string',
+    selector: selectorForKey?.(key)
   };
 }
 
@@ -240,11 +244,13 @@ function JsonSchemaCodeEditor({
 export function OutputContractDefinitionField({
   value,
   onChange,
-  syncTitleWithKey = false
+  syncTitleWithKey = false,
+  selectorForKey
 }: {
   value: FlowNodeDocument['outputs'];
   onChange: (value: FlowNodeDocument['outputs']) => void;
   syncTitleWithKey?: boolean;
+  selectorForKey?: (key: string) => string[] | undefined;
 }) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [schemaText, setSchemaText] = useState('');
@@ -280,9 +286,11 @@ export function OutputContractDefinitionField({
 
   function emitChange(nextValue: FlowNodeDocument['outputs']) {
     onChange(
-      syncTitleWithKey
-        ? nextValue.map((output) => ({ ...output, title: output.key }))
-        : nextValue
+      nextValue.map((output) => ({
+        ...output,
+        title: syncTitleWithKey ? output.key : output.title,
+        selector: selectorForKey ? selectorForKey(output.key) : output.selector
+      }))
     );
   }
 
@@ -395,7 +403,9 @@ export function OutputContractDefinitionField({
           icon={<PlusOutlined />}
           size="small"
           type="text"
-          onClick={() => emitChange([...value, createNextOutput(value.length)])}
+          onClick={() =>
+            emitChange([...value, createNextOutput(value.length, selectorForKey)])
+          }
         />
       </div>
       {value.length > 0 ? (

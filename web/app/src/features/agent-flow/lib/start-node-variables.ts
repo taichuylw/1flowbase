@@ -10,6 +10,7 @@ import {
 } from '@1flowbase/flow-schema';
 
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
+import { normalizeCodeOutput } from './output-contract/code-output';
 import { LLM_CONTEXT_MESSAGES_JSON_SCHEMA } from './output-contract/schema';
 import { i18nText } from '../../../shared/i18n/text';
 
@@ -230,7 +231,9 @@ export function getNodeVariableOutputs(
   }
 
   if (node.type === 'code') {
-    return node.outputs.filter((output) => isValidPublicOutputKey(output.key));
+    return node.outputs
+      .filter((output) => isValidPublicOutputKey(output.key))
+      .map(normalizeCodeOutput);
   }
 
   if (node.type === 'plugin_node') {

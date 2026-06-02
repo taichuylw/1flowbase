@@ -463,6 +463,10 @@ fn code_runtime_metadata_compiles_language_entrypoint_source_and_import_snapshot
         runtime.source.as_deref(),
         Some("export function main(input) { return input; }")
     );
+    assert_eq!(
+        plan.nodes["node-code"].outputs[0].selector,
+        vec!["result".to_string(), "result".to_string()]
+    );
     assert_eq!(runtime.source_ref, None);
     assert_eq!(runtime.entrypoint, "main");
     assert_eq!(runtime.imports, vec!["zod".to_string()]);
@@ -1008,6 +1012,38 @@ fn compile_named_bindings_extracts_selector_dependencies_from_templated_content(
     assert_eq!(
         plan.nodes["node-code"].bindings["named_bindings"].selector_paths,
         vec![vec!["node-start".to_string(), "query".to_string()]]
+    );
+}
+
+#[test]
+fn compile_templated_text_extracts_nested_selector_dependencies() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"] = json!({
+        "prompt_messages": {
+            "kind": "prompt_messages",
+            "value": [
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "History: {{ node-code.result.chat_history }}"
+                    }
+                }
+            ]
+        }
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(
+        plan.nodes["node-llm"].bindings["prompt_messages"].selector_paths,
+        vec![vec![
+            "node-code".to_string(),
+            "result".to_string(),
+            "chat_history".to_string()
+        ]]
     );
 }
 

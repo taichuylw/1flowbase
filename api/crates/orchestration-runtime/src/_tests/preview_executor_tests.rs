@@ -285,7 +285,10 @@ async fn preview_executor_code_node_executes_runner() {
     assert!(!outcome.is_failed());
     assert_eq!(
         outcome.node_output,
-        serde_json::json!({ "result": "退款流程是什么？" })
+        serde_json::json!({
+            "result": { "result": "退款流程是什么？" },
+            "error": null
+        })
     );
     assert_eq!(outcome.metrics_payload["language"], "javascript");
     assert_eq!(outcome.metrics_payload["entrypoint"], "main");

@@ -756,7 +756,8 @@ describe('NodeInspector', () => {
         {
           key: 'risk_score',
           title: 'risk_score',
-          valueType: 'number'
+          valueType: 'number',
+          selector: ['result', 'risk_score']
         }
       ]);
     });
@@ -820,6 +821,11 @@ describe('NodeInspector', () => {
             name: { type: 'string' }
           }
         }
+      });
+      expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
+        key: 'chat_history',
+        title: 'chat_history',
+        selector: ['result', 'chat_history']
       });
     });
   });

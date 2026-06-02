@@ -716,13 +716,13 @@ where
     {
         Ok(output) => {
             let debug_facts = code_runtime_debug_facts(&output.console_logs)?;
-            if let Err(error) = validate_code_output_contract(node, &output.output_payload) {
+            let executor_output = object_from_value(output.output_payload)?;
+            if let Err(error) = validate_code_output_contract(node, &executor_output) {
                 let raw = RawNodeExecutionResult {
                     executor_output: Map::new(),
                     metrics_facts: code_runtime_metrics(runtime, true)?,
                     error_facts: object_from_value(json!({
                         "error_code": "code_output_contract_error",
-                        "error_kind": "code_output_contract_error",
                         "message": "code output contract validation failed",
                         "runtime_message": error.to_string(),
                     }))?,
@@ -739,7 +739,7 @@ where
                 });
             }
             let raw = RawNodeExecutionResult {
-                executor_output: object_from_value(output.output_payload)?,
+                executor_output,
                 metrics_facts: code_runtime_metrics(runtime, false)?,
                 error_facts: Map::new(),
                 debug_facts,
@@ -764,7 +764,6 @@ where
                 metrics_facts: code_runtime_metrics(runtime, true)?,
                 error_facts: object_from_value(json!({
                     "error_code": "code_runtime_error",
-                    "error_kind": "code_runtime_error",
                     "message": "code execution failed",
                     "runtime_message": error.to_string(),
                 }))?,
@@ -783,18 +782,21 @@ where
     }
 }
 
-fn validate_code_output_contract(node: &CompiledNode, output_payload: &Value) -> Result<()> {
-    let payload = output_payload
-        .as_object()
-        .ok_or_else(|| anyhow!("code node output payload must be an object"))?;
+fn validate_code_output_contract(
+    node: &CompiledNode,
+    executor_output: &Map<String, Value>,
+) -> Result<()> {
+    let mut envelope = Map::new();
+    envelope.insert("result".to_string(), Value::Object(executor_output.clone()));
+    envelope.insert("error".to_string(), Value::Null);
 
     for output in &node.outputs {
         let selector = if output.selector.is_empty() {
-            vec![output.key.clone()]
+            vec!["result".to_string(), output.key.clone()]
         } else {
             output.selector.clone()
         };
-        if let Some(value) = read_output_selector(payload, &selector) {
+        if let Some(value) = read_output_selector(&envelope, &selector) {
             validate_output_value(output, value)?;
         }
     }
@@ -854,7 +856,36 @@ fn build_code_node_payloads(
         }
     }
 
-    PublicOutputContract::from_compiled_outputs(&node.outputs)?.build_node_payloads(raw)
+    let mut debug_payload = raw.debug_facts.clone();
+    if !raw.provider_events.is_empty() {
+        debug_payload.insert(
+            "provider_events".to_string(),
+            serde_json::to_value(raw.provider_events)?,
+        );
+    }
+
+    let error_payload = Value::Object(raw.error_facts.clone());
+    let result_payload = if raw.error_facts.is_empty() {
+        Value::Object(raw.executor_output)
+    } else {
+        Value::Null
+    };
+    let output_payload = json!({
+        "result": result_payload,
+        "error": if raw.error_facts.is_empty() {
+            Value::Null
+        } else {
+            error_payload.clone()
+        },
+    });
+
+    PublicOutputContract::from_compiled_outputs(&node.outputs)?;
+    Ok(BuiltNodePayloads {
+        output_payload,
+        metrics_payload: Value::Object(raw.metrics_facts),
+        error_payload,
+        debug_payload: Value::Object(debug_payload),
+    })
 }
 
 fn object_from_value(value: Value) -> Result<Map<String, Value>> {

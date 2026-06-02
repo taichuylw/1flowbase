@@ -273,7 +273,12 @@ describe('agent-flow node schema registry', () => {
       source: DEFAULT_CODE_NODE_SOURCE
     });
     expect(codeNode.outputs).toEqual([
-      { key: 'result', title: 'result', valueType: 'string' }
+      {
+        key: 'result',
+        title: 'result',
+        valueType: 'string',
+        selector: ['result', 'result']
+      }
     ]);
   });
 

@@ -793,7 +793,7 @@ where
     }
 
     let error_payload = json!({
-        "error_kind": "provider_unavailable",
+        "error_code": "provider_unavailable",
         "message": "all failover queue attempts failed",
         "attempts": failed_attempts,
     });
@@ -967,7 +967,7 @@ fn build_attempt_metric(input: AttemptMetricInput<'_>) -> Value {
         "time_to_first_token_ms": input.time_to_first_token_ms,
         "usage": serde_json::to_value(input.usage).unwrap_or(Value::Null),
         "error_code": input.error_payload
-            .and_then(|payload| payload.get("error_kind"))
+            .and_then(|payload| payload.get("error_code"))
             .cloned()
             .unwrap_or(Value::Null),
         "error_message_ref": input.error_payload
@@ -1656,21 +1656,21 @@ fn build_empty_prompt_messages_error_payload(runtime: &CompiledLlmRuntime) -> Va
         "provider_instance_id": runtime.provider_instance_id,
         "provider_code": runtime.provider_code,
         "protocol": runtime.protocol,
-        "error_kind": "prompt_messages_empty",
+        "error_code": "prompt_messages_empty",
         "message": "LLM node requires at least one non-empty user or assistant prompt message",
     })
 }
 
 fn build_binding_resolution_error_payload(error: &anyhow::Error) -> Value {
     let message = error.to_string();
-    let error_kind = if message.contains("unresolved template selector") {
+    let error_code = if message.contains("unresolved template selector") {
         "prompt_template_unresolved"
     } else {
         "binding_resolution_failed"
     };
 
     json!({
-        "error_kind": error_kind,
+        "error_code": error_code,
         "message": message,
     })
 }
@@ -1679,7 +1679,7 @@ fn build_answer_binding_resolution_error_payload(
     node: &CompiledNode,
     issues: &[BindingResolutionIssue],
 ) -> Value {
-    let error_kind = if issues
+    let error_code = if issues
         .iter()
         .any(|issue| issue.selector.is_some() || issue.message.contains("selector"))
     {
@@ -1713,7 +1713,7 @@ fn build_answer_binding_resolution_error_payload(
         .collect::<Vec<_>>();
 
     json!({
-        "error_kind": error_kind,
+        "error_code": error_code,
         "message": message,
         "details": details,
     })
@@ -1885,7 +1885,6 @@ fn build_llm_context_selector_error_payload(
 ) -> Value {
     json!({
         "error_code": "llm_context_selector_error",
-        "error_kind": "llm_context_selector_error",
         "message": "LLM context selector validation failed",
         "runtime_message": format!(
             "node {} context_selector {}: {message}",
@@ -2742,6 +2741,10 @@ fn build_llm_node_payloads(
 }
 
 fn project_node_variable_payload(node: &CompiledNode, output_payload: &Value) -> Result<Value> {
+    if node.node_type == "code" {
+        return Ok(output_payload.clone());
+    }
+
     PublicOutputContract::from_compiled_outputs(&node.outputs)?
         .project_variable_payload(output_payload)
 }
@@ -3100,7 +3103,7 @@ fn build_provider_error_payload(
         "provider_instance_id": runtime.provider_instance_id,
         "provider_code": runtime.provider_code,
         "protocol": runtime.protocol,
-        "error_kind": serde_json::to_value(error.kind).unwrap_or(Value::Null),
+        "error_code": serde_json::to_value(error.kind).unwrap_or(Value::Null),
         "message": sanitize_diagnostic_text(&error.message),
         "provider_summary": error
             .provider_summary

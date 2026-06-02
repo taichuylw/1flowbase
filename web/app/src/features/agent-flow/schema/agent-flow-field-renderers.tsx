@@ -42,6 +42,7 @@ import {
   decodeSelectorValue,
   type FlowSelectorOption
 } from '../lib/selector-options';
+import { codeOutputSelector } from '../lib/output-contract/code-output';
 import { outputHasLlmContextSchema } from '../lib/output-contract/schema';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
@@ -436,6 +437,7 @@ function renderOutputContractDefinitionField({
 
   return (
     <OutputContractDefinitionField
+      selectorForKey={node?.type === 'code' ? codeOutputSelector : undefined}
       syncTitleWithKey={node?.type === 'code'}
       value={outputs}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}

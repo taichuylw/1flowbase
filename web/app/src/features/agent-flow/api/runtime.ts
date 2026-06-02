@@ -35,6 +35,7 @@ import {
   getNodeVariableOutputs,
   getStartInputFields
 } from '../lib/start-node-variables';
+import { parseTemplateSelectorTokens } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
 export type NodeLastRun = ConsoleNodeLastRun;
@@ -390,27 +391,14 @@ function normalizeSelectorPath(value: string[] | null | undefined) {
     return null;
   }
 
-  return [value[0], value[1]] as const;
+  return value;
 }
 
 function extractTemplateSelectors(template: string) {
-  const selectors: Array<readonly [string, string]> = [];
-  const matcher = /{{\s*([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)\s*}}/g;
-
-  for (const match of template.matchAll(matcher)) {
-    if (!match[1] || !match[2]) {
-      continue;
-    }
-
-    selectors.push([match[1], match[2]]);
-  }
-
-  return selectors;
+  return parseTemplateSelectorTokens(template);
 }
 
-function extractSelectors(
-  binding: FlowBinding
-): Array<readonly [string, string]> {
+function extractSelectors(binding: FlowBinding): string[][] {
   switch (binding.kind) {
     case 'selector': {
       const selector = normalizeSelectorPath(binding.value);
@@ -420,7 +408,7 @@ function extractSelectors(
     case 'selector_list':
       return binding.value
         .map((value) => normalizeSelectorPath(value))
-        .filter((value): value is readonly [string, string] => value !== null);
+        .filter((value): value is string[] => value !== null);
     case 'prompt_messages':
       return binding.value.flatMap((message) =>
         extractTemplateSelectors(message.content.value)
@@ -438,15 +426,15 @@ function extractSelectors(
     case 'condition_group':
       return binding.value.conditions
         .map((condition) => normalizeSelectorPath(condition.left))
-        .filter((value): value is readonly [string, string] => value !== null);
+        .filter((value): value is string[] => value !== null);
     case 'state_write':
       return binding.value
         .map((entry) => normalizeSelectorPath(entry.source))
-        .filter((value): value is readonly [string, string] => value !== null);
+        .filter((value): value is string[] => value !== null);
     case 'data_model_query':
       return extractDataModelQuerySelectors(binding.value)
         .map((value) => normalizeSelectorPath(value))
-        .filter((value): value is readonly [string, string] => value !== null);
+        .filter((value): value is string[] => value !== null);
     case 'templated_text':
       return extractTemplateSelectors(binding.value);
   }
@@ -460,6 +448,94 @@ function findNodeOutput(node: FlowNodeDocument | undefined, outputKey: string) {
   return node
     ? getNodeVariableOutputs(node).find((output) => output.key === outputKey)
     : undefined;
+}
+
+function selectorsMatch(left: string[] | undefined, right: string[]) {
+  return (
+    Array.isArray(left) &&
+    left.length === right.length &&
+    left.every((segment, index) => segment === right[index])
+  );
+}
+
+function findNodeOutputBySelector(
+  node: FlowNodeDocument | undefined,
+  selector: string[]
+) {
+  if (!node) {
+    return undefined;
+  }
+
+  const selectorTail = selector.slice(1);
+  const outputKey = selectorOutputKey(selector);
+  const outputs = getNodeVariableOutputs(node);
+
+  return (
+    outputs.find((output) => selectorsMatch(output.selector, selectorTail)) ??
+    outputs.find((output) => output.key === outputKey) ??
+    (selectorTail.length === 1
+      ? outputs.find((output) => output.key === selectorTail[0])
+      : undefined)
+  );
+}
+
+function selectorOutputKey(selector: string[]) {
+  return selector[selector.length - 1] ?? '';
+}
+
+function writeNestedPreviewValue(
+  target: Record<string, unknown>,
+  path: string[],
+  value: unknown
+) {
+  let current = target;
+
+  for (const [index, segment] of path.entries()) {
+    if (index === path.length - 1) {
+      current[segment] = value;
+      return;
+    }
+
+    const next = current[segment];
+
+    if (!isRecord(next)) {
+      current[segment] = {};
+    }
+
+    current = current[segment] as Record<string, unknown>;
+  }
+}
+
+function writePreviewInputValue({
+  inputPayload,
+  sourceNode,
+  sourceOutput,
+  outputKey,
+  value
+}: {
+  inputPayload: Record<string, Record<string, unknown>>;
+  sourceNode: FlowNodeDocument | undefined;
+  sourceOutput: FlowNodeOutputDocument | undefined;
+  outputKey: string;
+  value: unknown;
+}) {
+  if (!sourceNode) {
+    return;
+  }
+
+  inputPayload[sourceNode.id] ??= {};
+
+  if (sourceNode.type === 'code' && sourceOutput?.selector?.length) {
+    writeNestedPreviewValue(
+      inputPayload[sourceNode.id],
+      sourceOutput.selector,
+      value
+    );
+    inputPayload[sourceNode.id].error ??= null;
+    return;
+  }
+
+  inputPayload[sourceNode.id][outputKey] = value;
 }
 
 function readCachedOutputValue(
@@ -597,16 +673,21 @@ export function buildNodeDebugPreviewInput(
     extractSelectors(binding)
   );
 
-  for (const [sourceNodeId, outputKey] of selectors) {
+  for (const selector of selectors) {
+    const sourceNodeId = selector[0] ?? '';
+    const outputKey = selectorOutputKey(selector);
     const sourceNode = document.graph.nodes.find(
       (entry) => entry.id === sourceNodeId
     );
+    const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
 
-    inputPayload[sourceNodeId] ??= {};
-    inputPayload[sourceNodeId][outputKey] = buildPreviewValue(
+    writePreviewInputValue({
+      inputPayload,
       sourceNode,
-      outputKey
-    );
+      sourceOutput,
+      outputKey,
+      value: buildPreviewValue(sourceNode, outputKey)
+    });
   }
 
   return { input_payload: inputPayload };
@@ -665,12 +746,14 @@ export function buildNodeDebugPreviewPlan(
   );
   const visited = new Set<string>();
 
-  for (const [sourceNodeId, outputKey] of selectors) {
-    const cacheKey = `${sourceNodeId}.${outputKey}`;
+  for (const selector of selectors) {
+    const sourceNodeId = selector[0] ?? '';
+    const outputKey = selectorOutputKey(selector);
+    const cacheKey = selector.join('.');
     const sourceNode = document.graph.nodes.find(
       (entry) => entry.id === sourceNodeId
     );
-    const sourceOutput = findNodeOutput(sourceNode, outputKey);
+    const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
     const cachedOutput = readCachedOutputValue(
       variableCache[sourceNodeId],
       sourceOutput,
@@ -684,8 +767,13 @@ export function buildNodeDebugPreviewPlan(
     visited.add(cacheKey);
 
     if (cachedOutput.found && hasPreviewVariableValue(cachedOutput.value)) {
-      inputPayload[sourceNodeId] ??= {};
-      inputPayload[sourceNodeId][outputKey] = cachedOutput.value;
+      writePreviewInputValue({
+        inputPayload,
+        sourceNode,
+        sourceOutput,
+        outputKey,
+        value: cachedOutput.value
+      });
       continue;
     }
 
