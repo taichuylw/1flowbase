@@ -1,8 +1,9 @@
-# 1flowbase
+#  1flowbase
 
 <p align="center">
-  <img src="../assets/logo_index_cn.png" alt="1flowbase Logo" width="600">
+  <img src="../assets/logo_index_cn.png" alt="1flowbase Logo">
 </p>
+
 
 <p align="center">
   <a href="../../README.md">English</a> | <b>简体中文</b>
@@ -23,9 +24,6 @@
 
 ## 💡 什么是虚拟模型 (Virtual Model)？
 
-<p align="center">
-  <video src="../assets/claude_code_use.mp4" width="100%" controls></video>
-</p>
 
 虚拟模型接口从外部看是一个普通的 LLM API，但在内部它可以运行完整的多模型编排工作流。
 
@@ -51,6 +49,42 @@ Gemini Vision (视觉上下文提取)
 ```
 
 对于调用客户端而言，它只是一个单模型；对于你而言，它是一个完全可编程的 AI 工作流。
+
+![img](../assets/640.jpeg)
+
+然后直接发布为你openai/anthropic的兼容API 接口
+
+![img](../assets/640-17803586907163.jpeg)
+
+
+
+![img](../assets/640-17803586998246.jpeg)
+
+
+
+你可以自定义对外模型信息：
+
+![img](../assets/640-17803587501769.jpeg)
+
+然后你就可以直接在Claude code 对话使用
+
+![image-20260602080606711](../assets/image-20260602080606711.png)
+
+
+
+可以在日志中看到详细信息
+
+![img](../assets/640-178035878311612.jpeg)
+
+如果是一个复杂任务，我们有详细回调日志：
+
+![image-20260602080644672](../assets/image-20260602080644672.png)
+
+统计每一个应用token消耗情况
+
+![img](../assets/640-178035881698115.jpeg)
+
+
 
 ---
 
@@ -104,22 +138,6 @@ MODEL=deepseek-with-vision
 * **保证输出结构与质量**：在最终响应返回前，由特定的结构校验节点检测并修复损坏 JSON 格式。
 
 ---
-
-## 🗺️ 路线图 (Roadmap)
-
-### 已实现核心特征 (Implemented)
-- [x] **低代码可视化工作流编辑器 (Visual workflow editor)**
-- [x] **内置多种类型节点与混合编排 (More built-in node types)**
-- [x] **调用成本与延迟 Trace 仪表盘 (Cost and latency dashboard)**
-- [x] **Prompt 与模型配置版本历史管理 (Prompt/version history)**
-- [x] **OpenAI Responses 协议及流式输出支持 (OpenAI Responses streaming)**
-- [x] **Claude Messages 协议及流式输出支持 (Claude Messages streaming)**
-
-### 规划中特征 (Upcoming)
-- [ ] **聊天记录原生采集与全链路 Trace (Conversation/chat logs collection & trace logs)** — 沉淀组织专属“对话壁垒”的关键第一步
-- [ ] **面向 AI 组织的端到端低代码应用构建平台 (AI-Native low-code application builder)** — 从虚拟接口向完整 AI 应用延伸
-- [ ] **企业级团队协作空间与工作区多租户管理 (Enterprise team workspace & tenant management)**
-- [ ] **支持增强型 MCP (Model Context Protocol) 插件节点 (Advanced MCP integration)**
 
 
 
@@ -215,6 +233,26 @@ node scripts/node/dev-up.js restart  # 重启服务
 关于页面调试、自动化测试、清理缓存等的更多高级脚本用法，请参阅 [scripts/README.md](scripts/README.md)。
 
 ---
+
+## 🗺️ 路线图 (Roadmap)
+
+### 已实现核心特征 (Implemented)
+
+- [x] **低代码可视化工作流编辑器 (Visual workflow editor)**
+- [x] **内置多种类型节点与混合编排 (More built-in node types)**
+- [x] **调用成本与延迟 Trace 仪表盘 (Cost and latency dashboard)**
+- [x] **Prompt 与模型配置版本历史管理 (Prompt/version history)**
+- [x] **OpenAI Responses 协议及流式输出支持 (OpenAI Responses streaming)**
+- [x] **Claude Messages 协议及流式输出支持 (Claude Messages streaming)**
+
+### 规划中特征 (Upcoming)
+
+- [ ] **聊天记录原生采集与全链路 Trace (Conversation/chat logs collection & trace logs)** — 沉淀组织专属“对话壁垒”的关键第一步
+- [ ] **面向 AI 组织的端到端低代码应用构建平台 (AI-Native low-code application builder)** — 从虚拟接口向完整 AI 应用延伸
+- [ ] **企业级团队协作空间与工作区多租户管理 (Enterprise team workspace & tenant management)**
+- [ ] **支持增强型 MCP (Model Context Protocol) 插件节点 (Advanced MCP integration)**
+
+
 
 ## 🤝 贡献
 
