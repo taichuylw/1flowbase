@@ -37,6 +37,7 @@ import {
   getLlmContextPolicy,
   getLlmExternalReasoningPolicy
 } from '../lib/llm-node-config';
+import { getNamedBindingExpression } from '../lib/named-binding-expressions';
 import {
   encodeSelectorValue,
   decodeSelectorValue,
@@ -337,24 +338,65 @@ function renderNamedBindingsField({
   );
 }
 
-function normalizeTemplatedNamedBindingEntries(value: unknown) {
-  return getBindingValue<
-    Array<{
-      name: string;
-      selector?: string[];
-      content?: { kind: 'templated_text'; value: string };
-    }>
-  >(value, 'named_bindings', []).map((entry) => ({
-    name: entry.name,
-    selector: entry.selector,
-    content:
-      entry.content?.kind === 'templated_text'
-        ? entry.content
-        : {
-            kind: 'templated_text' as const,
-            value: createTemplateSelectorToken(entry.selector ?? [])
-          }
-  }));
+function findSelectorOption(options: FlowSelectorOption[], selector: string[]) {
+  return options.find(
+    (option) =>
+      option.value.length === selector.length &&
+      option.value.every((segment, index) => selector[index] === segment)
+  );
+}
+
+function inferConstantValueType(value: unknown) {
+  if (typeof value === 'string') {
+    return 'string';
+  }
+
+  if (typeof value === 'number') {
+    return 'number';
+  }
+
+  if (typeof value === 'boolean') {
+    return 'boolean';
+  }
+
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return 'object';
+  }
+
+  return 'unknown';
+}
+
+function normalizeTemplatedNamedBindingEntries(
+  value: unknown,
+  options: FlowSelectorOption[]
+) {
+  return getBindingValue<TemplatedNamedBindingValue[]>(
+    value,
+    'named_bindings',
+    []
+  ).map((entry) => {
+    const expression = getNamedBindingExpression(entry) ?? {
+      kind: 'constant' as const,
+      value: ''
+    };
+    const valueType =
+      entry.valueType ??
+      (expression.kind === 'selector'
+        ? findSelectorOption(options, expression.selector)?.valueType
+        : expression.kind === 'templated_text'
+          ? 'string'
+          : inferConstantValueType(expression.value));
+
+    return {
+      name: entry.name,
+      valueType,
+      value: expression
+    };
+  });
 }
 
 function renderTemplatedNamedBindingsField({
@@ -362,12 +404,13 @@ function renderTemplatedNamedBindingsField({
   block
 }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const binding = normalizeTemplatedNamedBindingEntries(value);
+  const options = getSelectorOptions(adapter);
+  const binding = normalizeTemplatedNamedBindingEntries(value, options);
 
   return (
     <TemplatedNamedBindingsField
       ariaLabel={block.label}
-      options={getSelectorOptions(adapter)}
+      options={options}
       value={binding}
       onChange={(nextValue: TemplatedNamedBindingValue[]) =>
         adapter.setValue(block.path, {

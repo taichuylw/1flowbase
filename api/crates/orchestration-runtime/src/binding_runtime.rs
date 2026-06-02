@@ -101,7 +101,35 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
                     .get("name")
                     .and_then(Value::as_str)
                     .ok_or_else(|| anyhow!("named_bindings entry missing name"))?;
-                let value = if let Some(content) = entry
+                let value = if let Some(value) = entry.get("value").and_then(Value::as_object) {
+                    match value.get("kind").and_then(Value::as_str) {
+                        Some("constant") => value.get("value").cloned().unwrap_or(Value::Null),
+                        Some("selector") => {
+                            let selector = value
+                                .get("selector")
+                                .and_then(Value::as_array)
+                                .ok_or_else(|| anyhow!("named_bindings selector missing path"))?
+                                .iter()
+                                .map(|segment| {
+                                    segment.as_str().map(str::to_string).ok_or_else(|| {
+                                        anyhow!("named_bindings selector segment must be a string")
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                            lookup_selector_value(variable_pool, &selector)?
+                        }
+                        Some("templated_text") => {
+                            let template =
+                                value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                                    anyhow!("named_bindings templated_text value must be a string")
+                                })?;
+                            Value::String(render_template(template, variable_pool)?)
+                        }
+                        _ => {
+                            return Err(anyhow!("named_bindings value has unknown kind"));
+                        }
+                    }
+                } else if let Some(content) = entry
                     .get("content")
                     .and_then(|content| content.get("value"))
                     .and_then(Value::as_str)

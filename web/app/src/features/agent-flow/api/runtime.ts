@@ -35,6 +35,7 @@ import {
   getNodeVariableOutputs,
   getStartInputFields
 } from '../lib/start-node-variables';
+import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
 import { parseTemplateSelectorTokens } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
@@ -414,15 +415,7 @@ function extractSelectors(binding: FlowBinding): string[][] {
         extractTemplateSelectors(message.content.value)
       );
     case 'named_bindings':
-      return binding.value.flatMap((entry) => {
-        if (entry.content?.kind === 'templated_text') {
-          return extractTemplateSelectors(entry.content.value);
-        }
-
-        const selector = normalizeSelectorPath(entry.selector);
-
-        return selector ? [selector] : [];
-      });
+      return extractNamedBindingSelectors(binding.value);
     case 'condition_group':
       return binding.value.conditions
         .map((condition) => normalizeSelectorPath(condition.left))
@@ -596,6 +589,16 @@ function isRequiredStartPreviewKey(node: FlowNodeDocument, outputKey: string) {
 
   return getStartInputFields(node).some(
     (field) => field.key === outputKey && field.required
+  );
+}
+
+function canUseStartPreviewDefault(
+  node: FlowNodeDocument | undefined,
+  outputKey: string
+) {
+  return (
+    node?.type === 'start' &&
+    !isRequiredStartPreviewKey(node, outputKey)
   );
 }
 
@@ -773,6 +776,17 @@ export function buildNodeDebugPreviewPlan(
         sourceOutput,
         outputKey,
         value: cachedOutput.value
+      });
+      continue;
+    }
+
+    if (canUseStartPreviewDefault(sourceNode, outputKey)) {
+      writePreviewInputValue({
+        inputPayload,
+        sourceNode,
+        sourceOutput,
+        outputKey,
+        value: buildPreviewValue(sourceNode, outputKey)
       });
       continue;
     }

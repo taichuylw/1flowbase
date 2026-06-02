@@ -465,11 +465,13 @@ function createCodeContract(): NodeRuntimeUiContract {
         value: [
           {
             name: 'arg1',
-            content: { kind: 'templated_text', value: '' }
+            valueType: 'string',
+            value: { kind: 'constant', value: '' }
           },
           {
             name: 'arg2',
-            content: { kind: 'templated_text', value: '' }
+            valueType: 'string',
+            value: { kind: 'constant', value: '' }
           }
         ]
       }

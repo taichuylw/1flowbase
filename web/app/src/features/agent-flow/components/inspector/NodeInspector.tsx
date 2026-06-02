@@ -49,7 +49,7 @@ function isPolicyFieldRenderer(renderer: string) {
   );
 }
 
-function getFieldLabelTag(_renderer: string) {
+function getFieldLabelTag() {
   return null;
 }
 
@@ -180,7 +180,7 @@ export function NodeInspector({
                   const hasError = fieldIssues.some(
                     (issue) => issue.level === 'error'
                   );
-                  const labelTag = getFieldLabelTag(childBlock.renderer);
+                  const labelTag = getFieldLabelTag();
                   const labelHelp = getFieldHelp(childBlock.renderer);
 
                   if (

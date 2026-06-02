@@ -774,6 +774,84 @@ async fn code_runtime_resolves_templated_named_bindings_as_top_level_args() {
 }
 
 #[tokio::test]
+async fn code_runtime_resolves_constant_named_bindings_with_json_types() {
+    let mut plan = code_runtime_plan();
+    let code_node = plan
+        .nodes
+        .get_mut("node-code")
+        .expect("expected code node in fixture plan");
+    code_node.bindings = BTreeMap::from([(
+        "named_bindings".to_string(),
+        CompiledBinding {
+            kind: "named_bindings".to_string(),
+            selector_paths: Vec::new(),
+            raw_value: json!([
+                {
+                    "name": "limit",
+                    "valueType": "number",
+                    "value": { "kind": "constant", "value": 10 }
+                },
+                {
+                    "name": "title",
+                    "valueType": "string",
+                    "value": { "kind": "constant", "value": "10" }
+                },
+                {
+                    "name": "options",
+                    "valueType": "object",
+                    "value": { "kind": "constant", "value": { "top_k": 5 } }
+                },
+                {
+                    "name": "items",
+                    "valueType": "array",
+                    "value": { "kind": "constant", "value": [1, 2] }
+                }
+            ]),
+        },
+    )]);
+    code_node.config["source"] = json!(
+        "function main({limit, title, options, items}) { return { result: { limit_type: typeof limit, title_type: typeof title, top_k: options.top_k, item_count: items.length } }; }"
+    );
+    code_node.code_runtime.as_mut().unwrap().source = Some(
+        "function main({limit, title, options, items}) { return { result: { limit_type: typeof limit, title_type: typeof title, top_k: options.top_k, item_count: items.length } }; }"
+            .to_string(),
+    );
+    code_node.outputs = vec![CompiledOutput {
+        key: "result".to_string(),
+        title: "Result".to_string(),
+        value_type: "json".to_string(),
+        selector: vec!["result".to_string(), "result".to_string()],
+        json_schema: None,
+    }];
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &RealCodeFixtureInvoker {
+            code: QuickJsCodeInvoker::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
+    assert_eq!(
+        outcome.variable_pool["node-code"],
+        json!({
+            "result": {
+                "result": {
+                    "limit_type": "number",
+                    "title_type": "string",
+                    "top_k": 5,
+                    "item_count": 2
+                }
+            },
+            "error": null
+        })
+    );
+}
+
+#[tokio::test]
 async fn code_runtime_invoker_error_yields_stable_failed_stop_reason_and_trace_payload() {
     let outcome = start_flow_debug_run(
         &code_runtime_plan(),

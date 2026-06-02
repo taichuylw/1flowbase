@@ -1016,6 +1016,49 @@ fn compile_named_bindings_extracts_selector_dependencies_from_templated_content(
 }
 
 #[test]
+fn compile_named_bindings_ignores_constant_dependencies() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1] = json!({
+        "id": "node-code",
+        "type": "code",
+        "alias": "Code",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": {
+            "language": "javascript",
+            "source": "function main({limit}) { return { result: limit }; }",
+            "entrypoint": "main"
+        },
+        "bindings": {
+            "named_bindings": {
+                "kind": "named_bindings",
+                "value": [
+                    {
+                        "name": "limit",
+                        "valueType": "number",
+                        "value": {
+                            "kind": "constant",
+                            "value": 10
+                        }
+                    }
+                ]
+            }
+        },
+        "outputs": [{ "key": "result", "title": "result", "valueType": "number" }]
+    });
+    document["graph"]["edges"][0]["target"] = json!("node-code");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(plan.nodes["node-code"].bindings["named_bindings"]
+        .selector_paths
+        .is_empty());
+}
+
+#[test]
 fn compile_templated_text_extracts_nested_selector_dependencies() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);

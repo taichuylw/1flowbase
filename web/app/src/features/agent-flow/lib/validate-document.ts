@@ -13,6 +13,11 @@ import {
 } from './data-model-query-binding';
 import { getLlmModelProvider } from './llm-node-config';
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
+import {
+  extractNamedBindingSelectors,
+  getNamedBindingExpression,
+  isNamedBindingNameAllowed
+} from './named-binding-expressions';
 import type {
   InspectorSectionKey,
   NodeDefinitionField
@@ -169,13 +174,7 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
         parseTemplateSelectorTokens(message.content.value)
       );
     case 'named_bindings':
-      return binding.value.flatMap((entry) =>
-        entry.content?.kind === 'templated_text'
-          ? parseTemplateSelectorTokens(entry.content.value)
-          : entry.selector
-            ? [entry.selector]
-            : []
-      );
+      return extractNamedBindingSelectors(binding.value);
     case 'condition_group':
       return binding.value.conditions.flatMap((condition) => {
         const selectors = [condition.left];
@@ -400,6 +399,118 @@ function validateAnswerPresentationReferences(
         ) })
       );
       break;
+    }
+  }
+}
+
+function isCodeNamedBindingValueCompatible(
+  valueType: string | undefined,
+  value: unknown
+) {
+  if (!valueType || valueType === 'unknown' || valueType === 'json') {
+    return true;
+  }
+
+  if (valueType === 'string') {
+    return typeof value === 'string';
+  }
+
+  if (valueType === 'number') {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
+  if (valueType === 'boolean') {
+    return typeof value === 'boolean';
+  }
+
+  if (valueType.startsWith('array')) {
+    return Array.isArray(value);
+  }
+
+  if (valueType === 'object') {
+    return isRecord(value) && !Array.isArray(value);
+  }
+
+  return true;
+}
+
+function validateCodeNamedBindings(
+  issues: AgentFlowIssue[],
+  node: FlowNodeDocument
+) {
+  const binding = node.bindings.named_bindings;
+
+  if (!binding || binding.kind !== 'named_bindings') {
+    return;
+  }
+
+  const seenNames = new Set<string>();
+
+  for (const entry of binding.value) {
+    const parameterName = entry.name.trim();
+
+    if (parameterName.length === 0) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.code_input_variable_name_empty"),
+        i18nText("agentFlow", "auto.enter_variable_name")
+      );
+      continue;
+    }
+
+    if (!isNamedBindingNameAllowed(parameterName)) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.code_input_variable_name_format_invalid"),
+        i18nText("agentFlow", "auto.code_input_variable_name_format_message")
+      );
+      continue;
+    }
+
+    if (seenNames.has(parameterName)) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.code_input_variable_name_duplicate"),
+        i18nText("agentFlow", "auto.code_input_variable_name_duplicate_message")
+      );
+      continue;
+    }
+
+    seenNames.add(parameterName);
+
+    const expression = getNamedBindingExpression(entry);
+
+    if (
+      expression?.kind === 'templated_text' &&
+      entry.valueType !== undefined &&
+      entry.valueType !== 'string'
+    ) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.variable_value_match_type"),
+        i18nText("agentFlow", "auto.variable_value_match_type")
+      );
+    }
+
+    if (
+      expression?.kind === 'constant' &&
+      !isCodeNamedBindingValueCompatible(entry.valueType, expression.value)
+    ) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.variable_value_match_type"),
+        i18nText("agentFlow", "auto.variable_value_match_type")
+      );
     }
   }
 }
@@ -631,6 +742,8 @@ export function validateDocument(
           i18nText("agentFlow", "auto.version_supports_javascript")
         );
       }
+
+      validateCodeNamedBindings(issues, node);
     }
 
     if (node.type === 'code' && node.outputs.length === 0) {

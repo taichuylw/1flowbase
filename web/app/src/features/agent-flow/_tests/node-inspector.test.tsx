@@ -678,7 +678,7 @@ describe('NodeInspector', () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     expect(inspectorStyles).toContain(
-      'grid-template-columns: minmax(96px, 0.8fr) minmax(132px, 1.4fr) 28px;'
+      'grid-template-columns: minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(168px, 1.5fr) 28px;'
     );
 
     renderWithProviders(
@@ -717,11 +717,9 @@ describe('NodeInspector', () => {
       Node.DOCUMENT_POSITION_FOLLOWING
     );
     expect(screen.getByLabelText(/输入变量-0-name|input variables-0-name/)).toHaveValue('arg1');
-    expect(screen.getByLabelText(/输入变量-0-value|input variables-0-value/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/输入变量-0-value|input variables-0-value/)).toHaveAttribute(
-      'aria-multiline',
-      'false'
-    );
+    expect(screen.getAllByLabelText(/输入变量-0-type|input variables-0-type/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/输入变量-0-value-mode|input variables-0-value-mode/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/输入变量-0-value|input variables-0-value/).length).toBeGreaterThan(0);
     expect(
       screen.queryByLabelText(/输入变量-0-selector|input variables-0-selector/)
     ).not.toBeInTheDocument();
@@ -740,6 +738,9 @@ describe('NodeInspector', () => {
     expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
     expect(screen.queryByLabelText('输出显示名 1')).not.toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText(/输入变量-0-name|input variables-0-name/), {
+      target: { value: 'score_1' }
+    });
     fireEvent.change(codeEditor, {
       target: { value: 'return { risk_score: inputs.score };' }
     });
@@ -751,6 +752,19 @@ describe('NodeInspector', () => {
       expect(getCodeNode(latestDocument).config).toMatchObject({
         language: 'javascript',
         source: 'return { risk_score: inputs.score };'
+      });
+      expect(getCodeNode(latestDocument).bindings.named_bindings).toEqual({
+        kind: 'named_bindings',
+        value: [
+          {
+            name: 'score_1',
+            valueType: 'string',
+            value: {
+              kind: 'selector',
+              selector: ['sys', 'conversation_id']
+            }
+          }
+        ]
       });
       expect(getCodeNode(latestDocument).outputs).toEqual([
         {

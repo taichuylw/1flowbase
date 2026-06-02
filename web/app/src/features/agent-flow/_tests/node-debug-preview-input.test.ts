@@ -98,6 +98,65 @@ describe('node debug preview input', () => {
     });
   });
 
+  test('extracts Code named binding expressions and materializes optional start defaults', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.nodes.push({
+      ...createNodeDocument('code', 'node-code'),
+      bindings: {
+        named_bindings: {
+          kind: 'named_bindings',
+          value: [
+            {
+              name: 'history',
+              valueType: 'array',
+              value: {
+                kind: 'selector',
+                selector: ['node-start', 'history']
+              }
+            },
+            {
+              name: 'prompt',
+              valueType: 'string',
+              value: {
+                kind: 'templated_text',
+                value: '用户问题：{{node-start.query}}'
+              }
+            },
+            {
+              name: 'limit',
+              valueType: 'number',
+              value: { kind: 'constant', value: 10 }
+            }
+          ]
+        }
+      }
+    });
+    document.graph.edges.push({
+      id: 'edge-start-code',
+      source: 'node-start',
+      target: 'node-code',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(buildNodeDebugPreviewPlan(document, 'node-code')).toEqual({
+      input_payload: {
+        'node-start': {
+          history: []
+        }
+      },
+      missing_fields: [
+        expect.objectContaining({
+          nodeId: 'node-start',
+          key: 'query'
+        })
+      ]
+    });
+  });
+
   test('extracts API-provided node output for downstream previews', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmOutput = extractNodePreviewVariableOutput({

@@ -292,6 +292,19 @@ export interface DataModelQueryBindingValue {
   page_size: DataModelQueryValue;
 }
 
+export type NamedBindingExpression =
+  | { kind: 'selector'; selector: string[] }
+  | { kind: 'constant'; value: unknown }
+  | { kind: 'templated_text'; value: string };
+
+export interface NamedBindingEntry {
+  name: string;
+  valueType?: string;
+  value?: NamedBindingExpression;
+  selector?: string[];
+  content?: { kind: 'templated_text'; value: string };
+}
+
 export type FlowBinding =
   | { kind: 'templated_text'; value: string }
   | { kind: 'selector'; value: string[] }
@@ -306,11 +319,7 @@ export type FlowBinding =
     }
   | {
       kind: 'named_bindings';
-      value: Array<{
-        name: string;
-        selector?: string[];
-        content?: { kind: 'templated_text'; value: string };
-      }>;
+      value: NamedBindingEntry[];
     }
   | {
       kind: 'condition_group';

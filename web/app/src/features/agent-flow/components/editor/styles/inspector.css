@@ -598,19 +598,34 @@
 
 .agent-flow-templated-binding-row {
   display: grid;
-  grid-template-columns: minmax(96px, 0.8fr) minmax(132px, 1.4fr) 28px;
-  align-items: center;
+  grid-template-columns: minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(168px, 1.5fr) 28px;
+  align-items: start;
   min-width: 0;
   gap: 8px;
 }
 
 .agent-flow-templated-binding-row__name,
+.agent-flow-templated-binding-row__type,
 .agent-flow-templated-binding-row__value {
   min-width: 0;
 }
 
-.agent-flow-templated-binding-row__name .ant-input {
+.agent-flow-templated-binding-row__name .ant-input,
+.agent-flow-templated-binding-row__type .ant-select,
+.agent-flow-templated-binding-row__value .ant-cascader,
+.agent-flow-templated-binding-row__value .ant-input-number,
+.agent-flow-templated-binding-row__value .ant-input,
+.agent-flow-templated-binding-row__value .ant-select {
   width: 100%;
+}
+
+.agent-flow-templated-binding-row__value {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-flow-templated-binding-row__value-mode .ant-segmented {
+  max-width: 100%;
 }
 
 .agent-flow-templated-binding-row__delete {

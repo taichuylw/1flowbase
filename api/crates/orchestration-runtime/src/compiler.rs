@@ -1392,6 +1392,27 @@ fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<Strin
             let mut selectors = Vec::new();
 
             for entry in entries {
+                if let Some(value) = entry.get("value").and_then(Value::as_object) {
+                    match value.get("kind").and_then(Value::as_str) {
+                        Some("constant") => continue,
+                        Some("selector") => {
+                            selectors.push(selector_path(
+                                value.get("selector").unwrap_or(&Value::Null),
+                            )?);
+                            continue;
+                        }
+                        Some("templated_text") => {
+                            let template =
+                                value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                                    anyhow!("named_bindings templated_text value must be a string")
+                                })?;
+                            selectors.extend(parse_template_selector_tokens(template));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+
                 if let Some(content) = entry
                     .get("content")
                     .and_then(|content| content.get("value"))

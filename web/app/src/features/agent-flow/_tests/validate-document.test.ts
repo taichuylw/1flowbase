@@ -1044,6 +1044,48 @@ describe('validateDocument', () => {
     ).toBe(false);
   });
 
+  test('validates Code input parameter names and constant value types', () => {
+    const document = createCodeDocumentWithOutputs([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
+    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+    if (!codeNode) {
+      throw new Error('expected code node');
+    }
+
+    codeNode.bindings.named_bindings = {
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'bad-name',
+          valueType: 'string',
+          value: { kind: 'constant', value: 'ok' }
+        },
+        {
+          name: 'items',
+          valueType: 'array',
+          value: { kind: 'constant', value: { not: 'array' } }
+        }
+      ]
+    };
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '输入变量名格式错误'
+        }),
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '变量值与类型不匹配'
+        })
+      ])
+    );
+  });
+
   test('does not crash on malformed saved Data Model query binding', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes.push({

@@ -7,6 +7,7 @@ import type {
 import { getNodeById } from '../selectors';
 import { remapTemplateSelectorTokens } from '../../template-binding';
 import { remapDataModelQueryBinding } from '../../data-model-query-binding';
+import { remapNamedBindingEntry } from '../../named-binding-expressions';
 import { i18nText } from '../../../../../shared/i18n/text';
 
 function collectDuplicatedNodeIds(
@@ -104,19 +105,9 @@ function remapBinding(
     case 'named_bindings':
       return {
         ...binding,
-        value: binding.value.map((entry) => ({
-          ...entry,
-          selector: entry.selector
-            ? remapSelector(entry.selector, idMap)
-            : undefined,
-          content:
-            entry.content?.kind === 'templated_text'
-              ? {
-                  ...entry.content,
-                  value: remapTemplateSelectorTokens(entry.content.value, idMap)
-                }
-              : entry.content
-        }))
+        value: binding.value.map((entry) =>
+          remapNamedBindingEntry(entry, idMap)
+        )
       };
     case 'condition_group':
       return {
