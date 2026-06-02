@@ -509,6 +509,26 @@ impl PluginRepository for InMemoryOrchestrationRuntimeRepository {
         Ok(inner.installations_by_id.values().cloned().collect())
     }
 
+    async fn upsert_plugin_package_catalog_projection(
+        &self,
+        _input: &crate::ports::UpsertPluginPackageCatalogProjectionInput,
+    ) -> Result<domain::PluginPackageCatalogProjectionRecord> {
+        unimplemented!("not needed in orchestration runtime tests")
+    }
+
+    async fn get_plugin_package_catalog_projection(
+        &self,
+        _installation_id: Uuid,
+    ) -> Result<Option<domain::PluginPackageCatalogProjectionRecord>> {
+        Ok(None)
+    }
+
+    async fn list_plugin_package_catalog_projections(
+        &self,
+    ) -> Result<Vec<domain::PluginPackageCatalogProjectionRecord>> {
+        Ok(Vec::new())
+    }
+
     async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
         if inner.installations_by_id.remove(&installation_id).is_some() {

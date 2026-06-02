@@ -9,7 +9,6 @@ import {
   deleteDebugVariableCacheEntries,
   fetchApplicationRunDetail,
   fetchDebugVariableSnapshot,
-  fetchRuntimeDebugArtifact,
   startFlowDebugRun,
   startFlowDebugRunStream,
   upsertDebugVariableCacheEntry,
@@ -18,13 +17,37 @@ import {
   type AgentFlowTraceItem,
   type AgentFlowVariableGroup,
   type FlowDebugRunDetail,
-  type FlowDebugRunStreamEvent,
   type NodeDebugPreviewVariableCache
 } from '../../api/runtime';
 import {
   applyDebugStreamEventToAssistantMessage,
   applyDebugStreamEventToTrace
 } from '../../lib/debug-console/stream-events';
+import {
+  buildStreamEventDedupKeys,
+  clearRunContextQuery,
+  createRunningAssistantMessage,
+  createUserMessage,
+  replaceAssistantMessage,
+  replaceAssistantMessageWithError,
+  resolvePrompt,
+  shouldPollRun,
+  updateRunContextQuery
+} from './debug-session-messages';
+import {
+  applyVariableOverridesToGroups,
+  buildDisplayVariableCache,
+  buildInputVariableCacheFromRunDetail,
+  buildNodeVariableDisplayMetadata,
+  createDebugSessionState,
+  hydrateRunDetailArtifacts,
+  mergeVariableCache,
+  mergeVariableGroupsByTitle,
+  parseVariableCacheItemKey,
+  projectVariableCache,
+  removeCachedVariableItemsFromGroups,
+  removeVariableCacheKeys
+} from './debug-session-variable-cache';
 import {
   mapRunDetailToConversation,
   mapRunDetailToTrace
@@ -33,17 +56,12 @@ import {
   buildRunContextFromDocument,
   getRunContextValues,
   mapRunContextToVariableGroups,
-  mapVariableCacheToVariableGroups,
-  type NodePreviewDisplayVariableCache,
-  type NodeVariableDisplayMeta
+  mapVariableCacheToVariableGroups
 } from '../../lib/debug-console/variable-groups';
-import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
-import { getNodeVariableOutputs } from '../../lib/start-node-variables';
+import type { AgentFlowEnvironmentVariable } from '../../lib/variables/application-environment-variables';
 import { i18nText } from '../../../../shared/i18n/text';
 
 const RUN_DETAIL_POLL_INTERVAL_MS = 200;
-let debugMessageIdSequence = 0;
-
 export type AgentFlowDebugSessionStatus =
   | 'idle'
   | 'running'
@@ -52,564 +70,6 @@ export type AgentFlowDebugSessionStatus =
   | 'waiting_human'
   | 'cancelled'
   | 'failed';
-
-function createUserMessage(prompt: string): AgentFlowDebugMessage {
-  return {
-    id: createDebugMessageId('user'),
-    role: 'user',
-    content: prompt,
-    status: 'completed',
-    runId: null,
-    rawOutput: null,
-    traceSummary: []
-  };
-}
-
-function createRunningAssistantMessage(): AgentFlowDebugMessage {
-  return {
-    id: createDebugMessageId('assistant-pending'),
-    role: 'assistant',
-    content: '',
-    status: 'running',
-    runId: null,
-    rawOutput: null,
-    traceSummary: []
-  };
-}
-
-function createDebugMessageId(prefix: string) {
-  const randomId =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now().toString(36)}-${(debugMessageIdSequence += 1).toString(36)}`;
-
-  return `${prefix}-${randomId}`;
-}
-
-function resolvePrompt(
-  runContext: AgentFlowRunContext,
-  prompt: string | undefined
-): string {
-  if (typeof prompt === 'string') {
-    return prompt;
-  }
-
-  const queryField = runContext.fields.find((field) => field.key === 'query');
-
-  return typeof queryField?.value === 'string' ? queryField.value : '';
-}
-
-function updateRunContextQuery(
-  runContext: AgentFlowRunContext,
-  prompt: string
-): AgentFlowRunContext {
-  return {
-    ...runContext,
-    fields: runContext.fields.map((field) =>
-      field.key === 'query' ? { ...field, value: prompt } : field
-    )
-  };
-}
-
-function clearRunContextQuery(
-  runContext: AgentFlowRunContext
-): AgentFlowRunContext {
-  return updateRunContextQuery(runContext, '');
-}
-
-function buildStreamEventDedupKeys(event: FlowDebugRunStreamEvent) {
-  const keys: string[] = [];
-
-  if (event.event_id) {
-    keys.push(`eid:${event.event_id}`);
-  }
-
-  if ('run_id' in event && event.run_id && event.sequence !== undefined) {
-    keys.push(`seq:${event.run_id}:${event.sequence}`);
-  }
-
-  return keys;
-}
-
-function replaceAssistantMessage(
-  currentMessages: AgentFlowDebugMessage[],
-  nextMessage: AgentFlowDebugMessage,
-  fallbackMessageId?: string | null
-) {
-  let replaced = false;
-  const nextMessages = currentMessages.map((message) => {
-    const matchedById = fallbackMessageId
-      ? message.id === fallbackMessageId
-      : false;
-    const matchedByRunId =
-      nextMessage.runId !== null && message.runId === nextMessage.runId;
-
-    if (!matchedById && !matchedByRunId) {
-      return message;
-    }
-
-    replaced = true;
-    return {
-      ...nextMessage,
-      id: message.id
-    };
-  });
-
-  return replaced ? nextMessages : [...nextMessages, nextMessage];
-}
-
-function replaceAssistantMessageWithError(
-  currentMessages: AgentFlowDebugMessage[],
-  errorMessage: string,
-  options?: {
-    fallbackMessageId?: string | null;
-    runId?: string | null;
-  }
-) {
-  let replaced = false;
-  const nextMessages = currentMessages.map((message) => {
-    const matchedById = options?.fallbackMessageId
-      ? message.id === options.fallbackMessageId
-      : false;
-    const matchedByRunId = options?.runId
-      ? message.runId === options.runId
-      : false;
-
-    if (!matchedById && !matchedByRunId) {
-      return message;
-    }
-
-    replaced = true;
-    return {
-      ...message,
-      status: 'failed',
-      content: errorMessage
-    } satisfies AgentFlowDebugMessage;
-  });
-
-  if (replaced) {
-    return nextMessages;
-  }
-
-  return [
-    ...nextMessages,
-    {
-      id: createDebugMessageId('assistant-error'),
-      role: 'assistant',
-      content: errorMessage,
-      status: 'failed',
-      runId: options?.runId ?? null,
-      rawOutput: null,
-      traceSummary: []
-    } satisfies AgentFlowDebugMessage
-  ];
-}
-
-function shouldPollRun(detail: FlowDebugRunDetail) {
-  return detail.flow_run.status === 'running';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function isRuntimeDebugArtifactPreview(value: unknown): value is {
-  __runtime_debug_artifact: true;
-  artifact_ref: string;
-} {
-  return (
-    isRecord(value) &&
-    value.__runtime_debug_artifact === true &&
-    typeof value.artifact_ref === 'string'
-  );
-}
-
-async function hydrateRuntimeDebugArtifacts(
-  value: unknown,
-  loadArtifact: (artifactRef: string) => Promise<unknown>
-): Promise<unknown> {
-  if (isRuntimeDebugArtifactPreview(value)) {
-    try {
-      return await loadArtifact(value.artifact_ref);
-    } catch {
-      return value;
-    }
-  }
-
-  if (Array.isArray(value)) {
-    return Promise.all(
-      value.map((entry) => hydrateRuntimeDebugArtifacts(entry, loadArtifact))
-    );
-  }
-
-  if (!isRecord(value)) {
-    return value;
-  }
-
-  const entries = await Promise.all(
-    Object.entries(value).map(async ([key, entryValue]) => [
-      key,
-      await hydrateRuntimeDebugArtifacts(entryValue, loadArtifact)
-    ])
-  );
-
-  return Object.fromEntries(entries);
-}
-
-async function hydrateRunDetailArtifacts(
-  applicationId: string,
-  detail: FlowDebugRunDetail
-): Promise<FlowDebugRunDetail> {
-  const artifactRequests = new Map<string, Promise<unknown>>();
-  const loadArtifact = (artifactRef: string) => {
-    const existingRequest = artifactRequests.get(artifactRef);
-
-    if (existingRequest) {
-      return existingRequest;
-    }
-
-    const request = fetchRuntimeDebugArtifact(applicationId, artifactRef);
-    artifactRequests.set(artifactRef, request);
-    return request;
-  };
-
-  const [flowInputPayload, flowOutputPayload, nodeRuns] = await Promise.all([
-    hydrateRuntimeDebugArtifacts(detail.flow_run.input_payload, loadArtifact),
-    hydrateRuntimeDebugArtifacts(detail.flow_run.output_payload, loadArtifact),
-    Promise.all(
-      detail.node_runs.map(async (nodeRun) => ({
-        ...nodeRun,
-        input_payload: await hydrateRuntimeDebugArtifacts(
-          nodeRun.input_payload,
-          loadArtifact
-        ),
-        output_payload: await hydrateRuntimeDebugArtifacts(
-          nodeRun.output_payload,
-          loadArtifact
-        )
-      }))
-    )
-  ]);
-
-  return {
-    ...detail,
-    flow_run: {
-      ...detail.flow_run,
-      input_payload: isRecord(flowInputPayload) ? flowInputPayload : {},
-      output_payload: isRecord(flowOutputPayload) ? flowOutputPayload : {}
-    },
-    node_runs: nodeRuns.map((nodeRun) => ({
-      ...nodeRun,
-      input_payload: isRecord(nodeRun.input_payload)
-        ? nodeRun.input_payload
-        : {},
-      output_payload: isRecord(nodeRun.output_payload)
-        ? nodeRun.output_payload
-        : {}
-    }))
-  };
-}
-
-function mergeVariablePayload(
-  currentCache: NodeDebugPreviewVariableCache,
-  nodeId: string,
-  payload: Record<string, unknown>
-) {
-  return {
-    ...currentCache,
-    [nodeId]: {
-      ...(currentCache[nodeId] ?? {}),
-      ...payload
-    }
-  };
-}
-
-function mergeVariableCache(
-  currentCache: NodeDebugPreviewVariableCache,
-  nextCache: NodeDebugPreviewVariableCache
-) {
-  let mergedCache = currentCache;
-
-  for (const [nodeId, payload] of Object.entries(nextCache)) {
-    mergedCache = mergeVariablePayload(mergedCache, nodeId, payload);
-  }
-
-  return mergedCache;
-}
-
-function removeVariableCacheKeys(
-  currentCache: NodeDebugPreviewVariableCache,
-  consumedCache: NodeDebugPreviewVariableCache
-) {
-  let changed = false;
-  const nextCache: NodeDebugPreviewVariableCache = {};
-
-  for (const [nodeId, payload] of Object.entries(currentCache)) {
-    const consumedPayload = consumedCache[nodeId];
-    const nextPayload: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(payload)) {
-      if (
-        consumedPayload &&
-        Object.prototype.hasOwnProperty.call(consumedPayload, key)
-      ) {
-        changed = true;
-        continue;
-      }
-      nextPayload[key] = value;
-    }
-
-    if (Object.keys(nextPayload).length > 0) {
-      nextCache[nodeId] = nextPayload;
-    }
-  }
-
-  return changed ? nextCache : currentCache;
-}
-
-function parseVariableCacheItemKey(
-  key: string
-): { nodeId: string; variableKey: string } | null {
-  const separatorIndex = key.indexOf('.');
-
-  if (separatorIndex <= 0 || separatorIndex === key.length - 1) {
-    return null;
-  }
-
-  return {
-    nodeId: key.slice(0, separatorIndex),
-    variableKey: key.slice(separatorIndex + 1)
-  };
-}
-
-function readVariableCacheValue(
-  cache: NodeDebugPreviewVariableCache,
-  key: string
-) {
-  const parsed = parseVariableCacheItemKey(key);
-  if (!parsed) {
-    return { found: false as const };
-  }
-
-  const payload = cache[parsed.nodeId];
-  if (
-    !payload ||
-    !Object.prototype.hasOwnProperty.call(payload, parsed.variableKey)
-  ) {
-    return { found: false as const };
-  }
-
-  return { found: true as const, value: payload[parsed.variableKey] };
-}
-
-function applyVariableOverridesToGroups(
-  groups: AgentFlowVariableGroup[],
-  variableOverrides: NodeDebugPreviewVariableCache
-): AgentFlowVariableGroup[] {
-  if (Object.keys(variableOverrides).length === 0) {
-    return groups;
-  }
-
-  return groups.map((group) => ({
-    ...group,
-    items: group.items.map((item) => {
-      const override = readVariableCacheValue(variableOverrides, item.key);
-      return override.found ? { ...item, value: override.value } : item;
-    })
-  }));
-}
-
-function removeCachedVariableItemsFromGroups(
-  groups: AgentFlowVariableGroup[],
-  variableCache: NodeDebugPreviewVariableCache
-): AgentFlowVariableGroup[] {
-  return groups.flatMap((group) => {
-    const items = group.items.filter(
-      (item) => !readVariableCacheValue(variableCache, item.key).found
-    );
-
-    return items.length > 0 ? [{ ...group, items }] : [];
-  });
-}
-
-function mergeVariableGroupsByTitle(
-  groups: AgentFlowVariableGroup[]
-): AgentFlowVariableGroup[] {
-  const groupsByTitle = new Map<string, AgentFlowVariableGroup>();
-
-  for (const group of groups) {
-    const existing = groupsByTitle.get(group.title);
-    if (existing) {
-      existing.items.push(...group.items);
-      continue;
-    }
-
-    groupsByTitle.set(group.title, { ...group, items: [...group.items] });
-  }
-
-  return Array.from(groupsByTitle.values());
-}
-
-function readOutputSelectorValue(
-  payload: Record<string, unknown>,
-  selector: string[]
-): { found: true; value: unknown } | { found: false } {
-  let current: unknown = payload;
-
-  for (const segment of selector) {
-    if (
-      !isRecord(current) ||
-      !Object.prototype.hasOwnProperty.call(current, segment)
-    ) {
-      return { found: false };
-    }
-
-    current = current[segment];
-  }
-
-  return { found: true, value: current };
-}
-
-function projectNodeVariablePayload(
-  document: FlowAuthoringDocument,
-  nodeId: string,
-  payload: Record<string, unknown>
-) {
-  const node = document.graph.nodes.find((entry) => entry.id === nodeId);
-
-  if (!node) {
-    return {};
-  }
-
-  return getNodeVariableOutputs(node).reduce<Record<string, unknown>>(
-    (projected, output) => {
-      if (Object.prototype.hasOwnProperty.call(payload, output.key)) {
-        projected[output.key] = payload[output.key];
-        return projected;
-      }
-
-      const selector = output.selector?.length ? output.selector : undefined;
-      if (!selector) {
-        return projected;
-      }
-
-      const selected = readOutputSelectorValue(payload, selector);
-      if (selected.found) {
-        projected[output.key] = selected.value;
-      }
-
-      return projected;
-    },
-    {}
-  );
-}
-
-function projectVariableCache(
-  document: FlowAuthoringDocument,
-  variableCache: NodeDebugPreviewVariableCache
-): NodeDebugPreviewVariableCache {
-  let cache: NodeDebugPreviewVariableCache = {};
-
-  for (const [nodeId, payload] of Object.entries(variableCache)) {
-    if (isRecord(payload)) {
-      const projectedPayload = projectNodeVariablePayload(
-        document,
-        nodeId,
-        payload
-      );
-
-      if (Object.keys(projectedPayload).length > 0) {
-        cache = mergeVariablePayload(cache, nodeId, projectedPayload);
-      }
-    }
-  }
-
-  return cache;
-}
-
-function buildInputVariableCacheFromRunDetail(
-  detail: FlowDebugRunDetail
-): NodeDebugPreviewVariableCache {
-  let cache: NodeDebugPreviewVariableCache = {};
-
-  if (isRecord(detail.flow_run.input_payload)) {
-    for (const [nodeId, payload] of Object.entries(
-      detail.flow_run.input_payload
-    )) {
-      if (isRecord(payload)) {
-        cache = mergeVariablePayload(cache, nodeId, payload);
-      }
-    }
-  }
-
-  for (const nodeRun of detail.node_runs) {
-    if (isRecord(nodeRun.input_payload)) {
-      cache = mergeVariablePayload(
-        cache,
-        nodeRun.node_id,
-        nodeRun.input_payload
-      );
-    }
-  }
-
-  return cache;
-}
-
-function buildDisplayVariableCache(
-  outputCache: NodeDebugPreviewVariableCache
-): NodePreviewDisplayVariableCache {
-  const displayCache: NodePreviewDisplayVariableCache = {};
-
-  for (const [nodeId, payload] of Object.entries(outputCache)) {
-    displayCache[nodeId] ??= {};
-    displayCache[nodeId].output = payload;
-  }
-
-  return displayCache;
-}
-
-function buildNodeVariableDisplayMetadata(
-  document: FlowAuthoringDocument
-): Record<string, NodeVariableDisplayMeta> {
-  return Object.fromEntries(
-    document.graph.nodes.map((node) => [
-      node.id,
-      {
-        label: node.alias,
-        nodeType: node.type,
-        outputs: getNodeVariableOutputs(node)
-      }
-    ])
-  );
-}
-
-function createDebugSessionState(
-  applicationId: string,
-  draftId: string,
-  persistedDebugSessionId?: string
-) {
-  const scope = `${applicationId}:${draftId}`;
-
-  if (
-    typeof persistedDebugSessionId === 'string' &&
-    persistedDebugSessionId.startsWith(`${scope}:`)
-  ) {
-    return {
-      scope,
-      id: persistedDebugSessionId
-    };
-  }
-
-  const random =
-    typeof globalThis.crypto?.randomUUID === 'function'
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-  return {
-    scope,
-    id: `${scope}:${random}`
-  };
-}
 
 export function useAgentFlowDebugSession({
   applicationId,

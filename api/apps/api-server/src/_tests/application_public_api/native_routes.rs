@@ -419,7 +419,7 @@ async fn native_resume_rejects_missing_llm_tool_result_without_consuming_task() 
 }
 
 #[tokio::test]
-async fn native_streaming_tool_resume_enqueues_request_and_returns_current_run() {
+async fn native_tool_resume_consumes_in_request_and_records_failure_timeline() {
     let (app, state) = test_app_with_state().await;
     let token = setup_published_native_app(&app, "Native Streaming Tool Resume App").await;
     let mut body = native_run_body(json!("provider/model:any-public-string"));
@@ -428,6 +428,8 @@ async fn native_streaming_tool_resume_enqueues_request_and_returns_current_run()
     let created = post_native_run(&app, &token, body).await;
     assert_eq!(created.status(), StatusCode::CREATED);
     let created_payload = response_json(created).await;
+    let application_id =
+        Uuid::parse_str(created_payload["data"]["application_id"].as_str().unwrap()).unwrap();
     let run_id = Uuid::parse_str(created_payload["data"]["id"].as_str().unwrap()).unwrap();
     let callback_task = seed_pending_llm_callback(state.as_ref(), run_id).await;
     let response = app
@@ -459,14 +461,9 @@ async fn native_streaming_tool_resume_enqueues_request_and_returns_current_run()
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let payload = response_json(response).await;
-    assert_eq!(payload["data"]["id"], json!(run_id.to_string()));
-    assert_eq!(payload["data"]["status"], json!("waiting"));
-    assert_eq!(
-        payload["data"]["required_action"]["payload"]["callback_task_id"],
-        json!(callback_task.id.to_string())
-    );
+    assert_eq!(payload["code"], json!("internal_error"));
 
     let stored_task = state
         .store
@@ -475,66 +472,6 @@ async fn native_streaming_tool_resume_enqueues_request_and_returns_current_run()
         .unwrap()
         .unwrap();
     assert_eq!(stored_task.status, domain::CallbackTaskStatus::Pending);
-}
-
-#[tokio::test]
-async fn native_resume_worker_run_once_marks_failed_request_and_timeline_event() {
-    let (app, state) = test_app_with_state().await;
-    let token = setup_published_native_app(&app, "Native Worker Failed Resume App").await;
-    let mut body = native_run_body(json!("provider/model:any-public-string"));
-    body["response_mode"] = json!("manual");
-
-    let created = post_native_run(&app, &token, body).await;
-    assert_eq!(created.status(), StatusCode::CREATED);
-    let created_payload = response_json(created).await;
-    let application_id =
-        Uuid::parse_str(created_payload["data"]["application_id"].as_str().unwrap()).unwrap();
-    let run_id = Uuid::parse_str(created_payload["data"]["id"].as_str().unwrap()).unwrap();
-    let callback_task = seed_pending_llm_callback(state.as_ref(), run_id).await;
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/agent/v1/runs/{run_id}/resume"))
-                .header("authorization", format!("Bearer {token}"))
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({
-                        "callback_task_id": callback_task.id,
-                        "response_payload": {
-                            "tool_results": [
-                                {
-                                    "tool_call_id": "call_weather",
-                                    "content": "{\"temperature\":21}"
-                                }
-                            ]
-                        }
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let processed = crate::workers::native_resume::process_next_native_resume_request(
-        state.clone(),
-        "test-worker",
-    )
-    .await
-    .unwrap();
-
-    assert!(processed);
-    let stats = state
-        .store
-        .summarize_flow_run_resume_requests()
-        .await
-        .unwrap();
-    assert_eq!(stats.pending_count, 0);
-    assert_eq!(stats.failed_count, 1);
 
     let flow_run = state
         .store
@@ -543,9 +480,6 @@ async fn native_resume_worker_run_once_marks_failed_request_and_timeline_event()
         .unwrap()
         .unwrap();
     assert_eq!(flow_run.status, domain::FlowRunStatus::Failed);
-    let worker_snapshot = state.native_resume_worker.snapshot();
-    assert_eq!(worker_snapshot.processed_count, 1);
-    assert_eq!(worker_snapshot.failed_count, 1);
 
     let detail = state
         .store
@@ -560,90 +494,10 @@ async fn native_resume_worker_run_once_marks_failed_request_and_timeline_event()
         .collect::<Vec<_>>();
     assert!(
         event_types.contains(&"public_run_resume_requested")
-            && event_types.contains(&"public_run_resume_claimed")
             && event_types.contains(&"public_run_resume_failed"),
-        "resume worker timeline should expose request, claim, and failure: {event_types:?}"
+        "resume timeline should expose request and failure: {event_types:?}"
     );
-}
-
-#[tokio::test]
-async fn native_cancel_marks_pending_resume_request_cancelled_and_visible() {
-    let (app, state) = test_app_with_state().await;
-    let token = setup_published_native_app(&app, "Native Cancel Pending Resume App").await;
-    let mut body = native_run_body(json!("provider/model:any-public-string"));
-    body["response_mode"] = json!("manual");
-
-    let created = post_native_run(&app, &token, body).await;
-    assert_eq!(created.status(), StatusCode::CREATED);
-    let created_payload = response_json(created).await;
-    let application_id =
-        Uuid::parse_str(created_payload["data"]["application_id"].as_str().unwrap()).unwrap();
-    let run_id = Uuid::parse_str(created_payload["data"]["id"].as_str().unwrap()).unwrap();
-    let callback_task = seed_pending_llm_callback(state.as_ref(), run_id).await;
-
-    let resume = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/agent/v1/runs/{run_id}/resume"))
-                .header("authorization", format!("Bearer {token}"))
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({
-                        "callback_task_id": callback_task.id,
-                        "response_payload": {
-                            "tool_results": [
-                                {
-                                    "tool_call_id": "call_weather",
-                                    "content": "{\"temperature\":21}"
-                                }
-                            ]
-                        }
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(resume.status(), StatusCode::OK);
-
-    let cancel = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/agent/v1/runs/{run_id}/cancel"))
-                .header("authorization", format!("Bearer {token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(cancel.status(), StatusCode::OK);
-    let cancel_payload = response_json(cancel).await;
-    assert_eq!(cancel_payload["data"]["status"], json!("cancelled"));
-
-    let stats = state
-        .store
-        .summarize_flow_run_resume_requests()
-        .await
-        .unwrap();
-    assert_eq!(stats.pending_count, 0);
-    assert_eq!(stats.claimed_count, 0);
-    assert_eq!(stats.cancelled_count, 1);
-
-    let detail = state
-        .store
-        .get_application_run_detail(application_id, run_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(detail
-        .events
-        .iter()
-        .any(|event| event.event_type == "public_run_resume_cancelled"));
+    assert!(!event_types.contains(&"public_run_resume_claimed"));
 }
 
 #[tokio::test]

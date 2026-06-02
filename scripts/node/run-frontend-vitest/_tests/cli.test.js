@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseCliArgs, buildVitestCommand, main } = require('../../run-frontend-vitest.js');
+const { parseCliArgs, buildVitestCommand, main } = require('../../cli/run-frontend-vitest.js');
 
 test('parseCliArgs defaults to run mode', () => {
   assert.deepEqual(parseCliArgs([]), {

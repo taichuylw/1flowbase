@@ -187,49 +187,26 @@ pub struct UpdateCallbackTaskPayloadsInput {
 }
 
 #[derive(Debug, Clone)]
-pub struct UpsertFlowRunResumeRequestInput {
+pub struct RecordFlowRunCallbackResumeAttemptInput {
     pub flow_run_id: Uuid,
     pub callback_task_id: Uuid,
+    pub source: String,
     pub response_payload: serde_json::Value,
     pub idempotency_key: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct UpsertFlowRunResumeRequestOutput {
-    pub request: domain::FlowRunResumeRequestRecord,
+pub struct RecordFlowRunCallbackResumeAttemptOutput {
+    pub attempt: domain::FlowRunCallbackResumeAttemptRecord,
     pub inserted: bool,
 }
 
 #[derive(Debug, Clone)]
-pub struct ClaimFlowRunResumeRequestInput {
-    pub worker_id: String,
-    pub claim_expires_at: OffsetDateTime,
-}
-
-#[derive(Debug, Clone)]
-pub struct FlowRunResumeRequestClaim {
-    pub request: domain::FlowRunResumeRequestRecord,
-    pub application_id: Uuid,
-    pub actor_user_id: Uuid,
-}
-
-#[derive(Debug, Clone)]
-pub struct FinishFlowRunResumeRequestInput {
-    pub request_id: Uuid,
-    pub status: domain::FlowRunResumeRequestStatus,
+pub struct FinishFlowRunCallbackResumeAttemptInput {
+    pub attempt_id: Uuid,
+    pub status: domain::FlowRunCallbackResumeAttemptStatus,
     pub error_payload: Option<serde_json::Value>,
     pub completed_at: OffsetDateTime,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct FlowRunResumeRequestQueueStats {
-    pub pending_count: i64,
-    pub claimed_count: i64,
-    pub succeeded_count: i64,
-    pub failed_count: i64,
-    pub cancelled_count: i64,
-    pub expired_claim_count: i64,
-    pub oldest_pending_created_at: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -665,31 +642,26 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = input;
         anyhow::bail!("update_callback_task_payloads not implemented")
     }
-    async fn upsert_flow_run_resume_request(
+    async fn record_flow_run_callback_resume_attempt(
         &self,
-        input: &UpsertFlowRunResumeRequestInput,
-    ) -> anyhow::Result<UpsertFlowRunResumeRequestOutput> {
+        input: &RecordFlowRunCallbackResumeAttemptInput,
+    ) -> anyhow::Result<RecordFlowRunCallbackResumeAttemptOutput> {
         let _ = input;
-        anyhow::bail!("upsert_flow_run_resume_request not implemented")
+        anyhow::bail!("record_flow_run_callback_resume_attempt not implemented")
     }
-    async fn claim_next_flow_run_resume_request(
+    async fn get_flow_run_callback_resume_attempt_by_callback_task(
         &self,
-        input: &ClaimFlowRunResumeRequestInput,
-    ) -> anyhow::Result<Option<FlowRunResumeRequestClaim>> {
+        callback_task_id: Uuid,
+    ) -> anyhow::Result<Option<domain::FlowRunCallbackResumeAttemptRecord>> {
+        let _ = callback_task_id;
+        anyhow::bail!("get_flow_run_callback_resume_attempt_by_callback_task not implemented")
+    }
+    async fn finish_flow_run_callback_resume_attempt(
+        &self,
+        input: &FinishFlowRunCallbackResumeAttemptInput,
+    ) -> anyhow::Result<domain::FlowRunCallbackResumeAttemptRecord> {
         let _ = input;
-        anyhow::bail!("claim_next_flow_run_resume_request not implemented")
-    }
-    async fn finish_flow_run_resume_request(
-        &self,
-        input: &FinishFlowRunResumeRequestInput,
-    ) -> anyhow::Result<domain::FlowRunResumeRequestRecord> {
-        let _ = input;
-        anyhow::bail!("finish_flow_run_resume_request not implemented")
-    }
-    async fn summarize_flow_run_resume_requests(
-        &self,
-    ) -> anyhow::Result<FlowRunResumeRequestQueueStats> {
-        anyhow::bail!("summarize_flow_run_resume_requests not implemented")
+        anyhow::bail!("finish_flow_run_callback_resume_attempt not implemented")
     }
     async fn upsert_debug_variable_cache_entry(
         &self,

@@ -552,20 +552,6 @@ pub trait ApplicationPublishedRunControlRepository: Send + Sync {
     ) -> Result<Option<domain::ApplicationRunDetail>>;
 }
 
-#[async_trait]
-pub trait ApplicationPublishedResumeRequestRepository: Send + Sync {
-    async fn upsert_published_resume_request(
-        &self,
-        input: &crate::ports::UpsertFlowRunResumeRequestInput,
-    ) -> Result<crate::ports::UpsertFlowRunResumeRequestOutput>;
-
-    async fn cancel_published_resume_requests_for_run(
-        &self,
-        flow_run_id: Uuid,
-        completed_at: OffsetDateTime,
-    ) -> Result<Vec<domain::FlowRunResumeRequestRecord>>;
-}
-
 pub fn native_result_from_flow_run(
     flow_run: &domain::FlowRunRecord,
     metadata: Value,

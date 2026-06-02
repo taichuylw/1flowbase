@@ -11,7 +11,6 @@ use crate::{
     provider_runtime::ApiRuntimeServices,
     runtime_activity::ApplicationRuntimeActivityTracker,
     runtime_profile_client::{ApiRuntimeProfilePort, PluginRunnerSystemPort},
-    workers::native_resume::NativeResumeWorkerRuntime,
 };
 
 #[derive(Clone)]
@@ -23,7 +22,6 @@ pub struct ApiState {
     pub provider_runtime: Arc<ApiRuntimeServices>,
     pub process_started_at: OffsetDateTime,
     pub runtime_activity: Arc<ApplicationRuntimeActivityTracker>,
-    pub native_resume_worker: Arc<NativeResumeWorkerRuntime>,
     pub api_runtime_profile: Arc<dyn ApiRuntimeProfilePort>,
     pub plugin_runner_system: Arc<dyn PluginRunnerSystemPort>,
     pub official_plugin_source: Arc<dyn OfficialPluginSourcePort>,

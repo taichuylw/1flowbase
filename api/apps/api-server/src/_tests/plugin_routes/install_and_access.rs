@@ -82,6 +82,37 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
     assert!(!Path::new(&installed_path).join("demo").exists());
     assert!(!Path::new(&installed_path).join("scripts").exists());
 
+    let refresh_projection = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/plugins/{installation_id}/catalog-projection/refresh"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(refresh_projection.status(), StatusCode::OK);
+    let refresh_payload: Value = serde_json::from_slice(
+        &to_bytes(refresh_projection.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        refresh_payload["data"]["projection_status"].as_str(),
+        Some("ok")
+    );
+    assert_eq!(
+        refresh_payload["data"]["package_code"].as_str(),
+        Some("fixture_provider")
+    );
+
     let enable = app
         .clone()
         .oneshot(
@@ -141,6 +172,10 @@ async fn plugin_routes_install_enable_assign_and_query_tasks() {
     assert_eq!(
         catalog_payload["data"]["entries"][0]["namespace"],
         "plugin.fixture_provider"
+    );
+    assert_eq!(
+        catalog_payload["data"]["entries"][0]["catalog_refresh_status"].as_str(),
+        Some("ok")
     );
     assert_eq!(
         catalog_payload["data"]["entries"][0]["label_key"],

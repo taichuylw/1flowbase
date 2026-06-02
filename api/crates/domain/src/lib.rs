@@ -66,7 +66,8 @@ pub use model_provider::{
     ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderMainInstanceRecord,
     ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
     PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
+    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
+    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
     PluginTaskStatus, PluginVerificationStatus,
 };
 pub use modeling::{
@@ -80,9 +81,9 @@ pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRe
 pub use orchestration::{
     ApplicationRunDetail, ApplicationRunLogSummary, ApplicationRunSummary, CallbackTaskRecord,
     CallbackTaskStatus, CheckpointRecord, CompiledPlanRecord, DataModelSideEffectReceiptRecord,
-    FlowRunMode, FlowRunRecord, FlowRunResumeRequestRecord, FlowRunResumeRequestStatus,
-    FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord, NodeRunStatus,
-    RunEventRecord, RuntimeDebugArtifactRecord,
+    FlowRunCallbackResumeAttemptRecord, FlowRunCallbackResumeAttemptStatus, FlowRunMode,
+    FlowRunRecord, FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord,
+    NodeRunStatus, RunEventRecord, RuntimeDebugArtifactRecord,
 };
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;

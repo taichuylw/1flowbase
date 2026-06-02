@@ -27,7 +27,8 @@ function getRepoRoot() {
 }
 
 function isRustTestPath(relativePath) {
-  return /(?:^|\/)(?:_tests|tests|benches)\//u.test(relativePath);
+  return /(?:^|\/)(?:_tests|tests|benches)\//u.test(relativePath)
+    || /(?:^|\/)tests\.rs$/u.test(relativePath);
 }
 
 function isSkippedRustPath(relativePath) {

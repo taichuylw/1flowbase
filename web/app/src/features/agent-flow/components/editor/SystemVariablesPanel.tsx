@@ -1,7 +1,7 @@
 import { CloseOutlined } from '@ant-design/icons';
 import { Button, Tag, Typography } from 'antd';
 
-import { agentFlowSystemVariables } from '../../lib/system-variables';
+import { agentFlowSystemVariables } from '../../lib/variables/system-variables';
 import { i18nText } from '../../../../shared/i18n/text';
 
 interface SystemVariablesPanelProps {

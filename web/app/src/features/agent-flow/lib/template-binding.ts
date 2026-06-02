@@ -1,5 +1,5 @@
 import type { FlowSelectorOption } from './selector-options';
-import { formatNodeVariableLabel } from './variable-labels';
+import { formatNodeVariableLabel } from './variables/variable-labels';
 
 export const TEMPLATE_SELECTOR_REGEX =
   /{{\s*([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+)\s*}}/g;

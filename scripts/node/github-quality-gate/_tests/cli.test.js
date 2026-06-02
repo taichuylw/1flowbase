@@ -4,11 +4,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { main, readInputs } = require('../../github-quality-gate.js');
+const { main, readInputs } = require('../../cli/github-quality-gate.js');
 const {
   main: aggregateMain,
   readInputs: readAggregateInputs,
-} = require('../../github-quality-gate-aggregate.js');
+} = require('../../cli/github-quality-gate-aggregate.js');
 
 test('readInputs maps GitHub action environment inputs', () => {
   assert.deepEqual(readInputs({

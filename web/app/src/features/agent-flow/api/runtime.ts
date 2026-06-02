@@ -34,7 +34,7 @@ import {
 import {
   getNodeVariableOutputs,
   getStartInputFields
-} from '../lib/start-node-variables';
+} from '../lib/variables/start-node-variables';
 import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
 import { parseTemplateSelectorTokens } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';

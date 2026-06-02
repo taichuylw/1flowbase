@@ -10,7 +10,7 @@ import {
 import { getDirectDownstreamNodes } from '../lib/document/relations';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
-import type { AgentFlowEnvironmentVariable } from '../lib/application-environment-variables';
+import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import type { AgentFlowIssue } from '../lib/validate-document';
 
 import type { SchemaAdapter } from '../../../shared/schema-ui/registry/create-renderer-registry';

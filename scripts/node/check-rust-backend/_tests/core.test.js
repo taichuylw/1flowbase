@@ -64,10 +64,11 @@ test('scanRustSource flags sensitive serialized fields', () => {
 
 test('current auth hash records are not serializable or baseline-suppressed', () => {
   const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
-  const authPath = path.join(repoRoot, 'api', 'crates', 'domain', 'src', 'auth.rs');
+  const authRelativePath = 'api/crates/domain/src/auth/mod.rs';
+  const authPath = path.join(repoRoot, ...authRelativePath.split('/'));
   const baselinePath = path.join(repoRoot, 'scripts', 'node', 'check-rust-backend', 'baseline.json');
   const authFindings = scanRustSource({
-    relativePath: 'api/crates/domain/src/auth.rs',
+    relativePath: authRelativePath,
     content: fs.readFileSync(authPath, 'utf8'),
   }).filter(
     (finding) =>
@@ -78,7 +79,7 @@ test('current auth hash records are not serializable or baseline-suppressed', ()
   const authBaselineSuppressions = (baseline.allowedFindings || []).filter(
     (finding) =>
       finding.rule === 'no-sensitive-serialize'
-      && finding.file === 'api/crates/domain/src/auth.rs'
+      && finding.file === authRelativePath
       && /(?:password_hash|token_hash)/u.test(finding.snippet)
   );
 
@@ -129,13 +130,18 @@ test('scanRustSource reports async blocking patterns as warnings', () => {
   assert.equal(findings[0].rule, 'blocking-in-async-context');
 });
 
-test('collectRustBackendFindings skips Rust files under test directories', () => {
+test('collectRustBackendFindings skips Rust files under test directories and test modules', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-rust-gate-'));
   fs.mkdirSync(path.join(repoRoot, 'api', 'crates', 'domain', 'src', '_tests'), { recursive: true });
+  fs.mkdirSync(path.join(repoRoot, 'api', 'apps', 'api-server', 'src', 'routes', 'foo'), { recursive: true });
   fs.mkdirSync(path.join(repoRoot, 'api', 'crates', 'domain', 'src'), { recursive: true });
   fs.writeFileSync(
     path.join(repoRoot, 'api', 'crates', 'domain', 'src', '_tests', 'order_tests.rs'),
     'fn test_helper() { Some(1).unwrap(); }\n'
+  );
+  fs.writeFileSync(
+    path.join(repoRoot, 'api', 'apps', 'api-server', 'src', 'routes', 'foo', 'tests.rs'),
+    'fn route_test_helper() { Some(1).unwrap(); }\n'
   );
   fs.writeFileSync(
     path.join(repoRoot, 'api', 'crates', 'domain', 'src', 'order.rs'),

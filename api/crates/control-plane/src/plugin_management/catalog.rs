@@ -13,6 +13,9 @@ pub struct PluginCatalogEntry {
     pub default_base_url: Option<String>,
     pub model_discovery_mode: String,
     pub assigned_to_current_workspace: bool,
+    pub catalog_refresh_status: String,
+    pub catalog_last_error_message: Option<String>,
+    pub catalog_refreshed_at: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +117,17 @@ pub struct PluginFamilyView {
 pub struct PluginFamilyCatalogView {
     pub entries: Vec<PluginFamilyView>,
     pub i18n_catalog: I18nCatalog,
+}
+
+#[derive(Debug)]
+struct PluginCatalogProjectionView {
+    help_url: Option<String>,
+    default_base_url: Option<String>,
+    model_discovery_mode: String,
+    i18n_bundles: BTreeMap<String, serde_json::Value>,
+    catalog_refresh_status: String,
+    catalog_last_error_message: Option<String>,
+    catalog_refreshed_at: Option<OffsetDateTime>,
 }
 
 fn compare_plugin_versions(left: &str, right: &str) -> Ordering {
@@ -256,6 +270,13 @@ where
             .map(|assignment| assignment.installation_id)
             .collect::<HashSet<_>>();
         let installations = self.repository.list_installations().await?;
+        let projections = self
+            .repository
+            .list_plugin_package_catalog_projections()
+            .await?
+            .into_iter()
+            .map(|projection| (projection.installation_id, projection))
+            .collect::<HashMap<_, _>>();
         let mut catalog = Vec::with_capacity(installations.len());
         let mut i18n_catalog = BTreeMap::new();
         for installation in installations {
@@ -266,26 +287,24 @@ where
                 continue;
             }
             let namespace = plugin_namespace(&installation.provider_code);
-            let package = load_provider_package(&installation.installed_path).ok();
-            if let Some(package) = package.as_ref() {
-                merge_i18n_catalog(
-                    &mut i18n_catalog,
-                    trim_provider_bundles(&namespace, &package.i18n, &locales),
-                );
-            }
+            let projection = plugin_catalog_projection_view(projections.get(&installation.id));
+            merge_i18n_catalog(
+                &mut i18n_catalog,
+                trim_json_bundles(&namespace, &projection.i18n_bundles, &locales),
+            );
             catalog.push(PluginCatalogEntry {
                 plugin_type: "model_provider".to_string(),
                 namespace,
                 label_key: "plugin.label".to_string(),
                 description_key: Some("plugin.description".to_string()),
                 provider_label_key: "provider.label".to_string(),
-                help_url: provider_help_url(&installation, package.as_ref()),
-                default_base_url: provider_default_base_url(&installation, package.as_ref()),
-                model_discovery_mode: provider_model_discovery_mode(
-                    &installation,
-                    package.as_ref(),
-                ),
+                help_url: projection.help_url,
+                default_base_url: projection.default_base_url,
+                model_discovery_mode: projection.model_discovery_mode,
                 assigned_to_current_workspace: assigned_installation_ids.contains(&installation.id),
+                catalog_refresh_status: projection.catalog_refresh_status,
+                catalog_last_error_message: projection.catalog_last_error_message,
+                catalog_refreshed_at: projection.catalog_refreshed_at,
                 installation,
             });
         }
@@ -478,4 +497,50 @@ where
             i18n_catalog,
         })
     }
+}
+
+fn plugin_catalog_projection_view(
+    projection: Option<&domain::PluginPackageCatalogProjectionRecord>,
+) -> PluginCatalogProjectionView {
+    let Some(projection) = projection else {
+        return PluginCatalogProjectionView {
+            help_url: None,
+            default_base_url: None,
+            model_discovery_mode: "unknown".to_string(),
+            i18n_bundles: BTreeMap::new(),
+            catalog_refresh_status: domain::PluginPackageCatalogProjectionStatus::Missing
+                .as_str()
+                .to_string(),
+            catalog_last_error_message: None,
+            catalog_refreshed_at: None,
+        };
+    };
+
+    let snapshot = &projection.catalog_snapshot_json;
+    PluginCatalogProjectionView {
+        help_url: projection_provider_string(snapshot, "help_url"),
+        default_base_url: projection_provider_string(snapshot, "default_base_url"),
+        model_discovery_mode: projection_provider_string(snapshot, "model_discovery_mode")
+            .unwrap_or_else(|| "unknown".to_string()),
+        i18n_bundles: projection_i18n_bundles(snapshot),
+        catalog_refresh_status: projection.projection_status.as_str().to_string(),
+        catalog_last_error_message: projection.last_error_message.clone(),
+        catalog_refreshed_at: projection.refreshed_at,
+    }
+}
+
+fn projection_provider_string(snapshot: &serde_json::Value, field: &str) -> Option<String> {
+    snapshot
+        .get("provider")?
+        .get(field)?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn projection_i18n_bundles(snapshot: &serde_json::Value) -> BTreeMap<String, serde_json::Value> {
+    snapshot
+        .pointer("/i18n/bundles")
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default()
 }

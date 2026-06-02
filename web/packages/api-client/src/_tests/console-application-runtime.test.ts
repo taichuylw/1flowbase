@@ -11,7 +11,7 @@ import {
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRunStream,
   subscribeConsoleFlowDebugRunStream
-} from '../console-application-runtime';
+} from '../console/application-runtime';
 
 function sseResponse(frame: string) {
   return new Response(

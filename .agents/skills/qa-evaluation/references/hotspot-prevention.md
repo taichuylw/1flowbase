@@ -12,7 +12,7 @@
 
 - `git log`：确认时间窗口、提交主题和提交数量
 - `git log --name-only` 或 `git numstat`：找出高频文件和高 churn 模块
-- 优先运行 `node scripts/node/hotspot-review.js --since "2 days ago"`，报告产物固定写入 `tmp/test-governance/hotspot-review.json`
+- 优先运行 `node scripts/node/cli/hotspot-review.js --since "2 days ago"`，报告产物固定写入 `tmp/test-governance/hotspot-review.json`
 - 当前源码：抽样确认热点是否仍存在结构压力
 - 相关 `.memory` 与现有 `.agents/skills`：判断是新规则缺失，还是已有规则未触发
 

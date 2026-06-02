@@ -34,6 +34,7 @@ use crate::{
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertHostInfrastructureProviderConfigInput, UpsertModelProviderCatalogCacheInput,
         UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
+        UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use domain::{
@@ -42,7 +43,8 @@ use domain::{
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
     ModelProviderSecretRecord, NodeContributionDependencyStatus, PermissionDefinition,
     PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginTaskStatus,
+    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
+    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskRecord, PluginTaskStatus,
     ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{

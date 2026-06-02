@@ -4,6 +4,7 @@ use super::*;
 pub(crate) struct MemoryPluginManagementRepository {
     pub(crate) actor: ActorContext,
     installations: Arc<RwLock<HashMap<Uuid, PluginInstallationRecord>>>,
+    catalog_projections: Arc<RwLock<HashMap<Uuid, PluginPackageCatalogProjectionRecord>>>,
     plugin_ids: Arc<RwLock<HashMap<String, Uuid>>>,
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
     tasks: Arc<RwLock<HashMap<Uuid, PluginTaskRecord>>>,
@@ -29,6 +30,7 @@ impl MemoryPluginManagementRepository {
         Self {
             actor,
             installations: Arc::new(RwLock::new(HashMap::new())),
+            catalog_projections: Arc::new(RwLock::new(HashMap::new())),
             plugin_ids: Arc::new(RwLock::new(HashMap::new())),
             assignments: Arc::new(RwLock::new(Vec::new())),
             tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -51,6 +53,13 @@ impl MemoryPluginManagementRepository {
 
     pub(crate) async fn artifact_snapshot_update_count(&self) -> usize {
         self.artifact_snapshot_updates.read().await.len()
+    }
+
+    pub(crate) async fn remove_catalog_projection(&self, installation_id: Uuid) {
+        self.catalog_projections
+            .write()
+            .await
+            .remove(&installation_id);
     }
 
     pub(crate) async fn assignment_installation_id(&self, provider_code: &str) -> Uuid {
@@ -284,6 +293,51 @@ impl PluginRepository for MemoryPluginManagementRepository {
         Ok(self.installations.read().await.values().cloned().collect())
     }
 
+    async fn upsert_plugin_package_catalog_projection(
+        &self,
+        input: &UpsertPluginPackageCatalogProjectionInput,
+    ) -> Result<PluginPackageCatalogProjectionRecord> {
+        let record = PluginPackageCatalogProjectionRecord {
+            installation_id: input.installation_id,
+            package_code: input.package_code.clone(),
+            package_version: input.package_version.clone(),
+            catalog_snapshot_json: input.catalog_snapshot_json.clone(),
+            projection_status: input.projection_status,
+            last_error_message: input.last_error_message.clone(),
+            refreshed_at: input.refreshed_at,
+            updated_at: OffsetDateTime::now_utc(),
+        };
+        self.catalog_projections
+            .write()
+            .await
+            .insert(input.installation_id, record.clone());
+        Ok(record)
+    }
+
+    async fn get_plugin_package_catalog_projection(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<Option<PluginPackageCatalogProjectionRecord>> {
+        Ok(self
+            .catalog_projections
+            .read()
+            .await
+            .get(&installation_id)
+            .cloned())
+    }
+
+    async fn list_plugin_package_catalog_projections(
+        &self,
+    ) -> Result<Vec<PluginPackageCatalogProjectionRecord>> {
+        Ok(self
+            .catalog_projections
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect())
+    }
+
     async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
         let removed = self.installations.write().await.remove(&installation_id);
         let Some(_) = removed else {
@@ -294,6 +348,10 @@ impl PluginRepository for MemoryPluginManagementRepository {
             .write()
             .await
             .retain(|_, id| *id != installation_id);
+        self.catalog_projections
+            .write()
+            .await
+            .remove(&installation_id);
         self.assignments
             .write()
             .await

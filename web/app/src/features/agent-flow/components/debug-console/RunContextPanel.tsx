@@ -1,7 +1,7 @@
 import { Input, InputNumber, Space, Switch, Tag, Typography } from 'antd';
 
 import type { AgentFlowRunContext } from '../../api/runtime';
-import { formatNodeVariableLabel } from '../../lib/variable-labels';
+import { formatNodeVariableLabel } from '../../lib/variables/variable-labels';
 import { i18nText } from '../../../../shared/i18n/text';
 
 function renderFieldInput(

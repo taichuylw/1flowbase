@@ -704,5 +704,7 @@ impl InMemoryOrchestrationRuntimeRepository {
 mod flow_ports;
 mod provider_runtime;
 mod runtime_repository;
+mod runtime_repository_helpers;
+mod runtime_repository_status_tests;
 
 pub(crate) use provider_runtime::InMemoryProviderRuntime;

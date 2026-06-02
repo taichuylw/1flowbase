@@ -200,7 +200,7 @@ jobs:
           pattern: test-governance-*
           path: tmp/test-governance/parallel
           merge-multiple: false
-      - run: node scripts/node/github-quality-gate-aggregate.js
+      - run: node scripts/node/cli/github-quality-gate-aggregate.js
         env:
           INPUT_ARTIFACT_ROOT: tmp/test-governance/parallel
           INPUT_REPORT_TYPE: ci

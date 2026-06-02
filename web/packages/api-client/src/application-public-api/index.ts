@@ -2,7 +2,7 @@ import type {
   ConsoleApiDocsCatalog,
   ConsoleApiDocsCategoryOperations,
   ConsoleApiDocsCategoryOperationsRequest
-} from '../console-api-docs';
+} from '../console/api-docs';
 import { apiFetch, apiFetchVoid } from '../transport';
 
 export const APPLICATION_PUBLIC_RUNTIME_PATHS = {

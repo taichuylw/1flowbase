@@ -85,7 +85,7 @@ test('verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
   assert.match(workflow, /merge-multiple: false/u);
-  assert.match(workflow, /node scripts\/node\/github-quality-gate-aggregate\.js/u);
+  assert.match(workflow, /node scripts\/node\/cli\/github-quality-gate-aggregate\.js/u);
 });
 
 test('verify workflow runs React Doctor as a frontend quality gate', () => {
@@ -294,7 +294,7 @@ test('quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /scope: coverage-frontend/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
-  assert.match(workflow, /node scripts\/node\/github-quality-gate-aggregate\.js/u);
+  assert.match(workflow, /node scripts\/node\/cli\/github-quality-gate-aggregate\.js/u);
   assert.match(workflow, /name: test-governance-repo-tooling/u);
   assert.match(workflow, /name: test-governance-repo-frontend/u);
   assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);

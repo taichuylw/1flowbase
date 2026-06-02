@@ -33,7 +33,6 @@ const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
 const RUN_CONVERSATION_PAGE_LIMIT = 5;
 const RESUME_EVENT_TYPES = new Set([
   'public_run_resume_requested',
-  'public_run_resume_claimed',
   'public_run_resume_succeeded',
   'public_run_resume_failed',
   'public_run_resume_cancelled',
@@ -301,9 +300,6 @@ function eventStatusColor(eventType: string) {
   if (eventType.endsWith('_failed')) {
     return 'red';
   }
-  if (eventType.endsWith('_claimed')) {
-    return 'blue';
-  }
   if (eventType.endsWith('_succeeded') || eventType === 'flow_run_resumed') {
     return 'green';
   }
@@ -314,8 +310,6 @@ function resumeEventLabel(eventType: string) {
   switch (eventType) {
     case 'public_run_resume_requested':
       return i18nText("applications", "auto.resume_event_requested");
-    case 'public_run_resume_claimed':
-      return i18nText("applications", "auto.resume_event_claimed");
     case 'public_run_resume_succeeded':
       return i18nText("applications", "auto.resume_event_succeeded");
     case 'public_run_resume_failed':

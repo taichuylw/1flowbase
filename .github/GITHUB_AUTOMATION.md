@@ -33,7 +33,7 @@ scope: coverage-backend-{control-plane,storage-postgres,api-server}
 ```
 
 The `repo-tooling` scope includes `repo-hygiene`, which writes
-`tmp/test-governance/repo-hygiene.json` with deprecated-marker, weak-assertion,
+`tmp/test-governance/repo-hygiene.json` with debt-marker, weak-assertion,
 duplicate-test-title, file-size, and directory-pressure findings. Advisory findings
 remain warnings; focused tests still fail the repo gate.
 
@@ -113,7 +113,7 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `repo-backend-check-runtime-storage` | `node scripts/node/verify-backend.js check runtime-storage` |
 | `repo-backend-check-apps` | `node scripts/node/verify-backend.js check apps` |
 | `backend` | `node scripts/node/verify-backend.js` |
-| `backend-consistency` | `node scripts/node/verify-backend-consistency.js` |
+| `backend-consistency` | `node scripts/node/cli/verify-backend-consistency.js` |
 | `coverage` | `node scripts/node/verify-coverage.js all` |
 | `coverage-frontend` | `node scripts/node/verify-coverage.js frontend` |
 | `coverage-backend` | `node scripts/node/verify-coverage.js backend` |

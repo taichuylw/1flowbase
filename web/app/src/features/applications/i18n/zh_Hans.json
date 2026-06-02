@@ -178,7 +178,6 @@
     "resume_timeline": "Resume 时间线",
     "no_resume_events": "暂无 Resume 事件",
     "resume_event_requested": "Resume 请求已接收",
-    "resume_event_claimed": "Resume 请求已领取",
     "resume_event_succeeded": "Resume 已完成",
     "resume_event_failed": "Resume 失败",
     "resume_event_cancelled": "Resume 已取消",

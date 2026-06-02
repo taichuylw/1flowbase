@@ -6,7 +6,7 @@ import {
   fetchConsoleApiDocsCategoryOperations,
   fetchConsoleApiDocsCategorySpec,
   fetchConsoleApiOperationSpec
-} from '../console-api-docs';
+} from '../console/api-docs';
 
 describe('console-api-docs client', () => {
   vi.spyOn(transport, 'apiFetch').mockImplementation(async (input) => input as never);

@@ -73,4 +73,4 @@ runs:
         INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
         INPUT_ENVIRONMENT: ${{ inputs.environment }}
         TURBO_TELEMETRY_DISABLED: "1"
-      run: node scripts/node/github-quality-gate.js
+      run: node scripts/node/cli/github-quality-gate.js

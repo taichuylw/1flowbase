@@ -2,14 +2,15 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use control_plane::{
     application_public_api::{
+        callback_resume::ApplicationPublishedCallbackAttemptRepository,
         conversations::{
             ApplicationPublicConversationMessageRecord, ApplicationPublicConversationRecord,
             ApplicationPublicConversationRepository, BindApplicationPublicConversationInput,
             ListApplicationPublicConversationMessagesInput,
         },
         run_service::{
-            ApplicationPublishedFlowRunRepository, ApplicationPublishedResumeRequestRepository,
-            ApplicationPublishedRunControlRepository, CancelPublishedFlowRunInput,
+            ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
+            CancelPublishedFlowRunInput,
         },
     },
     errors::ControlPlaneError,
@@ -18,20 +19,20 @@ use control_plane::{
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
         AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput,
         AppendRuntimeSpanInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
-        ClaimFlowRunResumeRequestInput, CompleteCallbackTaskInput, CompleteFlowRunInput,
-        CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
-        FinishFlowRunResumeRequestInput, FlowRunResumeRequestClaim, FlowRunResumeRequestQueueStats,
-        GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
-        LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
-        ListApplicationRunsPageInput, OrchestrationRuntimeRepository,
-        UpdateCallbackTaskPayloadsInput, UpdateCheckpointPayloadsInput, UpdateFlowRunInput,
-        UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
-        UpdateRunEventPayloadInput, UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
-        UpsertDebugVariableCacheEntryInput, UpsertFlowRunResumeRequestInput,
-        UpsertFlowRunResumeRequestOutput,
+        FinishFlowRunCallbackResumeAttemptInput, GetApplicationRunMonitoringReportInput,
+        GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
+        ListApplicationConversationRunsPageInput, ListApplicationRunsPageInput,
+        OrchestrationRuntimeRepository, RecordFlowRunCallbackResumeAttemptInput,
+        RecordFlowRunCallbackResumeAttemptOutput, UpdateCallbackTaskPayloadsInput,
+        UpdateCheckpointPayloadsInput, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
+        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
+        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        UpsertDebugVariableCacheEntryInput,
     },
 };
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -51,9 +52,10 @@ use sequencing::*;
 include!("event_methods.rs");
 include!("artifact_methods.rs");
 include!("application_run_log_methods.rs");
+include!("application_run_monitoring_methods.rs");
 include!("debug_variable_cache_methods.rs");
 include!("flow_run_methods.rs");
-include!("flow_run_resume_request_methods.rs");
+include!("flow_run_callback_resume_attempt_methods.rs");
 include!("ledger_methods.rs");
 include!("read_methods.rs");
 include!("side_effect_receipt_methods.rs");
@@ -226,29 +228,29 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         PgControlPlaneStore::update_callback_task_payloads(self, input).await
     }
 
-    async fn upsert_flow_run_resume_request(
+    async fn record_flow_run_callback_resume_attempt(
         &self,
-        input: &UpsertFlowRunResumeRequestInput,
-    ) -> Result<UpsertFlowRunResumeRequestOutput> {
-        PgControlPlaneStore::upsert_flow_run_resume_request(self, input).await
+        input: &RecordFlowRunCallbackResumeAttemptInput,
+    ) -> Result<RecordFlowRunCallbackResumeAttemptOutput> {
+        PgControlPlaneStore::record_flow_run_callback_resume_attempt(self, input).await
     }
 
-    async fn claim_next_flow_run_resume_request(
+    async fn get_flow_run_callback_resume_attempt_by_callback_task(
         &self,
-        input: &ClaimFlowRunResumeRequestInput,
-    ) -> Result<Option<FlowRunResumeRequestClaim>> {
-        PgControlPlaneStore::claim_next_flow_run_resume_request(self, input).await
+        callback_task_id: Uuid,
+    ) -> Result<Option<domain::FlowRunCallbackResumeAttemptRecord>> {
+        PgControlPlaneStore::get_flow_run_callback_resume_attempt_by_callback_task(
+            self,
+            callback_task_id,
+        )
+        .await
     }
 
-    async fn finish_flow_run_resume_request(
+    async fn finish_flow_run_callback_resume_attempt(
         &self,
-        input: &FinishFlowRunResumeRequestInput,
-    ) -> Result<domain::FlowRunResumeRequestRecord> {
-        PgControlPlaneStore::finish_flow_run_resume_request(self, input).await
-    }
-
-    async fn summarize_flow_run_resume_requests(&self) -> Result<FlowRunResumeRequestQueueStats> {
-        PgControlPlaneStore::summarize_flow_run_resume_requests(self).await
+        input: &FinishFlowRunCallbackResumeAttemptInput,
+    ) -> Result<domain::FlowRunCallbackResumeAttemptRecord> {
+        PgControlPlaneStore::finish_flow_run_callback_resume_attempt(self, input).await
     }
 
     async fn upsert_debug_variable_cache_entry(
@@ -655,23 +657,61 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
 }
 
 #[async_trait]
-impl ApplicationPublishedResumeRequestRepository for PgControlPlaneStore {
-    async fn upsert_published_resume_request(
+impl ApplicationPublishedCallbackAttemptRepository for PgControlPlaneStore {
+    async fn record_published_callback_resume_attempt(
         &self,
-        input: &UpsertFlowRunResumeRequestInput,
-    ) -> Result<UpsertFlowRunResumeRequestOutput> {
-        PgControlPlaneStore::upsert_flow_run_resume_request(self, input).await
+        input: &RecordFlowRunCallbackResumeAttemptInput,
+    ) -> Result<RecordFlowRunCallbackResumeAttemptOutput> {
+        PgControlPlaneStore::record_flow_run_callback_resume_attempt(self, input).await
     }
 
-    async fn cancel_published_resume_requests_for_run(
+    async fn get_published_callback_resume_attempt(
+        &self,
+        callback_task_id: Uuid,
+    ) -> Result<Option<domain::FlowRunCallbackResumeAttemptRecord>> {
+        PgControlPlaneStore::get_flow_run_callback_resume_attempt_by_callback_task(
+            self,
+            callback_task_id,
+        )
+        .await
+    }
+
+    async fn finish_published_callback_resume_attempt(
+        &self,
+        input: &FinishFlowRunCallbackResumeAttemptInput,
+    ) -> Result<domain::FlowRunCallbackResumeAttemptRecord> {
+        PgControlPlaneStore::finish_flow_run_callback_resume_attempt(self, input).await
+    }
+
+    async fn cancel_published_callback_resume_attempts_for_run(
         &self,
         flow_run_id: Uuid,
         completed_at: OffsetDateTime,
-    ) -> Result<Vec<domain::FlowRunResumeRequestRecord>> {
-        PgControlPlaneStore::cancel_flow_run_resume_requests_for_run(
+    ) -> Result<Vec<domain::FlowRunCallbackResumeAttemptRecord>> {
+        PgControlPlaneStore::cancel_flow_run_callback_resume_attempts_for_run(
             self,
             flow_run_id,
             completed_at,
+        )
+        .await
+    }
+
+    async fn fail_waiting_callback_published_run(
+        &self,
+        flow_run_id: Uuid,
+        error_payload: serde_json::Value,
+        finished_at: OffsetDateTime,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        PgControlPlaneStore::update_flow_run_if_status(
+            self,
+            &UpdateFlowRunInput {
+                flow_run_id,
+                status: domain::FlowRunStatus::Failed,
+                output_payload: serde_json::json!({}),
+                error_payload: Some(error_payload),
+                finished_at: Some(finished_at),
+            },
+            domain::FlowRunStatus::WaitingCallback,
         )
         .await
     }

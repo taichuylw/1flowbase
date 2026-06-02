@@ -1,0 +1,391 @@
+use super::*;
+
+#[tokio::test]
+async fn llm_runtime_exposes_effective_system_and_promotes_legacy_history_system() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "enabled"
+    });
+    llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Use the node policy."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Question: {{ node-start.query }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "system": "Use the run policy.",
+                "history": [
+                    { "role": "system", "content": "Use the legacy history policy." },
+                    { "role": "user", "content": "Earlier question" }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(
+        input.system.as_deref(),
+        Some("Use the run policy.\n\nUse the legacy history policy.\n\nUse the node policy.")
+    );
+    assert_eq!(input.messages.len(), 2);
+    assert_eq!(input.messages[0].role, ProviderMessageRole::User);
+    assert_eq!(input.messages[0].content, "Earlier question");
+    assert_eq!(input.messages[1].role, ProviderMessageRole::User);
+    assert_eq!(input.messages[1].content, "Question: hello");
+
+    let trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("llm trace should exist");
+    assert_eq!(
+        trace.debug_payload["llm_context"]["effective_system"],
+        json!("Use the run policy.\n\nUse the legacy history policy.\n\nUse the node policy.")
+    );
+    assert_eq!(
+        trace.debug_payload["llm_context"]["provider_messages"],
+        json!([
+            { "role": "user", "content": "Earlier question" },
+            { "role": "user", "content": "Question: hello" }
+        ])
+    );
+    assert_eq!(
+        trace.debug_payload["llm_context"]["compatibility_promotions"],
+        json!([
+            {
+                "source": "node-start.history",
+                "source_kind": "history",
+                "message_index": 0,
+                "target": "effective_system"
+            }
+        ])
+    );
+}
+
+#[tokio::test]
+async fn llm_runtime_injects_selected_context_messages() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "enabled",
+        "context_selector": ["node-start", "history"]
+    });
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "history": [
+                    { "role": "user", "content": "Earlier question" },
+                    { "role": "assistant", "content": "Earlier answer" }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::WaitingHuman(_)
+    ));
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(input.messages.len(), 3);
+    assert_eq!(input.messages[0].content, "Earlier question");
+    assert_eq!(input.messages[1].content, "Earlier answer");
+    assert_eq!(input.messages[2].content, "hello");
+}
+
+#[tokio::test]
+async fn llm_runtime_fails_when_selected_context_value_is_not_messages() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "enabled",
+        "context_selector": ["node-start", "history"]
+    });
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "history": [{ "role": "user" }]
+            }
+        }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("llm_context_selector_error")
+            );
+        }
+        other => panic!("expected llm context selector failure, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn llm_runtime_context_policy_can_disable_run_level_system_context() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "disabled"
+    });
+    llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "system-1",
+                    "role": "system",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Use only the local node policy."
+                    }
+                },
+                {
+                    "id": "user-1",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "{{ node-start.query }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "system": "Ignored run-level policy.",
+                "history": [
+                    { "role": "user", "content": "Ignored earlier question" }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(
+        input.system.as_deref(),
+        Some("Use only the local node policy.")
+    );
+    assert_eq!(input.messages.len(), 1);
+    assert_eq!(input.messages[0].content, "hello");
+}
+
+#[tokio::test]
+async fn llm_runtime_forwards_compatible_tools_and_tool_history_to_provider() {
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "final answer".to_string(),
+    };
+
+    start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "node-start": {
+                "query": "Final question",
+                "history": [
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_123",
+                                "type": "function",
+                                "function": {
+                                    "name": "lookup_order",
+                                    "arguments": "{\"order_id\":\"A-1\"}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_123",
+                        "content": "{\"status\":\"shipped\"}"
+                    }
+                ],
+                "tools": [
+                    {
+                        "name": "lookup_order",
+                        "description": "Lookup an order",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "order_id": { "type": "string" }
+                            }
+                        },
+                        "source": "openai_compatible"
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(captured.tools[0]["function"]["name"], json!("lookup_order"));
+    assert_eq!(
+        captured.tools[0]["function"]["parameters"]["properties"]["order_id"]["type"],
+        json!("string")
+    );
+
+    let messages = serde_json::to_value(&captured.messages).expect("messages serialize");
+    assert_eq!(messages[0]["role"], json!("assistant"));
+    assert_eq!(messages[0]["tool_calls"][0]["id"], json!("call_123"));
+    assert_eq!(messages[1]["role"], json!("tool"));
+    assert_eq!(messages[1]["tool_call_id"], json!("call_123"));
+    assert_eq!(messages[2]["role"], json!("user"));
+    assert_eq!(messages[2]["content"], json!("Final question"));
+}
+
+#[tokio::test]
+async fn downstream_llm_inherits_run_level_tools_from_start_input() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        final_llm_response("first answer"),
+        final_llm_response("second answer"),
+    ]);
+
+    let outcome = start_flow_debug_run(
+        &multi_llm_answer_plan(),
+        &json!({
+            "node-start": {
+                "query": "List files",
+                "tools": [
+                    {
+                        "name": "list_directory",
+                        "description": "List a directory",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": { "type": "string" }
+                            }
+                        }
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 2);
+    assert_eq!(
+        captured[0].tools[0]["function"]["name"],
+        json!("list_directory")
+    );
+    assert_eq!(
+        captured[1].tools[0]["function"]["name"],
+        json!("list_directory")
+    );
+    assert_eq!(
+        captured[1].tools[0]["function"]["parameters"]["properties"]["path"]["type"],
+        json!("string")
+    );
+}

@@ -11,7 +11,7 @@ function getRepoRoot() {
 }
 
 function usage() {
-  process.stdout.write(`用法：node scripts/node/mock-ui-sync.js [选项]
+  process.stdout.write(`用法：node scripts/node/cli/mock-ui-sync.js [选项]
 
 默认行为：
   从 web/ 重建 tmp/mock-ui/，并把 mock-ui 的前端端口改成 3210

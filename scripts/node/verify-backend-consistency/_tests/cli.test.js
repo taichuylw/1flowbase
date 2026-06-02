@@ -10,7 +10,7 @@ const {
   buildCommands,
   main,
   runBackendConsistencyCommandSequence,
-} = require('../../verify-backend-consistency.js');
+} = require('../../cli/verify-backend-consistency.js');
 
 test('buildCommands targets backend consistency suites without workspace-wide reruns', () => {
   const commands = buildCommands({ cargoJobs: 4, cargoTestThreads: 1 });
@@ -59,7 +59,7 @@ test('main routes backend consistency through the heavy managed gate', async () 
   assert.equal(status, 0);
   assert.equal(capturedOptions.scope, 'verify-backend-consistency');
   assert.equal(capturedOptions.lockMode, 'heavy');
-  assert.equal(capturedOptions.commandDisplay, 'node scripts/node/verify-backend-consistency.js');
+  assert.equal(capturedOptions.commandDisplay, 'node scripts/node/cli/verify-backend-consistency.js');
   assert.deepEqual(
     capturedOptions.commands,
     buildCommands({ cargoJobs: 2, cargoTestThreads: 1 })

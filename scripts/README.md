@@ -61,7 +61,7 @@ cargo test --workspace
 
 实际并发参数由 `scripts/node/testing/verify-runtime.js` 的运行时配置控制。
 
-### `node scripts/node/test-contracts.js`
+### `node scripts/node/cli/test-contracts.js`
 
 运行跨消费者契约测试，当前聚焦模型供应商配置相关契约。
 
@@ -163,19 +163,19 @@ node scripts/node/page-debug.js login --account <account> --password <password>
 - `--wait-for-selector <selector>`: 等待指定元素
 - `--wait-for-url <url>`: 等待目标 URL
 
-### `node scripts/node/runtime-gate.js <page-debug args>`
+### `node scripts/node/cli/runtime-gate.js <page-debug args>`
 
 运行时页面检查入口，本质上是对 `page-debug` 的门禁封装。
 
 ## Workspace Tools
 
-### `node scripts/node/mock-ui-sync.js [选项]`
+### `node scripts/node/cli/mock-ui-sync.js [选项]`
 
 从 `web/` 重建 mock UI 工作区。
 
 ```bash
-node scripts/node/mock-ui-sync.js
-node scripts/node/mock-ui-sync.js --source web --target tmp/mock-ui --port 3210
+node scripts/node/cli/mock-ui-sync.js
+node scripts/node/cli/mock-ui-sync.js --source web --target tmp/mock-ui --port 3210
 ```
 
 说明：
@@ -184,13 +184,13 @@ node scripts/node/mock-ui-sync.js --source web --target tmp/mock-ui --port 3210
 - 默认把 mock 副本前端端口改成 `3210`。
 - 会排除 `node_modules`、`dist`、`coverage`、`.turbo`、`.vite`。
 
-### `node scripts/node/claude-skill-sync.js [选项]`
+### `node scripts/node/cli/claude-skill-sync.js [选项]`
 
 将 `.agents/skills` 同步为 Claude 可识别的 `.claude/skills/<name>/SKILL.md` 结构。
 
 ```bash
-node scripts/node/claude-skill-sync.js
-node scripts/node/claude-skill-sync.js --source .agents/skills --target .claude/skills
+node scripts/node/cli/claude-skill-sync.js
+node scripts/node/cli/claude-skill-sync.js --source .agents/skills --target .claude/skills
 ```
 
 ### `node scripts/node/tooling.js <command> [args]`
@@ -209,7 +209,7 @@ node scripts/node/claude-skill-sync.js --source .agents/skills --target .claude/
 
 工程卫生审计入口。默认写入 `tmp/test-governance/repo-hygiene.json`，覆盖：
 
-- 废弃 / legacy / TODO 类标记
+- 历史债务类标记
 - `test.only`、跳过测试和弱断言
 - 重复测试标题
 - 超大文件和目录文件数压力

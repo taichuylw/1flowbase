@@ -2,7 +2,7 @@ import { Form, Input, InputNumber, Modal, Switch } from 'antd';
 import { useEffect } from 'react';
 
 import type { NodeDebugPreviewVariableField } from '../../api/runtime';
-import { formatNodeVariableLabel } from '../../lib/variable-labels';
+import { formatNodeVariableLabel } from '../../lib/variables/variable-labels';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type NodePreviewVariablesModalProps = {

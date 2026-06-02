@@ -12,7 +12,7 @@ import {
   saveFrontstageBlockCode,
   saveFrontstagePageContent,
   updateFrontstagePageNodeTitle
-} from '../console-frontstage';
+} from '../console/frontstage';
 
 describe('console-frontstage client', () => {
   vi.spyOn(transport, 'apiFetch').mockImplementation(async (input) => input as never);

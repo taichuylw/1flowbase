@@ -9,7 +9,7 @@ import {
   listVisibleSelectorOptions,
   toCascaderSelectorOptions
 } from '../lib/selector-options';
-import { getStartInputFields } from '../lib/start-node-variables';
+import { getStartInputFields } from '../lib/variables/start-node-variables';
 import { appI18n } from '../../../shared/i18n/app-i18n';
 
 describe('start node variables', () => {

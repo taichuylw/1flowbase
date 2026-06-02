@@ -11,7 +11,7 @@
 | 命令 | 主要覆盖面 | 什么时候优先跑 | 不替代什么 |
 | --- | --- | --- | --- |
 | `node scripts/node/test-scripts.js [filter]` | `scripts/node` 自身脚本与编排逻辑 | 改了 Node 验证脚本、CLI 编排、治理脚本 | 不替代前后端业务回归 |
-| `node scripts/node/test-contracts.js` | 共享 DTO / consumer contract / style-boundary contract consumer | 改共享 console API DTO、settings / agent-flow provider consumer、`style-boundary` registry 或其他跨消费者契约 | 不替代页面质量和后端分层回归 |
+| `node scripts/node/cli/test-contracts.js` | 共享 DTO / consumer contract / style-boundary contract consumer | 改共享 console API DTO、settings / agent-flow provider consumer、`style-boundary` registry 或其他跨消费者契约 | 不替代页面质量和后端分层回归 |
 | `node scripts/node/test-frontend.js fast` | 前端快速回归 | 需要仓库级前端快检，但还没到 full gate | 不替代移动端/真实运行态证据 |
 | `node scripts/node/test-frontend.js full` | 前端 lint、test、build、style-boundary full gate | 要给前端结论兜底，或 `verify-repo` 前置确认 | 不替代具体页面走查和截图证据 |
 | `node scripts/node/tooling.js repo-hygiene` | 废弃标记、前后端字段兼容标记、弱断言、重复测试标题、超大文件和目录压力，报告写入 `tmp/test-governance/repo-hygiene.json` | 全量审计、热点预防、判断旧逻辑、字段兼容 alias 和测试重复是否已进入 QA 证据层 | 不替代业务正确性、覆盖率和人工架构审查 |
@@ -21,7 +21,7 @@
 | `node scripts/node/verify-repo.js` | 仓库级 full gate | 需要判断“当前改动是否达到仓库级可合入基线” | 不替代 coverage 结论与运行态页面证据 |
 | `node scripts/node/verify-coverage.js [frontend|backend|all]` | 覆盖率门禁 | 用户明确要求 coverage、CI 收口或全量质量审计 | 不替代功能正确性 |
 | `node scripts/node/verify-ci.js` | CI 总入口 | 需要模拟 CI 最终门禁，或判断“是否可过 CI” | 不替代局部根因定位 |
-| `node scripts/node/runtime-gate.js <page-debug args>` | 单路由 / 运行态页面 / 跳转链路证据 | 评估受保护页面、跳转、ready signal、console/runtime 行为 | 不替代静态代码检查与仓库级 full gate |
+| `node scripts/node/cli/runtime-gate.js <page-debug args>` | 单路由 / 运行态页面 / 跳转链路证据 | 评估受保护页面、跳转、ready signal、console/runtime 行为 | 不替代静态代码检查与仓库级 full gate |
 
 ## Quality Gate Watch Routing
 

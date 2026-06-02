@@ -72,14 +72,14 @@ jobs:
               image_tag="${{ inputs.image_tag }}"
             fi
           else
-            image_tag="$(node scripts/node/verify-container-version.js print-tag "${{ matrix.component }}")"
+            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag "${{ matrix.component }}")"
             before_sha="${{ github.event.before }}"
             zero_sha="0000000000000000000000000000000000000000"
 
             if [[ "$before_sha" != "$zero_sha" ]] \
               && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
               && git cat-file -e "$before_sha:${{ matrix.manifest }}" 2>/dev/null; then
-              if old_version="$(git show "$before_sha:${{ matrix.manifest }}" | node scripts/node/verify-container-version.js read-stdin-version "${{ matrix.component }}")"; then
+              if old_version="$(git show "$before_sha:${{ matrix.manifest }}" | node scripts/node/cli/verify-container-version.js read-stdin-version "${{ matrix.component }}")"; then
                 old_tag="v${old_version}"
               fi
             fi
@@ -105,7 +105,7 @@ jobs:
 
       - name: Validate component version
         if: steps.select.outputs.enabled == 'true'
-        run: node scripts/node/verify-container-version.js ${{ matrix.component }} ${{ steps.select.outputs.image_tag }}
+        run: node scripts/node/cli/verify-container-version.js ${{ matrix.component }} ${{ steps.select.outputs.image_tag }}
 
       - name: Build and push ${{ matrix.image }}
         if: steps.select.outputs.enabled == 'true'

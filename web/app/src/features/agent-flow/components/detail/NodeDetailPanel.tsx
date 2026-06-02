@@ -5,7 +5,7 @@ import { SchemaDockPanel } from '../../../../shared/schema-ui/overlay-shell/Sche
 import { createAgentFlowNodeSchemaAdapter } from '../../schema/node-schema-adapter';
 import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 import { useNodeInteractions } from '../../hooks/interactions/use-node-interactions';
-import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
+import type { AgentFlowEnvironmentVariable } from '../../lib/variables/application-environment-variables';
 import type { AgentFlowIssue } from '../../lib/validate-document';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { NodeDetailHeader } from './NodeDetailHeader';

@@ -35,6 +35,7 @@ use crate::{
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpdateScopeDataModelGrantInput, UpsertDataSourceCatalogCacheInput,
         UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
+        UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use domain::{
@@ -43,8 +44,9 @@ use domain::{
     DataSourceInstanceRecord, DataSourceInstanceStatus, DataSourcePreviewSessionRecord,
     DataSourceSecretRecord, ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition,
     PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus,
-    ScopeContext, ScopeDataModelGrantRecord, UserRecord,
+    PluginInstallationRecord, PluginPackageCatalogProjectionRecord, PluginRuntimeStatus,
+    PluginTaskRecord, PluginVerificationStatus, ScopeContext, ScopeDataModelGrantRecord,
+    UserRecord,
 };
 
 fn tenant_id() -> Uuid {
@@ -278,6 +280,26 @@ impl crate::ports::PluginRepository for InMemoryDataSourceRepository {
 
     async fn list_installations(&self) -> Result<Vec<PluginInstallationRecord>> {
         Ok(self.installations.read().await.values().cloned().collect())
+    }
+
+    async fn upsert_plugin_package_catalog_projection(
+        &self,
+        _input: &UpsertPluginPackageCatalogProjectionInput,
+    ) -> Result<PluginPackageCatalogProjectionRecord> {
+        anyhow::bail!("not implemented")
+    }
+
+    async fn get_plugin_package_catalog_projection(
+        &self,
+        _installation_id: Uuid,
+    ) -> Result<Option<PluginPackageCatalogProjectionRecord>> {
+        Ok(None)
+    }
+
+    async fn list_plugin_package_catalog_projections(
+        &self,
+    ) -> Result<Vec<PluginPackageCatalogProjectionRecord>> {
+        Ok(Vec::new())
     }
 
     async fn delete_installation(&self, _installation_id: Uuid) -> Result<()> {

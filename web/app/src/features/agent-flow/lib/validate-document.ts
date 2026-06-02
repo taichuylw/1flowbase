@@ -35,8 +35,8 @@ import { parseTemplateSelectorTokens } from './template-binding';
 import {
   environmentVariableNodeId,
   type AgentFlowEnvironmentVariable
-} from './application-environment-variables';
-import { systemVariableNodeId } from './system-variables';
+} from './variables/application-environment-variables';
+import { systemVariableNodeId } from './variables/system-variables';
 import { i18nText } from '../../../shared/i18n/text';
 
 export interface AgentFlowIssue {

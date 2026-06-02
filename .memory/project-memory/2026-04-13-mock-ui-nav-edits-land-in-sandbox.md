@@ -18,7 +18,7 @@ decision_policy: verify_before_decision
 scope:
   - tmp/mock-ui
   - web
-  - scripts/node/mock-ui-sync.js
+  - scripts/node/cli/mock-ui-sync.js
 ---
 
 # 轻壳层 mock 导航修正当前优先落在 tmp/mock-ui

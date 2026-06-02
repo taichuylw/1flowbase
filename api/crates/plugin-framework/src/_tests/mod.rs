@@ -1,7 +1,6 @@
 mod artifact_reconcile_tests;
 mod assignment_tests;
-mod data_source_contract_tests;
-mod data_source_package_tests;
+mod data_source;
 mod host_contract_tests;
 mod host_extension_contribution_tests;
 mod host_extension_dropin_tests;

@@ -170,6 +170,55 @@ async fn plugin_management_service_list_catalog_does_not_refresh_artifact_snapsh
 }
 
 #[tokio::test]
+async fn plugin_management_service_list_catalog_returns_missing_projection_without_package_read() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all"],
+    ));
+    let install_root = std::env::temp_dir().join(format!(
+        "plugin-catalog-missing-projection-{}",
+        Uuid::now_v7()
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    repository.remove_catalog_projection(installation_id).await;
+    let installation = repository
+        .get_installation(installation_id)
+        .await
+        .unwrap()
+        .expect("installation should exist");
+    fs::remove_dir_all(&installation.installed_path).unwrap();
+
+    let catalog = service
+        .list_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(catalog.entries.len(), 1);
+    assert_eq!(catalog.entries[0].catalog_refresh_status, "missing");
+    assert_eq!(catalog.entries[0].model_discovery_mode, "unknown");
+    assert!(catalog.entries[0].help_url.is_none());
+    assert_eq!(repository.artifact_snapshot_update_count().await, 0);
+}
+
+#[tokio::test]
 async fn plugin_management_service_keeps_only_latest_official_entry_per_provider() {
     #[derive(Clone)]
     struct DuplicateOfficialSource;

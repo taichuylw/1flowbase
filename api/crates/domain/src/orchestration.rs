@@ -40,19 +40,19 @@ impl CallbackTaskStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FlowRunResumeRequestStatus {
-    Pending,
-    Claimed,
+pub enum FlowRunCallbackResumeAttemptStatus {
+    Received,
+    Processing,
     Succeeded,
     Failed,
     Cancelled,
 }
 
-impl FlowRunResumeRequestStatus {
+impl FlowRunCallbackResumeAttemptStatus {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Pending => "pending",
-            Self::Claimed => "claimed",
+            Self::Received => "received",
+            Self::Processing => "processing",
             Self::Succeeded => "succeeded",
             Self::Failed => "failed",
             Self::Cancelled => "cancelled",
@@ -213,15 +213,14 @@ pub struct CallbackTaskRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FlowRunResumeRequestRecord {
+pub struct FlowRunCallbackResumeAttemptRecord {
     pub id: Uuid,
     pub flow_run_id: Uuid,
     pub callback_task_id: Uuid,
-    pub status: FlowRunResumeRequestStatus,
+    pub source: String,
+    pub status: FlowRunCallbackResumeAttemptStatus,
     pub response_payload: serde_json::Value,
     pub idempotency_key: String,
-    pub claimed_by: Option<String>,
-    pub claim_expires_at: Option<OffsetDateTime>,
     pub error_payload: Option<serde_json::Value>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,

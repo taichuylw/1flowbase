@@ -6,7 +6,7 @@ use control_plane::{
         CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput,
-        UpsertPluginInstallationInput,
+        UpsertPluginInstallationInput, UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use sqlx::Row;
@@ -14,7 +14,8 @@ use uuid::Uuid;
 
 use crate::{
     mappers::plugin_mapper::{
-        PgPluginMapper, StoredPluginAssignmentRow, StoredPluginInstallationRow, StoredPluginTaskRow,
+        PgPluginMapper, StoredPluginAssignmentRow, StoredPluginInstallationRow,
+        StoredPluginPackageCatalogProjectionRow, StoredPluginTaskRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -75,6 +76,21 @@ fn map_task(row: sqlx::postgres::PgRow) -> Result<domain::PluginTaskRecord> {
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
         finished_at: row.get("finished_at"),
+    })
+}
+
+fn map_catalog_projection(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::PluginPackageCatalogProjectionRecord> {
+    PgPluginMapper::to_package_catalog_projection_record(StoredPluginPackageCatalogProjectionRow {
+        installation_id: row.get("installation_id"),
+        package_code: row.get("package_code"),
+        package_version: row.get("package_version"),
+        catalog_snapshot_json: row.get("catalog_snapshot_json"),
+        projection_status: row.get("projection_status"),
+        last_error_message: row.get("last_error_message"),
+        refreshed_at: row.get("refreshed_at"),
+        updated_at: row.get("updated_at"),
     })
 }
 
@@ -281,6 +297,103 @@ impl PluginRepository for PgControlPlaneStore {
         .await?;
 
         rows.into_iter().map(map_installation).collect()
+    }
+
+    async fn upsert_plugin_package_catalog_projection(
+        &self,
+        input: &UpsertPluginPackageCatalogProjectionInput,
+    ) -> Result<domain::PluginPackageCatalogProjectionRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into plugin_package_catalog_projection (
+                installation_id,
+                package_code,
+                package_version,
+                catalog_snapshot_json,
+                projection_status,
+                last_error_message,
+                refreshed_at
+            ) values ($1, $2, $3, $4, $5, $6, $7)
+            on conflict (installation_id) do update
+            set package_code = excluded.package_code,
+                package_version = excluded.package_version,
+                catalog_snapshot_json = excluded.catalog_snapshot_json,
+                projection_status = excluded.projection_status,
+                last_error_message = excluded.last_error_message,
+                refreshed_at = excluded.refreshed_at,
+                updated_at = now()
+            returning
+                installation_id,
+                package_code,
+                package_version,
+                catalog_snapshot_json,
+                projection_status,
+                last_error_message,
+                refreshed_at,
+                updated_at
+            "#,
+        )
+        .bind(input.installation_id)
+        .bind(&input.package_code)
+        .bind(&input.package_version)
+        .bind(&input.catalog_snapshot_json)
+        .bind(input.projection_status.as_str())
+        .bind(&input.last_error_message)
+        .bind(input.refreshed_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_catalog_projection(row)
+    }
+
+    async fn get_plugin_package_catalog_projection(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<Option<domain::PluginPackageCatalogProjectionRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                installation_id,
+                package_code,
+                package_version,
+                catalog_snapshot_json,
+                projection_status,
+                last_error_message,
+                refreshed_at,
+                updated_at
+            from plugin_package_catalog_projection
+            where installation_id = $1
+            "#,
+        )
+        .bind(installation_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_catalog_projection).transpose()
+    }
+
+    async fn list_plugin_package_catalog_projections(
+        &self,
+    ) -> Result<Vec<domain::PluginPackageCatalogProjectionRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                installation_id,
+                package_code,
+                package_version,
+                catalog_snapshot_json,
+                projection_status,
+                last_error_message,
+                refreshed_at,
+                updated_at
+            from plugin_package_catalog_projection
+            order by updated_at desc, installation_id desc
+            "#,
+        )
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_catalog_projection).collect()
     }
 
     async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {

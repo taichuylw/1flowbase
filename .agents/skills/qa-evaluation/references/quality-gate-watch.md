@@ -49,8 +49,8 @@
 
 - `.github/workflows/verify.yml`：`pull_request`、`main` 和 `latest` push 触发，调用本地 quality-gate action。
 - `.github/workflows/quality-gate.yml`：手动 quality gate，`target_branch` 默认 `latest`，可选 `latest` / `main`。
-- `.github/actions/quality-gate/action.yml`：复用 action，实际执行 `node scripts/node/github-quality-gate.js`。
-- `scripts/node/github-quality-gate.js`：生成 `quality-gate.latest.log`、`quality-gate-report.md`、`quality-gate-report.json`，有 token 时发布 GitHub issue。
+- `.github/actions/quality-gate/action.yml`：复用 action，实际执行 `node scripts/node/cli/github-quality-gate.js`。
+- `scripts/node/cli/github-quality-gate.js`：生成 `quality-gate.latest.log`、`quality-gate-report.md`、`quality-gate-report.json`，有 token 时发布 GitHub issue。
 
 ## Hard Stops
 

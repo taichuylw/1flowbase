@@ -24,7 +24,7 @@ scope:
   - .agents/skills
   - .claude/skills
   - /home/taichu/.config/AionUi-Dev/config/skills
-  - scripts/node/claude-skill-sync.js
+  - scripts/node/cli/claude-skill-sync.js
 ---
 
 # Project Skills Must Be Registered In Consumer Dirs

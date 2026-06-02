@@ -16,7 +16,7 @@ updated_at: 2026-05-26 07
 last_verified_at: 2026-05-26 07
 decision_policy: reference_on_failure
 scope:
-  - scripts/node/test-contracts.js
+  - scripts/node/cli/test-contracts.js
   - pnpm.CMD
   - Windows PowerShell
 ---
@@ -32,7 +32,7 @@ scope:
 Running:
 
 ```powershell
-node scripts/node/test-contracts.js
+node scripts/node/cli/test-contracts.js
 ```
 
 failed with:

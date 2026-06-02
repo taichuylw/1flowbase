@@ -1,17 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  ConsoleApplicationEnvironmentVariable,
-  ConsoleApplicationOrchestrationState,
-  ConsoleNodeContributionEntry,
-  SaveConsoleApplicationDraftInput
-} from '@1flowbase/api-client';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
-import {
-  CloseOutlined,
-  CopyOutlined,
-  QuestionCircleOutlined
-} from '@ant-design/icons';
-import { App, Button, Tooltip, Typography } from 'antd';
+import { App, Button, Typography } from 'antd';
 import {
   useEffect,
   useMemo,
@@ -45,7 +34,7 @@ import {
   fetchApplicationApiMapping,
   publishApplicationApiVersion
 } from '../../../applications/api/public-api';
-import type { AgentFlowEnvironmentVariable } from '../../lib/application-environment-variables';
+import type { AgentFlowEnvironmentVariable } from '../../lib/variables/application-environment-variables';
 import {
   fetchModelProviderOptions,
   modelProviderOptionsQueryKey
@@ -59,7 +48,6 @@ import {
 import { validateDocument } from '../../lib/validate-document';
 import { buildNodePickerOptions } from '../../lib/plugin-node-definitions';
 import { useAuthStore } from '../../../../state/auth-store';
-import { copyTextToClipboard } from '../../../../shared/ui/clipboard/copy-text';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import {
   selectAutosaveStatus,
@@ -72,9 +60,9 @@ import {
 import { AgentFlowDebugConsole } from '../debug-console/AgentFlowDebugConsole';
 import { ConversationLogPanel } from '../debug-console/ConversationLogPanel';
 import {
-  DebugVariablesPane,
+  AgentFlowVariableCachePanel,
   type SelectedVariableInfo
-} from '../debug-console/variables/DebugVariablesPane';
+} from './AgentFlowVariableCachePanel';
 import { NodeDetailPanel } from '../detail/NodeDetailPanel';
 import { NodePreviewVariablesModal } from '../detail/NodePreviewVariablesModal';
 import { VersionHistoryPanel } from '../history/VersionHistoryPanel';
@@ -85,37 +73,31 @@ import { AgentFlowSideDock } from './AgentFlowSideDock';
 import { ApplicationEnvironmentVariablesPanel } from './ApplicationEnvironmentVariablesPanel';
 import { SystemVariablesPanel } from './SystemVariablesPanel';
 import { i18nText } from '../../../../shared/i18n/text';
-
-const DEBUG_CONSOLE_DEFAULT_WIDTH = 420;
-const DEBUG_CONSOLE_MIN_WIDTH = 320;
-const DEBUG_CONSOLE_GAP = 12;
-const CONVERSATION_LOG_DEFAULT_WIDTH = 560;
-const CONVERSATION_LOG_MIN_WIDTH = 360;
-const SYSTEM_VARIABLES_DOCK_WIDTH = 420;
-const ENVIRONMENT_VARIABLES_DOCK_WIDTH = 520;
-const VARIABLES_DOCK_MIN_WIDTH = 360;
-const HISTORY_DOCK_WIDTH = 460;
-const HISTORY_DOCK_MIN_WIDTH = 360;
-const VARIABLE_CACHE_DEFAULT_HEIGHT = 330;
-const VARIABLE_CACHE_MIN_HEIGHT = 180;
-const VARIABLE_CACHE_BOTTOM_GAP = 16;
-const VARIABLE_CACHE_MAX_TOP_GAP = 96;
-const VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH = 270;
-const VARIABLE_CACHE_MIN_SIDEBAR_WIDTH = 140;
-const VARIABLE_CACHE_MIN_DETAIL_WIDTH = 220;
-
-interface AgentFlowCanvasFrameProps {
-  applicationId: string;
-  applicationName: string;
-  initialEnvironmentVariables?: ConsoleApplicationEnvironmentVariable[];
-  nodeContributions: ConsoleNodeContributionEntry[];
-  saveDraftOverride?: (
-    input: SaveConsoleApplicationDraftInput
-  ) => Promise<ConsoleApplicationOrchestrationState>;
-  restoreVersionOverride?: (
-    versionId: string
-  ) => Promise<ConsoleApplicationOrchestrationState>;
-}
+import {
+  CONVERSATION_LOG_MIN_WIDTH,
+  CONVERSATION_LOG_DEFAULT_WIDTH,
+  DEBUG_CONSOLE_DEFAULT_WIDTH,
+  DEBUG_CONSOLE_GAP,
+  DEBUG_CONSOLE_MIN_WIDTH,
+  ENVIRONMENT_VARIABLES_DOCK_WIDTH,
+  HISTORY_DOCK_MIN_WIDTH,
+  HISTORY_DOCK_WIDTH,
+  SYSTEM_VARIABLES_DOCK_WIDTH,
+  VARIABLE_CACHE_BOTTOM_GAP,
+  VARIABLE_CACHE_DEFAULT_HEIGHT,
+  VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH,
+  VARIABLE_CACHE_MAX_TOP_GAP,
+  VARIABLE_CACHE_MIN_DETAIL_WIDTH,
+  VARIABLE_CACHE_MIN_HEIGHT,
+  VARIABLE_CACHE_MIN_SIDEBAR_WIDTH,
+  VARIABLES_DOCK_MIN_WIDTH
+} from './canvas-frame-layout';
+import { startCanvasFrameResize } from './canvas-frame-resize';
+import {
+  countIssuesByNodeId,
+  getDocumentWithLatestViewport
+} from './canvas-frame-document';
+import type { AgentFlowCanvasFrameProps } from './canvas-frame-types';
 
 export function AgentFlowCanvasFrame({
   applicationId,
@@ -295,7 +277,10 @@ export function AgentFlowCanvasFrame({
     saveDraftOverride,
     restoreVersionOverride,
     getCurrentDocument: () =>
-      getDocumentWithLatestViewport(documentRef.current),
+      getDocumentWithLatestViewport(
+        documentRef.current,
+        viewportGetterRef.current?.() ?? viewportSnapshotRef.current
+      ),
     getLastSavedDocument: () => lastSavedDocumentRef.current
   });
   const debugSession = useAgentFlowDebugSession({
@@ -348,7 +333,10 @@ export function AgentFlowCanvasFrame({
         nodeId,
         {
           input_payload: inputPayload,
-          document: getDocumentWithLatestViewport(documentRef.current),
+          document: getDocumentWithLatestViewport(
+            documentRef.current,
+            viewportGetterRef.current?.() ?? viewportSnapshotRef.current
+          ),
           debug_session_id: debugSession.debugSessionId
         },
         csrfToken
@@ -383,19 +371,10 @@ export function AgentFlowCanvasFrame({
       );
     }
   });
-  const issueCountByNodeId = useMemo(() => {
-    const counts: Record<string, number> = {};
-
-    for (const issue of issues) {
-      if (!issue.nodeId) {
-        continue;
-      }
-
-      counts[issue.nodeId] = (counts[issue.nodeId] ?? 0) + 1;
-    }
-
-    return counts;
-  }, [issues]);
+  const issueCountByNodeId = useMemo(
+    () => countIssuesByNodeId(issues),
+    [issues]
+  );
   const issueErrorCount = useMemo(
     () => issues.filter((issue) => issue.level === 'error').length,
     [issues]
@@ -623,28 +602,11 @@ export function AgentFlowCanvasFrame({
   );
 
   function handleNodeDetailResizeStart(event: ReactMouseEvent<HTMLDivElement>) {
-    event.preventDefault();
-
     const startX = event.clientX;
     const startWidth = boundedNodeDetailWidth;
     const containerWidth = detailContainerWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopNodeDetailResizeRef.current?.();
-    setIsResizingNodeDetail(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingNodeDetail(false);
-      stopNodeDetailResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = clampNodeDetailWidth(
         startWidth + startX - moveEvent.clientX,
@@ -654,36 +616,25 @@ export function AgentFlowCanvasFrame({
       setPanelState({ nodeDetailWidth: nextWidth });
     };
 
-    stopNodeDetailResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopNodeDetailResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'col-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingNodeDetail(true),
+      onStop: () => {
+        setIsResizingNodeDetail(false);
+        stopNodeDetailResizeRef.current = null;
+      }
+    });
   }
 
   function handleDebugConsoleResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
-    event.preventDefault();
-
     const startX = event.clientX;
     const startWidth = boundedDebugConsoleWidth;
     const containerWidth = canvasFrameWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopDebugConsoleResizeRef.current?.();
-    setIsResizingDebugConsole(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingDebugConsole(false);
-      stopDebugConsoleResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
         Math.max(
@@ -701,36 +652,25 @@ export function AgentFlowCanvasFrame({
       setPanelState({ debugConsoleWidth: nextWidth });
     };
 
-    stopDebugConsoleResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopDebugConsoleResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'col-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingDebugConsole(true),
+      onStop: () => {
+        setIsResizingDebugConsole(false);
+        stopDebugConsoleResizeRef.current = null;
+      }
+    });
   }
 
   function handleConversationLogResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
-    event.preventDefault();
-
     const startX = event.clientX;
     const startWidth = boundedConversationLogWidth;
     const containerWidth = canvasFrameWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopConversationLogResizeRef.current?.();
-    setIsResizingConversationLog(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingConversationLog(false);
-      stopConversationLogResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
         Math.max(
@@ -750,36 +690,25 @@ export function AgentFlowCanvasFrame({
       setConversationLogWidth(nextWidth);
     };
 
-    stopConversationLogResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopConversationLogResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'col-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingConversationLog(true),
+      onStop: () => {
+        setIsResizingConversationLog(false);
+        stopConversationLogResizeRef.current = null;
+      }
+    });
   }
 
   function handleVariablesDockResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
-    event.preventDefault();
-
     const startX = event.clientX;
     const startWidth = boundedVariablesDockWidth;
     const containerWidth = canvasFrameWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopVariablesDockResizeRef.current?.();
-    setIsResizingVariablesDock(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingVariablesDock(false);
-      stopVariablesDockResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
         Math.max(
@@ -801,36 +730,25 @@ export function AgentFlowCanvasFrame({
       }
     };
 
-    stopVariablesDockResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopVariablesDockResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'col-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingVariablesDock(true),
+      onStop: () => {
+        setIsResizingVariablesDock(false);
+        stopVariablesDockResizeRef.current = null;
+      }
+    });
   }
 
   function handleHistoryDockResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
-    event.preventDefault();
-
     const startX = event.clientX;
     const startWidth = boundedHistoryDockWidth;
     const containerWidth = canvasFrameWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopHistoryDockResizeRef.current?.();
-    setIsResizingHistoryDock(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingHistoryDock(false);
-      stopHistoryDockResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
         Math.max(
@@ -848,35 +766,24 @@ export function AgentFlowCanvasFrame({
       setHistoryDockWidth(nextWidth);
     };
 
-    stopHistoryDockResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopHistoryDockResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'col-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingHistoryDock(true),
+      onStop: () => {
+        setIsResizingHistoryDock(false);
+        stopHistoryDockResizeRef.current = null;
+      }
+    });
   }
 
   function handleVariableCacheResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
-    event.preventDefault();
-
     const startY = event.clientY;
     const startHeight = boundedVariableCacheHeight;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopVariableCacheResizeRef.current?.();
-    setIsResizingVariableCache(true);
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingVariableCache(false);
-      stopVariableCacheResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextHeight = Math.min(
         Math.max(
@@ -889,37 +796,26 @@ export function AgentFlowCanvasFrame({
       setVariableCacheHeight(nextHeight);
     };
 
-    stopVariableCacheResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopVariableCacheResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'row-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingVariableCache(true),
+      onStop: () => {
+        setIsResizingVariableCache(false);
+        stopVariableCacheResizeRef.current = null;
+      }
+    });
   }
 
   function handleVariableCacheSidebarResizeStart(
     event: ReactMouseEvent<HTMLDivElement>
   ) {
-    event.preventDefault();
-
     const startX = event.clientX;
     const startWidth = boundedVariableCacheSidebarWidth;
     const minWidth = VARIABLE_CACHE_MIN_SIDEBAR_WIDTH;
     const maxWidth = variableCacheSidebarMaxWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
 
     stopVariableCacheSidebarResizeRef.current?.();
-    setIsResizingVariableCacheSidebar(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', cleanup);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setIsResizingVariableCacheSidebar(false);
-      stopVariableCacheSidebarResizeRef.current = null;
-    };
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.min(
         Math.max(startWidth + moveEvent.clientX - startX, minWidth),
@@ -929,9 +825,15 @@ export function AgentFlowCanvasFrame({
       setVariableCacheSidebarWidth(nextWidth);
     };
 
-    stopVariableCacheSidebarResizeRef.current = cleanup;
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', cleanup);
+    stopVariableCacheSidebarResizeRef.current = startCanvasFrameResize(event, {
+      cursor: 'col-resize',
+      onMove: handleMouseMove,
+      onStart: () => setIsResizingVariableCacheSidebar(true),
+      onStop: () => {
+        setIsResizingVariableCacheSidebar(false);
+        stopVariableCacheSidebarResizeRef.current = null;
+      }
+    });
   }
   function handleResetVariableCache() {
     debugSession.resetVariableCache();
@@ -958,30 +860,6 @@ export function AgentFlowCanvasFrame({
     );
     debugSession.setVariableCacheValue(key, value);
   }
-  function getDocumentWithLatestViewport(
-    currentDocument: FlowAuthoringDocument
-  ) {
-    const viewport =
-      viewportGetterRef.current?.() ?? viewportSnapshotRef.current;
-    const currentViewport = currentDocument.editor.viewport;
-
-    if (
-      currentViewport.x === viewport.x &&
-      currentViewport.y === viewport.y &&
-      currentViewport.zoom === viewport.zoom
-    ) {
-      return currentDocument;
-    }
-
-    return {
-      ...currentDocument,
-      editor: {
-        ...currentDocument.editor,
-        viewport
-      }
-    };
-  }
-
   function runNodePreview(
     nodeId: string,
     inputPayload: Record<string, Record<string, unknown>>
@@ -1187,90 +1065,24 @@ export function AgentFlowCanvasFrame({
           </div>
         ) : null}
         {variableCacheOpen ? (
-          <section
-            aria-label={i18nText("agentFlow", "auto.variable_cache")}
-            className="agent-flow-editor__variable-cache-panel"
-            data-resizing={isResizingVariableCache ? 'true' : 'false'}
-            data-sidebar-resizing={
-              isResizingVariableCacheSidebar ? 'true' : 'false'
-            }
-            style={{
-              right: variableCacheRightOffset,
-              height: boundedVariableCacheHeight
-            }}
-          >
-            <div
-              aria-label={i18nText("agentFlow", "auto.adjust_variable_cache_height")}
-              aria-orientation="horizontal"
-              className="agent-flow-editor__variable-cache-resize-handle"
-              onMouseDown={handleVariableCacheResizeStart}
-              role="separator"
-            />
-            <header className="agent-flow-editor__variable-cache-header">
-              <div className="agent-flow-editor__variable-cache-title-line">
-                <Typography.Text strong>{i18nText("agentFlow", "auto.variable_cache")}</Typography.Text>
-                <Tooltip title={i18nText("agentFlow", "auto.trial_run_variable_memory_layout_page")}>
-                  <QuestionCircleOutlined
-                    aria-label={i18nText("agentFlow", "auto.variable_cache_description")}
-                    className="agent-flow-editor__variable-cache-help-icon"
-                  />
-                </Tooltip>
-              </div>
-              <div className="agent-flow-editor__variable-cache-header-right">
-                {selectedVariable && (
-                  <div className="agent-flow-editor__variable-cache-header-center">
-                    <Typography.Text className="agent-flow-editor__variable-cache-header-variable-name">
-                      {selectedVariable.label}
-                    </Typography.Text>
-                    <Button
-                      aria-label={i18nText("agentFlow", "auto.copy_variable_value")}
-                      icon={<CopyOutlined />}
-                      size="small"
-                      type="text"
-                      onClick={() => {
-                        const text =
-                          typeof selectedVariable.value === 'string'
-                            ? selectedVariable.value
-                            : JSON.stringify(selectedVariable.value, null, 2);
-                        copyTextToClipboard(text).then(
-                          () => message.success(i18nText("agentFlow", "auto.copied")),
-                          () => message.error(i18nText("agentFlow", "auto.copy_failed"))
-                        );
-                      }}
-                    >
-                      {i18nText("agentFlow", "auto.copy")}</Button>
-                  </div>
-                )}
-                <Button
-                  aria-label={i18nText("agentFlow", "auto.reset_all_variable_caches")}
-                  size="small"
-                  type="text"
-                  onClick={handleResetVariableCache}
-                >
-                  {i18nText("agentFlow", "auto.reset_all")}</Button>
-                <Button
-                  aria-label={i18nText("agentFlow", "auto.turn_off_variable_caching")}
-                  icon={<CloseOutlined />}
-                  type="text"
-                  onClick={() => setVariableCacheOpen(false)}
-                />
-              </div>
-            </header>
-            <div className="agent-flow-editor__variable-cache-body">
-              <DebugVariablesPane
-                onSelectedValueChange={handleVariableCacheValueChange}
-                onLoadFullValue={(artifactRef) =>
-                  fetchRuntimeDebugArtifact(applicationId, artifactRef)
-                }
-                groups={debugSession.variableGroups}
-                onSelectedChange={setSelectedVariable}
-                sidebarWidth={boundedVariableCacheSidebarWidth}
-                sidebarMinWidth={VARIABLE_CACHE_MIN_SIDEBAR_WIDTH}
-                sidebarMaxWidth={variableCacheSidebarMaxWidth}
-                onSidebarResizeStart={handleVariableCacheSidebarResizeStart}
-              />
-            </div>
-          </section>
+          <AgentFlowVariableCachePanel
+            applicationId={applicationId}
+            groups={debugSession.variableGroups}
+            height={boundedVariableCacheHeight}
+            isResizing={isResizingVariableCache}
+            isSidebarResizing={isResizingVariableCacheSidebar}
+            onClose={() => setVariableCacheOpen(false)}
+            onReset={handleResetVariableCache}
+            onResizeStart={handleVariableCacheResizeStart}
+            onSelectedChange={setSelectedVariable}
+            onSelectedValueChange={handleVariableCacheValueChange}
+            onSidebarResizeStart={handleVariableCacheSidebarResizeStart}
+            rightOffset={variableCacheRightOffset}
+            selectedVariable={selectedVariable}
+            sidebarMaxWidth={variableCacheSidebarMaxWidth}
+            sidebarMinWidth={VARIABLE_CACHE_MIN_SIDEBAR_WIDTH}
+            sidebarWidth={boundedVariableCacheSidebarWidth}
+          />
         ) : null}
         {conversationLogOpen && conversationLogMessage ? (
           <AgentFlowSideDock

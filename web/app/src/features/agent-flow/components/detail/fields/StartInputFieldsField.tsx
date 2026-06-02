@@ -14,7 +14,7 @@ import { JsonPreviewBlock } from '../../../../../shared/ui/json-preview/JsonPrev
 import {
   normalizeStartInputField,
   startSystemVariables
-} from '../../../lib/start-node-variables';
+} from '../../../lib/variables/start-node-variables';
 import { StartInputFieldSettingsPanel } from './StartInputFieldSettingsPanel';
 import { i18nText } from '../../../../../shared/i18n/text';
 

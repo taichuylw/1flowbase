@@ -1,0 +1,756 @@
+use super::*;
+
+#[async_trait]
+impl<R, H> orchestration_runtime::execution_engine::ProviderInvoker for RuntimeProviderInvoker<R, H>
+where
+    R: ModelProviderRepository
+        + OrchestrationRuntimeRepository
+        + PluginRepository
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    H: ProviderRuntimePort + Clone + Send + Sync,
+{
+    async fn invoke_llm(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
+        mut input: ProviderInvocationInput,
+    ) -> Result<orchestration_runtime::execution_engine::ProviderInvocationOutput> {
+        let provider_resolve_started = std::time::Instant::now();
+        let instance = self.resolve_llm_instance(runtime).await?;
+        tracing::debug!(
+            provider_resolve_ms = provider_resolve_started.elapsed().as_millis() as u64,
+            "provider resolve finished"
+        );
+
+        let installation_reconcile_started = std::time::Instant::now();
+        let installation =
+            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        tracing::debug!(
+            installation_reconcile_ms = installation_reconcile_started.elapsed().as_millis() as u64,
+            "installation reconcile finished"
+        );
+        let assigned = self
+            .repository
+            .list_assignments(self.workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned
+            || matches!(
+                installation.desired_state,
+                domain::PluginDesiredState::Disabled
+            )
+        {
+            return Err(ControlPlaneError::InvalidInput("provider_code").into());
+        }
+        if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+
+        let package_load_started = std::time::Instant::now();
+        let package = load_provider_package(&installation.installed_path)?;
+        tracing::debug!(
+            package_load_ms = package_load_started.elapsed().as_millis() as u64,
+            "package load finished"
+        );
+
+        let runtime_config_started = std::time::Instant::now();
+        input.provider_config = build_provider_runtime_config(
+            &self.repository,
+            &self.provider_secret_master_key,
+            &package,
+            &instance,
+        )
+        .await?;
+        tracing::debug!(
+            runtime_config_ms = runtime_config_started.elapsed().as_millis() as u64,
+            "runtime config finished"
+        );
+
+        let provider_invoke_started_at = OffsetDateTime::now_utc();
+        let provider_invoke_started = std::time::Instant::now();
+        let first_token_timing = Arc::new(Mutex::new(None::<FirstTokenTiming>));
+        let mut live_forward_handle = None;
+        let live_provider_events = if let (Some(node_id), Some(node_run_id)) =
+            (self.active_node_id.clone(), self.active_node_run_id)
+        {
+            let live_sender = self.live_provider_events.clone();
+            let persist_sender = self.persist_events.clone();
+            let runtime_event_stream = self.runtime_event_stream.clone();
+            let answer_presentation = self.answer_presentation.clone();
+            let repository = self.repository.clone();
+            let flow_run_id = self.flow_run_id;
+            let first_token_timing_for_task = first_token_timing.clone();
+            let (provider_sender, mut provider_receiver) =
+                mpsc::unbounded_channel::<ProviderStreamEvent>();
+            if live_sender.is_some() || runtime_event_stream.is_some() || persist_sender.is_some() {
+                live_forward_handle = Some(tokio::spawn(async move {
+                    let mut think_tag_splitter = ThinkTagStreamSplitter::default();
+                    while let Some(event) = provider_receiver.recv().await {
+                        record_first_token_timing(
+                            &first_token_timing_for_task,
+                            &event,
+                            provider_invoke_started_at,
+                            provider_invoke_started,
+                        );
+                        if let Some(sender) = &live_sender {
+                            let _ = sender.send(LiveProviderStreamEvent {
+                                node_id: node_id.clone(),
+                                node_run_id,
+                                event: event.clone(),
+                            });
+                        }
+                        if let (Some(stream), Some(flow_run_id)) =
+                            (&runtime_event_stream, flow_run_id)
+                        {
+                            let runtime_events = match &event {
+                                ProviderStreamEvent::TextDelta { delta } => {
+                                    let mut runtime_events = Vec::new();
+                                    let parts = think_tag_splitter.split(delta);
+                                    for part in parts {
+                                        let provider_event = match part.kind {
+                                            DebugDeltaKind::Text => {
+                                                runtime_events.push(
+                                                    debug_stream_events::text_delta(
+                                                        &node_id,
+                                                        node_run_id,
+                                                        part.text.clone(),
+                                                    ),
+                                                );
+                                                ProviderStreamEvent::TextDelta { delta: part.text }
+                                            }
+                                            DebugDeltaKind::Reasoning => {
+                                                runtime_events.push(
+                                                    debug_stream_events::reasoning_delta(
+                                                        &node_id,
+                                                        node_run_id,
+                                                        part.text.clone(),
+                                                    ),
+                                                );
+                                                ProviderStreamEvent::ReasoningDelta {
+                                                    delta: part.text,
+                                                }
+                                            }
+                                        };
+                                        if let Some(answer_presentation) = &answer_presentation {
+                                            runtime_events.extend(
+                                                answer_presentation
+                                                    .lock()
+                                                    .await
+                                                    .push_provider_event(
+                                                        &node_id,
+                                                        node_run_id,
+                                                        &provider_event,
+                                                    ),
+                                            );
+                                        }
+                                    }
+                                    runtime_events
+                                }
+                                ProviderStreamEvent::ReasoningDelta { delta } => {
+                                    let mut runtime_events =
+                                        vec![debug_stream_events::reasoning_delta(
+                                            &node_id,
+                                            node_run_id,
+                                            delta.clone(),
+                                        )];
+                                    if let Some(answer_presentation) = &answer_presentation {
+                                        runtime_events.extend(
+                                            answer_presentation.lock().await.push_provider_event(
+                                                &node_id,
+                                                node_run_id,
+                                                &event,
+                                            ),
+                                        );
+                                    }
+                                    runtime_events
+                                }
+                                _ => Vec::new(),
+                            };
+                            if runtime_events.is_empty() {
+                                if let Some(persist) = &persist_sender {
+                                    let _ = persist.send(event);
+                                }
+                                continue;
+                            };
+                            for runtime_event in runtime_events {
+                                let is_answer_presentation =
+                                    debug_stream_events::is_answer_presentation_delta_payload(
+                                        &runtime_event.payload,
+                                    );
+                                if is_answer_presentation {
+                                    if let Err(error) =
+                                        runtime_event_persister::persist_runtime_event_payload(
+                                            &repository,
+                                            flow_run_id,
+                                            &runtime_event,
+                                        )
+                                        .await
+                                    {
+                                        tracing::warn!(
+                                            flow_run_id = %flow_run_id,
+                                            event_type = %runtime_event.event_type,
+                                            error = %error,
+                                            "failed to persist answer presentation runtime event"
+                                        );
+                                    }
+                                }
+                                let event_type = runtime_event.event_type.clone();
+                                let source = runtime_event.source;
+                                let mut stream_event = runtime_event;
+                                if is_answer_presentation {
+                                    stream_event.persist_required = false;
+                                }
+                                if let Err(error) = stream.append(flow_run_id, stream_event).await {
+                                    if is_expected_runtime_event_stream_closed_error(&error) {
+                                        tracing::debug!(
+                                            flow_run_id = %flow_run_id,
+                                            event_type = %event_type,
+                                            source = ?source,
+                                            error = %error,
+                                            "provider runtime event append skipped because stream is already closed"
+                                        );
+                                    } else {
+                                        tracing::warn!(
+                                            flow_run_id = %flow_run_id,
+                                            event_type = %event_type,
+                                            source = ?source,
+                                            error = %error,
+                                            "failed to append provider runtime event"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(persist) = &persist_sender {
+                            let _ = persist.send(event);
+                        }
+                    }
+                }));
+                Some(provider_sender)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let has_live_provider_events = live_provider_events.is_some();
+        let invocation_result = self
+            .runtime
+            .invoke_stream_with_live_events(&installation, input, live_provider_events)
+            .await;
+        tracing::debug!(
+            provider_invoke_ms = provider_invoke_started.elapsed().as_millis() as u64,
+            "provider invoke finished"
+        );
+        if let Some(handle) = live_forward_handle {
+            if let Err(error) = handle.await {
+                tracing::warn!(
+                    error = %error,
+                    "provider live event forwarding task panicked"
+                );
+            }
+        }
+        let invocation_output = invocation_result?;
+        if let Some(persist) = &self.persist_events {
+            if !has_live_provider_events {
+                for event in invocation_output.events.iter().cloned() {
+                    let _ = persist.send(event);
+                }
+            }
+        }
+
+        let captured_first_token_timing = first_token_timing.lock().ok().and_then(|timing| *timing);
+        Ok(
+            orchestration_runtime::execution_engine::ProviderInvocationOutput {
+                events: invocation_output.events,
+                result: invocation_output.result,
+                first_token_at: captured_first_token_timing.map(|timing| timing.first_token_at),
+                time_to_first_token_ms: captured_first_token_timing
+                    .map(|timing| timing.time_to_first_token_ms),
+            },
+        )
+    }
+}
+
+fn record_first_token_timing(
+    first_token_timing: &Arc<Mutex<Option<FirstTokenTiming>>>,
+    event: &ProviderStreamEvent,
+    provider_invoke_started_at: OffsetDateTime,
+    provider_invoke_started: std::time::Instant,
+) {
+    if !matches!(
+        event,
+        ProviderStreamEvent::TextDelta { .. } | ProviderStreamEvent::ReasoningDelta { .. }
+    ) {
+        return;
+    }
+
+    let Ok(mut timing) = first_token_timing.lock() else {
+        return;
+    };
+    if timing.is_some() {
+        return;
+    }
+    let elapsed = provider_invoke_started.elapsed();
+    *timing = Some(FirstTokenTiming {
+        first_token_at: provider_invoke_started_at + elapsed,
+        time_to_first_token_ms: elapsed.as_millis() as u64,
+    });
+}
+
+pub(super) fn is_expected_runtime_event_stream_closed_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("runtime event stream is closed")
+        || message.contains("runtime event stream is not open")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DebugDeltaKind {
+    Text,
+    Reasoning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct DebugDeltaPart {
+    pub(super) kind: DebugDeltaKind,
+    pub(super) text: String,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct ThinkTagStreamSplitter {
+    inside_think: bool,
+    pending: String,
+}
+
+impl ThinkTagStreamSplitter {
+    pub(super) fn split(&mut self, delta: &str) -> Vec<DebugDeltaPart> {
+        self.pending.push_str(delta);
+        let mut parts = Vec::new();
+
+        loop {
+            let tag = if self.inside_think {
+                "</think>"
+            } else {
+                "<think>"
+            };
+
+            if let Some(tag_index) = self.pending.find(tag) {
+                let text = self.pending[..tag_index].to_string();
+                push_debug_delta_part(
+                    &mut parts,
+                    if self.inside_think {
+                        DebugDeltaKind::Reasoning
+                    } else {
+                        DebugDeltaKind::Text
+                    },
+                    text,
+                );
+                self.pending.drain(..tag_index + tag.len());
+                self.inside_think = !self.inside_think;
+                continue;
+            }
+
+            let keep_len = partial_tag_prefix_len(&self.pending, tag);
+            let emit_len = self.pending.len().saturating_sub(keep_len);
+            if emit_len > 0 {
+                let text = self.pending[..emit_len].to_string();
+                self.pending.drain(..emit_len);
+                push_debug_delta_part(
+                    &mut parts,
+                    if self.inside_think {
+                        DebugDeltaKind::Reasoning
+                    } else {
+                        DebugDeltaKind::Text
+                    },
+                    text,
+                );
+            }
+            break;
+        }
+
+        parts
+    }
+
+    pub(super) fn finish(&mut self) -> Vec<DebugDeltaPart> {
+        let text = std::mem::take(&mut self.pending);
+        let mut parts = Vec::new();
+        push_debug_delta_part(
+            &mut parts,
+            if self.inside_think {
+                DebugDeltaKind::Reasoning
+            } else {
+                DebugDeltaKind::Text
+            },
+            text,
+        );
+        parts
+    }
+}
+
+fn push_debug_delta_part(parts: &mut Vec<DebugDeltaPart>, kind: DebugDeltaKind, text: String) {
+    if text.is_empty() {
+        return;
+    }
+
+    if let Some(previous) = parts.last_mut().filter(|part| part.kind == kind) {
+        previous.text.push_str(&text);
+        return;
+    }
+
+    parts.push(DebugDeltaPart { kind, text });
+}
+
+fn partial_tag_prefix_len(buffer: &str, tag: &str) -> usize {
+    let max_len = buffer.len().min(tag.len().saturating_sub(1));
+    (1..=max_len)
+        .rev()
+        .find(|length| {
+            let start = buffer.len() - length;
+            buffer.is_char_boundary(start) && tag.starts_with(&buffer[start..])
+        })
+        .unwrap_or(0)
+}
+
+impl<R, H> RuntimeProviderInvoker<R, H>
+where
+    R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + Clone + Send + Sync,
+{
+    pub(super) fn for_flow_run(&self, flow_run_id: Uuid) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            persist_events: self.persist_events.clone(),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: Some(flow_run_id),
+            active_node_id: self.active_node_id.clone(),
+            active_node_run_id: self.active_node_run_id,
+            answer_presentation: self.answer_presentation.clone(),
+        }
+    }
+
+    pub(super) fn with_answer_presentation(
+        &self,
+        answer_presentation: Arc<tokio::sync::Mutex<answer_presentation::AnswerPresentationCursor>>,
+    ) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            persist_events: self.persist_events.clone(),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: self.flow_run_id,
+            active_node_id: self.active_node_id.clone(),
+            active_node_run_id: self.active_node_run_id,
+            answer_presentation: Some(answer_presentation),
+        }
+    }
+
+    pub(super) fn for_live_llm_node_with_persist(
+        &self,
+        node_id: String,
+        node_run_id: Uuid,
+        persist_events: mpsc::UnboundedSender<ProviderStreamEvent>,
+    ) -> Self {
+        Self {
+            repository: self.repository.clone(),
+            runtime: self.runtime.clone(),
+            workspace_id: self.workspace_id,
+            provider_secret_master_key: self.provider_secret_master_key.clone(),
+            live_provider_events: self.live_provider_events.clone(),
+            persist_events: Some(persist_events),
+            runtime_event_stream: self.runtime_event_stream.clone(),
+            flow_run_id: self.flow_run_id,
+            active_node_id: Some(node_id),
+            active_node_run_id: Some(node_run_id),
+            answer_presentation: self.answer_presentation.clone(),
+        }
+    }
+
+    pub(super) async fn resolve_llm_instance(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledLlmRuntime,
+    ) -> Result<domain::ModelProviderInstanceRecord> {
+        let provider_instance_id = Uuid::parse_str(&runtime.provider_instance_id)
+            .map_err(|_| ControlPlaneError::InvalidInput("source_instance_id"))?;
+        let instance = self
+            .repository
+            .get_instance(self.workspace_id, provider_instance_id)
+            .await?
+            .ok_or(ControlPlaneError::InvalidInput("source_instance_id"))?;
+        if instance.provider_code != runtime.provider_code
+            || instance.status != domain::ModelProviderInstanceStatus::Ready
+            || !instance.included_in_main
+        {
+            return Err(ControlPlaneError::InvalidInput("source_instance_id").into());
+        }
+        let installation = self
+            .repository
+            .get_installation(instance.installation_id)
+            .await?
+            .ok_or(ControlPlaneError::InvalidInput("source_instance_id"))?;
+        let assigned = self
+            .repository
+            .list_assignments(self.workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned
+            || matches!(
+                installation.desired_state,
+                domain::PluginDesiredState::Disabled
+            )
+            || installation.availability_status != domain::PluginAvailabilityStatus::Available
+        {
+            return Err(ControlPlaneError::InvalidInput("source_instance_id").into());
+        }
+        if !instance.enabled_model_ids.is_empty()
+            && !instance
+                .enabled_model_ids
+                .iter()
+                .any(|model_id| model_id == &runtime.model)
+        {
+            return Err(ControlPlaneError::InvalidInput("model").into());
+        }
+
+        Ok(instance)
+    }
+}
+
+#[async_trait]
+impl<R, H> orchestration_runtime::execution_engine::CapabilityInvoker
+    for RuntimeProviderInvoker<R, H>
+where
+    R: PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + CapabilityPluginRuntimePort + Clone + Send + Sync,
+{
+    async fn invoke_capability_node(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledPluginRuntime,
+        config_payload: Value,
+        input_payload: Value,
+    ) -> Result<orchestration_runtime::execution_engine::CapabilityInvocationOutput> {
+        let installation =
+            reconcile_installation_snapshot(&self.repository, runtime.installation_id).await?;
+        let assigned = self
+            .repository
+            .list_assignments(self.workspace_id)
+            .await?
+            .into_iter()
+            .any(|assignment| assignment.installation_id == installation.id);
+        if !assigned
+            || matches!(
+                installation.desired_state,
+                domain::PluginDesiredState::Disabled
+            )
+        {
+            return Err(ControlPlaneError::InvalidInput("installation_id").into());
+        }
+        if installation.availability_status != domain::PluginAvailabilityStatus::Available {
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
+        }
+
+        let output = self
+            .runtime
+            .execute_node(ExecuteCapabilityNodeInput {
+                installation,
+                contribution_code: runtime.contribution_code.clone(),
+                config_payload,
+                input_payload,
+            })
+            .await?;
+
+        Ok(
+            orchestration_runtime::execution_engine::CapabilityInvocationOutput {
+                output_payload: output.output_payload,
+            },
+        )
+    }
+}
+
+#[async_trait]
+impl<R, H> orchestration_runtime::execution_engine::CodeInvoker for RuntimeProviderInvoker<R, H>
+where
+    R: Clone + Send + Sync,
+    H: Clone + Send + Sync,
+{
+    async fn invoke_code_node(
+        &self,
+        runtime: &orchestration_runtime::compiled_plan::CompiledCodeRuntime,
+        config_payload: Value,
+        input_payload: Value,
+    ) -> Result<orchestration_runtime::execution_engine::CodeInvocationOutput> {
+        orchestration_runtime::execution_engine::CodeInvoker::invoke_code_node(
+            &orchestration_runtime::execution_engine::QuickJsCodeInvoker::default(),
+            runtime,
+            config_payload,
+            input_payload,
+        )
+        .await
+    }
+}
+
+async fn build_provider_runtime_config<R>(
+    repository: &R,
+    master_key: &str,
+    package: &ProviderPackage,
+    instance: &domain::ModelProviderInstanceRecord,
+) -> Result<Value>
+where
+    R: ModelProviderRepository,
+{
+    let secret_json = repository
+        .get_secret_json(instance.id, master_key)
+        .await?
+        .unwrap_or_else(empty_object);
+    validate_required_fields(
+        &package.provider.form_schema,
+        &instance.config_json,
+        &secret_json,
+    )?;
+    merge_json_object(&instance.config_json, &secret_json)
+}
+
+fn validate_required_fields(
+    form_schema: &[ProviderConfigField],
+    public_config: &Value,
+    secret_config: &Value,
+) -> Result<()> {
+    let public_object = public_config
+        .as_object()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    let secret_object = secret_config
+        .as_object()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    for field in form_schema {
+        if !field.required {
+            continue;
+        }
+        let value = if is_secret_field(&field.field_type) {
+            secret_object.get(&field.key)
+        } else {
+            public_object.get(&field.key)
+        };
+        if value.is_none()
+            || value == Some(&Value::Null)
+            || value == Some(&Value::String(String::new()))
+        {
+            return Err(ControlPlaneError::InvalidInput("config_json").into());
+        }
+    }
+    Ok(())
+}
+
+fn merge_json_object(base: &Value, patch: &Value) -> Result<Value> {
+    let mut merged = base
+        .as_object()
+        .cloned()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    let patch_object = patch
+        .as_object()
+        .ok_or(ControlPlaneError::InvalidInput("config_json"))?;
+    for (key, value) in patch_object {
+        merged.insert(key.clone(), value.clone());
+    }
+    Ok(Value::Object(merged))
+}
+
+fn empty_object() -> Value {
+    Value::Object(serde_json::Map::new())
+}
+
+fn is_secret_field(field_type: &str) -> bool {
+    field_type.trim().eq_ignore_ascii_case("secret")
+}
+
+fn load_provider_package(path: &str) -> Result<ProviderPackage> {
+    ProviderPackage::load_from_dir(path)
+        .map_err(|_| ControlPlaneError::InvalidInput("provider_package").into())
+}
+
+pub(super) async fn freeze_failover_queue_routes<R>(
+    repository: &R,
+    compiled_plan: &mut orchestration_runtime::compiled_plan::CompiledPlan,
+) -> Result<()>
+where
+    R: ModelProviderRepository,
+{
+    for node in compiled_plan.nodes.values_mut() {
+        let Some(runtime) = node.llm_runtime.as_mut() else {
+            continue;
+        };
+        let Some(routing) = runtime.routing.as_mut() else {
+            continue;
+        };
+        if routing.routing_mode
+            != orchestration_runtime::compiled_plan::LlmRoutingMode::FailoverQueue
+            || !routing.queue_targets.is_empty()
+        {
+            continue;
+        }
+
+        let queue_template_id = routing
+            .queue_template_id
+            .as_deref()
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or(ControlPlaneError::InvalidInput("queue_template_id"))?;
+        let queue = repository
+            .get_failover_queue_template(queue_template_id)
+            .await?
+            .ok_or(ControlPlaneError::InvalidInput("queue_template_id"))?;
+        if queue.status != "active" {
+            return Err(ControlPlaneError::InvalidInput("queue_template_id").into());
+        }
+        let items = repository
+            .list_failover_queue_items(queue_template_id)
+            .await?;
+        let snapshot_items = items
+            .iter()
+            .cloned()
+            .map(FailoverQueueSnapshotItem::from)
+            .collect::<Vec<_>>();
+        let snapshot = repository
+            .create_failover_queue_snapshot(&crate::ports::CreateModelFailoverQueueSnapshotInput {
+                snapshot_id: Uuid::now_v7(),
+                queue_template_id,
+                version: queue.version,
+                items: freeze_queue_items(&snapshot_items),
+            })
+            .await?;
+        routing.queue_snapshot_id = Some(snapshot.id.to_string());
+        routing.queue_targets = snapshot_items
+            .into_iter()
+            .filter(|item| item.enabled)
+            .map(
+                |item| orchestration_runtime::compiled_plan::CompiledLlmRouteTarget {
+                    provider_instance_id: item.provider_instance_id.to_string(),
+                    provider_code: item.provider_code,
+                    protocol: item.protocol,
+                    upstream_model_id: item.upstream_model_id,
+                },
+            )
+            .collect();
+        let Some(first_target) = routing.queue_targets.first() else {
+            return Err(ControlPlaneError::InvalidInput("queue_template_id").into());
+        };
+        runtime.provider_instance_id = first_target.provider_instance_id.clone();
+        runtime.provider_code = first_target.provider_code.clone();
+        runtime.protocol = first_target.protocol.clone();
+        runtime.model = first_target.upstream_model_id.clone();
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "../_tests/orchestration_runtime/support.rs"]
+pub(crate) mod test_support;

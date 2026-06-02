@@ -1,0 +1,57 @@
+import type { NormalizedFrontstageBlockCatalogEntry } from '../../lib/block-catalog';
+import type { FrontstageBlockCompositionInput } from '../../lib/block-composition';
+import type { FrontstageBlockInstance } from '../../lib/page-document';
+
+function createCatalogBlockInput(
+  entry: NormalizedFrontstageBlockCatalogEntry,
+  blockIndex: number
+): FrontstageBlockCompositionInput {
+  const blockNumber = blockIndex + 1;
+  const blockId = `frontstage-js-block-${blockNumber}`;
+
+  return {
+    id: blockId,
+    codeRef: `${blockId}-code`,
+    catalog: {
+      providerCode: entry.providerCode,
+      installationId: entry.installationId
+    },
+    contribution: {
+      pluginId: entry.pluginId,
+      pluginVersion: entry.pluginVersion,
+      code: entry.contributionCode
+    },
+    props: {},
+    layout: {
+      order: blockIndex,
+      region: 'main'
+    },
+    runtime: {
+      kind: entry.runtimeKind,
+      entry: entry.entry,
+      hint: entry.runtimeKind
+    }
+  };
+}
+
+function findMatchingFrontstageBlockCatalogEntry(
+  block: FrontstageBlockInstance | null | undefined,
+  catalogItems: NormalizedFrontstageBlockCatalogEntry[]
+): NormalizedFrontstageBlockCatalogEntry | null {
+  if (!block) {
+    return null;
+  }
+
+  return (
+    catalogItems.find(
+      (item) =>
+        block.catalog.providerCode === item.providerCode &&
+        block.catalog.installationId === item.installationId &&
+        block.contribution.pluginId === item.pluginId &&
+        block.contribution.pluginVersion === item.pluginVersion &&
+        block.contribution.code === item.contributionCode
+    ) ?? null
+  );
+}
+
+export { createCatalogBlockInput, findMatchingFrontstageBlockCatalogEntry };

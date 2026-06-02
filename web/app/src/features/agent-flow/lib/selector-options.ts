@@ -1,17 +1,17 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
-import { getNodeVariableOutputs } from './start-node-variables';
+import { getNodeVariableOutputs } from './variables/start-node-variables';
 import {
   agentFlowSystemVariables,
   systemVariableNodeId
-} from './system-variables';
+} from './variables/system-variables';
 import {
   environmentVariableNodeId,
   formatEnvironmentVariableTitle,
   type AgentFlowEnvironmentVariable
-} from './application-environment-variables';
+} from './variables/application-environment-variables';
 import { outputHasLlmContextSchema } from './output-contract/schema';
-import { formatNodeVariableLabel } from './variable-labels';
+import { formatNodeVariableLabel } from './variables/variable-labels';
 import { i18nText } from '../../../shared/i18n/text';
 
 export interface FlowSelectorOption {

@@ -31,8 +31,8 @@ function bumpSemver(version, release) {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`Usage: node scripts/node/bump-version.js [patch|minor|major] [--dry-run]
-       node scripts/node/bump-version.js --to <x.y.z> [--dry-run]
+  writeStdout(`Usage: node scripts/node/cli/bump-version.js [patch|minor|major] [--dry-run]
+       node scripts/node/cli/bump-version.js --to <x.y.z> [--dry-run]
 
 Defaults to applying a patch bump.
 Targets owned frontend packages, owned Rust backend packages, and Cargo.lock owned entries.

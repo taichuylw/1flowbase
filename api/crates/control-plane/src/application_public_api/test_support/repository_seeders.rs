@@ -1,0 +1,138 @@
+use super::*;
+
+impl ApplicationPublicApiTestRepository {
+    pub async fn get_or_create_editor_state(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+        actor_user_id: Uuid,
+    ) -> Result<domain::FlowEditorState> {
+        FlowRepository::get_or_create_editor_state(
+            self,
+            workspace_id,
+            application_id,
+            actor_user_id,
+        )
+        .await
+    }
+
+    pub async fn get_compiled_plan(
+        &self,
+        compiled_plan_id: Uuid,
+    ) -> Result<Option<domain::CompiledPlanRecord>> {
+        ApplicationCompiledPlanRepository::get_application_compiled_plan(self, compiled_plan_id)
+            .await
+    }
+
+    pub async fn get_flow_run(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .flow_runs
+            .get(&flow_run_id)
+            .filter(|run| run.application_id == application_id)
+            .cloned())
+    }
+
+    pub fn clear_native_run_results(&self) {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .native_runs
+            .clear();
+    }
+
+    pub fn conversation_record_id_for_run(&self, flow_run_id: Uuid) -> Option<Uuid> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .run_conversations
+            .get(&flow_run_id)
+            .copied()
+    }
+
+    pub fn seed_pending_callback_task(&self, flow_run_id: Uuid) -> domain::CallbackTaskRecord {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let node_run_id = Uuid::now_v7();
+        if let Some(flow_run) = inner.flow_runs.get_mut(&flow_run_id) {
+            flow_run.status = domain::FlowRunStatus::WaitingCallback;
+        }
+        let task = domain::CallbackTaskRecord {
+            id: Uuid::now_v7(),
+            flow_run_id,
+            node_run_id,
+            callback_kind: "external_callback".to_string(),
+            status: domain::CallbackTaskStatus::Pending,
+            request_payload: serde_json::json!({ "prompt": "approve" }),
+            response_payload: None,
+            external_ref_payload: None,
+            created_at: OffsetDateTime::now_utc(),
+            completed_at: None,
+        };
+        inner.callback_tasks.insert(task.id, task.clone());
+        task
+    }
+
+    pub fn run_event_types(&self, flow_run_id: Uuid) -> Vec<String> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .run_events
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|event| event.event_type)
+            .collect()
+    }
+
+    pub fn run_events(&self, flow_run_id: Uuid) -> Vec<domain::RunEventRecord> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .run_events
+            .get(&flow_run_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn callback_resume_attempts(&self) -> Vec<domain::FlowRunCallbackResumeAttemptRecord> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .callback_resume_attempts
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    pub fn flow_run_count(&self) -> usize {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .flow_runs
+            .len()
+    }
+
+    pub fn reset_editor_state_read_count(&self) {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .editor_state_read_count = 0;
+    }
+
+    pub fn editor_state_read_count(&self) -> usize {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .editor_state_read_count
+    }
+}

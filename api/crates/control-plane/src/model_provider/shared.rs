@@ -248,10 +248,6 @@ fn model_i18n_key(model_id: &str) -> String {
         .collect()
 }
 
-pub(super) fn model_discovery_mode_string(mode: ModelDiscoveryMode) -> String {
-    format!("{mode:?}").to_ascii_lowercase()
-}
-
 pub(super) fn map_model_discovery_mode(
     mode: ModelDiscoveryMode,
 ) -> domain::ModelProviderDiscoveryMode {

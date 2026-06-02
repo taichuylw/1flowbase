@@ -19,7 +19,7 @@ decision_policy: verify_before_decision
 scope:
   - web
   - tmp/mock-ui
-  - scripts/node/mock-ui-sync.js
+  - scripts/node/cli/mock-ui-sync.js
 ---
 
 # web UI 探索沙盒固定为可重建 mock-ui 副本

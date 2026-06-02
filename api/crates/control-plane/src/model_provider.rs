@@ -106,6 +106,9 @@ pub struct ModelProviderCatalogEntry {
     pub availability_status: String,
     pub form_schema: Vec<ProviderConfigField>,
     pub predefined_models: Vec<LocalizedProviderModelDescriptor>,
+    pub catalog_refresh_status: String,
+    pub catalog_last_error_message: Option<String>,
+    pub catalog_refreshed_at: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Clone)]

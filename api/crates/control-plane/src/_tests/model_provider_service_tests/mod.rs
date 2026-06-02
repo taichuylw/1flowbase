@@ -23,6 +23,7 @@ use crate::{
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertModelProviderCatalogCacheInput, UpsertModelProviderMainInstanceInput,
         UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
+        UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use domain::{
@@ -30,7 +31,8 @@ use domain::{
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
     ModelProviderMainInstanceRecord, ModelProviderPreviewSessionRecord, ModelProviderSecretRecord,
     PermissionDefinition, PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus,
-    PluginDesiredState, PluginInstallationRecord, PluginRuntimeStatus, PluginTaskRecord,
+    PluginDesiredState, PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
+    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskRecord,
     PluginVerificationStatus, ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
@@ -44,6 +46,7 @@ use super::plugin_management::support::{actor_with_permissions, create_provider_
 struct MemoryModelProviderRepository {
     actor: ActorContext,
     installations: Arc<RwLock<HashMap<Uuid, PluginInstallationRecord>>>,
+    catalog_projections: Arc<RwLock<HashMap<Uuid, PluginPackageCatalogProjectionRecord>>>,
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
     tasks: Arc<RwLock<HashMap<Uuid, PluginTaskRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, ModelProviderInstanceRecord>>>,
@@ -65,6 +68,7 @@ impl MemoryModelProviderRepository {
         Self {
             actor,
             installations: Arc::new(RwLock::new(HashMap::new())),
+            catalog_projections: Arc::new(RwLock::new(HashMap::new())),
             assignments: Arc::new(RwLock::new(Vec::new())),
             tasks: Arc::new(RwLock::new(HashMap::new())),
             instances: Arc::new(RwLock::new(HashMap::new())),
@@ -125,6 +129,76 @@ impl MemoryModelProviderRepository {
             .write()
             .await
             .insert(installation_id, installation);
+        self.upsert_plugin_package_catalog_projection(&UpsertPluginPackageCatalogProjectionInput {
+            installation_id,
+            package_code: "fixture_provider".to_string(),
+            package_version: "0.1.0".to_string(),
+            catalog_snapshot_json: json!({
+                "manifest": {
+                    "icon": null,
+                },
+                "provider": {
+                    "display_name": "Fixture Provider",
+                    "help_url": "https://example.com/help",
+                    "default_base_url": "https://api.example.com",
+                    "model_discovery_mode": "hybrid",
+                    "supports_model_fetch_without_credentials": false,
+                    "form_schema": [
+                        {
+                            "key": "base_url",
+                            "type": "string",
+                            "required": true
+                        }
+                    ],
+                    "parameter_form": null,
+                    "predefined_models": [
+                        {
+                            "model_id": "fixture_chat",
+                            "display_name": "Fixture Chat",
+                            "source": "static",
+                            "supports_streaming": true,
+                            "supports_tool_call": false,
+                            "supports_multimodal": false,
+                            "context_window": null,
+                            "max_output_tokens": null,
+                            "provider_metadata": {}
+                        }
+                    ]
+                },
+                "i18n": {
+                    "default_locale": "en_US",
+                    "bundles": {
+                        "en_US": {
+                            "provider": {
+                                "label": "Fixture Provider"
+                            },
+                            "models": {
+                                "fixture_chat": {
+                                    "label": "Fixture Chat",
+                                    "description": "Fixture chat model"
+                                }
+                            }
+                        },
+                        "zh_Hans": {
+                            "provider": {
+                                "label": "示例供应商"
+                            },
+                            "models": {
+                                "fixture_chat": {
+                                    "label": "示例聊天模型",
+                                    "description": "示例聊天模型"
+                                }
+                            }
+                        }
+                    }
+                }
+            }),
+            projection_status: PluginPackageCatalogProjectionStatus::Ok,
+            last_error_message: None,
+            refreshed_at: Some(OffsetDateTime::now_utc()),
+        })
+        .await
+        .unwrap();
         if assigned {
             self.assignments.write().await.push(PluginAssignmentRecord {
                 id: Uuid::now_v7(),
@@ -165,6 +239,13 @@ impl MemoryModelProviderRepository {
 
     async fn artifact_snapshot_update_count(&self) -> usize {
         self.artifact_snapshot_updates.read().await.len()
+    }
+
+    async fn remove_catalog_projection(&self, installation_id: Uuid) {
+        self.catalog_projections
+            .write()
+            .await
+            .remove(&installation_id);
     }
 
     async fn installation(&self, installation_id: Uuid) -> PluginInstallationRecord {
@@ -316,6 +397,51 @@ impl PluginRepository for MemoryModelProviderRepository {
         Ok(self.installations.read().await.values().cloned().collect())
     }
 
+    async fn upsert_plugin_package_catalog_projection(
+        &self,
+        input: &UpsertPluginPackageCatalogProjectionInput,
+    ) -> Result<PluginPackageCatalogProjectionRecord> {
+        let record = PluginPackageCatalogProjectionRecord {
+            installation_id: input.installation_id,
+            package_code: input.package_code.clone(),
+            package_version: input.package_version.clone(),
+            catalog_snapshot_json: input.catalog_snapshot_json.clone(),
+            projection_status: input.projection_status,
+            last_error_message: input.last_error_message.clone(),
+            refreshed_at: input.refreshed_at,
+            updated_at: OffsetDateTime::now_utc(),
+        };
+        self.catalog_projections
+            .write()
+            .await
+            .insert(input.installation_id, record.clone());
+        Ok(record)
+    }
+
+    async fn get_plugin_package_catalog_projection(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<Option<PluginPackageCatalogProjectionRecord>> {
+        Ok(self
+            .catalog_projections
+            .read()
+            .await
+            .get(&installation_id)
+            .cloned())
+    }
+
+    async fn list_plugin_package_catalog_projections(
+        &self,
+    ) -> Result<Vec<PluginPackageCatalogProjectionRecord>> {
+        Ok(self
+            .catalog_projections
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect())
+    }
+
     async fn delete_installation(&self, installation_id: Uuid) -> Result<()> {
         if self
             .installations
@@ -324,6 +450,10 @@ impl PluginRepository for MemoryModelProviderRepository {
             .remove(&installation_id)
             .is_some()
         {
+            self.catalog_projections
+                .write()
+                .await
+                .remove(&installation_id);
             Ok(())
         } else {
             Err(ControlPlaneError::NotFound("plugin_installation").into())

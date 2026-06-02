@@ -4,6 +4,7 @@ import {
   JS_BLOCK_ALLOWED_IMPORTS,
   validateJsBlockSource
 } from './js-block-source-policy';
+import { isIdentifierPart, isIdentifierStart, isImportName, isLocalBindingName, isWhitespace } from './js-block-source-transform/identifiers';
 
 export type JsBlockInjectedModuleSource =
   (typeof JS_BLOCK_ALLOWED_IMPORTS)[number];
@@ -107,50 +108,6 @@ const RESERVED_TRANSFORM_IDENTIFIERS = new Set([
   DEFAULT_EXPORT_IDENTIFIER
 ]);
 const allowedImportSources = new Set<string>(JS_BLOCK_ALLOWED_IMPORTS);
-const localBindingIdentifiers = new Set<string>([
-  'as',
-  'async',
-  'await',
-  'break',
-  'case',
-  'catch',
-  'class',
-  'const',
-  'continue',
-  'debugger',
-  'default',
-  'delete',
-  'do',
-  'else',
-  'export',
-  'extends',
-  'false',
-  'finally',
-  'for',
-  'from',
-  'function',
-  'if',
-  'import',
-  'in',
-  'instanceof',
-  'let',
-  'new',
-  'null',
-  'return',
-  'super',
-  'switch',
-  'this',
-  'throw',
-  'true',
-  'try',
-  'typeof',
-  'undefined',
-  'var',
-  'void',
-  'while',
-  'with',
-  'yield'
-]);
 
 export function transformJsBlockSource(
   source: unknown
@@ -609,7 +566,10 @@ function parseNamedImportBinding(
 
   const imported = parts[0];
   const local = parts.length === 1 ? imported : parts[2];
-  if (!isImportName(imported) || !isLocalBindingName(local)) {
+  if (
+    !isImportName(imported) ||
+    !isLocalBindingName(local, RESERVED_TRANSFORM_IDENTIFIERS)
+  ) {
     return parseError(
       'source.imports',
       'JS block named import binding could not be transformed.'
@@ -632,7 +592,7 @@ function parseDefaultBinding(
   source: JsBlockInjectedModuleSource
 ): ParseResult<JsBlockImportBinding> {
   const local = clause.trim();
-  if (!isLocalBindingName(local)) {
+  if (!isLocalBindingName(local, RESERVED_TRANSFORM_IDENTIFIERS)) {
     return parseError(
       'source.imports',
       'JS block default import binding could not be transformed.'
@@ -662,7 +622,7 @@ function parseNamespaceBinding(
   }
 
   const local = parts[2];
-  if (!isLocalBindingName(local)) {
+  if (!isLocalBindingName(local, RESERVED_TRANSFORM_IDENTIFIERS)) {
     return parseError(
       'source.imports',
       'JS block namespace import binding could not be transformed.'
@@ -1209,34 +1169,6 @@ function isAllowedImportSource(
   source: string
 ): source is JsBlockInjectedModuleSource {
   return allowedImportSources.has(source);
-}
-
-function isImportName(value: string): boolean {
-  return value === 'default' || isIdentifierName(value);
-}
-
-function isLocalBindingName(value: string): boolean {
-  return (
-    isIdentifierName(value) &&
-    !localBindingIdentifiers.has(value) &&
-    !RESERVED_TRANSFORM_IDENTIFIERS.has(value)
-  );
-}
-
-function isIdentifierName(value: string): boolean {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
-}
-
-function isWhitespace(char: string): boolean {
-  return char === ' ' || char === '\t' || char === '\n' || char === '\r';
-}
-
-function isIdentifierStart(char: string): boolean {
-  return /[A-Za-z_$]/.test(char);
-}
-
-function isIdentifierPart(char: string): boolean {
-  return /[A-Za-z0-9_$]/.test(char);
 }
 
 function parseError(path: string, message: string): ParseFailure {

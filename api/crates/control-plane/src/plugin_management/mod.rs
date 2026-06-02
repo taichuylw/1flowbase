@@ -1,4 +1,5 @@
 mod catalog;
+mod catalog_projection;
 mod family;
 mod filesystem;
 mod install;
@@ -50,6 +51,7 @@ use crate::{
 };
 
 pub use catalog::*;
+pub use catalog_projection::*;
 pub use family::*;
 pub use install::*;
 pub use package_router::{route_plugin_package, RoutedPluginPackageKind};

@@ -32,7 +32,7 @@ scope:
 
 同一批并行调用里同时执行：
 
-- `node scripts/node/claude-skill-sync.js`
+- `node scripts/node/cli/claude-skill-sync.js`
 - `find .claude/skills -maxdepth 2 -type f | sort`
 
 读取侧会报：
@@ -64,5 +64,5 @@ find: ‘.claude/skills’: 没有那个文件或目录
 
 ## 复现记录
 
-- `2026-04-15 21`：在为 `.agents/skills` 生成 `.claude/skills` 时，把 `node scripts/node/claude-skill-sync.js` 和 `find .claude/skills ...` 放进同一批 `parallel`，读取侧先执行导致报目录不存在；改为串行复查后确认脚本输出正常。
-- `2026-04-15 22`：在修复 `references/` 同步后，又把 `node scripts/node/claude-skill-sync.js` 与 `find .claude/skills/backend-development ...`、`sed .claude/skills/backend-development/references/api-design.md` 并行执行；读取侧拿到生成前的旧目录状态，表现为只看到旧的 `SKILL.md` 或直接报引用文件不存在。后续凡是“重新生成后立刻验结果”的命令都必须串行。
+- `2026-04-15 21`：在为 `.agents/skills` 生成 `.claude/skills` 时，把 `node scripts/node/cli/claude-skill-sync.js` 和 `find .claude/skills ...` 放进同一批 `parallel`，读取侧先执行导致报目录不存在；改为串行复查后确认脚本输出正常。
+- `2026-04-15 22`：在修复 `references/` 同步后，又把 `node scripts/node/cli/claude-skill-sync.js` 与 `find .claude/skills/backend-development ...`、`sed .claude/skills/backend-development/references/api-design.md` 并行执行；读取侧拿到生成前的旧目录状态，表现为只看到旧的 `SKILL.md` 或直接报引用文件不存在。后续凡是“重新生成后立刻验结果”的命令都必须串行。

@@ -694,7 +694,7 @@ capabilities:
     )
     .unwrap();
 
-    repository
+    let installation = repository
         .upsert_installation(&UpsertPluginInstallationInput {
             installation_id: Uuid::now_v7(),
             provider_code: provider_code.into(),
@@ -731,6 +731,69 @@ capabilities:
             actor_user_id: repository.actor.user_id,
         })
         .await
-        .unwrap()
-        .id
+        .unwrap();
+    repository
+        .upsert_plugin_package_catalog_projection(&UpsertPluginPackageCatalogProjectionInput {
+            installation_id: installation.id,
+            package_code: provider_code.into(),
+            package_version: plugin_version.into(),
+            catalog_snapshot_json: json!({
+                "manifest": {
+                    "icon": null,
+                },
+                "provider": {
+                    "display_name": "Fixture Provider",
+                    "help_url": "https://example.com/help",
+                    "default_base_url": "https://api.example.com",
+                    "model_discovery_mode": "hybrid",
+                    "supports_model_fetch_without_credentials": false,
+                    "form_schema": [
+                        {
+                            "key": "base_url",
+                            "type": "string",
+                            "required": true
+                        },
+                        {
+                            "key": "api_key",
+                            "type": "secret",
+                            "required": true
+                        }
+                    ],
+                    "parameter_form": {
+                        "schema_version": "1.0.0",
+                        "title": "LLM Parameters",
+                        "fields": []
+                    },
+                    "predefined_models": [
+                        {
+                            "model_id": "fixture_chat",
+                            "display_name": "Fixture Chat",
+                            "source": "static",
+                            "supports_streaming": true,
+                            "supports_tool_call": false,
+                            "supports_multimodal": false,
+                            "context_window": null,
+                            "max_output_tokens": null,
+                            "provider_metadata": {}
+                        }
+                    ]
+                },
+                "i18n": {
+                    "default_locale": "en_US",
+                    "bundles": {
+                        "en_US": {
+                            "plugin": {
+                                "label": "Fixture Provider"
+                            }
+                        }
+                    }
+                }
+            }),
+            projection_status: PluginPackageCatalogProjectionStatus::Ok,
+            last_error_message: None,
+            refreshed_at: Some(OffsetDateTime::now_utc()),
+        })
+        .await
+        .unwrap();
+    installation.id
 }

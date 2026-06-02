@@ -84,6 +84,17 @@ pub struct UpdatePluginRuntimeSnapshotInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpsertPluginPackageCatalogProjectionInput {
+    pub installation_id: Uuid,
+    pub package_code: String,
+    pub package_version: String,
+    pub catalog_snapshot_json: serde_json::Value,
+    pub projection_status: domain::PluginPackageCatalogProjectionStatus,
+    pub last_error_message: Option<String>,
+    pub refreshed_at: Option<time::OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpsertHostInfrastructureProviderConfigInput {
     pub installation_id: Uuid,
     pub extension_id: String,
@@ -171,6 +182,17 @@ pub trait PluginRepository: Send + Sync {
         installation_id: Uuid,
     ) -> anyhow::Result<Option<domain::PluginInstallationRecord>>;
     async fn list_installations(&self) -> anyhow::Result<Vec<domain::PluginInstallationRecord>>;
+    async fn upsert_plugin_package_catalog_projection(
+        &self,
+        input: &UpsertPluginPackageCatalogProjectionInput,
+    ) -> anyhow::Result<domain::PluginPackageCatalogProjectionRecord>;
+    async fn get_plugin_package_catalog_projection(
+        &self,
+        installation_id: Uuid,
+    ) -> anyhow::Result<Option<domain::PluginPackageCatalogProjectionRecord>>;
+    async fn list_plugin_package_catalog_projections(
+        &self,
+    ) -> anyhow::Result<Vec<domain::PluginPackageCatalogProjectionRecord>>;
     async fn delete_installation(&self, installation_id: Uuid) -> anyhow::Result<()>;
     async fn list_pending_restart_host_extensions(
         &self,

@@ -1,0 +1,372 @@
+.agent-flow-node-handle.react-flow__handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  background: #1677ff;
+  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.18);
+}
+
+.agent-flow-node-handle--target.react-flow__handle {
+  left: -7px;
+}
+
+.agent-flow-node-handle--source.react-flow__handle {
+  right: -7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: crosshair;
+  font-size: 16px;
+  line-height: 1;
+  transition:
+    width 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    height 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    right 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+  z-index: 10;
+}
+
+.agent-flow-node-handle__icon {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  transform: translateY(-1px);
+}
+
+.react-flow__node:hover .agent-flow-node-handle--source.react-flow__handle,
+.agent-flow-node-handle--source.react-flow__handle[aria-expanded='true'] {
+  width: 24px;
+  height: 24px;
+  right: -12px;
+  border: 2px solid #fff;
+  background: #1677ff;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.4);
+}
+
+.react-flow__node:hover
+  .agent-flow-node-handle--source
+  .agent-flow-node-handle__icon,
+.agent-flow-node-handle--source.react-flow__handle[aria-expanded='true']
+  .agent-flow-node-handle__icon {
+  opacity: 1;
+}
+
+.agent-flow-node-handle--source.react-flow__handle:hover,
+.agent-flow-node-handle--source.react-flow__handle:focus-visible {
+  background: #0958d9;
+}
+
+.agent-flow-edge-label-container {
+  opacity: 1;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.16);
+}
+
+.react-flow__edge:hover .agent-flow-edge-label-container {
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.agent-flow-edge-add-button-wrapper .ant-btn {
+  background: #1677ff;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.agent-flow-edge-add-button-wrapper .ant-btn:hover {
+  background: #0958d9;
+  color: white;
+}
+
+.agent-flow-floating-picker-anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: auto;
+}
+
+.agent-flow-floating-picker-anchor__button.ant-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border: 2px solid #1677ff;
+  border-radius: 999px;
+  background: #e6f4ff;
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.18);
+  color: #0958d9;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.agent-flow-floating-picker-anchor__button.ant-btn:hover,
+.agent-flow-floating-picker-anchor__button.ant-btn:focus-visible {
+  background: #bae0ff;
+  color: #0958d9;
+}
+
+.agent-flow-zoom-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.agent-flow-zoom-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agent-flow-zoom-toolbar__button.ant-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: #365540;
+}
+
+.agent-flow-zoom-toolbar__button.ant-btn:hover,
+.agent-flow-zoom-toolbar__button.ant-btn:focus-visible {
+  background: rgba(132, 165, 143, 0.14);
+  color: #264131;
+}
+
+.agent-flow-zoom-display {
+  min-width: 40px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #365540;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.agent-flow-node-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(260px, calc(100vw - 48px));
+  min-width: 240px;
+  max-height: var(--agent-flow-node-picker-max-height, calc(100vh - 120px));
+  overflow: hidden;
+}
+
+.agent-flow-node-picker__header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 2px;
+  background: #ffffff;
+}
+
+.agent-flow-node-picker__tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  background: #f3f8ff;
+}
+
+.agent-flow-node-picker__tab {
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.agent-flow-node-picker__tab:hover,
+.agent-flow-node-picker__tab:focus-visible {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.agent-flow-node-picker__tab--active {
+  background: #1677ff;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(22, 119, 255, 0.22);
+}
+
+.agent-flow-node-picker__tab--active:hover,
+.agent-flow-node-picker__tab--active:focus-visible {
+  background: #0958d9;
+  color: #ffffff;
+}
+
+.agent-flow-node-picker__list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.agent-flow-node-picker__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-flow-node-picker__section-head {
+  display: flex;
+  padding: 0 2px;
+}
+
+.agent-flow-node-picker__section-label {
+  color: #203227;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.agent-flow-node-picker__section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-flow-node-picker__item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #203227;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-flow-node-picker__item:hover {
+  border-color: #1677ff;
+  background: #e6f4ff;
+}
+
+.agent-flow-node-picker__item:disabled {
+  border-color: #e5e9ee;
+  background: #f7f8fa;
+  color: #9aa5b5;
+  cursor: not-allowed;
+}
+
+.agent-flow-node-picker__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 14px;
+}
+
+.agent-flow-node-picker__text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.agent-flow-node-picker__name {
+  overflow: hidden;
+  color: #203227;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-flow-node-picker__empty {
+  padding: 18px 8px;
+  color: #738196;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .agent-flow-node-picker {
+    width: min(260px, calc(100vw - 32px));
+    min-width: 220px;
+  }
+
+  .agent-flow-llm-parameter-form__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px 12px;
+    align-items: start;
+  }
+
+  .agent-flow-llm-parameter-form__row-head {
+    grid-column: 1 / -1;
+  }
+
+  .agent-flow-llm-parameter-form__row-label {
+    grid-column: 1 / 2;
+  }
+
+  .agent-flow-llm-parameter-form__row-toggle {
+    grid-column: 2 / 3;
+    justify-self: end;
+    min-width: auto;
+  }
+
+  .agent-flow-llm-parameter-form__row-control {
+    grid-column: 1 / -1;
+  }
+
+  .agent-flow-llm-parameter-form__numeric-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-flow-model-settings__row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 960px) {
+  .agent-flow-zoom-toolbar {
+    gap: 8px;
+    margin: 0;
+  }
+}

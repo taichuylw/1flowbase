@@ -217,9 +217,6 @@ async fn test_state_with_runtime_profile_state(
             runtime_activity: Arc::new(
                 crate::runtime_activity::ApplicationRuntimeActivityTracker::default(),
             ),
-            native_resume_worker: Arc::new(
-                crate::workers::native_resume::NativeResumeWorkerRuntime::new(),
-            ),
             api_runtime_profile,
             plugin_runner_system,
             official_plugin_source: Arc::new(InMemoryOfficialPluginSource),

@@ -191,6 +191,36 @@ pub struct PluginInstallationRecord {
     pub updated_at: OffsetDateTime,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginPackageCatalogProjectionStatus {
+    Ok,
+    Missing,
+    Failed,
+}
+
+impl PluginPackageCatalogProjectionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Missing => "missing",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginPackageCatalogProjectionRecord {
+    pub installation_id: Uuid,
+    pub package_code: String,
+    pub package_version: String,
+    pub catalog_snapshot_json: serde_json::Value,
+    pub projection_status: PluginPackageCatalogProjectionStatus,
+    pub last_error_message: Option<String>,
+    pub refreshed_at: Option<OffsetDateTime>,
+    pub updated_at: OffsetDateTime,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginAssignmentRecord {
     pub id: Uuid,

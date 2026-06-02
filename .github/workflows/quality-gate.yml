@@ -343,7 +343,7 @@ jobs:
           pattern: test-governance-*
           path: tmp/test-governance/parallel
           merge-multiple: false
-      - run: node scripts/node/github-quality-gate-aggregate.js
+      - run: node scripts/node/cli/github-quality-gate-aggregate.js
         env:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}

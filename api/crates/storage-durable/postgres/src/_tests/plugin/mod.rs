@@ -1,0 +1,3 @@
+mod host_extension_migration_tests;
+mod plugin_repository_tests;
+mod plugin_worker_repository_tests;

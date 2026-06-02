@@ -2,10 +2,15 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::Result;
 use plugin_framework::provider_contract::{ProviderModelDescriptor, ProviderModelSource};
+use plugin_framework::provider_package::ProviderConfigField;
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    i18n::{merge_i18n_catalog, plugin_namespace, trim_provider_bundles, RequestedLocales},
+    i18n::{
+        merge_i18n_catalog, plugin_namespace, trim_json_bundles, trim_provider_bundles,
+        RequestedLocales,
+    },
     model_provider::{
         ModelProviderCatalogEntry, ModelProviderCatalogView, ModelProviderMainInstanceSummary,
         ModelProviderOptionEntry, ModelProviderOptionGroup, ModelProviderOptionsView,
@@ -16,8 +21,23 @@ use crate::{
 
 use super::shared::{
     ensure_state_model_permission, load_actor_context_for_user, load_provider_package,
-    localized_model_descriptor, model_discovery_mode_string,
+    localized_model_descriptor,
 };
+
+#[derive(Debug)]
+struct ModelProviderCatalogProjectionView {
+    display_name: String,
+    help_url: Option<String>,
+    default_base_url: Option<String>,
+    model_discovery_mode: String,
+    supports_model_fetch_without_credentials: bool,
+    form_schema: Vec<ProviderConfigField>,
+    predefined_models: Vec<ProviderModelDescriptor>,
+    i18n_bundles: BTreeMap<String, Value>,
+    catalog_refresh_status: String,
+    catalog_last_error_message: Option<String>,
+    catalog_refreshed_at: Option<time::OffsetDateTime>,
+}
 
 pub(super) async fn list_catalog<R>(
     repository: &R,
@@ -37,6 +57,12 @@ where
         .map(|assignment| assignment.installation_id)
         .collect::<HashSet<_>>();
     let installations = repository.list_installations().await?;
+    let projections = repository
+        .list_plugin_package_catalog_projections()
+        .await?
+        .into_iter()
+        .map(|projection| (projection.installation_id, projection))
+        .collect::<HashMap<_, _>>();
     let mut catalog = Vec::new();
     let mut i18n_catalog = BTreeMap::new();
     for installation in installations {
@@ -48,11 +74,12 @@ where
         {
             continue;
         }
-        let package = load_provider_package(&installation.installed_path)?;
         let namespace = plugin_namespace(&installation.provider_code);
+        let projection =
+            model_provider_projection_view(&installation, projections.get(&installation.id));
         merge_i18n_catalog(
             &mut i18n_catalog,
-            trim_provider_bundles(&namespace, &package.i18n, &locales),
+            trim_json_bundles(&namespace, &projection.i18n_bundles, &locales),
         );
         catalog.push(ModelProviderCatalogEntry {
             installation_id: installation.id,
@@ -63,24 +90,24 @@ where
             namespace: namespace.clone(),
             label_key: "provider.label".to_string(),
             description_key: Some("provider.description".to_string()),
-            display_name: package.provider.display_name.clone(),
+            display_name: projection.display_name,
             protocol: installation.protocol,
-            help_url: package.provider.help_url.clone(),
-            default_base_url: package.provider.default_base_url.clone(),
-            model_discovery_mode: model_discovery_mode_string(
-                package.provider.model_discovery_mode,
-            ),
-            supports_model_fetch_without_credentials: package
-                .provider
+            help_url: projection.help_url,
+            default_base_url: projection.default_base_url,
+            model_discovery_mode: projection.model_discovery_mode,
+            supports_model_fetch_without_credentials: projection
                 .supports_model_fetch_without_credentials,
             desired_state: installation.desired_state.as_str().to_string(),
             availability_status: installation.availability_status.as_str().to_string(),
-            form_schema: package.provider.form_schema.clone(),
-            predefined_models: package
+            form_schema: projection.form_schema,
+            predefined_models: projection
                 .predefined_models
                 .into_iter()
                 .map(|model| localized_model_descriptor(&namespace, model))
                 .collect(),
+            catalog_refresh_status: projection.catalog_refresh_status,
+            catalog_last_error_message: projection.catalog_last_error_message,
+            catalog_refreshed_at: projection.catalog_refreshed_at,
         });
     }
 
@@ -201,6 +228,77 @@ where
         providers: options,
         i18n_catalog,
     })
+}
+
+fn model_provider_projection_view(
+    installation: &domain::PluginInstallationRecord,
+    projection: Option<&domain::PluginPackageCatalogProjectionRecord>,
+) -> ModelProviderCatalogProjectionView {
+    let Some(projection) = projection else {
+        return ModelProviderCatalogProjectionView {
+            display_name: installation.display_name.clone(),
+            help_url: None,
+            default_base_url: None,
+            model_discovery_mode: "unknown".to_string(),
+            supports_model_fetch_without_credentials: false,
+            form_schema: Vec::new(),
+            predefined_models: Vec::new(),
+            i18n_bundles: BTreeMap::new(),
+            catalog_refresh_status: domain::PluginPackageCatalogProjectionStatus::Missing
+                .as_str()
+                .to_string(),
+            catalog_last_error_message: None,
+            catalog_refreshed_at: None,
+        };
+    };
+
+    let snapshot = &projection.catalog_snapshot_json;
+    ModelProviderCatalogProjectionView {
+        display_name: projection_provider_string(snapshot, "display_name")
+            .unwrap_or_else(|| installation.display_name.clone()),
+        help_url: projection_provider_string(snapshot, "help_url"),
+        default_base_url: projection_provider_string(snapshot, "default_base_url"),
+        model_discovery_mode: projection_provider_string(snapshot, "model_discovery_mode")
+            .unwrap_or_else(|| "unknown".to_string()),
+        supports_model_fetch_without_credentials: snapshot
+            .pointer("/provider/supports_model_fetch_without_credentials")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        form_schema: projection_provider_array(snapshot, "form_schema"),
+        predefined_models: projection_provider_array(snapshot, "predefined_models"),
+        i18n_bundles: projection_i18n_bundles(snapshot),
+        catalog_refresh_status: projection.projection_status.as_str().to_string(),
+        catalog_last_error_message: projection.last_error_message.clone(),
+        catalog_refreshed_at: projection.refreshed_at,
+    }
+}
+
+fn projection_provider_string(snapshot: &Value, field: &str) -> Option<String> {
+    snapshot
+        .get("provider")?
+        .get(field)?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn projection_provider_array<T>(snapshot: &Value, field: &str) -> Vec<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    snapshot
+        .get("provider")
+        .and_then(|provider| provider.get(field))
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default()
+}
+
+fn projection_i18n_bundles(snapshot: &Value) -> BTreeMap<String, Value> {
+    snapshot
+        .pointer("/i18n/bundles")
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default()
 }
 
 fn expose_enabled_models(

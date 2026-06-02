@@ -14,13 +14,13 @@ import {
 import {
   agentFlowSystemVariables,
   systemVariableNodeId
-} from '../system-variables';
+} from '../variables/system-variables';
 import {
   formatEnvironmentVariableTitle,
   type AgentFlowEnvironmentVariable
-} from '../application-environment-variables';
-import { getNodeVariableOutputs } from '../start-node-variables';
-import { formatNodeVariablePathLabel } from '../variable-labels';
+} from '../variables/application-environment-variables';
+import { getNodeVariableOutputs } from '../variables/start-node-variables';
+import { formatNodeVariablePathLabel } from '../variables/variable-labels';
 import { getBuiltinNodeRuntimeContract } from '../node-definitions/contracts';
 
 export interface NodeVariableDisplayMeta {

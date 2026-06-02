@@ -312,6 +312,47 @@ async fn list_catalog_returns_i18n_namespace_and_keys() {
 }
 
 #[tokio::test]
+async fn list_catalog_returns_missing_projection_without_package_read() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all"],
+    ));
+    let package_root =
+        std::env::temp_dir().join(format!("provider-catalog-no-projection-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    repository.remove_catalog_projection(installation_id).await;
+    fs::remove_dir_all(&package_root).unwrap();
+    let service = ModelProviderService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        "provider-secret-master-key",
+    );
+
+    let catalog = service
+        .list_catalog(
+            repository.actor.user_id,
+            RequestedLocales::new("zh_Hans", "en_US"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(catalog.entries.len(), 1);
+    assert_eq!(catalog.entries[0].catalog_refresh_status, "missing");
+    assert_eq!(catalog.entries[0].display_name, "Fixture Provider");
+    assert!(catalog.entries[0].form_schema.is_empty());
+    assert!(catalog.entries[0].predefined_models.is_empty());
+    assert_eq!(repository.artifact_snapshot_update_count().await, 0);
+}
+
+#[tokio::test]
 async fn list_catalog_uses_persisted_missing_artifact_snapshot() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(

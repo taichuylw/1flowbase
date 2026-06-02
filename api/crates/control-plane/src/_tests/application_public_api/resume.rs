@@ -1,16 +1,22 @@
+use async_trait::async_trait;
 use control_plane::application_public_api::{
     api_keys::{ApplicationApiKeyService, CreateApplicationApiKeyCommand},
+    callback_resume::{
+        ApplicationPublishedCallbackConsumer, ApplicationPublishedCallbackResumeService,
+        CompletePublishedCallbackInput, PublishedCallbackResumeSource,
+        PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
+    },
     mapping::{
         ApplicationApiMappingConfig, ApplicationApiMappingInput, ApplicationApiMappingOutput,
     },
-    native::{
-        ApplicationNativeRunService, CancelNativeRunCommand, CreateNativeRunCommand,
-        NativeRunValidationError, ResumeNativeRunCommand,
-    },
+    native::{ApplicationNativeRunService, CreateNativeRunCommand},
     publications::{ApplicationPublicationService, PublishApplicationCommand},
-    ApplicationPublicApiTestHarness,
+    run_service::ApplicationPublishedRunControlRepository,
+    ApplicationPublicApiTestHarness, ApplicationPublicApiTestRepository,
 };
+use control_plane::errors::ControlPlaneError;
 use serde_json::json;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 fn actor_user_id() -> Uuid {
@@ -91,18 +97,30 @@ async fn native_resume_rejects_callback_task_from_another_run() {
         .unwrap();
     let callback_task = repository.seed_pending_callback_task(second.id);
 
-    let error = service
-        .resume_native_run(ResumeNativeRunCommand {
+    let consumer = RecordingCallbackConsumer {
+        repository: repository.clone(),
+        ..RecordingCallbackConsumer::default()
+    };
+    let error = ApplicationPublishedCallbackResumeService::new(repository.clone(), consumer)
+        .resume_callback(ResumePublishedCallbackCommand {
             bearer_token: token,
-            run_id: first.id,
-            callback_task_id: callback_task.id,
+            target: PublishedCallbackResumeTarget::FlowRun {
+                flow_run_id: first.id,
+                callback_task_id: callback_task.id,
+            },
+            source: PublishedCallbackResumeSource::NativeAgent,
             response_payload: json!({ "answer": "approved" }),
             response_mode: Some("blocking".into()),
         })
         .await
         .unwrap_err();
 
-    assert_eq!(error, NativeRunValidationError::Forbidden);
+    assert_eq!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(&ControlPlaneError::PermissionDenied(
+            "callback_task_flow_run"
+        ))
+    );
 }
 
 #[tokio::test]
@@ -125,18 +143,30 @@ async fn native_resume_validates_ownership_before_execution_continuation_boundar
         .unwrap();
     let callback_task = repository.seed_pending_callback_task(run.id);
 
-    let error = service
-        .resume_native_run(ResumeNativeRunCommand {
+    let consumer = RecordingCallbackConsumer {
+        repository: repository.clone(),
+        ..RecordingCallbackConsumer::default()
+    };
+    let error = ApplicationPublishedCallbackResumeService::new(repository.clone(), consumer)
+        .resume_callback(ResumePublishedCallbackCommand {
             bearer_token: second_token,
-            run_id: run.id,
-            callback_task_id: callback_task.id,
+            target: PublishedCallbackResumeTarget::FlowRun {
+                flow_run_id: run.id,
+                callback_task_id: callback_task.id,
+            },
+            source: PublishedCallbackResumeSource::NativeAgent,
             response_payload: json!({ "answer": "approved" }),
             response_mode: Some("streaming".into()),
         })
         .await
         .unwrap_err();
 
-    assert_eq!(error, NativeRunValidationError::Forbidden);
+    assert_eq!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(&ControlPlaneError::PermissionDenied(
+            "application_public_callback_resume"
+        ))
+    );
 }
 
 #[tokio::test]
@@ -184,84 +214,52 @@ async fn native_get_run_exposes_pending_callback_required_action() {
     );
 }
 
-#[tokio::test]
-async fn native_resume_owned_callback_accepts_durable_resume_request() {
-    let harness = ApplicationPublicApiTestHarness::new();
-    let application = harness.seed_application(actor_user_id(), "Resume App");
-    let token = issue_key(&harness, application.id, actor_user_id()).await;
-    publish_application(&harness, application.id, actor_user_id()).await;
-    let repository = harness.repository();
-    let service = ApplicationNativeRunService::new(repository.clone());
-    let run = service
-        .create_native_run(CreateNativeRunCommand {
-            bearer_token: token.clone(),
-            request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
-        })
-        .await
-        .unwrap();
-    let callback_task = repository.seed_pending_callback_task(run.id);
+#[derive(Clone, Default)]
+struct RecordingCallbackConsumer {
+    repository: ApplicationPublicApiTestRepository,
+    calls: Arc<Mutex<Vec<CompletePublishedCallbackInput>>>,
+}
 
-    let result = service
-        .resume_native_run(ResumeNativeRunCommand {
-            bearer_token: token,
-            run_id: run.id,
-            callback_task_id: callback_task.id,
-            response_payload: json!({ "answer": "approved" }),
-            response_mode: Some("blocking".into()),
-        })
-        .await
-        .unwrap();
+impl RecordingCallbackConsumer {
+    fn calls(&self) -> Vec<CompletePublishedCallbackInput> {
+        self.calls
+            .lock()
+            .expect("recording callback consumer mutex poisoned")
+            .clone()
+    }
+}
 
-    assert_eq!(
-        result.status,
-        control_plane::application_public_api::native::NativeRunStatus::Waiting
-    );
-    let resume_requests = repository.resume_requests();
-    assert_eq!(resume_requests.len(), 1);
-    assert_eq!(resume_requests[0].flow_run_id, run.id);
-    assert_eq!(resume_requests[0].callback_task_id, callback_task.id);
-    assert_eq!(
-        resume_requests[0].status,
-        domain::FlowRunResumeRequestStatus::Pending
-    );
-    assert_eq!(
-        resume_requests[0].response_payload,
-        json!({ "answer": "approved" })
-    );
-    let resume_events: Vec<_> = repository
-        .run_events(run.id)
-        .into_iter()
-        .filter(|event| event.event_type == "public_run_resume_requested")
-        .collect();
-    assert_eq!(resume_events.len(), 1);
-    assert_eq!(
-        resume_events[0].payload["callback_task_id"],
-        json!(callback_task.id)
-    );
-    assert_eq!(
-        resume_events[0].payload["resume_request_id"],
-        json!(resume_requests[0].id)
-    );
-    assert_eq!(
-        resume_events[0].payload["response_payload"],
-        json!({ "answer": "approved" })
-    );
-    assert!(!resume_events[0]
-        .payload
-        .as_object()
-        .unwrap()
-        .contains_key("todo"));
+#[async_trait]
+impl ApplicationPublishedCallbackConsumer for RecordingCallbackConsumer {
+    async fn complete_published_callback(
+        &self,
+        input: CompletePublishedCallbackInput,
+    ) -> anyhow::Result<domain::ApplicationRunDetail> {
+        self.calls
+            .lock()
+            .expect("recording callback consumer mutex poisoned")
+            .push(input.clone());
+        let callback_task = self
+            .repository
+            .get_published_callback_task(input.callback_task_id)
+            .await?
+            .expect("callback task should exist");
+        self.repository
+            .get_published_run_detail(input.application_id, callback_task.flow_run_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("published run detail should exist"))
+    }
 }
 
 #[tokio::test]
-async fn native_resume_reuses_existing_pending_resume_request_for_duplicate_callback() {
+async fn public_callback_resume_consumes_pending_callback_in_request() {
     let harness = ApplicationPublicApiTestHarness::new();
-    let application = harness.seed_application(actor_user_id(), "Resume App");
+    let application = harness.seed_application(actor_user_id(), "Unified Resume App");
     let token = issue_key(&harness, application.id, actor_user_id()).await;
     publish_application(&harness, application.id, actor_user_id()).await;
     let repository = harness.repository();
-    let service = ApplicationNativeRunService::new(repository.clone());
-    let run = service
+    let native_service = ApplicationNativeRunService::new(repository.clone());
+    let run = native_service
         .create_native_run(CreateNativeRunCommand {
             bearer_token: token.clone(),
             request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
@@ -269,87 +267,48 @@ async fn native_resume_reuses_existing_pending_resume_request_for_duplicate_call
         .await
         .unwrap();
     let callback_task = repository.seed_pending_callback_task(run.id);
+    let consumer = RecordingCallbackConsumer {
+        repository: repository.clone(),
+        ..RecordingCallbackConsumer::default()
+    };
 
-    for answer in ["approved", "ignored-second-payload"] {
-        service
-            .resume_native_run(ResumeNativeRunCommand {
-                bearer_token: token.clone(),
-                run_id: run.id,
-                callback_task_id: callback_task.id,
-                response_payload: json!({ "answer": answer }),
+    let result =
+        ApplicationPublishedCallbackResumeService::new(repository.clone(), consumer.clone())
+            .resume_callback(ResumePublishedCallbackCommand {
+                bearer_token: token,
+                target: PublishedCallbackResumeTarget::FlowRun {
+                    flow_run_id: run.id,
+                    callback_task_id: callback_task.id,
+                },
+                source: PublishedCallbackResumeSource::NativeAgent,
+                response_payload: json!({ "answer": "approved" }),
                 response_mode: Some("blocking".into()),
             })
             .await
             .unwrap();
-    }
 
-    let resume_requests = repository.resume_requests();
-    assert_eq!(resume_requests.len(), 1);
+    let calls = consumer.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].application_id, application.id);
+    assert_eq!(calls[0].callback_task_id, callback_task.id);
+    assert_eq!(calls[0].response_payload, json!({ "answer": "approved" }));
     assert_eq!(
-        resume_requests[0].response_payload,
-        json!({ "answer": "approved" })
+        result.attempt.status,
+        domain::FlowRunCallbackResumeAttemptStatus::Succeeded
     );
-    let resume_events: Vec<_> = repository
-        .run_events(run.id)
-        .into_iter()
-        .filter(|event| event.event_type == "public_run_resume_requested")
-        .collect();
-    assert_eq!(resume_events.len(), 1);
-}
 
-#[tokio::test]
-async fn native_cancel_marks_pending_resume_request_cancelled() {
-    let harness = ApplicationPublicApiTestHarness::new();
-    let application = harness.seed_application(actor_user_id(), "Resume Cancel App");
-    let token = issue_key(&harness, application.id, actor_user_id()).await;
-    publish_application(&harness, application.id, actor_user_id()).await;
-    let repository = harness.repository();
-    let service = ApplicationNativeRunService::new(repository.clone());
-    let run = service
-        .create_native_run(CreateNativeRunCommand {
-            bearer_token: token.clone(),
-            request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
-        })
-        .await
-        .unwrap();
-    let callback_task = repository.seed_pending_callback_task(run.id);
-    service
-        .resume_native_run(ResumeNativeRunCommand {
-            bearer_token: token.clone(),
-            run_id: run.id,
-            callback_task_id: callback_task.id,
-            response_payload: json!({ "answer": "approved" }),
-            response_mode: Some("blocking".into()),
-        })
-        .await
-        .unwrap();
+    let attempts = repository.callback_resume_attempts();
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].flow_run_id, run.id);
+    assert_eq!(attempts[0].callback_task_id, callback_task.id);
+    assert_eq!(attempts[0].source, "native_agent");
+    assert_eq!(
+        attempts[0].status,
+        domain::FlowRunCallbackResumeAttemptStatus::Succeeded
+    );
 
-    let cancelled = service
-        .cancel_native_run(CancelNativeRunCommand {
-            bearer_token: token,
-            run_id: run.id,
-        })
-        .await
-        .unwrap();
-
-    assert_eq!(
-        cancelled.status,
-        control_plane::application_public_api::native::NativeRunStatus::Cancelled
-    );
-    let resume_requests = repository.resume_requests();
-    assert_eq!(
-        resume_requests[0].status,
-        domain::FlowRunResumeRequestStatus::Cancelled
-    );
-    assert!(resume_requests[0].completed_at.is_some());
-    let resume_events: Vec<_> = repository
-        .run_events(run.id)
-        .into_iter()
-        .filter(|event| event.event_type == "public_run_resume_cancelled")
-        .collect();
-    assert_eq!(resume_events.len(), 1);
-    assert_eq!(
-        resume_events[0].payload["resume_request_id"],
-        json!(resume_requests[0].id)
-    );
+    let event_types = repository.run_event_types(run.id);
+    assert!(event_types.contains(&"public_run_resume_requested".to_string()));
+    assert!(event_types.contains(&"public_run_resume_succeeded".to_string()));
+    assert!(!event_types.contains(&"public_run_resume_claimed".to_string()));
 }

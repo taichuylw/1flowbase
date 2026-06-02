@@ -1,0 +1,624 @@
+use super::*;
+
+#[test]
+fn plugin_manifest_v1_parses_runtime_extension_provider_fields() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: openai_compatible@0.4.0
+version: 0.4.0
+vendor: 1flowbase
+display_name: OpenAI Compatible
+description: Generic OpenAI-compatible provider runtime extension
+icon: icon.svg
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/openai-compatible-provider
+  limits:
+    timeout_ms: 30000
+    memory_bytes: 268435456
+node_contributions: []
+"#,
+    )
+    .unwrap();
+
+    assert_eq!(manifest.manifest_version, 1);
+    assert_eq!(manifest.plugin_id, "openai_compatible@0.4.0");
+    assert_eq!(manifest.version, "0.4.0");
+    assert_eq!(manifest.vendor, "1flowbase");
+    assert_eq!(manifest.display_name, "OpenAI Compatible");
+    assert_eq!(
+        manifest.consumption_kind,
+        PluginConsumptionKind::RuntimeExtension
+    );
+    assert_eq!(manifest.execution_mode, PluginExecutionMode::ProcessPerCall);
+    assert_eq!(manifest.consumption_kind.as_str(), "runtime_extension");
+    assert_eq!(manifest.execution_mode.as_str(), "process_per_call");
+    assert_eq!(manifest.slot_codes, vec!["model_provider"]);
+    assert_eq!(manifest.binding_targets, vec!["workspace"]);
+    assert_eq!(manifest.runtime.protocol, "stdio_json");
+    assert_eq!(manifest.runtime.entry, "bin/openai-compatible-provider");
+    assert_eq!(manifest.runtime.limits.timeout_ms, Some(30000));
+    assert_eq!(manifest.runtime.limits.memory_bytes, Some(268435456));
+    assert!(manifest.node_contributions.is_empty());
+}
+
+#[test]
+fn plugin_manifest_v1_parses_stateful_provider_worker_runtime() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: openai@0.1.0
+version: 0.1.0
+vendor: 1flowbase
+display_name: OpenAI
+description: OpenAI Responses provider runtime extension
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: runtime_extension
+execution_mode: stateful_provider_worker
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json_worker
+  entry: bin/openai-provider
+node_contributions: []
+"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        manifest.execution_mode,
+        PluginExecutionMode::StatefulProviderWorker
+    );
+    assert_eq!(manifest.execution_mode.as_str(), "stateful_provider_worker");
+    assert_eq!(manifest.runtime.protocol, "stdio_json_worker");
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_stateful_provider_worker_with_plain_stdio() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: openai@0.1.0
+version: 0.1.0
+vendor: 1flowbase
+display_name: OpenAI
+description: invalid
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: runtime_extension
+execution_mode: stateful_provider_worker
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/openai-provider
+node_contributions: []
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains(
+        "stateful_provider_worker execution_mode requires runtime.protocol=stdio_json_worker"
+    ));
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_host_extension_with_workspace_binding() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_host@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Host
+description: invalid
+source_kind: uploaded
+trust_level: unverified
+consumption_kind: host_extension
+execution_mode: in_process
+slot_codes: []
+binding_targets:
+  - workspace
+selection_mode: auto_activate
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.host_extension/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: none
+  storage: host_managed
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: native_host
+  entry: lib/bad-host.so
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("host_extension cannot declare workspace binding_targets"));
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_capability_plugin_without_node_contributions() {
+    let error = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_capability@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Capability
+description: invalid
+source_kind: official_registry
+trust_level: verified_official
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - node_contribution
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-capability
+node_contributions: []
+"#,
+    )
+    .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("capability_plugin must declare node_contributions"));
+}
+
+#[test]
+fn plugin_manifest_v1_parses_capability_plugin_with_js_dependency_pack() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: js_zod_pack@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: JS Zod Pack
+description: Example JS dependency pack plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - js_dependency_pack
+binding_targets: []
+selection_mode: manual_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/js-zod-pack
+js_dependencies:
+  - alias: zod
+    package: zod
+    version: 3.24.0
+    targets:
+      - backend_code
+    artifacts:
+      backend_code: artifacts/zod.backend.mjs
+    integrity: sha256-example
+    permissions:
+      network: deny
+      filesystem: deny
+      env: deny
+    native_addon: false
+    lifecycle_scripts: false
+"#,
+    )
+    .unwrap();
+
+    assert_eq!(manifest.slot_codes, vec!["js_dependency_pack"]);
+    assert_eq!(
+        manifest.consumption_kind,
+        PluginConsumptionKind::CapabilityPlugin
+    );
+    assert_eq!(manifest.js_dependencies.len(), 1);
+    let dep = &manifest.js_dependencies[0];
+    assert_eq!(dep.alias, "zod");
+    assert_eq!(dep.package, "zod");
+    assert_eq!(dep.version, "3.24.0");
+    assert_eq!(dep.targets, vec!["backend_code"]);
+    assert_eq!(
+        dep.artifacts.get("backend_code"),
+        Some(&"artifacts/zod.backend.mjs".to_string())
+    );
+    assert_eq!(dep.permissions.network, "deny");
+    assert_eq!(dep.permissions.filesystem, "deny");
+}
+
+#[test]
+fn plugin_manifest_v1_accepts_frontend_block_contribution() {
+    let manifest = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: fixture_frontend_blocks@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Fixture Frontend Blocks
+description: Frontend block contribution plugin
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture-frontend-blocks
+block_contributions:
+  - contribution_code: hero_banner
+    title: Hero Banner
+    runtime: iframe
+    entry: blocks/hero/index.html
+    context_contract:
+      primitives:
+        - text
+        - image
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+      - configurable
+"#,
+    )
+    .unwrap();
+
+    assert_eq!(manifest.block_contributions.len(), 1);
+    let block = &manifest.block_contributions[0];
+    assert_eq!(block.contribution_code, "hero_banner");
+    assert_eq!(block.runtime, "iframe");
+    assert_eq!(block.entry, "blocks/hero/index.html");
+    assert_eq!(block.context_contract.primitives, vec!["text", "image"]);
+    assert_eq!(block.ui_capabilities, vec!["responsive", "configurable"]);
+}
+
+#[test]
+fn plugin_manifest_v1_rejects_invalid_frontend_block_values_with_stable_errors() {
+    let invalid_runtime = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block
+description: invalid runtime
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block
+block_contributions:
+  - contribution_code: bad_runtime
+    title: Bad Runtime
+    runtime: react_remote
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_runtime
+        .to_string()
+        .contains("block_contributions[].runtime must be one of iframe"));
+
+    let missing_entry = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: missing_frontend_block_entry@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Missing Frontend Block Entry
+description: missing entry
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/missing-frontend-block-entry
+block_contributions:
+  - contribution_code: missing_entry
+    title: Missing Entry
+    runtime: iframe
+    entry: ""
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(missing_entry
+        .to_string()
+        .contains("block_contributions[].entry cannot be empty"));
+
+    let invalid_permission = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block_permission@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block Permission
+description: invalid permission
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block-permission
+block_contributions:
+  - contribution_code: bad_permission
+    title: Bad Permission
+    runtime: iframe
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: workspace_write
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_permission
+        .to_string()
+        .contains("block_contributions[].permissions.storage must be one of none"));
+
+    let invalid_primitive = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block_primitive@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block Primitive
+description: invalid primitive
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block-primitive
+block_contributions:
+  - contribution_code: bad_primitive
+    title: Bad Primitive
+    runtime: iframe
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - script
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - responsive
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_primitive.to_string().contains(
+        "block_contributions[].context_contract.primitives[] must be one of text, image, link, button, rich_text, data_record"
+    ));
+
+    let invalid_capability = parse_plugin_manifest(
+        r#"
+manifest_version: 1
+plugin_id: bad_frontend_block_capability@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: Bad Frontend Block Capability
+description: invalid capability
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: capability_plugin
+execution_mode: declarative_only
+slot_codes:
+  - frontend_block
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.capability/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: none
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/bad-frontend-block-capability
+block_contributions:
+  - contribution_code: bad_capability
+    title: Bad Capability
+    runtime: iframe
+    entry: blocks/bad/index.html
+    context_contract:
+      primitives:
+        - text
+      input_schema:
+        type: object
+    permissions:
+      network: none
+      storage: none
+      secrets: none
+    ui_capabilities:
+      - arbitrary_dom_access
+"#,
+    )
+    .unwrap_err();
+
+    assert!(invalid_capability.to_string().contains(
+        "block_contributions[].ui_capabilities[] must be one of responsive, configurable, theming, data_binding"
+    ));
+}

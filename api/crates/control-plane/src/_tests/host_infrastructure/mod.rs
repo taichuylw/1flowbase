@@ -1,0 +1,2 @@
+mod host_infrastructure_config_tests;
+mod host_infrastructure_contract_tests;

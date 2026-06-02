@@ -1,0 +1,204 @@
+use super::*;
+
+pub(super) fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<String>>> {
+    match kind {
+        "templated_text" => {
+            let template = raw_value
+                .as_str()
+                .ok_or_else(|| anyhow!("templated_text binding value must be a string"))?;
+            Ok(parse_template_selector_tokens(template))
+        }
+        "selector" => Ok(vec![selector_path(raw_value)?]),
+        "selector_list" => selector_path_list(raw_value),
+        "named_bindings" => {
+            let entries = raw_value
+                .as_array()
+                .ok_or_else(|| anyhow!("named_bindings value must be an array"))?;
+            let mut selectors = Vec::new();
+
+            for entry in entries {
+                if let Some(value) = entry.get("value").and_then(Value::as_object) {
+                    match value.get("kind").and_then(Value::as_str) {
+                        Some("constant") => continue,
+                        Some("selector") => {
+                            selectors.push(selector_path(
+                                value.get("selector").unwrap_or(&Value::Null),
+                            )?);
+                            continue;
+                        }
+                        Some("templated_text") => {
+                            let template =
+                                value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                                    anyhow!("named_bindings templated_text value must be a string")
+                                })?;
+                            selectors.extend(parse_template_selector_tokens(template));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+
+                if let Some(content) = entry
+                    .get("content")
+                    .and_then(|content| content.get("value"))
+                    .and_then(Value::as_str)
+                {
+                    selectors.extend(parse_template_selector_tokens(content));
+                    continue;
+                }
+
+                selectors.push(selector_path(
+                    entry.get("selector").unwrap_or(&Value::Null),
+                )?);
+            }
+
+            Ok(selectors)
+        }
+        "prompt_messages" => {
+            let entries = raw_value
+                .as_array()
+                .ok_or_else(|| anyhow!("prompt_messages value must be an array"))?;
+            let mut selectors = Vec::new();
+
+            for entry in entries {
+                let content = entry
+                    .get("content")
+                    .and_then(|content| content.get("value"))
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        anyhow!("prompt_messages entry content.value must be a string")
+                    })?;
+                selectors.extend(parse_template_selector_tokens(content));
+            }
+
+            Ok(selectors)
+        }
+        "data_model_query" => extract_data_model_query_selector_paths(raw_value),
+        "condition_group" => {
+            let conditions = raw_value
+                .get("conditions")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("condition_group value must include conditions"))?;
+            let mut selectors = Vec::new();
+
+            for condition in conditions {
+                selectors.push(selector_path(
+                    condition.get("left").unwrap_or(&Value::Null),
+                )?);
+
+                if let Some(right) = condition.get("right").filter(|value| value.is_array()) {
+                    selectors.push(selector_path(right)?);
+                }
+            }
+
+            Ok(selectors)
+        }
+        "state_write" => {
+            let entries = raw_value
+                .as_array()
+                .ok_or_else(|| anyhow!("state_write value must be an array"))?;
+            let mut selectors = Vec::new();
+
+            for entry in entries {
+                if let Some(source) = entry.get("source").filter(|value| value.is_array()) {
+                    selectors.push(selector_path(source)?);
+                }
+            }
+
+            Ok(selectors)
+        }
+        other => bail!("unsupported binding kind: {other}"),
+    }
+}
+
+fn extract_data_model_query_selector_paths(raw_value: &Value) -> Result<Vec<Vec<String>>> {
+    let object = raw_value
+        .as_object()
+        .ok_or_else(|| anyhow!("data_model_query value must be an object"))?;
+    let mut selectors = Vec::new();
+
+    if let Some(filters) = object.get("filters") {
+        for filter in filters
+            .as_array()
+            .ok_or_else(|| anyhow!("data_model_query filters must be an array"))?
+        {
+            if let Some(value) = filter.get("value") {
+                push_query_value_selector(value, &mut selectors)?;
+            }
+        }
+    }
+
+    if let Some(page) = object.get("page") {
+        push_query_value_selector(page, &mut selectors)?;
+    }
+    if let Some(page_size) = object.get("page_size") {
+        push_query_value_selector(page_size, &mut selectors)?;
+    }
+
+    Ok(selectors)
+}
+
+fn push_query_value_selector(value: &Value, selectors: &mut Vec<Vec<String>>) -> Result<()> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow!("data_model_query value input must be an object"))?;
+
+    if object.get("kind").and_then(Value::as_str) == Some("selector") {
+        selectors.push(selector_path(
+            object.get("selector").unwrap_or(&Value::Null),
+        )?);
+    }
+
+    Ok(())
+}
+
+fn selector_path(value: &Value) -> Result<Vec<String>> {
+    value
+        .as_array()
+        .ok_or_else(|| anyhow!("selector path must be an array"))?
+        .iter()
+        .map(|segment| {
+            segment
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| anyhow!("selector path segment must be a string"))
+        })
+        .collect()
+}
+
+fn selector_path_list(value: &Value) -> Result<Vec<Vec<String>>> {
+    value
+        .as_array()
+        .ok_or_else(|| anyhow!("selector path list must be an array"))?
+        .iter()
+        .map(selector_path)
+        .collect()
+}
+
+fn parse_template_selector_tokens(value: &str) -> Vec<Vec<String>> {
+    let mut selectors = Vec::new();
+    let mut cursor = 0;
+
+    while let Some(start_offset) = value[cursor..].find("{{") {
+        let start = cursor + start_offset + 2;
+        let Some(end_offset) = value[start..].find("}}") else {
+            break;
+        };
+        let end = start + end_offset;
+        let token = value[start..end].trim();
+
+        let selector = token
+            .split('.')
+            .map(str::trim)
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
+
+        if selector.len() >= 2 && selector.iter().all(|segment| !segment.is_empty()) {
+            selectors.push(selector);
+        }
+
+        cursor = end + 2;
+    }
+
+    selectors
+}

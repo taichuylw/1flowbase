@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   formatEnvironmentVariableTitle,
   type AgentFlowEnvironmentVariable
-} from '../../lib/application-environment-variables';
+} from '../../lib/variables/application-environment-variables';
 import { EnvironmentVariableValueEditor } from './environment-variables/EnvironmentVariableValueEditor';
 import { i18nText } from '../../../../shared/i18n/text';
 

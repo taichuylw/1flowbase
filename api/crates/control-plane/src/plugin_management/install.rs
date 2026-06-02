@@ -1,3 +1,4 @@
+use super::catalog_projection::refresh_provider_package_catalog_projection;
 use super::*;
 use super::{catalog::normalize_official_entries, filesystem::copy_installation_artifact};
 use sha2::{Digest, Sha256};
@@ -672,6 +673,12 @@ where
                             actor_user_id: command.actor_user_id,
                         })
                         .await?;
+                    refresh_provider_package_catalog_projection(
+                        &self.repository,
+                        &installation,
+                        &installed_package,
+                    )
+                    .await?;
                     let manifest = load_plugin_manifest(&install_path)?;
                     self.repository
                         .replace_installation_node_contributions(

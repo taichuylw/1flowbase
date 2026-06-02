@@ -349,7 +349,7 @@ function writeReport(repoRoot, report) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/hotspot-review.js [--since <git-date>] [--min-touches <n>] [--line-warning <n>] [--line-error <n>]\n'
+    'Usage: node scripts/node/cli/hotspot-review.js [--since <git-date>] [--min-touches <n>] [--line-warning <n>] [--line-error <n>]\n'
   );
 }
 

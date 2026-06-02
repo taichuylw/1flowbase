@@ -9,6 +9,10 @@ use axum::{
 };
 use control_plane::application_public_api::{
     api_keys::ApplicationApiKeyService,
+    callback_resume::{
+        ApplicationPublishedCallbackResumeService, PublishedCallbackResumeSource,
+        PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
+    },
     compat::openai::{
         extract_model_list_from_start_node, map_chat_completion_request, map_response_request,
         response_id_from_run_id, run_id_from_response_id, OpenAiCompatError, OpenAiCompatibleModel,
@@ -19,11 +23,9 @@ use control_plane::application_public_api::{
         NativeRunResult, NativeRunValidationError,
     },
     publications::{ApplicationPublicationService, LoadActiveApplicationPublicationCommand},
-    run_service::{native_result_from_run_detail, ApplicationPublishedRunControlRepository},
+    run_service::ApplicationPublishedRunControlRepository,
 };
-use control_plane::orchestration_runtime::{
-    CompleteCallbackTaskCommand, OrchestrationRuntimeService,
-};
+use control_plane::orchestration_runtime::OrchestrationRuntimeService;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{info, warn};
@@ -39,6 +41,14 @@ use crate::{
             decode_openai_callback_tool_call_id, encode_openai_callback_tool_call_id,
         },
     },
+};
+
+mod model_list;
+#[cfg(test)]
+mod tests;
+
+use model_list::{
+    is_codex_model_list_request, to_codex_model_list_response, to_openai_model_list_response,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -223,7 +233,7 @@ struct OpenAiToolResumeRequest {
 
 struct OpenAiToolResumePlan {
     initial_run: NativeRunResult,
-    command: CompleteCallbackTaskCommand,
+    command: ResumePublishedCallbackCommand,
 }
 
 #[utoipa::path(
@@ -283,6 +293,7 @@ pub async fn create_chat_completion(
                 state.clone(),
                 &credential.token,
                 callback_task_id,
+                PublishedCallbackResumeSource::OpenAiChat,
                 resume.tool_results,
             )
             .await?;
@@ -304,6 +315,7 @@ pub async fn create_chat_completion(
             state,
             &credential.token,
             callback_task_id,
+            PublishedCallbackResumeSource::OpenAiChat,
             resume.tool_results,
         )
         .await?;
@@ -455,6 +467,7 @@ pub async fn create_response(
                 state.clone(),
                 &credential.token,
                 resume.callback_task_id,
+                PublishedCallbackResumeSource::OpenAiResponses,
                 resume.tool_results,
             )
             .await?;
@@ -472,6 +485,7 @@ pub async fn create_response(
             state,
             &credential.token,
             resume.callback_task_id,
+            PublishedCallbackResumeSource::OpenAiResponses,
             resume.tool_results,
         )
         .await?;
@@ -709,101 +723,6 @@ fn warn_openai_route_error(route: &'static str, error: &OpenAiRouteError, messag
     }
 }
 
-fn to_openai_model_list_response(
-    models: Vec<OpenAiCompatibleModel>,
-    created: i64,
-) -> OpenAiModelListResponse {
-    OpenAiModelListResponse {
-        object: "list",
-        data: models
-            .into_iter()
-            .map(|model| OpenAiModelObject {
-                id: model.id.clone(),
-                object: "model",
-                created,
-                owned_by: "1flowbase",
-                name: model.name.clone(),
-                context_window: model.context_window,
-                max_context_window: model.max_context_window.or(model.context_window),
-                max_output_tokens: model.max_output_tokens,
-                auto_compact_token_limit: model.auto_compact_token_limit,
-                capabilities: (!model.capabilities.is_empty())
-                    .then(|| serde_json::to_value(&model.capabilities).unwrap_or(Value::Null)),
-                reasoning: model
-                    .reasoning
-                    .as_ref()
-                    .map(|reasoning| serde_json::to_value(reasoning).unwrap_or(Value::Null)),
-                limit: opencode_limit_projection(&model),
-            })
-            .collect(),
-    }
-}
-
-fn is_codex_model_list_request(query: &OpenAiModelListQuery) -> bool {
-    query
-        .client_version
-        .as_deref()
-        .is_some_and(|client_version| !client_version.trim().is_empty())
-}
-
-fn to_codex_model_list_response(models: Vec<OpenAiCompatibleModel>) -> Value {
-    let models = models
-        .into_iter()
-        .map(codex_model_metadata)
-        .collect::<Vec<_>>();
-    json!({ "models": models })
-}
-
-fn codex_model_metadata(model: OpenAiCompatibleModel) -> Value {
-    let display_name = model.name.clone().unwrap_or_else(|| model.id.clone());
-    let max_context_window = model.max_context_window.or(model.context_window);
-    json!({
-        "slug": model.id,
-        "display_name": display_name,
-        "description": null,
-        "default_reasoning_level": null,
-        "supported_reasoning_levels": [],
-        "shell_type": "shell_command",
-        "visibility": "list",
-        "supported_in_api": true,
-        "priority": 0,
-        "availability_nux": null,
-        "upgrade": null,
-        "base_instructions": "You are a helpful coding assistant.",
-        "supports_reasoning_summaries": false,
-        "default_reasoning_summary": "auto",
-        "support_verbosity": false,
-        "default_verbosity": null,
-        "apply_patch_tool_type": null,
-        "web_search_tool_type": "text",
-        "truncation_policy": { "mode": "bytes", "limit": 10000 },
-        "supports_parallel_tool_calls": false,
-        "supports_image_detail_original": false,
-        "context_window": model.context_window,
-        "max_context_window": max_context_window,
-        "max_output_tokens": model.max_output_tokens,
-        "auto_compact_token_limit": model.auto_compact_token_limit,
-        "effective_context_window_percent": 95,
-        "limit": opencode_limit_projection(&model),
-        "experimental_supported_tools": [],
-        "input_modalities": ["text"]
-    })
-}
-
-fn opencode_limit_projection(model: &OpenAiCompatibleModel) -> Option<Value> {
-    let context = model.max_context_window.or(model.context_window);
-    let output = model.max_output_tokens;
-    if context.is_none() && output.is_none() {
-        return None;
-    }
-
-    Some(json!({
-        "context": context,
-        "input": context,
-        "output": output,
-    }))
-}
-
 async fn create_native_run(
     state: Arc<ApiState>,
     bearer_token: String,
@@ -822,57 +741,44 @@ async fn resume_openai_tool_call(
     state: Arc<ApiState>,
     bearer_token: &str,
     callback_task_id: Uuid,
+    source: PublishedCallbackResumeSource,
     tool_results: Value,
 ) -> Result<NativeRunResult, OpenAiRouteError> {
-    let api_actor = ApplicationApiKeyService::new(state.store.clone())
-        .with_last_used_cache(state.infrastructure.cache_store())
-        .authenticate_bearer_token(bearer_token)
-        .await
-        .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let detail = OrchestrationRuntimeService::new(
+    let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
-    .complete_callback_task(CompleteCallbackTaskCommand {
-        actor_user_id: api_actor.creator_user_id,
-        application_id: api_actor.application_id,
-        callback_task_id,
-        response_payload: json!({ "tool_results": tool_results }),
-    })
-    .await
-    .map_err(native::service_error)?;
+    .with_runtime_event_stream(state.runtime_event_stream.clone());
+    let result =
+        ApplicationPublishedCallbackResumeService::new(state.store.clone(), runtime_service)
+            .with_last_used_cache(state.infrastructure.cache_store())
+            .resume_callback(ResumePublishedCallbackCommand {
+                bearer_token: bearer_token.to_string(),
+                target: PublishedCallbackResumeTarget::CallbackTask { callback_task_id },
+                source,
+                response_payload: json!({ "tool_results": tool_results }),
+                response_mode: None,
+            })
+            .await
+            .map_err(native::service_error)?;
 
-    Ok(native_result_from_run_detail(
-        &detail,
-        json!({
-            "external_user": detail.flow_run.external_user,
-            "external_conversation_id": detail.flow_run.external_conversation_id,
-            "external_trace_id": detail.flow_run.external_trace_id,
-            "compatibility_mode": detail.flow_run.compatibility_mode,
-            "idempotency_key": detail.flow_run.idempotency_key,
-            "request": {
-                "conversation": {
-                    "id": detail.flow_run.external_conversation_id,
-                    "user": detail.flow_run.external_user,
-                }
-            }
-        }),
-    ))
+    Ok(
+        control_plane::application_public_api::run_service::native_result_from_run_detail(
+            &result.detail,
+            native::published_run_metadata(&result.detail.flow_run),
+        ),
+    )
 }
 
 async fn prepare_openai_tool_resume(
     state: Arc<ApiState>,
     bearer_token: &str,
     callback_task_id: Uuid,
+    source: PublishedCallbackResumeSource,
     tool_results: Value,
 ) -> Result<OpenAiToolResumePlan, OpenAiRouteError> {
-    let api_actor = ApplicationApiKeyService::new(state.store.clone())
-        .with_last_used_cache(state.infrastructure.cache_store())
-        .authenticate_bearer_token(bearer_token)
-        .await
-        .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
     let callback_task = state
         .store
         .get_published_callback_task(callback_task_id)
@@ -885,14 +791,6 @@ async fn prepare_openai_tool_resume(
                 "callback task was not found",
             )
         })?;
-    if callback_task.status != domain::CallbackTaskStatus::Pending {
-        return Err(native::NativeApiError::new(
-            StatusCode::CONFLICT,
-            "callback_task_not_pending",
-            "callback task is not pending",
-        )
-        .into());
-    }
     let initial_run = ApplicationNativeRunService::new(state.store.clone())
         .with_last_used_cache(state.infrastructure.cache_store())
         .get_native_run(GetNativeRunCommand {
@@ -904,11 +802,12 @@ async fn prepare_openai_tool_resume(
 
     Ok(OpenAiToolResumePlan {
         initial_run,
-        command: CompleteCallbackTaskCommand {
-            actor_user_id: api_actor.creator_user_id,
-            application_id: api_actor.application_id,
-            callback_task_id,
+        command: ResumePublishedCallbackCommand {
+            bearer_token: bearer_token.to_string(),
+            target: PublishedCallbackResumeTarget::CallbackTask { callback_task_id },
+            source,
             response_payload: json!({ "tool_results": tool_results }),
+            response_mode: Some("streaming".into()),
         },
     })
 }
@@ -1292,271 +1191,5 @@ fn openai_responses_usage(
         input_tokens: usage.prompt_tokens.unwrap_or_default(),
         output_tokens: usage.completion_tokens.unwrap_or_default(),
         total_tokens: usage.total_tokens.unwrap_or_default(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use control_plane::application_public_api::native::{NativeRequiredAction, NativeRunStatus};
-    use time::OffsetDateTime;
-    use uuid::Uuid;
-
-    #[test]
-    fn openai_response_projects_native_tool_calls() {
-        let run = NativeRunResult {
-            id: Uuid::nil(),
-            application_id: Uuid::nil(),
-            api_key_id: Uuid::nil(),
-            publication_version_id: Uuid::nil(),
-            status: NativeRunStatus::Succeeded,
-            node_input_payload: json!({}),
-            metadata: json!({}),
-            answer: None,
-            required_action: None,
-            tool_calls: Some(json!([
-                {
-                    "id": "call_123",
-                    "name": "lookup_order",
-                    "arguments": {"order_id": "order_123"}
-                }
-            ])),
-            usage: None,
-            error: None,
-            created_at: OffsetDateTime::UNIX_EPOCH,
-        };
-
-        let payload = serde_json::to_value(to_openai_response(
-            run,
-            "provider/model".into(),
-            "chatcmpl-test-tool-call".to_string(),
-        ))
-        .expect("openai response serializes");
-
-        assert_eq!(payload["id"], json!("chatcmpl-test-tool-call"));
-        assert_eq!(payload["choices"][0]["finish_reason"], json!("tool_calls"));
-        assert_eq!(
-            payload["choices"][0]["message"]["tool_calls"][0]["function"]["name"],
-            json!("lookup_order")
-        );
-        assert_eq!(
-            payload["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"],
-            json!("{\"order_id\":\"order_123\"}")
-        );
-    }
-
-    #[test]
-    fn openai_response_encodes_callback_task_id_into_tool_call_ids() {
-        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
-        let run = NativeRunResult {
-            id: Uuid::nil(),
-            application_id: Uuid::nil(),
-            api_key_id: Uuid::nil(),
-            publication_version_id: Uuid::nil(),
-            status: NativeRunStatus::Waiting,
-            node_input_payload: json!({}),
-            metadata: json!({}),
-            answer: Some("need tool".to_string()),
-            required_action: Some(NativeRequiredAction {
-                action_type: "submit_tool_outputs".to_string(),
-                payload: json!({ "callback_task_id": callback_task_id }),
-            }),
-            tool_calls: Some(json!([
-                {
-                    "id": "call_123",
-                    "name": "lookup_order",
-                    "arguments": {"order_id": "order_123"}
-                }
-            ])),
-            usage: None,
-            error: None,
-            created_at: OffsetDateTime::UNIX_EPOCH,
-        };
-
-        let payload = serde_json::to_value(to_openai_response(
-            run,
-            "provider/model".into(),
-            "chatcmpl-test-callback".to_string(),
-        ))
-        .expect("openai response serializes");
-
-        let tool_call_id = payload["choices"][0]["message"]["tool_calls"][0]["id"]
-            .as_str()
-            .expect("tool call id should be a string");
-        assert!(tool_call_id.starts_with(
-            control_plane::application_public_api::callback_tool_ids::OPENAI_CALLBACK_TOOL_CALL_PREFIX
-        ));
-        assert_eq!(
-            decode_openai_callback_tool_call_id(tool_call_id),
-            Some((callback_task_id, "call_123".to_string()))
-        );
-    }
-
-    #[test]
-    fn openai_chat_tool_resume_request_decodes_tool_messages() {
-        let callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
-        let external_tool_call_id =
-            encode_openai_callback_tool_call_id(callback_task_id, "call_weather");
-
-        let resume = openai_chat_tool_resume_request(&json!({
-            "model": "1flowbase",
-            "messages": [
-                {"role": "assistant", "content": null, "tool_calls": [
-                    {"id": external_tool_call_id, "type": "function", "function": {"name": "lookup_weather", "arguments": "{}"}}
-                ]},
-                {"role": "tool", "tool_call_id": external_tool_call_id, "content": "{\"temperature\":21}"}
-            ]
-        }))
-        .expect("resume request should parse")
-        .expect("tool message should resume callback");
-
-        assert_eq!(resume.callback_task_id, callback_task_id);
-        assert_eq!(
-            resume.tool_results[0]["tool_call_id"],
-            json!("call_weather")
-        );
-        assert_eq!(
-            resume.tool_results[0]["content"],
-            json!("{\"temperature\":21}")
-        );
-    }
-
-    #[test]
-    fn openai_chat_tool_resume_request_uses_latest_trailing_tool_messages() {
-        let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
-        let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
-        let previous_tool_call_id =
-            encode_openai_callback_tool_call_id(previous_callback_task_id, "call_previous");
-        let current_tool_call_id =
-            encode_openai_callback_tool_call_id(current_callback_task_id, "call_current");
-
-        let resume = openai_chat_tool_resume_request(&json!({
-            "model": "1flowbase",
-            "messages": [
-                {"role": "user", "content": "first"},
-                {"role": "assistant", "content": null, "tool_calls": [
-                    {"id": previous_tool_call_id, "type": "function", "function": {"name": "lookup_previous", "arguments": "{}"}}
-                ]},
-                {"role": "tool", "tool_call_id": previous_tool_call_id, "content": "old result"},
-                {"role": "assistant", "content": "old answer"},
-                {"role": "user", "content": "next"},
-                {"role": "assistant", "content": null, "tool_calls": [
-                    {"id": current_tool_call_id, "type": "function", "function": {"name": "lookup_current", "arguments": "{}"}}
-                ]},
-                {"role": "tool", "tool_call_id": current_tool_call_id, "content": "new result"}
-            ]
-        }))
-        .expect("resume request should parse")
-        .expect("trailing tool messages should resume callback");
-
-        assert_eq!(resume.callback_task_id, current_callback_task_id);
-        assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
-        assert_eq!(
-            resume.tool_results[0]["tool_call_id"],
-            json!("call_current")
-        );
-        assert_eq!(resume.tool_results[0]["content"], json!("new result"));
-    }
-
-    #[test]
-    fn openai_chat_tool_resume_request_ignores_historical_tool_messages() {
-        let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
-        let external_tool_call_id =
-            encode_openai_callback_tool_call_id(callback_task_id, "call_previous");
-
-        let resume = openai_chat_tool_resume_request(&json!({
-            "model": "1flowbase",
-            "messages": [
-                {"role": "user", "content": "first"},
-                {"role": "assistant", "content": null, "tool_calls": [
-                    {"id": external_tool_call_id, "type": "function", "function": {"name": "lookup_previous", "arguments": "{}"}}
-                ]},
-                {"role": "tool", "tool_call_id": external_tool_call_id, "content": "old result"},
-                {"role": "assistant", "content": "old answer"},
-                {"role": "user", "content": "next question"}
-            ]
-        }))
-        .expect("historical tool messages should parse");
-
-        assert!(resume.is_none());
-    }
-
-    #[test]
-    fn openai_responses_response_projects_native_tool_calls_with_encoded_call_id() {
-        let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
-        let run = NativeRunResult {
-            id: Uuid::nil(),
-            application_id: Uuid::nil(),
-            api_key_id: Uuid::nil(),
-            publication_version_id: Uuid::nil(),
-            status: NativeRunStatus::Waiting,
-            node_input_payload: json!({}),
-            metadata: json!({}),
-            answer: Some("".to_string()),
-            required_action: Some(NativeRequiredAction {
-                action_type: "submit_tool_outputs".to_string(),
-                payload: json!({ "callback_task_id": callback_task_id, "callback_kind": "llm_tool_calls" }),
-            }),
-            tool_calls: Some(json!([
-                {
-                    "id": "call_inventory",
-                    "name": "lookup_inventory",
-                    "arguments": {"sku": "sku_123"}
-                }
-            ])),
-            usage: None,
-            error: None,
-            created_at: OffsetDateTime::UNIX_EPOCH,
-        };
-
-        let payload = serde_json::to_value(to_openai_responses_response(
-            run,
-            "provider/model".into(),
-            Some("resp_previous".into()),
-        ))
-        .expect("responses object serializes");
-
-        assert_eq!(payload["status"], json!("completed"));
-        assert_eq!(payload["output_text"], json!(""));
-        assert_eq!(payload["output"][0]["type"], json!("function_call"));
-        assert_eq!(payload["output"][0]["name"], json!("lookup_inventory"));
-        assert_eq!(
-            payload["output"][0]["arguments"],
-            json!("{\"sku\":\"sku_123\"}")
-        );
-        let call_id = payload["output"][0]["call_id"]
-            .as_str()
-            .expect("call_id should be encoded");
-        assert_eq!(
-            decode_openai_callback_tool_call_id(call_id),
-            Some((callback_task_id, "call_inventory".to_string()))
-        );
-    }
-
-    #[test]
-    fn openai_responses_tool_resume_request_decodes_function_call_outputs() {
-        let callback_task_id = Uuid::from_u128(0xdddddddddddddddddddddddddddddddd);
-        let call_id = encode_openai_callback_tool_call_id(callback_task_id, "call_inventory");
-
-        let resume = openai_responses_tool_resume_request(&json!({
-            "model": "1flowbase",
-            "previous_response_id": "resp_11111111-1111-1111-1111-111111111111",
-            "input": [
-                {
-                    "type": "function_call_output",
-                    "call_id": call_id,
-                    "output": {"stock": 7}
-                }
-            ]
-        }))
-        .expect("resume request should parse")
-        .expect("function_call_output should resume callback");
-
-        assert_eq!(resume.callback_task_id, callback_task_id);
-        assert_eq!(
-            resume.tool_results[0]["tool_call_id"],
-            json!("call_inventory")
-        );
-        assert_eq!(resume.tool_results[0]["content"], json!("{\"stock\":7}"));
     }
 }

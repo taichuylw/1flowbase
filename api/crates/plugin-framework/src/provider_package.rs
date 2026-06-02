@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -60,7 +60,7 @@ pub struct ProviderCapabilitiesManifest {
     pub model_types: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderConfigField {
     pub key: String,
     #[serde(rename = "type")]

@@ -100,7 +100,7 @@ function buildContractsCommands({ repoRoot }) {
 
 function usageContracts(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/test-contracts.js\n'
+    'Usage: node scripts/node/cli/test-contracts.js\n'
       + 'Runs targeted model provider contract tests across shared consumers\n'
   );
 }
@@ -121,7 +121,7 @@ async function runContracts(argv = [], deps = {}) {
     env,
     scope: 'test-contracts',
     lockMode: 'heavy',
-    commandDisplay: 'node scripts/node/test-contracts.js',
+    commandDisplay: 'node scripts/node/cli/test-contracts.js',
     runtimeConfig,
     commands: buildContractsCommands({ repoRoot }),
     spawnSyncImpl: deps.spawnSyncImpl,

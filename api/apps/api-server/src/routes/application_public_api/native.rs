@@ -13,6 +13,10 @@ use axum::{
 use control_plane::{
     application_public_api::{
         api_keys::ApplicationApiKeyService,
+        callback_resume::{
+            ApplicationPublishedCallbackResumeService, PublishedCallbackResumeSource,
+            PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
+        },
         model_catalog::{
             extract_agent_model_catalog_from_start_node, AgentModelCapabilities,
             AgentModelDescriptor, AgentModelReasoning,
@@ -20,7 +24,6 @@ use control_plane::{
         native::{
             ApplicationNativeRunService, CancelNativeRunCommand, CreateNativeRunCommand,
             GetNativeRunCommand, NativeRunRequest, NativeRunResult, NativeRunValidationError,
-            ResumeNativeRunCommand,
         },
         publications::{ApplicationPublicationService, LoadActiveApplicationPublicationCommand},
         run_service::native_result_from_run_detail,
@@ -32,7 +35,7 @@ use control_plane::{
     ports::AuthRepository,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tracing::error;
@@ -296,6 +299,26 @@ impl From<AgentModelReasoning> for NativeModelReasoning {
 }
 
 pub(crate) fn service_error(error: anyhow::Error) -> NativeApiError {
+    if error
+        .downcast_ref::<control_plane::errors::ControlPlaneError>()
+        .is_some_and(|error| {
+            matches!(
+                error,
+                control_plane::errors::ControlPlaneError::NotAuthenticated
+            )
+        })
+    {
+        return NativeApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "not_authenticated",
+            "invalid application API key",
+        );
+    }
+    if let Some(control_plane::errors::ControlPlaneError::PermissionDenied(reason)) =
+        error.downcast_ref::<control_plane::errors::ControlPlaneError>()
+    {
+        return NativeApiError::new(StatusCode::FORBIDDEN, reason, error.to_string());
+    }
     if let Some(control_plane::errors::ControlPlaneError::NotFound(name)) =
         error.downcast_ref::<control_plane::errors::ControlPlaneError>()
     {
@@ -420,6 +443,24 @@ pub(crate) fn to_native_run_response(run: NativeRunResult) -> NativeRunResponse 
         error: run.error.and_then(|value| serde_json::to_value(value).ok()),
         created_at: run.created_at.to_string(),
     }
+}
+
+pub(crate) fn published_run_metadata(flow_run: &domain::FlowRunRecord) -> Value {
+    json!({
+        "title": flow_run.title,
+        "expand_id": flow_run.external_user,
+        "external_user": flow_run.external_user,
+        "external_conversation_id": flow_run.external_conversation_id,
+        "external_trace_id": flow_run.external_trace_id,
+        "compatibility_mode": flow_run.compatibility_mode,
+        "idempotency_key": flow_run.idempotency_key,
+        "request": {
+            "conversation": {
+                "id": flow_run.external_conversation_id,
+                "user": flow_run.external_user,
+            }
+        }
+    })
 }
 
 pub(crate) async fn execute_blocking_native_run(
@@ -694,18 +735,32 @@ pub async fn resume_native_run(
     Json(body): Json<ResumeNativeRunBody>,
 ) -> Result<Response, NativeApiError> {
     let bearer_token = bearer_token(&headers)?;
-    let native_service = ApplicationNativeRunService::new(state.store.clone())
-        .with_last_used_cache(state.infrastructure.cache_store());
-    let run = native_service
-        .resume_native_run(ResumeNativeRunCommand {
-            bearer_token,
-            run_id,
-            callback_task_id: body.callback_task_id,
-            response_payload: body.response_payload,
-            response_mode: body.response_mode,
-        })
-        .await
-        .map_err(native_error)?;
+    let runtime_service = OrchestrationRuntimeService::new(
+        state.store.clone(),
+        api_provider_runtime(&state),
+        state.runtime_engine.clone(),
+        state.provider_secret_master_key.clone(),
+    )
+    .with_runtime_event_stream(state.runtime_event_stream.clone());
+    let result =
+        ApplicationPublishedCallbackResumeService::new(state.store.clone(), runtime_service)
+            .with_last_used_cache(state.infrastructure.cache_store())
+            .resume_callback(ResumePublishedCallbackCommand {
+                bearer_token,
+                target: PublishedCallbackResumeTarget::FlowRun {
+                    flow_run_id: run_id,
+                    callback_task_id: body.callback_task_id,
+                },
+                source: PublishedCallbackResumeSource::NativeAgent,
+                response_payload: body.response_payload,
+                response_mode: body.response_mode,
+            })
+            .await
+            .map_err(service_error)?;
+    let run = control_plane::application_public_api::run_service::native_result_from_run_detail(
+        &result.detail,
+        published_run_metadata(&result.detail.flow_run),
+    );
 
     Ok(Json(ApiSuccess::new(to_native_run_response(run))).into_response())
 }

@@ -1,4 +1,3 @@
-import * as AntIcons from '@ant-design/icons';
 import {
   Alert,
   App as AntdApp,
@@ -7,13 +6,9 @@ import {
   Drawer,
   Empty,
   Form,
-  Input,
-  Modal,
-  Popover,
   Typography
 } from 'antd';
 import type { FC } from 'react';
-import type { ElementType } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { SectionPageLayout } from '../../../shared/ui/section-page-layout/SectionPageLayout';
@@ -38,7 +33,6 @@ import {
   createFrontstageBlockCompositionState,
   moveFrontstageBlock,
   removeFrontstageBlock,
-  type FrontstageBlockCompositionInput,
   type FrontstageBlockCompositionState
 } from '../lib/block-composition';
 import {
@@ -49,8 +43,7 @@ import { createFrontstageBlockConfigurationModel } from '../lib/block-configurat
 import { createFrontstageJsBlockDataEffectHandler } from '../lib/js-block-data-effect-handler';
 import {
   createFrontstagePageDocument,
-  createFrontstagePageDocumentSaveInput,
-  type FrontstageBlockInstance
+  createFrontstagePageDocumentSaveInput
 } from '../lib/page-document';
 import { createFrontstagePageRenderPlan } from '../lib/page-canvas/render-plan';
 import { createFrontstagePageCanvasRuntimeRunPlanState } from '../lib/page-canvas/runtime-run-plan';
@@ -65,521 +58,30 @@ import {
 } from '../lib/page-tree';
 import type { FrontStageTreeNode } from '../lib/page-tree';
 import type { RestrictedBlockLoaderLimits } from '../lib/restricted-block-loader';
-import './frontstage-page.css';
 import { i18nText } from '../../../shared/i18n/text';
-
-const DESIGN_MODE_PERMISSION = 'frontstage.page.design';
-const DEFAULT_JS_BLOCK_TRIAL_LIMITS: RestrictedBlockLoaderLimits = {
-  timeoutMs: 1000,
-  maxRenderDepth: 8,
-  maxRenderNodes: 250,
-  maxEventChainDepth: 4,
-  allowedActions: [],
-  allowedEvents: [],
-  allowedDataModels: [],
-  allowedDataOperations: []
-};
-
-type FrontStagePageProps = {
-  workspaceId: string;
-  pageId?: string;
-  onNavigatePage?: (pageId?: string) => void;
-  initialPageTree?: FrontStageTreeNode[];
-  isPageTreeLoading?: boolean;
-  hasPageTreeLoadError?: boolean;
-  onRetryLoadPageTree?: () => void;
-  pageContent?: FrontstagePageContent;
-  isPageContentLoading?: boolean;
-  hasPageContentLoadError?: boolean;
-  onRetryLoadPageContent?: () => void;
-  isPageTreeMutating?: boolean;
-  pageTreeMutationError?: Error | null;
-  onCreateGroupNode?: (
-    input: CreatePageTreeNodeInput
-  ) => Promise<PageTreeMutationResult | void>;
-  onCreatePageNode?: (
-    input: CreatePageTreeNodeInput
-  ) => Promise<PageTreeMutationResult | void>;
-  onRenamePageNode?: (
-    nodeId: string,
-    input: RenamePageTreeNodeInput
-  ) => Promise<PageTreeMutationResult | void>;
-  onUpdatePageNodeMetadata?: (
-    nodeId: string,
-    input: UpdatePageTreeNodeMetadataInput
-  ) => Promise<PageTreeMutationResult | void>;
-  onMovePageNode?: (
-    nodeId: string,
-    input: MovePageTreeNodeInput
-  ) => Promise<PageTreeMutationResult | void>;
-  onDeletePageNode?: (nodeId: string) => Promise<void>;
-};
-
-type CreatePageTreeNodeInput = {
-  title: string | null;
-  icon?: string | null;
-  tooltip?: string | null;
-  parentId: string | null;
-  rank: string;
-};
-
-type RenamePageTreeNodeInput = {
-  title: string | null;
-  icon?: string | null;
-  tooltip?: string | null;
-};
-
-type UpdatePageTreeNodeMetadataInput = {
-  icon?: string | null;
-  tooltip?: string | null;
-  isHidden?: boolean;
-};
-
-type MovePageTreeNodeInput = {
-  parentId: string | null;
-  rank: string;
-};
-
-type PageTreeMutationResult = {
-  id: string;
-  kind: 'group' | 'page';
-};
-
-type PageTreeOperationStatus = 'idle' | 'pending' | 'error';
-
-type PageTreeFormValues = {
-  title?: string;
-  icon?: string;
-  tooltip?: string;
-};
-
-type PageTreeFormDialog =
-  | {
-      kind: 'create';
-      nodeKind: 'group' | 'page';
-      parentId: string | null;
-      rank: string;
-      title: string;
-      initialTitle: string;
-      initialIcon: string;
-      initialTooltip: string;
-    }
-  | {
-      kind: 'rename';
-      nodeId: string;
-      title: string;
-      initialTitle: string;
-      initialIcon: string;
-      initialTooltip: string;
-    }
-  | {
-      kind: 'tooltip';
-      nodeId: string;
-      title: string;
-      initialTooltip: string;
-    };
-
-type AntIconComponent = ElementType<{ className?: string }>;
-
-const antIconComponents = AntIcons as Record<string, unknown>;
-const pageTreeIconEntries = Object.entries(antIconComponents)
-  .filter(
-    (entry): entry is [string, AntIconComponent] =>
-      /(?:Outlined|Filled|TwoTone)$/.test(entry[0]) &&
-      (typeof entry[1] === 'function' ||
-        (typeof entry[1] === 'object' && entry[1] !== null))
-  )
-  .sort(([left], [right]) => left.localeCompare(right));
-const pageTreeIconMap = Object.fromEntries(pageTreeIconEntries);
-const CloseIcon =
-  (pageTreeIconMap.CloseOutlined as AntIconComponent | undefined) ??
-  (() => null);
-const PlusIcon =
-  (pageTreeIconMap.PlusOutlined as AntIconComponent | undefined) ??
-  (() => null);
-
-function createCatalogBlockInput(
-  entry: NormalizedFrontstageBlockCatalogEntry,
-  blockIndex: number
-): FrontstageBlockCompositionInput {
-  const blockNumber = blockIndex + 1;
-  const blockId = `frontstage-js-block-${blockNumber}`;
-
-  return {
-    id: blockId,
-    codeRef: `${blockId}-code`,
-    catalog: {
-      providerCode: entry.providerCode,
-      installationId: entry.installationId
-    },
-    contribution: {
-      pluginId: entry.pluginId,
-      pluginVersion: entry.pluginVersion,
-      code: entry.contributionCode
-    },
-    props: {},
-    layout: {
-      order: blockIndex,
-      region: 'main'
-    },
-    runtime: {
-      kind: entry.runtimeKind,
-      entry: entry.entry,
-      hint: entry.runtimeKind
-    }
-  };
-}
-
-function renderPageTreeIconPicker(
-  selectedIcon: string | undefined,
-  onChange: (icon: string | undefined) => void,
-  iconPickerOpen: boolean,
-  onIconPickerOpenChange: (open: boolean) => void
-) {
-  const SelectedIcon = selectedIcon
-    ? (pageTreeIconMap[selectedIcon] as AntIconComponent | undefined)
-    : undefined;
-  const DisplayIcon = SelectedIcon ?? PlusIcon;
-  const picker = (
-    <div className="frontstage-page-tree-form__icon-popover">
-      <div className="frontstage-page-tree-form__icon-grid">
-        {pageTreeIconEntries.map(([iconName, Icon]) => (
-          <button
-            key={iconName}
-            aria-label={iconName}
-            className={[
-              'frontstage-page-tree-form__icon-button',
-              selectedIcon === iconName
-                ? 'frontstage-page-tree-form__icon-button--selected'
-                : null
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            type="button"
-            onClick={() => {
-              onChange(iconName);
-              onIconPickerOpenChange(false);
-            }}
-          >
-            <Icon />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="frontstage-page-tree-form__icon-field">
-      <Popover
-        arrow={false}
-        content={picker}
-        open={iconPickerOpen}
-        placement="bottomLeft"
-        trigger="click"
-        onOpenChange={onIconPickerOpenChange}
-      >
-        <button
-          aria-label={i18nText("frontstage", "auto.select_icon")}
-          className={[
-            'frontstage-page-tree-form__icon-select-button',
-            selectedIcon
-              ? 'frontstage-page-tree-form__icon-select-button--with-clear'
-              : null
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          type="button"
-        >
-          <DisplayIcon />
-        </button>
-      </Popover>
-      {selectedIcon ? (
-        <button
-          aria-label={i18nText("frontstage", "auto.clear_icon")}
-          className="frontstage-page-tree-form__icon-clear-button"
-          type="button"
-          onClick={() => onChange(undefined)}
-        >
-          <CloseIcon />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function PageTreeIconPickerField({
-  value,
-  onChange,
-  iconPickerOpen,
-  onIconPickerOpenChange
-}: {
-  value?: string;
-  onChange?: (icon: string | undefined) => void;
-  iconPickerOpen: boolean;
-  onIconPickerOpenChange: (open: boolean) => void;
-}) {
-  return renderPageTreeIconPicker(
-    value,
-    (icon) => onChange?.(icon),
-    iconPickerOpen,
-    onIconPickerOpenChange
-  );
-}
-
-function toDisplayErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  return i18nText("frontstage", "auto.page_content_save_failed");
-}
-
-function requireCsrfToken(csrfToken: string | null): string {
-  if (!csrfToken) {
-    throw new Error('missing csrf token');
-  }
-
-  return csrfToken;
-}
-
-function rankForAppendIndex(index: number): string {
-  return String((index + 1) * 1000).padStart(6, '0');
-}
-
-function rankForMoveTarget(index: number, direction: -1 | 1): string {
-  if (direction < 0) {
-    return index === 0 ? '000000' : String(index * 1000 + 500).padStart(6, '0');
-  }
-
-  return String((index + 1) * 1000 + 500).padStart(6, '0');
-}
-
-function findSiblingContext(
-  nodes: FrontStageTreeNode[],
-  targetNodeId: string,
-  parentId: string | null = null
-): {
-  parentId: string | null;
-  siblings: FrontStageTreeNode[];
-  index: number;
-} | null {
-  const index = nodes.findIndex((node) => node.id === targetNodeId);
-  if (index >= 0) {
-    return {
-      parentId,
-      siblings: nodes,
-      index
-    };
-  }
-
-  for (const node of nodes) {
-    if (!node.children) {
-      continue;
-    }
-
-    const childContext = findSiblingContext(
-      node.children,
-      targetNodeId,
-      node.id
-    );
-    if (childContext) {
-      return childContext;
-    }
-  }
-
-  return null;
-}
-
-function extractNodeFromTree(
-  nodes: FrontStageTreeNode[],
-  targetNodeId: string
-): { nodes: FrontStageTreeNode[]; extractedNode: FrontStageTreeNode | null } {
-  let extractedNode: FrontStageTreeNode | null = null;
-  const nextNodes: FrontStageTreeNode[] = [];
-
-  for (const node of nodes) {
-    if (node.id === targetNodeId) {
-      extractedNode = node;
-      continue;
-    }
-
-    if (node.children) {
-      const childResult = extractNodeFromTree(node.children, targetNodeId);
-      if (childResult.extractedNode) {
-        extractedNode = childResult.extractedNode;
-        nextNodes.push({
-          ...node,
-          children: childResult.nodes
-        });
-        continue;
-      }
-    }
-
-    nextNodes.push(node);
-  }
-
-  return {
-    nodes: nextNodes,
-    extractedNode
-  };
-}
-
-function insertNodeIntoTree(
-  nodes: FrontStageTreeNode[],
-  parentId: string | null,
-  index: number,
-  nodeToInsert: FrontStageTreeNode
-): FrontStageTreeNode[] {
-  if (!parentId) {
-    const nextNodes = [...nodes];
-    nextNodes.splice(index, 0, nodeToInsert);
-    return nextNodes;
-  }
-
-  return nodes.map((node) => {
-    if (node.id === parentId && node.kind === 'group') {
-      const nextChildren = [...(node.children ?? [])];
-      nextChildren.splice(index, 0, nodeToInsert);
-      return {
-        ...node,
-        children: nextChildren
-      };
-    }
-
-    return {
-      ...node,
-      children: node.children
-        ? insertNodeIntoTree(node.children, parentId, index, nodeToInsert)
-        : node.children
-    };
-  });
-}
-
-function moveNodeToTreePosition(
-  nodes: FrontStageTreeNode[],
-  nodeId: string,
-  targetNodeId: string,
-  position: 'before' | 'inside' | 'after'
-): FrontStageTreeNode[] {
-  const { nodes: nodesWithoutDragged, extractedNode } = extractNodeFromTree(
-    nodes,
-    nodeId
-  );
-  if (!extractedNode) {
-    return nodes;
-  }
-
-  const targetSiblingContext = findSiblingContext(
-    nodesWithoutDragged,
-    targetNodeId
-  );
-  if (!targetSiblingContext) {
-    return nodes;
-  }
-
-  if (extractedNode.kind === 'group' && targetSiblingContext.parentId) {
-    return nodes;
-  }
-
-  if (position === 'inside') {
-    if (extractedNode.kind !== 'page') {
-      return nodes;
-    }
-
-    const targetNode = findNodeById(nodesWithoutDragged, targetNodeId);
-    if (!targetNode || targetNode.kind !== 'group') {
-      return nodes;
-    }
-
-    return insertNodeIntoTree(
-      nodesWithoutDragged,
-      targetNodeId,
-      targetNode.children?.length ?? 0,
-      extractedNode
-    );
-  }
-
-  const insertIndex =
-    position === 'before'
-      ? targetSiblingContext.index
-      : targetSiblingContext.index + 1;
-
-  return insertNodeIntoTree(
-    nodesWithoutDragged,
-    targetSiblingContext.parentId,
-    insertIndex,
-    extractedNode
-  );
-}
-
-function isNodeDescendantOf(
-  nodes: FrontStageTreeNode[],
-  ancestorNodeId: string,
-  targetNodeId: string
-): boolean {
-  const ancestorNode = findNodeById(nodes, ancestorNodeId);
-  if (!ancestorNode?.children) {
-    return false;
-  }
-
-  return Boolean(findNodeById(ancestorNode.children, targetNodeId));
-}
-
-function updatePageTreeNode(
-  nodes: FrontStageTreeNode[],
-  targetNodeId: string,
-  patch: Partial<
-    Pick<FrontStageTreeNode, 'title' | 'icon' | 'tooltip' | 'is_hidden'>
-  >
-): FrontStageTreeNode[] {
-  return nodes.map((node) => {
-    if (node.id === targetNodeId) {
-      return {
-        ...node,
-        ...patch
-      };
-    }
-
-    return {
-      ...node,
-      children: node.children
-        ? updatePageTreeNode(node.children, targetNodeId, patch)
-        : node.children
-    };
-  });
-}
-
-function getNodeAppendRank(
-  nodes: FrontStageTreeNode[],
-  parentId: string | null
-): string {
-  if (!parentId) {
-    return rankForAppendIndex(nodes.length);
-  }
-
-  const parentNode = findNodeById(nodes, parentId);
-  return rankForAppendIndex(parentNode?.children?.length ?? 0);
-}
-
-function findMatchingFrontstageBlockCatalogEntry(
-  block: FrontstageBlockInstance | null | undefined,
-  catalogItems: NormalizedFrontstageBlockCatalogEntry[]
-): NormalizedFrontstageBlockCatalogEntry | null {
-  if (!block) {
-    return null;
-  }
-
-  return (
-    catalogItems.find(
-      (item) =>
-        block.catalog.providerCode === item.providerCode &&
-        block.catalog.installationId === item.installationId &&
-        block.contribution.pluginId === item.pluginId &&
-        block.contribution.pluginVersion === item.pluginVersion &&
-        block.contribution.code === item.contributionCode
-    ) ?? null
-  );
-}
+import {
+  createCatalogBlockInput,
+  findMatchingFrontstageBlockCatalogEntry
+} from './frontstage-page/block-catalog-helpers';
+import { requireCsrfToken, toDisplayErrorMessage } from './frontstage-page/page-action-helpers';
+import { DEFAULT_JS_BLOCK_TRIAL_LIMITS, DESIGN_MODE_PERMISSION } from './frontstage-page/page-constants';
+import type { FrontStagePageProps } from './frontstage-page/page-props';
+import {
+  PageTreeFormModal,
+  type PageTreeFormDialog,
+  type PageTreeFormValues
+} from './frontstage-page/page-tree-form-modal';
+import {
+  findSiblingContext,
+  getNodeAppendRank,
+  isNodeDescendantOf,
+  moveNodeToTreePosition,
+  rankForMoveTarget,
+  updatePageTreeNode,
+  type CreatePageTreeNodeInput,
+  type PageTreeOperationStatus
+} from './frontstage-page/page-tree-operations';
+import './frontstage-page.css';
 
 export const FrontStagePage: FC<FrontStagePageProps> = ({
   workspaceId,
@@ -1652,57 +1154,17 @@ export const FrontStagePage: FC<FrontStagePageProps> = ({
             )}
           </Drawer>
         </section>
-        <Modal
-          title={pageTreeFormDialog?.title}
-          open={Boolean(pageTreeFormDialog)}
-          okText={i18nText("frontstage", "auto.confirm")}
-          cancelText={i18nText("frontstage", "auto.cancel")}
-          confirmLoading={isOperationPending}
-          destroyOnHidden
-          forceRender
+        <PageTreeFormModal
+          dialog={pageTreeFormDialog}
+          form={pageTreeForm}
+          iconPickerOpen={isPageTreeIconPickerOpen}
+          isOperationPending={isOperationPending}
           onCancel={() => setPageTreeFormDialog(null)}
-          onOk={() => pageTreeForm.submit()}
-        >
-          <Form<PageTreeFormValues>
-            form={pageTreeForm}
-            layout="vertical"
-            preserve={false}
-            onFinish={() => {
-              void handleSubmitPageTreeForm();
-            }}
-          >
-            {pageTreeFormDialog?.kind === 'tooltip' ? (
-              <Form.Item label={i18nText("frontstage", "auto.description")} name="tooltip">
-                <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
-              </Form.Item>
-            ) : (
-              <>
-                <Form.Item
-                  label={i18nText("frontstage", "auto.name")}
-                  name="title"
-                  rules={[
-                    {
-                      required: true,
-                      whitespace: true,
-                      message: i18nText("frontstage", "auto.name_required")
-                    }
-                  ]}
-                >
-                  <Input autoFocus />
-                </Form.Item>
-                <Form.Item label={i18nText("frontstage", "auto.icon")} name="icon">
-                  <PageTreeIconPickerField
-                    iconPickerOpen={isPageTreeIconPickerOpen}
-                    onIconPickerOpenChange={setIsPageTreeIconPickerOpen}
-                  />
-                </Form.Item>
-                <Form.Item label={i18nText("frontstage", "auto.description")} name="tooltip">
-                  <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
-                </Form.Item>
-              </>
-            )}
-          </Form>
-        </Modal>
+          onIconPickerOpenChange={setIsPageTreeIconPickerOpen}
+          onSubmit={() => {
+            void handleSubmitPageTreeForm();
+          }}
+        />
         {canEnterDesignMode && isDesignMode ? (
           <AddBlockCatalogPickerDrawer
             open={isAddBlockPickerOpen}

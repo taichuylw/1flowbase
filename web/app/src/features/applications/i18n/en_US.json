@@ -178,7 +178,6 @@
     "resume_timeline": "Resume timeline",
     "no_resume_events": "No resume events yet",
     "resume_event_requested": "Resume request accepted",
-    "resume_event_claimed": "Resume request claimed",
     "resume_event_succeeded": "Resume completed",
     "resume_event_failed": "Resume failed",
     "resume_event_cancelled": "Resume cancelled",

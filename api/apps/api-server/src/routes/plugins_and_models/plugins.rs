@@ -11,7 +11,8 @@ use control_plane::plugin_management::{
     InstallOfficialPluginCommand, InstallPluginCommand, InstallPluginResult,
     InstallUploadedPluginCommand, OfficialPluginCatalogEntry, OfficialPluginCatalogView,
     PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView, PluginInstalledVersionView,
-    PluginManagementService, SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
+    PluginManagementService, RefreshPluginPackageCatalogProjectionCommand,
+    SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
 };
 use control_plane::resource_action::{
     ActionDefinition, ResourceActionKernel, ResourceActionRegistry, ResourceDefinition,
@@ -99,6 +100,9 @@ pub struct PluginCatalogEntryResponse {
     pub default_base_url: Option<String>,
     pub model_discovery_mode: String,
     pub assigned_to_current_workspace: bool,
+    pub catalog_refresh_status: String,
+    pub catalog_last_error_message: Option<String>,
+    pub catalog_refreshed_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -107,6 +111,17 @@ pub struct PluginCatalogResponse {
     #[schema(value_type = Object)]
     pub i18n_catalog: serde_json::Value,
     pub entries: Vec<PluginCatalogEntryResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PluginCatalogProjectionResponse {
+    pub installation_id: String,
+    pub package_code: String,
+    pub package_version: String,
+    pub projection_status: String,
+    pub last_error_message: Option<String>,
+    pub refreshed_at: Option<String>,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -237,6 +252,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route("/plugins/install-upload", post(install_uploaded_plugin))
         .route("/plugins/install", post(install_plugin))
         .route("/plugins/install-official", post(install_official_plugin))
+        .route(
+            "/plugins/:installation_id/catalog-projection/refresh",
+            post(refresh_catalog_projection),
+        )
         .route("/plugins/:installation_id/enable", post(enable_plugin))
         .route("/plugins/:installation_id/assign", post(assign_plugin))
         .route("/plugins/tasks", get(list_tasks))
@@ -386,6 +405,23 @@ fn to_catalog_response(entry: PluginCatalogEntry) -> PluginCatalogEntryResponse 
         default_base_url: entry.default_base_url,
         model_discovery_mode: entry.model_discovery_mode,
         assigned_to_current_workspace: entry.assigned_to_current_workspace,
+        catalog_refresh_status: entry.catalog_refresh_status,
+        catalog_last_error_message: entry.catalog_last_error_message,
+        catalog_refreshed_at: format_optional_time(entry.catalog_refreshed_at),
+    }
+}
+
+fn to_catalog_projection_response(
+    projection: domain::PluginPackageCatalogProjectionRecord,
+) -> PluginCatalogProjectionResponse {
+    PluginCatalogProjectionResponse {
+        installation_id: projection.installation_id.to_string(),
+        package_code: projection.package_code,
+        package_version: projection.package_version,
+        projection_status: projection.projection_status.as_str().to_string(),
+        last_error_message: projection.last_error_message,
+        refreshed_at: format_optional_time(projection.refreshed_at),
+        updated_at: format_time(projection.updated_at),
     }
 }
 
@@ -718,6 +754,30 @@ pub async fn install_official_plugin(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_install_response(result))),
     ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/plugins/{installation_id}/catalog-projection/refresh",
+    operation_id = "plugin_refresh_catalog_projection",
+    responses((status = 200, body = PluginCatalogProjectionResponse), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn refresh_catalog_projection(
+    State(state): State<Arc<ApiState>>,
+    Path(installation_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<PluginCatalogProjectionResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    let projection = service(&state)
+        .refresh_catalog_projection(RefreshPluginPackageCatalogProjectionCommand {
+            actor_user_id: context.user.id,
+            installation_id: parse_uuid(&installation_id, "installation_id")?,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_catalog_projection_response(
+        projection,
+    ))))
 }
 
 #[utoipa::path(

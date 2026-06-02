@@ -1,16 +1,8 @@
-use std::{
-    path::{Component, Path as FsPath},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use axum::{
-    body::Body,
     extract::{Path, Query, State},
-    http::{
-        header::{ACCEPT_LANGUAGE, CONTENT_TYPE},
-        HeaderMap, StatusCode,
-    },
-    response::Response,
+    http::{header::ACCEPT_LANGUAGE, HeaderMap, StatusCode},
     routing::{get, patch, post},
     Json, Router,
 };
@@ -22,7 +14,6 @@ use control_plane::model_provider::{
     ModelProviderService, PreviewModelProviderModelsCommand, UpdateModelProviderInstanceCommand,
     UpdateModelProviderMainInstanceCommand, ValidateModelProviderResult,
 };
-use control_plane::ports::PluginRepository;
 use plugin_framework::{
     provider_contract::{
         PluginFormCondition, PluginFormFieldSchema, PluginFormOption, PluginFormSchema,
@@ -44,6 +35,8 @@ use crate::{
     response::ApiSuccess,
     routes::system::LocaleMetaResponse,
 };
+
+mod icons;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConfiguredModelBody {
@@ -216,6 +209,9 @@ pub struct ModelProviderCatalogEntryResponse {
     pub availability_status: String,
     pub form_schema: Vec<ModelProviderConfigFieldResponse>,
     pub predefined_models: Vec<ProviderModelDescriptorResponse>,
+    pub catalog_refresh_status: String,
+    pub catalog_last_error_message: Option<String>,
+    pub catalog_refreshed_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -360,7 +356,7 @@ pub fn router() -> Router<Arc<ApiState>> {
         )
         .route(
             "/model-providers/providers/:provider_code/icon",
-            get(read_provider_icon),
+            get(icons::read_provider_icon),
         )
         .route("/model-providers/preview-models", post(preview_models))
         .route("/model-providers/options", get(list_options))
@@ -414,91 +410,6 @@ fn normalize_provider_icon(provider_code: &str, icon: Option<String>) -> Option<
     Some(format!(
         "/api/console/model-providers/providers/{provider_code}/icon"
     ))
-}
-
-fn provider_icon_content_type(path: &FsPath) -> &'static str {
-    match path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("svg") => "image/svg+xml",
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("webp") => "image/webp",
-        Some("gif") => "image/gif",
-        _ => "application/octet-stream",
-    }
-}
-
-async fn path_is_file(path: &FsPath) -> bool {
-    tokio::fs::metadata(path)
-        .await
-        .is_ok_and(|metadata| metadata.is_file())
-}
-
-async fn resolve_provider_icon_path(
-    installed_path: &str,
-    icon_path: &str,
-) -> Result<std::path::PathBuf, ApiError> {
-    let icon_relative_path = FsPath::new(icon_path);
-
-    if icon_relative_path.is_absolute()
-        || icon_relative_path.components().any(|component| {
-            matches!(
-                component,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
-    {
-        return Err(control_plane::errors::ControlPlaneError::InvalidInput("icon").into());
-    }
-
-    let installed_root = FsPath::new(installed_path);
-    let resolved_path = installed_root.join(icon_relative_path);
-    if path_is_file(&resolved_path).await {
-        return Ok(resolved_path);
-    }
-
-    // 兼容官方 provider 安装产物：manifest 只给出文件名，实际图标位于 _assets/ 目录。
-    if icon_relative_path.components().count() == 1 {
-        let assets_path = installed_root.join("_assets").join(icon_relative_path);
-        if path_is_file(&assets_path).await {
-            return Ok(assets_path);
-        }
-    }
-
-    Ok(resolved_path)
-}
-
-async fn installed_manifest_icon(installed_path: &str) -> Option<String> {
-    let manifest_path = FsPath::new(installed_path).join("manifest.yaml");
-    let manifest_raw = tokio::fs::read_to_string(manifest_path).await.ok()?;
-    let manifest = plugin_framework::parse_plugin_manifest(&manifest_raw).ok()?;
-    let icon = manifest.icon?;
-    let icon = icon.trim().to_string();
-    if icon.is_empty() {
-        return None;
-    }
-    Some(icon)
-}
-
-async fn installation_icon_path(
-    installed_path: &str,
-    metadata_json: &serde_json::Value,
-) -> Option<String> {
-    if let Some(icon) = metadata_json
-        .get("icon")
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-    {
-        return Some(icon);
-    }
-
-    installed_manifest_icon(installed_path).await
 }
 
 fn to_config_field_response(field: ProviderConfigField) -> ModelProviderConfigFieldResponse {
@@ -644,6 +555,9 @@ fn to_catalog_response(entry: ModelProviderCatalogEntry) -> ModelProviderCatalog
             .into_iter()
             .map(to_model_descriptor_response)
             .collect(),
+        catalog_refresh_status: entry.catalog_refresh_status,
+        catalog_last_error_message: entry.catalog_last_error_message,
+        catalog_refreshed_at: format_optional_time(entry.catalog_refreshed_at),
     }
 }
 
@@ -849,52 +763,6 @@ fn resolve_locale_meta(
             .collect(),
     })
     .into()
-}
-
-pub async fn read_provider_icon(
-    State(state): State<Arc<ApiState>>,
-    headers: HeaderMap,
-    Path(provider_code): Path<String>,
-) -> Result<Response, ApiError> {
-    let context = require_session(&state, &headers).await?;
-    let assignment = state
-        .store
-        .list_assignments(context.actor.current_workspace_id)
-        .await?
-        .into_iter()
-        .find(|assignment| assignment.provider_code == provider_code)
-        .ok_or(control_plane::errors::ControlPlaneError::NotFound(
-            "plugin_assignment",
-        ))?;
-    let installation = state
-        .store
-        .get_installation(assignment.installation_id)
-        .await?
-        .ok_or(control_plane::errors::ControlPlaneError::NotFound(
-            "plugin_installation",
-        ))?;
-    let icon_path =
-        installation_icon_path(&installation.installed_path, &installation.metadata_json)
-            .await
-            .ok_or(control_plane::errors::ControlPlaneError::NotFound(
-                "plugin_icon",
-            ))?;
-    let resolved_path =
-        resolve_provider_icon_path(&installation.installed_path, &icon_path).await?;
-    let content = tokio::fs::read(&resolved_path)
-        .await
-        .map_err(|error| match error.kind() {
-            std::io::ErrorKind::NotFound => {
-                control_plane::errors::ControlPlaneError::NotFound("plugin_icon").into()
-            }
-            _ => ApiError::from(anyhow::Error::from(error)),
-        })?;
-
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(CONTENT_TYPE, provider_icon_content_type(&resolved_path))
-        .body(Body::from(content))
-        .map_err(ApiError::from)
 }
 
 fn requested_locales(locale_meta: &LocaleMetaResponse) -> control_plane::i18n::RequestedLocales {

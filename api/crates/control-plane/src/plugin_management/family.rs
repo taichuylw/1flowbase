@@ -1,5 +1,6 @@
 use super::*;
 use super::{
+    catalog_projection::refresh_provider_package_catalog_projection,
     filesystem::remove_path_if_exists,
     install::{
         load_actor_context_for_user, load_provider_package, map_catalog_source,
@@ -555,6 +556,7 @@ where
 
         let switch_result = async {
             let package = load_provider_package(&target.installed_path)?;
+            refresh_provider_package_catalog_projection(&self.repository, target, &package).await?;
             let migrated_instances = self
                 .repository
                 .reassign_instances_to_installation(&ReassignModelProviderInstancesInput {

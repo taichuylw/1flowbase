@@ -10,7 +10,7 @@ import type {
 import {
   getStartInputValueType,
   startInputTypeOptions
-} from '../../../lib/start-node-variables';
+} from '../../../lib/variables/start-node-variables';
 import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
 import { i18nText } from '../../../../../shared/i18n/text';
 

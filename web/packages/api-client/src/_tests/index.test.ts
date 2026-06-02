@@ -8,7 +8,7 @@ import {
 } from '../index';
 import {
   getConsoleApplicationRunConversationMessages
-} from '../console-application-runtime';
+} from '../console/application-runtime';
 
 const indexSource = readFileSync(
   fileURLToPath(new URL('../index.ts', import.meta.url)),

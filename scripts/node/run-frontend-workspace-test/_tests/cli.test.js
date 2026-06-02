@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const {
   buildWorkspaceTestCommand,
   main,
-} = require('../../run-frontend-workspace-test.js');
+} = require('../../cli/run-frontend-workspace-test.js');
 
 test('buildWorkspaceTestCommand uses runtime-configured turbo concurrency', () => {
   assert.deepEqual(

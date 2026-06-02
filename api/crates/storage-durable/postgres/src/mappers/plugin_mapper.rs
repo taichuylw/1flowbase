@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use domain::{
     PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
+    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
+    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
     PluginTaskStatus, PluginVerificationStatus,
 };
 use time::OffsetDateTime;
@@ -61,6 +62,18 @@ pub struct StoredPluginTaskRow {
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
     pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredPluginPackageCatalogProjectionRow {
+    pub installation_id: Uuid,
+    pub package_code: String,
+    pub package_version: String,
+    pub catalog_snapshot_json: serde_json::Value,
+    pub projection_status: String,
+    pub last_error_message: Option<String>,
+    pub refreshed_at: Option<OffsetDateTime>,
+    pub updated_at: OffsetDateTime,
 }
 
 pub struct PgPluginMapper;
@@ -125,6 +138,32 @@ impl PgPluginMapper {
             updated_at: row.updated_at,
             finished_at: row.finished_at,
         })
+    }
+
+    pub fn to_package_catalog_projection_record(
+        row: StoredPluginPackageCatalogProjectionRow,
+    ) -> Result<PluginPackageCatalogProjectionRecord> {
+        Ok(PluginPackageCatalogProjectionRecord {
+            installation_id: row.installation_id,
+            package_code: row.package_code,
+            package_version: row.package_version,
+            catalog_snapshot_json: row.catalog_snapshot_json,
+            projection_status: parse_catalog_projection_status(&row.projection_status)?,
+            last_error_message: row.last_error_message,
+            refreshed_at: row.refreshed_at,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+fn parse_catalog_projection_status(value: &str) -> Result<PluginPackageCatalogProjectionStatus> {
+    match value {
+        "ok" => Ok(PluginPackageCatalogProjectionStatus::Ok),
+        "missing" => Ok(PluginPackageCatalogProjectionStatus::Missing),
+        "failed" => Ok(PluginPackageCatalogProjectionStatus::Failed),
+        _ => Err(anyhow!(
+            "unknown plugin package catalog projection status: {value}"
+        )),
     }
 }
 

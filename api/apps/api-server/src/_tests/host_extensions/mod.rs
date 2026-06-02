@@ -1,0 +1,6 @@
+mod host_extension_boot_tests;
+mod host_extension_loader_tests;
+mod host_extensions_builtin_tests;
+mod host_route_registry_tests;
+mod host_worker_registry_tests;
+mod official_plugin_registry_tests;

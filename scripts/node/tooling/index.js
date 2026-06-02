@@ -46,7 +46,7 @@ function buildRuntimeGateCommand({ argv, repoRoot, env = process.env }) {
 }
 
 function usageRuntimeGate(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout('Usage: node scripts/node/runtime-gate.js <page-debug args>\n');
+  writeStdout('Usage: node scripts/node/cli/runtime-gate.js <page-debug args>\n');
 }
 
 function runRuntimeGate(argv = [], deps = {}) {

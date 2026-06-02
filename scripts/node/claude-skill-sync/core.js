@@ -10,7 +10,7 @@ function getRepoRoot() {
 }
 
 function usage() {
-  process.stdout.write(`用法：node scripts/node/claude-skill-sync.js [选项]
+  process.stdout.write(`用法：node scripts/node/cli/claude-skill-sync.js [选项]
 
 默认行为：
   将 .agents/skills 下的技能转换到 .claude/skills/<技能名>/SKILL.md
