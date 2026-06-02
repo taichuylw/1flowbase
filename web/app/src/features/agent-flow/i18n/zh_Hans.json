@@ -469,7 +469,6 @@
     "delete_input_field": "删除输入字段 {{value1}}",
     "locate_node": "定位节点",
     "wait_manual_intervention": "等待人工介入。",
-    "console_log": "控制台日志",
     "maximum_length": "最大长度",
     "input_node_reference_variable": "输入节点引用变量",
     "add_new_filter": "新增过滤条件",

@@ -469,7 +469,6 @@
     "delete_input_field": "Delete input field {{value1}}",
     "locate_node": "Locate node",
     "wait_manual_intervention": "Wait for manual intervention.",
-    "console_log": "console log",
     "maximum_length": "maximum length",
     "input_node_reference_variable": "Input node reference variable",
     "add_new_filter": "Add new filter",
