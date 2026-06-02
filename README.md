@@ -8,6 +8,10 @@
   <b>English</b> | <a href="docs/READEME-i18n/README_CN.md">简体中文</a>
 </p>
 
+<p align="center">
+  <strong>💬 Community:</strong> <a href="docs/assets/community/wechat.jpg" target="_blank">WeChat</a> | <a href="docs/assets/community/taichuy_doc_wechat_office.jpg" target="_blank">WeChat Official Account</a> | <a href="https://x.com/Tacihu2021" target="_blank">Twitter</a>
+</p>
+
 
 > **Open-source virtual model gateway for local AI agent clients.**
 > **The first step to harness is to see the Agent's execution path clearly**
