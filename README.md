@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>💬 Community:</strong> <a href="docs/assets/community/wechat.jpg" target="_blank">WeChat</a> | <a href="docs/assets/community/taichuy_doc_wechat_office.jpg" target="_blank">WeChat Official Account</a> | <a href="https://x.com/Tacihu2021" target="_blank">Twitter</a>
+  <strong>💬 Community:</strong> <a href="docs/assets/community/wechat.jpg" target="_blank">WeChat</a> | <a href="docs/assets/community/taichuy_doc_wechat_office.png" target="_blank">WeChat Official Account</a> | <a href="https://x.com/Tacihu2021" target="_blank">Twitter</a>
 </p>
 
 
