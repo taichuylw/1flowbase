@@ -50,39 +50,39 @@ Gemini Vision (视觉上下文提取)
 
 对于调用客户端而言，它只是一个单模型；对于你而言，它是一个完全可编程的 AI 工作流。
 
-![img](../assets/640.jpeg)
+![img](../assets/workflow_editor_preview.jpeg)
 
-然后直接发布为你openai/anthropic的兼容API 接口
+然后直接发布为你openai的兼容API 接口
 
-![img](../assets/640-17803586907163.jpeg)
+![img](../assets/api_endpoint_publish_1.jpeg)
 
+当然anthropic接口也可以
 
-
-![img](../assets/640-17803586998246.jpeg)
+![img](../assets/api_endpoint_publish_2.jpeg)
 
 
 
 你可以自定义对外模型信息：
 
-![img](../assets/640-17803587501769.jpeg)
+![img](../assets/custom_model_settings.jpeg)
 
-然后你就可以直接在Claude code 对话使用
+然后你就可以直接用用anthropic接口直接在在Claude code 对话使用
 
-![image-20260602080606711](../assets/image-20260602080606711.png)
+![Claude Code Terminal Usage](../assets/claude_code_terminal_usage.png)
 
 
 
 可以在日志中看到详细信息
 
-![img](../assets/640-178035878311612.jpeg)
+![img](../assets/detailed_execution_logs.jpeg)
 
 如果是一个复杂任务，我们有详细回调日志：
 
-![image-20260602080644672](../assets/image-20260602080644672.png)
+![Tool Callback Trace Logs](../assets/tool_callback_trace_logs.png)
 
 统计每一个应用token消耗情况
 
-![img](../assets/640-178035881698115.jpeg)
+![img](../assets/token_consumption_dashboard.jpeg)
 
 
 

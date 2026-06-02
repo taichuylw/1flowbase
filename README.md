@@ -8,10 +8,11 @@
   <b>English</b> | <a href="docs/READEME-i18n/README_CN.md">简体中文</a>
 </p>
 
-> **Al app base begins from chat history.**
+> **A workflow inside. A model outside.**
 
-1flowbase is designed to provide a unified foundation for future AI-native applications and AI-Native Organizations.
+1flowbase is an open-source AI gateway for publishing multi-model workflows as OpenAI/Claude-compatible virtual model endpoints.
 
+Use it to give text-only models vision, route cheap tasks to cheaper models, add verifier nodes, and expose the whole workflow as a drop-in model API.
 ## 💡 Core Features
 
 *   💬 **Virtual Model Endpoint (Virtual Model)**: Externally, the Virtual Model interface functions as a standard LLM API, but internally it executes full, multi-model orchestration workflows. Compatible with OpenAI/Anthropic protocols.
@@ -47,33 +48,33 @@ Gemini Vision (Visual Context Extraction)
 
 To the calling client, it is just a single model; to you, it is a fully programmable AI workflow.
 
-![img](docs/assets/640.jpeg)
+![img](docs/assets/workflow_editor_preview.jpeg)
 
 Then, publish it directly as an OpenAI/Anthropic-compatible API endpoint.
 
-![img](docs/assets/640-17803586907163.jpeg)
+![img](docs/assets/api_endpoint_publish_1.jpeg)
 
-![img](docs/assets/640-17803586998246.jpeg)
+![img](docs/assets/api_endpoint_publish_2.jpeg)
 
 You can customize the exposed model information:
 
-![img](docs/assets/640-17803587501769.jpeg)
+![img](docs/assets/custom_model_settings.jpeg)
 
 Then, you can use it directly in Claude Code:
 
-![image-20260602080606711](docs/assets/image-20260602080606711.png)
+![Claude Code Terminal Usage](docs/assets/claude_code_terminal_usage.png)
 
 Detailed execution traces can be inspected in the logs:
 
-![img](docs/assets/640-178035878311612.jpeg)
+![img](docs/assets/detailed_execution_logs.jpeg)
 
 For complex tasks, a detailed callback trace log is available:
 
-![image-20260602080644672](docs/assets/image-20260602080644672.png)
+![Tool Callback Trace Logs](docs/assets/tool_callback_trace_logs.png)
 
 Token consumption statistics are tracked for each application:
 
-![img](docs/assets/640-178035881698115.jpeg)
+![img](docs/assets/token_consumption_dashboard.jpeg)
 
 ---
 
