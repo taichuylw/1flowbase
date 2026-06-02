@@ -21,6 +21,105 @@ fn compiled_node(binding: CompiledBinding) -> CompiledNode {
     }
 }
 
+fn compiled_code_node(binding: CompiledBinding) -> CompiledNode {
+    CompiledNode {
+        node_id: "node-code".to_string(),
+        node_type: "code".to_string(),
+        alias: "Code".to_string(),
+        container_id: None,
+        dependency_node_ids: Vec::new(),
+        downstream_node_ids: Vec::new(),
+        bindings: BTreeMap::from([("named_bindings".to_string(), binding)]),
+        outputs: Vec::new(),
+        config: json!({ "language": "javascript" }),
+        plugin_runtime: None,
+        llm_runtime: None,
+        code_runtime: None,
+    }
+}
+
+#[test]
+fn resolve_named_bindings_preserves_selector_and_constant_json_types() {
+    let node = compiled_code_node(CompiledBinding {
+        kind: "named_bindings".to_string(),
+        raw_value: json!([
+            {
+                "name": "history",
+                "valueType": "array",
+                "value": { "kind": "selector", "selector": ["node-start", "history"] }
+            },
+            {
+                "name": "limit",
+                "valueType": "number",
+                "value": { "kind": "constant", "value": 10 }
+            },
+            {
+                "name": "prompt",
+                "valueType": "string",
+                "value": {
+                    "kind": "templated_text",
+                    "value": "User: {{ node-start.query }} / {{ node-start.score }}"
+                }
+            },
+            {
+                "name": "score",
+                "valueType": "number",
+                "value": {
+                    "kind": "templated_text",
+                    "value": "({{ node-start.score }} + 5) / 2"
+                }
+            }
+        ]),
+        selector_paths: vec![],
+    });
+    let variable_pool = Map::from_iter([(
+        "node-start".to_string(),
+        json!({ "query": "hello", "score": 20, "history": [{ "role": "user", "content": "hi" }] }),
+    )]);
+
+    let resolved = resolve_node_inputs(&node, &variable_pool).unwrap();
+
+    assert_eq!(
+        resolved["named_bindings"],
+        json!({
+            "history": [{ "role": "user", "content": "hi" }],
+            "limit": 10,
+            "prompt": "User: hello / 20",
+            "score": 12.5
+        })
+    );
+}
+
+#[test]
+fn reject_named_bindings_numeric_formula_with_non_numeric_selector() {
+    let node = compiled_code_node(CompiledBinding {
+        kind: "named_bindings".to_string(),
+        raw_value: json!([
+            {
+                "name": "score",
+                "valueType": "number",
+                "value": {
+                    "kind": "templated_text",
+                    "value": "{{ node-start.query }} + 1"
+                }
+            }
+        ]),
+        selector_paths: vec![],
+    });
+    let variable_pool = Map::from_iter([(
+        "node-start".to_string(),
+        json!({ "query": "hello" }),
+    )]);
+
+    let error = resolve_node_inputs(&node, &variable_pool).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("numeric expression selector node-start.query is not a number")
+    );
+}
+
 #[test]
 fn resolve_data_model_query_binding_with_constant_and_selector_values() {
     let node = compiled_node(CompiledBinding {

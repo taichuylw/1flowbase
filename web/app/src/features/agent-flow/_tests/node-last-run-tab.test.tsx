@@ -662,7 +662,7 @@ describe('NodeLastRunTab', () => {
     );
   });
 
-  test('renders code console logs with normalized info level', async () => {
+  test('renders code console logs only inside data processing payload', async () => {
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
@@ -719,15 +719,13 @@ describe('NodeLastRunTab', () => {
       </AppProviders>
     );
 
-    const consoleLogs = await screen.findByLabelText('控制台日志');
-    expect(consoleLogs).toHaveTextContent('INFO');
-    expect(consoleLogs).toHaveTextContent('122');
-    expect(consoleLogs).toHaveTextContent('WARN');
-    expect(consoleLogs).toHaveTextContent('check arg2');
-
-    const processJson = screen.getByLabelText('数据处理 JSON');
+    const processJson = await screen.findByLabelText('数据处理 JSON');
+    expect(screen.queryByLabelText('控制台日志')).not.toBeInTheDocument();
+    expect(processJson).toHaveTextContent('"console_logs"');
     expect(processJson).toHaveTextContent('"level": "info"');
     expect(processJson).not.toHaveTextContent('"level": "log"');
+    expect(processJson).toHaveTextContent('122');
+    expect(processJson).toHaveTextContent('check arg2');
   });
 
   test('renders warning state when runtime payload is malformed', async () => {

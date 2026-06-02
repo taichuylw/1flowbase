@@ -110,8 +110,8 @@ describe('ApplicationApiDocsPanel', () => {
       categoryId: null,
       operationId: null
     });
-    expect(explorerState.lastProps?.showAllOperationsWhenNoCategory).toBeUndefined();
-    expect(explorerState.lastProps?.selectFirstCategoryWhenEmpty).toBe(true);
+    expect(explorerState.lastProps?.showAllOperationsWhenNoCategory).toBe(true);
+    expect(explorerState.lastProps?.selectFirstCategoryWhenEmpty).toBeUndefined();
     expect(explorerState.lastProps?.toolbarPortalId).toBeUndefined();
     expect(explorerState.lastProps?.catalogQueryKey).toEqual([
       'applications',

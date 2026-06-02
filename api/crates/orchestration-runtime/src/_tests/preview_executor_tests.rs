@@ -143,6 +143,7 @@ fn sample_compiled_plan() -> CompiledPlan {
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -255,6 +256,7 @@ async fn preview_executor_code_node_executes_runner() {
             title: "Result".to_string(),
             value_type: "string".to_string(),
             selector: Vec::new(),
+            json_schema: None,
         }];
         node.code_runtime = Some(CompiledCodeRuntime {
             language: "javascript".to_string(),
@@ -283,12 +285,147 @@ async fn preview_executor_code_node_executes_runner() {
     assert!(!outcome.is_failed());
     assert_eq!(
         outcome.node_output,
-        serde_json::json!({ "result": "退款流程是什么？" })
+        serde_json::json!({
+            "result": { "result": "退款流程是什么？" },
+            "error": null
+        })
     );
     assert_eq!(outcome.metrics_payload["language"], "javascript");
     assert_eq!(outcome.metrics_payload["entrypoint"], "main");
     assert_eq!(outcome.metrics_payload["error"], false);
     assert!(outcome.provider_events.is_empty());
+}
+
+#[tokio::test]
+async fn preview_executor_materializes_start_builtin_defaults_for_downstream_preview() {
+    let mut plan = sample_compiled_plan();
+    if let Some(node) = plan.nodes.get_mut("node-llm") {
+        node.node_type = "code".to_string();
+        node.bindings = BTreeMap::from([(
+            "named_bindings".to_string(),
+            CompiledBinding {
+                kind: "named_bindings".to_string(),
+                raw_value: json!([
+                    { "name": "query", "selector": ["node-start", "query"] },
+                    { "name": "history", "selector": ["node-start", "history"] },
+                    { "name": "files", "selector": ["node-start", "files"] },
+                    { "name": "tools", "selector": ["node-start", "tools"] },
+                    { "name": "tool_choice", "selector": ["node-start", "tool_choice"] }
+                ]),
+                selector_paths: vec![
+                    vec!["node-start".to_string(), "query".to_string()],
+                    vec!["node-start".to_string(), "history".to_string()],
+                    vec!["node-start".to_string(), "files".to_string()],
+                    vec!["node-start".to_string(), "tools".to_string()],
+                    vec!["node-start".to_string(), "tool_choice".to_string()],
+                ],
+            },
+        )]);
+        node.outputs = vec![CompiledOutput {
+            key: "result".to_string(),
+            title: "Result".to_string(),
+            value_type: "string".to_string(),
+            selector: Vec::new(),
+            json_schema: None,
+        }];
+        node.code_runtime = Some(CompiledCodeRuntime {
+            language: "javascript".to_string(),
+            source: Some("function main(inputs) { return { result: inputs.query }; }".to_string()),
+            source_ref: None,
+            entrypoint: "main".to_string(),
+            imports: Vec::new(),
+            dependencies: Vec::new(),
+            isolation_profile: CodeIsolationProfile::quickjs_default(),
+        });
+    }
+
+    let invoker = StubPreviewInvoker {
+        captured_input: Arc::new(Mutex::new(None)),
+    };
+    let outcome = preview_executor::run_node_preview(
+        &plan,
+        "node-llm",
+        &serde_json::json!({ "node-start": { "query": "退款流程是什么？" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let named_bindings = outcome.resolved_inputs["named_bindings"]
+        .as_object()
+        .expect("named bindings should resolve to an object");
+    assert_eq!(named_bindings["query"], "退款流程是什么？");
+    assert_eq!(named_bindings["history"], json!([]));
+    assert_eq!(named_bindings["files"], json!([]));
+    assert_eq!(named_bindings["tools"], json!([]));
+    assert_eq!(named_bindings["tool_choice"], json!({}));
+}
+
+#[tokio::test]
+async fn preview_executor_preserves_provided_start_builtin_values() {
+    let mut plan = sample_compiled_plan();
+    if let Some(node) = plan.nodes.get_mut("node-llm") {
+        node.node_type = "code".to_string();
+        node.bindings = BTreeMap::from([(
+            "named_bindings".to_string(),
+            CompiledBinding {
+                kind: "named_bindings".to_string(),
+                raw_value: json!([
+                    { "name": "history", "selector": ["node-start", "history"] },
+                    { "name": "tools", "selector": ["node-start", "tools"] }
+                ]),
+                selector_paths: vec![
+                    vec!["node-start".to_string(), "history".to_string()],
+                    vec!["node-start".to_string(), "tools".to_string()],
+                ],
+            },
+        )]);
+        node.outputs = vec![CompiledOutput {
+            key: "result".to_string(),
+            title: "Result".to_string(),
+            value_type: "string".to_string(),
+            selector: Vec::new(),
+            json_schema: None,
+        }];
+        node.code_runtime = Some(CompiledCodeRuntime {
+            language: "javascript".to_string(),
+            source: Some("function main(inputs) { return { result: inputs.query }; }".to_string()),
+            source_ref: None,
+            entrypoint: "main".to_string(),
+            imports: Vec::new(),
+            dependencies: Vec::new(),
+            isolation_profile: CodeIsolationProfile::quickjs_default(),
+        });
+    }
+
+    let invoker = StubPreviewInvoker {
+        captured_input: Arc::new(Mutex::new(None)),
+    };
+    let outcome = preview_executor::run_node_preview(
+        &plan,
+        "node-llm",
+        &serde_json::json!({
+            "node-start": {
+                "history": [{ "role": "user", "content": "之前的问题" }],
+                "tools": [{ "type": "function", "name": "lookup_policy" }]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let named_bindings = outcome.resolved_inputs["named_bindings"]
+        .as_object()
+        .expect("named bindings should resolve to an object");
+    assert_eq!(
+        named_bindings["history"],
+        json!([{ "role": "user", "content": "之前的问题" }])
+    );
+    assert_eq!(
+        named_bindings["tools"],
+        json!([{ "type": "function", "name": "lookup_policy" }])
+    );
 }
 
 #[tokio::test]

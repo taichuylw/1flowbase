@@ -13,13 +13,24 @@ import {
 } from './data-model-query-binding';
 import { getLlmModelProvider } from './llm-node-config';
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
+import {
+  extractNamedBindingSelectors,
+  getNamedBindingExpression,
+  isNamedBindingNameAllowed
+} from './named-binding-expressions';
 import type {
   InspectorSectionKey,
   NodeDefinitionField
 } from './node-definitions';
 import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
+import { outputTypeSupportsJsonSchema } from './output-contract/schema';
+import { isOutputVariableKeyAllowed } from './output-contract/variable-key';
 import { hasPluginContributionRef } from './plugin-node-definitions';
-import { isSelectorVisible } from './selector-options';
+import {
+  isSelectorVisible,
+  listVisibleSelectorOptions,
+  type FlowSelectorOption
+} from './selector-options';
 import { parseTemplateSelectorTokens } from './template-binding';
 import {
   environmentVariableNodeId,
@@ -167,13 +178,7 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
         parseTemplateSelectorTokens(message.content.value)
       );
     case 'named_bindings':
-      return binding.value.flatMap((entry) =>
-        entry.content?.kind === 'templated_text'
-          ? parseTemplateSelectorTokens(entry.content.value)
-          : entry.selector
-            ? [entry.selector]
-            : []
-      );
+      return extractNamedBindingSelectors(binding.value);
     case 'condition_group':
       return binding.value.conditions.flatMap((condition) => {
         const selectors = [condition.left];
@@ -268,7 +273,7 @@ function collectAnswerPresentationReferences(
     .filter((selector) => selector.length >= 2)
     .map((selector) => ({
       nodeId: selector[0],
-      outputKey: selector[1]
+      outputKey: selector.slice(1).join('.')
     }));
 }
 
@@ -398,6 +403,181 @@ function validateAnswerPresentationReferences(
         ) })
       );
       break;
+    }
+  }
+}
+
+function isCodeNamedBindingValueCompatible(
+  valueType: string | undefined,
+  value: unknown
+) {
+  if (!valueType || valueType === 'unknown') {
+    return true;
+  }
+
+  if (valueType === 'string') {
+    return typeof value === 'string';
+  }
+
+  if (valueType === 'number') {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
+  if (valueType === 'boolean') {
+    return typeof value === 'boolean';
+  }
+
+  return false;
+}
+
+function normalizeCodeBindingValueType(valueType: string | undefined) {
+  return valueType?.startsWith('array') ? 'array' : valueType;
+}
+
+function isCodeSelectorCompatible(
+  selectorOptions: FlowSelectorOption[],
+  selector: string[],
+  valueType: string | undefined
+) {
+  const normalizedValueType = normalizeCodeBindingValueType(valueType);
+
+  if (
+    !normalizedValueType ||
+    normalizedValueType === 'string' ||
+    normalizedValueType === 'unknown'
+  ) {
+    return true;
+  }
+
+  const option = selectorOptions.find(
+    (candidate) =>
+      candidate.value.length === selector.length &&
+      candidate.value.every((segment, index) => selector[index] === segment)
+  );
+
+  if (!option) {
+    return true;
+  }
+
+  const optionValueType = normalizeCodeBindingValueType(option.valueType);
+
+  if (optionValueType === 'json') {
+    return (
+      normalizedValueType === 'json' ||
+      normalizedValueType === 'object' ||
+      normalizedValueType === 'array'
+    );
+  }
+
+  return optionValueType === normalizedValueType;
+}
+
+function pushCodeNamedBindingValueTypeIssue(
+  issues: AgentFlowIssue[],
+  node: FlowNodeDocument
+) {
+  pushFieldIssue(
+    issues,
+    node,
+    'bindings.named_bindings',
+    i18nText("agentFlow", "auto.variable_value_match_type"),
+    i18nText("agentFlow", "auto.variable_value_match_type")
+  );
+}
+
+function validateCodeNamedBindings(
+  issues: AgentFlowIssue[],
+  node: FlowNodeDocument,
+  document: FlowAuthoringDocument,
+  environmentVariables: AgentFlowEnvironmentVariable[]
+) {
+  const binding = node.bindings.named_bindings;
+
+  if (!binding || binding.kind !== 'named_bindings') {
+    return;
+  }
+
+  const seenNames = new Set<string>();
+  const selectorOptions = listVisibleSelectorOptions(
+    document,
+    node.id,
+    environmentVariables
+  );
+
+  for (const entry of binding.value) {
+    const parameterName = entry.name.trim();
+
+    if (parameterName.length === 0) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.code_input_variable_name_empty"),
+        i18nText("agentFlow", "auto.enter_variable_name")
+      );
+      continue;
+    }
+
+    if (!isNamedBindingNameAllowed(parameterName)) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.code_input_variable_name_format_invalid"),
+        i18nText("agentFlow", "auto.code_input_variable_name_format_message")
+      );
+      continue;
+    }
+
+    if (seenNames.has(parameterName)) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.named_bindings',
+        i18nText("agentFlow", "auto.code_input_variable_name_duplicate"),
+        i18nText("agentFlow", "auto.code_input_variable_name_duplicate_message")
+      );
+      continue;
+    }
+
+    seenNames.add(parameterName);
+
+    const expression = getNamedBindingExpression(entry);
+
+    if (
+      expression?.kind === 'selector' &&
+      !isCodeSelectorCompatible(
+        selectorOptions,
+        expression.selector,
+        entry.valueType
+      )
+    ) {
+      pushCodeNamedBindingValueTypeIssue(issues, node);
+    }
+
+    if (
+      expression?.kind === 'templated_text' &&
+      entry.valueType !== undefined &&
+      entry.valueType !== 'string' &&
+      entry.valueType !== 'number'
+    ) {
+      pushCodeNamedBindingValueTypeIssue(issues, node);
+    }
+
+    if (expression?.kind === 'templated_text' && entry.valueType === 'number') {
+      for (const selector of parseTemplateSelectorTokens(expression.value)) {
+        if (!isCodeSelectorCompatible(selectorOptions, selector, 'number')) {
+          pushCodeNamedBindingValueTypeIssue(issues, node);
+          break;
+        }
+      }
+    }
+
+    if (
+      expression?.kind === 'constant' &&
+      !isCodeNamedBindingValueCompatible(entry.valueType, expression.value)
+    ) {
+      pushCodeNamedBindingValueTypeIssue(issues, node);
     }
   }
 }
@@ -629,6 +809,8 @@ export function validateDocument(
           i18nText("agentFlow", "auto.version_supports_javascript")
         );
       }
+
+      validateCodeNamedBindings(issues, node, document, environmentVariables);
     }
 
     if (node.type === 'code' && node.outputs.length === 0) {
@@ -643,6 +825,7 @@ export function validateDocument(
 
     for (const output of node.outputs) {
       const outputKey = output.key.trim();
+      const outputValueType = output.valueType.trim();
 
       if (outputKey.length === 0) {
         pushFieldIssue(
@@ -681,6 +864,29 @@ export function validateDocument(
         continue;
       }
 
+      if (
+        node.type === 'code' &&
+        !isOutputVariableKeyAllowed(outputKey)
+      ) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          i18nText("agentFlow", "auto.output_variable_name_format_invalid"),
+          i18nText("agentFlow", "auto.output_variable_name_format_message")
+        );
+      }
+
+      if (node.type === 'code' && output.title.trim() !== outputKey) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          i18nText("agentFlow", "auto.output_variable_title_mismatch"),
+          i18nText("agentFlow", "auto.code_output_variable_title_must_match_name")
+        );
+      }
+
       if (allowedPublicOutputKeys && !allowedPublicOutputKeys.has(outputKey)) {
         pushFieldIssue(
           issues,
@@ -688,6 +894,19 @@ export function validateDocument(
           'config.output_contract',
           i18nText("agentFlow", "auto.output_variable_name_unknown"),
           i18nText("agentFlow", "auto.variable_name_output_contract_belong_node_runtime_contract")
+        );
+      }
+
+      if (
+        output.jsonSchema !== undefined &&
+        !outputTypeSupportsJsonSchema(outputValueType)
+      ) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.output_contract',
+          'JSON Schema 类型不匹配',
+          '只有 Object 和 Array 输出变量可以启用 JSON Schema 校验。'
         );
       }
     }

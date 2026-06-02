@@ -1,7 +1,8 @@
 import type { FlowSelectorOption } from './selector-options';
 import { formatNodeVariableLabel } from './variable-labels';
 
-export const TEMPLATE_SELECTOR_REGEX = /{{\s*([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\s*}}/g;
+export const TEMPLATE_SELECTOR_REGEX =
+  /{{\s*([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+)\s*}}/g;
 
 function isSameSelector(left: string[], right: string[]) {
   return (
@@ -15,14 +16,18 @@ export function createTemplateSelectorToken(selector: string[]) {
     return '';
   }
 
-  return `{{${selector[0]}.${selector[1]}}}`;
+  return `{{${selector.join('.')}}}`;
 }
 
 export function parseTemplateSelectorTokens(value: string): string[][] {
   const selectors: string[][] = [];
 
   for (const match of value.matchAll(TEMPLATE_SELECTOR_REGEX)) {
-    selectors.push([match[1], match[2]]);
+    const selector = selectorFromTemplateMatch(match);
+
+    if (selector.length >= 2) {
+      selectors.push(selector);
+    }
   }
 
   return selectors;
@@ -51,7 +56,7 @@ export function getTemplateSelectorLabel(
 
   return matchedOption
     ? matchedOption.displayLabel
-    : formatNodeVariableLabel(selector[0], selector[1]);
+    : formatNodeVariableLabel(selector[0], selector.slice(1).join('.'));
 }
 
 export function remapTemplateSelectorTokens(
@@ -60,8 +65,12 @@ export function remapTemplateSelectorTokens(
 ) {
   return value.replace(
     TEMPLATE_SELECTOR_REGEX,
-    (_match, nodeId: string, outputKey: string) =>
-      createTemplateSelectorToken([idMap.get(nodeId) ?? nodeId, outputKey])
+    (_match, selectorPath: string) => {
+      const selector = selectorPath.split('.');
+      const [nodeId, ...rest] = selector;
+
+      return createTemplateSelectorToken([idMap.get(nodeId) ?? nodeId, ...rest]);
+    }
   );
 }
 
@@ -75,4 +84,10 @@ export function isTemplateSelectorToken(value: string) {
   const match = getTemplateSelectorTokenMatch(value);
 
   return match !== null && match[0] === value;
+}
+
+export function selectorFromTemplateMatch(
+  match: RegExpMatchArray | RegExpExecArray
+): string[] {
+  return typeof match[1] === 'string' ? match[1].split('.') : [];
 }

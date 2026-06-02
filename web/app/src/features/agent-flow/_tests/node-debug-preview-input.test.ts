@@ -6,6 +6,7 @@ import {
   buildNodeDebugPreviewPlan,
   extractNodePreviewVariableOutput
 } from '../api/runtime';
+import { createNodeDocument } from '../lib/document/node-factory';
 
 describe('node debug preview input', () => {
   test('asks for required start input when previewing the start node without cache', () => {
@@ -97,6 +98,65 @@ describe('node debug preview input', () => {
     });
   });
 
+  test('extracts Code named binding expressions and materializes optional start defaults', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.nodes.push({
+      ...createNodeDocument('code', 'node-code'),
+      bindings: {
+        named_bindings: {
+          kind: 'named_bindings',
+          value: [
+            {
+              name: 'history',
+              valueType: 'array',
+              value: {
+                kind: 'selector',
+                selector: ['node-start', 'history']
+              }
+            },
+            {
+              name: 'prompt',
+              valueType: 'string',
+              value: {
+                kind: 'templated_text',
+                value: '用户问题：{{node-start.query}}'
+              }
+            },
+            {
+              name: 'limit',
+              valueType: 'number',
+              value: { kind: 'constant', value: 10 }
+            }
+          ]
+        }
+      }
+    });
+    document.graph.edges.push({
+      id: 'edge-start-code',
+      source: 'node-start',
+      target: 'node-code',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(buildNodeDebugPreviewPlan(document, 'node-code')).toEqual({
+      input_payload: {
+        'node-start': {
+          history: []
+        }
+      },
+      missing_fields: [
+        expect.objectContaining({
+          nodeId: 'node-start',
+          key: 'query'
+        })
+      ]
+    });
+  });
+
   test('extracts API-provided node output for downstream previews', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmOutput = extractNodePreviewVariableOutput({
@@ -177,6 +237,55 @@ describe('node debug preview input', () => {
       input_payload: {
         'node-tool': {
           result: '退款政策摘要'
+        }
+      },
+      missing_fields: []
+    });
+  });
+
+  test('keeps code preview input in result error envelope shape', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const codeNode = createNodeDocument('code', 'node-code');
+    const answerNode = document.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!answerNode) {
+      throw new Error('default document is missing answer node');
+    }
+
+    codeNode.outputs = [
+      {
+        key: 'chat_history',
+        title: 'chat_history',
+        valueType: 'array',
+        selector: ['result', 'chat_history']
+      }
+    ];
+    document.graph.nodes.push(codeNode);
+    answerNode.bindings = {
+      answer_template: {
+        kind: 'selector',
+        value: ['node-code', 'result', 'chat_history']
+      }
+    };
+
+    expect(
+      buildNodeDebugPreviewPlan(document, 'node-answer', {
+        'node-code': {
+          result: {
+            chat_history: [{ role: 'user', content: 'hello' }]
+          },
+          error: null
+        }
+      })
+    ).toEqual({
+      input_payload: {
+        'node-code': {
+          result: {
+            chat_history: [{ role: 'user', content: 'hello' }]
+          },
+          error: null
         }
       },
       missing_fields: []

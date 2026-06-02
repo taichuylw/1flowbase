@@ -16,6 +16,7 @@ import {
   getDataModelNodeOutputs,
   getDataModelActionForNodeType
 } from './nodes/data-model';
+import { normalizeCodeOutput } from '../output-contract/code-output';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type BuiltinNodeRuntimeContractType = FlowNodeType;
@@ -280,7 +281,8 @@ function createLlmContract(): NodeRuntimeUiContract {
         items: {}
       },
       context_policy: {
-        integration_context: 'enabled'
+        integration_context: 'enabled',
+        context_selector: ['node-start', 'history']
       },
       external_reasoning_policy: {
         follow_external_reasoning: false
@@ -315,7 +317,7 @@ function createLlmContract(): NodeRuntimeUiContract {
         }),
         panelField({
           key: 'config.context_policy',
-          title: '继承上下文',
+          title: '上下文',
           renderer: 'llm_context_policy',
           valueType: 'json'
         }),
@@ -447,7 +449,9 @@ function createIfElseContract(): NodeRuntimeUiContract {
 }
 
 function createCodeContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'result', title: 'result', valueType: 'string' }];
+  const outputs = [
+    normalizeCodeOutput({ key: 'result', title: 'result', valueType: 'string' })
+  ];
 
   return createNodeRuntimeContract({
     type: 'code',
@@ -461,11 +465,13 @@ function createCodeContract(): NodeRuntimeUiContract {
         value: [
           {
             name: 'arg1',
-            content: { kind: 'templated_text', value: '' }
+            valueType: 'string',
+            value: { kind: 'constant', value: '' }
           },
           {
             name: 'arg2',
-            content: { kind: 'templated_text', value: '' }
+            valueType: 'string',
+            value: { kind: 'constant', value: '' }
           }
         ]
       }

@@ -1,4 +1,4 @@
-import { App, Button, Card, Space, Tag, Typography } from 'antd';
+import { App, Button, Card, Space, Tag } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { NodeLastRun } from '../../../api/runtime';
@@ -167,49 +167,6 @@ function pickProcessPayload(debugPayload: unknown) {
   };
 }
 
-function getConsoleLogTagColor(level: ConsoleLogLevel) {
-  if (level === 'error') {
-    return 'error';
-  }
-
-  if (level === 'warn') {
-    return 'warning';
-  }
-
-  return 'processing';
-}
-
-function NodeRunConsoleLogs({ logs }: { logs: ConsoleLogEntryView[] }) {
-  if (logs.length === 0) {
-    return null;
-  }
-
-  return (
-    <section aria-label={i18nText("agentFlow", "auto.console_log")} className="agent-flow-node-run-console">
-      <Typography.Text className="agent-flow-node-run-console__title" strong>
-        {i18nText("agentFlow", "auto.console_log")}</Typography.Text>
-      <div className="agent-flow-node-run-console__list">
-        {logs.map((log, index) => (
-          <div
-            key={`${log.level}-${index}`}
-            className="agent-flow-node-run-console__row"
-          >
-            <Tag
-              className="agent-flow-node-run-console__level"
-              color={getConsoleLogTagColor(log.level)}
-            >
-              {log.level.toUpperCase()}
-            </Tag>
-            <Typography.Text className="agent-flow-node-run-console__message">
-              {log.message}
-            </Typography.Text>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export function NodeRunPayloadSections({
   inputPayload,
   debugPayload,
@@ -224,7 +181,6 @@ export function NodeRunPayloadSections({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const processPayload = pickProcessPayload(debugPayload);
-  const consoleLogs = readConsoleLogs(debugPayload);
 
   return (
     <>
@@ -234,14 +190,11 @@ export function NodeRunPayloadSections({
         onLoadArtifact={onLoadArtifact}
       />
       {includeDebugPayload ? (
-        <>
-          <NodeRunConsoleLogs logs={consoleLogs} />
-          <RuntimeDebugPayloadBlock
-            payload={processPayload}
-            title={i18nText("agentFlow", "auto.data_processing")}
-            onLoadArtifact={onLoadArtifact}
-          />
-        </>
+        <RuntimeDebugPayloadBlock
+          payload={processPayload}
+          title={i18nText("agentFlow", "auto.data_processing")}
+          onLoadArtifact={onLoadArtifact}
+        />
       ) : null}
       <RuntimeDebugPayloadBlock
         payload={outputPayload}

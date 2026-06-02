@@ -21,7 +21,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT"
-version = "0.1.1"
+version = "0.1.2"
 
 [workspace.dependencies]
 anyhow = "1"
@@ -33,6 +33,7 @@ axum = { version = "0.7", features = ["macros"] }
 axum-extra = { version = "0.9", features = ["cookie"] }
 flate2 = "1"
 http = "1"
+jsonschema = "0.46.5"
 moka = { version = "0.12.15", features = ["future"] }
 rand_core = { version = "0.6", features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

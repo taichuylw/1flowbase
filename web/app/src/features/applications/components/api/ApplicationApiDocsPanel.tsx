@@ -72,7 +72,7 @@ export function ApplicationApiDocsPanel({
           )
         }
         baseServerUrl={getApplicationsApiBaseUrl}
-        selectFirstCategoryWhenEmpty
+        showAllOperationsWhenNoCategory
         toolbarPortalId={toolbarPortalId}
       />
     </section>

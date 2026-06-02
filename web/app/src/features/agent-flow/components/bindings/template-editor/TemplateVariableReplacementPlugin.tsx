@@ -7,6 +7,7 @@ import type { FlowSelectorOption } from '../../../lib/selector-options';
 import {
   TEMPLATE_SELECTOR_REGEX,
   getTemplateSelectorLabel,
+  selectorFromTemplateMatch,
 } from '../../../lib/template-binding';
 import { $createTemplateVariableNode } from './TemplateVariableNode';
 
@@ -30,11 +31,14 @@ export function TemplateVariableReplacementPlugin({
         TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
         const match = TEMPLATE_SELECTOR_REGEX.exec(text);
 
-        if (!match?.[1] || !match[2]) {
+        if (!match?.[1]) {
           return;
         }
 
-        const selector = [match[1], match[2]];
+        const selector = selectorFromTemplateMatch(match);
+        if (selector.length < 2) {
+          return;
+        }
         const label = getTemplateSelectorLabel(selector, options);
         const startOffset = match.index;
         const endOffset = startOffset + match[0].length;

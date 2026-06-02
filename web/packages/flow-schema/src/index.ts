@@ -78,6 +78,7 @@ export interface FlowNodeOutputDocument {
   valueType: string;
   description?: string;
   selector?: string[];
+  jsonSchema?: Record<string, unknown>;
 }
 
 export type PublicOutputKeyValidationResult =
@@ -291,6 +292,19 @@ export interface DataModelQueryBindingValue {
   page_size: DataModelQueryValue;
 }
 
+export type NamedBindingExpression =
+  | { kind: 'selector'; selector: string[] }
+  | { kind: 'constant'; value: unknown }
+  | { kind: 'templated_text'; value: string };
+
+export interface NamedBindingEntry {
+  name: string;
+  valueType?: string;
+  value?: NamedBindingExpression;
+  selector?: string[];
+  content?: { kind: 'templated_text'; value: string };
+}
+
 export type FlowBinding =
   | { kind: 'templated_text'; value: string }
   | { kind: 'selector'; value: string[] }
@@ -305,11 +319,7 @@ export type FlowBinding =
     }
   | {
       kind: 'named_bindings';
-      value: Array<{
-        name: string;
-        selector?: string[];
-        content?: { kind: 'templated_text'; value: string };
-      }>;
+      value: NamedBindingEntry[];
     }
   | {
       kind: 'condition_group';
@@ -438,7 +448,8 @@ export function createDefaultAgentFlowDocument({
               items: {}
             },
             context_policy: {
-              integration_context: 'enabled'
+              integration_context: 'enabled',
+              context_selector: ['node-start', 'history']
             },
             external_reasoning_policy: {
               follow_external_reasoning: false

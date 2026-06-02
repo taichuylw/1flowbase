@@ -616,6 +616,7 @@ fn base_plan() -> CompiledPlan {
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -654,6 +655,7 @@ fn base_plan() -> CompiledPlan {
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -692,6 +694,7 @@ fn base_plan() -> CompiledPlan {
                 title: "人工输入".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -721,6 +724,7 @@ fn base_plan() -> CompiledPlan {
                 title: "对话输出".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -819,6 +823,7 @@ fn multi_llm_answer_plan() -> CompiledPlan {
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({
                 "provider_instance_id": "provider-ready",
@@ -1313,6 +1318,92 @@ async fn llm_runtime_exposes_effective_system_and_promotes_legacy_history_system
 }
 
 #[tokio::test]
+async fn llm_runtime_injects_selected_context_messages() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "enabled",
+        "context_selector": ["node-start", "history"]
+    });
+    let captured_input = Arc::new(Mutex::new(None));
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: captured_input.clone(),
+        final_content: "ok".to_string(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "history": [
+                    { "role": "user", "content": "Earlier question" },
+                    { "role": "assistant", "content": "Earlier answer" }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::WaitingHuman(_)
+    ));
+    let input = captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    assert_eq!(input.messages.len(), 3);
+    assert_eq!(input.messages[0].content, "Earlier question");
+    assert_eq!(input.messages[1].content, "Earlier answer");
+    assert_eq!(input.messages[2].content, "hello");
+}
+
+#[tokio::test]
+async fn llm_runtime_fails_when_selected_context_value_is_not_messages() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["context_policy"] = json!({
+        "integration_context": "enabled",
+        "context_selector": ["node-start", "history"]
+    });
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "hello",
+                "history": [{ "role": "user" }]
+            }
+        }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("llm_context_selector_error")
+            );
+        }
+        other => panic!("expected llm context selector failure, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn llm_runtime_context_policy_can_disable_run_level_system_context() {
     let mut plan = base_plan();
     let llm = plan
@@ -1359,7 +1450,10 @@ async fn llm_runtime_context_policy_can_disable_run_level_system_context() {
         &json!({
             "node-start": {
                 "query": "hello",
-                "system": "Ignored run-level policy."
+                "system": "Ignored run-level policy.",
+                "history": [
+                    { "role": "user", "content": "Ignored earlier question" }
+                ]
             }
         }),
         &invoker,
@@ -1376,6 +1470,8 @@ async fn llm_runtime_context_policy_can_disable_run_level_system_context() {
         input.system.as_deref(),
         Some("Use only the local node policy.")
     );
+    assert_eq!(input.messages.len(), 1);
+    assert_eq!(input.messages[0].content, "hello");
 }
 
 #[tokio::test]
@@ -1594,7 +1690,7 @@ async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved()
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-answer");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("prompt_template_unresolved")
             );
         }
@@ -1611,7 +1707,7 @@ async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved()
         json!("Answer: visible answer\nMissing: ")
     );
     assert_eq!(
-        answer_trace.output_payload["error"]["error_kind"],
+        answer_trace.output_payload["error"]["error_code"],
         json!("prompt_template_unresolved")
     );
     assert_eq!(
@@ -1622,7 +1718,7 @@ async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved()
         answer_trace
             .error_payload
             .as_ref()
-            .expect("answer trace should keep structured error")["error_kind"],
+            .expect("answer trace should keep structured error")["error_code"],
         json!("prompt_template_unresolved")
     );
     assert_eq!(
@@ -1762,7 +1858,7 @@ async fn failover_queue_stops_when_primary_fails_after_finish_error_with_first_t
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("provider_invalid_response")
             );
             assert_eq!(
@@ -1799,6 +1895,7 @@ fn plugin_plan() -> CompiledPlan {
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -1828,6 +1925,7 @@ fn plugin_plan() -> CompiledPlan {
                 title: "回答".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({
                 "prompt": "Hello {{ node-start.query }}"
@@ -1848,6 +1946,7 @@ fn plugin_plan() -> CompiledPlan {
                     title: "回答".to_string(),
                     value_type: "string".to_string(),
                     selector: Vec::new(),
+                    json_schema: None,
                 }],
                 side_effect_policy: "external_read".to_string(),
             }),
@@ -1994,6 +2093,7 @@ async fn tool_node_emits_waiting_callback_stop_reason() {
                 title: "工具输出".to_string(),
                 value_type: "json".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({ "tool_name": "lookup_order" }),
             plugin_runtime: None,
@@ -2183,7 +2283,7 @@ async fn llm_tool_call_finish_without_tool_calls_exposes_error_text_to_answer() 
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("provider_invalid_response")
             );
             assert!(failure.error_payload["message"]
@@ -2759,9 +2859,9 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
-            assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert_eq!(failure.error_payload["error_code"], json!("auth_failed"));
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("auth_failed")
             );
             assert_eq!(
@@ -2794,7 +2894,7 @@ async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
     match outcome.stop_reason {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
-            assert_eq!(failure.error_payload["error_kind"], json!("auth_failed"));
+            assert_eq!(failure.error_payload["error_code"], json!("auth_failed"));
             assert_eq!(
                 failure.error_payload["message"],
                 json!("401 401 Unauthorized: Incorrect API key provided")
@@ -2830,11 +2930,11 @@ async fn llm_failure_after_first_token_writes_error_text_to_public_output() {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("provider_invalid_response")
             );
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("provider_invalid_response")
             );
             assert_eq!(
@@ -3160,6 +3260,7 @@ async fn llm_json_schema_response_exposes_structured_output_only_when_declared()
         title: "结构化输出".to_string(),
         value_type: "json".to_string(),
         selector: Vec::new(),
+        json_schema: None,
     });
 
     let outcome = start_flow_debug_run(

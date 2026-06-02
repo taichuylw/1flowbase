@@ -10,6 +10,7 @@ use crate::compiled_plan::{
     CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
     LlmRoutingMode,
 };
+use crate::output_schema::{history_messages_schema, output_schema_is_llm_context_messages};
 use crate::payload_builder::PublicOutputContract;
 
 const NODE_CONTRIBUTION_SCHEMA_VERSION: &str = "1flowbase.node-contribution/v2";
@@ -243,7 +244,83 @@ fn build_nodes_and_topology(
         );
     }
 
+    compile_issues.extend(validate_llm_context_policies(&nodes));
+
     Ok((nodes, topological_order, compile_issues))
+}
+
+fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<CompileIssue> {
+    nodes
+        .values()
+        .filter(|node| node.node_type == "llm")
+        .filter_map(|node| {
+            let selector = context_policy_selector(node)?;
+            let Some(output) = output_for_selector(nodes, &selector) else {
+                return Some(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidLlmContextSelector,
+                    message: format!(
+                        "node {} context_selector references unavailable output {}",
+                        node.node_id,
+                        selector.join(".")
+                    ),
+                });
+            };
+
+            (!output_schema_is_llm_context_messages(&output)).then(|| CompileIssue {
+                node_id: node.node_id.clone(),
+                code: CompileIssueCode::IncompatibleLlmContextSchema,
+                message: format!(
+                    "node {} context_selector {} must reference an output with an LLM history-compatible jsonSchema",
+                    node.node_id,
+                    selector.join(".")
+                ),
+            })
+        })
+        .collect()
+}
+
+fn context_policy_selector(node: &CompiledNode) -> Option<Vec<String>> {
+    node.config
+        .get("context_policy")
+        .and_then(|policy| policy.get("context_selector"))
+        .and_then(Value::as_array)
+        .map(|selector| {
+            selector
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter(|selector| selector.len() >= 2)
+}
+
+fn output_for_selector(
+    nodes: &BTreeMap<String, CompiledNode>,
+    selector: &[String],
+) -> Option<CompiledOutput> {
+    let node_id = selector.first()?;
+    let selector_tail = selector.get(1..)?;
+    let output_key = selector_tail.first()?;
+    let node = nodes.get(node_id)?;
+
+    if node.node_type == "start" && output_key == "history" {
+        return Some(CompiledOutput {
+            key: "history".to_string(),
+            title: "userinput.history".to_string(),
+            value_type: "array".to_string(),
+            selector: Vec::new(),
+            json_schema: Some(history_messages_schema()),
+        });
+    }
+
+    node.outputs
+        .iter()
+        .find(|output| {
+            output.selector == selector_tail
+                || (selector_tail.len() == 1 && output.key == *output_key)
+        })
+        .cloned()
 }
 
 fn compile_node(
@@ -266,12 +343,19 @@ fn compile_node(
     let active_bindings = active_binding_values(&node_type, raw_bindings);
     let bindings = compile_bindings(&active_bindings)
         .with_context(|| format!("failed to compile bindings for node {node_id}"))?;
-    let outputs = compile_outputs(
+    let mut outputs = compile_outputs(
         node.get("outputs")
             .and_then(Value::as_array)
             .ok_or_else(|| anyhow!("node {node_id} missing outputs"))?,
     )
     .with_context(|| format!("failed to compile outputs for node {node_id}"))?;
+    if node_type == "code" {
+        for output in &mut outputs {
+            if output.selector.len() == 1 && output.selector[0] == output.key {
+                output.selector = vec!["result".to_string(), output.key.clone()];
+            }
+        }
+    }
     if node_type == "start" && !outputs.is_empty() {
         bail!("start node {node_id} outputs must be empty");
     }
@@ -1264,6 +1348,10 @@ fn compile_outputs(output_values: &[Value]) -> Result<Vec<CompiledOutput>> {
                 key,
                 title: required_string(output, "title")?.to_string(),
                 value_type: required_string(output, "valueType")?.to_string(),
+                json_schema: output
+                    .get("jsonSchema")
+                    .filter(|value| value.is_object())
+                    .cloned(),
             })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -1304,6 +1392,27 @@ fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Vec<Vec<Strin
             let mut selectors = Vec::new();
 
             for entry in entries {
+                if let Some(value) = entry.get("value").and_then(Value::as_object) {
+                    match value.get("kind").and_then(Value::as_str) {
+                        Some("constant") => continue,
+                        Some("selector") => {
+                            selectors.push(selector_path(
+                                value.get("selector").unwrap_or(&Value::Null),
+                            )?);
+                            continue;
+                        }
+                        Some("templated_text") => {
+                            let template =
+                                value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                                    anyhow!("named_bindings templated_text value must be a string")
+                                })?;
+                            selectors.extend(parse_template_selector_tokens(template));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+
                 if let Some(content) = entry
                     .get("content")
                     .and_then(|content| content.get("value"))
@@ -1453,13 +1562,14 @@ fn parse_template_selector_tokens(value: &str) -> Vec<Vec<String>> {
         let end = start + end_offset;
         let token = value[start..end].trim();
 
-        if let Some((left, right)) = token.split_once('.') {
-            let left = left.trim();
-            let right = right.trim();
+        let selector = token
+            .split('.')
+            .map(str::trim)
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
 
-            if !left.is_empty() && !right.is_empty() {
-                selectors.push(vec![left.to_string(), right.to_string()]);
-            }
+        if selector.len() >= 2 && selector.iter().all(|segment| !segment.is_empty()) {
+            selectors.push(selector);
         }
 
         cursor = end + 2;

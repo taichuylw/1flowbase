@@ -101,7 +101,39 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
                     .get("name")
                     .and_then(Value::as_str)
                     .ok_or_else(|| anyhow!("named_bindings entry missing name"))?;
-                let value = if let Some(content) = entry
+                let value = if let Some(value) = entry.get("value").and_then(Value::as_object) {
+                    match value.get("kind").and_then(Value::as_str) {
+                        Some("constant") => value.get("value").cloned().unwrap_or(Value::Null),
+                        Some("selector") => {
+                            let selector = value
+                                .get("selector")
+                                .and_then(Value::as_array)
+                                .ok_or_else(|| anyhow!("named_bindings selector missing path"))?
+                                .iter()
+                                .map(|segment| {
+                                    segment.as_str().map(str::to_string).ok_or_else(|| {
+                                        anyhow!("named_bindings selector segment must be a string")
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                            lookup_selector_value(variable_pool, &selector)?
+                        }
+                        Some("templated_text") => {
+                            let template =
+                                value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                                    anyhow!("named_bindings templated_text value must be a string")
+                                })?;
+                            if entry.get("valueType").and_then(Value::as_str) == Some("number") {
+                                render_numeric_template_expression(template, variable_pool)?
+                            } else {
+                                Value::String(render_template(template, variable_pool)?)
+                            }
+                        }
+                        _ => {
+                            return Err(anyhow!("named_bindings value has unknown kind"));
+                        }
+                    }
+                } else if let Some(content) = entry
                     .get("content")
                     .and_then(|content| content.get("value"))
                     .and_then(Value::as_str)
@@ -496,6 +528,204 @@ fn render_template(template: &str, variable_pool: &Map<String, Value>) -> Result
 
     rendered.push_str(&template[cursor..]);
     Ok(rendered)
+}
+
+fn render_numeric_template_expression(
+    template: &str,
+    variable_pool: &Map<String, Value>,
+) -> Result<Value> {
+    let mut expression = String::new();
+    let mut cursor = 0;
+
+    while let Some(start_offset) = template[cursor..].find("{{") {
+        let start = cursor + start_offset;
+        expression.push_str(&template[cursor..start]);
+        let token_start = start + 2;
+        let Some(end_offset) = template[token_start..].find("}}") else {
+            expression.push_str(&template[start..]);
+            break;
+        };
+        let token_end = token_start + end_offset;
+        let token = template[token_start..token_end].trim();
+        let selector = token.split('.').map(str::to_string).collect::<Vec<_>>();
+
+        if selector.len() < 2 {
+            bail!("numeric expression selector {token} must include a source");
+        }
+
+        let value = lookup_selector_value(variable_pool, &selector).map_err(|error| {
+            anyhow!(
+                "unresolved numeric expression selector {}: {error}",
+                selector.join(".")
+            )
+        })?;
+        let number = value.as_f64().ok_or_else(|| {
+            anyhow!(
+                "numeric expression selector {} is not a number",
+                selector.join(".")
+            )
+        })?;
+
+        expression.push_str(&number.to_string());
+        cursor = token_end + 2;
+    }
+
+    expression.push_str(&template[cursor..]);
+
+    let result = NumericExpressionParser::new(&expression).parse()?;
+    let number = serde_json::Number::from_f64(result)
+        .ok_or_else(|| anyhow!("numeric expression result must be finite"))?;
+
+    Ok(Value::Number(number))
+}
+
+struct NumericExpressionParser<'a> {
+    input: &'a [u8],
+    cursor: usize,
+}
+
+impl<'a> NumericExpressionParser<'a> {
+    fn new(input: &'a str) -> Self {
+        Self {
+            input: input.as_bytes(),
+            cursor: 0,
+        }
+    }
+
+    fn parse(mut self) -> Result<f64> {
+        let value = self.parse_expression()?;
+        self.skip_whitespace();
+
+        if self.cursor != self.input.len() {
+            bail!("numeric expression contains unsupported syntax");
+        }
+
+        if !value.is_finite() {
+            bail!("numeric expression result must be finite");
+        }
+
+        Ok(value)
+    }
+
+    fn parse_expression(&mut self) -> Result<f64> {
+        let mut value = self.parse_term()?;
+
+        loop {
+            self.skip_whitespace();
+
+            if self.consume(b'+') {
+                value += self.parse_term()?;
+            } else if self.consume(b'-') {
+                value -= self.parse_term()?;
+            } else {
+                return Ok(value);
+            }
+        }
+    }
+
+    fn parse_term(&mut self) -> Result<f64> {
+        let mut value = self.parse_factor()?;
+
+        loop {
+            self.skip_whitespace();
+
+            if self.consume(b'*') {
+                value *= self.parse_factor()?;
+            } else if self.consume(b'/') {
+                value /= self.parse_factor()?;
+            } else {
+                return Ok(value);
+            }
+        }
+    }
+
+    fn parse_factor(&mut self) -> Result<f64> {
+        self.skip_whitespace();
+
+        if self.consume(b'+') {
+            return self.parse_factor();
+        }
+
+        if self.consume(b'-') {
+            return Ok(-self.parse_factor()?);
+        }
+
+        if self.consume(b'(') {
+            let value = self.parse_expression()?;
+            self.skip_whitespace();
+
+            if !self.consume(b')') {
+                bail!("numeric expression has an unclosed group");
+            }
+
+            return Ok(value);
+        }
+
+        self.parse_number()
+    }
+
+    fn parse_number(&mut self) -> Result<f64> {
+        self.skip_whitespace();
+
+        let start = self.cursor;
+        let mut has_digit = false;
+
+        while self.peek().is_some_and(|value| value.is_ascii_digit()) {
+            has_digit = true;
+            self.cursor += 1;
+        }
+
+        if self.consume(b'.') {
+            while self.peek().is_some_and(|value| value.is_ascii_digit()) {
+                has_digit = true;
+                self.cursor += 1;
+            }
+        }
+
+        if matches!(self.peek(), Some(b'e' | b'E')) {
+            let exponent_start = self.cursor;
+            self.cursor += 1;
+            if matches!(self.peek(), Some(b'+' | b'-')) {
+                self.cursor += 1;
+            }
+
+            let exponent_digit_start = self.cursor;
+            while self.peek().is_some_and(|value| value.is_ascii_digit()) {
+                self.cursor += 1;
+            }
+
+            if exponent_digit_start == self.cursor {
+                self.cursor = exponent_start;
+            }
+        }
+
+        if !has_digit {
+            bail!("numeric expression expected a number");
+        }
+
+        std::str::from_utf8(&self.input[start..self.cursor])?
+            .parse::<f64>()
+            .map_err(|error| anyhow!("numeric expression number is invalid: {error}"))
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.peek().is_some_and(|value| value.is_ascii_whitespace()) {
+            self.cursor += 1;
+        }
+    }
+
+    fn consume(&mut self, value: u8) -> bool {
+        if self.peek() == Some(value) {
+            self.cursor += 1;
+            return true;
+        }
+
+        false
+    }
+
+    fn peek(&self) -> Option<u8> {
+        self.input.get(self.cursor).copied()
+    }
 }
 
 fn render_template_with_issues(
