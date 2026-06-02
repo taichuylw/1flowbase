@@ -24,7 +24,7 @@ pub struct BoundRole {
     pub workspace_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct UserRecord {
     pub id: Uuid,
     pub account: String,
@@ -230,7 +230,7 @@ impl ApiKeyKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ApiKeyRecord {
     pub id: Uuid,
     pub name: String,

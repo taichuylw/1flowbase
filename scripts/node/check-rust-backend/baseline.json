@@ -212,18 +212,6 @@
     },
     {
       "rule": "no-sensitive-serialize",
-      "file": "api/crates/domain/src/auth.rs",
-      "line": 33,
-      "snippet": "pub password_hash: String,"
-    },
-    {
-      "rule": "no-sensitive-serialize",
-      "file": "api/crates/domain/src/auth.rs",
-      "line": 236,
-      "snippet": "pub token_hash: String,"
-    },
-    {
-      "rule": "no-sensitive-serialize",
       "file": "api/crates/domain/src/data_source.rs",
       "line": 82,
       "snippet": "pub encrypted_secret_json: serde_json::Value,"

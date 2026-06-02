@@ -62,6 +62,30 @@ test('scanRustSource flags sensitive serialized fields', () => {
   assert.equal(findings[0].line, 4);
 });
 
+test('current auth hash records are not serializable or baseline-suppressed', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const authPath = path.join(repoRoot, 'api', 'crates', 'domain', 'src', 'auth.rs');
+  const baselinePath = path.join(repoRoot, 'scripts', 'node', 'check-rust-backend', 'baseline.json');
+  const authFindings = scanRustSource({
+    relativePath: 'api/crates/domain/src/auth.rs',
+    content: fs.readFileSync(authPath, 'utf8'),
+  }).filter(
+    (finding) =>
+      finding.rule === 'no-sensitive-serialize'
+      && /(?:password_hash|token_hash)/u.test(finding.snippet)
+  );
+  const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+  const authBaselineSuppressions = (baseline.allowedFindings || []).filter(
+    (finding) =>
+      finding.rule === 'no-sensitive-serialize'
+      && finding.file === 'api/crates/domain/src/auth.rs'
+      && /(?:password_hash|token_hash)/u.test(finding.snippet)
+  );
+
+  assert.deepEqual(authFindings, []);
+  assert.deepEqual(authBaselineSuppressions, []);
+});
+
 test('scanRustSource limits sensitive serialization checks to the current struct', () => {
   const findings = scanRustSource({
     relativePath: 'api/apps/api-server/src/routes/settings/members.rs',
