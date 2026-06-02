@@ -5,11 +5,13 @@ FLOWBASE_REPO="${FLOWBASE_REPO:-taichuy/1flowbase}"
 FLOWBASE_REF="${FLOWBASE_REF:-main}"
 FLOWBASE_ARCHIVE_URL="${FLOWBASE_ARCHIVE_URL:-https://codeload.github.com/${FLOWBASE_REPO}/tar.gz/refs/heads/${FLOWBASE_REF}}"
 FLOWBASE_ARCHIVE_DOCKER_DIR="1flowbase-${FLOWBASE_REF}/docker"
+DEFAULT_OFFICIAL_PLUGIN_GITHUB_PROXY_URL="https://gh-proxy.com/"
 DB_PASSWORD="${FLOWBASE_DB_PASSWORD:-}"
 ROOT_ACCOUNT="${FLOWBASE_ROOT_ACCOUNT:-}"
 ROOT_PASSWORD="${FLOWBASE_ROOT_PASSWORD:-}"
 PROVIDER_SECRET="${FLOWBASE_PROVIDER_SECRET:-}"
 WEB_PORT="${FLOWBASE_WEB_PORT:-}"
+PLUGIN_GITHUB_PROXY_URL="${FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-${API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-}}"
 PULL_IMAGES="${FLOWBASE_PULL_IMAGES:-}"
 START_CONTAINERS="${FLOWBASE_START_CONTAINERS:-}"
 INTERACTIVE=1
@@ -116,6 +118,34 @@ prompt_yes_no() {
   fi
 }
 
+prompt_official_plugin_github_proxy_url() {
+  current_value="$(read_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL ./docker/.env)"
+  default_answer="no"
+  if [ -n "$current_value" ]; then
+    default_answer="yes"
+  fi
+
+  enabled="$(prompt_yes_no "Use CN GitHub plugin download accelerator?" "$default_answer")"
+  if [ "$enabled" = "yes" ]; then
+    default_value="$current_value"
+    if [ -z "$default_value" ]; then
+      default_value="$DEFAULT_OFFICIAL_PLUGIN_GITHUB_PROXY_URL"
+    fi
+
+    printf 'Official plugin GitHub raw proxy URL [%s]: ' "$default_value" > /dev/tty 2>/dev/null || true
+    input="$(read_from_tty)"
+    if [ -n "$input" ]; then
+      set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "$input" ./docker/.env
+    else
+      set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "$default_value" ./docker/.env
+    fi
+    echo "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+  else
+    set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "" ./docker/.env
+    echo "Disabled API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage: docker-deploy.sh [options]
@@ -126,6 +156,8 @@ Options:
   --root-password VALUE     Pre-fill BOOTSTRAP_ROOT_PASSWORD before the interactive prompt.
   --provider-secret VALUE   Pre-fill API_PROVIDER_SECRET_MASTER_KEY before the interactive prompt.
   --web-port VALUE          Pre-fill WEB_PORT before the interactive prompt.
+  --plugin-github-proxy-url VALUE
+                            Pre-fill API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL before the interactive prompt.
   --pull                    Pull images without asking.
   --no-pull                 Do not pull images without asking.
   --start                   Start containers without asking.
@@ -139,6 +171,7 @@ Environment variables with the same effect:
   FLOWBASE_ROOT_PASSWORD
   FLOWBASE_PROVIDER_SECRET
   FLOWBASE_WEB_PORT
+  FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
   FLOWBASE_PULL_IMAGES=1
   FLOWBASE_START_CONTAINERS=1
   FLOWBASE_NON_INTERACTIVE=1
@@ -185,6 +218,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --web-port=*)
       WEB_PORT="${1#*=}"
+      shift
+      ;;
+    --plugin-github-proxy-url)
+      PLUGIN_GITHUB_PROXY_URL="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --plugin-github-proxy-url=*)
+      PLUGIN_GITHUB_PROXY_URL="${1#*=}"
       shift
       ;;
     --pull)
@@ -276,6 +317,10 @@ if [ -n "$WEB_PORT" ]; then
   set_env_value WEB_PORT "$WEB_PORT" ./docker/.env
   echo "Updated WEB_PORT in docker/.env."
 fi
+if [ -n "$PLUGIN_GITHUB_PROXY_URL" ]; then
+  set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "$PLUGIN_GITHUB_PROXY_URL" ./docker/.env
+  echo "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+fi
 
 if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   echo "Configure docker/.env. Press Enter to keep the value shown in brackets."
@@ -284,6 +329,7 @@ if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   prompt_env_value BOOTSTRAP_ROOT_PASSWORD "Root password"
   prompt_env_value API_PROVIDER_SECRET_MASTER_KEY "API provider secret master key"
   prompt_env_value WEB_PORT "Web port"
+  prompt_official_plugin_github_proxy_url
 elif [ "$INTERACTIVE" -eq 1 ]; then
   echo "No interactive terminal was found. Keeping docker/.env values."
 fi

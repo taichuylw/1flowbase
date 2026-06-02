@@ -4,6 +4,7 @@ param(
   [string]$RootPassword = $env:FLOWBASE_ROOT_PASSWORD,
   [string]$ProviderSecret = $env:FLOWBASE_PROVIDER_SECRET,
   [string]$WebPort = $env:FLOWBASE_WEB_PORT,
+  [string]$PluginGithubProxyUrl = $env:FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL,
   [switch]$Pull,
   [switch]$NoPull,
   [switch]$Start,
@@ -23,6 +24,7 @@ $FlowbaseArchiveUrl = if ($env:FLOWBASE_ARCHIVE_URL) {
   "https://codeload.github.com/$FlowbaseRepo/tar.gz/refs/heads/$FlowbaseRef"
 }
 $FlowbaseArchiveDockerDir = "1flowbase-$FlowbaseRef/docker"
+$DefaultOfficialPluginGithubProxyUrl = "https://gh-proxy.com/"
 $ShouldPrompt = -not ($NonInteractive -or $env:FLOWBASE_NON_INTERACTIVE -eq "1" -or $env:FLOWBASE_NON_INTERACTIVE -eq "true")
 $PullImages = $null
 $StartContainers = $null
@@ -38,6 +40,9 @@ if ($Start -or $env:FLOWBASE_START_CONTAINERS -eq "1" -or $env:FLOWBASE_START_CO
 }
 if ($NoStart -or $PrepareOnly -or $env:FLOWBASE_START_CONTAINERS -eq "0" -or $env:FLOWBASE_START_CONTAINERS -eq "false") {
   $StartContainers = $false
+}
+if (-not $PluginGithubProxyUrl -and $env:API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL) {
+  $PluginGithubProxyUrl = $env:API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
 }
 
 function Fail([string]$Message) {
@@ -129,6 +134,25 @@ function Prompt-YesNo([string]$Question, [bool]$Default) {
   return Convert-ToYesNo $InputValue
 }
 
+function Prompt-OfficialPluginGithubProxyUrl() {
+  $CurrentValue = Read-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" ".\docker\.env"
+  $UseProxy = Prompt-YesNo "Use CN GitHub plugin download accelerator?" ([bool]$CurrentValue)
+
+  if ($UseProxy) {
+    $DefaultValue = if ($CurrentValue) { $CurrentValue } else { $DefaultOfficialPluginGithubProxyUrl }
+    $InputValue = Read-Host "Official plugin GitHub raw proxy URL [$DefaultValue]"
+    if ($InputValue) {
+      Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" $InputValue ".\docker\.env"
+    } else {
+      Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" $DefaultValue ".\docker\.env"
+    }
+    Write-Host "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+  } else {
+    Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" "" ".\docker\.env"
+    Write-Host "Disabled API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+  }
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Fail "Docker is required. Install Docker Desktop or Docker Engine first."
 }
@@ -186,6 +210,10 @@ if ($WebPort) {
   Set-EnvValue "WEB_PORT" $WebPort ".\docker\.env"
   Write-Host "Updated WEB_PORT in docker/.env."
 }
+if ($PluginGithubProxyUrl) {
+  Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" $PluginGithubProxyUrl ".\docker\.env"
+  Write-Host "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+}
 
 if ($ShouldPrompt) {
   Write-Host "Configure docker/.env. Press Enter to keep the value shown in brackets."
@@ -194,6 +222,7 @@ if ($ShouldPrompt) {
   Prompt-EnvValue "BOOTSTRAP_ROOT_PASSWORD" "Root password"
   Prompt-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" "API provider secret master key"
   Prompt-EnvValue "WEB_PORT" "Web port"
+  Prompt-OfficialPluginGithubProxyUrl
 }
 
 if ($null -eq $PullImages) {
