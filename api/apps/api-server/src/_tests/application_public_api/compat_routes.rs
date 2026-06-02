@@ -689,6 +689,24 @@ async fn openai_chat_completions_rejects_removed_prefixed_openai_alias() {
 }
 
 #[tokio::test]
+async fn openai_compatible_routes_reject_nested_v1_aliases() {
+    let app = test_app().await;
+    let token = setup_published_app(&app, "OpenAI Nested Alias Compatible Route App").await;
+
+    let models = get_models(&app, "/v1/chat/completions/v1/models", &token).await;
+    assert_eq!(models.status(), StatusCode::NOT_FOUND);
+
+    let chat_completion = post_json(
+        &app,
+        "/v1/chat/completions/v1/chat/completions",
+        ("authorization", format!("Bearer {token}")),
+        openai_body(false),
+    )
+    .await;
+    assert_eq!(chat_completion.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn openai_responses_accepts_blocking_text_input() {
     let app = test_app().await;
     let token = setup_published_app(&app, "OpenAI Responses Blocking App").await;

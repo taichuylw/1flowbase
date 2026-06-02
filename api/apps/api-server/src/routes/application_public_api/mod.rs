@@ -34,11 +34,6 @@ pub fn compatible_router() -> Router<Arc<ApiState>> {
         .route("/v1/chat/completions", post(openai::create_chat_completion))
         .route("/v1/responses", post(openai::create_response))
         .route("/v1/chat/completions/models", get(openai::list_models))
-        .route("/v1/chat/completions/v1/models", get(openai::list_models))
-        .route(
-            "/v1/chat/completions/v1/chat/completions",
-            post(openai::create_chat_completion),
-        )
         .route(
             "/v1/messages/count_tokens",
             post(anthropic::count_message_tokens),
