@@ -199,11 +199,7 @@ function renderLlmPromptMessagesField({
   const contextPolicy = getLlmContextPolicy({
     context_policy: adapter.getValue('config.context_policy')
   });
-  const messages = normalizePromptMessagesBinding(
-    adapter.getValue(block.path),
-    adapter.getValue('bindings.system_prompt'),
-    adapter.getValue('bindings.user_prompt')
-  );
+  const messages = normalizePromptMessagesBinding(adapter.getValue(block.path));
 
   return (
     <LlmPromptMessagesField

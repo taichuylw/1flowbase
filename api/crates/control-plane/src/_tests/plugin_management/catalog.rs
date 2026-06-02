@@ -10,7 +10,7 @@ use crate::{
     ports::{
         CreatePluginAssignmentInput, DownloadedOfficialPluginPackage,
         OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource, OfficialPluginSourceEntry,
-        OfficialPluginSourcePort, PluginRepository,
+        OfficialPluginSourcePort, PluginRepository, UpdatePluginArtifactSnapshotInput,
     },
 };
 use domain::PluginDesiredState;
@@ -117,6 +117,56 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
     assert_eq!(families.entries[0].current_version, "0.1.0");
     assert_eq!(families.entries[0].latest_version.as_deref(), Some("0.2.0"));
     assert!(families.entries[0].has_update);
+}
+
+#[tokio::test]
+async fn plugin_management_service_list_catalog_does_not_refresh_artifact_snapshot() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-catalog-readonly-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id,
+            workspace_id: repository.actor.current_workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
+    let catalog = service
+        .list_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(catalog.entries.len(), 1);
+    assert_eq!(catalog.entries[0].provider_label_key, "provider.label");
+    assert_eq!(catalog.entries[0].model_discovery_mode, "hybrid");
+    assert!(catalog.entries[0].assigned_to_current_workspace);
+    assert!(catalog.i18n_catalog["plugin.fixture_provider"].contains_key("en_US"));
+    assert_eq!(repository.artifact_snapshot_update_count().await, 0);
 }
 
 #[tokio::test]
@@ -238,7 +288,7 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
 }
 
 #[tokio::test]
-async fn plugin_management_service_degrades_catalog_entry_when_artifact_is_missing() {
+async fn plugin_management_service_uses_persisted_missing_artifact_snapshot_for_catalog_fallback() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
         workspace_id,
@@ -267,6 +317,19 @@ async fn plugin_management_service_degrades_catalog_entry_when_artifact_is_missi
         .unwrap()
         .installed_path;
     fs::remove_dir_all(&install_path).unwrap();
+    repository
+        .update_artifact_snapshot(&UpdatePluginArtifactSnapshotInput {
+            installation_id,
+            artifact_status: domain::PluginArtifactStatus::Missing,
+            availability_status: domain::PluginAvailabilityStatus::ArtifactMissing,
+            package_path: None,
+            installed_path: install_path,
+            checksum: None,
+            manifest_fingerprint: None,
+        })
+        .await
+        .unwrap();
+    let maintenance_update_count = repository.artifact_snapshot_update_count().await;
 
     let catalog = service
         .list_catalog(
@@ -295,6 +358,10 @@ async fn plugin_management_service_degrades_catalog_entry_when_artifact_is_missi
     assert_eq!(
         installation.availability_status,
         domain::PluginAvailabilityStatus::ArtifactMissing
+    );
+    assert_eq!(
+        repository.artifact_snapshot_update_count().await,
+        maintenance_update_count
     );
 }
 

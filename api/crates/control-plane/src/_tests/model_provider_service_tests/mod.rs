@@ -53,6 +53,7 @@ struct MemoryModelProviderRepository {
     main_instances: Arc<RwLock<HashMap<(Uuid, String), ModelProviderMainInstanceRecord>>>,
     references: Arc<RwLock<HashMap<Uuid, u64>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
+    artifact_snapshot_updates: Arc<RwLock<Vec<Uuid>>>,
 }
 
 impl MemoryModelProviderRepository {
@@ -73,6 +74,7 @@ impl MemoryModelProviderRepository {
             main_instances: Arc::new(RwLock::new(HashMap::new())),
             references: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
+            artifact_snapshot_updates: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -159,6 +161,10 @@ impl MemoryModelProviderRepository {
 
     async fn audit_events(&self) -> Vec<String> {
         self.audit_events.read().await.clone()
+    }
+
+    async fn artifact_snapshot_update_count(&self) -> usize {
+        self.artifact_snapshot_updates.read().await.len()
     }
 
     async fn installation(&self, installation_id: Uuid) -> PluginInstallationRecord {
@@ -357,6 +363,10 @@ impl PluginRepository for MemoryModelProviderRepository {
         &self,
         input: &UpdatePluginArtifactSnapshotInput,
     ) -> Result<PluginInstallationRecord> {
+        self.artifact_snapshot_updates
+            .write()
+            .await
+            .push(input.installation_id);
         let mut installations = self.installations.write().await;
         let installation = installations
             .get_mut(&input.installation_id)

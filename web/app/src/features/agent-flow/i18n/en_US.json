@@ -267,7 +267,7 @@
     "full_callback": "full callback",
     "variable_name": "variable name",
     "manual_input": "manual input",
-    "system_variable_app_id": "Application ID",
+    "system_variable_application_id": "Application ID",
     "copy_alt": "Copy {{value1}}",
     "conditionally_execute_node_repeatedly": "Conditionally execute a node repeatedly.",
     "multiple_master_instances_supplier_provide_same_model_close_supplier_configuration": "There are multiple master instances under the current supplier that provide the same model. Please close them in the supplier configuration first.",

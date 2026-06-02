@@ -27,10 +27,10 @@ export const agentFlowSystemVariables: AgentFlowSystemVariable[] = [
     description: i18nText('agentFlow', 'auto.system_variable_user_id')
   },
   {
-    key: 'app_id',
-    title: 'sys.app_id',
+    key: 'application_id',
+    title: 'sys.application_id',
     valueType: 'string',
-    description: i18nText('agentFlow', 'auto.system_variable_app_id')
+    description: i18nText('agentFlow', 'auto.system_variable_application_id')
   },
   {
     key: 'workflow_id',

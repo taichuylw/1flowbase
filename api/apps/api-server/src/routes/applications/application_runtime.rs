@@ -2392,13 +2392,6 @@ pub async fn get_application_run_detail(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-    let detail = offload_application_run_detail_artifacts(
-        state.clone(),
-        context.actor.current_workspace_id,
-        id,
-        detail,
-    )
-    .await?;
     let response = to_application_run_detail_response(&application, detail);
 
     Ok(Json(ApiSuccess::new(response)))
@@ -2434,13 +2427,6 @@ pub async fn get_application_run_node_last_run(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-    let detail = offload_application_run_detail_artifacts(
-        state.clone(),
-        context.actor.current_workspace_id,
-        id,
-        detail,
-    )
-    .await?;
 
     let Some(node_run) = detail
         .node_runs
@@ -2545,35 +2531,7 @@ pub async fn get_node_last_run(
         &node_id,
     )
     .await?;
-    let last_run = if let Some(last_run) = last_run {
-        let checkpoints = last_run.checkpoints;
-        let detail = offload_application_run_detail_artifacts(
-            state.clone(),
-            context.actor.current_workspace_id,
-            id,
-            domain::ApplicationRunDetail {
-                flow_run: last_run.flow_run,
-                node_runs: vec![last_run.node_run],
-                checkpoints: checkpoints.clone(),
-                callback_tasks: Vec::new(),
-                events: last_run.events,
-            },
-        )
-        .await?;
-        let node_run = detail
-            .node_runs
-            .into_iter()
-            .next()
-            .ok_or(ControlPlaneError::NotFound("node_run"))?;
-        Some(to_node_last_run_response(domain::NodeLastRun {
-            flow_run: detail.flow_run,
-            node_run,
-            checkpoints,
-            events: detail.events,
-        }))
-    } else {
-        None
-    };
+    let last_run = last_run.map(to_node_last_run_response);
 
     Ok(Json(ApiSuccess::new(last_run)))
 }

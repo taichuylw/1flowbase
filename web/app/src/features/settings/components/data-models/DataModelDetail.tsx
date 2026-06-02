@@ -39,10 +39,8 @@ import { DataModelAdvisorTab } from './DataModelAdvisorTab';
 import { DataModelApiTab } from './DataModelApiTab';
 import { DataModelFieldDrawer } from './DataModelFieldDrawer';
 import { DataModelFormDrawer } from './DataModelFormDrawer';
-import {
-  DataModelHelpTooltip,
-  dataModelStatusHelp
-} from './DataModelHelpTooltip';
+import { DataModelHelpTooltip } from './DataModelHelpTooltip';
+import { dataModelStatusHelp } from './data-model-help-text';
 import { DataModelPermissionsTab } from './DataModelPermissionsTab';
 import { DataModelRecordPreview } from './DataModelRecordPreview';
 import { i18nText } from '../../../../shared/i18n/text';

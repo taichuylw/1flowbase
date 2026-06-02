@@ -22,14 +22,14 @@ import {
   type ApplicationRunSummary
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
+import { ApplicationLogsFloatingWindow } from '../components/logs/ApplicationLogsFloatingWindow';
 import {
-  ApplicationLogsFloatingWindow,
   clampRect,
   applyStoredWidth,
   DEFAULT_MIN_WIDTH,
   DEFAULT_MIN_HEIGHT,
   type FloatingWindowRect
-} from '../components/logs/ApplicationLogsFloatingWindow';
+} from '../components/logs/floating-window-geometry';
 import { getApplicationRunsTableColumns } from '../components/logs/application-runs-table-columns';
 import {
   ApplicationRunsTable,

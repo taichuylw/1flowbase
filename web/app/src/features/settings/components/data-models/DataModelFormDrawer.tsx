@@ -8,12 +8,12 @@ import type {
   SettingsDataSourceInstance,
   UpdateSettingsDataModelInput
 } from '../../api/data-models';
+import { DataModelFieldLabel } from './DataModelHelpTooltip';
 import {
-  DataModelFieldLabel,
   dataModelCodeHelp,
   dataModelStatusHelp,
   dataModelTitleHelp
-} from './DataModelHelpTooltip';
+} from './data-model-help-text';
 import { i18nText } from '../../../../shared/i18n/text';
 
 const dataModelStatusOptions = ['draft', 'published', 'disabled', 'broken'].map(

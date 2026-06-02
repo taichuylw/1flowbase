@@ -301,11 +301,20 @@ describe('start node variables', () => {
           label: 'sys.conversation_id'
         },
         {
+          value: ['sys', 'application_id'],
+          label: 'sys.application_id'
+        },
+        {
           value: ['sys', 'workflow_run_id'],
           label: 'sys.workflow_run_id'
         }
       ])
     );
+    expect(
+      listVisibleSelectorOptions(document, 'node-answer').map(
+        (option) => option.value
+      )
+    ).not.toContainEqual(['sys', 'app_id']);
   });
 
   test('exposes application environment variables to any node', () => {

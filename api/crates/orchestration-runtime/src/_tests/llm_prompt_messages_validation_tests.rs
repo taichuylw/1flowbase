@@ -85,7 +85,7 @@ impl CodeInvoker for CapturingProviderInvoker {
     }
 }
 
-fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
+fn plan_with_empty_prompt_messages() -> CompiledPlan {
     let mut nodes = BTreeMap::new();
     nodes.insert(
         "node-start".to_string(),
@@ -119,41 +119,31 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
             container_id: None,
             dependency_node_ids: vec!["node-start".to_string()],
             downstream_node_ids: vec![],
-            bindings: BTreeMap::from([
-                (
-                    "prompt_messages".to_string(),
-                    CompiledBinding {
-                        kind: "prompt_messages".to_string(),
-                        selector_paths: vec![],
-                        raw_value: json!([
-                            {
-                                "id": "system-1",
-                                "role": "system",
-                                "content": {
-                                    "kind": "templated_text",
-                                    "value": ""
-                                }
-                            },
-                            {
-                                "id": "user-2",
-                                "role": "assistant",
-                                "content": {
-                                    "kind": "templated_text",
-                                    "value": ""
-                                }
+            bindings: BTreeMap::from([(
+                "prompt_messages".to_string(),
+                CompiledBinding {
+                    kind: "prompt_messages".to_string(),
+                    selector_paths: vec![],
+                    raw_value: json!([
+                        {
+                            "id": "system-1",
+                            "role": "system",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": ""
                             }
-                        ]),
-                    },
-                ),
-                (
-                    "user_prompt".to_string(),
-                    CompiledBinding {
-                        kind: "templated_text".to_string(),
-                        selector_paths: vec![],
-                        raw_value: json!("nihao ?试你好？"),
-                    },
-                ),
-            ]),
+                        },
+                        {
+                            "id": "user-2",
+                            "role": "assistant",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": ""
+                            }
+                        }
+                    ]),
+                },
+            )]),
             outputs: vec![CompiledOutput {
                 key: "text".to_string(),
                 title: "模型输出".to_string(),
@@ -185,7 +175,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
 }
 
 fn plan_with_templated_prompt_message() -> CompiledPlan {
-    let mut plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
+    let mut plan = plan_with_empty_prompt_messages();
     let node = plan
         .nodes
         .get_mut("node-llm")
@@ -211,7 +201,7 @@ fn plan_with_templated_prompt_message() -> CompiledPlan {
 }
 
 fn plan_with_system_only_prompt_message() -> CompiledPlan {
-    let mut plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
+    let mut plan = plan_with_empty_prompt_messages();
     let node = plan
         .nodes
         .get_mut("node-llm")
@@ -241,7 +231,7 @@ fn plan_with_system_only_prompt_message() -> CompiledPlan {
 
 #[tokio::test]
 async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
-    let plan = plan_with_empty_prompt_messages_and_legacy_user_prompt();
+    let plan = plan_with_empty_prompt_messages();
     let captured_input = Arc::new(Mutex::new(None));
     let invoker = CapturingProviderInvoker {
         captured_input: captured_input.clone(),

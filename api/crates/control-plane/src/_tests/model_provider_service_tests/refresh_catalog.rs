@@ -308,10 +308,11 @@ async fn list_catalog_returns_i18n_namespace_and_keys() {
         entries.entries[0].predefined_models[0].label_key.as_deref(),
         Some("models.fixture_chat.label")
     );
+    assert_eq!(repository.artifact_snapshot_update_count().await, 0);
 }
 
 #[tokio::test]
-async fn list_catalog_reconciles_missing_artifacts_before_returning_entries() {
+async fn list_catalog_uses_persisted_missing_artifact_snapshot() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(
         workspace_id,
@@ -328,6 +329,19 @@ async fn list_catalog_reconciles_missing_artifacts_before_returning_entries() {
         )
         .await;
     fs::remove_dir_all(&package_root).unwrap();
+    repository
+        .update_artifact_snapshot(&UpdatePluginArtifactSnapshotInput {
+            installation_id,
+            artifact_status: PluginArtifactStatus::Missing,
+            availability_status: PluginAvailabilityStatus::ArtifactMissing,
+            package_path: None,
+            installed_path: package_root.display().to_string(),
+            checksum: None,
+            manifest_fingerprint: None,
+        })
+        .await
+        .unwrap();
+    let maintenance_update_count = repository.artifact_snapshot_update_count().await;
     let service = ModelProviderService::new(
         repository.clone(),
         MemoryProviderRuntime::default(),
@@ -348,5 +362,9 @@ async fn list_catalog_reconciles_missing_artifacts_before_returning_entries() {
     assert_eq!(
         installation.availability_status,
         PluginAvailabilityStatus::ArtifactMissing
+    );
+    assert_eq!(
+        repository.artifact_snapshot_update_count().await,
+        maintenance_update_count
     );
 }

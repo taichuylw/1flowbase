@@ -671,30 +671,6 @@ async fn resolve_runtime_debug_artifact_value(
     serde_json::from_slice(&body).unwrap()
 }
 
-async fn load_runtime_debug_artifact_by_ref(
-    app: &axum::Router,
-    cookie: &str,
-    application_id: &str,
-    artifact_ref: &str,
-) -> Value {
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/{artifact_ref}"
-                ))
-                .header("cookie", cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    serde_json::from_slice(&body).unwrap()
-}
-
 async fn wait_for_persisted_text_delta_events(
     app: &axum::Router,
     cookie: &str,
@@ -779,5 +755,6 @@ fn sse_data_payload(frame: &str) -> Value {
 
 mod artifacts_billing_routes;
 mod logs_routes;
+mod read_side_effect_routes;
 mod resume_cancel_routes;
 mod stream_routes;

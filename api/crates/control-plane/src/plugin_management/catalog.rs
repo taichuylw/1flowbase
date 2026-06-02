@@ -259,8 +259,6 @@ where
         let mut catalog = Vec::with_capacity(installations.len());
         let mut i18n_catalog = BTreeMap::new();
         for installation in installations {
-            let installation =
-                reconcile_installation_snapshot(&self.repository, installation.id).await?;
             if !filter.matches("model_provider") {
                 continue;
             }

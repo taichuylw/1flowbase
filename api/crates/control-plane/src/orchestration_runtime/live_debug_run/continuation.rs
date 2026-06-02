@@ -1404,8 +1404,6 @@ fn inject_system_variables(
             "dialog_count": 0,
             "user_id": flow_run.created_by.to_string(),
             "application_id": flow_run.application_id.to_string(),
-            // @field-contract-compat source=sys.application_id alias=sys.app_id remove_by=2026-06-30
-            "app_id": flow_run.application_id.to_string(),
             "workflow_id": flow_run.flow_id.to_string(),
             "workflow_run_id": flow_run.id.to_string(),
     });

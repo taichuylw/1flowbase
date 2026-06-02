@@ -11,6 +11,7 @@ import {
 
 import { AppProviders } from '../../../../app/AppProviders';
 import { NodeConfigTab } from '../../components/detail/tabs/NodeConfigTab';
+import { normalizePromptMessagesBinding } from '../../lib/llm-prompt-messages';
 import { AgentFlowEditorStoreProvider } from '../../store/editor/AgentFlowEditorStoreProvider';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { selectWorkingDocument } from '../../store/editor/selectors';
@@ -113,6 +114,19 @@ describe('LLM prompt messages field', () => {
     expect(cssSource).toContain(
       '.agent-flow-llm-prompt-messages__role-icon {\n' + '  color: #101828;'
     );
+  });
+
+  test('does not read removed prompt bindings in the field renderer', async () => {
+    const rendererSource = await readFile(
+      path.resolve(
+        process.cwd(),
+        'src/features/agent-flow/schema/agent-flow-field-renderers.tsx'
+      ),
+      'utf8'
+    );
+
+    expect(rendererSource).not.toContain('bindings.system_prompt');
+    expect(rendererSource).not.toContain('bindings.user_prompt');
   });
 
   test('keeps system first and only lets dynamic messages switch between user and assistant', async () => {
@@ -254,39 +268,15 @@ describe('LLM prompt messages field', () => {
     ).toEqual(['system', 'user', 'user']);
   });
 
-  test('renders legacy system and user prompt bindings as prompt messages', async () => {
-    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    document.graph.nodes = document.graph.nodes.map((node) =>
-      node.id === 'node-llm'
-        ? {
-            ...node,
-            bindings: {
-              system_prompt: {
-                kind: 'templated_text',
-                value: 'You are helpful.'
-              },
-              user_prompt: {
-                kind: 'selector',
-                value: ['node-start', 'query']
-              }
-            }
-          }
-        : node
-    );
+  test('ignores removed system and user prompt bindings without prompt_messages', () => {
+    const messages = normalizePromptMessagesBinding(undefined);
 
-    renderWithProviders(
-      <AgentFlowEditorStoreProvider initialState={createInitialState(document)}>
-        <SelectionSeed nodeId="node-llm" />
-        <NodeConfigTab />
-      </AgentFlowEditorStoreProvider>
-    );
-
-    fireEvent.click(
-      await screen.findByRole('button', { name: '展开本地 SYSTEM' })
-    );
-    expect(screen.getByLabelText('SYSTEM 消息内容')).toBeInTheDocument();
-    expect(screen.getByText('You are helpful.')).toBeInTheDocument();
-    expect(screen.getByLabelText('USER 消息内容')).toBeInTheDocument();
+    expect(messages).toEqual([
+      expect.objectContaining({
+        role: 'system',
+        content: { kind: 'templated_text', value: '' }
+      })
+    ]);
   });
 
   test('collapses local system prompt when integration context is enabled', async () => {

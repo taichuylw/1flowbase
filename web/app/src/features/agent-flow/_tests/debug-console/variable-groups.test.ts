@@ -123,7 +123,8 @@ describe('debug console variable groups', () => {
           isReadOnly: true
         }),
         expect.objectContaining({
-          key: 'sys.app_id',
+          key: 'sys.application_id',
+          label: 'sys.application_id',
           value: 'app-1'
         }),
         expect.objectContaining({
@@ -135,6 +136,9 @@ describe('debug console variable groups', () => {
           value: null
         })
       ])
+    );
+    expect(systemGroup?.items.map((item) => item.key)).not.toContain(
+      'sys.app_id'
     );
 
     const environmentGroup = variableGroups.find(

@@ -125,6 +125,53 @@ async fn seed_answer_only_application(
     application_id
 }
 
+async fn wait_for_run_detail_matching(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+    expected_statuses: &[&str],
+    mut matches_detail: impl FnMut(&Value) -> bool,
+    reason: &str,
+) -> Value {
+    let mut last_detail = Value::Null;
+    for _ in 0..200 {
+        let detail =
+            wait_for_run_detail(app, cookie, application_id, run_id, expected_statuses).await;
+        if matches_detail(&detail) {
+            return detail;
+        }
+        last_detail = detail;
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    panic!("timed out waiting for {reason}: {last_detail}");
+}
+
+async fn wait_for_flow_run_status_in_database(
+    pool: &sqlx::PgPool,
+    flow_run_id: Uuid,
+    expected_status: &str,
+) {
+    let mut last_status = String::new();
+    for _ in 0..200 {
+        last_status =
+            sqlx::query_scalar::<_, String>("select status::text from flow_runs where id = $1")
+                .bind(flow_run_id)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        if last_status == expected_status {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    panic!(
+        "timed out waiting for run status in database: {expected_status}, last status: {last_status}"
+    );
+}
+
 #[tokio::test]
 async fn application_runtime_routes_start_debug_run_persists_gateway_billing_audit() {
     let (app, database_url) = test_app_with_database_url().await;
@@ -268,12 +315,14 @@ async fn application_runtime_routes_runtime_debug_artifact_full_load_returns_ori
     let snapshot_payload: Value = serde_json::from_slice(&snapshot_body).unwrap();
     assert!(snapshot_payload["data"]["variable_cache"]["node-start"].is_null());
 
-    let detail = wait_for_run_detail(
+    let detail = wait_for_run_detail_matching(
         &app,
         &cookie,
         &application_id,
         run_id,
         &["succeeded", "failed", "cancelled"],
+        |detail| detail["flow_run"]["input_payload"]["__runtime_debug_artifact"] == true,
+        "flow input debug artifact preview",
     )
     .await;
     let preview = &detail["flow_run"]["input_payload"];
@@ -378,12 +427,26 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
     let payload: Value = serde_json::from_slice(&body).unwrap();
     let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
 
-    let detail = wait_for_run_detail(
+    let detail = wait_for_run_detail_matching(
         &app,
         &cookie,
         &application_id,
         run_id,
         &["succeeded", "failed", "cancelled"],
+        |detail| {
+            let answer_node_output = detail["node_runs"]
+                .as_array()
+                .and_then(|node_runs| {
+                    node_runs
+                        .iter()
+                        .find(|node_run| node_run["node_id"] == json!("node-answer"))
+                })
+                .and_then(|node_run| node_run.get("output_payload"));
+            detail["flow_run"]["output_payload"]["answer"]["__runtime_debug_artifact"] == true
+                && answer_node_output
+                    .is_some_and(|output| output["answer"]["__runtime_debug_artifact"] == true)
+        },
+        "flow and answer node output artifact previews",
     )
     .await;
 
@@ -452,7 +515,8 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
 }
 
 #[tokio::test]
-async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds() {
+async fn application_runtime_routes_waiting_run_detail_reads_persisted_llm_rounds_as_plain_payload()
+{
     let (app, database_url) = test_app_with_database_url().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
@@ -488,140 +552,8 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
     let run_id = start_payload["data"]["flow_run"]["id"].as_str().unwrap();
     let flow_run_id = Uuid::parse_str(run_id).unwrap();
 
-    let detail =
-        wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
-    let llm_node_run = detail["node_runs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|node_run| node_run["node_id"].as_str() == Some("node-llm"))
-        .expect("waiting run detail should include the LLM node run");
-    let llm_node_run_id = Uuid::parse_str(llm_node_run["id"].as_str().unwrap()).unwrap();
-    let large_llm_content = "tool callback evidence ".repeat(300);
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
-    sqlx::query("update node_runs set debug_payload = $1 where id = $2")
-        .bind(json!({
-            "llm_rounds": [
-                {
-                    "round_index": 0,
-                    "usage": {
-                        "input_tokens": 11,
-                        "input_cache_hit_tokens": 5,
-                        "output_tokens": 3,
-                        "total_tokens": 14
-                    },
-                    "assistant": {
-                        "role": "assistant",
-                        "content": large_llm_content,
-                        "tool_calls": [
-                            {
-                                "id": "call_weather",
-                                "name": "lookup_weather",
-                                "call_usage": {
-                                    "input_tokens": 11,
-                                    "input_cache_hit_tokens": 5,
-                                    "output_tokens": 3,
-                                    "total_tokens": 14
-                                },
-                                "arguments": {
-                                    "city": "Shanghai"
-                                }
-                            }
-                        ]
-                    },
-                    "tool_results": [
-                        {
-                            "role": "tool",
-                            "tool_call_id": "call_weather",
-                            "result_context_usage": {
-                                "input_tokens": 20,
-                                "input_cache_hit_tokens": 8,
-                                "output_tokens": 4,
-                                "total_tokens": 24
-                            },
-                            "content": "{\"temperature\":21}"
-                        }
-                    ]
-                },
-                {
-                    "round_index": 1,
-                    "usage": {
-                        "input_tokens": 20,
-                        "input_cache_hit_tokens": 8,
-                        "output_tokens": 4,
-                        "total_tokens": 24
-                    },
-                    "assistant": {
-                        "role": "assistant",
-                        "content": "weather is clear"
-                    },
-                    "finish_reason": "stop"
-                }
-            ]
-        }))
-        .bind(llm_node_run_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        r#"
-        insert into flow_run_callback_tasks (
-            id,
-            scope_id,
-            flow_run_id,
-            node_run_id,
-            callback_kind,
-            status,
-            request_payload,
-            response_payload,
-            external_ref_payload,
-            completed_at
-        ) values (
-            $1,
-            (
-                select applications.workspace_id
-                from flow_runs
-                join applications on applications.id = flow_runs.application_id
-                where flow_runs.id = $2
-            ),
-            $2,
-            $3,
-            'llm_tool_calls',
-            'completed',
-            $4,
-            $5,
-            $4,
-            now()
-        )
-        "#,
-    )
-    .bind(Uuid::now_v7())
-    .bind(flow_run_id)
-    .bind(llm_node_run_id)
-    .bind(json!({
-        "tool_calls": [
-            {
-                "id": "call_weather",
-                "name": "lookup_weather",
-                "arguments": {
-                    "city": "Shanghai"
-                }
-            }
-        ]
-    }))
-    .bind(json!({
-        "tool_results": [
-            {
-                "tool_call_id": "call_weather",
-                "content": "{\"temperature\":21}",
-                "stdout": "{\"temperature\":21}",
-                "adapter_trace_id": "trace-weather-1"
-            }
-        ]
-    }))
-    .execute(&pool)
-    .await
-    .unwrap();
+    wait_for_flow_run_status_in_database(&pool, flow_run_id, "waiting_human").await;
 
     let detail =
         wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
@@ -632,81 +564,12 @@ async fn application_runtime_routes_waiting_run_detail_offloads_large_llm_rounds
         .find(|node_run| node_run["node_id"].as_str() == Some("node-llm"))
         .expect("waiting run detail should include the LLM node run");
     let llm_rounds = &llm_node_run["debug_payload"]["llm_rounds"];
+    assert_eq!(llm_rounds["__runtime_debug_artifact"], Value::Null);
 
-    assert_eq!(llm_rounds["__runtime_debug_artifact"], true);
-    assert_eq!(llm_rounds["artifact_scope"], "field");
-    assert_eq!(llm_rounds["field_path"], json!(["llm_rounds"]));
-    assert!(llm_rounds["preview"].as_str().unwrap().len() < large_llm_content.len());
-    let tool_callbacks = llm_rounds["tool_callbacks"].as_array().unwrap();
-    assert_eq!(tool_callbacks.len(), 1);
-    assert_eq!(tool_callbacks[0]["id"], "call_weather");
-    assert_eq!(tool_callbacks[0]["name"], "lookup_weather");
-    assert_eq!(tool_callbacks[0]["callback_status"], "returned");
-    assert_eq!(tool_callbacks[0]["execution_status"], "unknown");
-    assert_eq!(tool_callbacks[0]["request_round_index"], 0);
-    assert_eq!(tool_callbacks[0]["result_round_index"], 0);
-    assert_eq!(tool_callbacks[0]["call_usage"]["input_tokens"], 11);
-    assert_eq!(tool_callbacks[0]["call_usage"]["output_tokens"], 3);
-    assert_eq!(tool_callbacks[0]["call_usage"]["total_tokens"], 14);
-    assert_eq!(
-        tool_callbacks[0]["result_context_usage"]["input_tokens"],
-        20
-    );
-    assert_eq!(
-        tool_callbacks[0]["result_context_usage"]["total_tokens"],
-        24
-    );
-    assert!(tool_callbacks[0].get("token_delta").is_none());
-    assert!(tool_callbacks[0].get("result_input_tokens").is_none());
-    assert!(tool_callbacks[0].get("token_count_method").is_none());
-    let tool_callback_artifact_ref = tool_callbacks[0]["artifact_ref"].as_str().unwrap();
-
-    let full_llm_rounds =
-        resolve_runtime_debug_artifact_value(&app, &cookie, &application_id, llm_rounds).await;
-    assert!(full_llm_rounds[0]["assistant"]["content"]
+    let llm_rounds = llm_rounds.as_array().unwrap();
+    assert!(!llm_rounds.is_empty());
+    assert!(llm_rounds[0]["assistant"]["content"]
         .as_str()
         .unwrap()
-        .contains("tool callback evidence"));
-
-    let tool_callback_detail = load_runtime_debug_artifact_by_ref(
-        &app,
-        &cookie,
-        &application_id,
-        tool_callback_artifact_ref,
-    )
-    .await;
-    assert_eq!(tool_callback_detail["id"], "call_weather");
-    assert_eq!(tool_callback_detail["name"], "lookup_weather");
-    assert_eq!(tool_callback_detail["callback_status"], "returned");
-    assert_eq!(tool_callback_detail["execution_status"], "unknown");
-    assert_eq!(
-        tool_callback_detail["request_payload"]["arguments"]["city"],
-        "Shanghai"
-    );
-    assert_eq!(
-        tool_callback_detail["callback_payload"]["content"],
-        "{\"temperature\":21}"
-    );
-    assert_eq!(
-        tool_callback_detail["callback_payload"]["adapter_trace_id"],
-        "trace-weather-1"
-    );
-    assert_eq!(
-        tool_callback_detail["parsed_result"]["content"],
-        "{\"temperature\":21}"
-    );
-    assert_eq!(tool_callback_detail["call_usage"]["input_tokens"], 11);
-    assert_eq!(tool_callback_detail["call_usage"]["output_tokens"], 3);
-    assert_eq!(tool_callback_detail["call_usage"]["total_tokens"], 14);
-    assert_eq!(
-        tool_callback_detail["result_context_usage"]["input_tokens"],
-        20
-    );
-    assert_eq!(
-        tool_callback_detail["result_context_usage"]["total_tokens"],
-        24
-    );
-    assert!(tool_callback_detail.get("token_delta").is_none());
-    assert!(tool_callback_detail.get("result_input_tokens").is_none());
-    assert!(tool_callback_detail.get("token_count_method").is_none());
+        .contains("请总结退款政策"));
 }

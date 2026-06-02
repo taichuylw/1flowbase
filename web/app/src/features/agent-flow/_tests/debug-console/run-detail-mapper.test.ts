@@ -121,7 +121,7 @@ describe('run detail mapper', () => {
       env: {},
       sys: {
         workflow_run_id: 'flow-run-1',
-        app_id: 'app-1'
+        application_id: 'app-1'
       }
     };
 

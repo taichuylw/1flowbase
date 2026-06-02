@@ -839,7 +839,7 @@ fn compile_rejects_legacy_start_outputs() {
 }
 
 #[test]
-fn compile_llm_node_ignores_legacy_prompt_bindings() {
+fn compile_llm_node_ignores_removed_prompt_bindings() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["bindings"]["user_prompt"] =

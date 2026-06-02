@@ -40,7 +40,6 @@ where
     let mut catalog = Vec::new();
     let mut i18n_catalog = BTreeMap::new();
     for installation in installations {
-        let installation = reconcile_installation_snapshot(repository, installation.id).await?;
         if matches!(
             installation.desired_state,
             domain::PluginDesiredState::Disabled

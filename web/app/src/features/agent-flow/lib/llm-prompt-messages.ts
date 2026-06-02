@@ -4,8 +4,6 @@ import type {
   LlmPromptMessageRole
 } from '@1flowbase/flow-schema';
 
-import { createTemplateSelectorToken } from './template-binding';
-
 export const LLM_PROMPT_MESSAGE_ROLES: LlmPromptMessageRole[] = [
   'system',
   'user',
@@ -36,26 +34,8 @@ function isFlowBinding(value: unknown): value is FlowBinding {
   return Boolean(value && typeof value === 'object' && 'kind' in value);
 }
 
-function legacyBindingToText(value: unknown) {
-  if (!isFlowBinding(value)) {
-    return '';
-  }
-
-  if (value.kind === 'templated_text') {
-    return value.value;
-  }
-
-  if (value.kind === 'selector') {
-    return createTemplateSelectorToken(value.value);
-  }
-
-  return '';
-}
-
 export function normalizePromptMessagesBinding(
-  promptMessages: unknown,
-  legacySystemPrompt: unknown,
-  legacyUserPrompt: unknown
+  promptMessages: unknown
 ): LlmPromptMessage[] {
   if (
     isFlowBinding(promptMessages) &&
@@ -97,19 +77,7 @@ export function normalizePromptMessagesBinding(
     return [systemMessage, ...dynamicMessages];
   }
 
-  const messages: LlmPromptMessage[] = [];
-  const systemText = legacyBindingToText(legacySystemPrompt);
-  const userText = legacyBindingToText(legacyUserPrompt);
-
-  if (systemText || legacySystemPrompt) {
-    messages.push(createPromptMessage('system', messages.length, systemText));
-  }
-
-  if (userText || legacyUserPrompt) {
-    messages.push(createPromptMessage('user', messages.length, userText));
-  }
-
-  return messages.length > 0 ? messages : [createPromptMessage('system', 0)];
+  return [createPromptMessage('system', 0)];
 }
 
 export function toPromptMessagesBinding(

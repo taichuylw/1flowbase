@@ -1308,7 +1308,10 @@ export function HostInfrastructureMemoryObservationPanel({
     }
   });
 
-  const rootNodes = rootTreeQuery.data?.nodes ?? [];
+  const rootNodes = useMemo(
+    () => rootTreeQuery.data?.nodes ?? [],
+    [rootTreeQuery.data?.nodes]
+  );
   const treeData = useMemo(
     () => toTreeData(rootNodes, loadedTreeChildren, treeSearchText),
     [loadedTreeChildren, rootNodes, treeSearchText]

@@ -1067,7 +1067,7 @@ export function ApplicationMonitoringPage({
             ...report.authorized_accounts.map((item) => item.request_count)
           )
         : 1,
-    [report?.authorized_accounts]
+    [report]
   );
   const maxAuthTokens = useMemo(
     () =>
@@ -1077,7 +1077,7 @@ export function ApplicationMonitoringPage({
             ...report.authorized_accounts.map((item) => item.total_tokens)
           )
         : 1,
-    [report?.authorized_accounts]
+    [report]
   );
 
   const maxExtUserRequests = useMemo(
@@ -1088,14 +1088,14 @@ export function ApplicationMonitoringPage({
             ...report.external_users.map((item) => item.request_count)
           )
         : 1,
-    [report?.external_users]
+    [report]
   );
   const maxExtUserTokens = useMemo(
     () =>
       report
         ? Math.max(1, ...report.external_users.map((item) => item.total_tokens))
         : 1,
-    [report?.external_users]
+    [report]
   );
 
   const maxApiKeyRequests = useMemo(
@@ -1103,14 +1103,14 @@ export function ApplicationMonitoringPage({
       report
         ? Math.max(1, ...report.api_keys.map((item) => item.request_count))
         : 1,
-    [report?.api_keys]
+    [report]
   );
   const maxApiKeyTokens = useMemo(
     () =>
       report
         ? Math.max(1, ...report.api_keys.map((item) => item.total_tokens))
         : 1,
-    [report?.api_keys]
+    [report]
   );
 
   const maxExtConvRequests = useMemo(
@@ -1121,7 +1121,7 @@ export function ApplicationMonitoringPage({
             ...report.external_conversations.map((item) => item.request_count)
           )
         : 1,
-    [report?.external_conversations]
+    [report]
   );
   const maxExtConvTokens = useMemo(
     () =>
@@ -1131,7 +1131,7 @@ export function ApplicationMonitoringPage({
             ...report.external_conversations.map((item) => item.total_tokens)
           )
         : 1,
-    [report?.external_conversations]
+    [report]
   );
 
   const timeRangeOptions = monitoringTimeRangeOptions();

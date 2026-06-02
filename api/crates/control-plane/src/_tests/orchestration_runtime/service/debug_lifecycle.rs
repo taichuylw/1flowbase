@@ -262,7 +262,7 @@ async fn flow_debug_run_resolves_system_variables_from_run_context() {
     let mut document = editor_state.draft.document.clone();
 
     document["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]["content"]["value"] =
-        json!("{{sys.user_id}}/{{sys.application_id}}/{{sys.app_id}}/{{sys.workflow_id}}/{{sys.workflow_run_id}}");
+        json!("{{sys.user_id}}/{{sys.application_id}}/{{sys.workflow_id}}/{{sys.workflow_run_id}}");
 
     let detail = service
         .start_flow_debug_run(StartFlowDebugRunCommand {
@@ -295,12 +295,8 @@ async fn flow_debug_run_resolves_system_variables_from_run_context() {
     assert_eq!(
         content,
         format!(
-            "{}/{}/{}/{}/{}",
-            seeded.actor_user_id,
-            seeded.application_id,
-            seeded.application_id,
-            seeded.flow_id,
-            detail.flow_run.id
+            "{}/{}/{}/{}",
+            seeded.actor_user_id, seeded.application_id, seeded.flow_id, detail.flow_run.id
         )
     );
 }
@@ -422,6 +418,11 @@ async fn live_debug_run_persists_start_context_and_answer_final_variables() {
         json!("debug-session-1")
     );
     assert_eq!(
+        start_node.input_payload["sys"]["application_id"],
+        json!(seeded.application_id.to_string())
+    );
+    assert!(start_node.input_payload["sys"].get("app_id").is_none());
+    assert_eq!(
         start_node.input_payload["sys"]["workflow_run_id"],
         json!(started.flow_run.id.to_string())
     );
@@ -457,6 +458,11 @@ async fn live_debug_run_persists_start_context_and_answer_final_variables() {
         answer_node.output_payload["sys"]["workflow_run_id"],
         json!(started.flow_run.id.to_string())
     );
+    assert_eq!(
+        answer_node.output_payload["sys"]["application_id"],
+        json!(seeded.application_id.to_string())
+    );
+    assert!(answer_node.output_payload["sys"].get("app_id").is_none());
     assert_eq!(
         completed.flow_run.output_payload,
         answer_node.output_payload

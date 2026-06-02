@@ -227,7 +227,7 @@ function mapSystemVariablesToGroup(
     conversation_id: context.debugSessionId ?? null,
     dialog_count: 0,
     user_id: context.actorUserId ?? null,
-    app_id: context.applicationId,
+    application_id: context.applicationId,
     workflow_id: context.flowId ?? null,
     workflow_run_id: context.flowRunId ?? null
   };

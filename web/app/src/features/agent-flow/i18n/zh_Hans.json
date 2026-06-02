@@ -267,7 +267,7 @@
     "full_callback": "完整回调",
     "variable_name": "变量名",
     "manual_input": "人工输入",
-    "system_variable_app_id": "应用 ID",
+    "system_variable_application_id": "应用 ID",
     "copy_alt": "复制{{value1}}",
     "conditionally_execute_node_repeatedly": "按条件重复执行节点。",
     "multiple_master_instances_supplier_provide_same_model_close_supplier_configuration": "当前供应商下有多个主实例提供同一模型，请先在供应商配置中收口。",

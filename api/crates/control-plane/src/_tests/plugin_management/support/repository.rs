@@ -16,6 +16,7 @@ pub(crate) struct MemoryPluginManagementRepository {
     host_infrastructure_configs:
         Arc<RwLock<HashMap<(Uuid, String), HostInfrastructureProviderConfigRecord>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
+    artifact_snapshot_updates: Arc<RwLock<Vec<Uuid>>>,
     created_task_status_override: Arc<RwLock<Option<PluginTaskStatus>>>,
 }
 
@@ -39,12 +40,17 @@ impl MemoryPluginManagementRepository {
             frontend_blocks: Arc::new(RwLock::new(Vec::new())),
             host_infrastructure_configs: Arc::new(RwLock::new(HashMap::new())),
             audit_events: Arc::new(RwLock::new(Vec::new())),
+            artifact_snapshot_updates: Arc::new(RwLock::new(Vec::new())),
             created_task_status_override: Arc::new(RwLock::new(None)),
         }
     }
 
     pub(crate) async fn audit_events(&self) -> Vec<String> {
         self.audit_events.read().await.clone()
+    }
+
+    pub(crate) async fn artifact_snapshot_update_count(&self) -> usize {
+        self.artifact_snapshot_updates.read().await.len()
     }
 
     pub(crate) async fn assignment_installation_id(&self, provider_code: &str) -> Uuid {
@@ -341,6 +347,10 @@ impl PluginRepository for MemoryPluginManagementRepository {
         &self,
         input: &UpdatePluginArtifactSnapshotInput,
     ) -> Result<PluginInstallationRecord> {
+        self.artifact_snapshot_updates
+            .write()
+            .await
+            .push(input.installation_id);
         let mut installations = self.installations.write().await;
         let installation = installations
             .get_mut(&input.installation_id)
