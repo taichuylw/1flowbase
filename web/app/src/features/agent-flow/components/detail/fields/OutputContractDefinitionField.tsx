@@ -1,6 +1,15 @@
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons';
 import type { editor } from 'monaco-editor';
-import { Button, Checkbox, Empty, Input, Select, Tabs, Typography } from 'antd';
+import {
+  Button,
+  Checkbox,
+  Empty,
+  Input,
+  Select,
+  Tabs,
+  Tooltip,
+  Typography
+} from 'antd';
 import { Suspense, lazy, useMemo, useRef, useState } from 'react';
 
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
@@ -494,17 +503,22 @@ export function OutputContractDefinitionField({
                   />
                 </label>
                 {outputTypeSupportsJsonSchema(output.valueType) ? (
-                  <Button
-                    aria-label="编辑 JSON Schema"
-                    className="agent-flow-output-contract-editor__schema"
-                    size="small"
-                    type={output.jsonSchema ? 'primary' : 'default'}
-                    onClick={(event) =>
-                      openSchemaEditor(index, event.currentTarget)
-                    }
-                  >
-                    Schema
-                  </Button>
+                  <Tooltip title="编辑 JSON Schema">
+                    <Button
+                      aria-label="编辑 JSON Schema"
+                      className={
+                        output.jsonSchema
+                          ? 'agent-flow-output-contract-editor__schema agent-flow-output-contract-editor__schema--active'
+                          : 'agent-flow-output-contract-editor__schema'
+                      }
+                      icon={<FileTextOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={(event) =>
+                        openSchemaEditor(index, event.currentTarget)
+                      }
+                    />
+                  </Tooltip>
                 ) : null}
                 <Button
                   aria-label={i18nText("agentFlow", "auto.delete_output_variable", { value1: output.key || index + 1 })}

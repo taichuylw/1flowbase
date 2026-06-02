@@ -484,14 +484,14 @@
 
 .agent-flow-output-contract-editor__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 104px 72px 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 104px 28px 28px;
   align-items: end;
   gap: 8px;
   width: 100%;
 }
 
 .agent-flow-output-contract-editor__row--synced-title {
-  grid-template-columns: minmax(0, 1fr) 104px 72px 28px;
+  grid-template-columns: minmax(0, 1fr) 104px 28px 28px;
 }
 
 .agent-flow-output-contract-editor__cell {
@@ -514,6 +514,11 @@
 
 .agent-flow-output-contract-editor__schema {
   align-self: end;
+  justify-self: end;
+}
+
+.agent-flow-output-contract-editor__schema--active {
+  color: #009b72;
 }
 
 .agent-flow-code-source-field {
