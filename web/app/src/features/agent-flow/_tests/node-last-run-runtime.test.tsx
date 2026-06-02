@@ -6,6 +6,7 @@ import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 import * as runtimeApi from '../api/runtime';
 import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
+import { createNodeDocument } from '../lib/document/node-factory';
 import { renderReactFlowScene } from '../../../test/renderers/render-react-flow-scene';
 
 function createInitialState() {
@@ -20,6 +21,54 @@ function createInitialState() {
     versions: [],
     autosave_interval_seconds: 30
   };
+}
+
+function createInitialStateWithCodeNode() {
+  const state = createInitialState();
+  const document = state.draft.document;
+  const codeNode = createNodeDocument('code', 'node-code', 300, 220);
+
+  codeNode.outputs = [
+    {
+      key: 'result',
+      title: 'result',
+      valueType: 'array',
+      jsonSchema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['role', 'content'],
+          properties: {
+            role: { type: 'string' },
+            content: { type: 'string' }
+          }
+        }
+      }
+    }
+  ];
+  document.graph.nodes.push(codeNode);
+  document.graph.edges.push(
+    {
+      id: 'edge-start-code',
+      source: 'node-start',
+      target: 'node-code',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    },
+    {
+      id: 'edge-code-llm',
+      source: 'node-code',
+      target: 'node-llm',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    }
+  );
+
+  return state;
 }
 
 function sampleNodeLastRun() {
@@ -126,6 +175,12 @@ function sampleRunDetail() {
 async function selectLlmNode() {
   fireEvent.click(
     await screen.findByText('LLM', { selector: '.agent-flow-node-card__title' })
+  );
+}
+
+async function selectCodeNode() {
+  fireEvent.click(
+    await screen.findByText('Code', { selector: '.agent-flow-node-card__title' })
   );
 }
 
@@ -266,6 +321,55 @@ describe('node last run runtime', () => {
     );
     expect(within(variableSidebar).getByText('Start/query')).toBeInTheDocument();
     expect(within(variableSidebar).getByText('LLM/text')).toBeInTheDocument();
+  }, 30_000);
+
+  test('runs Code node preview with legacy result output document shape', async () => {
+    renderReactFlowScene(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialStateWithCodeNode()}
+      />
+    );
+
+    await selectCodeNode();
+
+    fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
+
+    await waitFor(() => {
+      expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalledWith(
+        'app-1',
+        'node-code',
+        {
+          input_payload: {},
+          document: expect.objectContaining({
+            schemaVersion: '1flowbase.flow/v2'
+          }),
+          debug_session_id: expect.any(String)
+        },
+        'csrf-123'
+      );
+    });
+  }, 30_000);
+
+  test('shows API errors when Code node preview fails', async () => {
+    vi
+      .spyOn(runtimeApi, 'startNodeDebugPreview')
+      .mockRejectedValueOnce(new Error('Code 输出契约不兼容'));
+
+    renderReactFlowScene(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialStateWithCodeNode()}
+      />
+    );
+
+    await selectCodeNode();
+
+    fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
+
+    expect(await screen.findByText('Code 输出契约不兼容')).toBeInTheDocument();
   }, 30_000);
 
   test('asks for referenced variables before running when cache is empty', async () => {

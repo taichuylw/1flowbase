@@ -374,6 +374,13 @@ export function AgentFlowCanvasFrame({
       await queryClient.invalidateQueries({
         queryKey: ['applications', applicationId, 'runtime']
       });
+    },
+    onError(error) {
+      message.error(
+        error instanceof Error && error.message
+          ? error.message
+          : i18nText("agentFlow", "auto.debug_run_failed")
+      );
     }
   });
   const issueCountByNodeId = useMemo(() => {
