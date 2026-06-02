@@ -1027,6 +1027,12 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'frontend', 'full'],
       cwd: repoRoot,
     },
+    {
+      label: 'repo-frontend-page-regression',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'frontend', 'page-regression'],
+      cwd: repoRoot,
+    },
   ];
   const backendCommands = [
     {

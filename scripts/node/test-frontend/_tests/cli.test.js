@@ -13,6 +13,13 @@ test('parseCliArgs defaults to full frontend gate', () => {
   });
 });
 
+test('parseCliArgs accepts page-regression frontend gate', () => {
+  assert.deepEqual(parseCliArgs(['page-regression']), {
+    help: false,
+    layer: 'page-regression',
+  });
+});
+
 test('buildCommands maps full layer to lint, test, build and style-boundary', () => {
   const repoRoot = '/repo-root';
 
@@ -40,6 +47,19 @@ test('buildCommands maps full layer to lint, test, build and style-boundary', ()
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'check-style-boundary', 'all-pages'],
       cwd: repoRoot,
+    },
+  ]);
+});
+
+test('page-regression layer runs the long-term page regression suite', () => {
+  const repoRoot = '/repo-root';
+
+  assert.deepEqual(buildCommands({ layer: 'page-regression', repoRoot }), [
+    {
+      label: 'frontend-page-regression',
+      command: 'pnpm',
+      args: ['--dir', 'web/app', 'test:page-regression'],
+      cwd: '.',
     },
   ]);
 });
@@ -108,4 +128,22 @@ test('main keeps fast frontend gate outside heavy lock mode', async () => {
 
   assert.equal(status, 0);
   assert.equal(capturedLockMode, 'none');
+});
+
+test('main names page-regression as its own frontend scope', async () => {
+  let capturedOptions = null;
+
+  const status = await main(['page-regression'], {
+    repoRoot: '/repo-root',
+    env: {},
+    managedRunnerImpl(options) {
+      capturedOptions = options;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(capturedOptions.scope, 'frontend-page-regression');
+  assert.equal(capturedOptions.lockMode, 'none');
+  assert.equal(capturedOptions.commandDisplay, 'node scripts/node/test-frontend.js page-regression');
 });

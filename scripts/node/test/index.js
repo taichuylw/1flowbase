@@ -12,7 +12,7 @@ const {
 const { loadVerifyRuntimeConfig } = require('../testing/verify-runtime.js');
 const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
 
-const FRONTEND_LAYERS = new Set(['fast', 'full']);
+const FRONTEND_LAYERS = new Set(['fast', 'full', 'page-regression']);
 const TEST_COMMANDS = new Set(['backend', 'contracts', 'frontend', 'scripts']);
 const CONTRACT_TEST_FILES = [
   'src/features/settings/api/_tests/settings-api.test.ts',
@@ -162,6 +162,17 @@ function buildFrontendCommands({ layer, repoRoot, env = process.env }) {
     ];
   }
 
+  if (layer === 'page-regression') {
+    return [
+      {
+        label: 'frontend-page-regression',
+        command: 'pnpm',
+        args: ['--dir', 'web/app', 'test:page-regression'],
+        cwd: '.',
+      },
+    ];
+  }
+
   const nodeBinary = resolveNodeBinaryFromPath(env);
 
   return [
@@ -193,7 +204,7 @@ function buildFrontendCommands({ layer, repoRoot, env = process.env }) {
 }
 
 function usageFrontend(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout('Usage: node scripts/node/test-frontend.js [fast|full]\n');
+  writeStdout('Usage: node scripts/node/test-frontend.js [fast|full|page-regression]\n');
 }
 
 async function runFrontend(argv = [], deps = {}) {
