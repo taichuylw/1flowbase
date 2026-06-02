@@ -15,7 +15,15 @@ function createCodeDocumentWithOutputs(
   outputs: Array<{
     key: string;
     title: string;
-    valueType: 'string' | 'number' | 'boolean' | 'array' | 'json' | 'unknown';
+    valueType:
+      | 'string'
+      | 'number'
+      | 'boolean'
+      | 'object'
+      | 'array'
+      | 'json'
+      | 'unknown';
+    jsonSchema?: Record<string, unknown>;
   }>
 ) {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -197,6 +205,73 @@ describe('validateDocument', () => {
           nodeId: 'node-llm',
           fieldKey: 'config.output_contract',
           title: '输出变量名未知'
+        })
+      ])
+    );
+  });
+
+  test('flags JSON Schema on non structured output types', () => {
+    const document = createCodeDocumentWithOutputs([
+      {
+        key: 'summary',
+        title: 'Summary',
+        valueType: 'string',
+        jsonSchema: { type: 'string' }
+      }
+    ]);
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'config.output_contract',
+          title: 'JSON Schema 类型不匹配'
+        })
+      ])
+    );
+  });
+
+  test('flags Code output names with unsupported characters', () => {
+    const document = createCodeDocumentWithOutputs([
+      {
+        key: 'risk-score',
+        title: 'risk-score',
+        valueType: 'number'
+      }
+    ]);
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'config.output_contract',
+          title: '输出变量名格式错误'
+        })
+      ])
+    );
+  });
+
+  test('flags Code output display name drift', () => {
+    const document = createCodeDocumentWithOutputs([
+      {
+        key: 'riskScore',
+        title: 'Risk Score',
+        valueType: 'number'
+      }
+    ]);
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'config.output_contract',
+          title: '输出变量名与显示名不一致'
         })
       ])
     );
@@ -967,6 +1042,118 @@ describe('validateDocument', () => {
           issue.fieldKey === 'bindings.record_id'
       )
     ).toBe(false);
+  });
+
+  test('validates Code input parameter names and constant value types', () => {
+    const document = createCodeDocumentWithOutputs([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
+    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+    if (!codeNode) {
+      throw new Error('expected code node');
+    }
+
+    codeNode.bindings.named_bindings = {
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'bad-name',
+          valueType: 'string',
+          value: { kind: 'constant', value: 'ok' }
+        },
+        {
+          name: 'items',
+          valueType: 'array',
+          value: { kind: 'constant', value: { not: 'array' } }
+        }
+      ]
+    };
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '输入变量名格式错误'
+        }),
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '变量值与类型不匹配'
+        })
+      ])
+    );
+  });
+
+  test('allows Code numeric input formulas with numeric selector tokens', () => {
+    const document = createCodeDocumentWithOutputs([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
+    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+    if (!codeNode) {
+      throw new Error('expected code node');
+    }
+
+    codeNode.bindings.named_bindings = {
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'score',
+          valueType: 'number',
+          value: {
+            kind: 'templated_text',
+            value: '{{sys.dialog_count}} + 1'
+          }
+        }
+      ]
+    };
+
+    expect(validateDocument(document)).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '变量值与类型不匹配'
+        })
+      ])
+    );
+  });
+
+  test('flags Code numeric input formulas with non numeric selector tokens', () => {
+    const document = createCodeDocumentWithOutputs([
+      { key: 'result', title: 'result', valueType: 'string' }
+    ]);
+    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+
+    if (!codeNode) {
+      throw new Error('expected code node');
+    }
+
+    codeNode.bindings.named_bindings = {
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'score',
+          valueType: 'number',
+          value: {
+            kind: 'templated_text',
+            value: '{{sys.conversation_id}} + 1'
+          }
+        }
+      ]
+    };
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-code',
+          fieldKey: 'bindings.named_bindings',
+          title: '变量值与类型不匹配'
+        })
+      ])
+    );
   });
 
   test('does not crash on malformed saved Data Model query binding', () => {

@@ -214,6 +214,10 @@ pub(super) fn ensure_compiled_plan_runnable(
             | orchestration_runtime::compiled_plan::CompileIssueCode::InvalidAnswerPresentationOrder => {
                 "answer_template"
             }
+            orchestration_runtime::compiled_plan::CompileIssueCode::InvalidLlmContextSelector
+            | orchestration_runtime::compiled_plan::CompileIssueCode::IncompatibleLlmContextSchema => {
+                "context_policy"
+            }
         };
         return Err(ControlPlaneError::InvalidInput(field).into());
     }
@@ -238,6 +242,10 @@ fn compile_contribution_outputs(
                 key,
                 title: required_output_string(output, "title")?,
                 value_type: required_output_string(output, "valueType")?,
+                json_schema: output
+                    .get("jsonSchema")
+                    .filter(|value| value.is_object())
+                    .cloned(),
             })
         })
         .collect()
@@ -599,6 +607,23 @@ mod tests {
         .await;
 
         assert_eq!(field, "provider_code");
+    }
+
+    #[tokio::test]
+    async fn orchestration_runtime_compile_context_maps_context_selector_issue_to_context_policy() {
+        let repository =
+            super::super::test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(
+                vec![],
+            );
+        let mut document = llm_document(Uuid::now_v7(), "fixture_provider", "gpt-5.4-mini");
+        document["graph"]["nodes"][1]["config"]["context_policy"] = json!({
+            "integration_context": "enabled",
+            "context_selector": ["node-start", "missing_history"]
+        });
+
+        let field = compile_error_field(&repository, &document).await;
+
+        assert_eq!(field, "context_policy");
     }
 
     #[tokio::test]

@@ -11,6 +11,7 @@ fn output(key: &str) -> CompiledOutput {
         title: key.to_string(),
         value_type: "string".to_string(),
         selector: Vec::new(),
+        json_schema: None,
     }
 }
 
@@ -20,6 +21,7 @@ fn output_with_selector(key: &str, selector: &[&str]) -> CompiledOutput {
         title: key.to_string(),
         value_type: "json".to_string(),
         selector: selector.iter().map(|segment| segment.to_string()).collect(),
+        json_schema: None,
     }
 }
 

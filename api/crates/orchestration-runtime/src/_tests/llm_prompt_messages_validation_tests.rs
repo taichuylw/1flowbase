@@ -102,6 +102,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
                 title: "用户输入".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -158,6 +159,7 @@ fn plan_with_empty_prompt_messages_and_legacy_user_prompt() -> CompiledPlan {
                 title: "模型输出".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -262,7 +264,7 @@ async fn llm_runtime_fails_before_provider_when_prompt_messages_are_empty() {
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("prompt_messages_empty")
             );
             assert_eq!(
@@ -373,7 +375,7 @@ async fn llm_runtime_fails_before_provider_when_prompt_template_selector_is_miss
         ExecutionStopReason::Failed(ref failure) => {
             assert_eq!(failure.node_id, "node-llm");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("prompt_template_unresolved")
             );
             assert!(failure.error_payload["message"]

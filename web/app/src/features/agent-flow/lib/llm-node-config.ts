@@ -29,6 +29,7 @@ export interface LlmNodeResponseFormat {
 
 export interface LlmNodeContextPolicy {
   integration_context: 'enabled' | 'disabled';
+  context_selector?: string[];
 }
 
 export interface LlmNodeExternalReasoningPolicy {
@@ -36,7 +37,8 @@ export interface LlmNodeExternalReasoningPolicy {
 }
 
 export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
-  integration_context: 'enabled'
+  integration_context: 'enabled',
+  context_selector: ['node-start', 'history']
 };
 
 export const DEFAULT_LLM_EXTERNAL_REASONING_POLICY: LlmNodeExternalReasoningPolicy =
@@ -203,7 +205,12 @@ export function getLlmContextPolicy(
 
   return {
     integration_context:
-      contextPolicy.integration_context === 'disabled' ? 'disabled' : 'enabled'
+      contextPolicy.integration_context === 'disabled' ? 'disabled' : 'enabled',
+    context_selector: Array.isArray(contextPolicy.context_selector)
+      ? contextPolicy.context_selector.filter(
+          (segment): segment is string => typeof segment === 'string'
+        )
+      : DEFAULT_LLM_CONTEXT_POLICY.context_selector
   };
 }
 

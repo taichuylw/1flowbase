@@ -259,11 +259,13 @@ describe('agent-flow node schema registry', () => {
         value: [
           {
             name: 'arg1',
-            content: { kind: 'templated_text', value: '' }
+            valueType: 'string',
+            value: { kind: 'constant', value: '' }
           },
           {
             name: 'arg2',
-            content: { kind: 'templated_text', value: '' }
+            valueType: 'string',
+            value: { kind: 'constant', value: '' }
           }
         ]
       }
@@ -273,7 +275,12 @@ describe('agent-flow node schema registry', () => {
       source: DEFAULT_CODE_NODE_SOURCE
     });
     expect(codeNode.outputs).toEqual([
-      { key: 'result', title: 'result', valueType: 'string' }
+      {
+        key: 'result',
+        title: 'result',
+        valueType: 'string',
+        selector: ['result', 'result']
+      }
     ]);
   });
 

@@ -45,20 +45,55 @@ impl NodePreviewOutcome {
 fn start_preview_output(resolved_inputs: &Map<String, Value>) -> Value {
     let mut output = resolved_inputs.clone();
 
-    output
-        .entry("query".to_string())
-        .or_insert_with(|| Value::String(String::new()));
-    output
-        .entry("model".to_string())
-        .or_insert_with(|| Value::String(String::new()));
-    output
-        .entry("history".to_string())
-        .or_insert_with(|| Value::Array(Vec::new()));
-    output
-        .entry("files".to_string())
-        .or_insert_with(|| Value::Array(Vec::new()));
+    materialize_start_builtin_defaults(&mut output);
 
     Value::Object(output)
+}
+
+fn materialize_start_builtin_defaults(start_payload: &mut Map<String, Value>) {
+    start_payload
+        .entry("query".to_string())
+        .or_insert_with(|| Value::String(String::new()));
+    start_payload
+        .entry("system".to_string())
+        .or_insert_with(|| Value::String(String::new()));
+    start_payload
+        .entry("model".to_string())
+        .or_insert_with(|| Value::String(String::new()));
+    start_payload
+        .entry("reasoning_effort".to_string())
+        .or_insert_with(|| Value::String(String::new()));
+    start_payload
+        .entry("history".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    start_payload
+        .entry("files".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    start_payload
+        .entry("tools".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    start_payload
+        .entry("tool_choice".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+}
+
+fn materialize_start_nodes_in_variable_pool(
+    plan: &CompiledPlan,
+    variable_pool: &mut Map<String, Value>,
+) {
+    for (node_id, node) in &plan.nodes {
+        if node.node_type != "start" {
+            continue;
+        }
+
+        let start_payload = variable_pool
+            .entry(node_id.clone())
+            .or_insert_with(|| Value::Object(Map::new()));
+
+        if let Some(start_payload) = start_payload.as_object_mut() {
+            materialize_start_builtin_defaults(start_payload);
+        }
+    }
 }
 
 pub async fn run_node_preview<I>(
@@ -74,10 +109,11 @@ where
         .nodes
         .get(target_node_id)
         .ok_or_else(|| anyhow!("target node not found: {target_node_id}"))?;
-    let variable_pool = input_payload
+    let mut variable_pool = input_payload
         .as_object()
         .cloned()
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
+    materialize_start_nodes_in_variable_pool(plan, &mut variable_pool);
     let runtime_context = ExecutionRuntimeContext::from_plan_input(plan, &variable_pool);
     let resolved_inputs = if node.node_type == "start" {
         variable_pool

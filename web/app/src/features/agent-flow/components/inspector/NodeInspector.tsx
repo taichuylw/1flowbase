@@ -49,8 +49,8 @@ function isPolicyFieldRenderer(renderer: string) {
   );
 }
 
-function getFieldLabelTag(renderer: string) {
-  return renderer === 'llm_context_policy' ? 'history' : null;
+function getFieldLabelTag() {
+  return null;
 }
 
 function getFieldHelp(renderer: string) {
@@ -180,7 +180,7 @@ export function NodeInspector({
                   const hasError = fieldIssues.some(
                     (issue) => issue.level === 'error'
                   );
-                  const labelTag = getFieldLabelTag(childBlock.renderer);
+                  const labelTag = getFieldLabelTag();
                   const labelHelp = getFieldHelp(childBlock.renderer);
 
                   if (

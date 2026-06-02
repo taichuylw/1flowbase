@@ -4,7 +4,11 @@ import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import { buildFlowDebugRunInput } from '../api/runtime';
 import { createNodeDocument } from '../lib/document/node-factory';
-import { listVisibleSelectorOptions } from '../lib/selector-options';
+import {
+  listLlmContextSelectorOptions,
+  listVisibleSelectorOptions,
+  toCascaderSelectorOptions
+} from '../lib/selector-options';
 import { getStartInputFields } from '../lib/start-node-variables';
 import { appI18n } from '../../../shared/i18n/app-i18n';
 
@@ -103,6 +107,153 @@ describe('start node variables', () => {
         { value: ['node-start', 'files'], label: 'Start/files' },
         { value: ['node-start', 'tools'], label: 'Start/tools' },
         { value: ['node-start', 'tool_choice'], label: 'Start/tool_choice' }
+      ])
+    );
+  });
+
+  test('carries output value type and schema metadata into selector options', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const codeNode = createNodeDocument('code', 'node-code');
+
+    codeNode.outputs = [
+      {
+        key: 'chat_history',
+        title: 'Chat History',
+        valueType: 'array',
+        jsonSchema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['role', 'content'],
+            properties: {
+              role: { type: 'string' },
+              content: { type: 'string' }
+            }
+          }
+        }
+      }
+    ];
+    document.graph.nodes.push(codeNode);
+    document.graph.edges.push({
+      id: 'edge-code-llm',
+      source: 'node-code',
+      target: 'node-llm',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(listVisibleSelectorOptions(document, 'node-llm')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: ['node-start', 'history'],
+          valueType: 'array',
+          jsonSchema: expect.objectContaining({ type: 'array' })
+        }),
+        expect.objectContaining({
+          value: ['node-code', 'result', 'chat_history'],
+          valueType: 'array',
+          jsonSchema: expect.objectContaining({ type: 'array' })
+        })
+      ])
+    );
+  });
+
+  test('filters LLM context options to history-compatible schemas', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const codeNode = createNodeDocument('code', 'node-code');
+
+    codeNode.outputs = [
+      {
+        key: 'chat_history',
+        title: 'Chat History',
+        valueType: 'array',
+        jsonSchema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['role', 'content'],
+            properties: {
+              role: { type: 'string' },
+              content: { type: 'string' }
+            }
+          }
+        }
+      },
+      {
+        key: 'raw_payload',
+        title: 'Raw Payload',
+        valueType: 'json',
+        jsonSchema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['role', 'content'],
+            properties: {
+              role: { type: 'string' },
+              content: { type: 'string' }
+            }
+          }
+        }
+      }
+    ];
+    document.graph.nodes.push(codeNode);
+    document.graph.edges.push({
+      id: 'edge-code-llm',
+      source: 'node-code',
+      target: 'node-llm',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(
+      listLlmContextSelectorOptions(document, 'node-llm').map(
+        (option) => option.value
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        ['node-start', 'history'],
+        ['node-code', 'result', 'chat_history']
+      ])
+    );
+    expect(
+      listLlmContextSelectorOptions(document, 'node-llm').map(
+        (option) => option.value
+      )
+    ).not.toContainEqual(['node-code', 'result', 'raw_payload']);
+  });
+
+  test('builds nested cascader paths for code result output selectors', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const codeNode = createNodeDocument('code', 'node-code');
+
+    document.graph.nodes.push(codeNode);
+    document.graph.edges.push({
+      id: 'edge-code-llm',
+      source: 'node-code',
+      target: 'node-llm',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(toCascaderSelectorOptions(listVisibleSelectorOptions(document, 'node-llm'))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: 'node-code',
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              value: 'result',
+              children: expect.arrayContaining([
+                expect.objectContaining({ value: 'result', label: 'result' })
+              ])
+            })
+          ])
+        })
       ])
     );
   });

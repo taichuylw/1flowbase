@@ -130,6 +130,7 @@ fn code_runtime_plan() -> CompiledPlan {
                 title: "Query".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -158,7 +159,8 @@ fn code_runtime_plan() -> CompiledPlan {
                 key: "result".to_string(),
                 title: "Result".to_string(),
                 value_type: "string".to_string(),
-                selector: Vec::new(),
+                selector: vec!["result".to_string(), "result".to_string()],
+                json_schema: None,
             }],
             config: json!({
                 "language": "javascript",
@@ -193,8 +195,12 @@ fn code_runtime_plan() -> CompiledPlan {
                 "answer_template".to_string(),
                 CompiledBinding {
                     kind: "templated_text".to_string(),
-                    selector_paths: vec![vec!["node-code".to_string(), "result".to_string()]],
-                    raw_value: json!("Code said: {{ node-code.result }}"),
+                    selector_paths: vec![vec![
+                        "node-code".to_string(),
+                        "result".to_string(),
+                        "result".to_string(),
+                    ]],
+                    raw_value: json!("Code said: {{ node-code.result.result }}"),
                 },
             )]),
             outputs: vec![CompiledOutput {
@@ -202,6 +208,7 @@ fn code_runtime_plan() -> CompiledPlan {
                 title: "Answer".to_string(),
                 value_type: "string".to_string(),
                 selector: Vec::new(),
+                json_schema: None,
             }],
             config: json!({}),
             plugin_runtime: None,
@@ -274,7 +281,8 @@ fn code_node_with_runtime(runtime: CompiledCodeRuntime) -> CompiledNode {
             key: "result".to_string(),
             title: "Result".to_string(),
             value_type: "json".to_string(),
-            selector: Vec::new(),
+            selector: vec!["result".to_string(), "result".to_string()],
+            json_schema: None,
         }],
         config: json!({}),
         plugin_runtime: None,
@@ -616,7 +624,7 @@ function main(inputs) {
 
     assert_eq!(
         execution.output_payload,
-        json!({ "result": { "value": "hello" } })
+        json!({ "result": { "result": { "value": "hello" } }, "error": null })
     );
     assert!(execution.output_payload.get("console_logs").is_none());
     assert_eq!(
@@ -665,7 +673,8 @@ function main() {
     let error_payload = execution
         .error_payload
         .expect("runtime throw should produce an error payload");
-    assert_eq!(error_payload["error_kind"], json!("code_runtime_error"));
+    assert_eq!(error_payload["error_code"], json!("code_runtime_error"));
+    assert!(error_payload.get("error_kind").is_none());
     assert_eq!(error_payload["message"], json!("code execution failed"));
     assert_eq!(
         error_payload["runtime_message"],
@@ -703,7 +712,7 @@ async fn code_runtime_invoker_success_projects_output_for_downstream_template_no
     assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
     assert_eq!(
         outcome.variable_pool["node-code"],
-        json!({ "result": "from-code" })
+        json!({ "result": { "result": "from-code" }, "error": null })
     );
     assert_eq!(
         outcome.variable_pool["node-answer"],
@@ -711,7 +720,7 @@ async fn code_runtime_invoker_success_projects_output_for_downstream_template_no
     );
     assert_eq!(
         outcome.node_traces[1].output_payload,
-        json!({ "result": "from-code" })
+        json!({ "result": { "result": "from-code" }, "error": null })
     );
     assert_eq!(
         outcome.node_traces[1].metrics_payload["language"],
@@ -760,7 +769,85 @@ async fn code_runtime_resolves_templated_named_bindings_as_top_level_args() {
     assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
     assert_eq!(
         outcome.variable_pool["node-code"],
-        json!({ "result": "Question: hello" })
+        json!({ "result": { "result": "Question: hello" }, "error": null })
+    );
+}
+
+#[tokio::test]
+async fn code_runtime_resolves_constant_named_bindings_with_json_types() {
+    let mut plan = code_runtime_plan();
+    let code_node = plan
+        .nodes
+        .get_mut("node-code")
+        .expect("expected code node in fixture plan");
+    code_node.bindings = BTreeMap::from([(
+        "named_bindings".to_string(),
+        CompiledBinding {
+            kind: "named_bindings".to_string(),
+            selector_paths: Vec::new(),
+            raw_value: json!([
+                {
+                    "name": "limit",
+                    "valueType": "number",
+                    "value": { "kind": "constant", "value": 10 }
+                },
+                {
+                    "name": "title",
+                    "valueType": "string",
+                    "value": { "kind": "constant", "value": "10" }
+                },
+                {
+                    "name": "options",
+                    "valueType": "object",
+                    "value": { "kind": "constant", "value": { "top_k": 5 } }
+                },
+                {
+                    "name": "items",
+                    "valueType": "array",
+                    "value": { "kind": "constant", "value": [1, 2] }
+                }
+            ]),
+        },
+    )]);
+    code_node.config["source"] = json!(
+        "function main({limit, title, options, items}) { return { result: { limit_type: typeof limit, title_type: typeof title, top_k: options.top_k, item_count: items.length } }; }"
+    );
+    code_node.code_runtime.as_mut().unwrap().source = Some(
+        "function main({limit, title, options, items}) { return { result: { limit_type: typeof limit, title_type: typeof title, top_k: options.top_k, item_count: items.length } }; }"
+            .to_string(),
+    );
+    code_node.outputs = vec![CompiledOutput {
+        key: "result".to_string(),
+        title: "Result".to_string(),
+        value_type: "json".to_string(),
+        selector: vec!["result".to_string(), "result".to_string()],
+        json_schema: None,
+    }];
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &RealCodeFixtureInvoker {
+            code: QuickJsCodeInvoker::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
+    assert_eq!(
+        outcome.variable_pool["node-code"],
+        json!({
+            "result": {
+                "result": {
+                    "limit_type": "number",
+                    "title_type": "string",
+                    "top_k": 5,
+                    "item_count": 2
+                }
+            },
+            "error": null
+        })
     );
 }
 
@@ -782,9 +869,10 @@ async fn code_runtime_invoker_error_yields_stable_failed_stop_reason_and_trace_p
             assert_eq!(failure.node_id, "node-code");
             assert_eq!(failure.node_alias, "Code");
             assert_eq!(
-                failure.error_payload["error_kind"],
+                failure.error_payload["error_code"],
                 json!("code_runtime_error")
             );
+            assert!(failure.error_payload.get("error_kind").is_none());
             assert_eq!(
                 failure.error_payload["message"],
                 json!("code execution failed")
@@ -794,15 +882,27 @@ async fn code_runtime_invoker_error_yields_stable_failed_stop_reason_and_trace_p
                 json!("runtime failed: user code threw")
             );
             assert_eq!(outcome.node_traces[1].node_type, "code");
-            assert!(outcome.node_traces[1]
-                .output_payload
-                .as_object()
-                .unwrap()
-                .is_empty());
             assert_eq!(
-                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_kind"],
+                outcome.node_traces[1].output_payload,
+                json!({
+                    "result": null,
+                    "error": {
+                        "error_code": "code_runtime_error",
+                        "message": "code execution failed",
+                        "runtime_message": "runtime failed: user code threw"
+                    }
+                })
+            );
+            assert_eq!(
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["error_code"],
                 json!("code_runtime_error")
             );
+            assert!(outcome.node_traces[1]
+                .error_payload
+                .as_ref()
+                .unwrap()
+                .get("error_kind")
+                .is_none());
         }
         other => panic!("expected failed stop reason, got {other:?}"),
     }
@@ -834,11 +934,64 @@ async fn code_runtime_missing_declared_output_projects_empty_variable_payload() 
         }
         other => panic!("expected downstream binding failure, got {other:?}"),
     }
-    assert_eq!(outcome.variable_pool["node-code"], json!({}));
     assert_eq!(
         outcome.node_traces[1].output_payload,
-        json!({ "unexpected": true })
+        json!({ "result": { "unexpected": true }, "error": null })
     );
+}
+
+#[tokio::test]
+async fn code_runtime_rejects_declared_output_schema_mismatch() {
+    let mut plan = code_runtime_plan();
+    let code = plan
+        .nodes
+        .get_mut("node-code")
+        .expect("code node should exist");
+    code.outputs = vec![CompiledOutput {
+        key: "chat_history".to_string(),
+        title: "Chat History".to_string(),
+        value_type: "array".to_string(),
+        selector: vec!["result".to_string(), "chat_history".to_string()],
+        json_schema: Some(json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["role", "content"],
+                "properties": {
+                    "role": { "type": "string" },
+                    "content": { "type": "string" }
+                }
+            }
+        })),
+    }];
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &CodeFixtureInvoker {
+            output_payload: json!({ "chat_history": [{ "role": "user" }] }),
+            fail_message: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(failure) => {
+            assert_eq!(failure.node_id, "node-code");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("code_output_contract_error")
+            );
+            assert!(failure.error_payload.get("error_kind").is_none());
+            assert_eq!(outcome.node_traces[1].output_payload["result"], Value::Null);
+            assert_eq!(
+                outcome.node_traces[1].output_payload["error"]["error_code"],
+                json!("code_output_contract_error")
+            );
+        }
+        other => panic!("expected code output contract failure, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -856,7 +1009,7 @@ async fn code_runtime_execution_engine_uses_real_quickjs_runner_for_downstream_t
     assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
     assert_eq!(
         outcome.variable_pool["node-code"],
-        json!({ "result": "hello" })
+        json!({ "result": { "result": "hello" }, "error": null })
     );
     assert_eq!(
         outcome.variable_pool["node-answer"],

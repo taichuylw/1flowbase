@@ -299,6 +299,70 @@ describe('agent flow document transforms', () => {
     });
   });
 
+  test('duplicates Code named binding expressions and rewrites selectors', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const codeNode = {
+      ...createNodeDocument('code', 'node-code'),
+      bindings: {
+        named_bindings: {
+          kind: 'named_bindings' as const,
+          value: [
+            {
+              name: 'score',
+              valueType: 'number',
+              value: {
+                kind: 'selector' as const,
+                selector: ['node-code', 'result']
+              }
+            },
+            {
+              name: 'prompt',
+              valueType: 'string',
+              value: {
+                kind: 'templated_text' as const,
+                value: 'Score: {{node-code.result}}'
+              }
+            },
+            {
+              name: 'limit',
+              valueType: 'number',
+              value: { kind: 'constant' as const, value: 10 }
+            }
+          ]
+        }
+      }
+    };
+    document.graph.nodes.push(codeNode);
+
+    const duplicated = duplicateNodeSubgraph(document, {
+      nodeId: 'node-code'
+    });
+    const copied = duplicated.graph.nodes.find(
+      (node) => node.id === 'node-code-copy'
+    );
+
+    expect(copied?.bindings.named_bindings).toMatchObject({
+      kind: 'named_bindings',
+      value: [
+        {
+          value: {
+            kind: 'selector',
+            selector: ['node-code-copy', 'result']
+          }
+        },
+        {
+          value: {
+            kind: 'templated_text',
+            value: 'Score: {{node-code-copy.result}}'
+          }
+        },
+        {
+          value: { kind: 'constant', value: 10 }
+        }
+      ]
+    });
+  });
+
   test('duplicates Data Model query binding and rewrites selector values', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const sourceNode = createNodeDocument('data_model_list', 'node-data-model');
