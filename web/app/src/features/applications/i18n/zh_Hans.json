@@ -176,6 +176,7 @@
     "delete_application_failed": "删除应用失败",
     "callback_response": "Callback 响应",
     "resume_timeline": "Resume 时间线",
+    "close_resume_timeline": "关闭 Resume 时间线",
     "no_resume_events": "暂无 Resume 事件",
     "resume_event_requested": "Resume 请求已接收",
     "resume_event_succeeded": "Resume 已完成",

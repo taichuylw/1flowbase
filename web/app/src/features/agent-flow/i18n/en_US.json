@@ -487,6 +487,7 @@
     "add_new_node_connection": "Add a new node to this connection",
     "turn_off_conversation_log": "Turn off conversation log",
     "view_conversation_log": "View conversation log",
+    "view_resume_timeline": "View Resume timeline",
     "model_belong_selected_supplier_s_list_active_models": "The current model does not belong to the selected supplier's list of active models.",
     "currently_historical_version_restore": "There is currently no historical version to restore",
     "save_version_title": "Save version title",

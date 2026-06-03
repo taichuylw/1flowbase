@@ -487,6 +487,7 @@
     "add_new_node_connection": "在此连线上新增节点",
     "turn_off_conversation_log": "关闭对话日志",
     "view_conversation_log": "查看对话日志",
+    "view_resume_timeline": "查看 Resume 时间线",
     "model_belong_selected_supplier_s_list_active_models": "当前模型不属于所选供应商的生效模型列表。",
     "currently_historical_version_restore": "当前还没有可恢复的历史版本",
     "save_version_title": "保存版本标题",

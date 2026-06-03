@@ -945,6 +945,113 @@ describe('ApplicationLogsPage - floating windows', () => {
     });
   }, 20_000);
 
+  test('opens resume timeline from run detail without covering existing floating windows', async () => {
+    innerWidthSpy = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    innerHeightSpy = vi
+      .spyOn(window, 'innerHeight', 'get')
+      .mockReturnValue(900);
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue({
+      ...sampleRunDetail(),
+      callback_tasks: [
+        {
+          id: 'callback-1',
+          flow_run_id: 'run-1',
+          node_run_id: 'node-run-1',
+          callback_kind: 'llm_tool_calls',
+          status: 'completed',
+          request_payload: {},
+          response_payload: {},
+          external_ref_payload: null,
+          created_at: '2026-04-17T09:00:01Z',
+          completed_at: '2026-04-17T09:00:02Z'
+        }
+      ],
+      events: [
+        ...sampleRunDetail().events,
+        {
+          id: 'event-resume-requested',
+          flow_run_id: 'run-1',
+          node_run_id: 'node-run-1',
+          sequence: 3,
+          event_type: 'public_run_resume_requested',
+          payload: {
+            callback_task_id: 'callback-1'
+          },
+          created_at: '2026-04-17T09:00:01Z'
+        }
+      ]
+    });
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const runDetailWindow = await screen.findByTestId(
+      'application-logs-floating-run-detail'
+    );
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const conversationLogWindow = await screen.findByTestId(
+      'application-logs-floating-conversation-log'
+    );
+    expect(conversationLogWindow).toHaveStyle({
+      left: '512px',
+      top: '112px',
+      width: '360px'
+    });
+
+    const openResumeTimelineButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看 Resume 时间线' },
+        { timeout: 8_000 }
+      ),
+      'expected resume timeline button'
+    );
+    fireEvent.click(openResumeTimelineButton);
+
+    const resumeTimelineWindow = await screen.findByTestId(
+      'application-logs-floating-resume-timeline'
+    );
+    expect(runDetailWindow).toHaveStyle({
+      left: '888px',
+      top: '112px',
+      width: '360px'
+    });
+    expect(conversationLogWindow).toHaveStyle({
+      left: '512px',
+      top: '112px',
+      width: '360px'
+    });
+    expect(resumeTimelineWindow).toHaveStyle({
+      left: '136px',
+      top: '112px',
+      width: '360px'
+    });
+    expect(
+      await screen.findByRole('complementary', { name: 'Resume 时间线' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Resume 请求已接收')).toBeInTheDocument();
+    expect(screen.getByText('工具调用回调')).toBeInTheDocument();
+    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+      'app-1',
+      'run-1'
+    );
+  }, 20_000);
+
   test('keeps the runs table layout unchanged while floating windows are open', async () => {
     innerHeightSpy = vi
       .spyOn(window, 'innerHeight', 'get')

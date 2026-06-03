@@ -23,6 +23,7 @@ import {
 } from '../api/runtime';
 import { ApplicationRunDetailPanel } from '../components/logs/ApplicationRunDetailPanel';
 import { ApplicationLogsFloatingWindow } from '../components/logs/ApplicationLogsFloatingWindow';
+import { ApplicationRunResumeTimelinePanel } from '../components/logs/ApplicationRunResumeTimelinePanel';
 import {
   clampRect,
   applyStoredWidth,
@@ -49,6 +50,10 @@ const DEFAULT_TIME_RANGE = '7';
 const PAGE_SIZE = 20;
 
 type ApplicationLogTimeRange = '1' | '7' | '28' | '90' | '365' | 'all';
+type ApplicationLogsFloatingWindowKind =
+  | 'conversation-log'
+  | 'resume-timeline'
+  | 'run-detail';
 
 const TIME_RANGE_OPTIONS: Array<{
   labelKey: string;
@@ -125,6 +130,10 @@ function getConversationLogInitialRect() {
   };
 }
 
+function getResumeTimelineInitialRect() {
+  return getConversationLogInitialRect();
+}
+
 function resolveCollision(
   rectA: FloatingWindowRect,
   rectB: FloatingWindowRect,
@@ -143,7 +152,7 @@ function resolveCollision(
       nextWidthB = Math.max(minWidthB, availableWidthB);
     }
 
-    const overlap = (nextLeftB + nextWidthB + gap) - rectA.left;
+    const overlap = nextLeftB + nextWidthB + gap - rectA.left;
     let nextLeftA = rectA.left;
     if (overlap > 0) {
       nextLeftA = Math.min(
@@ -152,7 +161,10 @@ function resolveCollision(
       );
 
       const newAvailableWidthB = nextLeftA - margin - gap;
-      nextWidthB = Math.max(minWidthB, Math.min(rectB.width, newAvailableWidthB));
+      nextWidthB = Math.max(
+        minWidthB,
+        Math.min(rectB.width, newAvailableWidthB)
+      );
       nextLeftB = Math.max(margin, nextLeftA - nextWidthB - gap);
     }
 
@@ -177,8 +189,16 @@ export function ApplicationLogsPage({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [openConversationLogMessage, setOpenConversationLogMessage] =
     useState<AgentFlowDebugMessage | null>(null);
-  const [runDetailRect, setRunDetailRect] = useState<FloatingWindowRect | null>(null);
-  const [conversationLogRect, setConversationLogRect] = useState<FloatingWindowRect | null>(null);
+  const [openResumeTimelineRunId, setOpenResumeTimelineRunId] = useState<
+    string | null
+  >(null);
+  const [runDetailRect, setRunDetailRect] = useState<FloatingWindowRect | null>(
+    null
+  );
+  const [conversationLogRect, setConversationLogRect] =
+    useState<FloatingWindowRect | null>(null);
+  const [resumeTimelineRect, setResumeTimelineRect] =
+    useState<FloatingWindowRect | null>(null);
   const [timeRange, setTimeRange] =
     useState<ApplicationLogTimeRange>(DEFAULT_TIME_RANGE);
 
@@ -194,11 +214,16 @@ export function ApplicationLogsPage({
           clampRect(conversationLogRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT)
         );
       }
+      if (resumeTimelineRect) {
+        setResumeTimelineRect(
+          clampRect(resumeTimelineRect, DEFAULT_MIN_WIDTH, DEFAULT_MIN_HEIGHT)
+        );
+      }
     }
 
     window.addEventListener('resize', handleViewportResize);
     return () => window.removeEventListener('resize', handleViewportResize);
-  }, [runDetailRect, conversationLogRect]);
+  }, [runDetailRect, conversationLogRect, resumeTimelineRect]);
   const [keywordSearch, setKeywordSearch] = useState('');
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] =
@@ -206,9 +231,8 @@ export function ApplicationLogsPage({
   const [sortOrder, setSortOrder] =
     useState<ApplicationRunSortOrder>(DEFAULT_SORT_ORDER);
   const [refreshingRuns, setRefreshingRuns] = useState(false);
-  const [activeFloatingWindow, setActiveFloatingWindow] = useState<
-    'conversation-log' | 'run-detail'
-  >('run-detail');
+  const [activeFloatingWindow, setActiveFloatingWindow] =
+    useState<ApplicationLogsFloatingWindowKind>('run-detail');
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const timeRangeOptions = useMemo(
@@ -234,8 +258,12 @@ export function ApplicationLogsPage({
       ),
     [runSortFieldOptions, t]
   );
-  const runsTableColumns = useMemo(() => getApplicationRunsTableColumns(t), [t]);
-  const runsTableConfiguration = useApplicationRunsTableConfiguration(runsTableColumns);
+  const runsTableColumns = useMemo(
+    () => getApplicationRunsTableColumns(t),
+    [t]
+  );
+  const runsTableConfiguration =
+    useApplicationRunsTableConfiguration(runsTableColumns);
   const titleIncludes = keywordSearch.trim();
   const runsInput: FetchApplicationRunsInput = {
     page,
@@ -271,14 +299,18 @@ export function ApplicationLogsPage({
   }, [runs, refetchRuns]);
 
   function selectRun(run: ApplicationRunSummary | null) {
-    const nextRunId = run ? run.flow_run_id ?? run.id : null;
+    const nextRunId = run ? (run.flow_run_id ?? run.id) : null;
     setSelectedRunId(nextRunId);
     setOpenConversationLogMessage(null);
+    setOpenResumeTimelineRunId(null);
     setActiveFloatingWindow('run-detail');
 
     if (nextRunId) {
       const initial = clampRect(
-        applyStoredWidth(getRunDetailInitialRect(), 'application-logs-floating-run-detail'),
+        applyStoredWidth(
+          getRunDetailInitialRect(),
+          'application-logs-floating-run-detail'
+        ),
         DEFAULT_MIN_WIDTH,
         DEFAULT_MIN_HEIGHT
       );
@@ -287,16 +319,19 @@ export function ApplicationLogsPage({
       setRunDetailRect(null);
     }
     setConversationLogRect(null);
+    setResumeTimelineRect(null);
   }
 
   const handleRectChange = (
-    type: 'run-detail' | 'conversation-log',
+    type: ApplicationLogsFloatingWindowKind,
     newRect: FloatingWindowRect
   ) => {
     if (type === 'run-detail') {
       setRunDetailRect(newRect);
-    } else {
+    } else if (type === 'conversation-log') {
       setConversationLogRect(newRect);
+    } else {
+      setResumeTimelineRect(newRect);
     }
   };
 
@@ -322,6 +357,66 @@ export function ApplicationLogsPage({
     }
   }
 
+  function openConversationLog(message: AgentFlowDebugMessage) {
+    setOpenConversationLogMessage(message);
+    setActiveFloatingWindow('conversation-log');
+
+    const initial = clampRect(
+      applyStoredWidth(
+        getConversationLogInitialRect(),
+        'application-logs-floating-conversation-log'
+      ),
+      DEFAULT_MIN_WIDTH,
+      DEFAULT_MIN_HEIGHT
+    );
+    const anchorRect = resumeTimelineRect ?? runDetailRect;
+    if (anchorRect) {
+      const viewport = getViewportSize();
+      const resolved = resolveCollision(anchorRect, initial, viewport.width);
+
+      if (resumeTimelineRect) {
+        setResumeTimelineRect(resolved.rectA);
+      } else {
+        setRunDetailRect(resolved.rectA);
+      }
+      setConversationLogRect(resolved.rectB);
+    } else {
+      setConversationLogRect(initial);
+    }
+  }
+
+  function openResumeTimeline() {
+    if (!selectedRunId) {
+      return;
+    }
+
+    setOpenResumeTimelineRunId(selectedRunId);
+    setActiveFloatingWindow('resume-timeline');
+
+    const initial = clampRect(
+      applyStoredWidth(
+        getResumeTimelineInitialRect(),
+        'application-logs-floating-resume-timeline'
+      ),
+      DEFAULT_MIN_WIDTH,
+      DEFAULT_MIN_HEIGHT
+    );
+    const anchorRect = conversationLogRect ?? runDetailRect;
+    if (anchorRect) {
+      const viewport = getViewportSize();
+      const resolved = resolveCollision(anchorRect, initial, viewport.width);
+
+      if (conversationLogRect) {
+        setConversationLogRect(resolved.rectA);
+      } else {
+        setRunDetailRect(resolved.rectA);
+      }
+      setResumeTimelineRect(resolved.rectB);
+    } else {
+      setResumeTimelineRect(initial);
+    }
+  }
+
   const logsHeader = (
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
@@ -342,7 +437,8 @@ export function ApplicationLogsPage({
             options={runSortFieldOptions}
             prefix={
               <span className="application-logs-page__sort-select-prefix">
-                {t('auto.sort_by_prefix')}</span>
+                {t('auto.sort_by_prefix')}
+              </span>
             }
             value={sortBy}
             onChange={setSortBy}
@@ -464,6 +560,28 @@ export function ApplicationLogsPage({
           </div>
         </ApplicationLogsFloatingWindow>
       ) : null}
+      {openResumeTimelineRunId ? (
+        <ApplicationLogsFloatingWindow
+          active={activeFloatingWindow === 'resume-timeline'}
+          initialRect={getResumeTimelineInitialRect}
+          rect={resumeTimelineRect ?? undefined}
+          onRectChange={(rect) => handleRectChange('resume-timeline', rect)}
+          testId="application-logs-floating-resume-timeline"
+          title={t('auto.resume_timeline')}
+          onActivate={() => setActiveFloatingWindow('resume-timeline')}
+        >
+          <div className="application-logs-page__resume-timeline-panel">
+            <ApplicationRunResumeTimelinePanel
+              applicationId={applicationId}
+              runId={openResumeTimelineRunId}
+              onClose={() => {
+                setOpenResumeTimelineRunId(null);
+                setResumeTimelineRect(null);
+              }}
+            />
+          </div>
+        </ApplicationLogsFloatingWindow>
+      ) : null}
       {selectedRunId ? (
         <ApplicationLogsFloatingWindow
           active={activeFloatingWindow === 'run-detail'}
@@ -477,24 +595,8 @@ export function ApplicationLogsPage({
           <ApplicationRunDetailPanel
             applicationId={applicationId}
             onClose={() => selectRun(null)}
-            onOpenMessageLog={(message) => {
-              setOpenConversationLogMessage(message);
-              setActiveFloatingWindow('conversation-log');
-
-              const initial = clampRect(
-                applyStoredWidth(getConversationLogInitialRect(), 'application-logs-floating-conversation-log'),
-                DEFAULT_MIN_WIDTH,
-                DEFAULT_MIN_HEIGHT
-              );
-              if (runDetailRect) {
-                const viewport = getViewportSize();
-                const resolved = resolveCollision(runDetailRect, initial, viewport.width);
-                setRunDetailRect(resolved.rectA);
-                setConversationLogRect(resolved.rectB);
-              } else {
-                setConversationLogRect(initial);
-              }
-            }}
+            onOpenMessageLog={openConversationLog}
+            onOpenResumeTimeline={openResumeTimeline}
             runId={selectedRunId}
           />
         </ApplicationLogsFloatingWindow>

@@ -103,7 +103,8 @@
   background: rgba(0, 171, 115, 0.08);
 }
 
-.application-logs-page__conversation-log-panel {
+.application-logs-page__conversation-log-panel,
+.application-logs-page__resume-timeline-panel {
   display: flex;
   flex: 1 1 auto;
   width: 100%;
@@ -112,7 +113,8 @@
   min-height: 0;
 }
 
-.application-logs-page__conversation-log-panel .agent-flow-editor__dock-panel {
+.application-logs-page__conversation-log-panel .agent-flow-editor__dock-panel,
+.application-logs-page__resume-timeline-panel .agent-flow-editor__dock-panel {
   display: flex;
   container-type: inline-size;
   flex: 1;
@@ -126,6 +128,8 @@
 }
 
 .application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel-body,
+.application-logs-page__resume-timeline-panel
   .agent-flow-editor__dock-panel-body {
   display: flex;
   flex: 1;
@@ -135,6 +139,8 @@
 }
 
 .application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel-header,
+.application-logs-page__resume-timeline-panel
   .agent-flow-editor__dock-panel-header {
   display: flex;
   flex: 0 0 auto;
@@ -146,11 +152,24 @@
 }
 
 .application-logs-page__conversation-log-panel
+  .agent-flow-editor__dock-panel-title-stack,
+.application-logs-page__resume-timeline-panel
   .agent-flow-editor__dock-panel-title-stack {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
+}
+
+.application-logs-page__resume-timeline-panel
+  .application-run-detail__timeline {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: #f8fafd;
 }
 
 .application-logs-floating-window {

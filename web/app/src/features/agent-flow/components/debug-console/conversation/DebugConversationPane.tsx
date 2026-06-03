@@ -45,6 +45,7 @@ export function DebugConversationPane({
   onChangeQuery,
   onLoadArtifact,
   onOpenMessageLog,
+  onOpenResumeTimeline,
   onReachTop,
   onStopRun,
   onSubmitPrompt,
@@ -57,6 +58,7 @@ export function DebugConversationPane({
   onChangeQuery: (value: string) => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  onOpenResumeTimeline?: () => void;
   onReachTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
@@ -109,20 +111,23 @@ export function DebugConversationPane({
     },
     [firstMessageId, lastMessageId, messages.length]
   );
-  const scrollToBottom = useCallback((force = false) => {
-    if (!force && (status !== 'running' || !autoScrollEnabledRef.current)) {
-      return;
-    }
+  const scrollToBottom = useCallback(
+    (force = false) => {
+      if (!force && (status !== 'running' || !autoScrollEnabledRef.current)) {
+        return;
+      }
 
-    const element = messagesRef.current;
+      const element = messagesRef.current;
 
-    if (element) {
-      element.scrollTop = element.scrollHeight;
-      return;
-    }
+      if (element) {
+        element.scrollTop = element.scrollHeight;
+        return;
+      }
 
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [status]);
+      bottomRef.current?.scrollIntoView({ block: 'end' });
+    },
+    [status]
+  );
 
   useLayoutEffect(() => {
     const element = messagesRef.current;
@@ -234,7 +239,10 @@ export function DebugConversationPane({
         >
           {messages.length === 0 ? (
             <Empty
-              description={i18nText("agentFlow", "auto.rectification_operation_record_yet")}
+              description={i18nText(
+                'agentFlow',
+                'auto.rectification_operation_record_yet'
+              )}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : (
@@ -245,6 +253,7 @@ export function DebugConversationPane({
                   message={message}
                   onLoadArtifact={onLoadArtifact}
                   onOpenLog={onOpenMessageLog}
+                  onOpenResumeTimeline={onOpenResumeTimeline}
                 />
               ) : (
                 <article
@@ -296,9 +305,7 @@ export function DebugConversationPane({
           onChange={composerUiOnly ? setUiOnlyComposerValue : onChangeQuery}
           onStop={composerUiOnly ? () => {} : onStopRun}
           onSubmit={
-            composerUiOnly
-              ? () => setUiOnlyComposerValue('')
-              : onSubmitPrompt
+            composerUiOnly ? () => setUiOnlyComposerValue('') : onSubmitPrompt
           }
         />
       ) : null}

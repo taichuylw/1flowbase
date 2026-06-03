@@ -176,6 +176,7 @@
     "delete_application_failed": "Failed to delete app",
     "callback_response": "Callback response",
     "resume_timeline": "Resume timeline",
+    "close_resume_timeline": "Close Resume timeline",
     "no_resume_events": "No resume events yet",
     "resume_event_requested": "Resume request accepted",
     "resume_event_succeeded": "Resume completed",
