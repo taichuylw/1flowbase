@@ -177,3 +177,20 @@ fn compile_if_else_rejects_unknown_source_handles() {
         .to_string()
         .contains("edge edge-if-answer references unknown if_else sourceHandle stale-branch"));
 }
+
+#[test]
+fn compile_if_else_rejects_missing_else_branch() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"] =
+        json!([document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"][0]]);
+    document["graph"]["edges"] =
+        json!([document["graph"]["edges"][0], document["graph"]["edges"][1],]);
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("if_else branch document without else fallback should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("if_else node node-if must include an else branch"));
+}

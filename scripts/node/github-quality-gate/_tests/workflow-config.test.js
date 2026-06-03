@@ -112,7 +112,7 @@ test("verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
   assert.match(
     workflow,
-    /coverage-backend-gate:[\s\S]*?scope: \$\{\{ matrix\.scope \}\}[\s\S]*?start_postgres: "false"/u,
+    /coverage-backend-gate:[\s\S]*?scope: \$\{\{ matrix\.scope \}\}[\s\S]*?start_postgres: \$\{\{ matrix\.scope == 'coverage-backend-storage-postgres' \|\| matrix\.scope == 'coverage-backend-api-server' \}\}/u,
   );
   assert.match(workflow, /merge-multiple: false/u);
   assert.match(

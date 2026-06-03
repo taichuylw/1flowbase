@@ -6,6 +6,7 @@ import {
 import type {
   FlowBinding,
   FlowConditionGroupDocument,
+  FlowConditionRuleDocument,
   FlowNodeDocument,
   IfElseBranchDocument
 } from '@1flowbase/flow-schema';
@@ -133,8 +134,36 @@ function conditionGroupHasRule(group: FlowConditionGroupDocument): boolean {
       return conditionGroupHasRule(condition);
     }
 
-    return isConditionRule(condition);
+    return isConditionRule(condition) && conditionRuleHasRequiredInput(condition);
   });
+}
+
+function selectorHasRequiredInput(selector: string[]): boolean {
+  return (
+    selector.length >= 2 &&
+    selector.every((segment) => segment.trim().length > 0)
+  );
+}
+
+function conditionRuleHasRequiredInput(
+  rule: FlowConditionRuleDocument
+): boolean {
+  if (!selectorHasRequiredInput(rule.left)) {
+    return false;
+  }
+
+  if (rule.comparator === 'exists' || rule.comparator === 'empty') {
+    return true;
+  }
+
+  if (!rule.right) {
+    return false;
+  }
+
+  return (
+    rule.right.kind !== 'selector' ||
+    selectorHasRequiredInput(rule.right.selector)
+  );
 }
 
 function ifElseBranchesMissingRequiredInput(
