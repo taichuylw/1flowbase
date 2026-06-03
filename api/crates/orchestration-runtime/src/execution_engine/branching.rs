@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn initial_active_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
+pub fn initial_active_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
     if plan.edges.is_empty() {
         return plan.topological_order.iter().cloned().collect();
     }
@@ -19,7 +19,7 @@ fn outgoing_edges<'a>(
     plan.edges.iter().filter(move |edge| edge.source == node_id)
 }
 
-pub(super) fn activate_downstream_nodes(
+pub fn activate_downstream_nodes(
     plan: &CompiledPlan,
     active_node_ids: &mut BTreeSet<String>,
     node: &CompiledNode,
@@ -39,11 +39,11 @@ pub(super) fn activate_downstream_nodes(
     }
 }
 
-pub(super) fn checkpoint_active_node_ids(active_node_ids: &BTreeSet<String>) -> Vec<String> {
+pub fn checkpoint_active_node_ids(active_node_ids: &BTreeSet<String>) -> Vec<String> {
     active_node_ids.iter().cloned().collect()
 }
 
-pub(super) fn select_if_else_source_handle(
+pub fn select_if_else_source_handle(
     node: &CompiledNode,
     variable_pool: &Map<String, Value>,
 ) -> Result<Option<String>> {
