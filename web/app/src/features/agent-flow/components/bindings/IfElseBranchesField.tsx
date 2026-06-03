@@ -44,6 +44,16 @@ export function IfElseBranchesField({
   onChange
 }: IfElseBranchesFieldProps) {
   const branches = normalizeIfElseBranches(value);
+  const addElseIfButton = (
+    <Button
+      data-testid="if-else-add-else-if"
+      icon={<PlusOutlined />}
+      type="dashed"
+      onClick={appendElseIf}
+    >
+      {i18nText("agentFlow", "auto.add_else_if")}
+    </Button>
+  );
 
   function appendElseIf() {
     const elseBranch = branches.find((branch) => branch.kind === 'else');
@@ -60,64 +70,59 @@ export function IfElseBranchesField({
   return (
     <div className="agent-flow-if-else-branches" aria-label={ariaLabel}>
       {branches.map((branch) => (
-        <section
-          className="agent-flow-if-else-branches__item"
-          data-testid={`if-else-branch-${branch.sourceHandle}`}
-          key={branch.id}
-        >
-          <div className="agent-flow-if-else-branches__header">
-            <Input
-              aria-label={i18nText("agentFlow", "auto.branch_name", {
-                value1: branchLabel(branch)
-              })}
-              className="agent-flow-if-else-branches__title"
-              disabled={branch.kind !== 'else_if'}
-              value={branch.title}
-              onChange={(event) =>
-                onChange(
-                  replaceBranch(branches, branch.id, {
-                    ...branch,
-                    title: event.target.value
-                  })
-                )
-              }
-            />
-            {branch.kind === 'else_if' ? (
-              <Button
-                aria-label={i18nText("agentFlow", "auto.delete_branch", {
-                  value1: branch.title
+        <div key={branch.id} className="agent-flow-if-else-branches__entry">
+          {branch.kind === 'else' ? addElseIfButton : null}
+          <section
+            className="agent-flow-if-else-branches__item"
+            data-testid={`if-else-branch-${branch.sourceHandle}`}
+          >
+            <div className="agent-flow-if-else-branches__header">
+              <Input
+                aria-label={i18nText("agentFlow", "auto.branch_name", {
+                  value1: branchLabel(branch)
                 })}
-                danger
-                icon={<DeleteOutlined />}
-                type="text"
-                onClick={() => deleteElseIf(branch.id)}
+                className="agent-flow-if-else-branches__title"
+                disabled={branch.kind !== 'else_if'}
+                value={branch.title}
+                onChange={(event) =>
+                  onChange(
+                    replaceBranch(branches, branch.id, {
+                      ...branch,
+                      title: event.target.value
+                    })
+                  )
+                }
+              />
+              {branch.kind === 'else_if' ? (
+                <Button
+                  aria-label={i18nText("agentFlow", "auto.delete_branch", {
+                    value1: branch.title
+                  })}
+                  danger
+                  icon={<DeleteOutlined />}
+                  type="text"
+                  onClick={() => deleteElseIf(branch.id)}
+                />
+              ) : null}
+            </div>
+            {branch.kind !== 'else' && branch.condition ? (
+              <ConditionGroupField
+                ariaLabel={`${ariaLabel}-${branch.sourceHandle}`}
+                options={options}
+                value={branch.condition}
+                onChange={(condition) =>
+                  onChange(
+                    replaceBranch(branches, branch.id, {
+                      ...branch,
+                      condition
+                    })
+                  )
+                }
               />
             ) : null}
-          </div>
-          {branch.kind !== 'else' && branch.condition ? (
-            <ConditionGroupField
-              ariaLabel={`${ariaLabel}-${branch.sourceHandle}`}
-              options={options}
-              value={branch.condition}
-              onChange={(condition) =>
-                onChange(
-                  replaceBranch(branches, branch.id, {
-                    ...branch,
-                    condition
-                  })
-                )
-              }
-            />
-          ) : null}
-        </section>
+          </section>
+        </div>
       ))}
-      <Button
-        icon={<PlusOutlined />}
-        type="dashed"
-        onClick={appendElseIf}
-      >
-        {i18nText("agentFlow", "auto.add_else_if")}
-      </Button>
     </div>
   );
 }

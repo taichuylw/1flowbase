@@ -615,6 +615,11 @@
   gap: 10px;
 }
 
+.agent-flow-if-else-branches__entry {
+  display: grid;
+  gap: 10px;
+}
+
 .agent-flow-if-else-branches__item {
   display: grid;
   gap: 10px;

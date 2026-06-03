@@ -293,8 +293,10 @@ describe('AgentFlowNodeCard', () => {
 
     expect(ifHandle).toHaveClass('agent-flow-node-handle--branch');
     expect(elseHandle).toHaveClass('agent-flow-node-handle--branch');
-    expect(within(ifHandle).getByText('If')).toBeInTheDocument();
-    expect(within(elseHandle).getByText('Else')).toBeInTheDocument();
+    expect(within(ifHandle).queryByText('If')).not.toBeInTheDocument();
+    expect(within(elseHandle).queryByText('Else')).not.toBeInTheDocument();
+    expect(screen.queryByText('If')).not.toBeInTheDocument();
+    expect(screen.queryByText('Else')).not.toBeInTheDocument();
 
     fireEvent.click(ifHandle);
 

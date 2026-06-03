@@ -3,6 +3,7 @@ import type {
   FlowNodeDocument
 } from '@1flowbase/flow-schema';
 
+import { getDefaultIfElseSourceHandle } from '../../if-else-branches';
 import { createEdgeDocument } from '../edge-factory';
 import { getEdgeById, getNodeById } from '../selectors';
 import { shiftDownstreamNodesBFS } from './layout';
@@ -216,6 +217,8 @@ export function connectNodeFromSource(
     ...payload.node,
     containerId: sourceNode.containerId
   };
+  const sourceHandleId =
+    payload.sourceHandleId ?? getDefaultIfElseSourceHandle(sourceNode);
 
   const intermediateDoc = {
     ...document,
@@ -231,7 +234,7 @@ export function connectNodeFromSource(
           }),
           source: sourceNode.id,
           target: insertedNode.id,
-          sourceHandle: payload.sourceHandleId ?? null,
+          sourceHandle: sourceHandleId,
           targetHandle: null,
           containerId: sourceNode.containerId
         })

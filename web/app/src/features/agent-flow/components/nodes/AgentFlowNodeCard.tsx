@@ -169,96 +169,97 @@ export function AgentFlowNodeCard({
       sourceHandles.length > 1
         ? `${((index + 1) / (sourceHandles.length + 1)) * 100}%`
         : undefined;
+    const style = top ? { top } : undefined;
+    const tooltipTitle = handle.title ? (
+      <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
+        <div>{handle.title}</div>
+        <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
+      </div>
+    ) : (
+      <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
+        <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
+        <div>{i18nText("agentFlow", "auto.drag_drop_connect_nodes")}</div>
+      </div>
+    );
 
     return (
-      <NodePickerPopover
-        ariaLabel={ariaLabel}
-        key={handle.id ?? 'default'}
-        open={pickerOpen}
-        options={data.nodePickerOptions}
-        onOpenChange={(open) => {
-          if (open) {
-            if (handle.id) {
-              data.onOpenPicker(data.nodeId, handle.id);
-            } else {
-              data.onOpenPicker(data.nodeId);
-            }
-            return;
-          }
-
-          data.onClosePicker();
-        }}
-        onPickNode={(option) =>
-          handle.id
-            ? data.onInsertNode(data.nodeId, option, handle.id)
-            : data.onInsertNode(data.nodeId, option)
-        }
-      >
-        <Tooltip
-          title={
-            <div
-              style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}
-            >
-              <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
-              <div>{i18nText("agentFlow", "auto.drag_drop_connect_nodes")}</div>
-            </div>
-          }
-          placement="top"
-          color="#ffffff"
-          styles={{
-            body: {
-              color: '#333',
-              borderRadius: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }
-          }}
-          open={!pickerOpen ? undefined : false}
-        >
-          <CanvasHandle
-            id={handle.id ?? undefined}
-            type="source"
-            position={Position.Right}
-            aria-expanded={pickerOpen}
-            aria-haspopup="menu"
-            aria-label={ariaLabel}
-            className={`agent-flow-node-handle agent-flow-node-handle--source${handle.id ? ' agent-flow-node-handle--branch' : ''}`}
-            role="button"
-            style={top ? { top } : undefined}
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') {
-                return;
-              }
-
-              event.preventDefault();
-              event.stopPropagation();
-
-              if (pickerOpen) {
-                data.onClosePicker();
-                return;
-              }
-
+      <div key={handle.id ?? 'default'}>
+        <NodePickerPopover
+          ariaLabel={ariaLabel}
+          open={pickerOpen}
+          options={data.nodePickerOptions}
+          onOpenChange={(open) => {
+            if (open) {
               if (handle.id) {
                 data.onOpenPicker(data.nodeId, handle.id);
               } else {
                 data.onOpenPicker(data.nodeId);
               }
+              return;
+            }
+
+            data.onClosePicker();
+          }}
+          onPickNode={(option) =>
+            handle.id
+              ? data.onInsertNode(data.nodeId, option, handle.id)
+              : data.onInsertNode(data.nodeId, option)
+          }
+        >
+          <Tooltip
+            title={tooltipTitle}
+            placement="top"
+            color="#ffffff"
+            styles={{
+              body: {
+                color: '#333',
+                borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
+            open={!pickerOpen ? undefined : false}
           >
-            {handle.title ? (
-              <span className="agent-flow-node-handle__branch-label">
-                {handle.title}
+            <CanvasHandle
+              id={handle.id ?? undefined}
+              type="source"
+              position={Position.Right}
+              aria-expanded={pickerOpen}
+              aria-haspopup="menu"
+              aria-label={ariaLabel}
+              className={`agent-flow-node-handle agent-flow-node-handle--source${handle.id ? ' agent-flow-node-handle--branch' : ''}`}
+              role="button"
+              style={style}
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                  return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (pickerOpen) {
+                  data.onClosePicker();
+                  return;
+                }
+
+                if (handle.id) {
+                  data.onOpenPicker(data.nodeId, handle.id);
+                } else {
+                  data.onOpenPicker(data.nodeId);
+                }
+              }}
+            >
+              <span aria-hidden="true" className="agent-flow-node-handle__icon">
+                +
               </span>
-            ) : null}
-            <span aria-hidden="true" className="agent-flow-node-handle__icon">
-              +
-            </span>
-          </CanvasHandle>
-        </Tooltip>
-      </NodePickerPopover>
+            </CanvasHandle>
+          </Tooltip>
+        </NodePickerPopover>
+      </div>
     );
   }
 

@@ -355,11 +355,12 @@ where
                             node_run_id: Some(node_run.id),
                             status: "waiting_callback".to_string(),
                             reason: "等待 LLM 工具回调".to_string(),
-                            locator_payload: json!({
-                                "node_id": node.node_id,
-                                "next_node_index": node_index,
-                                "active_node_ids": active_node_ids_from_index(&compiled_plan, node_index),
-                            }),
+                            locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                                &node.node_id,
+                                node_index,
+                                active_node_ids_from_index(&compiled_plan, node_index),
+                            )
+                            .into_json(),
                             variable_snapshot: Value::Object(wait.checkpoint_variable_pool),
                             external_ref_payload: Some(wait.request_payload.clone()),
                         })
@@ -623,11 +624,12 @@ where
                             node_run_id: Some(node_run.id),
                             status: "waiting_data_model_side_effect_confirmation".to_string(),
                             reason: "等待 Data Model 写入确认".to_string(),
-                            locator_payload: json!({
-                                "node_id": node.node_id,
-                                "next_node_index": next_index,
-                                "active_node_ids": active_node_ids_from_index(&compiled_plan, next_index),
-                            }),
+                            locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                                &node.node_id,
+                                next_index,
+                                active_node_ids_from_index(&compiled_plan, next_index),
+                            )
+                            .into_json(),
                             variable_snapshot: Value::Object(variable_pool.clone()),
                             external_ref_payload: Some(confirmation_payload.clone()),
                         })
@@ -829,11 +831,12 @@ where
                         node_run_id: Some(node_run.id),
                         status: "waiting_human".to_string(),
                         reason: "等待人工输入".to_string(),
-                        locator_payload: json!({
-                            "node_id": node.node_id,
-                            "next_node_index": next_index,
-                            "active_node_ids": active_node_ids_from_index(&compiled_plan, next_index),
-                        }),
+                        locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                            &node.node_id,
+                            next_index,
+                            active_node_ids_from_index(&compiled_plan, next_index),
+                        )
+                        .into_json(),
                         variable_snapshot: Value::Object(variable_pool.clone()),
                         external_ref_payload: Some(json!({ "prompt": prompt })),
                     })
@@ -912,11 +915,12 @@ where
                         node_run_id: Some(node_run.id),
                         status: "waiting_callback".to_string(),
                         reason: "等待 callback 回填".to_string(),
-                        locator_payload: json!({
-                            "node_id": node.node_id,
-                            "next_node_index": next_index,
-                            "active_node_ids": active_node_ids_from_index(&compiled_plan, next_index),
-                        }),
+                        locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                            &node.node_id,
+                            next_index,
+                            active_node_ids_from_index(&compiled_plan, next_index),
+                        )
+                        .into_json(),
                         variable_snapshot: Value::Object(variable_pool.clone()),
                         external_ref_payload: Some(request_payload.clone()),
                     })

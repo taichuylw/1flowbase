@@ -581,6 +581,7 @@
     "branches": "Branches",
     "value_comparison": "Value comparison",
     "exists": "Exists",
+    "empty": "Is empty",
     "equals": "Equals",
     "not_equals": "Does not equal",
     "contains": "Contains",

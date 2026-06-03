@@ -717,8 +717,17 @@ describe('NodeInspector', () => {
       screen.queryByRole('button', { name: '删除 Else 分支' })
     ).not.toBeInTheDocument();
 
+    const addElseIfButton = within(branchField).getByTestId(
+      'if-else-add-else-if'
+    );
+    expect(
+      addElseIfButton.compareDocumentPosition(
+        screen.getByTestId('if-else-branch-else')
+      ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
     fireEvent.click(
-      within(branchField).getByRole('button', { name: /新增 Else If/ })
+      addElseIfButton
     );
 
     const elseIfBranch = await screen.findByTestId(
@@ -777,6 +786,58 @@ describe('NodeInspector', () => {
           sourceHandle: 'else'
         })
       ]);
+    });
+  });
+
+  test('supports empty comparator in If / Else condition rules without right value', async () => {
+    const initialState = createInitialStateWithIfElseNode();
+    let latestDocument = initialState.draft.document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-if-else" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const ifBranch = await screen.findByTestId('if-else-branch-if');
+
+    fireEvent.click(
+      within(ifBranch).getByRole('button', { name: /新增条件$/ })
+    );
+
+    await openSelect('分支-if-0-comparator');
+    expect(await screen.findByTitle('为空')).toBeInTheDocument();
+    await selectOption('为空');
+
+    expect(
+      screen.queryByRole('combobox', { name: '分支-if-0-right-kind' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('分支-if-0-right')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const ifElseNode = latestDocument.graph.nodes.find(
+        (node) => node.id === 'node-if-else'
+      );
+      const branchBinding = ifElseNode?.bindings.branches;
+
+      if (!branchBinding || branchBinding.kind !== 'if_else_branches') {
+        throw new Error('expected If / Else branch binding');
+      }
+
+      const conditions = branchBinding.value.branches[0]?.condition?.conditions;
+
+      expect(conditions).toEqual([
+        expect.objectContaining({
+          comparator: 'empty'
+        })
+      ]);
+      expect(conditions?.[0]).not.toHaveProperty('right');
     });
   });
 

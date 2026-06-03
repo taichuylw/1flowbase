@@ -146,11 +146,15 @@ fn evaluate_condition_rule(rule: &Value, variable_pool: &Map<String, Value>) -> 
         .unwrap_or("exists");
     let left_value = match lookup_selector_value(variable_pool, &left_selector) {
         Ok(value) => value,
+        Err(_) if comparator == "empty" => return Ok(true),
         Err(_) => return Ok(false),
     };
 
     if comparator == "exists" {
         return Ok(!left_value.is_null());
+    }
+    if comparator == "empty" {
+        return Ok(is_empty_condition_value(&left_value));
     }
 
     let Some(right_value) = rule
@@ -222,4 +226,10 @@ fn string_value(value: &Value) -> String {
         .as_str()
         .map(str::to_string)
         .unwrap_or_else(|| value.to_string())
+}
+
+fn is_empty_condition_value(value: &Value) -> bool {
+    value.is_null()
+        || value.as_str().is_some_and(str::is_empty)
+        || value.as_array().is_some_and(Vec::is_empty)
 }

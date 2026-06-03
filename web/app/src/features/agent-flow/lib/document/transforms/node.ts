@@ -9,7 +9,10 @@ import { createEdgeDocument } from '../edge-factory';
 import { createNodeDocument } from '../node-factory';
 import type { NodePickerOption } from '../../plugin-node-definitions';
 import { getOutgoingEdges, getNodeById } from '../selectors';
-import { getIfElseBranches } from '../../if-else-branches';
+import {
+  getDefaultIfElseSourceHandle,
+  getIfElseBranches
+} from '../../if-else-branches';
 import { shiftDownstreamNodesBFS } from './layout';
 
 const NODE_GAP_X = 280;
@@ -294,8 +297,10 @@ export function insertNodeAfter(
     return document;
   }
 
+  const resolvedSourceHandle =
+    sourceHandle ?? getDefaultIfElseSourceHandle(anchorNode);
   const outgoingEdges = getOutgoingEdges(document, anchorNodeId).filter(
-    (edge) => edge.sourceHandle === sourceHandle
+    (edge) => edge.sourceHandle === resolvedSourceHandle
   );
   const nextPositionX = anchorNode.position.x + NODE_GAP_X;
 
@@ -315,13 +320,14 @@ export function insertNodeAfter(
       edges: [
         ...document.graph.edges.filter(
           (edge) =>
-            edge.source !== anchorNodeId || edge.sourceHandle !== sourceHandle
+            edge.source !== anchorNodeId ||
+            edge.sourceHandle !== resolvedSourceHandle
         ),
         createEdgeDocument({
           id: `edge-${anchorNodeId}-${insertedNode.id}`,
           source: anchorNodeId,
           target: insertedNode.id,
-          sourceHandle,
+          sourceHandle: resolvedSourceHandle,
           containerId: anchorNode.containerId
         }),
         ...outgoingEdges.map((edge) =>

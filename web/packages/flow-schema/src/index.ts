@@ -307,6 +307,7 @@ export interface NamedBindingEntry {
 
 export type FlowConditionComparator =
   | 'exists'
+  | 'empty'
   | 'equals'
   | 'not_equals'
   | 'greater_than'

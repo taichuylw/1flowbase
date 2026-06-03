@@ -8,6 +8,7 @@ import { getContainerPathForNode } from '../../lib/document/transforms/container
 import { duplicateNodeSubgraph } from '../../lib/document/transforms/duplicate';
 import {
   removeEdge,
+  connectNodeFromSource,
   insertNodeOnEdge,
   reconnectEdge,
   validateConnection
@@ -588,6 +589,49 @@ describe('agent flow document transforms', () => {
           id: 'edge-if-else-if-target',
           source: 'node-if-else',
           target: 'node-if-target'
+        })
+      ])
+    );
+  });
+
+  test('defaults If / Else insert-after connections to the if branch when no handle is provided', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else', 640, 240);
+    const insertedNode = createNodeDocument('code', 'node-code', 0, 0);
+
+    document.graph.nodes.push(ifElseNode);
+
+    const next = insertNodeAfter(document, 'node-if-else', insertedNode);
+
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-if-else',
+          target: 'node-code',
+          sourceHandle: 'if'
+        })
+      ])
+    );
+  });
+
+  test('defaults If / Else drag-created connections to the if branch when no handle is provided', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else', 640, 240);
+    const insertedNode = createNodeDocument('code', 'node-code', 920, 240);
+
+    document.graph.nodes.push(ifElseNode);
+
+    const next = connectNodeFromSource(document, {
+      sourceNodeId: 'node-if-else',
+      node: insertedNode
+    });
+
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-if-else',
+          target: 'node-code',
+          sourceHandle: 'if'
         })
       ])
     );

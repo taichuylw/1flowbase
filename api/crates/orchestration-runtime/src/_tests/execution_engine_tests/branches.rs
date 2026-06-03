@@ -263,6 +263,76 @@ async fn if_else_invalid_regex_does_not_match() {
 }
 
 #[tokio::test]
+async fn if_else_empty_comparator_matches_missing_null_empty_string_and_empty_array() {
+    let mut plan = branch_plan(true, None);
+    let branch_binding = plan
+        .nodes
+        .get_mut("node-if")
+        .expect("branch plan should include if_else node")
+        .bindings
+        .get_mut("branches")
+        .expect("if_else node should include branches binding");
+
+    branch_binding.raw_value = json!({
+        "branches": [
+            {
+                "id": "if",
+                "kind": "if",
+                "title": "If",
+                "sourceHandle": "if",
+                "condition": {
+                    "operator": "and",
+                    "conditions": [{
+                        "kind": "rule",
+                        "left": ["node-start", "maybe"],
+                        "comparator": "empty"
+                    }]
+                }
+            },
+            {
+                "id": "else",
+                "kind": "else",
+                "title": "Else",
+                "sourceHandle": "else"
+            }
+        ]
+    });
+
+    for payload in [
+        json!({ "node-start": {} }),
+        json!({ "node-start": { "maybe": null } }),
+        json!({ "node-start": { "maybe": "" } }),
+        json!({ "node-start": { "maybe": [] } }),
+    ] {
+        let outcome = start_flow_debug_run(&plan, &payload, &successful_invoker())
+            .await
+            .unwrap();
+        let traces = outcome
+            .node_traces
+            .into_iter()
+            .map(|trace| trace.node_id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(traces, vec!["node-start", "node-if", "node-if-answer"]);
+    }
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "maybe": "ready" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+    let traces = outcome
+        .node_traces
+        .into_iter()
+        .map(|trace| trace.node_id)
+        .collect::<Vec<_>>();
+
+    assert_eq!(traces, vec!["node-start", "node-if", "node-else-answer"]);
+}
+
+#[tokio::test]
 async fn if_else_evaluates_nested_groups_and_selector_right_values() {
     let mut plan = branch_plan(true, None);
     let branch_binding = plan

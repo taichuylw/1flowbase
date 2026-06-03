@@ -4,6 +4,7 @@ import type {
   FlowConditionGroupDocument,
   FlowConditionRuleDocument,
   FlowConditionValue,
+  FlowNodeDocument,
   IfElseBranchDocument
 } from '@1flowbase/flow-schema';
 
@@ -104,6 +105,20 @@ export function normalizeIfElseBranches(
     ),
     elseBranch as IfElseBranchDocument
   ];
+}
+
+export function getDefaultIfElseSourceHandle(
+  node: FlowNodeDocument
+): string | null {
+  if (node.type !== 'if_else') {
+    return null;
+  }
+
+  return (
+    normalizeIfElseBranches(
+      getIfElseBranchesFromBindings(node.bindings)
+    )[0]?.sourceHandle ?? null
+  );
 }
 
 function conditionValueSelectors(value: FlowConditionValue | undefined) {

@@ -29,13 +29,7 @@
 }
 
 .agent-flow-node-handle--branch.react-flow__handle {
-  width: 58px;
-  min-width: 58px;
-  height: 22px;
-  right: -52px;
-  gap: 4px;
-  border-radius: 999px;
-  font-size: 11px;
+  right: -7px;
   transform: translateY(-50%);
 }
 
@@ -44,18 +38,6 @@
   pointer-events: none;
   transition: opacity 0.2s ease;
   transform: translateY(-1px);
-}
-
-.agent-flow-node-handle__branch-label {
-  max-width: 42px;
-  overflow: hidden;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
-  pointer-events: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .react-flow__node:hover .agent-flow-node-handle--source.react-flow__handle,
@@ -70,10 +52,9 @@
 
 .react-flow__node:hover .agent-flow-node-handle--branch.react-flow__handle,
 .agent-flow-node-handle--branch.react-flow__handle[aria-expanded='true'] {
-  width: 68px;
-  min-width: 68px;
+  width: 24px;
   height: 24px;
-  right: -60px;
+  right: -12px;
 }
 
 .react-flow__node:hover

@@ -29,6 +29,7 @@ const COMPARATOR_OPTIONS = [
     label: i18nText("agentFlow", "auto.value_comparison"),
     options: [
       { label: i18nText("agentFlow", "auto.exists"), value: 'exists' },
+      { label: i18nText("agentFlow", "auto.empty"), value: 'empty' },
       { label: i18nText("agentFlow", "auto.equals"), value: 'equals' },
       { label: i18nText("agentFlow", "auto.not_equals"), value: 'not_equals' },
       { label: '>', value: 'greater_than' },
@@ -71,10 +72,12 @@ function ensureRightValue(
   rule: FlowConditionRuleDocument,
   comparator: FlowConditionComparator
 ): FlowConditionRuleDocument {
-  if (comparator === 'exists') {
-    const { right: _right, ...nextRule } = rule;
+  if (comparator === 'exists' || comparator === 'empty') {
+    const nextRule = { ...rule, comparator };
 
-    return { ...nextRule, comparator };
+    delete nextRule.right;
+
+    return nextRule;
   }
 
   return {
@@ -115,7 +118,7 @@ function renderRightValue({
   options: FlowSelectorOption[];
   onChange: (condition: FlowConditionRuleDocument) => void;
 }) {
-  if (condition.comparator === 'exists') {
+  if (condition.comparator === 'exists' || condition.comparator === 'empty') {
     return null;
   }
 

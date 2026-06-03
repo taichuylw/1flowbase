@@ -581,6 +581,7 @@
     "branches": "分支",
     "value_comparison": "值比较",
     "exists": "存在",
+    "empty": "为空",
     "equals": "等于",
     "not_equals": "不等于",
     "contains": "包含",
