@@ -217,6 +217,49 @@ flowbase_env_or_file_value() {
   printf '%s\n' "$value"
 }
 
+flowbase_web_image() {
+  file="$1"
+  version="$(flowbase_env_or_file_value FLOWBASE_WEB_VERSION "$file" latest)"
+  printf '%s\n' "ghcr.io/taichuy/1flowbase-web:${version}"
+}
+
+flowbase_api_server_image() {
+  file="$1"
+  version="$(flowbase_env_or_file_value FLOWBASE_API_SERVER_VERSION "$file" latest)"
+  printf '%s\n' "ghcr.io/taichuy/1flowbase-api-server:${version}"
+}
+
+flowbase_plugin_runner_image() {
+  file="$1"
+  version="$(flowbase_env_or_file_value FLOWBASE_PLUGIN_RUNNER_VERSION "$file" latest)"
+  printf '%s\n' "ghcr.io/taichuy/1flowbase-plugin-runner:${version}"
+}
+
+flowbase_uses_latest_image_tags() {
+  file="$1"
+  [ "$(flowbase_env_or_file_value FLOWBASE_WEB_VERSION "$file" latest)" = "latest" ] || return 1
+  [ "$(flowbase_env_or_file_value FLOWBASE_API_SERVER_VERSION "$file" latest)" = "latest" ] || return 1
+  [ "$(flowbase_env_or_file_value FLOWBASE_PLUGIN_RUNNER_VERSION "$file" latest)" = "latest" ] || return 1
+  return 0
+}
+
+local_flowbase_latest_images_exist() {
+  file="$1"
+  flowbase_uses_latest_image_tags "$file" || return 1
+  docker image inspect "$(flowbase_web_image "$file")" >/dev/null 2>&1 || return 1
+  docker image inspect "$(flowbase_api_server_image "$file")" >/dev/null 2>&1 || return 1
+  docker image inspect "$(flowbase_plugin_runner_image "$file")" >/dev/null 2>&1 || return 1
+  return 0
+}
+
+prompt_pull_images() {
+  if local_flowbase_latest_images_exist ./docker/.env; then
+    prompt_yes_no "Local latest Docker images were found. Update Docker images?" "no"
+  else
+    prompt_yes_no "Pull Docker images?" "no"
+  fi
+}
+
 manifest_supports_platform() {
   image="$1"
   platform="$2"
@@ -242,14 +285,10 @@ verify_flowbase_image_platforms() {
       ;;
   esac
 
-  web_version="$(flowbase_env_or_file_value FLOWBASE_WEB_VERSION .env latest)"
-  api_version="$(flowbase_env_or_file_value FLOWBASE_API_SERVER_VERSION .env latest)"
-  plugin_runner_version="$(flowbase_env_or_file_value FLOWBASE_PLUGIN_RUNNER_VERSION .env latest)"
-
   for image in \
-    "ghcr.io/taichuy/1flowbase-web:${web_version}" \
-    "ghcr.io/taichuy/1flowbase-api-server:${api_version}" \
-    "ghcr.io/taichuy/1flowbase-plugin-runner:${plugin_runner_version}"
+    "$(flowbase_web_image .env)" \
+    "$(flowbase_api_server_image .env)" \
+    "$(flowbase_plugin_runner_image .env)"
   do
     manifest_status=0
     manifest_supports_platform "$image" "$platform" || manifest_status="$?"
@@ -410,11 +449,23 @@ else
   echo "Downloaded ./docker."
 fi
 
+PROMPT_CONFIG_VALUES=0
 if [ ! -f ./docker/.env ]; then
   cp ./docker/.env.example ./docker/.env
   echo "Created docker/.env from docker/.env.example."
+  PROMPT_CONFIG_VALUES=1
 else
   echo "Using existing docker/.env."
+  if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
+    OVERWRITE_ENV="$(prompt_yes_no "Overwrite current docker/.env from docker/.env.example?" "no")"
+    if [ "$OVERWRITE_ENV" = "yes" ]; then
+      cp ./docker/.env.example ./docker/.env
+      echo "Overwrote docker/.env from docker/.env.example."
+      PROMPT_CONFIG_VALUES=1
+    else
+      echo "Keeping existing docker/.env."
+    fi
+  fi
 fi
 
 if [ -n "$DB_PASSWORD" ]; then
@@ -442,7 +493,7 @@ if [ -n "$PLUGIN_GITHUB_PROXY_URL" ]; then
   echo "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
 fi
 
-if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
+if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   echo "Configure docker/.env. Press Enter to keep the value shown in brackets."
   prompt_env_value POSTGRES_PASSWORD "Database password"
   prompt_env_value BOOTSTRAP_ROOT_ACCOUNT "Root account"
@@ -450,13 +501,13 @@ if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   prompt_env_value API_PROVIDER_SECRET_MASTER_KEY "API provider secret master key"
   prompt_env_value WEB_PORT "Web port"
   prompt_official_plugin_github_proxy_url
-elif [ "$INTERACTIVE" -eq 1 ]; then
+elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "No interactive terminal was found. Keeping docker/.env values."
 fi
 
 if [ -z "$PULL_IMAGES" ]; then
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
-    PULL_IMAGES="$(prompt_yes_no "Pull Docker images?" "no")"
+    PULL_IMAGES="$(prompt_pull_images)"
   else
     PULL_IMAGES="no"
   fi

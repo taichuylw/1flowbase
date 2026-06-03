@@ -204,6 +204,40 @@ function Get-EnvOrFileValue([string]$Key, [string]$Path, [string]$DefaultValue) 
   return $DefaultValue
 }
 
+function Get-FlowbaseImageRefs([string]$Path) {
+  $WebVersion = Get-EnvOrFileValue "FLOWBASE_WEB_VERSION" $Path "latest"
+  $ApiVersion = Get-EnvOrFileValue "FLOWBASE_API_SERVER_VERSION" $Path "latest"
+  $PluginRunnerVersion = Get-EnvOrFileValue "FLOWBASE_PLUGIN_RUNNER_VERSION" $Path "latest"
+
+  return @(
+    "ghcr.io/taichuy/1flowbase-web:$WebVersion",
+    "ghcr.io/taichuy/1flowbase-api-server:$ApiVersion",
+    "ghcr.io/taichuy/1flowbase-plugin-runner:$PluginRunnerVersion"
+  )
+}
+
+function Test-FlowbaseUsesLatestImageTags([string]$Path) {
+  return (
+    (Get-EnvOrFileValue "FLOWBASE_WEB_VERSION" $Path "latest") -eq "latest" -and
+    (Get-EnvOrFileValue "FLOWBASE_API_SERVER_VERSION" $Path "latest") -eq "latest" -and
+    (Get-EnvOrFileValue "FLOWBASE_PLUGIN_RUNNER_VERSION" $Path "latest") -eq "latest"
+  )
+}
+
+function Test-LocalLatestFlowbaseImages([string]$Path) {
+  if (-not (Test-FlowbaseUsesLatestImageTags $Path)) {
+    return $false
+  }
+
+  foreach ($Image in Get-FlowbaseImageRefs $Path) {
+    if (-not (Invoke-NativeQuiet { docker image inspect $Image })) {
+      return $false
+    }
+  }
+
+  return $true
+}
+
 function Test-ImageManifestPlatform([string]$Image, [string]$Platform) {
   $ManifestLines = docker manifest inspect $Image 2>$null
   if ($LASTEXITCODE -ne 0 -or -not $ManifestLines) {
@@ -229,16 +263,7 @@ function Assert-FlowbaseImagePlatformSupport() {
     Fail "This 1flowbase Docker package supports linux/amd64 and linux/arm64. Detected Docker platform: $Platform."
   }
 
-  $WebVersion = Get-EnvOrFileValue "FLOWBASE_WEB_VERSION" ".\.env" "latest"
-  $ApiVersion = Get-EnvOrFileValue "FLOWBASE_API_SERVER_VERSION" ".\.env" "latest"
-  $PluginRunnerVersion = Get-EnvOrFileValue "FLOWBASE_PLUGIN_RUNNER_VERSION" ".\.env" "latest"
-  $Images = @(
-    "ghcr.io/taichuy/1flowbase-web:$WebVersion",
-    "ghcr.io/taichuy/1flowbase-api-server:$ApiVersion",
-    "ghcr.io/taichuy/1flowbase-plugin-runner:$PluginRunnerVersion"
-  )
-
-  foreach ($Image in $Images) {
+  foreach ($Image in Get-FlowbaseImageRefs ".\.env") {
     $SupportsPlatform = Test-ImageManifestPlatform $Image $Platform
     if ($null -eq $SupportsPlatform) {
       Write-Host "Could not verify Docker image platform support for $Image; continuing to Docker pull."
@@ -278,11 +303,23 @@ if (Test-Path ".\docker") {
   Write-Host "Downloaded ./docker."
 }
 
+$PromptConfigValues = $false
 if (-not (Test-Path ".\docker\.env")) {
   Copy-Item ".\docker\.env.example" ".\docker\.env"
   Write-Host "Created docker/.env from docker/.env.example."
+  $PromptConfigValues = $true
 } else {
   Write-Host "Using existing docker/.env."
+  if ($ShouldPrompt) {
+    $OverwriteEnv = Prompt-YesNo "Overwrite current docker/.env from docker/.env.example?" $false
+    if ($OverwriteEnv) {
+      Copy-Item ".\docker\.env.example" ".\docker\.env" -Force
+      Write-Host "Overwrote docker/.env from docker/.env.example."
+      $PromptConfigValues = $true
+    } else {
+      Write-Host "Keeping existing docker/.env."
+    }
+  }
 }
 
 if ($DbPassword) {
@@ -310,7 +347,7 @@ if ($PluginGithubProxyUrl) {
   Write-Host "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
 }
 
-if ($ShouldPrompt) {
+if ($ShouldPrompt -and $PromptConfigValues) {
   Write-Host "Configure docker/.env. Press Enter to keep the value shown in brackets."
   Prompt-EnvValue "POSTGRES_PASSWORD" "Database password"
   Prompt-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" "Root account"
@@ -322,7 +359,11 @@ if ($ShouldPrompt) {
 
 if ($null -eq $PullImages) {
   if ($ShouldPrompt) {
-    $PullImages = Prompt-YesNo "Pull Docker images?" $false
+    if (Test-LocalLatestFlowbaseImages ".\docker\.env") {
+      $PullImages = Prompt-YesNo "Local latest Docker images were found. Update Docker images?" $false
+    } else {
+      $PullImages = Prompt-YesNo "Pull Docker images?" $false
+    }
   } else {
     $PullImages = $false
   }
