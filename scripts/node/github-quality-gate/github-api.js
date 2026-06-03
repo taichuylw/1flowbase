@@ -117,6 +117,65 @@ function closeIssueWithGitHubApi({ token, repository, number }) {
   });
 }
 
+function listIssueCommentsWithGitHubApi({ token, repository, number }) {
+  return requestGitHubJson({
+    token,
+    repository,
+    method: 'GET',
+    path: `/issues/${number}/comments?per_page=100`,
+  });
+}
+
+function createIssueCommentWithGitHubApi({ token, repository, number, body }) {
+  return requestGitHubJson({
+    token,
+    repository,
+    method: 'POST',
+    path: `/issues/${number}/comments`,
+    body: { body },
+  });
+}
+
+function updateIssueCommentWithGitHubApi({ token, repository, commentId, body }) {
+  return requestGitHubJson({
+    token,
+    repository,
+    method: 'PATCH',
+    path: `/issues/comments/${commentId}`,
+    body: { body },
+  });
+}
+
+async function upsertIssueCommentWithMarker({
+  token,
+  repository,
+  number,
+  marker,
+  body,
+  listCommentsImpl = listIssueCommentsWithGitHubApi,
+  createCommentImpl = createIssueCommentWithGitHubApi,
+  updateCommentImpl = updateIssueCommentWithGitHubApi,
+}) {
+  const comments = await listCommentsImpl({ token, repository, number });
+  const existingComment = comments.find((comment) => String(comment.body || '').includes(marker));
+
+  if (existingComment) {
+    return updateCommentImpl({
+      token,
+      repository,
+      commentId: existingComment.id,
+      body,
+    });
+  }
+
+  return createCommentImpl({
+    token,
+    repository,
+    number,
+    body,
+  });
+}
+
 async function createIssueWithLabelFallback({ createIssueImpl, issue }) {
   try {
     return await createIssueImpl(issue);
@@ -217,4 +276,5 @@ module.exports = {
   createIssueWithGitHubApi,
   createIssueWithLabelFallback,
   listOpenQualityGateIssuesWithGitHubApi,
+  upsertIssueCommentWithMarker,
 };

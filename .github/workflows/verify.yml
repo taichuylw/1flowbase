@@ -176,12 +176,12 @@ jobs:
         with:
           fetch-depth: 0
       - name: Prepare React Doctor diff base
-        run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+        run: git fetch --no-tags --prune --depth=1 origin main:refs/remotes/origin/main
       - uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Run React Doctor
-        run: npx react-doctor@latest web/app --diff main --offline --fail-on warning --verbose
+        run: npx react-doctor@0.2.16 web/app --diff origin/main --offline --fail-on warning --verbose
 
   verify:
     needs:
@@ -206,6 +206,8 @@ jobs:
           INPUT_ARTIFACT_ROOT: tmp/test-governance/parallel
           INPUT_REPORT_TYPE: ci
           INPUT_PUBLISH_ISSUE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/latest' }}
+          INPUT_PUBLISH_PR_COMMENT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+          INPUT_PR_NUMBER: ${{ github.event.pull_request.number }}
           INPUT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v6
         if: always()

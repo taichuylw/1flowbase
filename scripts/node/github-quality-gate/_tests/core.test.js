@@ -319,7 +319,7 @@ test('runQualityGate publishes a complete passed report with coverage details', 
   assert.match(createdIssues[0].body, /tmp\/test-governance\/quality-gate\.latest\.log/u);
 });
 
-test('runQualityGate fails a clean exit when warning logs are captured', async () => {
+test('runQualityGate keeps warning-only output advisory when the gate exits cleanly', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-warning-'));
   const createdIssues = [];
 
@@ -360,12 +360,81 @@ test('runQualityGate fails a clean exit when warning logs are captured', async (
     writeStderr() {},
   });
 
-  assert.equal(status.status, 'failed');
-  assert.equal(status.exitCode, 1);
-  assert.equal(createdIssues[0].title, '[Quality Gate][CI] 2026-05-03 23:40 latest abcdef1 failed');
-  assert.deepEqual(createdIssues[0].labels, ['quality-gate', 'ci-report', 'failed']);
-  assert.match(createdIssues[0].body, /- Status: failed/u);
+  assert.equal(status.status, 'passed');
+  assert.equal(status.exitCode, 0);
+  assert.equal(createdIssues[0].title, '[Quality Gate][CI] 2026-05-03 23:40 latest abcdef1 passed');
+  assert.deepEqual(createdIssues[0].labels, ['quality-gate', 'ci-report', 'passed']);
+  assert.match(createdIssues[0].body, /- Status: passed/u);
   assert.match(createdIssues[0].body, /- Warning log: tmp\/test-governance\/repo\.warnings\.log/u);
+});
+
+test('runQualityGate includes security risk findings as advisory report evidence', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-security-risk-'));
+  const createdIssues = [];
+
+  const status = await runQualityGate({
+    repoRoot,
+    scope: 'repo-tooling',
+    reportType: 'ci',
+    publishIssue: true,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'latest',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '793',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+    },
+    spawnSyncImpl() {
+      const reportPath = path.join(repoRoot, 'tmp', 'test-governance', 'security-risk.json');
+      fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+      fs.writeFileSync(
+        reportPath,
+        `${JSON.stringify({
+          status: 'review_required',
+          changedFiles: ['web/pnpm-lock.yaml', 'web/app/src/api.ts'],
+          findings: [
+            { severity: 'medium', kind: 'sensitive-file-changed', file: 'web/pnpm-lock.yaml' },
+            { severity: 'high', kind: 'insecure-url', file: 'web/app/src/api.ts' },
+          ],
+        }, null, 2)}\n`,
+        'utf8'
+      );
+      return {
+        status: 0,
+        stdout: 'repo tooling passed\n',
+        stderr: '',
+      };
+    },
+    createIssueImpl(issue) {
+      createdIssues.push(issue);
+      return { html_url: 'https://github.com/taichuy/1flowbase/issues/10' };
+    },
+    listOpenQualityGateIssuesImpl() {
+      return [];
+    },
+    writeStdout() {},
+    writeStderr() {},
+  });
+
+  assert.equal(status.status, 'passed');
+  assert.equal(status.exitCode, 0);
+  assert.match(createdIssues[0].body, /## Security Risk/u);
+  assert.match(createdIssues[0].body, /Status: review_required/u);
+  assert.match(createdIssues[0].body, /Findings: 2 \(high 1, medium 1\)/u);
+  assert.match(createdIssues[0].body, /Changed files: 2/u);
+  assert.match(createdIssues[0].body, /Security risk report: tmp\/test-governance\/security-risk\.json/u);
+  const report = JSON.parse(fs.readFileSync(path.join(repoRoot, 'tmp', 'test-governance', 'quality-gate-report.json'), 'utf8'));
+  assert.deepEqual(report.securityRisk, {
+    status: 'review_required',
+    changedFileCount: 2,
+    findingCount: 2,
+    highCount: 1,
+    mediumCount: 1,
+    reportPath: 'tmp/test-governance/security-risk.json',
+  });
 });
 
 test('runQualityGate renders unavailable coverage metrics as n/a', async () => {
@@ -706,6 +775,14 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
     coverageSummaries: [],
     backendConsistencyTargets: [],
     warningFiles: [],
+    securityRisk: {
+      status: 'review_required',
+      changedFileCount: 2,
+      findingCount: 2,
+      highCount: 1,
+      mediumCount: 1,
+      reportPath: 'tmp/test-governance/security-risk.json',
+    },
   });
   writeArtifact('test-governance-repo-frontend', {
     reportType: 'ci',
@@ -810,6 +887,9 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
   assert.match(createdIssues[0].body, /\| `repo-backend-test-api-server` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `coverage-frontend` \| passed \| 0 \|/u);
   assert.match(createdIssues[0].body, /\| `coverage-backend-api-server` \| passed \| 0 \|/u);
+  assert.match(createdIssues[0].body, /## Security Risk/u);
+  assert.match(createdIssues[0].body, /repo-tooling: review_required, findings 2 \(high 1, medium 1\), changed files 2/u);
+  assert.match(createdIssues[0].body, /Security risk report: tmp\/test-governance\/security-risk\.json/u);
   assert.match(createdIssues[0].body, /frontend total: lines 80\.00%, functions 75\.00%, statements 80\.00%, branches 78\.00%/u);
   assert.match(createdIssues[0].body, /consistency-runtime-engine/u);
   assert.equal(
@@ -818,7 +898,7 @@ test('runQualityGateAggregate publishes one report from parallel quality gate ar
   );
 });
 
-test('runQualityGateAggregate fails when component warning logs are captured', async () => {
+test('runQualityGateAggregate keeps component warning logs advisory when components pass', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-aggregate-warning-'));
   const artifactRoot = path.join(repoRoot, 'tmp', 'test-governance', 'parallel');
 
@@ -909,10 +989,64 @@ test('runQualityGateAggregate fails when component warning logs are captured', a
     },
   });
 
-  assert.equal(result.status, 'failed');
-  assert.equal(result.exitCode, 1);
+  assert.equal(result.status, 'passed');
+  assert.equal(result.exitCode, 0);
   assert.match(
     fs.readFileSync(path.join(repoRoot, 'tmp', 'test-governance', 'quality-gate-report.md'), 'utf8'),
     /Warning log: tmp\/test-governance\/repo-tooling\.warnings\.log/u
   );
+});
+
+test('runQualityGateAggregate publishes one upserted pull request report comment when enabled', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-aggregate-pr-'));
+  const artifactRoot = path.join(repoRoot, 'tmp', 'test-governance', 'parallel');
+  const artifactDir = path.join(artifactRoot, 'test-governance-repo-tooling');
+  const comments = [];
+
+  fs.mkdirSync(artifactDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(artifactDir, 'quality-gate-report.json'),
+    `${JSON.stringify({
+      reportType: 'ci',
+      status: 'passed',
+      scope: 'repo-tooling',
+      exitCode: 0,
+      coverageSummaries: [],
+      backendConsistencyTargets: [],
+      warningFiles: [],
+    }, null, 2)}\n`,
+    'utf8'
+  );
+  fs.writeFileSync(path.join(artifactDir, 'quality-gate.latest.log'), 'repo-tooling log\n', 'utf8');
+
+  const result = await runQualityGateAggregate({
+    repoRoot,
+    artifactRoot: path.join('tmp', 'test-governance', 'parallel'),
+    expectedScopes: ['repo-tooling'],
+    reportType: 'ci',
+    publishPrComment: true,
+    prNumber: 658,
+    githubToken: 'token',
+    env: {
+      GITHUB_ACTOR: 'taichu',
+      GITHUB_REF_NAME: 'feature',
+      GITHUB_REPOSITORY: 'taichuy/1flowbase',
+      GITHUB_RUN_ID: '1001',
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: 'abcdef1234567890',
+      GITHUB_WORKFLOW: 'verify',
+    },
+    upsertPrCommentImpl(comment) {
+      comments.push(comment);
+      return { html_url: 'https://github.com/taichuy/1flowbase/pull/658#issuecomment-1' };
+    },
+  });
+
+  assert.equal(result.status, 'passed');
+  assert.equal(result.prCommentUrl, 'https://github.com/taichuy/1flowbase/pull/658#issuecomment-1');
+  assert.equal(comments.length, 1);
+  assert.equal(comments[0].number, 658);
+  assert.equal(comments[0].repository, 'taichuy/1flowbase');
+  assert.match(comments[0].body, /^<!-- 1flowbase-quality-gate-pr-report -->/u);
+  assert.match(comments[0].body, /## Component Results/u);
 });

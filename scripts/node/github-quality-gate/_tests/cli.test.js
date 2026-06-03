@@ -106,12 +106,16 @@ test('readAggregateInputs maps aggregate environment inputs', () => {
     INPUT_ARTIFACT_ROOT: 'tmp/test-governance/parallel',
     INPUT_REPORT_TYPE: 'ci',
     INPUT_PUBLISH_ISSUE: 'true',
+    INPUT_PUBLISH_PR_COMMENT: 'true',
+    INPUT_PR_NUMBER: '658',
     INPUT_GITHUB_TOKEN: 'token',
     INPUT_ENVIRONMENT: 'nightly-latest',
   }), {
     artifactRoot: 'tmp/test-governance/parallel',
     reportType: 'ci',
     publishIssue: true,
+    publishPrComment: true,
+    prNumber: 658,
     githubToken: 'token',
     environmentName: 'nightly-latest',
   });

@@ -66,6 +66,11 @@ test("verify workflow runs on main and latest but only publishes quality reports
     workflow,
     /INPUT_PUBLISH_ISSUE: \$\{\{ github\.event_name == 'push' && github\.ref == 'refs\/heads\/latest' \}\}/u,
   );
+  assert.match(
+    workflow,
+    /INPUT_PUBLISH_PR_COMMENT: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/u,
+  );
+  assert.match(workflow, /INPUT_PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/u);
   assert.doesNotMatch(workflow, /INPUT_PUBLISH_ISSUE: .+refs\/heads\/main/u);
 });
 
@@ -128,13 +133,13 @@ test("verify workflow runs React Doctor as a frontend quality gate", () => {
   assert.match(workflow, /fetch-depth: 0/u);
   assert.match(
     workflow,
-    /git show-ref --verify --quiet refs\/heads\/main \|\| git branch main origin\/main/u,
+    /git fetch --no-tags --prune --depth=1 origin main:refs\/remotes\/origin\/main/u,
   );
   assert.match(workflow, /uses: actions\/setup-node@v5/u);
   assert.match(workflow, /node-version: 24/u);
   assert.match(
     workflow,
-    /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u,
+    /npx react-doctor@0\.2\.16 web\/app --diff origin\/main --offline --fail-on warning --verbose/u,
   );
   assert.doesNotMatch(workflow, /uses: millionco\/react-doctor@main/u);
   assert.doesNotMatch(
@@ -312,7 +317,7 @@ test("GitHub automation docs describe the React Doctor frontend gate", () => {
   assert.match(readme, /React Doctor frontend gates/u);
   assert.match(
     readme,
-    /npx react-doctor@latest web\/app --diff main --offline --fail-on warning --verbose/u,
+    /npx react-doctor@0\.2\.16 web\/app --diff origin\/main --offline --fail-on warning --verbose/u,
   );
   assert.match(readme, /web\/app\/doctor\.config\.json/u);
   assert.match(readme, /explicit baseline/u);

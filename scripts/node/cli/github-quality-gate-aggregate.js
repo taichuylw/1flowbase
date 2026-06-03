@@ -12,6 +12,8 @@ function readInputs(env = process.env) {
     artifactRoot: env.INPUT_ARTIFACT_ROOT || path.join('tmp', 'test-governance', 'parallel'),
     reportType: env.INPUT_REPORT_TYPE || 'ci',
     publishIssue: parseBooleanInput(env.INPUT_PUBLISH_ISSUE),
+    publishPrComment: parseBooleanInput(env.INPUT_PUBLISH_PR_COMMENT),
+    prNumber: env.INPUT_PR_NUMBER ? Number.parseInt(env.INPUT_PR_NUMBER, 10) : 0,
     githubToken: env.INPUT_GITHUB_TOKEN || '',
     environmentName: env.INPUT_ENVIRONMENT || '',
   };
@@ -27,6 +29,8 @@ async function main(_argv = [], deps = {}) {
     createIssueImpl: deps.createIssueImpl,
     listOpenQualityGateIssuesImpl: deps.listOpenQualityGateIssuesImpl,
     closeIssueImpl: deps.closeIssueImpl,
+    upsertPrCommentImpl: deps.upsertPrCommentImpl,
+    writeStderr: deps.writeStderr,
   });
 
   return result.exitCode;

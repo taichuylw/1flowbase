@@ -6,7 +6,7 @@ This directory owns GitHub Actions automation for repository quality gates.
 
 | Path | Purpose |
 | --- | --- |
-| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; runs repo slices, backend consistency, coverage slices, and React Doctor frontend gates in parallel, then publishes one aggregate issue only for `latest` pushes. |
+| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; runs repo slices, backend consistency, coverage slices, and React Doctor frontend gates in parallel, updates one PR report comment for same-repository pull requests, then publishes one aggregate issue only for `latest` pushes. |
 | `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates in parallel before one aggregate Issue report. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
@@ -34,13 +34,16 @@ scope: coverage-backend-{control-plane,storage-postgres,api-server}
 
 The `repo-tooling` scope includes `repo-hygiene`, which writes
 `tmp/test-governance/repo-hygiene.json` with debt-marker, weak-assertion,
-duplicate-test-title, file-size, and directory-pressure findings. Advisory findings
-remain warnings; focused tests still fail the repo gate.
+duplicate-test-title, file-size, and directory-pressure findings. It also runs
+`security-risk`, which writes `tmp/test-governance/security-risk.json` for changed
+dependency, lockfile, communication, CI, Docker, deploy, proxy, plugin, and runtime
+execution-path risks. Advisory findings remain warnings; focused tests still fail
+the repo gate.
 
 It also runs React Doctor as a frontend quality gate against `web/app` changed files:
 
 ```yaml
-run: npx react-doctor@latest web/app --diff main --offline --fail-on warning --verbose
+run: npx react-doctor@0.2.16 web/app --diff origin/main --offline --fail-on warning --verbose
 ```
 
 Current React Doctor structural debt is kept in `web/app/doctor.config.json`
@@ -52,13 +55,16 @@ report with:
 
 ```yaml
 INPUT_PUBLISH_ISSUE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/latest' }}
+INPUT_PUBLISH_PR_COMMENT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
 ```
 
-Automatic CI creates a GitHub Issue only for `latest` branch pushes and uploads the
-merged `tmp/test-governance` directory as the `test-governance-artifacts` artifact. The
-issue body includes the aggregate result summary, component status table, warning status,
-coverage percentages, evidence paths, and a failure excerpt when a component gate fails.
-Use the artifact for full logs and raw coverage files.
+Automatic CI updates one fixed-marker PR comment for same-repository pull requests and
+creates a GitHub Issue only for `latest` branch pushes. It also uploads the merged
+`tmp/test-governance` directory as the `test-governance-artifacts` artifact. The report body
+includes the aggregate result summary, component status table, advisory warning status,
+security-risk summary, coverage percentages, evidence paths, and a failure excerpt when a
+component gate fails.
+Use the artifact for full logs, raw coverage files, and security-risk finding details.
 Runs use branch-level concurrency, so a newer push cancels an older in-progress quality gate
 for the same branch before stale runs can publish or close quality issues.
 
