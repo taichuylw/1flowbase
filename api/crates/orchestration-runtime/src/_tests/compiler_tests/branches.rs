@@ -212,6 +212,40 @@ fn compile_if_else_rejects_duplicate_source_handles() {
 }
 
 #[test]
+fn compile_if_else_rejects_missing_branch_condition() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"][0]
+        .as_object_mut()
+        .expect("branch should be an object")
+        .remove("condition");
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("if_else branch without condition should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("if_else node node-if branch if must include a complete condition"));
+}
+
+#[test]
+fn compile_if_else_rejects_empty_branch_condition() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"][0]["condition"] = json!({
+        "operator": "and",
+        "conditions": []
+    });
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("if_else branch with empty condition should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("if_else node node-if branch if must include a complete condition"));
+}
+
+#[test]
 fn compile_if_else_rejects_multiple_else_branches() {
     let flow_id = Uuid::nil();
     let mut document = branch_document(flow_id);

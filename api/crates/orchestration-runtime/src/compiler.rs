@@ -335,10 +335,6 @@ fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>
     let mut source_handles = BTreeSet::new();
     let mut else_branch_count = 0;
     for branch in branches {
-        if branch.get("kind").and_then(Value::as_str) == Some("else") {
-            else_branch_count += 1;
-        }
-
         let source_handle = branch
             .get("sourceHandle")
             .or_else(|| branch.get("source_handle"))
@@ -346,6 +342,17 @@ fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>
             .map(str::trim)
             .filter(|handle| !handle.is_empty())
             .ok_or_else(|| anyhow!("if_else node {} branch missing sourceHandle", node.node_id))?;
+        if branch.get("kind").and_then(Value::as_str) == Some("else") {
+            else_branch_count += 1;
+        } else if !condition_group_has_complete_rules(
+            branch.get("condition").unwrap_or(&Value::Null),
+        ) {
+            bail!(
+                "if_else node {} branch {source_handle} must include a complete condition",
+                node.node_id
+            );
+        }
+
         if !source_handles.insert(source_handle.to_string()) {
             bail!(
                 "if_else node {} duplicate branch sourceHandle {source_handle}",
@@ -366,6 +373,60 @@ fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>
     }
 
     Ok(source_handles)
+}
+
+fn condition_group_has_complete_rules(group: &Value) -> bool {
+    let Some(conditions) = group.get("conditions").and_then(Value::as_array) else {
+        return false;
+    };
+
+    !conditions.is_empty()
+        && conditions
+            .iter()
+            .all(condition_expression_has_required_input)
+}
+
+fn condition_expression_has_required_input(condition: &Value) -> bool {
+    if condition
+        .get("conditions")
+        .and_then(Value::as_array)
+        .is_some()
+    {
+        return condition_group_has_complete_rules(condition);
+    }
+
+    condition_rule_has_required_input(condition)
+}
+
+fn condition_rule_has_required_input(rule: &Value) -> bool {
+    if !selector_has_required_input(rule.get("left").unwrap_or(&Value::Null)) {
+        return false;
+    }
+
+    if matches!(
+        rule.get("comparator").and_then(Value::as_str),
+        Some("exists" | "empty")
+    ) {
+        return true;
+    }
+
+    let Some(right) = rule.get("right") else {
+        return false;
+    };
+
+    right.get("kind").and_then(Value::as_str) != Some("selector")
+        || selector_has_required_input(right.get("selector").unwrap_or(&Value::Null))
+}
+
+fn selector_has_required_input(selector: &Value) -> bool {
+    selector.as_array().is_some_and(|segments| {
+        segments.len() >= 2
+            && segments.iter().all(|segment| {
+                segment
+                    .as_str()
+                    .is_some_and(|value| !value.trim().is_empty())
+            })
+    })
 }
 
 fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<CompileIssue> {

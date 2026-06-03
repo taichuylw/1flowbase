@@ -310,14 +310,20 @@ where
                         &public_output_payload,
                     )
                     .await;
-                    if can_continue_to_terminal_template_nodes(&compiled_plan, node_index) {
+                    let mut next_active_node_ids = active_node_ids.clone();
+                    orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
+                        &compiled_plan,
+                        &mut next_active_node_ids,
+                        node,
+                        selected_source_handle.as_deref(),
+                    );
+                    if can_continue_to_terminal_template_nodes(
+                        &compiled_plan,
+                        node_index,
+                        &next_active_node_ids,
+                    ) {
+                        active_node_ids = next_active_node_ids;
                         pending_failure = Some(error_payload.clone());
-                        orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
-                            &compiled_plan,
-                            &mut active_node_ids,
-                            node,
-                            None,
-                        );
                         continue;
                     }
                     return fail_current_live_run_after_node_error(
