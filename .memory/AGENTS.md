@@ -7,12 +7,12 @@
 ## 启动读取
 
 1. 进入用户交互后，固定先读 `.memory/AGENTS.md`。
-2. 固定再读 `.memory/user-memory.md`。
-3. 如果 `.memory/user-memory.md` 为空，先与用户沟通初始化。
+2. 如存在 `.memory/user-memory.md`，固定再读该文件。
+3. 如 `.memory/user-memory.md` 缺失或为空，参考 `.memory/user-memory.template.md` 与用户沟通初始化；模板本身不作为有效用户记忆。
 
 ## 检索预算
 
-1. 对 `feedback-memory`、`project-memory`、`reference-memory`、`tool-memory`，第一轮只读取每个文件前 30 行 YAML front matter。
+1. 对 `feedback-memory`、`project-memory`、`reference-memory`、`tool-memory`，第一轮只读取每个文件前 30 行 YAML front matter，并跳过 `TEMPLATE.md`。
 2. 单轮最多扫描 200 个记忆文件。
 3. 单轮最多展开 5 条最相关有效记忆全文。
 4. 有效记忆宁缺毋滥；达到当前任务所需证据后立即停止检索。
@@ -33,7 +33,7 @@
 
 ### 用户记忆
 
-写入 `.memory/user-memory.md`：
+写入本地私有 `.memory/user-memory.md`（不提交；格式参考 `.memory/user-memory.template.md`）：
 
 - 长期稳定偏好。
 - 协作方式。
@@ -71,7 +71,7 @@
 
 ### 引用记忆
 
-写入 `.memory/reference-memory/`：
+写入本地私有 `.memory/reference-memory/`（不提交；格式参考 `.memory/reference-memory/TEMPLATE.md`）：
 
 - 用户提供仓库外资料、外部路径、参考项目、网页或文档入口，且后续可能复用。
 - 只记录“去哪里看什么”的入口索引，不记录正文结论。
@@ -79,7 +79,7 @@
 
 ### 工具记忆
 
-写入 `.memory/tool-memory/`：
+写入本地私有 `.memory/tool-memory/`（不提交；格式参考 `.memory/tool-memory/TEMPLATE.md`）：
 
 - 项目环境中发生真实工具失败。
 - 本轮验证出可复用解决办法。
@@ -109,15 +109,16 @@
 
 ## 目录索引
 
-- `.memory/user-memory.md`：用户记忆主文件。
+- `.memory/user-memory.md`：用户记忆主文件，本地私有，不提交；模板见 `.memory/user-memory.template.md`。
 - `.memory/feedback-memory/`：反馈记忆根目录。
 - `.memory/feedback-memory/interaction/`：沟通、执行流程、记忆检索等交互纠正。
 - `.memory/feedback-memory/repository/`：仓库结构、目录管理、脚本放置、版本控制等工程纠正。
 - `.memory/project-memory/`：当前有效项目记忆。
 - `.memory/project-memory/archive/`：旧阶段项目记忆归档。
-- `.memory/reference-memory/`：引用入口索引。
-- `.memory/tool-memory/`：真实工具失败与已验证解法。
-- `.memory/todolist/`：AI 自主开发且用户离线时的待确认事项，处理后删除。
+- `.memory/reference-memory/`：引用入口索引，本地私有，不提交；模板见 `.memory/reference-memory/TEMPLATE.md`。
+- `.memory/tool-memory/`：真实工具失败与已验证解法，本地私有，不提交；模板见 `.memory/tool-memory/TEMPLATE.md`。
+- `.memory/todolist/`：AI 自主开发且用户离线时的待确认事项，本地私有，不提交；模板见 `.memory/todolist/TEMPLATE.md`，处理后删除。
+- 各目录中的 `TEMPLATE.md` 只作格式示例，不作为有效记忆检索输入。
 
 ## 目录外排除
 

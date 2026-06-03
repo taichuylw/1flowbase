@@ -2,7 +2,7 @@
 命中对应`记忆存储规则`自动更新对应记忆中
 @.memory/AGENTS.md
 ## 用户偏好
-@.memory/user-memory.md
+`.memory/user-memory.md` 是本地私有文件，不提交；缺失时参考 `.memory/user-memory.template.md` 初始化。
 
 # 本项目相关skill在
 .agents/skills 是项目 skill 源目录,其他skills只作为本地镜像

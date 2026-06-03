@@ -10,6 +10,18 @@ docs/draft
 docs/superpowers/plans/history
 docs/superpowers/specs/history
 
+# Developer-private memory; keep only templates tracked.
+.memory/user-memory.md
+.memory/reference-memory/**
+!.memory/reference-memory/
+!.memory/reference-memory/TEMPLATE.md
+.memory/todolist/**
+!.memory/todolist/
+!.memory/todolist/TEMPLATE.md
+.memory/tool-memory/**
+!.memory/tool-memory/
+!.memory/tool-memory/TEMPLATE.md
+
 # Docker local runtime state
 docker/volumes/
 docker/.env
