@@ -58,7 +58,7 @@ export function DebugConversationPane({
   onChangeQuery: (value: string) => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
-  onOpenResumeTimeline?: () => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;

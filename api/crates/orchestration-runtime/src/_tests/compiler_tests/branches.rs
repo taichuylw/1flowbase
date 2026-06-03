@@ -1,8 +1,6 @@
 use super::*;
 
-#[test]
-fn compile_if_else_branches_preserves_source_handles_and_condition_selectors() {
-    let flow_id = Uuid::nil();
+fn branch_document(flow_id: Uuid) -> Value {
     let if_condition = json!({
         "operator": "or",
         "conditions": [
@@ -23,7 +21,8 @@ fn compile_if_else_branches_preserves_source_handles_and_condition_selectors() {
             }
         ]
     });
-    let document = json!({
+
+    json!({
         "schemaVersion": "1flowbase.flow/v2",
         "meta": { "flowId": flow_id.to_string(), "name": "Branches", "description": "", "tags": [] },
         "graph": {
@@ -133,7 +132,13 @@ fn compile_if_else_branches_preserves_source_handles_and_condition_selectors() {
             ]
         },
         "editor": { "viewport": { "x": 0, "y": 0, "zoom": 1 }, "annotations": [], "activeContainerPath": [] }
-    });
+    })
+}
+
+#[test]
+fn compile_if_else_branches_preserves_source_handles_and_condition_selectors() {
+    let flow_id = Uuid::nil();
+    let document = branch_document(flow_id);
 
     let plan = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
         .expect("if_else branch document should compile");
@@ -157,4 +162,18 @@ fn compile_if_else_branches_preserves_source_handles_and_condition_selectors() {
             vec!["node-start".to_string(), "expected_tier".to_string()],
         ]
     );
+}
+
+#[test]
+fn compile_if_else_rejects_unknown_source_handles() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["edges"][1]["sourceHandle"] = json!("stale-branch");
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("stale if_else source handle should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("edge edge-if-answer references unknown if_else sourceHandle stale-branch"));
 }

@@ -43,53 +43,86 @@ function fallbackContent(message: AgentFlowDebugMessage) {
 const TYPEWRITER_INTERVAL_MS = 24;
 const TYPEWRITER_CHARS_PER_TICK = 12;
 
+interface ProgressiveTextState {
+  enabled: boolean;
+  target: string;
+  visibleText: string;
+}
+
+function resolveVisibleTextOnTargetChange({
+  currentVisibleText,
+  enabled,
+  target
+}: {
+  currentVisibleText: string;
+  enabled: boolean;
+  target: string;
+}) {
+  if (!enabled) {
+    return target;
+  }
+
+  if (!target) {
+    return '';
+  }
+
+  return target.startsWith(currentVisibleText) ? currentVisibleText : target;
+}
+
 function useProgressiveText(target: string, enabled: boolean) {
-  const [visibleText, setVisibleText] = useState(target);
+  const [state, setState] = useState<ProgressiveTextState>(() => ({
+    enabled,
+    target,
+    visibleText: target
+  }));
+  const stateChanged = state.enabled !== enabled || state.target !== target;
+  const effectiveState = stateChanged
+    ? {
+        enabled,
+        target,
+        visibleText: resolveVisibleTextOnTargetChange({
+          currentVisibleText: state.visibleText,
+          enabled,
+          target
+        })
+      }
+    : state;
 
   useEffect(() => {
-    if (!enabled) {
-      setVisibleText(target);
-      return;
-    }
-
-    setVisibleText((currentText) => {
-      if (!target) {
-        return '';
-      }
-
-      if (!target.startsWith(currentText)) {
-        return target;
-      }
-
-      return currentText;
-    });
-  }, [enabled, target]);
-
-  useEffect(() => {
-    if (!enabled) {
+    if (!effectiveState.enabled) {
       return undefined;
     }
 
-    if (visibleText.length >= target.length) {
+    if (effectiveState.visibleText.length >= effectiveState.target.length) {
       return undefined;
     }
 
     const timer = window.setTimeout(() => {
-      setVisibleText((currentText) =>
-        target.slice(
+      setState((current) => ({
+        ...current,
+        visibleText: current.target.slice(
           0,
           Math.min(
-            target.length,
-            currentText.length + TYPEWRITER_CHARS_PER_TICK
+            current.target.length,
+            current.visibleText.length + TYPEWRITER_CHARS_PER_TICK
           )
         )
-      );
+      }));
     }, TYPEWRITER_INTERVAL_MS);
 
     return () => window.clearTimeout(timer);
-  }, [enabled, target, visibleText]);
+  }, [
+    effectiveState.enabled,
+    effectiveState.target,
+    effectiveState.visibleText
+  ]);
 
-  return visibleText;
+  if (stateChanged) {
+    setState(effectiveState);
+    return effectiveState.visibleText;
+  }
+
+  return state.visibleText;
 }
 
 export function DebugAssistantMessage({
@@ -101,7 +134,7 @@ export function DebugAssistantMessage({
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenLog?: (message: AgentFlowDebugMessage) => void;
-  onOpenResumeTimeline?: () => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
 }) {
   const { message: messageApi } = App.useApp();
   const [isReasoningExpanded, setIsReasoningExpanded] = useState(true);
@@ -168,10 +201,9 @@ export function DebugAssistantMessage({
           />
         ) : null}
       </div>
-      <div
+      <fieldset
         aria-label={i18nText('agentFlow', 'auto.output_action')}
         className="agent-flow-editor__debug-message-action-row"
-        role="group"
       >
         <Space
           className="agent-flow-editor__debug-message-actions"
@@ -207,12 +239,12 @@ export function DebugAssistantMessage({
                 aria-label={i18nText('agentFlow', 'auto.view_resume_timeline')}
                 icon={<HistoryOutlined />}
                 size="small"
-                onClick={onOpenResumeTimeline}
+                onClick={() => onOpenResumeTimeline(message)}
               />
             </Tooltip>
           ) : null}
         </Space>
-      </div>
+      </fieldset>
     </article>
   );
 }

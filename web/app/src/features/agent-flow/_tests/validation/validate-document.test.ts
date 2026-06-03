@@ -620,6 +620,22 @@ describe('validateDocument', () => {
     ).toBe(false);
   });
 
+  test('flags If / Else branches whose non-else conditions are empty', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    document.graph.nodes.push(createNodeDocument('if_else', 'node-if-else'));
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-if-else',
+          fieldKey: 'bindings.branches'
+        })
+      ])
+    );
+  });
+
   test('flags duplicate code output keys in the editable output contract', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: '结果', valueType: 'string' },

@@ -3,7 +3,12 @@ import {
   validatePublicOutputKey,
   type FlowAuthoringDocument
 } from '@1flowbase/flow-schema';
-import type { FlowBinding, FlowNodeDocument } from '@1flowbase/flow-schema';
+import type {
+  FlowBinding,
+  FlowConditionGroupDocument,
+  FlowNodeDocument,
+  IfElseBranchDocument
+} from '@1flowbase/flow-schema';
 
 import { evaluateSchemaRule } from '../../../shared/schema-ui/runtime/rule-evaluator';
 import type { AgentFlowModelProviderOptions } from '../api/model-provider-options';
@@ -29,7 +34,9 @@ import { hasPluginContributionRef } from './plugin-node-definitions';
 import {
   collectConditionSelectors,
   collectIfElseBranchSelectors,
-  getIfElseBranchesFromBindings
+  getIfElseBranchesFromBindings,
+  isConditionGroup,
+  isConditionRule
 } from './if-else-branches';
 import {
   isSelectorVisible,
@@ -114,13 +121,34 @@ function isMissingRequiredField(
     case 'condition_group':
       return binding.value.conditions.length === 0;
     case 'if_else_branches':
-      return (
-        !binding.value.branches.some((branch) => branch.kind === 'if') ||
-        !binding.value.branches.some((branch) => branch.kind === 'else')
-      );
+      return ifElseBranchesMissingRequiredInput(binding.value.branches);
     case 'state_write':
       return binding.value.length === 0;
   }
+}
+
+function conditionGroupHasRule(group: FlowConditionGroupDocument): boolean {
+  return group.conditions.some((condition) => {
+    if (isConditionGroup(condition)) {
+      return conditionGroupHasRule(condition);
+    }
+
+    return isConditionRule(condition);
+  });
+}
+
+function ifElseBranchesMissingRequiredInput(
+  branches: IfElseBranchDocument[]
+): boolean {
+  return (
+    !branches.some((branch) => branch.kind === 'if') ||
+    !branches.some((branch) => branch.kind === 'else') ||
+    branches.some(
+      (branch) =>
+        branch.kind !== 'else' &&
+        (!branch.condition || !conditionGroupHasRule(branch.condition))
+    )
+  );
 }
 
 function createNodeRuleValues(node: FlowNodeDocument): Record<string, unknown> {

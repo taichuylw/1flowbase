@@ -1,7 +1,7 @@
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Tooltip } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
 import type {
@@ -280,6 +280,45 @@ function conversationItemKey(item: ApplicationRunConversationMessage) {
   ].join('::');
 }
 
+function mergeConversationPages({
+  initialPage,
+  previousPages
+}: {
+  initialPage: ApplicationRunConversationMessagesPage | null;
+  previousPages: ApplicationRunConversationMessagesPage[];
+}): ApplicationRunConversationMessagesPage | null {
+  if (!initialPage) {
+    return null;
+  }
+
+  const items: ApplicationRunConversationMessage[] = [];
+  const existingIds = new Set<string>();
+  for (const page of [...previousPages, initialPage]) {
+    for (const item of page.items) {
+      const key = conversationItemKey(item);
+      if (existingIds.has(key)) {
+        continue;
+      }
+      existingIds.add(key);
+      items.push(item);
+    }
+  }
+
+  const firstPage = previousPages[0] ?? initialPage;
+
+  return {
+    items,
+    page: {
+      has_before: firstPage.page.has_before,
+      has_after:
+        initialPage.page.has_after ||
+        previousPages.some((page) => page.page.has_after),
+      before_cursor: firstPage.page.before_cursor,
+      after_cursor: initialPage.page.after_cursor
+    }
+  };
+}
+
 function RunConversation({
   applicationId,
   onClose,
@@ -290,12 +329,14 @@ function RunConversation({
   applicationId: string;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
-  onOpenResumeTimeline?: () => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   runId: string;
 }) {
   const queryClient = useQueryClient();
-  const [conversationPage, setConversationPage] =
-    useState<ApplicationRunConversationMessagesPage | null>(null);
+  const [previousConversationPages, setPreviousConversationPages] = useState<
+    ApplicationRunConversationMessagesPage[]
+  >([]);
+  const loadingPreviousConversationRef = useRef(false);
   const initialConversationQuery = useQuery({
     queryKey: applicationRunConversationMessagesQueryKey(applicationId, runId, {
       limit: RUN_CONVERSATION_PAGE_LIMIT
@@ -306,56 +347,18 @@ function RunConversation({
       })
   });
   const refetchInitialConversation = initialConversationQuery.refetch;
-  const loadPreviousConversationMutation = useMutation({
-    mutationFn: async () => {
-      const before = conversationPage?.page.before_cursor;
-
-      if (!conversationPage || !conversationPage.page.has_before || !before) {
-        throw new Error('missing previous conversation cursor');
-      }
-
-      return fetchApplicationRunConversationMessages(applicationId, runId, {
-        before,
-        limit: RUN_CONVERSATION_PAGE_LIMIT
-      });
-    },
-    onSuccess: (page) => {
-      setConversationPage((current) => {
-        if (!current) {
-          return page;
-        }
-
-        const existingIds = new Set(current.items.map(conversationItemKey));
-        const newItems = page.items.filter(
-          (item) => !existingIds.has(conversationItemKey(item))
-        );
-
-        return {
-          items: [...newItems, ...current.items],
-          page: {
-            has_before: page.page.has_before,
-            has_after: current.page.has_after || page.page.has_after,
-            before_cursor: page.page.before_cursor,
-            after_cursor: current.page.after_cursor
-          }
-        };
-      });
-    }
-  });
+  const conversationPage = useMemo(
+    () =>
+      mergeConversationPages({
+        initialPage: initialConversationQuery.data ?? null,
+        previousPages: previousConversationPages
+      }),
+    [initialConversationQuery.data, previousConversationPages]
+  );
   const messages = useMemo(
     () => buildConversationPageMessages(conversationPage),
     [conversationPage]
   );
-
-  useEffect(() => {
-    setConversationPage(null);
-  }, [runId]);
-
-  useEffect(() => {
-    if (initialConversationQuery.data) {
-      setConversationPage(initialConversationQuery.data);
-    }
-  }, [initialConversationQuery.data]);
 
   useEffect(() => {
     if (!hasActiveConversationItem(conversationPage)) {
@@ -386,6 +389,34 @@ function RunConversation({
     onOpenMessageLog?.(buildConversationLogMessage(detail));
   }
 
+  async function loadPreviousConversationPage() {
+    const before = conversationPage?.page.before_cursor;
+
+    if (
+      loadingPreviousConversationRef.current ||
+      !conversationPage ||
+      !conversationPage.page.has_before ||
+      !before
+    ) {
+      return;
+    }
+
+    loadingPreviousConversationRef.current = true;
+    try {
+      const page = await fetchApplicationRunConversationMessages(
+        applicationId,
+        runId,
+        {
+          before,
+          limit: RUN_CONVERSATION_PAGE_LIMIT
+        }
+      );
+      setPreviousConversationPages((current) => [page, ...current]);
+    } finally {
+      loadingPreviousConversationRef.current = false;
+    }
+  }
+
   return (
     <div className="application-run-detail__conversation-pane">
       <AgentFlowDebugConsole
@@ -408,42 +439,10 @@ function RunConversation({
         }}
         onOpenResumeTimeline={onOpenResumeTimeline}
         onReachConversationTop={() => {
-          if (
-            conversationPage &&
-            conversationPage.page.has_before &&
-            !loadPreviousConversationMutation.isPending
-          ) {
-            loadPreviousConversationMutation.mutate();
-          }
+          void loadPreviousConversationPage();
         }}
         onStopRun={() => {}}
         onSubmitPrompt={() => {}}
-      />
-    </div>
-  );
-}
-
-function renderDetail({
-  applicationId,
-  onClose,
-  onOpenMessageLog,
-  onOpenResumeTimeline,
-  runId
-}: {
-  applicationId: string;
-  onClose: () => void;
-  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
-  onOpenResumeTimeline?: () => void;
-  runId: string;
-}) {
-  return (
-    <div className="application-run-detail__content">
-      <RunConversation
-        applicationId={applicationId}
-        onClose={onClose}
-        onOpenMessageLog={onOpenMessageLog}
-        onOpenResumeTimeline={onOpenResumeTimeline}
-        runId={runId}
       />
     </div>
   );
@@ -459,7 +458,7 @@ export function ApplicationRunDetailPanel({
   applicationId: string;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
-  onOpenResumeTimeline?: () => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   runId: string | null;
 }) {
   if (!runId) {
@@ -472,13 +471,16 @@ export function ApplicationRunDetailPanel({
       className="application-run-detail application-run-detail--loaded"
     >
       <div className="application-run-detail__body">
-        {renderDetail({
-          applicationId,
-          onClose,
-          onOpenMessageLog,
-          onOpenResumeTimeline,
-          runId
-        })}
+        <div className="application-run-detail__content">
+          <RunConversation
+            key={runId}
+            applicationId={applicationId}
+            onClose={onClose}
+            onOpenMessageLog={onOpenMessageLog}
+            onOpenResumeTimeline={onOpenResumeTimeline}
+            runId={runId}
+          />
+        </div>
       </div>
     </aside>
   );

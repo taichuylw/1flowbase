@@ -51,9 +51,26 @@ const COMPARATOR_OPTIONS = [
   label: string;
   options: Array<{ label: string; value: FlowConditionComparator }>;
 }>;
+const conditionRenderKeys = new WeakMap<
+  FlowConditionExpressionDocument,
+  string
+>();
+let nextConditionRenderKey = 0;
 
 function defaultRule(): FlowConditionRuleDocument {
   return { kind: 'rule', left: [], comparator: 'exists' };
+}
+
+function getConditionRenderKey(condition: FlowConditionExpressionDocument) {
+  const existingKey = conditionRenderKeys.get(condition);
+  if (existingKey) {
+    return existingKey;
+  }
+
+  nextConditionRenderKey += 1;
+  const nextKey = `condition-${nextConditionRenderKey}`;
+  conditionRenderKeys.set(condition, nextKey);
+  return nextKey;
 }
 
 function conditionValueKind(value: FlowConditionValue | undefined) {
@@ -107,7 +124,7 @@ function removeCondition(group: FlowConditionGroupDocument, index: number) {
   };
 }
 
-function renderRightValue({
+function RightValueField({
   ariaLabel,
   condition,
   options,
@@ -237,7 +254,7 @@ export function ConditionGroupField({
         if (isConditionGroup(condition)) {
           return (
             <div
-              key={`group-${index}`}
+              key={getConditionRenderKey(condition)}
               className="agent-flow-condition-group__nested"
             >
               <ConditionGroupField
@@ -264,7 +281,7 @@ export function ConditionGroupField({
 
         return (
           <div
-            key={`${rule.comparator}-${index}`}
+            key={getConditionRenderKey(condition)}
             className="agent-flow-binding-row agent-flow-condition-group__rule"
           >
             <SelectorField
@@ -294,13 +311,14 @@ export function ConditionGroupField({
                 )
               }
             />
-            {renderRightValue({
-              ariaLabel: `${ariaLabel}-${index}`,
-              condition: rule,
-              options,
-              onChange: (nextRule) =>
+            <RightValueField
+              ariaLabel={`${ariaLabel}-${index}`}
+              condition={rule}
+              options={options}
+              onChange={(nextRule) =>
                 onChange(replaceCondition(value, index, nextRule))
-            })}
+              }
+            />
             <Button
               aria-label={i18nText("agentFlow", "auto.delete_condition")}
               className="agent-flow-binding-row__delete"

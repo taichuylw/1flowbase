@@ -55,7 +55,7 @@ export function AgentFlowDebugConsole({
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
-  onOpenResumeTimeline?: () => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachConversationTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;

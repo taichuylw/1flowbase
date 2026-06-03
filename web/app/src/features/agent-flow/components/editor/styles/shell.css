@@ -794,7 +794,9 @@
   width: 100%;
   min-height: 1.625rem;
   margin-top: -0.25rem;
+  border: 0;
   padding: 0 clamp(0.25rem, 1.5cqw, 0.5rem);
+  min-inline-size: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;

@@ -110,6 +110,10 @@ test("verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
+  assert.match(
+    workflow,
+    /coverage-backend-gate:[\s\S]*?scope: \$\{\{ matrix\.scope \}\}[\s\S]*?start_postgres: "false"/u,
+  );
   assert.match(workflow, /merge-multiple: false/u);
   assert.match(
     workflow,
@@ -167,6 +171,28 @@ test("React Doctor keeps current debt as a narrow baseline", () => {
       rules: ["react-doctor/no-prop-callback-in-effect"],
     },
     {
+      files: ["src/features/agent-flow/_tests/node-inspector/support.tsx"],
+      rules: [
+        "react-doctor/no-pass-data-to-parent",
+        "react-doctor/no-prop-callback-in-effect",
+        "react-doctor/only-export-components",
+      ],
+    },
+    {
+      files: ["src/features/agent-flow/components/editor/AgentFlowCanvas.tsx"],
+      rules: [
+        "react-doctor/no-pass-data-to-parent",
+        "react-doctor/no-prop-callback-in-effect",
+      ],
+    },
+    {
+      files: ["src/features/agent-flow/components/nodes/AgentFlowNodeCard.tsx"],
+      rules: [
+        "react-doctor/no-giant-component",
+        "react-doctor/prefer-tag-over-role",
+      ],
+    },
+    {
       files: [
         "src/features/applications/components/api/ApplicationApiKeysPanel.tsx",
       ],
@@ -176,6 +202,7 @@ test("React Doctor keeps current debt as a narrow baseline", () => {
       files: ["src/features/applications/pages/ApplicationLogsPage.tsx"],
       rules: [
         "react-doctor/no-adjust-state-on-prop-change",
+        "react-doctor/no-cascading-set-state",
         "react-doctor/no-chain-state-updates",
         "react-doctor/no-derived-state-effect",
         "react-doctor/no-giant-component",

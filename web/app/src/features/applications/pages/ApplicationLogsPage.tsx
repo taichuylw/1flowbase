@@ -96,6 +96,10 @@ function getViewportSize() {
   };
 }
 
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
 function getFloatingWindowHeight() {
   const viewport = getViewportSize();
 
@@ -385,12 +389,19 @@ export function ApplicationLogsPage({
     }
   }
 
-  function openResumeTimeline() {
-    if (!selectedRunId) {
+  function openResumeTimeline(message?: AgentFlowDebugMessage) {
+    const targetRunId =
+      nonEmptyString(message?.detailRunId) ??
+      (message?.canOpenDetail === false
+        ? null
+        : nonEmptyString(message?.runId)) ??
+      selectedRunId;
+
+    if (!targetRunId) {
       return;
     }
 
-    setOpenResumeTimelineRunId(selectedRunId);
+    setOpenResumeTimelineRunId(targetRunId);
     setActiveFloatingWindow('resume-timeline');
 
     const initial = clampRect(

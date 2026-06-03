@@ -388,7 +388,9 @@
   width: 100%;
   min-height: 26px;
   margin-top: -4px;
+  border: 0;
   padding: 0 8px;
+  min-inline-size: 0;
 }
 
 .application-run-detail__conversation-pane .agent-flow-editor__debug-composer {

@@ -1052,6 +1052,58 @@ describe('ApplicationLogsPage - floating windows', () => {
     );
   }, 20_000);
 
+  test('opens resume timeline for the clicked historical conversation message run', async () => {
+    runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
+      conversationMessagesPage([
+        {
+          id: 'msg-run-0-assistant',
+          flow_run_id: 'run-0',
+          role: 'assistant',
+          content: '上一轮回答',
+          sequence: 1,
+          started_at: '2026-04-17T08:59:00Z',
+          finished_at: '2026-04-17T08:59:01Z'
+        },
+        {
+          id: 'msg-run-1-assistant',
+          flow_run_id: 'run-1',
+          role: 'assistant',
+          content: '退款政策摘要',
+          sequence: 2,
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z'
+        }
+      ])
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const conversation = await screen.findByTestId(
+      'debug-conversation-messages'
+    );
+    const openResumeTimelineButtons = await within(conversation).findAllByRole(
+      'button',
+      { name: '查看 Resume 时间线' },
+      { timeout: 8_000 }
+    );
+    fireEvent.click(openResumeTimelineButtons[0]);
+
+    await screen.findByTestId('application-logs-floating-resume-timeline');
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+        'app-1',
+        'run-0'
+      );
+    });
+  }, 20_000);
+
   test('keeps the runs table layout unchanged while floating windows are open', async () => {
     innerHeightSpy = vi
       .spyOn(window, 'innerHeight', 'get')

@@ -162,6 +162,7 @@ jobs:
           scope: ${{ matrix.scope }}
           report_type: ci
           publish_issue: "false"
+          start_postgres: "false"
       - uses: actions/upload-artifact@v6
         if: always()
         with:

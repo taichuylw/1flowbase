@@ -10,7 +10,7 @@ import {
   useEffect,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent
+  type SyntheticEvent
 } from 'react';
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
@@ -27,6 +27,10 @@ import { i18nText } from '../../../../shared/i18n/text';
 
 const QUICK_ACTION_HIDE_DELAY_MS = 1000;
 
+function stopActionEvent(event: SyntheticEvent<HTMLElement>) {
+  event.stopPropagation();
+}
+
 export function AgentFlowNodeCard({
   data,
   selected
@@ -36,9 +40,6 @@ export function AgentFlowNodeCard({
   const hideQuickActionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-  const stopActionEvent = (event: ReactMouseEvent<HTMLElement>) => {
-    event.stopPropagation();
-  };
   const clearHideQuickActionsTimer = () => {
     if (hideQuickActionsTimerRef.current === null) {
       return;
@@ -60,9 +61,12 @@ export function AgentFlowNodeCard({
   };
 
   useEffect(() => {
+    const timerRef = hideQuickActionsTimerRef;
+
     return () => {
-      if (hideQuickActionsTimerRef.current !== null) {
-        clearTimeout(hideQuickActionsTimerRef.current);
+      const timer = timerRef.current;
+      if (timer !== null) {
+        clearTimeout(timer);
       }
     };
   }, []);
@@ -309,11 +313,9 @@ export function AgentFlowNodeCard({
         <div
           className={`agent-flow-node-card__quick-actions${quickActionsVisible ? ' agent-flow-node-card__quick-actions--visible' : ''}`}
           data-testid={`agent-flow-node-quick-actions-${data.nodeId}`}
-          onClick={stopActionEvent}
-          onDoubleClick={stopActionEvent}
           onMouseEnter={showQuickActions}
           onMouseLeave={scheduleHideQuickActions}
-          onMouseDown={stopActionEvent}
+          onPointerDown={stopActionEvent}
         >
           <Tooltip title={i18nText("agentFlow", "auto.execute_this_node")}>
             <Button

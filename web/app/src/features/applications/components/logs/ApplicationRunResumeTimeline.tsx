@@ -98,9 +98,13 @@ function payloadString(payload: Record<string, unknown>, key: string) {
 function buildResumeTimeline(
   detail: ApplicationRunDetail
 ): ResumeTimelineItem[] {
-  const eventItems = detail.events
-    .filter((event) => RESUME_EVENT_TYPES.has(event.event_type))
-    .map((event) => ({
+  const eventItems: ResumeTimelineItem[] = [];
+  for (const event of detail.events) {
+    if (!RESUME_EVENT_TYPES.has(event.event_type)) {
+      continue;
+    }
+
+    eventItems.push({
       key: `event-${event.id}`,
       occurredAt: event.created_at,
       title: resumeEventLabel(event.event_type),
@@ -109,7 +113,8 @@ function buildResumeTimeline(
       description:
         payloadString(event.payload, 'resume_request_id') ??
         payloadString(event.payload, 'callback_task_id')
-    }));
+    });
+  }
   const callbackItems = detail.callback_tasks.map((task) => ({
     key: `callback-${task.id}-${task.status}`,
     occurredAt: task.completed_at ?? task.created_at,
@@ -154,11 +159,11 @@ export function ApplicationRunResumeTimeline({
                   {item.status}
                 </Tag>
               </div>
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {new Date(item.occurredAt).toLocaleString()}
               </Typography.Text>
               {item.description ? (
-                <Typography.Text code style={{ fontSize: 11 }}>
+                <Typography.Text code style={{ fontSize: 12 }}>
                   {item.description.slice(0, 32)}
                 </Typography.Text>
               ) : null}

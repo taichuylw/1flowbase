@@ -187,6 +187,13 @@ fn build_nodes_and_topology(
 
         let source_handle = edge_handle(edge, "sourceHandle", "source_handle")?;
         let target_handle = edge_handle(edge, "targetHandle", "target_handle")?;
+        validate_edge_source_handle(
+            edge_id,
+            nodes
+                .get(source)
+                .expect("validated source node must exist before edge compilation"),
+            source_handle.as_deref(),
+        )?;
         compiled_edges.push(CompiledEdge {
             edge_id: edge_id.to_string(),
             source: source.to_string(),
@@ -279,6 +286,65 @@ fn edge_handle(edge: &Value, camel_key: &str, snake_key: &str) -> Result<Option<
         Some(Value::String(_)) | Some(Value::Null) | None => Ok(None),
         Some(_) => bail!("edge handle {camel_key} must be a string or null"),
     }
+}
+
+fn validate_edge_source_handle(
+    edge_id: &str,
+    source_node: &CompiledNode,
+    source_handle: Option<&str>,
+) -> Result<()> {
+    if source_node.node_type != "if_else" {
+        return Ok(());
+    }
+
+    let Some(source_handle) = source_handle else {
+        bail!(
+            "edge {edge_id} from if_else node {} missing sourceHandle",
+            source_node.node_id
+        );
+    };
+    let source_handles = if_else_branch_source_handles(source_node)?;
+
+    if !source_handles.contains(source_handle) {
+        bail!(
+            "edge {edge_id} references unknown if_else sourceHandle {source_handle} for node {}",
+            source_node.node_id
+        );
+    }
+
+    Ok(())
+}
+
+fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>> {
+    let binding = node
+        .bindings
+        .get("branches")
+        .ok_or_else(|| anyhow!("if_else node {} missing branches binding", node.node_id))?;
+    if binding.kind != "if_else_branches" {
+        bail!(
+            "if_else node {} branches binding must be if_else_branches",
+            node.node_id
+        );
+    }
+
+    let branches = binding
+        .raw_value
+        .get("branches")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("if_else node {} branches must be an array", node.node_id))?;
+    let mut source_handles = BTreeSet::new();
+    for branch in branches {
+        let source_handle = branch
+            .get("sourceHandle")
+            .or_else(|| branch.get("source_handle"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|handle| !handle.is_empty())
+            .ok_or_else(|| anyhow!("if_else node {} branch missing sourceHandle", node.node_id))?;
+        source_handles.insert(source_handle.to_string());
+    }
+
+    Ok(source_handles)
 }
 
 fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<CompileIssue> {
