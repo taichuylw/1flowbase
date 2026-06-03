@@ -219,6 +219,61 @@ async fn plugin_management_service_list_catalog_returns_missing_projection_witho
 }
 
 #[tokio::test]
+async fn plugin_management_service_reconcile_all_installations_backfills_missing_catalog_projection(
+) {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all"],
+    ));
+    let install_root = std::env::temp_dir().join(format!(
+        "plugin-catalog-backfill-projection-{}",
+        Uuid::now_v7()
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    repository.remove_catalog_projection(installation_id).await;
+
+    service.reconcile_all_installations().await.unwrap();
+
+    let projection = repository
+        .get_plugin_package_catalog_projection(installation_id)
+        .await
+        .unwrap()
+        .expect("catalog projection should be backfilled");
+    assert_eq!(projection.projection_status.as_str(), "ok");
+
+    let catalog = service
+        .list_catalog(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(catalog.entries.len(), 1);
+    assert_eq!(catalog.entries[0].catalog_refresh_status, "ok");
+    assert_eq!(catalog.entries[0].model_discovery_mode, "hybrid");
+    assert_eq!(
+        catalog.entries[0].default_base_url.as_deref(),
+        Some("https://api.example.com")
+    );
+}
+
+#[tokio::test]
 async fn plugin_management_service_keeps_only_latest_official_entry_per_provider() {
     #[derive(Clone)]
     struct DuplicateOfficialSource;

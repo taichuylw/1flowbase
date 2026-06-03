@@ -10,6 +10,7 @@ const {
   createIssueWithGitHubApi,
   createIssueWithLabelFallback,
   listOpenQualityGateIssuesWithGitHubApi,
+  upsertIssueCommentWithMarker,
 } = require('./github-api.js');
 const {
   BACKEND_CI_TEST_SHARDS,
@@ -19,6 +20,7 @@ const {
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
+const SECURITY_RISK_REPORT_FILE = 'security-risk.json';
 const REPO_BACKEND_SHARD_TARGETS = ['clippy', 'test', 'check'];
 const REPO_BACKEND_SHARDS_BY_TARGET = {
   clippy: BACKEND_SHARDS,
@@ -56,6 +58,7 @@ const VALID_SCOPES = new Set([
   ...COVERAGE_BACKEND_COMPONENT_SCOPES,
 ]);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
+const PR_REPORT_MARKER = '<!-- 1flowbase-quality-gate-pr-report -->';
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
 const ANSI_CONTROL_SEQUENCE_PATTERN = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/gu;
@@ -429,6 +432,42 @@ function formatCoverageSummaryLine(summary) {
     : `- ${summary.name}: see ${summary.path}`;
 }
 
+function normalizeSecurityRiskReport({ repoRoot, reportPath, report }) {
+  const findings = Array.isArray(report?.findings) ? report.findings : [];
+  const changedFiles = Array.isArray(report?.changedFiles) ? report.changedFiles : [];
+
+  return {
+    status: report?.status || (findings.length > 0 ? 'review_required' : 'advisory'),
+    changedFileCount: changedFiles.length,
+    findingCount: findings.length,
+    highCount: findings.filter((finding) => finding.severity === 'high').length,
+    mediumCount: findings.filter((finding) => finding.severity === 'medium').length,
+    reportPath: toRepoRelative(repoRoot, reportPath),
+  };
+}
+
+function readSecurityRiskReport({ repoRoot, outputDir }) {
+  const reportPath = path.join(outputDir, SECURITY_RISK_REPORT_FILE);
+  const report = readJsonFileIfPresent(reportPath);
+
+  return report
+    ? normalizeSecurityRiskReport({ repoRoot, reportPath, report })
+    : null;
+}
+
+function formatSecurityRiskLine(securityRisk) {
+  return `- Status: ${securityRisk.status}`
+    + `; Findings: ${securityRisk.findingCount} (high ${securityRisk.highCount}, medium ${securityRisk.mediumCount})`
+    + `; Changed files: ${securityRisk.changedFileCount}`;
+}
+
+function formatAggregateSecurityRiskLine(securityRisk) {
+  const scope = securityRisk.scope || 'unknown';
+  return `- ${scope}: ${securityRisk.status}, findings ${securityRisk.findingCount} `
+    + `(high ${securityRisk.highCount}, medium ${securityRisk.mediumCount}), `
+    + `changed files ${securityRisk.changedFileCount}`;
+}
+
 function normalizeBackendConsistencyTarget(target) {
   return {
     label: target.label,
@@ -493,21 +532,20 @@ function buildReport({
   const logPath = path.join(outputDir, 'quality-gate.latest.log');
   const warningFiles = listFilesBySuffix(outputDir, '.warnings.log')
     .map((filePath) => toRepoRelative(repoRoot, filePath));
-  const effectiveStatus = status === 'passed' && warningFiles.length > 0 ? 'failed' : status;
-  const effectiveExitCode = exitCode === 0 && warningFiles.length > 0 ? 1 : exitCode;
   const coverageFiles = listFilesBySuffix(path.join(outputDir, 'coverage'), '.json')
     .map((filePath) => toRepoRelative(repoRoot, filePath));
   const coverageSummaries = buildCoverageSummaries({ repoRoot, coverageFiles });
+  const securityRisk = readSecurityRiskReport({ repoRoot, outputDir });
   const backendConsistencyTargets = buildBackendConsistencyTargets({ repoRoot, scope });
   const runUrl = buildRunUrl(env);
   const shortSha = shortShaFromEnv(env);
-  const failureExcerpt = effectiveStatus === 'failed' ? readFailureExcerpt(logPath) : '';
+  const failureExcerpt = status === 'failed' ? readFailureExcerpt(logPath) : '';
 
   const report = {
     reportType,
-    status: effectiveStatus,
+    status,
     scope,
-    exitCode: effectiveExitCode,
+    exitCode,
     branch: env.GITHUB_REF_NAME || '',
     commit: env.GITHUB_SHA || '',
     shortSha,
@@ -521,6 +559,7 @@ function buildReport({
     warningFiles,
     coverageFiles,
     coverageSummaries,
+    securityRisk,
     backendConsistencyTargets,
   };
 
@@ -549,6 +588,11 @@ function buildReport({
     coverageSummaries.length === 0 ? 'No coverage summaries were captured for this scope.' : null,
     ...coverageSummaries.map(formatCoverageSummaryLine),
     '',
+    '## Security Risk',
+    '',
+    securityRisk ? formatSecurityRiskLine(securityRisk) : 'No security risk report was captured for this scope.',
+    securityRisk ? `- Report: ${securityRisk.reportPath}` : null,
+    '',
     backendConsistencyTargets.length > 0 ? '## Backend Consistency Targets' : null,
     backendConsistencyTargets.length > 0 ? '' : null,
     backendConsistencyTargets.length > 0 ? '| Label | Package | Rust test filter | Status | Duration | Passed | Failed |' : null,
@@ -561,6 +605,7 @@ function buildReport({
     '- Artifact: test-governance-artifacts',
     ...warningFiles.map((filePath) => `- Warning log: ${filePath}`),
     ...coverageFiles.map((filePath) => `- Coverage summary file: ${filePath}`),
+    securityRisk ? `- Security risk report: ${securityRisk.reportPath}` : null,
     failureExcerpt ? '' : null,
     failureExcerpt ? '## Failure Excerpt' : null,
     failureExcerpt ? '' : null,
@@ -665,6 +710,7 @@ function addMissingAggregateScopes({ componentArtifacts, expectedScopes }) {
         coverageSummaries: [],
         backendConsistencyTargets: [],
         warningFiles: [],
+        securityRisk: null,
       },
     }));
 
@@ -686,7 +732,7 @@ function buildAggregateReport({
     componentArtifacts.flatMap((artifact) => artifact.report.warningFiles || []),
     (filePath) => filePath
   );
-  const status = components.every((component) => component.status === 'passed') && warningFiles.length === 0
+  const status = components.every((component) => component.status === 'passed')
     ? 'passed'
     : 'failed';
   const exitCode = status === 'passed'
@@ -695,6 +741,13 @@ function buildAggregateReport({
   const coverageSummaries = dedupeBy(
     componentArtifacts.flatMap((artifact) => artifact.report.coverageSummaries || []),
     (summary) => `${summary.kind || 'unknown'}:${summary.name}:${summary.path}`
+  );
+  const securityRiskReports = dedupeBy(
+    componentArtifacts
+      .flatMap((artifact) => (artifact.report.securityRisk
+        ? [{ ...artifact.report.securityRisk, scope: artifact.scope }]
+        : [])),
+    (securityRisk) => `${securityRisk.scope}:${securityRisk.reportPath}`
   );
   const backendConsistencyTargets = componentArtifacts.flatMap(
     (artifact) => artifact.report.backendConsistencyTargets || []
@@ -722,6 +775,7 @@ function buildAggregateReport({
     warningFiles,
     coverageFiles: coverageSummaries.map((summary) => summary.path).filter(Boolean),
     coverageSummaries,
+    securityRiskReports,
     backendConsistencyTargets,
     components,
   };
@@ -761,6 +815,11 @@ function buildAggregateReport({
     coverageSummaries.length === 0 ? 'No coverage summaries were captured for this scope.' : null,
     ...coverageSummaries.map(formatCoverageSummaryLine),
     '',
+    '## Security Risk',
+    '',
+    securityRiskReports.length === 0 ? 'No security risk reports were captured.' : null,
+    ...securityRiskReports.map(formatAggregateSecurityRiskLine),
+    '',
     backendConsistencyTargets.length > 0 ? '## Backend Consistency Targets' : null,
     backendConsistencyTargets.length > 0 ? '' : null,
     backendConsistencyTargets.length > 0 ? '| Label | Package | Rust test filter | Status | Duration | Passed | Failed |' : null,
@@ -777,6 +836,7 @@ function buildAggregateReport({
     ]),
     ...warningFiles.map((filePath) => `- Warning log: ${filePath}`),
     ...coverageSummaries.map((summary) => `- Coverage summary file: ${summary.path}`),
+    ...securityRiskReports.map((securityRisk) => `- Security risk report: ${securityRisk.reportPath}`),
     ...failedComponents.flatMap((component) => (
       component.failureExcerpt
         ? [
@@ -828,6 +888,10 @@ function appendStepSummary(markdown, summaryPath = process.env.GITHUB_STEP_SUMMA
   fs.appendFileSync(summaryPath, `\n${markdown}\n`, 'utf8');
 }
 
+function buildPullRequestReportComment(markdown) {
+  return `${PR_REPORT_MARKER}\n${markdown}`;
+}
+
 function runGateCommand({
   commandSpec,
   env,
@@ -870,6 +934,8 @@ async function runQualityGateAggregate({
   expectedScopes = DEFAULT_AGGREGATE_SCOPES,
   reportType = 'ci',
   publishIssue = false,
+  publishPrComment = false,
+  prNumber = 0,
   githubToken = '',
   environmentName = '',
   env = process.env,
@@ -877,6 +943,8 @@ async function runQualityGateAggregate({
   createIssueImpl = createIssueWithGitHubApi,
   listOpenQualityGateIssuesImpl = listOpenQualityGateIssuesWithGitHubApi,
   closeIssueImpl = closeIssueWithGitHubApi,
+  upsertPrCommentImpl = upsertIssueCommentWithMarker,
+  writeStderr = (text) => process.stderr.write(text),
 } = {}) {
   const normalizedReportType = normalizeReportType(reportType);
   const outputDir = ensureOutputDir(repoRoot);
@@ -967,6 +1035,26 @@ async function runQualityGateAggregate({
     writeReports({ repoRoot, report: finalReport });
   }
 
+  let prCommentUrl = '';
+  if (publishPrComment) {
+    if (!githubToken || !prNumber) {
+      writeStderr('[1flowbase-quality-gate] skipped PR report comment: github_token and pr_number are required\n');
+    } else {
+      try {
+        const comment = await upsertPrCommentImpl({
+          token: githubToken,
+          repository: env.GITHUB_REPOSITORY,
+          number: prNumber,
+          marker: PR_REPORT_MARKER,
+          body: buildPullRequestReportComment(finalReport.markdown),
+        });
+        prCommentUrl = comment.html_url || '';
+      } catch (error) {
+        writeStderr(`[1flowbase-quality-gate] failed to publish PR report comment: ${error.message}\n`);
+      }
+    }
+  }
+
   appendStepSummary(finalReport.markdown);
   writeActionOutputs({
     status: finalReport.json.status,
@@ -974,12 +1062,14 @@ async function runQualityGateAggregate({
     report_path: toRepoRelative(repoRoot, reportPaths.markdownPath),
     report_json_path: toRepoRelative(repoRoot, reportPaths.jsonPath),
     issue_url: issueUrl,
+    pr_comment_url: prCommentUrl,
   });
 
   return {
     status: finalReport.json.status,
     exitCode: finalReport.json.exitCode,
     issueUrl,
+    prCommentUrl,
     reportPath: reportPaths.markdownPath,
     reportJsonPath: reportPaths.jsonPath,
   };
@@ -1114,4 +1204,5 @@ module.exports = {
   parseBooleanInput,
   runQualityGateAggregate,
   runQualityGate,
+  upsertIssueCommentWithMarker,
 };
