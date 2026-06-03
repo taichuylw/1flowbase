@@ -42,6 +42,11 @@ test('runCommandSequence ignores known tool progress stderr on successful comman
           'This information is used to shape the Turborepo roadmap and prioritize features.',
           "You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:",
           'https://turborepo.dev/docs/telemetry',
+          '$ turbo run lint',
+          '$ ../scripts/node/exec-with-real-node.sh ../scripts/node/cli/run-frontend-workspace-test.js',
+          '$ tsc -p tsconfig.json --noEmit && vite build',
+          '$ ../../scripts/node/exec-with-real-node.sh ../../scripts/node/cli/run-frontend-vitest.js run src/features/me/_tests/me-page.test.tsx',
+          '$ eslint src --ext .ts',
         ].join('\n'),
       };
     },

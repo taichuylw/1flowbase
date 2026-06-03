@@ -1,212 +1,244 @@
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { i18nText } from '../../../../shared/i18n/text';
+import { DataModelFormDrawer } from '../../components/data-models/DataModelFormDrawer';
 import {
-  DataModelFormDrawer,
   SLOW_SETTINGS_PAGE_TEST_TIMEOUT,
   cleanupDataModelsPageTest,
   contactsModel,
   dataModelsApi,
   findDataModelsNavigation,
-  fireEvent,
-  i18nText,
   openContactsDataModelEditor,
   openDataModelEditorByTitle,
-  render,
   renderApp,
-  screen,
-  setupDataModelsPageTest,
-  waitFor,
-  within
+  setupDataModelsPageTest
 } from './support';
 
 beforeEach(setupDataModelsPageTest);
 afterEach(cleanupDataModelsPageTest);
 
 describe('Settings data models page', () => {
-  test('shows data source navigation, defaults, and the Data Model table', async () => {
-    renderApp('/settings/data-models');
+  test(
+    'shows data source navigation, defaults, and the Data Model table',
+    async () => {
+      renderApp('/settings/data-models');
 
-    expect(await findDataModelsNavigation()).toBeInTheDocument();
-    expect(await screen.findByText('主数据源')).toBeInTheDocument();
-    expect(await screen.findByText('HubSpot')).toBeInTheDocument();
-    const hubSpotRow = screen
-      .getAllByRole('row')
-      .find((row) => within(row).queryByText('HubSpot'));
-    expect(hubSpotRow).toBeInstanceOf(HTMLElement);
-    expect(
-      within(hubSpotRow as HTMLElement).getByLabelText('HubSpot 启用')
-    ).toBeChecked();
-    fireEvent.click(
-      within(hubSpotRow as HTMLElement).getByRole('button', { name: '配置' })
-    );
-    expect(await screen.findByText('数据源管理')).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        '管理内建主数据源和外部数据源的默认建模状态、API 暴露策略与 Data Model 访问面。'
-      )
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /返\s*回/ })).toBeInTheDocument();
-    expect(screen.getByLabelText('默认 Data Model 状态')).toBeInTheDocument();
-    expect(screen.getByLabelText('默认 API 暴露状态')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'HubSpot' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新建数据表' })).toBeInTheDocument();
-    expect(screen.getByText('数据表')).toBeInTheDocument();
-    expect(await screen.findByText('Contacts')).toBeInTheDocument();
-    expect(screen.getByText('contacts')).toBeInTheDocument();
-  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
+      expect(await findDataModelsNavigation()).toBeInTheDocument();
+      expect(await screen.findByText('主数据源')).toBeInTheDocument();
+      expect(await screen.findByText('HubSpot')).toBeInTheDocument();
+      const hubSpotRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('HubSpot'));
+      expect(hubSpotRow).toBeInstanceOf(HTMLElement);
+      expect(
+        within(hubSpotRow as HTMLElement).getByLabelText('HubSpot 启用')
+      ).toBeChecked();
+      fireEvent.click(
+        within(hubSpotRow as HTMLElement).getByRole('button', { name: '配置' })
+      );
+      expect(await screen.findByText('数据源管理')).toBeInTheDocument();
+      expect(
+        screen.queryByText(
+          '管理内建主数据源和外部数据源的默认建模状态、API 暴露策略与 Data Model 访问面。'
+        )
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /返\s*回/ })
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText('默认 Data Model 状态')).toBeInTheDocument();
+      expect(screen.getByLabelText('默认 API 暴露状态')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'HubSpot' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: '新建数据表' })
+      ).toBeInTheDocument();
+      expect(screen.getByText('数据表')).toBeInTheDocument();
+      expect(await screen.findByText('Contacts')).toBeInTheDocument();
+      expect(screen.getByText('contacts')).toBeInTheDocument();
+    },
+    SLOW_SETTINGS_PAGE_TEST_TIMEOUT
+  );
 
-  test('shows built-in user and role metadata in the main data source editor', async () => {
-    renderApp('/settings/data-models');
+  test(
+    'shows built-in user and role metadata in the main data source editor',
+    async () => {
+      renderApp('/settings/data-models');
 
-    expect(await findDataModelsNavigation()).toBeInTheDocument();
-    expect(await screen.findByText('主数据源')).toBeInTheDocument();
-    const mainSourceRow = screen
-      .getAllByRole('row')
-      .find((row) => within(row).queryByText('主数据源'));
-    expect(mainSourceRow).toBeInstanceOf(HTMLElement);
-    fireEvent.click(
-      within(mainSourceRow as HTMLElement).getByRole('button', {
-        name: '配置'
-      })
-    );
+      expect(await findDataModelsNavigation()).toBeInTheDocument();
+      expect(await screen.findByText('主数据源')).toBeInTheDocument();
+      const mainSourceRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('主数据源'));
+      expect(mainSourceRow).toBeInstanceOf(HTMLElement);
+      fireEvent.click(
+        within(mainSourceRow as HTMLElement).getByRole('button', {
+          name: '配置'
+        })
+      );
 
-    expect(await screen.findByText('Attachments')).toBeInTheDocument();
-    const attachmentsRow = screen
-      .getAllByRole('row')
-      .find((row) => within(row).queryByText('attachments'));
-    const usersRow = screen
-      .getAllByRole('row')
-      .find((row) => within(row).queryByText('users'));
-    const rolesRow = screen
-      .getAllByRole('row')
-      .find((row) => within(row).queryByText('roles'));
-    expect(attachmentsRow).toBeInstanceOf(HTMLElement);
-    expect(usersRow).toBeInstanceOf(HTMLElement);
-    expect(rolesRow).toBeInstanceOf(HTMLElement);
-    expect(
-      within(attachmentsRow as HTMLElement).queryByRole('button', {
-        name: '删除数据表 Attachments'
-      })
-    ).not.toBeInTheDocument();
-    expect(
-      within(usersRow as HTMLElement).queryByRole('button', {
-        name: '删除数据表 用户'
-      })
-    ).not.toBeInTheDocument();
-    expect(
-      within(rolesRow as HTMLElement).queryByRole('button', {
-        name: '删除数据表 角色'
-      })
-    ).not.toBeInTheDocument();
-    expect(
-      within(usersRow as HTMLElement).getByText('用户')
-    ).toBeInTheDocument();
-    expect(within(usersRow as HTMLElement).getByText('7')).toBeInTheDocument();
-    expect(
-      within(rolesRow as HTMLElement).getByText('角色')
-    ).toBeInTheDocument();
-    expect(within(rolesRow as HTMLElement).getByText('6')).toBeInTheDocument();
-    expect(screen.getByLabelText('默认 Data Model 状态')).toBeEnabled();
-    expect(screen.getByLabelText('默认 API 暴露状态')).toBeEnabled();
+      expect(await screen.findByText('Attachments')).toBeInTheDocument();
+      const attachmentsRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('attachments'));
+      const usersRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('users'));
+      const rolesRow = screen
+        .getAllByRole('row')
+        .find((row) => within(row).queryByText('roles'));
+      expect(attachmentsRow).toBeInstanceOf(HTMLElement);
+      expect(usersRow).toBeInstanceOf(HTMLElement);
+      expect(rolesRow).toBeInstanceOf(HTMLElement);
+      expect(
+        within(attachmentsRow as HTMLElement).queryByRole('button', {
+          name: '删除数据表 Attachments'
+        })
+      ).not.toBeInTheDocument();
+      expect(
+        within(usersRow as HTMLElement).queryByRole('button', {
+          name: '删除数据表 用户'
+        })
+      ).not.toBeInTheDocument();
+      expect(
+        within(rolesRow as HTMLElement).queryByRole('button', {
+          name: '删除数据表 角色'
+        })
+      ).not.toBeInTheDocument();
+      expect(
+        within(usersRow as HTMLElement).getByText('用户')
+      ).toBeInTheDocument();
+      expect(
+        within(usersRow as HTMLElement).getByText('7')
+      ).toBeInTheDocument();
+      expect(
+        within(rolesRow as HTMLElement).getByText('角色')
+      ).toBeInTheDocument();
+      expect(
+        within(rolesRow as HTMLElement).getByText('6')
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText('默认 Data Model 状态')).toBeEnabled();
+      expect(screen.getByLabelText('默认 API 暴露状态')).toBeEnabled();
 
-    fireEvent.click(
-      within(rolesRow as HTMLElement).getByRole('button', { name: '编辑' })
-    );
-    expect(await screen.findByText('编辑 角色')).toBeInTheDocument();
-    const editorDialog = await screen.findByRole('region', {
-      name: 'Data Model 详情'
-    });
-    expect(
-      within(editorDialog).getByRole('tab', { name: '字段' })
-    ).toBeInTheDocument();
-    expect(within(editorDialog).getByText('角色标识')).toBeInTheDocument();
-    expect(within(editorDialog).getByText('默认成员角色')).toBeInTheDocument();
-  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
+      fireEvent.click(
+        within(rolesRow as HTMLElement).getByRole('button', { name: '编辑' })
+      );
+      expect(await screen.findByText('编辑 角色')).toBeInTheDocument();
+      const editorDialog = await screen.findByRole('region', {
+        name: 'Data Model 详情'
+      });
+      expect(
+        within(editorDialog).getByRole('tab', { name: '字段' })
+      ).toBeInTheDocument();
+      expect(within(editorDialog).getByText('角色标识')).toBeInTheDocument();
+      expect(
+        within(editorDialog).getByText('默认成员角色')
+      ).toBeInTheDocument();
+    },
+    SLOW_SETTINGS_PAGE_TEST_TIMEOUT
+  );
 
-  test('selects a Data Model and exposes detail tabs with safe status controls', async () => {
-    renderApp('/settings/data-models?source=source-1');
+  test(
+    'selects a Data Model and exposes detail tabs with safe status controls',
+    async () => {
+      renderApp('/settings/data-models?source=source-1');
 
-    const editorDialog = await openContactsDataModelEditor();
-    expect(
-      await screen.findByRole('tab', { name: '字段' })
-    ).toBeInTheDocument();
-    expect(
-      within(editorDialog).getByTestId('data-model-detail-summary')
-    ).toBeInTheDocument();
-    const detailSummary = within(editorDialog).getByTestId(
-      'data-model-detail-summary'
-    );
-    expect(within(detailSummary).getByText('标题：')).toBeInTheDocument();
-    expect(within(detailSummary).getByText('Code：')).toBeInTheDocument();
-    expect(within(detailSummary).getByText('Contacts')).toBeInTheDocument();
-    expect(within(detailSummary).getByText('contacts')).toBeInTheDocument();
-    expect(
-      within(detailSummary).getAllByTestId('data-model-summary-item')
-    ).toHaveLength(6);
-    expect(within(detailSummary).getByText('表 ID：')).toBeInTheDocument();
-    expect(within(detailSummary).queryByText('状态：')).not.toBeInTheDocument();
-    const detailActions = within(editorDialog).getByTestId(
-      'data-model-detail-actions'
-    );
-    const tabs = within(editorDialog).getByRole('tab', { name: '字段' });
-    expect(detailActions).toBeInTheDocument();
-    expect(
-      detailActions.compareDocumentPosition(tabs) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(
-      within(detailActions).getByRole('button', {
-        name: /编\s*辑/
-      })
-    ).toBeInTheDocument();
-    const statusSelect = within(detailActions).getByRole('combobox', {
-      name: /状态/
-    });
-    expect(statusSelect).toBeInTheDocument();
-    const statusLabel = within(detailActions).getByTestId(
-      'data-model-status-label'
-    );
-    expect(statusLabel).toHaveTextContent('状态：');
-    expect(
-      within(statusLabel).getByLabelText('Data Model 状态说明')
-    ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '关系' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '权限' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'API' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: '记录预览' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Advisor' })).toBeInTheDocument();
+      const editorDialog = await openContactsDataModelEditor();
+      expect(
+        await screen.findByRole('tab', { name: '字段' })
+      ).toBeInTheDocument();
+      expect(
+        within(editorDialog).getByTestId('data-model-detail-summary')
+      ).toBeInTheDocument();
+      const detailSummary = within(editorDialog).getByTestId(
+        'data-model-detail-summary'
+      );
+      expect(within(detailSummary).getByText('标题：')).toBeInTheDocument();
+      expect(within(detailSummary).getByText('Code：')).toBeInTheDocument();
+      expect(within(detailSummary).getByText('Contacts')).toBeInTheDocument();
+      expect(within(detailSummary).getByText('contacts')).toBeInTheDocument();
+      expect(
+        within(detailSummary).getAllByTestId('data-model-summary-item')
+      ).toHaveLength(6);
+      expect(within(detailSummary).getByText('表 ID：')).toBeInTheDocument();
+      expect(
+        within(detailSummary).queryByText('状态：')
+      ).not.toBeInTheDocument();
+      const detailActions = within(editorDialog).getByTestId(
+        'data-model-detail-actions'
+      );
+      const tabs = within(editorDialog).getByRole('tab', { name: '字段' });
+      expect(detailActions).toBeInTheDocument();
+      expect(
+        detailActions.compareDocumentPosition(tabs) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        within(detailActions).getByRole('button', {
+          name: /编\s*辑/
+        })
+      ).toBeInTheDocument();
+      const statusSelect = within(detailActions).getByRole('combobox', {
+        name: /状态/
+      });
+      expect(statusSelect).toBeInTheDocument();
+      const statusLabel = within(detailActions).getByTestId(
+        'data-model-status-label'
+      );
+      expect(statusLabel).toHaveTextContent('状态：');
+      expect(
+        within(statusLabel).getByLabelText('Data Model 状态说明')
+      ).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '关系' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '权限' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'API' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: '记录预览' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Advisor' })).toBeInTheDocument();
 
-    fireEvent.mouseDown(statusSelect);
-    expect(
-      await screen.findByRole('option', { name: 'draft' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('option', { name: 'published' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('option', { name: 'disabled' })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'broken' })).toBeInTheDocument();
-    expect(
-      within(editorDialog).getByLabelText('Data Model 状态说明')
-    ).toBeInTheDocument();
-    expect(
-      within(editorDialog).getByText(/broken: 当前定义、运行依赖或外部资源异常/)
-    ).toBeInTheDocument();
+      fireEvent.mouseDown(statusSelect);
+      expect(
+        await screen.findByRole('option', { name: 'draft' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('option', { name: 'published' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('option', { name: 'disabled' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('option', { name: 'broken' })
+      ).toBeInTheDocument();
+      expect(
+        within(editorDialog).getByLabelText('Data Model 状态说明')
+      ).toBeInTheDocument();
+      expect(
+        within(editorDialog).getByText(
+          /broken: 当前定义、运行依赖或外部资源异常/
+        )
+      ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'API' }));
-    expect(
-      await screen.findByText('published_not_exposed')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(i18nText('settings', 'auto.api_exposed_ready'))
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('combobox', {
-        name: i18nText('settings', 'auto.api_exposed_ready')
-      })
-    ).not.toBeInTheDocument();
-  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT);
+      fireEvent.click(screen.getByRole('tab', { name: 'API' }));
+      expect(
+        await screen.findByText('published_not_exposed')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(i18nText('settings', 'auto.api_exposed_ready'))
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('combobox', {
+          name: i18nText('settings', 'auto.api_exposed_ready')
+        })
+      ).not.toBeInTheDocument();
+    },
+    SLOW_SETTINGS_PAGE_TEST_TIMEOUT
+  );
 
   test('shows editable grants, record preview, and Advisor severities', async () => {
     renderApp('/settings/data-models?source=source-1');
@@ -498,7 +530,9 @@ describe('Settings data models page', () => {
     expect(screen.queryByLabelText('外部字段映射 Key')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('目标数据表')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('关系配置 JSON')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('显示控件配置 JSON')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('显示控件配置 JSON')
+    ).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('字段标题'), {
       target: { value: '状态' }
@@ -535,7 +569,9 @@ describe('Settings data models page', () => {
       within(editorDialog).getByRole('button', { name: '新增字段' })
     );
 
-    expect(await screen.findByLabelText('外部字段映射 Key')).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText('外部字段映射 Key')
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText('显示格式')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('目标数据表')).not.toBeInTheDocument();
 
@@ -564,97 +600,109 @@ describe('Settings data models page', () => {
     expect(screen.getByLabelText('关系配置 JSON')).toBeInTheDocument();
   }, 20_000);
 
-  test('creates enum fields with display format and label-value options', async () => {
-    renderApp('/settings/data-models?source=source-1');
+  test(
+    'creates enum fields with display format and label-value options',
+    async () => {
+      renderApp('/settings/data-models?source=source-1');
 
-    const editorDialog = await openContactsDataModelEditor();
-    fireEvent.click(
-      within(editorDialog).getByRole('button', { name: '新增字段' })
-    );
+      const editorDialog = await openContactsDataModelEditor();
+      fireEvent.click(
+        within(editorDialog).getByRole('button', { name: '新增字段' })
+      );
 
-    fireEvent.change(await screen.findByLabelText('字段标题'), {
-      target: { value: '状态' }
-    });
-    fireEvent.change(screen.getByLabelText('字段 Code'), {
-      target: { value: 'status' }
-    });
-    fireEvent.change(screen.getByLabelText('外部字段映射 Key'), {
-      target: { value: 'properties.status' }
-    });
-    expect(screen.queryByText('外部数据源里的字段路径，例如 properties.email。')).not.toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByLabelText('字段类型'));
-    fireEvent.click(await screen.findByText('枚举'));
+      fireEvent.change(await screen.findByLabelText('字段标题'), {
+        target: { value: '状态' }
+      });
+      fireEvent.change(screen.getByLabelText('字段 Code'), {
+        target: { value: 'status' }
+      });
+      fireEvent.change(screen.getByLabelText('外部字段映射 Key'), {
+        target: { value: 'properties.status' }
+      });
+      expect(
+        screen.queryByText('外部数据源里的字段路径，例如 properties.email。')
+      ).not.toBeInTheDocument();
+      fireEvent.mouseDown(screen.getByLabelText('字段类型'));
+      fireEvent.click(await screen.findByText('枚举'));
 
-    expect(await screen.findByLabelText('显示格式')).toBeInTheDocument();
-    expect(screen.queryByLabelText('枚举选项说明')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('存储值说明')).toBeInTheDocument();
-    expect(screen.getByLabelText('显示值说明')).toBeInTheDocument();
-    expect(
-      screen.queryByText('显示值用于界面展示，存储值会写入数据库和 API payload。')
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText('存储值').compareDocumentPosition(screen.getByText('显示值')) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(
-      screen
-        .getByRole('button', { name: '添加选项' })
-        .compareDocumentPosition(screen.getByText('规则')) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(
-      screen.getByText('规则').compareDocumentPosition(screen.getByText('默认值')) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByLabelText('选项 1 显示值')).toBeInTheDocument();
-    expect(
-      (screen.getByLabelText('选项 1 存储值') as HTMLInputElement).value
-    ).toMatch(/^enum_[a-z0-9]{8}$/);
+      expect(await screen.findByLabelText('显示格式')).toBeInTheDocument();
+      expect(screen.queryByLabelText('枚举选项说明')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('存储值说明')).toBeInTheDocument();
+      expect(screen.getByLabelText('显示值说明')).toBeInTheDocument();
+      expect(
+        screen.queryByText(
+          '显示值用于界面展示，存储值会写入数据库和 API payload。'
+        )
+      ).not.toBeInTheDocument();
+      expect(
+        screen
+          .getByText('存储值')
+          .compareDocumentPosition(screen.getByText('显示值')) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        screen
+          .getByRole('button', { name: '添加选项' })
+          .compareDocumentPosition(screen.getByText('规则')) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        screen
+          .getByText('规则')
+          .compareDocumentPosition(screen.getByText('默认值')) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(screen.getByLabelText('选项 1 显示值')).toBeInTheDocument();
+      expect(
+        (screen.getByLabelText('选项 1 存储值') as HTMLInputElement).value
+      ).toMatch(/^enum_[a-z0-9]{8}$/);
 
-    fireEvent.mouseDown(screen.getByLabelText('显示格式'));
-    fireEvent.click(await screen.findByText('多选下拉'));
-    fireEvent.change(screen.getByLabelText('选项 1 显示值'), {
-      target: { value: '草稿' }
-    });
-    fireEvent.change(screen.getByLabelText('选项 1 存储值'), {
-      target: { value: 'draft' }
-    });
-    fireEvent.click(screen.getByRole('button', { name: '添加选项' }));
-    expect(
-      ((await screen.findByLabelText('选项 2 存储值')) as HTMLInputElement)
-        .value
-    ).toMatch(/^enum_[a-z0-9]{8}$/);
-    fireEvent.change(await screen.findByLabelText('选项 2 显示值'), {
-      target: { value: '已支付' }
-    });
-    fireEvent.change(screen.getByLabelText('选项 2 存储值'), {
-      target: { value: 'paid' }
-    });
-    fireEvent.mouseDown(screen.getByLabelText('默认值'));
-    fireEvent.click(await screen.findByText('草稿'));
-    fireEvent.click(await screen.findByText('已支付'));
-    fireEvent.click(screen.getByRole('button', { name: '创建字段' }));
+      fireEvent.mouseDown(screen.getByLabelText('显示格式'));
+      fireEvent.click(await screen.findByText('多选下拉'));
+      fireEvent.change(screen.getByLabelText('选项 1 显示值'), {
+        target: { value: '草稿' }
+      });
+      fireEvent.change(screen.getByLabelText('选项 1 存储值'), {
+        target: { value: 'draft' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: '添加选项' }));
+      expect(
+        ((await screen.findByLabelText('选项 2 存储值')) as HTMLInputElement)
+          .value
+      ).toMatch(/^enum_[a-z0-9]{8}$/);
+      fireEvent.change(await screen.findByLabelText('选项 2 显示值'), {
+        target: { value: '已支付' }
+      });
+      fireEvent.change(screen.getByLabelText('选项 2 存储值'), {
+        target: { value: 'paid' }
+      });
+      fireEvent.mouseDown(screen.getByLabelText('默认值'));
+      fireEvent.click(await screen.findByText('草稿'));
+      fireEvent.click(await screen.findByText('已支付'));
+      fireEvent.click(screen.getByRole('button', { name: '创建字段' }));
 
-    await waitFor(() =>
-      expect(dataModelsApi.createSettingsDataModelField).toHaveBeenCalledWith(
-        'model-1',
-        expect.objectContaining({
-          code: 'status',
-          title: '状态',
-          field_kind: 'enum',
-          default_value: ['draft', 'paid'],
-          display_interface: 'multi_select',
-          display_options: {
-            options: [
-              { label: '草稿', value: 'draft' },
-              { label: '已支付', value: 'paid' }
-            ]
-          }
-        }),
-        'csrf-123'
-      )
-    );
-  }, 20_000);
+      await waitFor(() =>
+        expect(dataModelsApi.createSettingsDataModelField).toHaveBeenCalledWith(
+          'model-1',
+          expect.objectContaining({
+            code: 'status',
+            title: '状态',
+            field_kind: 'enum',
+            default_value: ['draft', 'paid'],
+            display_interface: 'multi_select',
+            display_options: {
+              options: [
+                { label: '草稿', value: 'draft' },
+                { label: '已支付', value: 'paid' }
+              ]
+            }
+          }),
+          'csrf-123'
+        )
+      );
+    },
+    SLOW_SETTINGS_PAGE_TEST_TIMEOUT * 2
+  );
 
   test('requests and closes API exposure without raw ready or unsafe selectors', async () => {
     renderApp('/settings/data-models?source=source-1');

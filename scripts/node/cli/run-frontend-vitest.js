@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require('node:child_process');
+const { spawnSync } = require("node:child_process");
 
-const { buildNodePreferredEnv } = require('../testing/node-runtime.js');
-const { getRepoRoot } = require('../testing/warning-capture.js');
-const { loadVerifyRuntimeConfig } = require('../testing/verify-runtime.js');
+const { buildNodePreferredEnv } = require("../testing/node-runtime.js");
+const { getRepoRoot } = require("../testing/warning-capture.js");
+const { loadVerifyRuntimeConfig } = require("../testing/verify-runtime.js");
 
-const VALID_MODES = new Set(['run', 'coverage']);
+const VALID_MODES = new Set(["run", "coverage"]);
 
 function normalizePassThroughArgs(args) {
-  return args.filter((arg) => arg !== '--');
+  return args.filter((arg) => arg !== "--");
 }
 
 function parseCliArgs(argv) {
-  const [mode = 'run', ...passThroughArgs] = argv;
+  const [mode = "run", ...passThroughArgs] = argv;
 
   if (!VALID_MODES.has(mode)) {
     throw new Error(`Unknown frontend vitest mode: ${mode}`);
@@ -26,28 +26,21 @@ function parseCliArgs(argv) {
 }
 
 function buildVitestCommand({ mode, runtimeConfig, passThroughArgs = [] }) {
-  const args = [
-    '--dir',
-    'web/app',
-    'exec',
-    'vitest',
-    'run',
-  ];
+  const args = ["--dir", "web/app", "exec", "vitest", "run"];
 
-  if (mode === 'coverage') {
-    args.push('--coverage');
+  if (mode === "coverage") {
+    args.push("--coverage");
   }
 
   args.push(
     `--maxWorkers=${runtimeConfig.frontend.vitestMaxWorkers}`,
-    `--minWorkers=${runtimeConfig.frontend.vitestMinWorkers}`,
-    ...passThroughArgs
+    ...passThroughArgs,
   );
 
   return {
-    command: 'pnpm',
+    command: "pnpm",
     args,
-    cwd: '.',
+    cwd: ".",
   };
 }
 
@@ -55,7 +48,8 @@ function main(argv = [], deps = {}) {
   const options = parseCliArgs(argv);
   const repoRoot = deps.repoRoot || getRepoRoot();
   const env = deps.env || process.env;
-  const runtimeConfig = deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
+  const runtimeConfig =
+    deps.runtimeConfig || loadVerifyRuntimeConfig({ repoRoot, env });
   const spawnSyncImpl = deps.spawnSyncImpl || spawnSync;
 
   const command = buildVitestCommand({
@@ -68,7 +62,7 @@ function main(argv = [], deps = {}) {
   const result = spawnSyncImpl(command.command, command.args, {
     cwd: repoRoot,
     env: commandEnv,
-    stdio: 'inherit',
+    stdio: "inherit",
   });
 
   if (result.error) {

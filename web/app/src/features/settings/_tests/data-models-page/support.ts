@@ -6,6 +6,7 @@ import {
   within
 } from '@testing-library/react';
 import { Grid } from 'antd';
+import { createElement } from 'react';
 import { expect, vi } from 'vitest';
 
 import type {
@@ -182,7 +183,8 @@ vi.mock('../../api/file-management', () => fileManagementApi);
 vi.mock('../../api/host-infrastructure', () => hostInfrastructureApi);
 vi.mock('../../api/data-models', () => dataModelsApi);
 vi.mock('@scalar/api-reference-react', () => ({
-  ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
+  ApiReferenceReact: () =>
+    createElement('div', { 'data-testid': 'settings-page-scalar' }, 'Scalar')
 }));
 
 import { AppProviders } from '../../../../app/AppProviders';
@@ -231,9 +233,7 @@ export function renderApp(pathname: string) {
   window.history.pushState({}, '', pathname);
 
   return render(
-    <AppProviders>
-      <AppRouterProvider />
-    </AppProviders>
+    createElement(AppProviders, null, createElement(AppRouterProvider))
   );
 }
 
@@ -434,209 +434,205 @@ const mainSourceModels = [
   ])
 ];
 
-
 export function setupDataModelsPageTest() {
-consoleWarnSpy = vi
-  .spyOn(console, 'warn')
-  .mockImplementation((...args) => consoleWarn(...args));
-consoleErrorSpy = vi
-  .spyOn(console, 'error')
-  .mockImplementation((...args) => consoleError(...args));
+  consoleWarnSpy = vi
+    .spyOn(console, 'warn')
+    .mockImplementation((...args) => consoleWarn(...args));
+  consoleErrorSpy = vi
+    .spyOn(console, 'error')
+    .mockImplementation((...args) => consoleError(...args));
 
-resetAuthStore();
-authenticate();
-useBreakpointSpy.mockReturnValue({
-  xs: true,
-  sm: true,
-  md: true,
-  lg: true,
-  xl: false,
-  xxl: false
-});
+  resetAuthStore();
+  authenticate();
+  useBreakpointSpy.mockReturnValue({
+    xs: true,
+    sm: true,
+    md: true,
+    lg: true,
+    xl: false,
+    xxl: false
+  });
 
-membersApi.fetchSettingsMembers.mockResolvedValue([]);
-rolesApi.fetchSettingsRoles.mockResolvedValue([]);
-rolesApi.fetchSettingsRolePermissions.mockResolvedValue({
-  role_code: 'root',
-  permission_codes: []
-});
-permissionsApi.fetchSettingsPermissions.mockResolvedValue([]);
-docsApi.fetchSettingsApiDocsCatalog.mockResolvedValue({
-  title: '1flowbase API',
-  version: '0.1.0',
-  categories: []
-});
-modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
-modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
-modelProvidersApi.fetchSettingsModelProviderOptions.mockResolvedValue({
-  providers: []
-});
-pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue({
-  locale_meta: {},
-  i18n_catalog: {},
-  entries: []
-});
-pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
-  source_kind: 'official_registry',
-  entries: []
-});
-systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({
-  topology: { relationship: 'same_host' },
-  hosts: []
-});
-fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
-fileManagementApi.fetchSettingsFileTables.mockResolvedValue([]);
-hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
-  []
-);
+  membersApi.fetchSettingsMembers.mockResolvedValue([]);
+  rolesApi.fetchSettingsRoles.mockResolvedValue([]);
+  rolesApi.fetchSettingsRolePermissions.mockResolvedValue({
+    role_code: 'root',
+    permission_codes: []
+  });
+  permissionsApi.fetchSettingsPermissions.mockResolvedValue([]);
+  docsApi.fetchSettingsApiDocsCatalog.mockResolvedValue({
+    title: '1flowbase API',
+    version: '0.1.0',
+    categories: []
+  });
+  modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
+  modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
+  modelProvidersApi.fetchSettingsModelProviderOptions.mockResolvedValue({
+    providers: []
+  });
+  pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue({
+    locale_meta: {},
+    i18n_catalog: {},
+    entries: []
+  });
+  pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
+    source_kind: 'official_registry',
+    entries: []
+  });
+  systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({
+    topology: { relationship: 'same_host' },
+    hosts: []
+  });
+  fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
+  fileManagementApi.fetchSettingsFileTables.mockResolvedValue([]);
+  hostInfrastructureApi.fetchSettingsHostInfrastructureProviders.mockResolvedValue(
+    []
+  );
 
-dataModelsApi.fetchSettingsDataSourceInstances.mockResolvedValue([
-  {
-    id: 'main_source',
-    source_kind: 'main_source',
-    installation_id: 'main_source',
-    source_code: 'main_source',
-    display_name: '主数据源',
-    status: 'ready',
-    default_data_model_status: 'published',
-    default_api_exposure_status: 'published_not_exposed',
-    config_json: {},
-    secret_ref: null,
-    secret_version: null,
-    catalog_refresh_status: null,
-    catalog_last_error_message: null,
-    catalog_refreshed_at: null
-  },
-  {
-    id: 'source-1',
-    source_kind: 'external_source',
-    installation_id: 'installation-1',
-    source_code: 'hubspot',
-    display_name: 'HubSpot',
-    status: 'ready',
-    default_data_model_status: 'draft',
-    default_api_exposure_status: 'draft',
-    config_json: {},
-    secret_ref: null,
-    secret_version: null,
-    catalog_refresh_status: 'ready',
-    catalog_last_error_message: null,
-    catalog_refreshed_at: '2026-04-30T08:00:00Z'
-  }
-]);
-dataModelsApi.fetchSettingsDataModels.mockImplementation(
-  (sourceId: string) =>
+  dataModelsApi.fetchSettingsDataSourceInstances.mockResolvedValue([
+    {
+      id: 'main_source',
+      source_kind: 'main_source',
+      installation_id: 'main_source',
+      source_code: 'main_source',
+      display_name: '主数据源',
+      status: 'ready',
+      default_data_model_status: 'published',
+      default_api_exposure_status: 'published_not_exposed',
+      config_json: {},
+      secret_ref: null,
+      secret_version: null,
+      catalog_refresh_status: null,
+      catalog_last_error_message: null,
+      catalog_refreshed_at: null
+    },
+    {
+      id: 'source-1',
+      source_kind: 'external_source',
+      installation_id: 'installation-1',
+      source_code: 'hubspot',
+      display_name: 'HubSpot',
+      status: 'ready',
+      default_data_model_status: 'draft',
+      default_api_exposure_status: 'draft',
+      config_json: {},
+      secret_ref: null,
+      secret_version: null,
+      catalog_refresh_status: 'ready',
+      catalog_last_error_message: null,
+      catalog_refreshed_at: '2026-04-30T08:00:00Z'
+    }
+  ]);
+  dataModelsApi.fetchSettingsDataModels.mockImplementation((sourceId: string) =>
     Promise.resolve(
       sourceId === 'main_source' ? mainSourceModels : [contactsModel]
     )
-);
-dataModelsApi.fetchSettingsDataModelScopeGrants.mockResolvedValue([
-  {
-    id: 'grant-owner',
-    scope_kind: 'workspace',
-    scope_id: 'workspace-1',
-    data_model_id: 'model-1',
-    enabled: true,
-    permission_profile: 'owner'
-  },
-  {
-    id: 'grant-scope',
-    scope_kind: 'workspace',
-    scope_id: 'workspace-1',
-    data_model_id: 'model-1',
-    enabled: true,
-    permission_profile: 'scope_all'
-  },
-  {
-    id: 'grant-system',
-    scope_kind: 'system',
-    scope_id: '00000000-0000-0000-0000-000000000000',
-    data_model_id: 'model-1',
-    enabled: false,
-    permission_profile: 'system_all'
-  }
-]);
-dataModelsApi.fetchSettingsDataModelAdvisorFindings.mockResolvedValue([
-  {
-    id: 'finding-1',
-    data_model_id: 'model-1',
-    severity: 'blocking',
-    code: 'unsafe_external_source',
-    message: 'External source needs scope filtering.',
-    recommended_action: 'Enable scope filtering.',
-    can_acknowledge: false
-  },
-  {
-    id: 'finding-2',
-    data_model_id: 'model-1',
-    severity: 'high',
-    code: 'api_exposed_no_permission',
-    message: 'Permission path is incomplete.',
-    recommended_action: 'Check API key permissions.',
-    can_acknowledge: false
-  },
-  {
-    id: 'finding-3',
-    data_model_id: 'model-1',
-    severity: 'info',
-    code: 'published_not_exposed',
-    message: 'Published but not exposed.',
-    recommended_action: 'Create API key only if needed.',
-    can_acknowledge: true
-  }
-]);
-dataModelsApi.fetchSettingsDataModelRecordPreview.mockResolvedValue({
-  items: [
+  );
+  dataModelsApi.fetchSettingsDataModelScopeGrants.mockResolvedValue([
     {
-      id: 'record-1',
-      email: 'person@example.com'
+      id: 'grant-owner',
+      scope_kind: 'workspace',
+      scope_id: 'workspace-1',
+      data_model_id: 'model-1',
+      enabled: true,
+      permission_profile: 'owner'
+    },
+    {
+      id: 'grant-scope',
+      scope_kind: 'workspace',
+      scope_id: 'workspace-1',
+      data_model_id: 'model-1',
+      enabled: true,
+      permission_profile: 'scope_all'
+    },
+    {
+      id: 'grant-system',
+      scope_kind: 'system',
+      scope_id: '00000000-0000-0000-0000-000000000000',
+      data_model_id: 'model-1',
+      enabled: false,
+      permission_profile: 'system_all'
     }
-  ],
-  total: 1
-});
-dataModelsApi.updateSettingsDataModel.mockResolvedValue({
-  id: 'model-1'
-});
-dataModelsApi.deleteSettingsDataModel.mockResolvedValue({
-  deleted: true
-});
-dataModelsApi.updateSettingsDataModelApiExposure.mockResolvedValue({
-  id: 'model-1'
-});
-dataModelsApi.createSettingsDataModel.mockResolvedValue({
-  id: 'model-new'
-});
-dataModelsApi.createSettingsDataModelField.mockResolvedValue({
-  id: 'field-new'
-});
-dataModelsApi.updateSettingsDataModelField.mockResolvedValue({
-  id: 'field-1'
-});
-dataModelsApi.deleteSettingsDataModelField.mockResolvedValue({
-  deleted: true
-});
-dataModelsApi.updateSettingsDataModelScopeGrant.mockResolvedValue({
-  id: 'grant-owner'
-});
-dataModelsApi.createSettingsDataModelScopeGrant.mockResolvedValue({
-  id: 'grant-new'
-});
-
+  ]);
+  dataModelsApi.fetchSettingsDataModelAdvisorFindings.mockResolvedValue([
+    {
+      id: 'finding-1',
+      data_model_id: 'model-1',
+      severity: 'blocking',
+      code: 'unsafe_external_source',
+      message: 'External source needs scope filtering.',
+      recommended_action: 'Enable scope filtering.',
+      can_acknowledge: false
+    },
+    {
+      id: 'finding-2',
+      data_model_id: 'model-1',
+      severity: 'high',
+      code: 'api_exposed_no_permission',
+      message: 'Permission path is incomplete.',
+      recommended_action: 'Check API key permissions.',
+      can_acknowledge: false
+    },
+    {
+      id: 'finding-3',
+      data_model_id: 'model-1',
+      severity: 'info',
+      code: 'published_not_exposed',
+      message: 'Published but not exposed.',
+      recommended_action: 'Create API key only if needed.',
+      can_acknowledge: true
+    }
+  ]);
+  dataModelsApi.fetchSettingsDataModelRecordPreview.mockResolvedValue({
+    items: [
+      {
+        id: 'record-1',
+        email: 'person@example.com'
+      }
+    ],
+    total: 1
+  });
+  dataModelsApi.updateSettingsDataModel.mockResolvedValue({
+    id: 'model-1'
+  });
+  dataModelsApi.deleteSettingsDataModel.mockResolvedValue({
+    deleted: true
+  });
+  dataModelsApi.updateSettingsDataModelApiExposure.mockResolvedValue({
+    id: 'model-1'
+  });
+  dataModelsApi.createSettingsDataModel.mockResolvedValue({
+    id: 'model-new'
+  });
+  dataModelsApi.createSettingsDataModelField.mockResolvedValue({
+    id: 'field-new'
+  });
+  dataModelsApi.updateSettingsDataModelField.mockResolvedValue({
+    id: 'field-1'
+  });
+  dataModelsApi.deleteSettingsDataModelField.mockResolvedValue({
+    deleted: true
+  });
+  dataModelsApi.updateSettingsDataModelScopeGrant.mockResolvedValue({
+    id: 'grant-owner'
+  });
+  dataModelsApi.createSettingsDataModelScopeGrant.mockResolvedValue({
+    id: 'grant-new'
+  });
 }
 
 export function cleanupDataModelsPageTest() {
-const warningCalls = [
-  ...consoleWarnSpy.mock.calls,
-  ...consoleErrorSpy.mock.calls
-].filter((args) =>
-  args.some((arg) => String(arg).includes(antdStaticMessageWarning))
-);
+  const warningCalls = [
+    ...consoleWarnSpy.mock.calls,
+    ...consoleErrorSpy.mock.calls
+  ].filter((args) =>
+    args.some((arg: unknown) => String(arg).includes(antdStaticMessageWarning))
+  );
 
-consoleWarnSpy.mockRestore();
-consoleErrorSpy.mockRestore();
+  consoleWarnSpy.mockRestore();
+  consoleErrorSpy.mockRestore();
 
-expect(warningCalls).toEqual([]);
-
+  expect(warningCalls).toEqual([]);
 }
 
 export {

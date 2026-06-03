@@ -13,7 +13,6 @@ import {
   startFlowDebugRunStream,
   upsertDebugVariableCacheEntry,
   type AgentFlowDebugMessage,
-  type AgentFlowRunContext,
   type AgentFlowTraceItem,
   type AgentFlowVariableGroup,
   type FlowDebugRunDetail,
@@ -323,11 +322,13 @@ export function useAgentFlowDebugSession({
       invalidateRuntime?: boolean;
     }
   ) {
-    const hydratedDetail = await hydrateRunDetailArtifacts(applicationId, detail);
-    const assistantMessage = mapRunDetailToConversation(hydratedDetail);
-    const inputVariableCache = buildInputVariableCacheFromRunDetail(
-      hydratedDetail
+    const hydratedDetail = await hydrateRunDetailArtifacts(
+      applicationId,
+      detail
     );
+    const assistantMessage = mapRunDetailToConversation(hydratedDetail);
+    const inputVariableCache =
+      buildInputVariableCacheFromRunDetail(hydratedDetail);
 
     setActiveRunId(hydratedDetail.flow_run.id);
     setLastDetail(hydratedDetail);
@@ -387,7 +388,9 @@ export function useAgentFlowDebugSession({
       setMessages((currentMessages) =>
         replaceAssistantMessageWithError(
           currentMessages,
-          error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_run_failed"),
+          error instanceof Error
+            ? error.message
+            : i18nText('agentFlow', 'auto.debug_run_failed'),
           { runId }
         )
       );
@@ -441,7 +444,7 @@ export function useAgentFlowDebugSession({
       setMessages((currentMessages) =>
         replaceAssistantMessageWithError(
           currentMessages,
-          i18nText("agentFlow", "auto.debug_run_csrf_missing"),
+          i18nText('agentFlow', 'auto.debug_run_csrf_missing'),
           { fallbackMessageId: runningMessage.id }
         )
       );
@@ -593,7 +596,9 @@ export function useAgentFlowDebugSession({
       streamAbortControllerRef.current = null;
       if (activeRunIdRef.current) {
         const errorMessage =
-          error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_stream_connection_interrupted");
+          error instanceof Error
+            ? error.message
+            : i18nText('agentFlow', 'auto.debug_stream_connection_interrupted');
         clearScheduledAssistantMessageFlush();
         setStatus('failed');
         setMessages((currentMessages) =>
@@ -632,7 +637,9 @@ export function useAgentFlowDebugSession({
       return detail;
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : i18nText("agentFlow", "auto.debug_run_failed");
+        error instanceof Error
+          ? error.message
+          : i18nText('agentFlow', 'auto.debug_run_failed');
 
       setStatus('failed');
       setMessages((currentMessages) =>

@@ -6,7 +6,15 @@ on:
       - latest
     paths:
       - ".github/workflows/container-images.yml"
+      - "docker/api-server.Dockerfile"
+      - "docker/plugin-runner.Dockerfile"
+      - "docker/web.Dockerfile"
+      - "api/Cargo.lock"
+      - "api/Cargo.toml"
+      - "web/package.json"
       - "web/app/package.json"
+      - "web/pnpm-lock.yaml"
+      - "web/pnpm-workspace.yaml"
       - "api/apps/api-server/Cargo.toml"
       - "api/apps/plugin-runner/Cargo.toml"
   workflow_dispatch:

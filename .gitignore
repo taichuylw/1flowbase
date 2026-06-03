@@ -28,7 +28,7 @@ docker/api/plugins/host-extension/dropins/*
 !docker/api/plugins/host-extension/dropins/.gitkeep
 
 # Local runtime outputs
-tmp/*
+tmp/
 web/app/tmp/
 .1flowbase.verify.local.json
 

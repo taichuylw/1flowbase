@@ -132,7 +132,7 @@ async fn seed_large_runtime_read_payloads(
     .bind(flow_run_id)
     .bind(&flow_input_payload)
     .bind(&large_object)
-    .bind(&Some(large_object.clone()))
+    .bind(Some(large_object.clone()))
     .execute(pool)
     .await
     .unwrap();
@@ -151,7 +151,7 @@ async fn seed_large_runtime_read_payloads(
     .bind(node_run_id)
     .bind(&large_object)
     .bind(&large_object)
-    .bind(&Some(large_object.clone()))
+    .bind(Some(large_object.clone()))
     .bind(&large_object)
     .bind(&large_object)
     .execute(pool)

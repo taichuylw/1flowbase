@@ -139,7 +139,7 @@ export function VersionHistoryPanel({
                     void onRestore(version.id);
                   }}
                 >
-                  {i18nText("agentFlow", "auto.recovery_version")}{version.sequence}
+                  {i18nText("agentFlow", "auto.recovery_version")} {version.sequence}
                 </Button>
               ]}
             >

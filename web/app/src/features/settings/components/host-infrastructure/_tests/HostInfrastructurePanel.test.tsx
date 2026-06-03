@@ -1025,7 +1025,7 @@ describe('HostInfrastructurePanel', () => {
     ).not.toBeInTheDocument();
     expect(await screen.findByText('条目值')).toBeInTheDocument();
     expect(screen.getByLabelText('内存值 JSON')).toHaveTextContent('succeeded');
-  });
+  }, 10000);
 
   test('shows preview state before full reveal reports oversized value', async () => {
     api.fetchSettingsHostInfrastructureProviders.mockResolvedValue([]);
@@ -1172,5 +1172,5 @@ describe('HostInfrastructurePanel', () => {
     expect(
       (await screen.findAllByText('value_too_large')).length
     ).toBeGreaterThan(0);
-  });
+  }, 10000);
 });

@@ -16,6 +16,7 @@ vi.mock('../api/me', () => ({
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
+import { appI18n } from '../../../shared/i18n/app-i18n';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
@@ -60,8 +61,10 @@ function renderApp(pathname: string) {
 }
 
 describe('MePage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetAuthStore();
+    window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+    await appI18n.changeLanguage('zh_Hans');
     useBreakpointSpy.mockReturnValue({
       xs: true,
       sm: true,
@@ -129,10 +132,10 @@ describe('MePage', () => {
     fireEvent.change(screen.getByLabelText('昵称'), {
       target: { value: 'Captain Root' }
     });
-    fireEvent.change(screen.getByLabelText('邮箱'), {
+    fireEvent.change(screen.getByLabelText('联系邮箱'), {
       target: { value: 'root-next@example.com' }
     });
-    fireEvent.change(screen.getByLabelText('手机号'), {
+    fireEvent.change(screen.getByLabelText('手机号码'), {
       target: { value: '13900000000' }
     });
     fireEvent.click(screen.getByRole('button', { name: '保存资料' }));

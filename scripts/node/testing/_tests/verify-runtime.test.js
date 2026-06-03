@@ -1,8 +1,8 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const {
   HEAVY_VERIFY_LOCK_DIR,
@@ -12,13 +12,13 @@ const {
   loadVerifyRuntimeConfig,
   readHeavyVerifyLockOwner,
   withHeavyVerifyLock,
-} = require('../verify-runtime.js');
+} = require("../verify-runtime.js");
 
 function createRepoRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-runtime-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "oneflowbase-verify-runtime-"));
 }
 
-test('loadVerifyRuntimeConfig returns defaults when local config is absent', () => {
+test("loadVerifyRuntimeConfig returns defaults when local config is absent", () => {
   const repoRoot = createRepoRoot();
 
   const config = loadVerifyRuntimeConfig({
@@ -35,7 +35,6 @@ test('loadVerifyRuntimeConfig returns defaults when local config is absent', () 
     frontend: {
       turboConcurrency: 4,
       vitestMaxWorkers: 4,
-      vitestMinWorkers: 1,
     },
     locks: {
       waitTimeoutMinutes: 30,
@@ -45,26 +44,29 @@ test('loadVerifyRuntimeConfig returns defaults when local config is absent', () 
   });
 });
 
-test('loadVerifyRuntimeConfig applies local overrides when config file exists', () => {
+test("loadVerifyRuntimeConfig applies local overrides when config file exists", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 3,
-        cargoTestThreads: 2,
+    JSON.stringify(
+      {
+        backend: {
+          cargoJobs: 3,
+          cargoTestThreads: 2,
+        },
+        frontend: {
+          turboConcurrency: 2,
+          vitestMaxWorkers: 3,
+        },
+        locks: {
+          waitTimeoutMinutes: 12,
+          pollIntervalMs: 1500,
+        },
       },
-      frontend: {
-        turboConcurrency: 2,
-        vitestMaxWorkers: 3,
-        vitestMinWorkers: 1,
-      },
-      locks: {
-        waitTimeoutMinutes: 12,
-        pollIntervalMs: 1500,
-      },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   const config = loadVerifyRuntimeConfig({
@@ -81,7 +83,6 @@ test('loadVerifyRuntimeConfig applies local overrides when config file exists', 
     frontend: {
       turboConcurrency: 2,
       vitestMaxWorkers: 3,
-      vitestMinWorkers: 1,
     },
     locks: {
       waitTimeoutMinutes: 12,
@@ -91,121 +92,145 @@ test('loadVerifyRuntimeConfig applies local overrides when config file exists', 
   });
 });
 
-test('loadVerifyRuntimeConfig rejects unknown top-level keys', () => {
+test("loadVerifyRuntimeConfig rejects unknown top-level keys", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 3,
-        cargoTestThreads: 2,
+    JSON.stringify(
+      {
+        backend: {
+          cargoJobs: 3,
+          cargoTestThreads: 2,
+        },
+        locks: {
+          waitTimeoutMinutes: 12,
+          pollIntervalMs: 1500,
+        },
+        extra: true,
       },
-      locks: {
-        waitTimeoutMinutes: 12,
-        pollIntervalMs: 1500,
-      },
-      extra: true,
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 8,
-    }),
-    /Unknown verify runtime config key: extra/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 8,
+      }),
+    /Unknown verify runtime config key: extra/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects unknown backend keys', () => {
+test("loadVerifyRuntimeConfig rejects unknown backend keys", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 3,
-        cargoTestThreads: 2,
-        unexpected: true,
+    JSON.stringify(
+      {
+        backend: {
+          cargoJobs: 3,
+          cargoTestThreads: 2,
+          unexpected: true,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 8,
-    }),
-    /Unknown backend key: unexpected/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 8,
+      }),
+    /Unknown backend key: unexpected/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects unknown frontend keys', () => {
+test("loadVerifyRuntimeConfig rejects unknown frontend keys", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      frontend: {
-        turboConcurrency: 2,
-        unexpected: true,
+    JSON.stringify(
+      {
+        frontend: {
+          turboConcurrency: 2,
+          unexpected: true,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 8,
-    }),
-    /Unknown frontend key: unexpected/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 8,
+      }),
+    /Unknown frontend key: unexpected/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects unknown locks keys', () => {
+test("loadVerifyRuntimeConfig rejects unknown locks keys", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      locks: {
-        waitTimeoutMinutes: 12,
-        pollIntervalMs: 1500,
-        unexpected: true,
+    JSON.stringify(
+      {
+        locks: {
+          waitTimeoutMinutes: 12,
+          pollIntervalMs: 1500,
+          unexpected: true,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 8,
-    }),
-    /Unknown locks key: unexpected/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 8,
+      }),
+    /Unknown locks key: unexpected/,
   );
 });
 
-test('loadVerifyRuntimeConfig merges backend and lock overrides field by field', () => {
+test("loadVerifyRuntimeConfig merges backend and lock overrides field by field", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 3,
+    JSON.stringify(
+      {
+        backend: {
+          cargoJobs: 3,
+        },
+        frontend: {
+          vitestMaxWorkers: 2,
+        },
+        locks: {
+          waitTimeoutMinutes: 12,
+        },
       },
-      frontend: {
-        vitestMaxWorkers: 2,
-      },
-      locks: {
-        waitTimeoutMinutes: 12,
-      },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   const config = loadVerifyRuntimeConfig({
@@ -222,7 +247,6 @@ test('loadVerifyRuntimeConfig merges backend and lock overrides field by field',
     frontend: {
       turboConcurrency: 4,
       vitestMaxWorkers: 2,
-      vitestMinWorkers: 1,
     },
     locks: {
       waitTimeoutMinutes: 12,
@@ -232,26 +256,30 @@ test('loadVerifyRuntimeConfig merges backend and lock overrides field by field',
   });
 });
 
-test('loadVerifyRuntimeConfig ignores local config in CI environments', () => {
+test("loadVerifyRuntimeConfig ignores local config in CI environments", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 1,
-        cargoTestThreads: 1,
+    JSON.stringify(
+      {
+        backend: {
+          cargoJobs: 1,
+          cargoTestThreads: 1,
+        },
+        locks: {
+          waitTimeoutMinutes: 1,
+          pollIntervalMs: 1,
+        },
       },
-      locks: {
-        waitTimeoutMinutes: 1,
-        pollIntervalMs: 1,
-      },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   const config = loadVerifyRuntimeConfig({
     repoRoot,
-    env: { CI: 'true' },
+    env: { CI: "true" },
     availableParallelism: 8,
   });
 
@@ -263,7 +291,6 @@ test('loadVerifyRuntimeConfig ignores local config in CI environments', () => {
     frontend: {
       turboConcurrency: 4,
       vitestMaxWorkers: 4,
-      vitestMinWorkers: 1,
     },
     locks: {
       waitTimeoutMinutes: 30,
@@ -273,16 +300,16 @@ test('loadVerifyRuntimeConfig ignores local config in CI environments', () => {
   });
 });
 
-test('isCiEnvironment accepts common truthy CI variants', () => {
+test("isCiEnvironment accepts common truthy CI variants", () => {
   const cases = [
-    [{ CI: 'true' }, true],
-    [{ CI: 'TRUE' }, true],
-    [{ CI: '1' }, true],
-    [{ GITHUB_ACTIONS: 'true' }, true],
-    [{ GITHUB_ACTIONS: 'TRUE' }, true],
-    [{ GITHUB_ACTIONS: '1' }, true],
-    [{ CI: 'false', GITHUB_ACTIONS: 'true' }, true],
-    [{ CI: '0', GITHUB_ACTIONS: '0' }, false],
+    [{ CI: "true" }, true],
+    [{ CI: "TRUE" }, true],
+    [{ CI: "1" }, true],
+    [{ GITHUB_ACTIONS: "true" }, true],
+    [{ GITHUB_ACTIONS: "TRUE" }, true],
+    [{ GITHUB_ACTIONS: "1" }, true],
+    [{ CI: "false", GITHUB_ACTIONS: "true" }, true],
+    [{ CI: "0", GITHUB_ACTIONS: "0" }, false],
     [{}, false],
   ];
 
@@ -291,307 +318,355 @@ test('isCiEnvironment accepts common truthy CI variants', () => {
   }
 });
 
-test('loadVerifyRuntimeConfig rejects invalid backend cargoJobs', () => {
+test("loadVerifyRuntimeConfig rejects invalid backend cargoJobs", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoJobs: 0,
+    JSON.stringify(
+      {
+        backend: {
+          cargoJobs: 0,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /must be a positive integer/i
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /must be a positive integer/i,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects invalid backend cargoTestThreads', () => {
+test("loadVerifyRuntimeConfig rejects invalid backend cargoTestThreads", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoTestThreads: 0,
+    JSON.stringify(
+      {
+        backend: {
+          cargoTestThreads: 0,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /backend\.cargoTestThreads must be a positive integer/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /backend\.cargoTestThreads must be a positive integer/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects invalid frontend turboConcurrency', () => {
+test("loadVerifyRuntimeConfig rejects invalid frontend turboConcurrency", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      frontend: {
-        turboConcurrency: 0,
+    JSON.stringify(
+      {
+        frontend: {
+          turboConcurrency: 0,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /frontend\.turboConcurrency must be a positive integer/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /frontend\.turboConcurrency must be a positive integer/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects frontend vitestMinWorkers above vitestMaxWorkers', () => {
+test("loadVerifyRuntimeConfig rejects frontend vitestMaxWorkers above available parallelism", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      frontend: {
-        vitestMaxWorkers: 1,
-        vitestMinWorkers: 2,
+    JSON.stringify(
+      {
+        frontend: {
+          vitestMaxWorkers: 5,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /frontend\.vitestMinWorkers must not exceed frontend\.vitestMaxWorkers/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /frontend\.vitestMaxWorkers must not exceed availableParallelism/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects invalid locks waitTimeoutMinutes', () => {
+test("loadVerifyRuntimeConfig rejects invalid locks waitTimeoutMinutes", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      locks: {
-        waitTimeoutMinutes: 0,
+    JSON.stringify(
+      {
+        locks: {
+          waitTimeoutMinutes: 0,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /locks\.waitTimeoutMinutes must be a positive integer/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /locks\.waitTimeoutMinutes must be a positive integer/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects invalid locks pollIntervalMs', () => {
+test("loadVerifyRuntimeConfig rejects invalid locks pollIntervalMs", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      locks: {
-        pollIntervalMs: 0,
+    JSON.stringify(
+      {
+        locks: {
+          pollIntervalMs: 0,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /locks\.pollIntervalMs must be a positive integer/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /locks\.pollIntervalMs must be a positive integer/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects backend cargoTestThreads above available parallelism', () => {
+test("loadVerifyRuntimeConfig rejects backend cargoTestThreads above available parallelism", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: {
-        cargoTestThreads: 5,
+    JSON.stringify(
+      {
+        backend: {
+          cargoTestThreads: 5,
+        },
       },
-    }, null, 2)
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /backend\.cargoTestThreads must not exceed availableParallelism/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /backend\.cargoTestThreads must not exceed availableParallelism/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects missing repoRoot', () => {
+test("loadVerifyRuntimeConfig rejects missing repoRoot", () => {
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      env: {},
-      availableParallelism: 4,
-    }),
-    /repoRoot must be a non-empty string/
+    () =>
+      loadVerifyRuntimeConfig({
+        env: {},
+        availableParallelism: 4,
+      }),
+    /repoRoot must be a non-empty string/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects empty repoRoot', () => {
+test("loadVerifyRuntimeConfig rejects empty repoRoot", () => {
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot: '',
-      env: {},
-      availableParallelism: 4,
-    }),
-    /repoRoot must be a non-empty string/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot: "",
+        env: {},
+        availableParallelism: 4,
+      }),
+    /repoRoot must be a non-empty string/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects non-object root config values', () => {
+test("loadVerifyRuntimeConfig rejects non-object root config values", () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE), "null");
+
+  assert.throws(
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /verify runtime config root must be a plain object/,
+  );
+});
+
+test("loadVerifyRuntimeConfig rejects array root config values", () => {
+  const repoRoot = createRepoRoot();
+
+  fs.writeFileSync(path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE), "[]");
+
+  assert.throws(
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /verify runtime config root must be a plain object/,
+  );
+});
+
+test("loadVerifyRuntimeConfig rejects non-object backend config values", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    'null'
+    JSON.stringify(
+      {
+        backend: [],
+      },
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /verify runtime config root must be a plain object/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /backend must be a plain object/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects array root config values', () => {
+test("loadVerifyRuntimeConfig rejects non-object frontend config values", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    '[]'
+    JSON.stringify(
+      {
+        frontend: [],
+      },
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /verify runtime config root must be a plain object/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /frontend must be a plain object/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects non-object backend config values', () => {
+test("loadVerifyRuntimeConfig rejects non-object locks config values", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      backend: [],
-    }, null, 2)
+    JSON.stringify(
+      {
+        locks: [],
+      },
+      null,
+      2,
+    ),
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /backend must be a plain object/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /locks must be a plain object/,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects non-object frontend config values', () => {
+test("loadVerifyRuntimeConfig rejects invalid JSON", () => {
   const repoRoot = createRepoRoot();
 
   fs.writeFileSync(
     path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      frontend: [],
-    }, null, 2)
+    "{ not valid json",
   );
 
   assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /frontend must be a plain object/
+    () =>
+      loadVerifyRuntimeConfig({
+        repoRoot,
+        env: {},
+        availableParallelism: 4,
+      }),
+    /Unexpected token|JSON/i,
   );
 });
 
-test('loadVerifyRuntimeConfig rejects non-object locks config values', () => {
-  const repoRoot = createRepoRoot();
-
-  fs.writeFileSync(
-    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    JSON.stringify({
-      locks: [],
-    }, null, 2)
-  );
-
-  assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /locks must be a plain object/
-  );
-});
-
-test('loadVerifyRuntimeConfig rejects invalid JSON', () => {
-  const repoRoot = createRepoRoot();
-
-  fs.writeFileSync(
-    path.join(repoRoot, LOCAL_VERIFY_CONFIG_FILE),
-    '{ not valid json'
-  );
-
-  assert.throws(
-    () => loadVerifyRuntimeConfig({
-      repoRoot,
-      env: {},
-      availableParallelism: 4,
-    }),
-    /Unexpected token|JSON/i
-  );
-});
-
-test('acquireHeavyVerifyLock writes owner.json with the expected metadata', async () => {
+test("acquireHeavyVerifyLock writes owner.json with the expected metadata", async () => {
   const repoRoot = createRepoRoot();
   const output = [];
 
   const lock = await acquireHeavyVerifyLock({
     repoRoot,
     env: {},
-    scope: 'verify-backend',
-    command: 'node scripts/node/verify-backend.js',
-    now: () => new Date('2026-04-21T12:10:00.000Z'),
-    hostname: 'devbox',
+    scope: "verify-backend",
+    command: "node scripts/node/verify-backend.js",
+    now: () => new Date("2026-04-21T12:10:00.000Z"),
+    hostname: "devbox",
     processId: 321,
     sleepImpl: async () => {},
     isProcessAliveImpl: () => true,
@@ -601,50 +676,63 @@ test('acquireHeavyVerifyLock writes owner.json with the expected metadata', asyn
   const owner = readHeavyVerifyLockOwner({ repoRoot });
 
   assert.equal(owner.pid, 321);
-  assert.equal(owner.scope, 'verify-backend');
-  assert.equal(owner.command, 'node scripts/node/verify-backend.js');
+  assert.equal(owner.scope, "verify-backend");
+  assert.equal(owner.command, "node scripts/node/verify-backend.js");
   assert.equal(owner.cwd, repoRoot);
-  assert.equal(owner.startedAt, '2026-04-21T12:10:00.000Z');
-  assert.equal(owner.hostname, 'devbox');
-  assert.equal(typeof owner.token, 'string');
+  assert.equal(owner.startedAt, "2026-04-21T12:10:00.000Z");
+  assert.equal(owner.hostname, "devbox");
+  assert.equal(typeof owner.token, "string");
   assert.equal(owner.token.length > 0, true);
 
   lock.release();
-  assert.equal(fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)), false);
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] acquired: scope=verify-backend pid=321/u);
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] released: scope=verify-backend pid=321/u);
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)),
+    false,
+  );
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] acquired: scope=verify-backend pid=321/u,
+  );
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] released: scope=verify-backend pid=321/u,
+  );
 });
 
-test('acquireHeavyVerifyLock waits for a live owner and times out', async () => {
+test("acquireHeavyVerifyLock waits for a live owner and times out", async () => {
   const repoRoot = createRepoRoot();
   const output = [];
 
   fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
   fs.writeFileSync(
-    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'),
-    JSON.stringify({
-      token: 'existing-token',
-      pid: 999,
-      scope: 'verify-repo',
-      command: 'node scripts/node/verify-repo.js',
-      cwd: repoRoot,
-      startedAt: '2026-04-21T12:00:00.000Z',
-      hostname: 'devbox',
-    }, null, 2)
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, "owner.json"),
+    JSON.stringify(
+      {
+        token: "existing-token",
+        pid: 999,
+        scope: "verify-repo",
+        command: "node scripts/node/verify-repo.js",
+        cwd: repoRoot,
+        startedAt: "2026-04-21T12:00:00.000Z",
+        hostname: "devbox",
+      },
+      null,
+      2,
+    ),
   );
 
   const nowValues = [
-    new Date('2026-04-21T12:00:00.000Z'),
-    new Date('2026-04-21T12:00:30.000Z'),
-    new Date('2026-04-21T12:01:01.000Z'),
+    new Date("2026-04-21T12:00:00.000Z"),
+    new Date("2026-04-21T12:00:30.000Z"),
+    new Date("2026-04-21T12:01:01.000Z"),
   ];
 
   await assert.rejects(
     acquireHeavyVerifyLock({
       repoRoot,
       env: {},
-      scope: 'verify-backend',
-      command: 'node scripts/node/verify-backend.js',
+      scope: "verify-backend",
+      command: "node scripts/node/verify-backend.js",
       runtimeConfig: {
         backend: {
           cargoJobs: 1,
@@ -657,77 +745,96 @@ test('acquireHeavyVerifyLock waits for a live owner and times out', async () => 
         },
       },
       writeStdout: (text) => output.push(text),
-      now: () => nowValues.shift() ?? new Date('2026-04-21T12:01:01.000Z'),
+      now: () => nowValues.shift() ?? new Date("2026-04-21T12:01:01.000Z"),
       sleepImpl: async () => {},
       isProcessAliveImpl: () => true,
       processId: 654,
     }),
-    /timeout waiting for heavy-verify lock/u
+    /timeout waiting for heavy-verify lock/u,
   );
 
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] busy: scope=verify-repo pid=999/u);
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] waiting.../u);
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] timeout waiting for heavy-verify lock:/u);
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] busy: scope=verify-repo pid=999/u,
+  );
+  assert.match(output.join(""), /\[1flowbase-verify-lock\] waiting.../u);
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] timeout waiting for heavy-verify lock:/u,
+  );
 });
 
-test('acquireHeavyVerifyLock cleans a stale owner before retrying', async () => {
+test("acquireHeavyVerifyLock cleans a stale owner before retrying", async () => {
   const repoRoot = createRepoRoot();
   const output = [];
 
   fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
   fs.writeFileSync(
-    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'),
-    JSON.stringify({
-      token: 'stale-token',
-      pid: 555,
-      scope: 'verify-ci',
-      command: 'node scripts/node/verify-ci.js',
-      cwd: repoRoot,
-      startedAt: '2026-04-21T11:00:00.000Z',
-      hostname: 'devbox',
-    }, null, 2)
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, "owner.json"),
+    JSON.stringify(
+      {
+        token: "stale-token",
+        pid: 555,
+        scope: "verify-ci",
+        command: "node scripts/node/verify-ci.js",
+        cwd: repoRoot,
+        startedAt: "2026-04-21T11:00:00.000Z",
+        hostname: "devbox",
+      },
+      null,
+      2,
+    ),
   );
 
   const lock = await acquireHeavyVerifyLock({
     repoRoot,
     env: {},
-    scope: 'verify-backend',
-    command: 'node scripts/node/verify-backend.js',
+    scope: "verify-backend",
+    command: "node scripts/node/verify-backend.js",
     writeStdout: (text) => output.push(text),
     isProcessAliveImpl: () => false,
     sleepImpl: async () => {},
     processId: 777,
   });
 
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] stale lock detected, cleaning/u);
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] stale lock detected, cleaning/u,
+  );
   assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 777);
   lock.release();
 });
 
-test('acquireHeavyVerifyLock cleans a damaged owner before retrying', async () => {
+test("acquireHeavyVerifyLock cleans a damaged owner before retrying", async () => {
   const repoRoot = createRepoRoot();
   const output = [];
 
   fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
-  fs.writeFileSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'), '{ not valid json');
+  fs.writeFileSync(
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, "owner.json"),
+    "{ not valid json",
+  );
 
   const lock = await acquireHeavyVerifyLock({
     repoRoot,
     env: {},
-    scope: 'verify-backend',
-    command: 'node scripts/node/verify-backend.js',
+    scope: "verify-backend",
+    command: "node scripts/node/verify-backend.js",
     writeStdout: (text) => output.push(text),
     isProcessAliveImpl: () => true,
     sleepImpl: async () => {},
     processId: 778,
   });
 
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] stale lock detected, cleaning/u);
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] stale lock detected, cleaning/u,
+  );
   assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 778);
   lock.release();
 });
 
-test('acquireHeavyVerifyLock cleans a missing owner.json before retrying', async () => {
+test("acquireHeavyVerifyLock cleans a missing owner.json before retrying", async () => {
   const repoRoot = createRepoRoot();
   const output = [];
 
@@ -736,36 +843,39 @@ test('acquireHeavyVerifyLock cleans a missing owner.json before retrying', async
   const lock = await acquireHeavyVerifyLock({
     repoRoot,
     env: {},
-    scope: 'verify-backend',
-    command: 'node scripts/node/verify-backend.js',
+    scope: "verify-backend",
+    command: "node scripts/node/verify-backend.js",
     writeStdout: (text) => output.push(text),
     sleepImpl: async () => {},
     isProcessAliveImpl: () => true,
     processId: 779,
   });
 
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] stale lock detected, cleaning/u);
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] stale lock detected, cleaning/u,
+  );
   assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 779);
   lock.release();
 });
 
-test('acquireHeavyVerifyLock publishes the lock atomically before exposing lockDir', async () => {
+test("acquireHeavyVerifyLock publishes the lock atomically before exposing lockDir", async () => {
   const repoRoot = createRepoRoot();
   const output = [];
   const publishEntered = createDeferred();
   const releasePublish = createDeferred();
   const lockDir = path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR);
   const nowValues = [
-    new Date('2026-04-21T12:00:00.000Z'),
-    new Date('2026-04-21T12:00:01.000Z'),
-    new Date('2026-04-21T12:00:02.000Z'),
+    new Date("2026-04-21T12:00:00.000Z"),
+    new Date("2026-04-21T12:00:01.000Z"),
+    new Date("2026-04-21T12:00:02.000Z"),
   ];
 
   const acquirePromise = acquireHeavyVerifyLock({
     repoRoot,
     env: {},
-    scope: 'verify-backend',
-    command: 'node scripts/node/verify-backend.js',
+    scope: "verify-backend",
+    command: "node scripts/node/verify-backend.js",
     runtimeConfig: {
       backend: {
         cargoJobs: 1,
@@ -780,11 +890,11 @@ test('acquireHeavyVerifyLock publishes the lock atomically before exposing lockD
     writeStdout: (text) => output.push(text),
     beforeOwnerPublishImpl: async ({ stagingDir }) => {
       assert.equal(fs.existsSync(lockDir), false);
-      assert.equal(fs.existsSync(path.join(stagingDir, 'owner.json')), true);
+      assert.equal(fs.existsSync(path.join(stagingDir, "owner.json")), true);
       publishEntered.resolve();
       await releasePublish.promise;
     },
-    now: () => nowValues.shift() ?? new Date('2026-04-21T12:00:02.000Z'),
+    now: () => nowValues.shift() ?? new Date("2026-04-21T12:00:02.000Z"),
     sleepImpl: async () => {},
     isProcessAliveImpl: () => true,
     processId: 901,
@@ -795,50 +905,67 @@ test('acquireHeavyVerifyLock publishes the lock atomically before exposing lockD
 
   fs.mkdirSync(lockDir, { recursive: true });
   fs.writeFileSync(
-    path.join(lockDir, 'owner.json'),
-    JSON.stringify({
-      token: 'competing-token',
-      pid: 999,
-      scope: 'verify-repo',
-      command: 'node scripts/node/verify-repo.js',
-      cwd: repoRoot,
-      startedAt: '2026-04-21T11:59:59.000Z',
-      hostname: 'devbox',
-    }, null, 2)
+    path.join(lockDir, "owner.json"),
+    JSON.stringify(
+      {
+        token: "competing-token",
+        pid: 999,
+        scope: "verify-repo",
+        command: "node scripts/node/verify-repo.js",
+        cwd: repoRoot,
+        startedAt: "2026-04-21T11:59:59.000Z",
+        hostname: "devbox",
+      },
+      null,
+      2,
+    ),
   );
 
   releasePublish.resolve();
 
-  await assert.rejects(acquirePromise, /timeout waiting for heavy-verify lock/u);
+  await assert.rejects(
+    acquirePromise,
+    /timeout waiting for heavy-verify lock/u,
+  );
 
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] busy: scope=verify-repo pid=999/u);
-  assert.match(output.join(''), /\[1flowbase-verify-lock\] timeout waiting for heavy-verify lock:/u);
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] busy: scope=verify-repo pid=999/u,
+  );
+  assert.match(
+    output.join(""),
+    /\[1flowbase-verify-lock\] timeout waiting for heavy-verify lock:/u,
+  );
   assert.equal(readHeavyVerifyLockOwner({ repoRoot }).pid, 999);
 });
 
-test('acquireHeavyVerifyLock treats matching token as a reentrant owner', async () => {
+test("acquireHeavyVerifyLock treats matching token as a reentrant owner", async () => {
   const repoRoot = createRepoRoot();
-  const token = '11111111-2222-4333-8444-555555555555';
+  const token = "11111111-2222-4333-8444-555555555555";
 
   fs.mkdirSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR), { recursive: true });
   fs.writeFileSync(
-    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, 'owner.json'),
-    JSON.stringify({
-      token,
-      pid: 444,
-      scope: 'verify-repo',
-      command: 'node scripts/node/verify-repo.js',
-      cwd: repoRoot,
-      startedAt: '2026-04-21T12:00:00.000Z',
-      hostname: 'devbox',
-    }, null, 2)
+    path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR, "owner.json"),
+    JSON.stringify(
+      {
+        token,
+        pid: 444,
+        scope: "verify-repo",
+        command: "node scripts/node/verify-repo.js",
+        cwd: repoRoot,
+        startedAt: "2026-04-21T12:00:00.000Z",
+        hostname: "devbox",
+      },
+      null,
+      2,
+    ),
   );
 
   const lock = await acquireHeavyVerifyLock({
     repoRoot,
     env: { ONEFLOWBASE_VERIFY_LOCK_TOKEN: token },
-    scope: 'verify-backend',
-    command: 'node scripts/node/verify-backend.js',
+    scope: "verify-backend",
+    command: "node scripts/node/verify-backend.js",
     processId: 444,
     sleepImpl: async () => {},
     isProcessAliveImpl: () => true,
@@ -848,8 +975,13 @@ test('acquireHeavyVerifyLock treats matching token as a reentrant owner', async 
   assert.equal(lock.reentrant, true);
 });
 
-test('withHeavyVerifyLock releases the lock when cleanup events fire', async () => {
-  const cleanupEvents = ['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection'];
+test("withHeavyVerifyLock releases the lock when cleanup events fire", async () => {
+  const cleanupEvents = [
+    "SIGINT",
+    "SIGTERM",
+    "uncaughtException",
+    "unhandledRejection",
+  ];
 
   for (const eventName of cleanupEvents) {
     const repoRoot = createRepoRoot();
@@ -860,8 +992,8 @@ test('withHeavyVerifyLock releases the lock when cleanup events fire', async () 
       {
         repoRoot,
         env: {},
-        scope: 'verify-backend',
-        command: 'node scripts/node/verify-backend.js',
+        scope: "verify-backend",
+        command: "node scripts/node/verify-backend.js",
         runtimeConfig: {
           backend: {
             cargoJobs: 1,
@@ -890,30 +1022,36 @@ test('withHeavyVerifyLock releases the lock when cleanup events fire', async () 
       },
       async () => {
         for (const name of cleanupEvents) {
-          assert.equal(typeof listeners.get(name), 'function');
+          assert.equal(typeof listeners.get(name), "function");
         }
 
         listeners.get(eventName)();
-        assert.equal(fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)), false);
-        assert.match(output.join(''), /\[1flowbase-verify-lock\] released: scope=verify-backend pid=888/u);
+        assert.equal(
+          fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)),
+          false,
+        );
+        assert.match(
+          output.join(""),
+          /\[1flowbase-verify-lock\] released: scope=verify-backend pid=888/u,
+        );
         return 0;
-      }
+      },
     );
   }
 });
 
-test('withHeavyVerifyLock forwards fatal cleanup events after releasing the lock', async () => {
+test("withHeavyVerifyLock forwards fatal cleanup events after releasing the lock", async () => {
   const repoRoot = createRepoRoot();
   const listeners = new Map();
   const forwarded = [];
-  const error = new Error('boom');
+  const error = new Error("boom");
 
   await withHeavyVerifyLock(
     {
       repoRoot,
       env: {},
-      scope: 'verify-backend',
-      command: 'node scripts/node/verify-backend.js',
+      scope: "verify-backend",
+      command: "node scripts/node/verify-backend.js",
       runtimeConfig: {
         backend: {
           cargoJobs: 1,
@@ -943,11 +1081,16 @@ test('withHeavyVerifyLock forwards fatal cleanup events after releasing the lock
       processId: 889,
     },
     async () => {
-      listeners.get('uncaughtException')(error);
-      assert.equal(fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)), false);
-      assert.deepEqual(forwarded, [{ eventName: 'uncaughtException', payload: error }]);
+      listeners.get("uncaughtException")(error);
+      assert.equal(
+        fs.existsSync(path.join(repoRoot, HEAVY_VERIFY_LOCK_DIR)),
+        false,
+      );
+      assert.deepEqual(forwarded, [
+        { eventName: "uncaughtException", payload: error },
+      ]);
       return 0;
-    }
+    },
   );
 });
 

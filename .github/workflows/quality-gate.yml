@@ -3,16 +3,13 @@ name: quality gate
 on:
   schedule:
     # Daily 02:00 Asia/Shanghai.
-    - cron: '0 18 * * *'
+    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
       target_branch:
         description: Target branch
-        type: choice
+        type: string
         default: latest
-        options:
-          - latest
-          - main
       scope:
         description: Quality gate scope
         type: choice
@@ -85,7 +82,7 @@ jobs:
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
         with:
-          version: 10
+          version: 11.5.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -123,7 +120,7 @@ jobs:
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
         with:
-          version: 10
+          version: 11.5.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -159,7 +156,7 @@ jobs:
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
         with:
-          version: 10
+          version: 11.5.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -264,7 +261,7 @@ jobs:
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
         with:
-          version: 10
+          version: 11.5.0
       - uses: actions/setup-node@v5
         with:
           node-version: 24

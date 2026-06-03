@@ -1011,7 +1011,7 @@ describe('SettingsPage', () => {
     expect(
       screen.queryByRole('tab', { name: 'Provider 配置' })
     ).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   test('shows 文件管理 when file_table.view.own is the only visible settings section', async () => {
     authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);

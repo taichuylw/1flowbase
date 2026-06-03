@@ -5,8 +5,7 @@
   },
   "frontend": {
     "turboConcurrency": 1,
-    "vitestMaxWorkers": 1,
-    "vitestMinWorkers": 1
+    "vitestMaxWorkers": 1
   },
   "locks": {
     "waitTimeoutMinutes": 30,
