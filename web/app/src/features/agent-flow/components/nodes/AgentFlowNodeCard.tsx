@@ -5,7 +5,7 @@ import {
   SwapOutlined
 } from '@ant-design/icons';
 import { Button, Dropdown, Tooltip, type MenuProps } from 'antd';
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   useEffect,
   useRef,
@@ -32,6 +32,7 @@ export function AgentFlowNodeCard({
   selected
 }: NodeProps<AgentFlowCanvasNode>) {
   const [quickActionsVisible, setQuickActionsVisible] = useState(false);
+  const updateNodeInternals = useUpdateNodeInternals();
   const hideQuickActionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -147,10 +148,17 @@ export function AgentFlowNodeCard({
     dispatch: () => undefined
   } as const;
   const branchSourceHandles = data.branchSourceHandles ?? [];
+  const branchHandleSignature = branchSourceHandles
+    .map((handle) => handle.id)
+    .join('|');
   const sourceHandles =
     branchSourceHandles.length > 0
       ? branchSourceHandles
       : [{ id: null, title: null }];
+
+  useEffect(() => {
+    updateNodeInternals(data.nodeId);
+  }, [branchHandleSignature, data.nodeId, updateNodeInternals]);
 
   function renderSourceHandle(
     handle: { id: string | null; title: string | null },

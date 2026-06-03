@@ -686,6 +686,23 @@ describe('NodeInspector', () => {
     ).not.toHaveClass('agent-flow-editor__inspector-field--inline');
   });
 
+  test('keeps If / Else condition rule controls inside narrow inspector bounds', () => {
+    const inspectorStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/inspector.css',
+      'utf8'
+    );
+
+    expect(inspectorStyles).toContain(
+      '.agent-flow-condition-group__rule {\n  display: flex;\n  flex-wrap: wrap;'
+    );
+    expect(inspectorStyles).toContain(
+      '.agent-flow-condition-group__rule > :not(.agent-flow-binding-row__delete) {\n  flex: 1 1 136px;\n  min-width: 0;'
+    );
+    expect(inspectorStyles).toContain(
+      '.agent-flow-condition-group__rule > .agent-flow-binding-row__delete {\n  flex: 0 0 28px;'
+    );
+  });
+
   test('edits If / Else branches as first-class branch handles', async () => {
     const initialState = createInitialStateWithIfElseNode();
     let latestDocument = initialState.draft.document;

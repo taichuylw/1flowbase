@@ -591,6 +591,20 @@
   min-width: 0;
 }
 
+.agent-flow-condition-group__rule {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.agent-flow-condition-group__rule > :not(.agent-flow-binding-row__delete) {
+  flex: 1 1 136px;
+  min-width: 0;
+}
+
+.agent-flow-condition-group__rule > .agent-flow-binding-row__delete {
+  flex: 0 0 28px;
+}
+
 .agent-flow-binding-row__name,
 .agent-flow-binding-row__selector {
   min-width: 0;

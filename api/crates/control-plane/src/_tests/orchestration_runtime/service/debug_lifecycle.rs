@@ -740,6 +740,178 @@ async fn live_debug_run_returns_unknown_node_type_not_implemented_error() {
 }
 
 #[tokio::test]
+async fn live_debug_run_executes_if_else_selected_branch_only() {
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("Branch Agent").await;
+
+    let document = serde_json::json!({
+        "schemaVersion": "1flowbase.flow/v2",
+        "meta": {
+            "flowId": seeded.flow_id.to_string(),
+            "name": "Branch Agent",
+            "description": "",
+            "tags": []
+        },
+        "graph": {
+            "nodes": [
+                {
+                    "id": "node-start",
+                    "type": "start",
+                    "alias": "Start",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 0, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {},
+                    "outputs": []
+                },
+                {
+                    "id": "node-if",
+                    "type": "if_else",
+                    "alias": "If / Else",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 240, "y": 0 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {
+                        "branches": {
+                            "kind": "if_else_branches",
+                            "value": {
+                                "branches": [
+                                    {
+                                        "id": "if",
+                                        "kind": "if",
+                                        "title": "If",
+                                        "sourceHandle": "if",
+                                        "condition": {
+                                            "operator": "and",
+                                            "conditions": [{
+                                                "kind": "rule",
+                                                "left": ["node-start", "model"],
+                                                "comparator": "equals",
+                                                "right": { "kind": "constant", "value": "gpt" }
+                                            }]
+                                        }
+                                    },
+                                    {
+                                        "id": "else",
+                                        "kind": "else",
+                                        "title": "Else",
+                                        "sourceHandle": "else"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": []
+                },
+                {
+                    "id": "node-if-answer",
+                    "type": "answer",
+                    "alias": "If Answer",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 480, "y": -80 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {
+                        "answer_template": {
+                            "kind": "templated_text",
+                            "value": "if branch"
+                        }
+                    },
+                    "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+                },
+                {
+                    "id": "node-else-answer",
+                    "type": "answer",
+                    "alias": "Else Answer",
+                    "description": "",
+                    "containerId": null,
+                    "position": { "x": 480, "y": 120 },
+                    "configVersion": 1,
+                    "config": {},
+                    "bindings": {
+                        "answer_template": {
+                            "kind": "templated_text",
+                            "value": "else branch"
+                        }
+                    },
+                    "outputs": [{ "key": "answer", "title": "Answer", "valueType": "string" }]
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge-start-if",
+                    "source": "node-start",
+                    "target": "node-if",
+                    "sourceHandle": null,
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                },
+                {
+                    "id": "edge-if-answer",
+                    "source": "node-if",
+                    "target": "node-if-answer",
+                    "sourceHandle": "if",
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                },
+                {
+                    "id": "edge-else-answer",
+                    "source": "node-if",
+                    "target": "node-else-answer",
+                    "sourceHandle": "else",
+                    "targetHandle": null,
+                    "containerId": null,
+                    "points": []
+                }
+            ]
+        },
+        "editor": {
+            "viewport": { "x": 0, "y": 0, "zoom": 1 },
+            "annotations": [],
+            "activeContainerPath": []
+        }
+    });
+
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({ "node-start": { "model": "gpt" } }),
+            document_snapshot: Some(document),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(
+        node_run(&completed, "node-if").debug_payload["selected_source_handle"],
+        json!("if")
+    );
+    assert_eq!(completed.flow_run.output_payload["answer"], json!("if branch"));
+    assert!(completed
+        .node_runs
+        .iter()
+        .all(|node_run| node_run.node_id != "node-else-answer"));
+}
+
+#[tokio::test]
 async fn opens_flow_debug_run_shell_without_compiling_plan() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("Support Agent").await;

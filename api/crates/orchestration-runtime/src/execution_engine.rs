@@ -37,7 +37,7 @@ pub use crate::code_runtime::{
     execute_code_node, CodeInvocationOutput, CodeInvoker, QuickJsCodeInvoker,
 };
 
-mod branching;
+pub mod branching;
 mod llm_callbacks;
 mod llm_context;
 mod llm_error_payloads;
