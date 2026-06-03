@@ -1,0 +1,234 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+const { getRepoRoot, resolveOutputDir } = require('../testing/warning-capture.js');
+
+const REPORT_FILE = 'security-risk.json';
+const DEFAULT_BASE_REF = 'origin/main';
+
+const HIGH_RISK_FILE_PATTERNS = [
+  /^package\.json$/u,
+  /^pnpm-lock\.yaml$/u,
+  /^web\/.*package\.json$/u,
+  /^web\/pnpm-lock\.yaml$/u,
+  /^api\/Cargo\.(?:toml|lock)$/u,
+  /^api\/.*\/Cargo\.toml$/u,
+  /^\.github\/workflows\//u,
+  /^\.github\/actions\//u,
+  /^docker\//u,
+  /^scripts\/(?:shell|powershell|node\/docker-deploy|node\/dev-up)\//u,
+  /(?:^|\/)(?:Dockerfile|docker-compose[^/]*\.ya?ml|nginx\.conf)$/u,
+];
+
+const RISK_PATTERNS = [
+  {
+    severity: 'high',
+    kind: 'insecure-url',
+    pattern: /\b(?:http|ws):\/\/[^\s"'`<>)]+/u,
+  },
+  {
+    severity: 'medium',
+    kind: 'external-url',
+    pattern: /\b(?:https|wss):\/\/[^\s"'`<>)]+/u,
+  },
+  {
+    severity: 'medium',
+    kind: 'javascript-network-call',
+    pattern: /\b(?:fetch|axios|WebSocket|EventSource)\s*\(/u,
+  },
+  {
+    severity: 'medium',
+    kind: 'rust-network-call',
+    pattern: /\b(?:reqwest|hyper|tokio_tungstenite|tungstenite)::/u,
+  },
+  {
+    severity: 'high',
+    kind: 'process-execution',
+    pattern: /\b(?:child_process|spawn|exec|execFile|Command::new)\b/u,
+  },
+  {
+    severity: 'high',
+    kind: 'install-script',
+    pattern: /"(?:preinstall|install|postinstall|prepare)"\s*:/u,
+  },
+  {
+    severity: 'high',
+    kind: 'remote-dependency',
+    pattern: /"[^"]+"\s*:\s*"(?:git\+https?:|https?:\/\/|github:|gitlab:|bitbucket:)[^"]*"/u,
+  },
+  {
+    severity: 'medium',
+    kind: 'callback-or-webhook',
+    pattern: /\b(?:callback|webhook|proxy|upgrade|websocket|resume_url|callback_url)\b/iu,
+  },
+];
+
+function normalizePath(filePath) {
+  return filePath.replace(/\\/gu, '/');
+}
+
+function readChangedFiles({ repoRoot, baseRef, env, spawnSyncImpl = spawnSync }) {
+  if (env?.SECURITY_RISK_CHANGED_FILES) {
+    return env.SECURITY_RISK_CHANGED_FILES
+      .split(/\r?\n/u)
+      .map((line) => normalizePath(line.trim()))
+      .filter(Boolean);
+  }
+
+  const result = spawnSyncImpl('git', ['diff', '--name-only', `${baseRef}...HEAD`], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to resolve changed files against ${baseRef}: ${result.stderr || result.stdout}`);
+  }
+
+  return result.stdout
+    .split(/\r?\n/u)
+    .map((line) => normalizePath(line.trim()))
+    .filter(Boolean);
+}
+
+function readDiff({ repoRoot, baseRef, env, spawnSyncImpl = spawnSync }) {
+  if (env?.SECURITY_RISK_DIFF) {
+    return env.SECURITY_RISK_DIFF;
+  }
+
+  const result = spawnSyncImpl('git', ['diff', '--unified=0', `${baseRef}...HEAD`], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to resolve diff against ${baseRef}: ${result.stderr || result.stdout}`);
+  }
+
+  return result.stdout;
+}
+
+function isAddedDiffLine(line) {
+  return line.startsWith('+') && !line.startsWith('+++');
+}
+
+function scanDiffText(diffText) {
+  const findings = [];
+  let currentFile = '';
+
+  for (const line of diffText.split(/\r?\n/u)) {
+    if (line.startsWith('+++ b/')) {
+      currentFile = normalizePath(line.slice('+++ b/'.length));
+      continue;
+    }
+
+    if (!isAddedDiffLine(line)) {
+      continue;
+    }
+
+    const content = line.slice(1);
+    for (const rule of RISK_PATTERNS) {
+      if (rule.pattern.test(content)) {
+        findings.push({
+          severity: rule.severity,
+          kind: rule.kind,
+          file: currentFile,
+          sample: content.trim().slice(0, 180),
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+function scanChangedFiles(changedFiles) {
+  return changedFiles
+    .filter((filePath) => HIGH_RISK_FILE_PATTERNS.some((pattern) => pattern.test(filePath)))
+    .map((filePath) => ({
+      severity: 'medium',
+      kind: 'sensitive-file-changed',
+      file: filePath,
+      sample: filePath,
+    }));
+}
+
+function dedupeFindings(findings) {
+  const seen = new Set();
+  return findings.filter((finding) => {
+    const key = `${finding.severity}:${finding.kind}:${finding.file}:${finding.sample}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildReport({ changedFiles, findings }) {
+  return {
+    status: findings.some((finding) => finding.severity === 'high') ? 'review_required' : 'advisory',
+    changedFiles,
+    findings,
+  };
+}
+
+function writeReport({ repoRoot, env, report }) {
+  const outputDir = resolveOutputDir(repoRoot, env);
+  fs.mkdirSync(outputDir, { recursive: true });
+  const reportPath = path.join(outputDir, REPORT_FILE);
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  return reportPath;
+}
+
+async function main(argv = [], deps = {}) {
+  const repoRoot = deps.repoRoot || getRepoRoot();
+  const env = deps.env || process.env;
+  const baseRef = argv[0] || env.SECURITY_RISK_BASE_REF || DEFAULT_BASE_REF;
+  const changedFiles = readChangedFiles({
+    repoRoot,
+    baseRef,
+    env,
+    spawnSyncImpl: deps.spawnSyncImpl,
+  });
+  const diffText = readDiff({
+    repoRoot,
+    baseRef,
+    env,
+    spawnSyncImpl: deps.spawnSyncImpl,
+  });
+  const findings = dedupeFindings([
+    ...scanChangedFiles(changedFiles),
+    ...scanDiffText(diffText),
+  ]);
+  const report = buildReport({ changedFiles, findings });
+  const reportPath = writeReport({ repoRoot, env, report });
+  const writeStdout = deps.writeStdout || ((text) => process.stdout.write(text));
+  const writeStderr = deps.writeStderr || ((text) => process.stderr.write(text));
+
+  writeStdout(`[security-risk] Wrote ${path.relative(repoRoot, reportPath)} with ${findings.length} finding(s).\n`);
+
+  if (findings.length > 0) {
+    writeStderr(`[security-risk] Review ${findings.length} risk finding(s) before merging.\n`);
+  }
+
+  return 0;
+}
+
+module.exports = {
+  buildReport,
+  main,
+  scanChangedFiles,
+  scanDiffText,
+};

@@ -1008,6 +1008,12 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
     {
+      label: 'repo-security-risk',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'security-risk'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-script-tests',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'scripts'],
