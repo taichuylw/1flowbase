@@ -146,6 +146,125 @@ prompt_official_plugin_github_proxy_url() {
   fi
 }
 
+normalize_docker_architecture() {
+  case "$1" in
+    amd64|x86_64)
+      printf '%s\n' "amd64"
+      ;;
+    arm64|aarch64|arm64/v8)
+      printf '%s\n' "arm64"
+      ;;
+    *)
+      printf '%s\n' "$1"
+      ;;
+  esac
+}
+
+normalize_docker_platform() {
+  platform="$1"
+  case "$platform" in
+    */*)
+      os_name="${platform%%/*}"
+      arch_name="${platform#*/}"
+      ;;
+    *)
+      os_name="linux"
+      arch_name="$platform"
+      ;;
+  esac
+
+  os_name="$(printf '%s' "$os_name" | tr '[:upper:]' '[:lower:]')"
+  arch_name="$(normalize_docker_architecture "$(printf '%s' "$arch_name" | tr '[:upper:]' '[:lower:]')")"
+  printf '%s/%s\n' "$os_name" "$arch_name"
+}
+
+detect_docker_platform() {
+  if [ -n "${DOCKER_DEFAULT_PLATFORM:-}" ]; then
+    normalize_docker_platform "$DOCKER_DEFAULT_PLATFORM"
+    return
+  fi
+
+  platform="$(docker info --format '{{.OSType}}/{{.Architecture}}' 2>/dev/null || true)"
+  [ -n "$platform" ] || fail "Could not detect Docker server platform."
+  normalize_docker_platform "$platform"
+}
+
+flowbase_env_or_file_value() {
+  key="$1"
+  file="$2"
+  default_value="$3"
+  value=""
+
+  case "$key" in
+    FLOWBASE_WEB_VERSION)
+      value="${FLOWBASE_WEB_VERSION:-}"
+      ;;
+    FLOWBASE_API_SERVER_VERSION)
+      value="${FLOWBASE_API_SERVER_VERSION:-}"
+      ;;
+    FLOWBASE_PLUGIN_RUNNER_VERSION)
+      value="${FLOWBASE_PLUGIN_RUNNER_VERSION:-}"
+      ;;
+  esac
+
+  if [ -z "$value" ]; then
+    value="$(read_env_value "$key" "$file")"
+  fi
+  if [ -z "$value" ]; then
+    value="$default_value"
+  fi
+
+  printf '%s\n' "$value"
+}
+
+manifest_supports_platform() {
+  image="$1"
+  platform="$2"
+  os_name="${platform%%/*}"
+  arch_name="${platform#*/}"
+  manifest="$(docker manifest inspect "$image" 2>/dev/null || true)"
+
+  [ -n "$manifest" ] || return 2
+  printf '%s\n' "$manifest" | grep -Eq "\"os\"[[:space:]]*:[[:space:]]*\"${os_name}\"" || return 1
+  printf '%s\n' "$manifest" | grep -Eq "\"architecture\"[[:space:]]*:[[:space:]]*\"${arch_name}\"" || return 1
+  return 0
+}
+
+verify_flowbase_image_platforms() {
+  platform="$(detect_docker_platform)"
+  echo "Detected Docker platform: ${platform}"
+
+  case "$platform" in
+    linux/amd64|linux/arm64)
+      ;;
+    *)
+      fail "This 1flowbase Docker package supports linux/amd64 and linux/arm64. Detected Docker platform: ${platform}."
+      ;;
+  esac
+
+  web_version="$(flowbase_env_or_file_value FLOWBASE_WEB_VERSION .env latest)"
+  api_version="$(flowbase_env_or_file_value FLOWBASE_API_SERVER_VERSION .env latest)"
+  plugin_runner_version="$(flowbase_env_or_file_value FLOWBASE_PLUGIN_RUNNER_VERSION .env latest)"
+
+  for image in \
+    "ghcr.io/taichuy/1flowbase-web:${web_version}" \
+    "ghcr.io/taichuy/1flowbase-api-server:${api_version}" \
+    "ghcr.io/taichuy/1flowbase-plugin-runner:${plugin_runner_version}"
+  do
+    manifest_status=0
+    manifest_supports_platform "$image" "$platform" || manifest_status="$?"
+    if [ "$manifest_status" -eq 0 ]; then
+      continue
+    fi
+
+    if [ "$manifest_status" -eq 1 ]; then
+      fail "Docker image ${image} does not publish ${platform}. Rebuild/publish the 1flowbase multi-platform images, or set DOCKER_DEFAULT_PLATFORM=linux/amd64 as a temporary workaround on ARM machines."
+    fi
+
+    echo "Could not verify Docker image platform support for ${image}; continuing to Docker pull."
+  done
+}
+
 usage() {
   cat <<'EOF'
 Usage: docker-deploy.sh [options]
@@ -175,6 +294,7 @@ Environment variables with the same effect:
   FLOWBASE_PULL_IMAGES=1
   FLOWBASE_START_CONTAINERS=1
   FLOWBASE_NON_INTERACTIVE=1
+  DOCKER_DEFAULT_PLATFORM=linux/amd64
 EOF
 }
 
@@ -364,6 +484,8 @@ fi
 docker info >/dev/null 2>&1 || fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
 
 cd docker
+verify_flowbase_image_platforms
+
 if [ "$PULL_IMAGES" = "yes" ]; then
   compose pull
 else

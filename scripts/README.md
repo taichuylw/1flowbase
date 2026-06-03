@@ -313,6 +313,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 - `Pull Docker images? [y/N]`
 - `Start 1flowbase now? [y/N]`
 
+拉取或启动前，脚本会检测有效 Docker 平台。官方镜像支持 `linux/amd64` 和 `linux/arm64`，Docker 会自动拉取匹配 manifest；如果当前 tag 缺少本机平台 manifest，脚本会提前失败并提示重新发布多架构镜像。临时需要强制 x86 镜像时，可以设置 `DOCKER_DEFAULT_PLATFORM=linux/amd64`。
+
 如果选择暂时不启动，之后可以手动执行：
 
 ```bash

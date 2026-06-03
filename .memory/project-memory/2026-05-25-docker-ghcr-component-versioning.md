@@ -20,5 +20,7 @@ decision_policy: verify_before_decision
 - 默认使用 `latest`，并通过 `FLOWBASE_WEB_VERSION`、`FLOWBASE_API_SERVER_VERSION`、`FLOWBASE_PLUGIN_RUNNER_VERSION` 支持按组件 pin 具体版本。
 - 不再要求用户复制 `api/api.env`、`plugin-runner/plugin-runner.env` 或 `postgres/postgres.env`；配置入口收敛到 `docker/.env`。
 - 发布前用 `scripts/node/cli/verify-container-version.js` 校验镜像 tag 与组件 manifest 版本一致。
+- 2026-06-03 起，CI 使用 buildx/QEMU 为官方组件镜像发布 `linux/amd64` 和 `linux/arm64` manifest；Rust Dockerfile 的 cargo target cache 按目标平台拆分，避免多平台构建共用 release target。
+- 2026-06-03 起，`scripts/shell/docker-deploy.sh` 和 `scripts/powershell/docker-deploy.ps1` 在拉取或启动前检测有效 Docker 平台（优先尊重 `DOCKER_DEFAULT_PLATFORM`），并对三张官方业务镜像做 manifest 平台预检；当前 tag 缺少本机平台时提前失败并提示重新发布多架构镜像。
 
 后续调整发布流程、文档或 workflow 时，先核对当前代码和 issue #454。
