@@ -158,12 +158,13 @@ function maskSecretPreview(value: string) {
 function buildInitialConfig(
   mode: DrawerMode,
   entry: SettingsModelProviderCatalogEntry | null,
-  instance: SettingsModelProviderInstance | null
+  instance: SettingsModelProviderInstance | null,
+  formSchema: ModelProviderConfigField[]
 ) {
   const currentConfig = instance?.config_json ?? {};
   const nextConfig: Record<string, ModelProviderFormValue> = {};
 
-  for (const field of entry?.form_schema ?? []) {
+  for (const field of formSchema) {
     if (mode === 'edit' && field.field_type === 'secret') {
       nextConfig[field.key] = '';
       continue;
@@ -195,6 +196,38 @@ function buildInitialConfig(
   }
 
   return nextConfig;
+}
+
+function buildFallbackConfigSchema(
+  entry: SettingsModelProviderCatalogEntry | null,
+  instance: SettingsModelProviderInstance | null
+): ModelProviderConfigField[] {
+  if (!entry || entry.form_schema.length > 0) {
+    return entry?.form_schema ?? [];
+  }
+
+  const config = instance?.config_json ?? {};
+  const fallbackSchema: ModelProviderConfigField[] = [];
+
+  if ('base_url' in config || entry.default_base_url) {
+    fallbackSchema.push({
+      key: 'base_url',
+      field_type: 'string',
+      required: true,
+      advanced: false
+    });
+  }
+
+  if ('api_key' in config || !entry.supports_model_fetch_without_credentials) {
+    fallbackSchema.push({
+      key: 'api_key',
+      field_type: 'secret',
+      required: true,
+      advanced: false
+    });
+  }
+
+  return fallbackSchema;
 }
 
 function isTextAreaField(key: string) {
@@ -314,10 +347,12 @@ function ModelProviderInstanceDrawerContent({
       return;
     }
 
+    const formSchema = buildFallbackConfigSchema(catalogEntry, instance);
+
     form.setFieldsValue({
       display_name: instance?.display_name ?? catalogEntry?.display_name ?? '',
       included_in_main: instance?.included_in_main ?? defaultIncludedInMain,
-      config: buildInitialConfig(mode, catalogEntry, instance)
+      config: buildInitialConfig(mode, catalogEntry, instance, formSchema)
     });
     setPreviewModels([]);
     setConfiguredModels(buildInitialConfiguredModels());
@@ -437,7 +472,7 @@ function ModelProviderInstanceDrawerContent({
   }
 
   const title = mode === 'create' ? i18nText("settings", "auto.api_key_authorization_configuration") : i18nText("settings", "auto.edit_api_key_configuration");
-  const formSchema = (catalogEntry?.form_schema ?? []).filter(
+  const formSchema = buildFallbackConfigSchema(catalogEntry, instance).filter(
     (field) => !isPreviewOnlyField(field)
   );
   const editableConfigFields = formSchema.filter(
@@ -468,7 +503,7 @@ function ModelProviderInstanceDrawerContent({
     }
 
     if (mode === 'edit' && catalogEntry) {
-      for (const field of catalogEntry.form_schema) {
+      for (const field of formSchema) {
         if (field.field_type !== 'secret') {
           continue;
         }

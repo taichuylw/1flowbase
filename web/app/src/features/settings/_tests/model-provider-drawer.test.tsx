@@ -345,6 +345,95 @@ describe('ModelProviderInstanceDrawer', () => {
   );
 
   test(
+    'falls back to existing connection config fields when edit catalog schema is empty',
+    { timeout: 15000 },
+    async () => {
+      const submit = vi.fn().mockResolvedValue(undefined);
+      const instance = buildSettingsModelProviderInstances()[0];
+      const catalogEntry = {
+        ...modelProviderCatalogEntries[0],
+        form_schema: []
+      };
+
+      render(
+        <ModelProviderInstanceDrawer
+          open
+          mode="edit"
+          catalogEntry={catalogEntry}
+          instance={instance}
+          cachedModelCatalog={null}
+          defaultIncludedInMain={true}
+          submitting={false}
+          onClose={() => undefined}
+          onSubmit={submit}
+          onPreviewModels={async () => ({
+            models: [],
+            preview_token: 'preview-1',
+            expires_at: '2026-04-22T12:00:00Z'
+          })}
+          onRevealSecret={async () => 'super-secret'}
+        />
+      );
+
+      expect(await screen.findByLabelText('API Endpoint')).toHaveValue(
+        'https://api.openai.com/v1'
+      );
+      expect(screen.getByLabelText('API Key')).toHaveValue('supe****cret');
+
+      fireEvent.change(screen.getByLabelText('API Endpoint'), {
+        target: { value: 'https://gateway.example/v1' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+      await waitFor(() => {
+        expect(submit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            config: {
+              base_url: 'https://gateway.example/v1'
+            }
+          })
+        );
+      });
+    }
+  );
+
+  test(
+    'falls back to api key fields in create mode when credential catalog schema is empty',
+    { timeout: 15000 },
+    async () => {
+      const submit = vi.fn().mockResolvedValue(undefined);
+      const catalogEntry = {
+        ...modelProviderCatalogEntries[0],
+        form_schema: [],
+        supports_model_fetch_without_credentials: false
+      };
+
+      render(
+        <ModelProviderInstanceDrawer
+          open
+          mode="create"
+          catalogEntry={catalogEntry}
+          instance={null}
+          cachedModelCatalog={null}
+          defaultIncludedInMain={true}
+          submitting={false}
+          onClose={() => undefined}
+          onSubmit={submit}
+          onPreviewModels={async () => ({
+            models: [],
+            preview_token: 'preview-1',
+            expires_at: '2026-04-22T12:00:00Z'
+          })}
+          onRevealSecret={async () => 'super-secret'}
+        />
+      );
+
+      expect(await screen.findByLabelText('API Endpoint')).toBeInTheDocument();
+      expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+    }
+  );
+
+  test(
     'parses create-mode context overrides into numeric payloads and blocks invalid values',
     { timeout: 15000 },
     async () => {
