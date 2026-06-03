@@ -858,6 +858,82 @@ describe('NodeInspector', () => {
     });
   });
 
+  test('stores typed fixed values in If / Else condition rules', async () => {
+    const initialState = createInitialStateWithIfElseNode();
+    const startNode = initialState.draft.document.graph.nodes.find(
+      (node) => node.id === 'node-start'
+    );
+
+    if (!startNode) {
+      throw new Error('expected Start node');
+    }
+
+    startNode.config.input_fields = [
+      {
+        key: 'amount',
+        label: 'Amount',
+        inputType: 'number',
+        required: false
+      }
+    ];
+    initialState.draft.document.graph.edges.push({
+      id: 'edge-start-if-else',
+      source: 'node-start',
+      target: 'node-if-else',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+    let latestDocument = initialState.draft.document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-if-else" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const ifBranch = await screen.findByTestId('if-else-branch-if');
+
+    fireEvent.click(
+      within(ifBranch).getByRole('button', { name: /新增条件$/ })
+    );
+
+    await openSelect('分支-if-0-left');
+    await selectOption('Start');
+    await selectOption('amount');
+    await openSelect('分支-if-0-comparator');
+    await selectOption('等于');
+    fireEvent.change(await screen.findByLabelText('分支-if-0-right'), {
+      target: { value: '5' }
+    });
+
+    await waitFor(() => {
+      const ifElseNode = latestDocument.graph.nodes.find(
+        (node) => node.id === 'node-if-else'
+      );
+      const branchBinding = ifElseNode?.bindings.branches;
+
+      if (!branchBinding || branchBinding.kind !== 'if_else_branches') {
+        throw new Error('expected If / Else branch binding');
+      }
+
+      expect(
+        branchBinding.value.branches[0]?.condition?.conditions[0]
+      ).toMatchObject({
+        left: ['node-start', 'amount'],
+        comparator: 'equals',
+        right: { kind: 'constant', value: 5 }
+      });
+    });
+  });
+
   test('loads Data Model options from the feature API and disables unavailable models', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider

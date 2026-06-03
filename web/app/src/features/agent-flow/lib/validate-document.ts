@@ -128,14 +128,19 @@ function isMissingRequiredField(
   }
 }
 
-function conditionGroupHasRule(group: FlowConditionGroupDocument): boolean {
-  return group.conditions.some((condition) => {
-    if (isConditionGroup(condition)) {
-      return conditionGroupHasRule(condition);
-    }
+function conditionGroupHasCompleteRules(
+  group: FlowConditionGroupDocument
+): boolean {
+  return (
+    group.conditions.length > 0 &&
+    group.conditions.every((condition) => {
+      if (isConditionGroup(condition)) {
+        return conditionGroupHasCompleteRules(condition);
+      }
 
-    return isConditionRule(condition) && conditionRuleHasRequiredInput(condition);
-  });
+      return isConditionRule(condition) && conditionRuleHasRequiredInput(condition);
+    })
+  );
 }
 
 function selectorHasRequiredInput(selector: string[]): boolean {
@@ -175,7 +180,7 @@ function ifElseBranchesMissingRequiredInput(
     branches.some(
       (branch) =>
         branch.kind !== 'else' &&
-        (!branch.condition || !conditionGroupHasRule(branch.condition))
+        (!branch.condition || !conditionGroupHasCompleteRules(branch.condition))
     )
   );
 }

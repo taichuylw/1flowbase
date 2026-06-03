@@ -42,9 +42,14 @@ pub(super) fn answer_output_payload_with_error(
 pub(super) fn can_continue_to_terminal_template_nodes(
     plan: &CompiledPlan,
     failed_node_index: usize,
+    active_node_ids: &BTreeSet<String>,
 ) -> bool {
     let mut has_terminal_template_node = false;
     for node_id in plan.topological_order.iter().skip(failed_node_index + 1) {
+        if !active_node_ids.contains(node_id) {
+            continue;
+        }
+
         let Some(node) = plan.nodes.get(node_id) else {
             return false;
         };

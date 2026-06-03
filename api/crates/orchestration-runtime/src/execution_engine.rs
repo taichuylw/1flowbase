@@ -342,13 +342,15 @@ where
                         node_alias: node.alias.clone(),
                         error_payload,
                     };
-                    if can_continue_to_terminal_template_nodes(plan, index) {
-                        activate_downstream_nodes(
-                            plan,
-                            &mut active_node_ids,
-                            node,
-                            selected_source_handle.as_deref(),
-                        );
+                    let mut next_active_node_ids = active_node_ids.clone();
+                    activate_downstream_nodes(
+                        plan,
+                        &mut next_active_node_ids,
+                        node,
+                        selected_source_handle.as_deref(),
+                    );
+                    if can_continue_to_terminal_template_nodes(plan, index, &next_active_node_ids) {
+                        active_node_ids = next_active_node_ids;
                         pending_failure = Some(failure);
                         continue;
                     }

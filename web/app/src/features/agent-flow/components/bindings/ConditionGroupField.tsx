@@ -85,6 +85,64 @@ function conditionValueText(value: FlowConditionValue | undefined) {
   return typeof value.value === 'string' ? value.value : String(value.value ?? '');
 }
 
+function selectorValueType(options: FlowSelectorOption[], selector: string[]) {
+  return options.find(
+    (option) =>
+      option.value.length === selector.length &&
+      option.value.every((segment, index) => segment === selector[index])
+  )?.valueType;
+}
+
+function coerceConditionConstantValue(text: string, valueType: string | undefined) {
+  const trimmed = text.trim();
+
+  if (valueType === 'number') {
+    if (trimmed.length === 0) {
+      return text;
+    }
+
+    const numberValue = Number(trimmed);
+
+    return Number.isFinite(numberValue) ? numberValue : text;
+  }
+
+  if (valueType === 'boolean') {
+    if (trimmed.toLowerCase() === 'true') {
+      return true;
+    }
+    if (trimmed.toLowerCase() === 'false') {
+      return false;
+    }
+
+    return text;
+  }
+
+  if (valueType === 'json' || valueType === 'object' || valueType === 'array') {
+    if (trimmed.length === 0) {
+      return text;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+
+      if (valueType === 'array') {
+        return Array.isArray(parsed) ? parsed : text;
+      }
+      if (valueType === 'object') {
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed
+          : text;
+      }
+
+      return parsed;
+    } catch {
+      return text;
+    }
+  }
+
+  return text;
+}
+
 function ensureRightValue(
   rule: FlowConditionRuleDocument,
   comparator: FlowConditionComparator
@@ -183,7 +241,13 @@ function RightValueField({
           onChange={(event) =>
             onChange({
               ...condition,
-              right: { kind: 'constant', value: event.target.value }
+              right: {
+                kind: 'constant',
+                value: coerceConditionConstantValue(
+                  event.target.value,
+                  selectorValueType(options, condition.left)
+                )
+              }
             })
           }
         />
@@ -288,14 +352,32 @@ export function ConditionGroupField({
               ariaLabel={`${ariaLabel}-${index}-left`}
               options={options}
               value={rule.left}
-              onChange={(nextValue) =>
+              onChange={(nextValue) => {
+                const nextLeft = nextValue as string[];
+                const nextRule = {
+                  ...rule,
+                  left: nextLeft
+                };
+
                 onChange(
-                  replaceCondition(value, index, {
-                    ...rule,
-                    left: nextValue as string[]
-                  })
-                )
-              }
+                  replaceCondition(
+                    value,
+                    index,
+                    rule.right?.kind === 'constant'
+                      ? {
+                          ...nextRule,
+                          right: {
+                            kind: 'constant',
+                            value: coerceConditionConstantValue(
+                              conditionValueText(rule.right),
+                              selectorValueType(options, nextLeft)
+                            )
+                          }
+                        }
+                      : nextRule
+                  )
+                );
+              }}
             />
             <Select
               aria-label={`${ariaLabel}-${index}-comparator`}
