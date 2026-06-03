@@ -1,0 +1,150 @@
+name: 需求 / 变更
+description: 提出功能、流程调整、重构、文档或工程治理变更。
+title: "[讨论]"
+labels:
+  - "phase:discussion"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        普通需求先完成事实、边界、2-3 个轻量做法和推荐方案。进入实现前必须有明确 L3 执行边界，或用户明确跳过 issue。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题 / 目标
+      description: 说明为什么需要这个变更，以及用户或系统现在遇到的具体问题。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      description: 写清本次要做什么、不做什么。
+      placeholder: |
+        做：
+        不做：
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: 可选做法
+      description: 普通需求写 2-3 个轻量做法；高风险需求升级为 conservative / balanced / aggressive。
+      placeholder: |
+        做法 A：
+        做法 B：
+        做法 C：
+        推荐：
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: 工作类型
+      options:
+        - type:feature
+        - type:refactor
+        - type:docs
+        - type:chore
+        - type:spike
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要影响面
+      multiple: true
+      options:
+        - area:frontend
+        - area:backend
+        - area:api
+        - area:schema-ui
+        - area:runtime
+        - area:workflow
+        - area:settings
+        - area:infra
+        - area:docs
+        - area:test
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Issue 层级
+      options:
+        - level:l3 - 单个可执行任务
+        - level:l2 - 子系统 workstream，需要继续拆 L3
+        - level:l1 - 决策 / ADR
+        - level:l0 - 总问题 / umbrella
+    validations:
+      required: true
+  - type: dropdown
+    id: grade
+    attributes:
+      label: 风险分级
+      options:
+        - grade:g1 - 简单局部需求
+        - grade:g2 - 单子系统标准变更
+        - grade:g3 - 跨前后端、状态入口或多模块影响
+        - grade:g4 - 架构、数据、migration 或用户内容风险
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - priority:p2
+        - priority:p1
+        - priority:p0
+        - priority:p3
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: 风险
+      options:
+        - risk:low
+        - risk:medium
+        - risk:high
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: 规模
+      options:
+        - size:s
+        - size:xs
+        - size:m
+        - size:l
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent issue
+      description: 子 issue 必填，格式为 #123；没有 parent 时写 N/A。
+      placeholder: "#123 或 N/A"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收证据
+      description: 写清可验证的结果、命令、截图、日志或 QA 产物。
+      placeholder: |
+        - 用户可见结果：
+        - 自动化验证：
+        - 证据文件：
+    validations:
+      required: true
+  - type: textarea
+    id: stop-conditions
+    attributes:
+      label: 停止条件
+      description: 出现哪些情况必须停止并回到需求确认或决策。
+      placeholder: 例如：发现需要改变 contract、migration、权限模型或父 issue 范围。
+    validations:
+      required: true

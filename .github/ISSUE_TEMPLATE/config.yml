@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 1flowbase issue lifecycle
+    url: https://github.com/taichuy/1flowbase/blob/latest/.agents/skills/problem-framing/references/issue-lifecycle.md
+    about: 先阅读项目 issue 分级、标签、父子关系和阶段规则。

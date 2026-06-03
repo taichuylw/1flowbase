@@ -1,0 +1,149 @@
+name: 决策 / ADR
+description: 记录架构、contract、数据、权限、状态归属或不可逆方向的决策。
+title: "[讨论]"
+labels:
+  - "type:design"
+  - "phase:discussion"
+  - "needs-decision"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        L1 决策 issue 只能承载事实、方案、风险、推荐和批准状态；批准后再拆 L2 / L3。AI 可以推荐，但不能把推荐当成已批准。
+  - type: textarea
+    id: decision
+    attributes:
+      label: 需要决策的问题
+      description: 用一句话说明需要拍板的边界或方向。
+    validations:
+      required: true
+  - type: textarea
+    id: facts
+    attributes:
+      label: 已确认事实
+      description: 只写已有证据支撑的事实，附路径、issue、日志或讨论链接。
+      placeholder: |
+        - 事实：
+        - 证据：
+    validations:
+      required: true
+  - type: textarea
+    id: assumptions
+    attributes:
+      label: 假设和未知点
+      description: 区分假设、未知点和需要用户确认的问题。
+      placeholder: |
+        - 假设：
+        - 未知点：
+        - 需要确认：
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: 方案
+      description: 高风险或多方向决策按 conservative / balanced / aggressive 写清风险收益。
+      placeholder: |
+        Conservative:
+        Balanced:
+        Aggressive:
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: 推荐和理由
+      description: 推荐必须绑定证据；没有证据支撑的判断标为假设。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要影响面
+      multiple: true
+      options:
+        - area:frontend
+        - area:backend
+        - area:api
+        - area:schema-ui
+        - area:runtime
+        - area:workflow
+        - area:settings
+        - area:infra
+        - area:docs
+        - area:test
+    validations:
+      required: true
+  - type: dropdown
+    id: grade
+    attributes:
+      label: 风险分级
+      options:
+        - grade:g3 - 跨域或多模块决策
+        - grade:g4 - 架构、数据、migration 或用户内容风险
+        - grade:g2 - 单子系统标准变更
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: 风险
+      options:
+        - risk:high
+        - risk:medium
+        - risk:low
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - priority:p2
+        - priority:p1
+        - priority:p0
+        - priority:p3
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: 规模
+      options:
+        - size:m
+        - size:s
+        - size:l
+        - size:xs
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent issue
+      description: 有 L0 parent 时填写 #123；没有 parent 时写 N/A。
+      placeholder: "#123 或 N/A"
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 影响标记
+      description: 勾选所有适用项，后续同步为 labels。
+      options:
+        - label: contract
+        - label: migration
+        - label: user-data
+        - label: breaking-change
+        - label: security
+        - label: performance
+  - type: textarea
+    id: close-condition
+    attributes:
+      label: 关闭条件
+      description: 写清 ADR / 决策何时算批准，以及后续 L2 / L3 如何承接。
+      placeholder: |
+        - 用户明确批准：
+        - 后续 child issue：
+        - 停止条件：
+    validations:
+      required: true
