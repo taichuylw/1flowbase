@@ -1,4 +1,6 @@
-use super::catalog_projection::refresh_provider_package_catalog_projection;
+use super::catalog_projection::{
+    record_failed_catalog_projection, refresh_provider_package_catalog_projection,
+};
 use super::*;
 use super::{catalog::normalize_official_entries, filesystem::copy_installation_artifact};
 use sha2::{Digest, Sha256};
@@ -289,7 +291,26 @@ where
 
     pub async fn reconcile_all_installations(&self) -> Result<()> {
         for installation in self.repository.list_installations().await? {
-            let _ = reconcile_installation_snapshot(&self.repository, installation.id).await?;
+            let installation =
+                reconcile_installation_snapshot(&self.repository, installation.id).await?;
+            if !is_model_provider_installation(&installation) {
+                continue;
+            }
+
+            match load_provider_package(&installation.installed_path) {
+                Ok(package) => {
+                    refresh_provider_package_catalog_projection(
+                        &self.repository,
+                        &installation,
+                        &package,
+                    )
+                    .await?;
+                }
+                Err(error) => {
+                    record_failed_catalog_projection(&self.repository, &installation, &error)
+                        .await?;
+                }
+            }
         }
 
         Ok(())
