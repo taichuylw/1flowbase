@@ -82,6 +82,7 @@ fn plugin_plan() -> CompiledPlan {
         source_draft_id: "draft-plugin".to_string(),
         schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec!["node-start".to_string(), "node-plugin".to_string()],
+        edges: Vec::new(),
         nodes,
         compile_issues: Vec::new(),
     }

@@ -21,6 +21,7 @@ const {
   resolveCommandPath,
   runServicePrestartCommands,
   resolveComposeCommand,
+  stopService,
   waitForPortToClose,
   waitForServicePort,
 } = require('../core.js');
@@ -79,9 +80,16 @@ test('getServiceDefinitions gives plugin-runner extra startup time for cold carg
   const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
   const services = getServiceDefinitions(repoRoot);
 
-  assert.equal(services.web.startupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
+  assert.equal(services.web.startupTimeoutMs, 60_000);
   assert.equal(services['api-server'].startupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
   assert.equal(services['plugin-runner'].startupTimeoutMs, 60_000);
+});
+
+test('getServiceDefinitions leaves frontend pnpm startup interactive', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const services = getServiceDefinitions(repoRoot);
+
+  assert.equal(services.web.envOverrides, undefined);
 });
 
 test('waitForServicePort honors per-service startup timeout overrides', async () => {
@@ -153,6 +161,41 @@ test('listPortOccupantPids uses netstat on Windows', () => {
   ]);
 });
 
+test('listPortOccupantPids falls back to ss when lsof cannot resolve listeners', () => {
+  const calls = [];
+  const occupants = listPortOccupantPids(3100, {
+    platform: 'linux',
+    commandExistsImpl(command) {
+      return command === 'lsof' || command === 'ss';
+    },
+    runCommandImpl(command, args, options) {
+      calls.push({ command, args, captureOutput: options.captureOutput });
+      if (command === 'lsof') {
+        return {
+          status: 1,
+          stdout: '',
+          stderr: '',
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: [
+          'State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process',
+          'LISTEN 0      511          0.0.0.0:3100      0.0.0.0:*     users:(("node",pid=2468,fd=22),("node",pid=1357,fd=23))',
+        ].join('\n'),
+        stderr: '',
+      };
+    },
+  });
+
+  assert.deepEqual(occupants, [2468, 1357]);
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ['lsof', 'ss']
+  );
+});
+
 test('resolveCommandPath prefers Windows command shims that spawn can execute', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-command-path-'));
   fs.writeFileSync(path.join(tempRoot, 'pnpm'), '');
@@ -167,7 +210,7 @@ test('resolveCommandPath prefers Windows command shims that spawn can execute', 
   );
 });
 
-test('startService fails fast when the frontend port is occupied by another process', async () => {
+test('startService clears an occupied frontend port before spawning during takeover', async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-port-occupied-'));
   const service = {
     key: 'web',
@@ -182,33 +225,73 @@ test('startService fails fast when the frontend port is occupied by another proc
     logFile: path.join(tempRoot, 'web.log'),
     pidFile: path.join(tempRoot, 'web.json'),
   };
+  const clearCalls = [];
+  const waitForCloseCalls = [];
+  let portOccupied = true;
   let spawned = false;
+  let recordedPid = null;
 
-  await assert.rejects(
-    startService(service, {
-      ensureServiceEnvFileImpl() {
-        return false;
-      },
-      requireCommandImpl() {},
-      runServicePrestartCommandsImpl() {},
-      readPidRecordImpl() {
-        return null;
-      },
-      isProcessAliveImpl() {
-        return false;
-      },
-      isPortOpenImpl: async () => true,
-      logImpl() {},
-      spawnImpl() {
-        spawned = true;
-        throw new Error('spawn should not be called');
-      },
-    }),
-    /frontend 启动失败，端口 3100 已被其他进程占用/u
-  );
+  await startService(service, {
+    ensureServiceEnvFileImpl() {
+      return false;
+    },
+    requireCommandImpl() {},
+    runServicePrestartCommandsImpl() {},
+    readPidRecordImpl() {
+      return null;
+    },
+    isProcessAliveImpl() {
+      return false;
+    },
+    async isPortOpenImpl() {
+      return portOccupied;
+    },
+    async clearPortConflictsImpl(label, ports) {
+      clearCalls.push({ label, ports });
+      portOccupied = false;
+    },
+    async waitForPortToCloseImpl(host, port, timeoutMs) {
+      waitForCloseCalls.push({ host, port, timeoutMs });
+      return true;
+    },
+    logImpl() {},
+    spawnImpl() {
+      spawned = true;
+      return {
+        pid: 4242,
+        unref() {},
+      };
+    },
+    buildServiceEnvImpl() {
+      return {};
+    },
+    writePidRecordImpl(_service, pid) {
+      recordedPid = pid;
+    },
+    listPortOccupantPidsImpl() {
+      return [];
+    },
+    async waitForServicePortImpl() {
+      return true;
+    },
+    takeOverPortOwnership: true,
+  });
 
-  assert.equal(spawned, false);
-  assert.equal(fs.existsSync(service.pidFile), false);
+  assert.deepEqual(clearCalls, [
+    {
+      label: 'frontend',
+      ports: [3100],
+    },
+  ]);
+  assert.deepEqual(waitForCloseCalls, [
+    {
+      host: '127.0.0.1',
+      port: 3100,
+      timeoutMs: 5000,
+    },
+  ]);
+  assert.equal(spawned, true);
+  assert.equal(recordedPid, 4242);
 });
 
 test('startService reclaims an occupied service port during restart takeover before spawning', async () => {
@@ -295,6 +378,50 @@ test('startService reclaims an occupied service port during restart takeover bef
   assert.equal(recordedPid, 4242);
 });
 
+test('stopService clears the service port when the pid record is missing', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-stop-orphan-'));
+  const service = {
+    key: 'web',
+    label: 'frontend',
+    repoRoot: tempRoot,
+    bindHost: '0.0.0.0',
+    probeHost: '127.0.0.1',
+    port: 3100,
+    logFile: path.join(tempRoot, 'web.log'),
+    pidFile: path.join(tempRoot, 'web.json'),
+  };
+  const clearCalls = [];
+  const logs = [];
+  let portOccupied = true;
+
+  await stopService(service, {
+    readPidRecordImpl() {
+      return null;
+    },
+    async isPortOpenImpl() {
+      return portOccupied;
+    },
+    async clearPortConflictsImpl(label, ports) {
+      clearCalls.push({ label, ports });
+      portOccupied = false;
+    },
+    async waitForPortToCloseImpl() {
+      return true;
+    },
+    logImpl(message) {
+      logs.push(message);
+    },
+  });
+
+  assert.deepEqual(clearCalls, [
+    {
+      label: 'frontend',
+      ports: [3100],
+    },
+  ]);
+  assert.deepEqual(logs, ['frontend 未发现 pid 记录，正在清理端口占用', 'frontend 端口占用已清理']);
+});
+
 test('startService resolves the command path before spawning', async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-spawn-command-'));
   const service = {
@@ -354,6 +481,62 @@ test('startService resolves the command path before spawning', async () => {
   assert.equal(spawnedCommand, 'C:\\tools\\pnpm.cmd');
   assert.equal(spawnedOptions.shell, true);
   assert.equal(spawnedOptions.detached, false);
+});
+
+test('startService truncates stale service logs before spawning', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-log-truncate-'));
+  const service = {
+    key: 'web',
+    label: 'frontend',
+    cwd: path.join(tempRoot, 'web'),
+    command: 'pnpm',
+    args: ['--filter', '@1flowbase/web', 'dev'],
+    bindHost: '0.0.0.0',
+    probeHost: '127.0.0.1',
+    port: 3100,
+    startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
+    logFile: path.join(tempRoot, 'web.log'),
+    pidFile: path.join(tempRoot, 'web.json'),
+  };
+
+  fs.writeFileSync(service.logFile, 'old vite ready line\n', 'utf8');
+
+  await startService(service, {
+    ensureServiceEnvFileImpl() {
+      return false;
+    },
+    requireCommandImpl() {},
+    runServicePrestartCommandsImpl() {},
+    readPidRecordImpl() {
+      return null;
+    },
+    isProcessAliveImpl() {
+      return false;
+    },
+    async isPortOpenImpl() {
+      return false;
+    },
+    logImpl() {},
+    spawnImpl() {
+      return {
+        pid: 4245,
+        unref() {},
+      };
+    },
+    buildServiceEnvImpl() {
+      return {};
+    },
+    writePidRecordImpl() {},
+    async waitForServicePortImpl() {
+      return true;
+    },
+    listPortOccupantPidsImpl() {
+      return [];
+    },
+    takeOverPortOwnership: true,
+  });
+
+  assert.equal(fs.readFileSync(service.logFile, 'utf8'), '');
 });
 
 test('startService records the listener pid when it differs from the spawned shell pid', async () => {
@@ -588,6 +771,23 @@ test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them
   assert.equal(env.EXTRA_FLAG, 'enabled');
 });
 
+test('buildServiceEnv applies service env overrides after shell env', () => {
+  const env = buildServiceEnv(
+    {
+      envOverrides: {
+        CI: 'true',
+      },
+    },
+    {
+      CI: 'false',
+      PATH: '/bin',
+    }
+  );
+
+  assert.equal(env.CI, 'true');
+  assert.equal(env.PATH, '/bin');
+});
+
 test('ensureServiceEnvFile leaves existing api-server env values untouched even if they use old branding', () => {
   const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-legacy-env-'));
   const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
@@ -689,6 +889,33 @@ test('getServicePrestartCommands resets api root password in development mode', 
     ]
   );
   assert.equal(commands[0].env.API_ENV, 'development');
+});
+
+test('getServicePrestartCommands checks frontend dependencies with visible pnpm prompts', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const services = getServiceDefinitions(repoRoot);
+  const commands = getServicePrestartCommands(services.web, { CI: 'false' });
+
+  assert.deepEqual(
+    commands.map((command) => ({
+      description: command.description,
+      command: command.command,
+      args: command.args,
+      cwd: command.cwd,
+      captureOutput: command.captureOutput,
+      ci: command.env.CI,
+    })),
+    [
+      {
+        description: 'frontend 依赖检查（需要清空重装时由 pnpm 在终端提示确认）',
+        command: 'pnpm',
+        args: ['install'],
+        cwd: path.join(repoRoot, 'web'),
+        captureOutput: false,
+        ci: 'false',
+      },
+    ]
+  );
 });
 
 test('getServicePrestartCommands skips api root reset in production mode', () => {
@@ -795,6 +1022,43 @@ test('runServicePrestartCommands rebuilds local postgres db after migration chec
         '-c',
         'CREATE DATABASE "1flowbase";',
       ],
+    ]
+  );
+});
+
+test('runServicePrestartCommands lets frontend pnpm prompts write to the terminal', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const services = getServiceDefinitions(repoRoot);
+  const commandCalls = [];
+
+  runServicePrestartCommands(services.web, {
+    sourceEnv: { CI: 'false' },
+    runCommandImpl(command, args, options) {
+      commandCalls.push({ command, args, options });
+      return {
+        status: 0,
+        stdout: '',
+        stderr: '',
+      };
+    },
+  });
+
+  assert.deepEqual(
+    commandCalls.map((entry) => ({
+      command: entry.command,
+      args: entry.args,
+      cwd: entry.options.cwd,
+      captureOutput: entry.options.captureOutput,
+      ci: entry.options.env.CI,
+    })),
+    [
+      {
+        command: 'pnpm',
+        args: ['install'],
+        cwd: path.join(repoRoot, 'web'),
+        captureOutput: false,
+        ci: 'false',
+      },
     ]
   );
 });

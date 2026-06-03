@@ -305,6 +305,50 @@ export interface NamedBindingEntry {
   content?: { kind: 'templated_text'; value: string };
 }
 
+export type FlowConditionComparator =
+  | 'exists'
+  | 'equals'
+  | 'not_equals'
+  | 'greater_than'
+  | 'greater_than_or_equals'
+  | 'less_than'
+  | 'less_than_or_equals'
+  | 'contains'
+  | 'starts_with'
+  | 'ends_with'
+  | 'matches_regex';
+
+export type FlowConditionValue =
+  | { kind: 'constant'; value: unknown }
+  | { kind: 'selector'; selector: string[] };
+
+export interface FlowConditionRuleDocument {
+  kind?: 'rule';
+  left: string[];
+  comparator: FlowConditionComparator;
+  right?: FlowConditionValue;
+}
+
+export interface FlowConditionGroupDocument {
+  kind?: 'group';
+  operator: 'and' | 'or';
+  conditions: FlowConditionExpressionDocument[];
+}
+
+export type FlowConditionExpressionDocument =
+  | FlowConditionRuleDocument
+  | FlowConditionGroupDocument;
+
+export type IfElseBranchKind = 'if' | 'else_if' | 'else';
+
+export interface IfElseBranchDocument {
+  id: string;
+  kind: IfElseBranchKind;
+  title: string;
+  sourceHandle: string;
+  condition?: FlowConditionGroupDocument;
+}
+
 export type FlowBinding =
   | { kind: 'templated_text'; value: string }
   | { kind: 'selector'; value: string[] }
@@ -323,13 +367,12 @@ export type FlowBinding =
     }
   | {
       kind: 'condition_group';
+      value: FlowConditionGroupDocument;
+    }
+  | {
+      kind: 'if_else_branches';
       value: {
-        operator: 'and' | 'or';
-        conditions: Array<{
-          left: string[];
-          comparator: 'exists' | 'equals' | 'contains';
-          right?: string | string[];
-        }>;
+        branches: IfElseBranchDocument[];
       };
     }
   | {

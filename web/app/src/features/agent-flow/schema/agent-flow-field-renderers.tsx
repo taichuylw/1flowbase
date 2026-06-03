@@ -1,4 +1,8 @@
-import type { FlowNodeDocument } from '@1flowbase/flow-schema';
+import type {
+  FlowConditionGroupDocument,
+  FlowNodeDocument,
+  IfElseBranchDocument
+} from '@1flowbase/flow-schema';
 import { Input, InputNumber, Select, Switch } from 'antd';
 
 import type {
@@ -9,6 +13,7 @@ import type {
 import type { AgentFlowDataModelFieldOption } from '../api/data-model-options';
 import { ConditionGroupField } from '../components/bindings/ConditionGroupField';
 import { DataModelQueryField } from '../components/bindings/DataModelQueryField';
+import { IfElseBranchesField } from '../components/bindings/IfElseBranchesField';
 import { NamedBindingsField } from '../components/bindings/NamedBindingsField';
 import { SelectorField } from '../components/bindings/SelectorField';
 import { StateWriteField } from '../components/bindings/StateWriteField';
@@ -33,6 +38,7 @@ import {
   normalizePromptMessagesBinding,
   toPromptMessagesBinding
 } from '../lib/llm-prompt-messages';
+import { normalizeIfElseBranches } from '../lib/if-else-branches';
 import {
   getLlmContextPolicy,
   getLlmExternalReasoningPolicy
@@ -420,20 +426,47 @@ function renderConditionGroupField({
   block
 }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const binding = getBindingValue<{
-    operator: 'and' | 'or';
-    conditions: Array<unknown>;
-  }>(value, 'condition_group', { operator: 'and', conditions: [] });
+  const binding = getBindingValue<FlowConditionGroupDocument>(
+    value,
+    'condition_group',
+    { operator: 'and', conditions: [] }
+  );
 
   return (
     <ConditionGroupField
       ariaLabel={block.label}
       options={getSelectorOptions(adapter)}
-      value={binding as never}
+      value={binding}
       onChange={(nextValue) =>
         adapter.setValue(block.path, {
           kind: 'condition_group',
           value: nextValue
+        })
+      }
+    />
+  );
+}
+
+function renderIfElseBranchesField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const value = adapter.getValue(block.path);
+  const binding = getBindingValue<{ branches: IfElseBranchDocument[] }>(
+    value,
+    'if_else_branches',
+    { branches: [] }
+  );
+
+  return (
+    <IfElseBranchesField
+      ariaLabel={block.label}
+      options={getSelectorOptions(adapter)}
+      value={normalizeIfElseBranches(binding.branches)}
+      onChange={(branches) =>
+        adapter.setValue(block.path, {
+          kind: 'if_else_branches',
+          value: { branches }
         })
       }
     />
@@ -571,6 +604,7 @@ export const agentFlowFieldRenderers = {
   named_bindings: renderNamedBindingsField,
   templated_named_bindings: renderTemplatedNamedBindingsField,
   condition_group: renderConditionGroupField,
+  if_else_branches: renderIfElseBranchesField,
   state_write: renderStateWriteField,
   output_contract_definition: renderOutputContractDefinitionField,
   start_input_fields: renderStartInputFieldsField,

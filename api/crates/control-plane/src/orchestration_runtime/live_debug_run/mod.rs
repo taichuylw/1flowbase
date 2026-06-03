@@ -12,7 +12,7 @@ use super::{
     OrchestrationRuntimeService, PrepareFlowDebugRunCommand, StartFlowDebugRunCommand,
 };
 use observability::{persist_llm_context_observability, run_live_event_persister};
-use plan::{first_output_key, next_node_index};
+use plan::{active_node_ids_from_index, first_output_key, next_node_index};
 use run_detail::{fail_flow_run, is_run_cancelled, load_run_detail};
 use runtime_events::{
     append_runtime_event, close_runtime_event_stream, emit_flow_failed_and_close,

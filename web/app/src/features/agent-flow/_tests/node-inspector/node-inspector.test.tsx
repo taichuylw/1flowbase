@@ -21,6 +21,7 @@ import {
   createInitialStateWithCodeNode,
   createInitialStateWithCustomCodeNode,
   createInitialStateWithDataModelNode,
+  createInitialStateWithIfElseNode,
   createInitialStateWithLoopNode,
   createInitialStateWithStructuredCodeNode,
   createAgentFlowNodeSchemaAdapterSpy,
@@ -675,7 +676,7 @@ describe('NodeInspector', () => {
       within(toolbar).getByRole('combobox', { name: /入口条件-operator|Entry conditions-operator/ })
     ).toBeInTheDocument();
     expect(
-      within(toolbar).getByRole('button', { name: '新增条件' })
+      within(toolbar).getByRole('button', { name: /新增条件$/ })
     ).toBeInTheDocument();
     expect(screen.getByTestId('inspector-field-config.max_rounds')).toHaveClass(
       'agent-flow-editor__inspector-field--inline'
@@ -683,6 +684,100 @@ describe('NodeInspector', () => {
     expect(
       screen.getByTestId('inspector-field-bindings.entry_condition')
     ).not.toHaveClass('agent-flow-editor__inspector-field--inline');
+  });
+
+  test('edits If / Else branches as first-class branch handles', async () => {
+    const initialState = createInitialStateWithIfElseNode();
+    let latestDocument = initialState.draft.document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-if-else" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const branchField = await screen.findByTestId(
+      'inspector-field-bindings.branches'
+    );
+
+    expect(screen.getByTestId('if-else-branch-if')).toBeInTheDocument();
+    expect(screen.getByTestId('if-else-branch-else')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('if-else-branch-else')).getByLabelText(
+        'Else 分支名称'
+      )
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: '删除 Else 分支' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(branchField).getByRole('button', { name: /新增 Else If/ })
+    );
+
+    const elseIfBranch = await screen.findByTestId(
+      'if-else-branch-else-if-1'
+    );
+
+    expect(
+      within(elseIfBranch).getByLabelText('Else If 1 分支名称')
+    ).toHaveValue('Else If 1');
+    expect(
+      within(elseIfBranch).getByRole('button', {
+        name: '删除 Else If 1 分支'
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(screen.getByTestId('if-else-branch-if')).getByRole('button', {
+        name: /新增条件组/
+      })
+    );
+
+    expect(
+      within(screen.getByTestId('if-else-branch-if')).getAllByTestId(
+        'condition-group-toolbar'
+      )
+    ).toHaveLength(2);
+
+    await waitFor(() => {
+      const ifElseNode = latestDocument.graph.nodes.find(
+        (node) => node.id === 'node-if-else'
+      );
+      const branchBinding = ifElseNode?.bindings.branches;
+
+      if (!branchBinding || branchBinding.kind !== 'if_else_branches') {
+        throw new Error('expected If / Else branch binding');
+      }
+
+      expect(branchBinding.value.branches).toEqual([
+        expect.objectContaining({
+          kind: 'if',
+          sourceHandle: 'if',
+          condition: {
+            operator: 'and',
+            conditions: [{ operator: 'and', conditions: [] }]
+          }
+        }),
+        expect.objectContaining({
+          id: 'else-if-1',
+          kind: 'else_if',
+          title: 'Else If 1',
+          sourceHandle: 'else-if-1',
+          condition: { operator: 'and', conditions: [] }
+        }),
+        expect.objectContaining({
+          kind: 'else',
+          sourceHandle: 'else'
+        })
+      ]);
+    });
   });
 
   test('loads Data Model options from the feature API and disables unavailable models', async () => {

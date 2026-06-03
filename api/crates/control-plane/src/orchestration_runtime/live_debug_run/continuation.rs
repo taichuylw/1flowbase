@@ -30,9 +30,10 @@ mod engine;
 mod helpers;
 
 use super::{
-    append_runtime_event, close_runtime_event_stream, emit_flow_failed_and_close, fail_flow_run,
-    first_output_key, is_run_cancelled, load_run_detail, next_node_index,
-    persist_llm_context_observability, run_live_event_persister, update_node_run_and_emit,
+    active_node_ids_from_index, append_runtime_event, close_runtime_event_stream,
+    emit_flow_failed_and_close, fail_flow_run, first_output_key, is_run_cancelled, load_run_detail,
+    next_node_index, persist_llm_context_observability, run_live_event_persister,
+    update_node_run_and_emit,
 };
 use engine::continue_flow_debug_run_inner;
 

@@ -11,6 +11,7 @@ const {
   manageServices,
   parseWindowsNetstatPortOccupants,
   startService,
+  stopService,
   waitForPortToClose,
   waitForServicePort,
 } = require('./process.js');
@@ -68,6 +69,7 @@ module.exports = {
   selectServiceKeys,
   shouldManageDocker,
   startService,
+  stopService,
   waitForPortToClose,
   waitForServicePort,
 };

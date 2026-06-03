@@ -157,6 +157,7 @@ where
                     locator_payload: json!({
                         "node_id": wait.node_id,
                         "next_node_index": snapshot.next_node_index,
+                        "active_node_ids": snapshot.active_node_ids,
                     }),
                     variable_snapshot: Value::Object(snapshot.variable_pool.clone()),
                     external_ref_payload: Some(json!({ "prompt": wait.prompt })),
@@ -221,6 +222,7 @@ where
                     locator_payload: json!({
                         "node_id": wait.node_id,
                         "next_node_index": snapshot.next_node_index,
+                        "active_node_ids": snapshot.active_node_ids,
                     }),
                     variable_snapshot: Value::Object(snapshot.variable_pool.clone()),
                     external_ref_payload: Some(wait.request_payload.clone()),
@@ -438,6 +440,20 @@ where
 pub(super) fn checkpoint_snapshot_from_record(
     checkpoint: &domain::CheckpointRecord,
 ) -> Result<orchestration_runtime::execution_state::CheckpointSnapshot> {
+    let active_node_ids = checkpoint
+        .locator_payload
+        .get("active_node_ids")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("checkpoint is missing active_node_ids"))?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| anyhow!("checkpoint active_node_ids must be strings"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
     Ok(orchestration_runtime::execution_state::CheckpointSnapshot {
         next_node_index: checkpoint
             .locator_payload
@@ -450,6 +466,7 @@ pub(super) fn checkpoint_snapshot_from_record(
             .as_object()
             .cloned()
             .ok_or_else(|| anyhow!("checkpoint variable_snapshot must be an object"))?,
+        active_node_ids,
     })
 }
 

@@ -742,6 +742,7 @@ fn base_plan() -> CompiledPlan {
             "node-human".to_string(),
             "node-answer".to_string(),
         ],
+        edges: Vec::new(),
         nodes,
         compile_issues: Vec::new(),
     }
@@ -905,6 +906,7 @@ fn sequential_tool_invoker(
 }
 
 mod answer_and_failover;
+mod branches;
 mod failures_and_parameters;
 mod human_and_tool_resume;
 mod llm_context;

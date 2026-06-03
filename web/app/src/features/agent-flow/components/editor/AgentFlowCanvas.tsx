@@ -177,6 +177,9 @@ function AgentFlowCanvasInner({
   const nodePickerState = useAgentFlowEditorStore(
     (state) => state.nodePickerState
   );
+  const connectingPayload = useAgentFlowEditorStore(
+    (state) => state.connectingPayload
+  );
   const canvasInteractions = useCanvasInteractions();
   const nodeInteractions = useNodeInteractions();
   const edgeInteractions = useEdgeInteractions();
@@ -191,6 +194,7 @@ function AgentFlowCanvasInner({
         nodePickerState.open && !nodePickerState.anchorCanvasPosition
           ? nodePickerState.anchorNodeId
           : null,
+        connectingPayload.sourceHandleId,
         issueCountByNodeId,
         {
           onOpenPicker: nodeInteractions.openNodePicker,
@@ -214,6 +218,7 @@ function AgentFlowCanvasInner({
       nodePickerState.anchorCanvasPosition,
       nodePickerState.anchorNodeId,
       nodePickerState.open,
+      connectingPayload.sourceHandleId,
       selectedNodeId
     ]
   );

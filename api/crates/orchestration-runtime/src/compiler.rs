@@ -6,9 +6,9 @@ use serde_json::Value;
 use crate::answer_presentation::validate_answer_presentation;
 use crate::compiled_plan::{
     CodeExecutorCapability, CodeIsolationProfile, CompileIssue, CompileIssueCode, CompiledBinding,
-    CompiledCodeDependency, CompiledCodeRuntime, CompiledLlmRouteTarget, CompiledLlmRouting,
-    CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
-    LlmRoutingMode,
+    CompiledCodeDependency, CompiledCodeRuntime, CompiledEdge, CompiledLlmRouteTarget,
+    CompiledLlmRouting, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+    CompiledPluginRuntime, LlmRoutingMode,
 };
 use crate::output_schema::{history_messages_schema, output_schema_is_llm_context_messages};
 use crate::payload_builder::PublicOutputContract;
@@ -82,6 +82,7 @@ pub struct FlowCompileNodeContribution {
 
 type NodeTopologyBuild = (
     BTreeMap<String, CompiledNode>,
+    Vec<CompiledEdge>,
     Vec<String>,
     Vec<CompileIssue>,
 );
@@ -103,7 +104,7 @@ impl FlowCompiler {
         if schema_version != FLOW_SCHEMA_VERSION {
             bail!("unsupported flow schemaVersion: {schema_version}");
         }
-        let (nodes, topological_order, mut compile_issues) =
+        let (nodes, edges, topological_order, mut compile_issues) =
             build_nodes_and_topology(document, context)?;
 
         let mut plan = CompiledPlan {
@@ -111,6 +112,7 @@ impl FlowCompiler {
             source_draft_id: draft_id.to_string(),
             schema_version,
             topological_order,
+            edges,
             nodes,
             compile_issues: Vec::new(),
         };
@@ -154,6 +156,7 @@ fn build_nodes_and_topology(
 
     let mut adjacency = BTreeMap::<String, Vec<String>>::new();
     let mut indegree = BTreeMap::<String, usize>::new();
+    let mut compiled_edges = Vec::with_capacity(edge_values.len());
 
     for node_id in &node_order {
         adjacency.insert(node_id.clone(), Vec::new());
@@ -181,6 +184,16 @@ fn build_nodes_and_topology(
         if !nodes.contains_key(target) {
             bail!("edge {edge_id} references unknown target node: {target}");
         }
+
+        let source_handle = edge_handle(edge, "sourceHandle", "source_handle")?;
+        let target_handle = edge_handle(edge, "targetHandle", "target_handle")?;
+        compiled_edges.push(CompiledEdge {
+            edge_id: edge_id.to_string(),
+            source: source.to_string(),
+            target: target.to_string(),
+            source_handle,
+            target_handle,
+        });
 
         let dependency_node_ids = &mut nodes
             .get_mut(target)
@@ -255,7 +268,17 @@ fn build_nodes_and_topology(
 
     compile_issues.extend(validate_llm_context_policies(&nodes));
 
-    Ok((nodes, topological_order, compile_issues))
+    Ok((nodes, compiled_edges, topological_order, compile_issues))
+}
+
+fn edge_handle(edge: &Value, camel_key: &str, snake_key: &str) -> Result<Option<String>> {
+    let value = edge.get(camel_key).or_else(|| edge.get(snake_key));
+
+    match value {
+        Some(Value::String(handle)) if !handle.trim().is_empty() => Ok(Some(handle.to_string())),
+        Some(Value::String(_)) | Some(Value::Null) | None => Ok(None),
+        Some(_) => bail!("edge handle {camel_key} must be a string or null"),
+    }
 }
 
 fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<CompileIssue> {

@@ -29,6 +29,7 @@ export type NodeEditorKind =
   | 'named_bindings'
   | 'templated_named_bindings'
   | 'condition_group'
+  | 'if_else_branches'
   | 'state_write'
   | 'output_contract_definition'
   | 'start_input_fields'

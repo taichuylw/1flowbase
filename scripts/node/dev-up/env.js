@@ -142,9 +142,11 @@ function ensureServiceEnvFile(service, { logImpl = log } = {}) {
 
 function buildServiceEnv(service, sourceEnv = process.env) {
   const fileEnv = parseEnvFile(service.envFile);
+  const envOverrides = service.envOverrides || {};
   return buildLocalLoopbackEnv({
     ...fileEnv,
     ...sourceEnv,
+    ...envOverrides,
   });
 }
 
@@ -169,7 +171,25 @@ function parseApiEnvironment(value) {
 }
 
 function getServicePrestartCommands(service, sourceEnv = process.env) {
-  if (!service || service.key !== "api-server") {
+  if (!service) {
+    return [];
+  }
+
+  if (service.key === "web") {
+    return [
+      {
+        description:
+          "frontend 依赖检查（需要清空重装时由 pnpm 在终端提示确认）",
+        command: service.command,
+        args: ["install"],
+        cwd: service.cwd,
+        env: buildServiceEnv(service, sourceEnv),
+        captureOutput: false,
+      },
+    ];
+  }
+
+  if (service.key !== "api-server") {
     return [];
   }
 

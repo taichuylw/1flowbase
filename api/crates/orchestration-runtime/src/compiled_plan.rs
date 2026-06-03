@@ -9,9 +9,22 @@ pub struct CompiledPlan {
     pub source_draft_id: String,
     pub schema_version: String,
     pub topological_order: Vec<String>,
+    #[serde(default)]
+    pub edges: Vec<CompiledEdge>,
     pub nodes: BTreeMap<String, CompiledNode>,
     #[serde(default)]
     pub compile_issues: Vec<CompileIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledEdge {
+    pub edge_id: String,
+    pub source: String,
+    pub target: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_handle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_handle: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

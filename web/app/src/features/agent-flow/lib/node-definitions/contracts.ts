@@ -2,6 +2,7 @@ import type {
   FlowBinding,
   FlowNodeOutputDocument,
   FlowNodeType,
+  NodeRuntimePortDocument,
   NodeRuntimePanelFieldDocument,
   NodeRuntimePanelSectionDocument,
   NodeRuntimeUiContract
@@ -17,6 +18,7 @@ import {
   getDataModelActionForNodeType
 } from './nodes/data-model';
 import { normalizeCodeOutput } from '../output-contract/code-output';
+import { createDefaultIfElseBranches } from '../if-else-branches';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type BuiltinNodeRuntimeContractType = FlowNodeType;
@@ -122,6 +124,13 @@ function createContractPorts(outputs: FlowNodeOutputDocument[]) {
   };
 }
 
+function branchPorts(branches: ReturnType<typeof createDefaultIfElseBranches>): NodeRuntimePortDocument[] {
+  return branches.map((branch) => ({
+    key: branch.sourceHandle,
+    title: branch.title
+  }));
+}
+
 function panelField({
   key,
   title,
@@ -190,6 +199,7 @@ function createNodeRuntimeContract({
   config,
   bindings = {},
   outputs,
+  outputPorts,
   panelSections,
   runtimeOutputs
 }: {
@@ -200,6 +210,7 @@ function createNodeRuntimeContract({
   config: Record<string, unknown>;
   bindings?: Record<string, FlowBinding>;
   outputs: FlowNodeOutputDocument[];
+  outputPorts?: NodeRuntimePortDocument[];
   panelSections: NodeRuntimePanelSectionDocument[];
   runtimeOutputs?: FlowNodeOutputDocument[];
 }): NodeRuntimeUiContract {
@@ -216,7 +227,7 @@ function createNodeRuntimeContract({
       bindings,
       outputs: duplicateOutputs(outputs)
     }),
-    ports: createContractPorts(outputs),
+    ports: outputPorts ? { inputs: [], outputs: outputPorts } : createContractPorts(outputs),
     card: {
       title,
       description,
@@ -425,20 +436,29 @@ function createQuestionClassifierContract(): NodeRuntimeUiContract {
 }
 
 function createIfElseContract(): NodeRuntimeUiContract {
+  const branches = createDefaultIfElseBranches();
+
   return createNodeRuntimeContract({
     type: 'if_else',
     title: 'If / Else',
     description: i18nText("agentFlow", "auto.select_paths_based_conditional_judgment"),
     category: 'control',
-    config: { mode: 'all' },
+    config: {},
+    bindings: {
+      branches: {
+        kind: 'if_else_branches',
+        value: { branches }
+      }
+    },
     outputs: [],
+    outputPorts: branchPorts(branches),
     panelSections: [
       basicsPanelSection,
       panelSection('inputs', 'Inputs', [
         panelField({
-          key: 'bindings.condition_group',
-          title: i18nText("agentFlow", "auto.condition_group"),
-          renderer: 'condition_group',
+          key: 'bindings.branches',
+          title: i18nText("agentFlow", "auto.branches"),
+          renderer: 'if_else_branches',
           valueType: 'json',
           required: true
         })

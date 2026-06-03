@@ -176,7 +176,43 @@ function parseWindowsNetstatPortOccupants(output, port) {
   return [...occupants];
 }
 
-function listPortOccupantPids(port, { platform = process.platform, runCommandImpl = runCommand } = {}) {
+function parsePidList(output) {
+  return String(output || '')
+    .split(/\s+/u)
+    .map((value) => Number.parseInt(value.trim(), 10))
+    .filter((value) => Number.isInteger(value) && value > 0);
+}
+
+function parseSsPortOccupants(output) {
+  const occupants = new Set();
+
+  for (const line of String(output || '').split(/\r?\n/u)) {
+    const pidPattern = /\bpid=(\d+)\b/gu;
+    let match = pidPattern.exec(line);
+    while (match) {
+      const parsedPid = Number.parseInt(match[1], 10);
+      if (Number.isInteger(parsedPid) && parsedPid > 0) {
+        occupants.add(parsedPid);
+      }
+      match = pidPattern.exec(line);
+    }
+  }
+
+  return [...occupants];
+}
+
+function uniquePids(pids) {
+  return [...new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0))];
+}
+
+function listPortOccupantPids(
+  port,
+  {
+    platform = process.platform,
+    runCommandImpl = runCommand,
+    commandExistsImpl = commandExists,
+  } = {}
+) {
   if (!Number.isInteger(port) || port <= 0) {
     return [];
   }
@@ -192,21 +228,37 @@ function listPortOccupantPids(port, { platform = process.platform, runCommandImp
     return parseWindowsNetstatPortOccupants(result.stdout, port);
   }
 
-  if (!commandExists('lsof')) {
-    return [];
+  if (commandExistsImpl('lsof')) {
+    const result = runCommandImpl('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN', '-P', '-n'], {
+      captureOutput: true,
+    });
+    const occupants = result.error || result.status !== 0 ? [] : parsePidList(result.stdout);
+    if (occupants.length > 0) {
+      return uniquePids(occupants);
+    }
   }
 
-  const result = runCommandImpl('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN', '-P', '-n'], {
-    captureOutput: true,
-  });
-  if (result.error || result.status !== 0) {
-    return [];
+  if (commandExistsImpl('ss')) {
+    const result = runCommandImpl('ss', ['-ltnp', 'sport', '=', `:${port}`], {
+      captureOutput: true,
+    });
+    const occupants = result.error || result.status !== 0 ? [] : parseSsPortOccupants(result.stdout);
+    if (occupants.length > 0) {
+      return uniquePids(occupants);
+    }
   }
 
-  return String(result.stdout || '')
-    .split(/\r?\n/)
-    .map((value) => Number.parseInt(value.trim(), 10))
-    .filter((value) => Number.isInteger(value) && value > 0);
+  if (commandExistsImpl('fuser')) {
+    const result = runCommandImpl('fuser', ['-n', 'tcp', String(port)], {
+      captureOutput: true,
+    });
+    const occupants = result.error || result.status !== 0 ? [] : parsePidList(result.stdout);
+    if (occupants.length > 0) {
+      return uniquePids(occupants);
+    }
+  }
+
+  return [];
 }
 
 function getProcessGroupId(pid) {
@@ -355,7 +407,7 @@ async function startService(
     throw new Error(`${service.label} 启动失败，端口 ${service.port} 已被其他进程占用`);
   }
 
-  const outputFd = fs.openSync(service.logFile, 'a');
+  const outputFd = fs.openSync(service.logFile, 'w');
   const child = spawnImpl(resolveCommandPathImpl(service.command) || service.command, service.args, {
     cwd: service.cwd,
     env: buildServiceEnvImpl(service),
@@ -382,28 +434,92 @@ async function startService(
   logImpl(`${service.label} 已启动，监听 ${getBindHost(service)}:${service.port}`);
 }
 
-async function stopService(service) {
-  const pidRecord = readPidRecord(service.pidFile);
+async function clearServicePortOccupants(
+  service,
+  {
+    isPortOpenImpl = isPortOpen,
+    waitForPortToCloseImpl = waitForPortToClose,
+    clearPortConflictsImpl = clearPortConflicts,
+    logImpl = log,
+  } = {}
+) {
+  await clearPortConflictsImpl(service.label, [service.port]);
+  const closed = await waitForPortToCloseImpl(getProbeHost(service), service.port, 5000, isPortOpenImpl);
+  if (!closed && (await isPortOpenImpl(getProbeHost(service), service.port))) {
+    throw new Error(`${service.label} 端口 ${service.port} 清理失败，仍被占用`);
+  }
+
+  logImpl(`${service.label} 端口占用已清理`);
+}
+
+async function stopService(
+  service,
+  {
+    readPidRecordImpl = readPidRecord,
+    isProcessAliveImpl = isProcessAlive,
+    signalProcessImpl = signalProcess,
+    waitForProcessExitImpl = waitForProcessExit,
+    removePidRecordImpl = removePidRecord,
+    isPortOpenImpl = isPortOpen,
+    waitForPortToCloseImpl = waitForPortToClose,
+    clearPortConflictsImpl = clearPortConflicts,
+    logImpl = log,
+  } = {}
+) {
+  const pidRecord = readPidRecordImpl(service.pidFile);
   if (!pidRecord) {
-    log(`${service.label} 未发现 pid 记录，跳过停止`);
+    if (await isPortOpenImpl(getProbeHost(service), service.port)) {
+      logImpl(`${service.label} 未发现 pid 记录，正在清理端口占用`);
+      await clearServicePortOccupants(service, {
+        isPortOpenImpl,
+        waitForPortToCloseImpl,
+        clearPortConflictsImpl,
+        logImpl,
+      });
+      return;
+    }
+
+    logImpl(`${service.label} 未发现 pid 记录，跳过停止`);
     return;
   }
 
-  if (!isProcessAlive(pidRecord.pid)) {
-    removePidRecord(service.pidFile);
-    log(`${service.label} 进程记录已失效，已清理`);
+  if (!isProcessAliveImpl(pidRecord.pid)) {
+    removePidRecordImpl(service.pidFile);
+    if (await isPortOpenImpl(getProbeHost(service), service.port)) {
+      logImpl(`${service.label} 进程记录已失效，正在清理端口占用`);
+      await clearServicePortOccupants(service, {
+        isPortOpenImpl,
+        waitForPortToCloseImpl,
+        clearPortConflictsImpl,
+        logImpl,
+      });
+      return;
+    }
+
+    logImpl(`${service.label} 进程记录已失效，已清理`);
     return;
   }
 
-  signalProcess(pidRecord.pid, 'SIGTERM');
-  const exited = await waitForProcessExit(pidRecord.pid);
+  signalProcessImpl(pidRecord.pid, 'SIGTERM');
+  const exited = await waitForProcessExitImpl(pidRecord.pid);
   if (!exited) {
-    signalProcess(pidRecord.pid, 'SIGKILL');
-    await waitForProcessExit(pidRecord.pid, 2000);
+    signalProcessImpl(pidRecord.pid, 'SIGKILL');
+    await waitForProcessExitImpl(pidRecord.pid, 2000);
   }
 
-  removePidRecord(service.pidFile);
-  log(`${service.label} 已停止`);
+  removePidRecordImpl(service.pidFile);
+  if (await isPortOpenImpl(getProbeHost(service), service.port)) {
+    logImpl(`${service.label} 已停止记录进程，正在清理残留端口占用`);
+    await clearServicePortOccupants(service, {
+      isPortOpenImpl,
+      waitForPortToCloseImpl,
+      clearPortConflictsImpl,
+      logImpl,
+    });
+    return;
+  }
+
+  logImpl(`${service.label} 已停止`);
 }
 
 async function statusService(service) {
@@ -461,6 +577,7 @@ module.exports = {
   manageServices,
   parseWindowsNetstatPortOccupants,
   startService,
+  stopService,
   waitForPortToClose,
   waitForServicePort,
 };

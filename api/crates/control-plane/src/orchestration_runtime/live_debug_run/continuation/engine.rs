@@ -358,6 +358,7 @@ where
                             locator_payload: json!({
                                 "node_id": node.node_id,
                                 "next_node_index": node_index,
+                                "active_node_ids": active_node_ids_from_index(&compiled_plan, node_index),
                             }),
                             variable_snapshot: Value::Object(wait.checkpoint_variable_pool),
                             external_ref_payload: Some(wait.request_payload.clone()),
@@ -614,6 +615,7 @@ where
                         "expires_at": confirmation.expires_at,
                         "request_payload": confirmation.request_payload,
                     });
+                    let next_index = next_node_index(&compiled_plan, node_id)?;
                     service
                         .repository
                         .create_checkpoint(&CreateCheckpointInput {
@@ -623,7 +625,8 @@ where
                             reason: "等待 Data Model 写入确认".to_string(),
                             locator_payload: json!({
                                 "node_id": node.node_id,
-                                "next_node_index": next_node_index(&compiled_plan, node_id)?,
+                                "next_node_index": next_index,
+                                "active_node_ids": active_node_ids_from_index(&compiled_plan, next_index),
                             }),
                             variable_snapshot: Value::Object(variable_pool.clone()),
                             external_ref_payload: Some(confirmation_payload.clone()),
@@ -818,6 +821,7 @@ where
                 )
                 .await?
                 .unwrap_or_else(|| json!({}));
+                let next_index = next_node_index(&compiled_plan, node_id)?;
                 service
                     .repository
                     .create_checkpoint(&CreateCheckpointInput {
@@ -827,7 +831,8 @@ where
                         reason: "等待人工输入".to_string(),
                         locator_payload: json!({
                             "node_id": node.node_id,
-                            "next_node_index": next_node_index(&compiled_plan, node_id)?,
+                            "next_node_index": next_index,
+                            "active_node_ids": active_node_ids_from_index(&compiled_plan, next_index),
                         }),
                         variable_snapshot: Value::Object(variable_pool.clone()),
                         external_ref_payload: Some(json!({ "prompt": prompt })),
@@ -899,6 +904,7 @@ where
                 )
                 .await?
                 .unwrap_or_else(|| json!({}));
+                let next_index = next_node_index(&compiled_plan, node_id)?;
                 service
                     .repository
                     .create_checkpoint(&CreateCheckpointInput {
@@ -908,7 +914,8 @@ where
                         reason: "等待 callback 回填".to_string(),
                         locator_payload: json!({
                             "node_id": node.node_id,
-                            "next_node_index": next_node_index(&compiled_plan, node_id)?,
+                            "next_node_index": next_index,
+                            "active_node_ids": active_node_ids_from_index(&compiled_plan, next_index),
                         }),
                         variable_snapshot: Value::Object(variable_pool.clone()),
                         external_ref_payload: Some(request_payload.clone()),

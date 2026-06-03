@@ -2320,6 +2320,7 @@ dependencies = [
  "async-trait",
  "jsonschema",
  "plugin-framework",
+ "regex",
  "rquickjs",
  "serde",
  "serde_json",

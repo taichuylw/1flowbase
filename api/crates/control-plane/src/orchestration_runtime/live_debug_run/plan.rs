@@ -13,6 +13,18 @@ pub(super) fn next_node_index(
     Ok(index + 1)
 }
 
+pub(super) fn active_node_ids_from_index(
+    compiled_plan: &orchestration_runtime::compiled_plan::CompiledPlan,
+    next_node_index: usize,
+) -> Vec<String> {
+    compiled_plan
+        .topological_order
+        .iter()
+        .skip(next_node_index)
+        .cloned()
+        .collect()
+}
+
 pub(super) fn first_output_key(
     node: &orchestration_runtime::compiled_plan::CompiledNode,
 ) -> String {

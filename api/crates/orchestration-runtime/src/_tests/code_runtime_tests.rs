@@ -226,6 +226,7 @@ fn code_runtime_plan() -> CompiledPlan {
             "node-code".to_string(),
             "node-answer".to_string(),
         ],
+        edges: Vec::new(),
         nodes,
         compile_issues: Vec::new(),
     }

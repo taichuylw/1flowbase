@@ -169,6 +169,7 @@ fn plan_with_empty_prompt_messages() -> CompiledPlan {
         source_draft_id: "draft-1".to_string(),
         schema_version: "1flowbase.flow/v2".to_string(),
         topological_order: vec!["node-start".to_string(), "node-llm".to_string()],
+        edges: Vec::new(),
         nodes,
         compile_issues: Vec::new(),
     }

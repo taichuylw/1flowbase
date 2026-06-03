@@ -27,6 +27,11 @@ import { outputTypeSupportsJsonSchema } from './output-contract/schema';
 import { isOutputVariableKeyAllowed } from './output-contract/variable-key';
 import { hasPluginContributionRef } from './plugin-node-definitions';
 import {
+  collectConditionSelectors,
+  collectIfElseBranchSelectors,
+  getIfElseBranchesFromBindings
+} from './if-else-branches';
+import {
   isSelectorVisible,
   listVisibleSelectorOptions,
   type FlowSelectorOption
@@ -108,6 +113,11 @@ function isMissingRequiredField(
       return binding.value.length === 0;
     case 'condition_group':
       return binding.value.conditions.length === 0;
+    case 'if_else_branches':
+      return (
+        !binding.value.branches.some((branch) => branch.kind === 'if') ||
+        !binding.value.branches.some((branch) => branch.kind === 'else')
+      );
     case 'state_write':
       return binding.value.length === 0;
   }
@@ -180,15 +190,9 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
     case 'named_bindings':
       return extractNamedBindingSelectors(binding.value);
     case 'condition_group':
-      return binding.value.conditions.flatMap((condition) => {
-        const selectors = [condition.left];
-
-        if (Array.isArray(condition.right)) {
-          selectors.push(condition.right);
-        }
-
-        return selectors;
-      });
+      return collectConditionSelectors(binding.value);
+    case 'if_else_branches':
+      return collectIfElseBranchSelectors(binding.value.branches);
     case 'state_write':
       return binding.value.flatMap((entry) =>
         entry.source ? [entry.source] : []
@@ -632,6 +636,31 @@ export function validateDocument(
 
   for (const edge of document.graph.edges) {
     if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+      const sourceNode = nodeById.get(edge.source);
+      const sourceBranches =
+        sourceNode?.type === 'if_else'
+          ? getIfElseBranchesFromBindings(sourceNode.bindings)
+          : null;
+
+      if (sourceBranches) {
+        const branchHandles = new Set(
+          sourceBranches.map((branch) => branch.sourceHandle)
+        );
+
+        if (!edge.sourceHandle || !branchHandles.has(edge.sourceHandle)) {
+          issues.push({
+            id: `${edge.id}-invalid-source-handle`,
+            scope: 'node',
+            level: 'error',
+            nodeId: edge.source,
+            sectionKey: 'inputs',
+            fieldKey: 'bindings.branches',
+            title: i18nText("agentFlow", "auto.branch_connection_invalid"),
+            message: i18nText("agentFlow", "auto.branch_connection_invalid_message")
+          });
+        }
+      }
+
       continue;
     }
 

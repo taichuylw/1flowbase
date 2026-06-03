@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 15_000;
+const FRONTEND_COLD_STARTUP_TIMEOUT_MS = 60_000;
 const CARGO_COLD_STARTUP_TIMEOUT_MS = 60_000;
 
 function getRepoRoot() {
@@ -41,7 +42,7 @@ function getServiceDefinitions(repoRoot) {
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 3100,
-      startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
+      startupTimeoutMs: FRONTEND_COLD_STARTUP_TIMEOUT_MS,
       logFile: path.join(paths.logDir, 'web.log'),
       pidFile: path.join(paths.pidDir, 'web.json'),
     },
@@ -81,6 +82,7 @@ function getServiceDefinitions(repoRoot) {
 module.exports = {
   CARGO_COLD_STARTUP_TIMEOUT_MS,
   DEFAULT_STARTUP_TIMEOUT_MS,
+  FRONTEND_COLD_STARTUP_TIMEOUT_MS,
   ensureRuntimeDirs,
   getRepoRoot,
   getRuntimePaths,
