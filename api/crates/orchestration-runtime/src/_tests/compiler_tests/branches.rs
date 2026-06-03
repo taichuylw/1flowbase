@@ -246,6 +246,24 @@ fn compile_if_else_rejects_empty_branch_condition() {
 }
 
 #[test]
+fn compile_if_else_rejects_invalid_branch_contract_without_outgoing_edges() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["edges"] = json!([document["graph"]["edges"][0]]);
+    document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"][0]["condition"] = json!({
+        "operator": "and",
+        "conditions": []
+    });
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("reachable if_else node with invalid branches should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("if_else node node-if branch if must include a complete condition"));
+}
+
+#[test]
 fn compile_if_else_rejects_multiple_else_branches() {
     let flow_id = Uuid::nil();
     let mut document = branch_document(flow_id);

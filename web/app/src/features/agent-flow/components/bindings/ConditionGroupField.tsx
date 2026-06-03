@@ -1,5 +1,6 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Input, Select } from 'antd';
+import { useRef } from 'react';
 import type {
   FlowConditionComparator,
   FlowConditionExpressionDocument,
@@ -51,26 +52,16 @@ const COMPARATOR_OPTIONS = [
   label: string;
   options: Array<{ label: string; value: FlowConditionComparator }>;
 }>;
-const conditionRenderKeys = new WeakMap<
-  FlowConditionExpressionDocument,
-  string
->();
 let nextConditionRenderKey = 0;
 
 function defaultRule(): FlowConditionRuleDocument {
   return { kind: 'rule', left: [], comparator: 'exists' };
 }
 
-function getConditionRenderKey(condition: FlowConditionExpressionDocument) {
-  const existingKey = conditionRenderKeys.get(condition);
-  if (existingKey) {
-    return existingKey;
-  }
-
+function createConditionRenderKey() {
   nextConditionRenderKey += 1;
-  const nextKey = `condition-${nextConditionRenderKey}`;
-  conditionRenderKeys.set(condition, nextKey);
-  return nextKey;
+
+  return `condition-${nextConditionRenderKey}`;
 }
 
 function conditionValueKind(value: FlowConditionValue | undefined) {
@@ -82,7 +73,19 @@ function conditionValueText(value: FlowConditionValue | undefined) {
     return '';
   }
 
-  return typeof value.value === 'string' ? value.value : String(value.value ?? '');
+  if (typeof value.value === 'string') {
+    return value.value;
+  }
+
+  if (value.value === undefined) {
+    return '';
+  }
+
+  if (typeof value.value === 'object') {
+    return JSON.stringify(value.value) ?? '';
+  }
+
+  return String(value.value);
 }
 
 function selectorValueType(options: FlowSelectorOption[], selector: string[]) {
@@ -262,6 +265,16 @@ export function ConditionGroupField({
   options,
   onChange
 }: ConditionGroupFieldProps) {
+  const conditionKeysRef = useRef<string[]>([]);
+  const conditionKeys = conditionKeysRef.current;
+
+  while (conditionKeys.length < value.conditions.length) {
+    conditionKeys.push(createConditionRenderKey());
+  }
+  if (conditionKeys.length > value.conditions.length) {
+    conditionKeys.length = value.conditions.length;
+  }
+
   function appendCondition() {
     onChange({
       ...value,
@@ -274,6 +287,11 @@ export function ConditionGroupField({
       ...value,
       conditions: [...value.conditions, createEmptyConditionGroup()]
     });
+  }
+
+  function removeConditionAt(index: number) {
+    conditionKeys.splice(index, 1);
+    onChange(removeCondition(value, index));
   }
 
   return (
@@ -318,7 +336,7 @@ export function ConditionGroupField({
         if (isConditionGroup(condition)) {
           return (
             <div
-              key={getConditionRenderKey(condition)}
+              key={conditionKeys[index]}
               className="agent-flow-condition-group__nested"
             >
               <ConditionGroupField
@@ -335,7 +353,7 @@ export function ConditionGroupField({
                 danger
                 icon={<DeleteOutlined />}
                 type="text"
-                onClick={() => onChange(removeCondition(value, index))}
+                onClick={() => removeConditionAt(index)}
               />
             </div>
           );
@@ -345,7 +363,7 @@ export function ConditionGroupField({
 
         return (
           <div
-            key={getConditionRenderKey(condition)}
+            key={conditionKeys[index]}
             className="agent-flow-binding-row agent-flow-condition-group__rule"
           >
             <SelectorField
@@ -407,7 +425,7 @@ export function ConditionGroupField({
               danger
               icon={<DeleteOutlined />}
               type="text"
-              onClick={() => onChange(removeCondition(value, index))}
+              onClick={() => removeConditionAt(index)}
             />
           </div>
         );

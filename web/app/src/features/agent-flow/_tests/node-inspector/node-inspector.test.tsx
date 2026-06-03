@@ -910,8 +910,15 @@ describe('NodeInspector', () => {
     await selectOption('amount');
     await openSelect('分支-if-0-comparator');
     await selectOption('等于');
-    fireEvent.change(await screen.findByLabelText('分支-if-0-right'), {
+    const rightInput = await screen.findByLabelText('分支-if-0-right');
+
+    rightInput.focus();
+    fireEvent.change(rightInput, {
       target: { value: '5' }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('分支-if-0-right')).toHaveFocus();
     });
 
     await waitFor(() => {
@@ -932,6 +939,62 @@ describe('NodeInspector', () => {
         right: { kind: 'constant', value: 5 }
       });
     });
+  });
+
+  test('renders structured fixed values in If / Else condition rules as JSON text', async () => {
+    const initialState = createInitialStateWithIfElseNode();
+    const ifElseNode = initialState.draft.document.graph.nodes.find(
+      (node) => node.id === 'node-if-else'
+    );
+
+    if (!ifElseNode) {
+      throw new Error('expected If / Else node');
+    }
+
+    ifElseNode.bindings.branches = {
+      kind: 'if_else_branches',
+      value: {
+        branches: [
+          {
+            id: 'if',
+            kind: 'if',
+            title: 'If',
+            sourceHandle: 'if',
+            condition: {
+              operator: 'and',
+              conditions: [
+                {
+                  kind: 'rule',
+                  left: ['node-start', 'query'],
+                  comparator: 'equals',
+                  right: {
+                    kind: 'constant',
+                    value: { tier: 'gold' }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            id: 'else',
+            kind: 'else',
+            title: 'Else',
+            sourceHandle: 'else'
+          }
+        ]
+      }
+    };
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-if-else" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(await screen.findByLabelText('分支-if-0-right')).toHaveValue(
+      '{"tier":"gold"}'
+    );
   });
 
   test('loads Data Model options from the feature API and disables unavailable models', async () => {

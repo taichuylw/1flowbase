@@ -163,6 +163,8 @@ fn build_nodes_and_topology(
         indegree.insert(node_id.clone(), 0);
     }
 
+    let if_else_source_handles = collect_if_else_branch_source_handles(&nodes)?;
+
     for edge in edge_values {
         let edge_id = edge
             .get("id")
@@ -193,6 +195,7 @@ fn build_nodes_and_topology(
                 .get(source)
                 .expect("validated source node must exist before edge compilation"),
             source_handle.as_deref(),
+            &if_else_source_handles,
         )?;
         compiled_edges.push(CompiledEdge {
             edge_id: edge_id.to_string(),
@@ -292,6 +295,7 @@ fn validate_edge_source_handle(
     edge_id: &str,
     source_node: &CompiledNode,
     source_handle: Option<&str>,
+    if_else_source_handles: &BTreeMap<String, BTreeSet<String>>,
 ) -> Result<()> {
     if source_node.node_type != "if_else" {
         return Ok(());
@@ -303,7 +307,14 @@ fn validate_edge_source_handle(
             source_node.node_id
         );
     };
-    let source_handles = if_else_branch_source_handles(source_node)?;
+    let source_handles = if_else_source_handles
+        .get(&source_node.node_id)
+        .ok_or_else(|| {
+            anyhow!(
+                "if_else node {} missing branch contract",
+                source_node.node_id
+            )
+        })?;
 
     if !source_handles.contains(source_handle) {
         bail!(
@@ -313,6 +324,18 @@ fn validate_edge_source_handle(
     }
 
     Ok(())
+}
+
+fn collect_if_else_branch_source_handles(
+    nodes: &BTreeMap<String, CompiledNode>,
+) -> Result<BTreeMap<String, BTreeSet<String>>> {
+    let mut source_handles = BTreeMap::new();
+
+    for node in nodes.values().filter(|node| node.node_type == "if_else") {
+        source_handles.insert(node.node_id.clone(), if_else_branch_source_handles(node)?);
+    }
+
+    Ok(source_handles)
 }
 
 fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>> {
