@@ -343,6 +343,12 @@ where
                         error_payload,
                     };
                     if can_continue_to_terminal_template_nodes(plan, index) {
+                        activate_downstream_nodes(
+                            plan,
+                            &mut active_node_ids,
+                            node,
+                            selected_source_handle.as_deref(),
+                        );
                         pending_failure = Some(failure);
                         continue;
                     }

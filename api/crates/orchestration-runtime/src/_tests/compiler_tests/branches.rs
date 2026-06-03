@@ -194,3 +194,41 @@ fn compile_if_else_rejects_missing_else_branch() {
         .to_string()
         .contains("if_else node node-if must include an else branch"));
 }
+
+#[test]
+fn compile_if_else_rejects_duplicate_source_handles() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"][1]["sourceHandle"] =
+        json!("if");
+    document["graph"]["edges"][2]["sourceHandle"] = json!("if");
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("if_else branch document with duplicate source handles should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("if_else node node-if duplicate branch sourceHandle if"));
+}
+
+#[test]
+fn compile_if_else_rejects_multiple_else_branches() {
+    let flow_id = Uuid::nil();
+    let mut document = branch_document(flow_id);
+    document["graph"]["nodes"][1]["bindings"]["branches"]["value"]["branches"]
+        .as_array_mut()
+        .expect("branches should be an array")
+        .push(json!({
+            "id": "else-2",
+            "kind": "else",
+            "title": "Else 2",
+            "sourceHandle": "else-2"
+        }));
+
+    let error = FlowCompiler::compile(flow_id, "draft-branches", &document, &compile_context())
+        .expect_err("if_else branch document with multiple else branches should fail compile");
+
+    assert!(error
+        .to_string()
+        .contains("if_else node node-if must include only one else branch"));
+}

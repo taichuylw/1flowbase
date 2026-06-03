@@ -333,10 +333,10 @@ fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("if_else node {} branches must be an array", node.node_id))?;
     let mut source_handles = BTreeSet::new();
-    let mut has_else_branch = false;
+    let mut else_branch_count = 0;
     for branch in branches {
         if branch.get("kind").and_then(Value::as_str) == Some("else") {
-            has_else_branch = true;
+            else_branch_count += 1;
         }
 
         let source_handle = branch
@@ -346,11 +346,23 @@ fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>
             .map(str::trim)
             .filter(|handle| !handle.is_empty())
             .ok_or_else(|| anyhow!("if_else node {} branch missing sourceHandle", node.node_id))?;
-        source_handles.insert(source_handle.to_string());
+        if !source_handles.insert(source_handle.to_string()) {
+            bail!(
+                "if_else node {} duplicate branch sourceHandle {source_handle}",
+                node.node_id
+            );
+        }
     }
 
-    if !has_else_branch {
+    if else_branch_count == 0 {
         bail!("if_else node {} must include an else branch", node.node_id);
+    }
+
+    if else_branch_count > 1 {
+        bail!(
+            "if_else node {} must include only one else branch",
+            node.node_id
+        );
     }
 
     Ok(source_handles)

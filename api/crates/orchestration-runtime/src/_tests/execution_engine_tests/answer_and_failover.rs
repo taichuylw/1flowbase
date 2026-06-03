@@ -52,6 +52,50 @@ async fn failed_llm_public_text_is_available_to_downstream_answer_contract() {
 }
 
 #[tokio::test]
+async fn failed_llm_with_compiled_edges_activates_terminal_answer() {
+    let mut plan = llm_answer_plan();
+    plan.edges = vec![
+        CompiledEdge {
+            edge_id: "edge-start-llm".to_string(),
+            source: "node-start".to_string(),
+            target: "node-llm".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-answer".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+    ];
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &StubProviderInvoker {
+            fail: true,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: String::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                outcome.variable_pool["node-answer"]["answer"],
+                failure.error_payload["message"]
+            );
+        }
+        other => panic!("expected failed stop reason after terminal answer, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved() {
     let mut plan = llm_answer_plan();
     let answer = plan

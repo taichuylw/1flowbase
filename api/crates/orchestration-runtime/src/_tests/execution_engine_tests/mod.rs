@@ -18,9 +18,9 @@ use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledCodeRuntime, CompiledLlmRouteTarget, CompiledLlmRouting,
-        CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
-        LlmRoutingMode,
+        CompiledBinding, CompiledCodeRuntime, CompiledEdge, CompiledLlmRouteTarget,
+        CompiledLlmRouting, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+        CompiledPluginRuntime, LlmRoutingMode,
     },
     execution_engine::{
         resume_flow_debug_run, start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
