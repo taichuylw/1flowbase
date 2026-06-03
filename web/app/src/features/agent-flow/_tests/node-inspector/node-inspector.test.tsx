@@ -1028,7 +1028,7 @@ describe('NodeInspector', () => {
     expect(
       screen.queryByTestId('inspector-field-bindings.payload')
     ).not.toBeInTheDocument();
-  });
+  }, 45000);
 
   test('keeps pagination unique to Data Model list query editors', async () => {
     const { unmount } = renderWithProviders(

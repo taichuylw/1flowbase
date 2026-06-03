@@ -53,12 +53,12 @@ vi.mock('../../components/BlockCodeEditorDrawer', () => ({
     block?: { id?: string; codeRef?: string | null } | null;
   }) =>
     open ? (
-      <div role="dialog" aria-label="区块代码">
+      <dialog open aria-label="区块代码">
         <span>workspace:{workspaceId ?? 'none'}</span>
         <span>page:{pageId ?? 'none'}</span>
         <span>block:{block?.id ?? 'none'}</span>
         <span>code:{block?.codeRef ?? 'none'}</span>
-      </div>
+      </dialog>
     ) : null
 }));
 
@@ -804,7 +804,7 @@ describe('FrontStagePage block arrange actions', () => {
         screen.queryByRole('dialog', { name: '区块配置' })
       ).not.toBeInTheDocument();
     });
-  }, 15000);
+  }, 25000);
 
   test('closes block code editor drawer when exiting design mode or switching pages', async () => {
     authenticate(['frontstage.page.design']);

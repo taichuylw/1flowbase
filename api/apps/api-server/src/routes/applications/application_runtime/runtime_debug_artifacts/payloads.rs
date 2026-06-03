@@ -219,11 +219,11 @@ pub(crate) async fn load_runtime_debug_artifact_response(
         .await?;
     let content_type = object.content_type.unwrap_or(artifact.content_type);
 
-    Ok(Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, content_type)
         .body(Body::from(object.bytes))
-        .map_err(ApiError::from)?)
+        .map_err(ApiError::from)
 }
 
 pub(crate) async fn load_runtime_debug_artifact_json_value(

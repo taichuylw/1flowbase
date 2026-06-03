@@ -46,6 +46,32 @@ Object.defineProperty(window, 'scrollTo', {
   writable: true
 });
 
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  configurable: true,
+  value: vi.fn((contextId: string) => {
+    if (contextId !== '2d') {
+      return null;
+    }
+
+    return {
+      beginPath: vi.fn(),
+      clearRect: vi.fn(),
+      ellipse: vi.fn(),
+      fill: vi.fn(),
+      lineTo: vi.fn(),
+      moveTo: vi.fn(),
+      quadraticCurveTo: vi.fn(),
+      restore: vi.fn(),
+      rotate: vi.fn(),
+      save: vi.fn(),
+      scale: vi.fn(),
+      stroke: vi.fn(),
+      translate: vi.fn()
+    };
+  }),
+  writable: true
+});
+
 Object.defineProperty(window, 'innerWidth', {
   value: 1280,
   writable: true

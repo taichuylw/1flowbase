@@ -45,15 +45,6 @@
       },
       {
         "files": [
-          "src/features/frontstage/_tests/frontstage-page/BlockArrange.test.tsx"
-        ],
-        "rules": [
-          "react-doctor/prefer-html-dialog",
-          "react-doctor/prefer-tag-over-role"
-        ]
-      },
-      {
-        "files": [
           "src/features/frontstage/components/FrontStagePageTreeSidebar.tsx"
         ],
         "rules": [

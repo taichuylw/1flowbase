@@ -167,6 +167,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   schemaRuntimeSpies.resolveAgentFlowNodeSchema.mockClear();
   schemaRuntimeSpies.SchemaDrawerPanel.mockReset();
   schemaRuntimeSpies.SchemaDrawerPanel.mockImplementation(

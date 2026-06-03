@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -13,16 +13,93 @@ const applicationApi = vi.hoisted(() => ({
   applicationsQueryKey: ['applications'],
   applicationCatalogQueryKey: ['applications', 'catalog'],
   applicationDetailQueryKey: (applicationId: string) => ['applications', applicationId],
+  applicationEnvironmentVariablesQueryKey: (applicationId: string) => [
+    'applications',
+    applicationId,
+    'environment-variables'
+  ],
   getApplicationsApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800'),
   fetchApplications: vi.fn(),
   fetchApplicationCatalog: vi.fn(),
   createApplication: vi.fn(),
   updateApplication: vi.fn(),
   createApplicationTag: vi.fn(),
-  fetchApplicationDetail: vi.fn()
+  fetchApplicationDetail: vi.fn(),
+  fetchApplicationEnvironmentVariables: vi.fn(),
+  replaceApplicationEnvironmentVariables: vi.fn()
 }));
 
 vi.mock('../../features/applications/api/applications', () => applicationApi);
+
+const publicApi = vi.hoisted(() => ({
+  applicationApiKeysQueryKey: (applicationId: string) => [
+    'applications',
+    applicationId,
+    'public-api',
+    'keys'
+  ],
+  applicationApiMappingQueryKey: (applicationId: string) => [
+    'applications',
+    applicationId,
+    'public-api',
+    'mapping'
+  ],
+  applicationApiPublicationQueryKey: (applicationId: string) => [
+    'applications',
+    applicationId,
+    'public-api',
+    'publication'
+  ],
+  applicationApiDocsCatalogQueryKey: (applicationId: string, locale?: string | null) => [
+    'applications',
+    applicationId,
+    'public-api',
+    'docs',
+    'catalog',
+    locale ?? 'default'
+  ],
+  applicationApiDocsCategoryOperationsQueryKey: (
+    applicationId: string,
+    categoryId: string,
+    locale?: string | null
+  ) => [
+    'applications',
+    applicationId,
+    'public-api',
+    'docs',
+    'category',
+    categoryId,
+    'operations',
+    locale ?? 'default'
+  ],
+  applicationApiDocsOperationSpecQueryKey: (
+    applicationId: string,
+    operationId: string,
+    locale?: string | null
+  ) => [
+    'applications',
+    applicationId,
+    'public-api',
+    'docs',
+    'operation',
+    operationId,
+    'openapi',
+    locale ?? 'default'
+  ],
+  fetchApplicationApiKeys: vi.fn(),
+  createApplicationApiKey: vi.fn(),
+  revokeApplicationApiKey: vi.fn(),
+  fetchApplicationApiMapping: vi.fn(),
+  fetchApplicationApiPublication: vi.fn(),
+  publishApplicationApiVersion: vi.fn(),
+  setApplicationApiEnabled: vi.fn(),
+  fetchApplicationApiDocsCatalog: vi.fn(),
+  fetchApplicationApiDocsCategoryOperations: vi.fn(),
+  fetchApplicationApiDocsOperationSpec: vi.fn(),
+  getApplicationApiDocsLocale: vi.fn()
+}));
+
+vi.mock('../../features/applications/api/public-api', () => publicApi);
 
 const orchestrationApi = vi.hoisted(() => ({
   orchestrationQueryKey: (applicationId: string) => [
@@ -134,6 +211,44 @@ describe('application shell routing', () => {
         }
       }
     });
+    applicationApi.fetchApplicationEnvironmentVariables.mockReset();
+    applicationApi.fetchApplicationEnvironmentVariables.mockResolvedValue([]);
+    applicationApi.replaceApplicationEnvironmentVariables.mockReset();
+    applicationApi.replaceApplicationEnvironmentVariables.mockResolvedValue([]);
+    publicApi.fetchApplicationApiKeys.mockReset();
+    publicApi.fetchApplicationApiKeys.mockResolvedValue([]);
+    publicApi.fetchApplicationApiMapping.mockReset();
+    publicApi.fetchApplicationApiMapping.mockResolvedValue({
+      input: {
+        query_target: 'node-start.query',
+        model_target: 'node-start.model',
+        inputs_target: 'node-start',
+        history_target: 'node-start.history',
+        attachments_target: 'node-start.files'
+      },
+      output: {
+        answer_selector: 'node-answer.answer',
+        usage_selector: null,
+        files_selector: null,
+        error_selector: null
+      }
+    });
+    publicApi.fetchApplicationApiPublication.mockReset();
+    publicApi.fetchApplicationApiPublication.mockResolvedValue(null);
+    publicApi.publishApplicationApiVersion.mockReset();
+    publicApi.setApplicationApiEnabled.mockReset();
+    publicApi.fetchApplicationApiDocsCatalog.mockReset();
+    publicApi.fetchApplicationApiDocsCatalog.mockResolvedValue({
+      categories: []
+    });
+    publicApi.fetchApplicationApiDocsCategoryOperations.mockReset();
+    publicApi.fetchApplicationApiDocsCategoryOperations.mockResolvedValue({
+      operations: []
+    });
+    publicApi.fetchApplicationApiDocsOperationSpec.mockReset();
+    publicApi.fetchApplicationApiDocsOperationSpec.mockResolvedValue({});
+    publicApi.getApplicationApiDocsLocale.mockReset();
+    publicApi.getApplicationApiDocsLocale.mockReturnValue('zh_Hans');
     orchestrationApi.fetchOrchestrationState.mockReset();
     orchestrationApi.fetchOrchestrationState.mockResolvedValue({
       flow_id: 'flow-1',
@@ -208,15 +323,22 @@ describe('application shell routing', () => {
     });
   });
 
-  test('renders section navigation and planned API copy', async () => {
+  test('renders section navigation for the API route', async () => {
     window.history.pushState({}, '', '/applications/app-1/api');
     renderApplicationRouter();
 
     expect(
       await screen.findByRole('heading', { name: 'Support Agent', level: 4 })
     ).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Section navigation' })).toBeInTheDocument();
-    expect(screen.getByText(/API Key 绑定应用/i)).toBeInTheDocument();
+    const sectionNavigation = screen.getByRole('navigation', {
+      name: 'Section navigation'
+    });
+    expect(sectionNavigation).toBeInTheDocument();
+    expect(within(sectionNavigation).getByRole('link', { name: 'API' })).toHaveAttribute(
+      'href',
+      '/applications/app-1/api'
+    );
+    expect(applicationApi.fetchApplicationDetail).toHaveBeenCalledWith('app-1');
   });
 
   test('renders the editor page inside orchestration', async () => {
